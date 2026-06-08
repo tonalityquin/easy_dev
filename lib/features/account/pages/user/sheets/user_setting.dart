@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
-import '../../../domain/models/user/user_model.dart';
-import '../sheets/widgets/user_input_section.dart';
-import '../sheets/widgets/user_password_display_section.dart';
-import '../sheets/widgets/user_role_dropdown_section.dart';
-import '../sheets/widgets/user_role_type_section.dart';
-import '../sheets/widgets/user_validation_helpers_section.dart';
 import '../../../../../shared/auth/five_digit_password_generator.dart';
+import '../../../../../shared/secondary/widgets/ops_console_widgets.dart';
+import '../../../domain/models/user/user_model.dart';
+import 'widgets/user_role_type_section.dart';
 
 class UserSettingBottomSheet extends StatefulWidget {
   final void Function(
@@ -23,6 +21,8 @@ class UserSettingBottomSheet extends StatefulWidget {
     String selectedArea,
     Map<String, String?> startTimeByWeekday,
     Map<String, String?> endTimeByWeekday,
+    List<String> fixedHolidays,
+    List<String> breakDays,
     String position,
   ) onSave;
 
@@ -54,12 +54,6 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
     'minor': 'minor',
   };
 
-  static const int _panelBasic = 0;
-  static const int _panelRole = 1;
-  static const int _panelPosition = 2;
-  static const int _panelPassword = 3;
-  static const int _panelTime = 4;
-
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
@@ -71,20 +65,11 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
   final _emailFocus = FocusNode();
   final _positionFocus = FocusNode();
 
-  final ScrollController _scrollController = ScrollController();
-
-  final GlobalKey _keyBasic = GlobalKey();
-  final GlobalKey _keyRole = GlobalKey();
-  final GlobalKey _keyPosition = GlobalKey();
-  final GlobalKey _keyPassword = GlobalKey();
-  final GlobalKey _keyTime = GlobalKey();
-
-  late final List<bool> _expanded;
-
   RoleType _selectedRole = RoleType.fieldCommon;
   final Set<String> _selectedModes = <String>{};
   Map<String, TimeOfDay?> _startByDay = <String, TimeOfDay?>{};
   Map<String, TimeOfDay?> _endByDay = <String, TimeOfDay?>{};
+  Set<String> _breakDays = <String>{};
   String? _errorMessage;
 
   bool get isEditMode => widget.isEditMode;
@@ -92,8 +77,6 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
   @override
   void initState() {
     super.initState();
-    _expanded = List<bool>.filled(5, false);
-    _expanded[_panelBasic] = true;
     _startByDay = {for (final day in _days) day: null};
     _endByDay = {for (final day in _days) day: null};
 
@@ -110,44 +93,16 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
       );
       _selectedModes.addAll(_normalizeAndFilterModes(user.modes));
       final excludedDays = user.fixedHolidays.map((e) => e.trim()).where((e) => e.isNotEmpty).toSet();
-      _startByDay = _normalizeWeekMap(
-        user.startTimeByWeekday,
-        fallback: user.startTime,
-        excludedDays: excludedDays,
-      );
-      _endByDay = _normalizeWeekMap(
-        user.endTimeByWeekday,
-        fallback: user.endTime,
-        excludedDays: excludedDays,
-      );
+      _startByDay = _normalizeWeekMap(user.startTimeByWeekday, fallback: user.startTime, excludedDays: excludedDays);
+      _endByDay = _normalizeWeekMap(user.endTimeByWeekday, fallback: user.endTime, excludedDays: excludedDays);
+      _breakDays = _normalizeDaySet(user.breakDays).intersection(_workingDaySet());
     } else {
-      _passwordController.text = _generateRandomPassword();
+      _passwordController.text = FiveDigitPasswordGenerator.generate();
     }
 
     if (_selectedModes.isEmpty) {
       _selectedModes.add('single');
     }
-
-    _nameFocus.addListener(() {
-      if (_nameFocus.hasFocus) {
-        _openPanelAndScroll(_panelBasic);
-      }
-    });
-    _phoneFocus.addListener(() {
-      if (_phoneFocus.hasFocus) {
-        _openPanelAndScroll(_panelBasic);
-      }
-    });
-    _emailFocus.addListener(() {
-      if (_emailFocus.hasFocus) {
-        _openPanelAndScroll(_panelBasic);
-      }
-    });
-    _positionFocus.addListener(() {
-      if (_positionFocus.hasFocus) {
-        _openPanelAndScroll(_panelPosition);
-      }
-    });
   }
 
   @override
@@ -161,7 +116,6 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
     _phoneFocus.dispose();
     _emailFocus.dispose();
     _positionFocus.dispose();
-    _scrollController.dispose();
     super.dispose();
   }
 
@@ -198,6 +152,18 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
     return out.toList(growable: false);
   }
 
+  Set<String> _normalizeDaySet(Iterable<String> raw) {
+    return raw.map((value) => value.trim()).where((value) => _days.contains(value)).toSet();
+  }
+
+  List<String> _normalizeDayList(Iterable<String> raw) {
+    final set = _normalizeDaySet(raw);
+    return <String>[
+      for (final day in _days)
+        if (set.contains(day)) day,
+    ];
+  }
+
   Map<String, TimeOfDay?> _normalizeWeekMap(
     Map<String, TimeOfDay?> raw, {
     TimeOfDay? fallback,
@@ -213,120 +179,7 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
 
   String _modeLabel(String mode) => _modeLabels[mode] ?? mode;
 
-  void _setErrorMessage(String? message) {
-    setState(() => _errorMessage = message);
-  }
-
-  void _clearErrorIfAny() {
-    if (_errorMessage != null) {
-      setState(() => _errorMessage = null);
-    }
-  }
-
-  bool _validateInputs() {
-    final error = validateInputs(<String, String>{
-      '이름': _nameController.text,
-      '전화번호': _phoneController.text,
-      '이메일': _emailController.text,
-    });
-    _setErrorMessage(error);
-    return error == null;
-  }
-
-  bool _isValidEmailLocalPart(String input) {
-    return RegExp(r'^[a-zA-Z0-9._-]+$').hasMatch(input.trim());
-  }
-
-  String _generateRandomPassword() {
-    return FiveDigitPasswordGenerator.generate();
-  }
-
   int _toMinutes(TimeOfDay time) => time.hour * 60 + time.minute;
-
-  bool _validateWeeklyTimes() {
-    bool hasWorkingDay = false;
-
-    for (final day in _days) {
-      final start = _startByDay[day];
-      final end = _endByDay[day];
-      final hasStart = start != null;
-      final hasEnd = end != null;
-
-      if (hasStart != hasEnd) {
-        _setErrorMessage('$day 요일의 출근/퇴근 시간을 모두 입력하세요');
-        return false;
-      }
-
-      if (hasStart && hasEnd) {
-        hasWorkingDay = true;
-        if (_toMinutes(start) > _toMinutes(end)) {
-          _setErrorMessage('$day 요일의 출근/퇴근 시간을 다시 확인하세요');
-          return false;
-        }
-      }
-    }
-
-    if (!hasWorkingDay) {
-      _setErrorMessage('최소 1개 요일의 근무 시간을 입력하세요');
-      return false;
-    }
-
-    return true;
-  }
-
-  Future<void> _pickWeeklyTime({
-    required String day,
-    required bool isStart,
-  }) async {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final current = isStart ? _startByDay[day] : _endByDay[day];
-    final initial = current ?? (isStart ? const TimeOfDay(hour: 9, minute: 0) : const TimeOfDay(hour: 18, minute: 0));
-
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: initial,
-      helpText: isStart ? '$day 출근 시간' : '$day 퇴근 시간',
-      confirmText: '확인',
-      cancelText: '취소',
-      builder: (ctx, child) {
-        final mq = MediaQuery.of(ctx);
-        final branded = theme.copyWith(
-          colorScheme: theme.colorScheme.copyWith(
-            primary: cs.primary,
-            secondary: cs.primaryContainer,
-            surface: cs.surface,
-            onSurface: cs.onSurface,
-          ),
-        );
-        return MediaQuery(
-          data: mq.copyWith(alwaysUse24HourFormat: true),
-          child: Theme(data: branded, child: child!),
-        );
-      },
-    );
-
-    if (picked == null || !mounted) {
-      return;
-    }
-
-    _clearErrorIfAny();
-    setState(() {
-      if (isStart) {
-        _startByDay = Map<String, TimeOfDay?>.of(_startByDay)..[day] = picked;
-      } else {
-        _endByDay = Map<String, TimeOfDay?>.of(_endByDay)..[day] = picked;
-      }
-    });
-  }
-
-  void _clearWeeklyTime(String day) {
-    _clearErrorIfAny();
-    setState(() {
-      _startByDay = Map<String, TimeOfDay?>.of(_startByDay)..[day] = null;
-      _endByDay = Map<String, TimeOfDay?>.of(_endByDay)..[day] = null;
-    });
-  }
 
   String _formatTimeOfDay(TimeOfDay? time) {
     if (time == null) return '--:--';
@@ -343,253 +196,336 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
     return out;
   }
 
-  bool get _isBasicInfoComplete {
-    final nameOk = _nameController.text.trim().isNotEmpty;
-    final phoneOk = RegExp(r'^\d{9,}$').hasMatch(_phoneController.text.trim());
-    final emailOk = _emailController.text.trim().isNotEmpty;
-    return nameOk && phoneOk && emailOk;
+  Set<String> _workingDaySet() {
+    final out = <String>{};
+    for (final day in _days) {
+      if (_startByDay[day] != null && _endByDay[day] != null) {
+        out.add(day);
+      }
+    }
+    return out;
   }
 
-  String get _basicSummary {
-    final name = _nameController.text.trim();
-    final phone = _phoneController.text.trim();
-    final email = _emailController.text.trim();
-    final shownName = name.isEmpty ? '이름 미입력' : name;
-    final shownPhone = phone.isEmpty ? '전화 미입력' : phone;
-    final shownEmail = email.isEmpty ? '이메일 미입력' : '$email@gmail.com';
-    return '$shownName · $shownPhone · $shownEmail';
+  List<String> _fixedHolidaysFromWeekMaps() {
+    final out = <String>[];
+    for (final day in _days) {
+      if (_startByDay[day] == null && _endByDay[day] == null) {
+        out.add(day);
+      }
+    }
+    return out;
   }
 
-  String get _modesSummary {
-    if (_selectedModes.isEmpty) return '모드 미선택';
-    return _selectedModes.map(_modeLabel).join(', ');
+  List<String> _normalizedBreakDaysForWorkingDays() {
+    final workingDays = _workingDaySet();
+    return <String>[
+      for (final day in _days)
+        if (workingDays.contains(day) && _breakDays.contains(day)) day,
+    ];
   }
 
-  String get _roleSummary => '${_selectedRole.label} · $_modesSummary';
+  bool _isHoliday(String day) => _startByDay[day] == null && _endByDay[day] == null;
 
-  String get _positionSummary {
-    final position = _positionController.text.trim();
-    return position.isEmpty ? '직책(선택)' : position;
+  bool _isValidEmailLocalPart(String input) {
+    return RegExp(r'^[a-zA-Z0-9._-]+$').hasMatch(input.trim());
   }
+
+  bool get _nameOk => _nameController.text.trim().isNotEmpty;
+  bool get _phoneOk => RegExp(r'^\d{9,}$').hasMatch(_phoneController.text.trim());
+  bool get _emailOk => _emailController.text.trim().isNotEmpty && _isValidEmailLocalPart(_emailController.text);
+  bool get _roleOk => _selectedModes.isNotEmpty;
 
   int get _workingDayCount {
     var count = 0;
     for (final day in _days) {
-      if (_startByDay[day] != null && _endByDay[day] != null) {
-        count += 1;
-      }
+      if (_startByDay[day] != null && _endByDay[day] != null) count += 1;
     }
     return count;
   }
 
+  String get _modesSummary => _selectedModes.isEmpty ? '모드 미선택' : _selectedModes.map(_modeLabel).join(', ');
+
   String get _timeSummary {
-    if (_workingDayCount == 0) {
-      return '근무시간 미설정';
-    }
+    if (_workingDayCount == 0) return '근무시간 미설정';
     final parts = <String>[];
     for (final day in _days) {
       final start = _startByDay[day];
       final end = _endByDay[day];
       if (start != null && end != null) {
-        parts.add('$day ${_formatTimeOfDay(start)}~${_formatTimeOfDay(end)}');
+        final breakLabel = _breakDays.contains(day) ? '휴게' : '휴게없음';
+        parts.add('$day ${_formatTimeOfDay(start)}~${_formatTimeOfDay(end)} $breakLabel');
       }
     }
-    if (parts.length <= 2) {
-      return parts.join(' · ');
-    }
+    if (parts.length <= 2) return parts.join(' · ');
     return '${parts.take(2).join(' · ')} 외 ${parts.length - 2}일';
   }
 
-  void _openPanelAndScroll(int panelIndex) {
-    if (!mounted) return;
+  void _setErrorMessage(String? message) {
+    setState(() => _errorMessage = message);
+  }
 
-    setState(() {
-      for (var i = 0; i < _expanded.length; i++) {
-        _expanded[i] = i == panelIndex;
+  void _clearErrorIfAny() {
+    setState(() => _errorMessage = null);
+  }
+
+  bool _validateWeeklyTimes() {
+    var hasWorkingDay = false;
+    for (final day in _days) {
+      final start = _startByDay[day];
+      final end = _endByDay[day];
+      final hasStart = start != null;
+      final hasEnd = end != null;
+      if (hasStart != hasEnd) {
+        _setErrorMessage('$day 요일의 출근/퇴근 시간을 모두 입력하세요');
+        return false;
       }
-    });
+      if (start != null && end != null) {
+        hasWorkingDay = true;
+        if (_toMinutes(start) > _toMinutes(end)) {
+          _setErrorMessage('$day 요일의 출근/퇴근 시간을 다시 확인하세요');
+          return false;
+        }
+      }
+    }
+    if (!hasWorkingDay) {
+      _setErrorMessage('최소 1개 요일의 근무 시간을 입력하세요');
+      return false;
+    }
+    return true;
+  }
 
-    final key = switch (panelIndex) {
-      _panelBasic => _keyBasic,
-      _panelRole => _keyRole,
-      _panelPosition => _keyPosition,
-      _panelPassword => _keyPassword,
-      _panelTime => _keyTime,
-      _ => _keyBasic,
-    };
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final ctx = key.currentContext;
-      if (ctx != null) {
-        Scrollable.ensureVisible(
-          ctx,
-          alignment: 0.12,
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOut,
+  Future<void> _pickWeeklyTime({required String day, required bool isStart}) async {
+    final theme = Theme.of(context);
+    final current = isStart ? _startByDay[day] : _endByDay[day];
+    final initial = current ?? (isStart ? const TimeOfDay(hour: 9, minute: 0) : const TimeOfDay(hour: 18, minute: 0));
+    final wasHoliday = _isHoliday(day);
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: initial,
+      helpText: isStart ? '$day 출근 시간' : '$day 퇴근 시간',
+      confirmText: '확인',
+      cancelText: '취소',
+      builder: (ctx, child) {
+        return MediaQuery(
+          data: MediaQuery.of(ctx).copyWith(alwaysUse24HourFormat: true),
+          child: Theme(data: theme, child: child!),
         );
+      },
+    );
+    if (picked == null || !mounted) return;
+    _clearErrorIfAny();
+    setState(() {
+      if (isStart) {
+        _startByDay = Map<String, TimeOfDay?>.of(_startByDay)..[day] = picked;
+        if (_endByDay[day] == null) {
+          _endByDay = Map<String, TimeOfDay?>.of(_endByDay)..[day] = const TimeOfDay(hour: 18, minute: 0);
+        }
+      } else {
+        _endByDay = Map<String, TimeOfDay?>.of(_endByDay)..[day] = picked;
+        if (_startByDay[day] == null) {
+          _startByDay = Map<String, TimeOfDay?>.of(_startByDay)..[day] = const TimeOfDay(hour: 9, minute: 0);
+        }
+      }
+      if (wasHoliday) {
+        _breakDays = <String>{..._breakDays, day};
       }
     });
   }
 
-  Widget _buildScreenTag(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final base = Theme.of(context).textTheme.labelSmall;
-    final style = (base ?? const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)).copyWith(
-      color: cs.onSurfaceVariant.withOpacity(.72),
-      fontWeight: FontWeight.w600,
-      letterSpacing: 0.2,
-    );
-
-    return IgnorePointer(
-      child: Align(
-        alignment: Alignment.topLeft,
-        child: Padding(
-          padding: const EdgeInsets.only(left: 12, top: 4),
-          child: Semantics(
-            label: 'screen_tag: user setting',
-            child: Text('user setting', style: style),
-          ),
-        ),
-      ),
-    );
+  void _setHoliday(String day, bool value) {
+    _clearErrorIfAny();
+    setState(() {
+      if (value) {
+        _startByDay = Map<String, TimeOfDay?>.of(_startByDay)..[day] = null;
+        _endByDay = Map<String, TimeOfDay?>.of(_endByDay)..[day] = null;
+        _breakDays = <String>{..._breakDays}..remove(day);
+      } else {
+        _startByDay = Map<String, TimeOfDay?>.of(_startByDay)..[day] = _startByDay[day] ?? const TimeOfDay(hour: 9, minute: 0);
+        _endByDay = Map<String, TimeOfDay?>.of(_endByDay)..[day] = _endByDay[day] ?? const TimeOfDay(hour: 18, minute: 0);
+        _breakDays = <String>{..._breakDays, day};
+      }
+    });
   }
 
-  Widget _buildPanelHeader({
-    required ColorScheme cs,
-    required int step,
-    required String title,
-    required String summary,
-    required bool isDone,
-    required bool isExpanded,
-  }) {
-    final base = cs.primary;
-    final dark = cs.onSurface;
-    final container = cs.primaryContainer;
-
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      leading: Container(
-        width: 34,
-        height: 34,
-        decoration: BoxDecoration(
-          color: isExpanded ? base.withOpacity(.12) : container.withOpacity(.30),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: isExpanded ? base.withOpacity(.35) : cs.outlineVariant.withOpacity(.65),
-          ),
-        ),
-        child: Center(
-          child: isDone
-              ? Icon(Icons.check, color: dark, size: 20)
-              : Text(
-                  '$step',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w900,
-                    color: dark,
-                  ),
-                ),
-        ),
-      ),
-      title: Text(
-        title,
-        style: TextStyle(
-          fontWeight: FontWeight.w900,
-          color: dark,
-        ),
-      ),
-      subtitle: Text(
-        summary,
-        style: TextStyle(
-          color: cs.onSurfaceVariant.withOpacity(.78),
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-      trailing: Icon(
-        isExpanded ? Icons.expand_less : Icons.expand_more,
-        color: dark,
-      ),
-    );
+  void _toggleBreakDay(String day, bool value) {
+    if (_isHoliday(day)) return;
+    _clearErrorIfAny();
+    setState(() {
+      final next = <String>{..._breakDays};
+      if (value) {
+        next.add(day);
+      } else {
+        next.remove(day);
+      }
+      _breakDays = next;
+    });
   }
 
-  Widget _buildPanelBody({
-    required ColorScheme cs,
-    required Widget child,
-    int? nextPanel,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+  Future<void> _copyPassword() async {
+    await Clipboard.setData(ClipboardData(text: _passwordController.text));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('비밀번호를 복사했습니다.')));
+  }
+
+  void _handleSave() {
+    FocusScope.of(context).unfocus();
+    if (!_nameOk) {
+      _setErrorMessage('이름을 다시 입력하세요');
+      return;
+    }
+    if (!_phoneOk) {
+      _setErrorMessage('전화번호를 다시 입력하세요');
+      return;
+    }
+    if (!_emailOk) {
+      _setErrorMessage(_emailController.text.trim().isEmpty ? '이메일을 입력하세요' : '이메일을 다시 확인하세요');
+      return;
+    }
+    if (_selectedModes.isEmpty) {
+      _setErrorMessage('허용 모드를 1개 이상 선택하세요');
+      return;
+    }
+    if (!_validateWeeklyTimes()) return;
+
+    final normalizedModes = _normalizeAndFilterModes(_selectedModes);
+    if (normalizedModes.isEmpty) {
+      _setErrorMessage('허용 모드를 1개 이상 선택하세요');
+      return;
+    }
+
+    widget.onSave(
+      _nameController.text.trim(),
+      _phoneController.text.trim(),
+      '${_emailController.text.trim()}@gmail.com',
+      _selectedRole.name,
+      normalizedModes,
+      _passwordController.text.trim(),
+      widget.areaValue,
+      widget.division,
+      false,
+      false,
+      widget.areaValue,
+      _weekMapToStringMap(_startByDay),
+      _weekMapToStringMap(_endByDay),
+      _normalizeDayList(_fixedHolidaysFromWeekMaps()),
+      _normalizeDayList(_normalizedBreakDaysForWorkingDays()),
+      _positionController.text.trim(),
+    );
+
+    if (mounted) Navigator.pop(context);
+  }
+
+  Widget _buildBasicSection(BuildContext context) {
+    return OpsWorkSection(
+      title: '계정 식별 정보',
+      subtitle: isEditMode ? '기존 계정의 이름과 전화번호는 고정하고 이메일만 갱신합니다.' : '로그인 계정의 실명, 연락처, 구글 이메일을 입력합니다.',
+      icon: Icons.badge_rounded,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          child,
-          if (nextPanel != null) ...<Widget>[
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: () => _openPanelAndScroll(nextPanel),
-              icon: const Icon(Icons.arrow_forward),
-              label: const Text('다음 단계로 이동'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: cs.onSurface,
-                side: BorderSide(color: cs.outlineVariant.withOpacity(.75)),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-              ),
+        children: [
+          TextField(
+            controller: _nameController,
+            focusNode: _nameFocus,
+            readOnly: isEditMode,
+            onChanged: (_) => _clearErrorIfAny(),
+            textInputAction: TextInputAction.next,
+            onSubmitted: (_) => FocusScope.of(context).nextFocus(),
+            autofillHints: const [AutofillHints.name],
+            decoration: opsInputDecoration(
+              context,
+              label: '이름',
+              hintText: '예: 홍길동',
+              prefixIcon: const Icon(Icons.person_rounded),
+              locked: isEditMode,
+              errorText: _errorMessage == '이름을 다시 입력하세요' ? _errorMessage : null,
             ),
-          ],
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _phoneController,
+            focusNode: _phoneFocus,
+            readOnly: isEditMode,
+            onChanged: (_) => _clearErrorIfAny(),
+            textInputAction: TextInputAction.next,
+            onSubmitted: (_) => FocusScope.of(context).nextFocus(),
+            keyboardType: TextInputType.phone,
+            autofillHints: const [AutofillHints.telephoneNumber],
+            inputFormatters: isEditMode ? null : [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(11)],
+            decoration: opsInputDecoration(
+              context,
+              label: '전화번호',
+              hintText: '숫자만 입력',
+              helperText: '최소 9자리 이상',
+              prefixIcon: const Icon(Icons.phone_rounded),
+              locked: isEditMode,
+              errorText: _errorMessage == '전화번호를 다시 입력하세요' ? _errorMessage : null,
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _emailController,
+            focusNode: _emailFocus,
+            onChanged: (_) => _clearErrorIfAny(),
+            textInputAction: TextInputAction.done,
+            keyboardType: TextInputType.emailAddress,
+            autofillHints: const [AutofillHints.username],
+            inputFormatters: [FilteringTextInputFormatter.deny(RegExp(r'\s'))],
+            decoration: opsInputDecoration(
+              context,
+              label: '이메일',
+              hintText: 'google 계정 앞부분',
+              suffixText: '@gmail.com',
+              prefixIcon: const Icon(Icons.mail_rounded),
+              errorText: (_errorMessage == '이메일을 입력하세요' || _errorMessage == '이메일을 다시 확인하세요') ? _errorMessage : null,
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildModesSelector({required ColorScheme cs}) {
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: cs.outlineVariant.withOpacity(.75)),
-      ),
+  Widget _buildRoleSection(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return OpsWorkSection(
+      title: '권한과 허용 모드',
+      subtitle: '역할은 계정의 접근 범위를 결정하고, 모드는 로그인 가능한 현장 화면을 제한합니다.',
+      icon: Icons.admin_panel_settings_rounded,
+      trailing: OpsStatusBadge(label: _roleOk ? '설정됨' : '필수', color: _roleOk ? cs.primary : cs.error, icon: _roleOk ? Icons.check_rounded : Icons.priority_high_rounded),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          Text(
-            '허용 모드(필수)',
-            style: TextStyle(
-              color: cs.onSurface,
-              fontWeight: FontWeight.w900,
-            ),
+        children: [
+          DropdownButtonFormField<RoleType>(
+            value: _selectedRole,
+            isExpanded: true,
+            decoration: opsInputDecoration(context, label: '권한', prefixIcon: const Icon(Icons.verified_user_rounded)),
+            items: RoleType.values
+                .map((role) => DropdownMenuItem<RoleType>(
+                      value: role,
+                      child: Text(role.label, overflow: TextOverflow.ellipsis),
+                    ))
+                .toList(growable: false),
+            onChanged: (role) {
+              if (role == null) return;
+              _clearErrorIfAny();
+              setState(() => _selectedRole = role);
+            },
           ),
-          const SizedBox(height: 6),
-          Text(
-            '선택된 모드에 포함된 로그인 화면에서만 로그인할 수 있습니다.',
-            style: TextStyle(
-              color: cs.onSurfaceVariant.withOpacity(.78),
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: _availableModes.map((mode) {
               final selected = _selectedModes.contains(mode);
-              return FilterChip(
-                label: Text(_modeLabel(mode)),
+              return OpsFormChip(
+                label: _modeLabel(mode),
                 selected: selected,
-                selectedColor: cs.primaryContainer.withOpacity(.65),
-                checkmarkColor: cs.onPrimaryContainer,
-                side: BorderSide(
-                  color: selected ? cs.primary.withOpacity(.35) : cs.outlineVariant.withOpacity(.65),
-                ),
-                onSelected: (value) {
+                icon: Icons.widgets_rounded,
+                onTap: () {
                   _clearErrorIfAny();
                   setState(() {
-                    if (value) {
-                      _selectedModes.add(mode);
-                    } else {
+                    if (selected) {
                       _selectedModes.remove(mode);
+                    } else {
+                      _selectedModes.add(mode);
                     }
                   });
                 },
@@ -601,462 +537,215 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
     );
   }
 
-  Widget _buildWeeklyTimeSection({required ThemeData theme, required ColorScheme cs}) {
-    Widget dayRow(String day) {
-      final start = _startByDay[day];
-      final end = _endByDay[day];
-      final isWorking = start != null && end != null;
-      final hasPartial = (start == null) != (end == null);
-
-      final borderColor = hasPartial
-          ? cs.error.withOpacity(.35)
-          : (isWorking ? cs.primary.withOpacity(.25) : cs.outlineVariant.withOpacity(.75));
-      final backgroundColor = isWorking ? cs.primaryContainer.withOpacity(.12) : cs.surfaceContainerLow;
-
-      return Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: backgroundColor,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: borderColor),
+  Widget _buildPositionSection(BuildContext context) {
+    return OpsWorkSection(
+      title: '현장 직책',
+      subtitle: '목록과 근무 기록에서 계정을 구분하기 위한 보조 정보입니다.',
+      icon: Icons.work_rounded,
+      child: TextField(
+        controller: _positionController,
+        focusNode: _positionFocus,
+        onChanged: (_) => _clearErrorIfAny(),
+        textInputAction: TextInputAction.done,
+        decoration: opsInputDecoration(
+          context,
+          label: '직책',
+          hintText: '예: 매니저, 총괄, 팀장',
+          prefixIcon: const Icon(Icons.badge_rounded),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            Row(
-              children: <Widget>[
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: cs.surface,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: cs.outlineVariant.withOpacity(.75)),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    day,
-                    style: TextStyle(
-                      color: cs.onSurface,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
+      ),
+    );
+  }
+
+  Widget _buildPasswordSection(BuildContext context) {
+    return OpsWorkSection(
+      title: '초기 비밀번호',
+      subtitle: '자동 생성된 5자리 비밀번호를 복사해 사용자에게 전달합니다.',
+      icon: Icons.lock_rounded,
+      child: TextField(
+        controller: _passwordController,
+        readOnly: true,
+        enableSuggestions: false,
+        autocorrect: false,
+        decoration: opsInputDecoration(
+          context,
+          label: '비밀번호',
+          prefixIcon: const Icon(Icons.password_rounded),
+          suffixIcon: IconButton(
+            tooltip: '복사',
+            onPressed: _copyPassword,
+            icon: const Icon(Icons.copy_rounded),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDayRow(BuildContext context, String day) {
+    final cs = Theme.of(context).colorScheme;
+    final start = _startByDay[day];
+    final end = _endByDay[day];
+    final isWorking = start != null && end != null;
+    final isHoliday = !isWorking && start == null && end == null;
+    final hasBreak = _breakDays.contains(day) && isWorking;
+    final hasPartial = (start == null) != (end == null);
+    final borderColor = hasPartial ? cs.error.withOpacity(.45) : (isWorking ? cs.primary.withOpacity(.45) : cs.outlineVariant.withOpacity(.82));
+    final statusText = hasPartial ? '시간 확인 필요' : isWorking ? '${_formatTimeOfDay(start)} ~ ${_formatTimeOfDay(end)} · ${hasBreak ? '휴게 있음' : '휴게 없음'}' : '휴무';
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isWorking ? cs.primary.withOpacity(.06) : cs.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderColor),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: isWorking ? cs.primary : cs.surfaceVariant.withOpacity(.55),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    isWorking ? '${_formatTimeOfDay(start)} ~ ${_formatTimeOfDay(end)}' : '휴무',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: cs.onSurface,
-                    ),
-                  ),
-                ),
-                if (isWorking || hasPartial)
-                  TextButton.icon(
-                    onPressed: () => _clearWeeklyTime(day),
-                    icon: const Icon(Icons.close, size: 18),
-                    label: const Text('비우기'),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: <Widget>[
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => _pickWeeklyTime(day: day, isStart: true),
-                    icon: const Icon(Icons.login),
-                    label: Text('출근 ${_formatTimeOfDay(start)}'),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => _pickWeeklyTime(day: day, isStart: false),
-                    icon: const Icon(Icons.logout),
-                    label: Text('퇴근 ${_formatTimeOfDay(end)}'),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '시간이 비어 있으면 휴무로 처리됩니다.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: cs.onSurfaceVariant.withOpacity(.78),
-                fontWeight: FontWeight.w600,
+                child: Text(day, style: TextStyle(color: isWorking ? cs.onPrimary : cs.onSurfaceVariant, fontWeight: FontWeight.w900)),
               ),
-            ),
-          ],
-        ),
-      );
-    }
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  statusText,
+                  style: TextStyle(color: hasPartial ? cs.error : cs.onSurface, fontWeight: FontWeight.w900),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _pickWeeklyTime(day: day, isStart: true),
+                  icon: const Icon(Icons.login_rounded, size: 18),
+                  label: Text('출근 ${_formatTimeOfDay(start)}'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _pickWeeklyTime(day: day, isStart: false),
+                  icon: const Icon(Icons.logout_rounded, size: 18),
+                  label: Text('퇴근 ${_formatTimeOfDay(end)}'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: CheckboxListTile(
+                  value: isHoliday,
+                  onChanged: (value) => _setHoliday(day, value ?? false),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  title: const Text('휴무'),
+                ),
+              ),
+              Expanded(
+                child: CheckboxListTile(
+                  value: hasBreak,
+                  onChanged: isWorking ? (value) => _toggleBreakDay(day, value ?? false) : null,
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  title: const Text('휴게'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        Text(
-          '요일별 근무 시간',
-          style: theme.textTheme.bodyLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: cs.onSurface,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          '휴일 선택은 따로 하지 않습니다. 시간을 입력한 요일만 근무일로 저장됩니다.',
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: cs.onSurfaceVariant.withOpacity(.82),
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 12),
-        for (final day in _days) dayRow(day),
-      ],
+  Widget _buildTimeSection(BuildContext context) {
+    return OpsWorkSection(
+      title: '요일별 근무 시간',
+      subtitle: '휴무 요일은 기존 휴무 저장값으로 저장되고, 휴게 체크 요일만 퇴근 전 휴게 펀칭이 필요합니다.',
+      icon: Icons.schedule_rounded,
+      child: Column(
+        children: [
+          for (final day in _days) _buildDayRow(context, day),
+        ],
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
+    final cs = Theme.of(context).colorScheme;
+    final title = isEditMode ? '계정 수정' : '신규 계정 등록';
+    final subtitle = isEditMode ? '계정 권한, 이메일, 직책, 근무 시간, 휴무와 휴게 요일을 운영 정책에 맞게 갱신합니다.' : '현장 사용자를 등록하고 접근 권한, 근무 시간, 휴무와 휴게 요일을 지정합니다.';
+    final areaLabel = widget.division.trim().isEmpty ? widget.areaValue : '${widget.division} · ${widget.areaValue}';
 
-    return Material(
-      color: Colors.transparent,
-      child: Stack(
-        children: <Widget>[
-          SafeArea(
-            child: Container(
-              decoration: BoxDecoration(
-                color: cs.surface,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-                child: Column(
-                  children: <Widget>[
-                    Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              Text(
-                                isEditMode ? '유저 수정' : '유저 생성',
-                                style: theme.textTheme.headlineSmall?.copyWith(
-                                  fontWeight: FontWeight.w900,
-                                  color: cs.onSurface,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '${widget.division} · ${widget.areaValue}',
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  color: cs.onSurfaceVariant.withOpacity(.82),
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        IconButton(
-                          tooltip: '닫기',
-                          onPressed: () => Navigator.pop(context),
-                          icon: const Icon(Icons.close),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Expanded(
-                      child: SingleChildScrollView(
-                        controller: _scrollController,
-                        child: ExpansionPanelList(
-                          elevation: 0,
-                          expandedHeaderPadding: EdgeInsets.zero,
-                          expansionCallback: (index, isExpanded) {
-                            setState(() {
-                              for (var i = 0; i < _expanded.length; i++) {
-                                _expanded[i] = i == index ? !isExpanded : false;
-                              }
-                            });
-                          },
-                          children: <ExpansionPanel>[
-                            ExpansionPanel(
-                              canTapOnHeader: true,
-                              isExpanded: _expanded[_panelBasic],
-                              headerBuilder: (ctx, _) => KeyedSubtree(
-                                key: _keyBasic,
-                                child: _buildPanelHeader(
-                                  cs: cs,
-                                  step: 1,
-                                  title: '기본 정보',
-                                  summary: _basicSummary,
-                                  isDone: _isBasicInfoComplete,
-                                  isExpanded: _expanded[_panelBasic],
-                                ),
-                              ),
-                              body: _buildPanelBody(
-                                cs: cs,
-                                nextPanel: _panelRole,
-                                child: UserInputSection(
-                                  nameController: _nameController,
-                                  phoneController: _phoneController,
-                                  emailController: _emailController,
-                                  nameFocus: _nameFocus,
-                                  phoneFocus: _phoneFocus,
-                                  emailFocus: _emailFocus,
-                                  errorMessage: _errorMessage,
-                                  lockNameAndPhone: isEditMode,
-                                  emailLocalPartValidator: _isValidEmailLocalPart,
-                                  onEdited: _clearErrorIfAny,
-                                ),
-                              ),
-                            ),
-                            ExpansionPanel(
-                              canTapOnHeader: true,
-                              isExpanded: _expanded[_panelRole],
-                              headerBuilder: (ctx, _) => KeyedSubtree(
-                                key: _keyRole,
-                                child: _buildPanelHeader(
-                                  cs: cs,
-                                  step: 2,
-                                  title: '권한 및 허용 모드',
-                                  summary: _roleSummary,
-                                  isDone: _selectedModes.isNotEmpty,
-                                  isExpanded: _expanded[_panelRole],
-                                ),
-                              ),
-                              body: _buildPanelBody(
-                                cs: cs,
-                                nextPanel: _panelPosition,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                                  children: <Widget>[
-                                    UserRoleDropdownSection(
-                                      selectedRole: _selectedRole,
-                                      onChanged: (role) {
-                                        _clearErrorIfAny();
-                                        setState(() => _selectedRole = role);
-                                      },
-                                    ),
-                                    const SizedBox(height: 12),
-                                    _buildModesSelector(cs: cs),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            ExpansionPanel(
-                              canTapOnHeader: true,
-                              isExpanded: _expanded[_panelPosition],
-                              headerBuilder: (ctx, _) => KeyedSubtree(
-                                key: _keyPosition,
-                                child: _buildPanelHeader(
-                                  cs: cs,
-                                  step: 3,
-                                  title: '직책',
-                                  summary: _positionSummary,
-                                  isDone: _positionController.text.trim().isNotEmpty,
-                                  isExpanded: _expanded[_panelPosition],
-                                ),
-                              ),
-                              body: _buildPanelBody(
-                                cs: cs,
-                                nextPanel: _panelPassword,
-                                child: TextField(
-                                  controller: _positionController,
-                                  focusNode: _positionFocus,
-                                  textInputAction: TextInputAction.done,
-                                  onChanged: (_) => _clearErrorIfAny(),
-                                  decoration: InputDecoration(
-                                    labelText: '직책(선택)',
-                                    helperText: '예: 매니저, 총괄, 팀장',
-                                    filled: true,
-                                    fillColor: cs.surfaceVariant.withOpacity(.45),
-                                    isDense: true,
-                                    contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-                                    enabledBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(10),
-                                      borderSide: BorderSide(color: cs.outlineVariant.withOpacity(.75)),
-                                    ),
-                                    focusedBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(10),
-                                      borderSide: BorderSide(color: cs.primary, width: 1.3),
-                                    ),
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            ExpansionPanel(
-                              canTapOnHeader: true,
-                              isExpanded: _expanded[_panelPassword],
-                              headerBuilder: (ctx, _) => KeyedSubtree(
-                                key: _keyPassword,
-                                child: _buildPanelHeader(
-                                  cs: cs,
-                                  step: 4,
-                                  title: '비밀번호',
-                                  summary: '자동 생성 / 복사 가능',
-                                  isDone: _passwordController.text.trim().isNotEmpty,
-                                  isExpanded: _expanded[_panelPassword],
-                                ),
-                              ),
-                              body: _buildPanelBody(
-                                cs: cs,
-                                nextPanel: _panelTime,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                                  children: <Widget>[
-                                    UserPasswordDisplaySection(
-                                      controller: _passwordController,
-                                      enableMonospace: true,
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      '비밀번호는 읽기 전용입니다. 복사 버튼으로 전달하세요.',
-                                      style: theme.textTheme.bodySmall?.copyWith(
-                                        color: cs.onSurfaceVariant.withOpacity(.78),
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            ExpansionPanel(
-                              canTapOnHeader: true,
-                              isExpanded: _expanded[_panelTime],
-                              headerBuilder: (ctx, _) => KeyedSubtree(
-                                key: _keyTime,
-                                child: _buildPanelHeader(
-                                  cs: cs,
-                                  step: 5,
-                                  title: '요일별 근무 시간',
-                                  summary: _timeSummary,
-                                  isDone: _workingDayCount > 0,
-                                  isExpanded: _expanded[_panelTime],
-                                ),
-                              ),
-                              body: _buildPanelBody(
-                                cs: cs,
-                                child: _buildWeeklyTimeSection(theme: theme, cs: cs),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    if (_errorMessage != null)
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: cs.errorContainer.withOpacity(.55),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: cs.error.withOpacity(.35)),
-                        ),
-                        child: Text(
-                          _errorMessage!,
-                          style: TextStyle(
-                            color: cs.onErrorContainer,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () => Navigator.pop(context),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: cs.onSurface,
-                              side: BorderSide(color: cs.outlineVariant.withOpacity(.75)),
-                              shape: const StadiumBorder(),
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                            ),
-                            child: const Text('취소'),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () {
-                              FocusScope.of(context).unfocus();
-
-                              if (!_validateInputs()) {
-                                _openPanelAndScroll(_panelBasic);
-                                return;
-                              }
-
-                              if (!_isValidEmailLocalPart(_emailController.text)) {
-                                _setErrorMessage('이메일을 다시 확인하세요');
-                                _openPanelAndScroll(_panelBasic);
-                                return;
-                              }
-
-                              if (_selectedModes.isEmpty) {
-                                _setErrorMessage('허용 모드를 1개 이상 선택하세요');
-                                _openPanelAndScroll(_panelRole);
-                                return;
-                              }
-
-                              if (!_validateWeeklyTimes()) {
-                                _openPanelAndScroll(_panelTime);
-                                return;
-                              }
-
-                              final fullEmail = '${_emailController.text.trim()}@gmail.com';
-                              final normalizedModes = _normalizeAndFilterModes(_selectedModes);
-                              if (normalizedModes.isEmpty) {
-                                _setErrorMessage('허용 모드를 1개 이상 선택하세요');
-                                _openPanelAndScroll(_panelRole);
-                                return;
-                              }
-
-                              widget.onSave(
-                                _nameController.text.trim(),
-                                _phoneController.text.trim(),
-                                fullEmail,
-                                _selectedRole.name,
-                                normalizedModes,
-                                _passwordController.text.trim(),
-                                widget.areaValue,
-                                widget.division,
-                                false,
-                                false,
-                                widget.areaValue,
-                                _weekMapToStringMap(_startByDay),
-                                _weekMapToStringMap(_endByDay),
-                                _positionController.text.trim(),
-                              );
-
-                              if (mounted) {
-                                Navigator.pop(context);
-                              }
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: cs.primary,
-                              foregroundColor: cs.onPrimary,
-                              shape: const StadiumBorder(),
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                            ),
-                            child: Text(isEditMode ? '수정' : '생성'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
+    return OpsWorkSheet(
+      title: title,
+      subtitle: subtitle,
+      icon: Icons.manage_accounts_rounded,
+      areaLabel: areaLabel,
+      metrics: [
+        OpsMetric(label: '식별', value: _nameOk && _phoneOk && _emailOk ? '완료' : '필수', icon: Icons.badge_rounded, color: _nameOk && _phoneOk && _emailOk ? cs.primary : cs.error),
+        OpsMetric(label: '권한', value: _selectedRole.label.split('(').first, icon: Icons.verified_user_rounded, color: cs.primary),
+        OpsMetric(label: '모드', value: '${_selectedModes.length}', icon: Icons.widgets_rounded, color: _selectedModes.isEmpty ? cs.error : cs.primary),
+        OpsMetric(label: '근무일', value: '$_workingDayCount', icon: Icons.schedule_rounded, color: _workingDayCount == 0 ? cs.error : cs.primary),
+      ],
+      bottomBar: OpsBottomActionBar(
+        children: [
+          Expanded(
+            child: OpsActionButton(
+              label: '취소',
+              icon: Icons.close_rounded,
+              onPressed: () => Navigator.pop(context),
+              tonal: true,
             ),
           ),
-          _buildScreenTag(context),
+          const SizedBox(width: 8),
+          Expanded(
+            child: OpsActionButton(
+              label: isEditMode ? '계정 수정' : '계정 등록',
+              icon: isEditMode ? Icons.save_rounded : Icons.person_add_alt_1_rounded,
+              onPressed: _handleSave,
+            ),
+          ),
+        ],
+      ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          OpsInlineMessage(message: _errorMessage),
+          OpsCommandPanel(
+            children: [
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  OpsInfoPill(text: isEditMode ? '수정 모드' : '등록 모드', icon: isEditMode ? Icons.edit_rounded : Icons.person_add_alt_1_rounded),
+                  OpsInfoPill(text: _modesSummary, icon: Icons.widgets_rounded),
+                  OpsInfoPill(text: _timeSummary, icon: Icons.schedule_rounded),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _buildBasicSection(context),
+          _buildRoleSection(context),
+          _buildPositionSection(context),
+          _buildPasswordSection(context),
+          _buildTimeSection(context),
         ],
       ),
     );

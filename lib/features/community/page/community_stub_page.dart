@@ -53,43 +53,6 @@ class _BrandTintedLogo extends StatelessWidget {
   }
 }
 
-@immutable
-class _CommunityTokens {
-  const _CommunityTokens({
-    required this.pageBackground,
-    required this.appBarBackground,
-    required this.appBarForeground,
-    required this.divider,
-    required this.cardSurface,
-    required this.cardBorder,
-    required this.title,
-    required this.subtitle,
-  });
-
-  final Color pageBackground;
-  final Color appBarBackground;
-  final Color appBarForeground;
-  final Color divider;
-  final Color cardSurface;
-  final Color cardBorder;
-  final Color title;
-  final Color subtitle;
-
-  factory _CommunityTokens.of(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return _CommunityTokens(
-      pageBackground: cs.background,
-      appBarBackground: cs.background,
-      appBarForeground: cs.onSurface,
-      divider: cs.outlineVariant,
-      cardSurface: cs.surface,
-      cardBorder: cs.outlineVariant.withOpacity(0.85),
-      title: cs.onSurface,
-      subtitle: cs.onSurfaceVariant,
-    );
-  }
-}
-
 class CommunityStubPage extends StatelessWidget {
   const CommunityStubPage({super.key});
 
@@ -163,131 +126,113 @@ class CommunityStubPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = _CommunityTokens.of(context);
     final cs = Theme.of(context).colorScheme;
-    final text = Theme.of(context).textTheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-
     final media = MediaQuery.of(context);
     final isShort = media.size.height < 640;
     final keyboardOpen = media.viewInsets.bottom > 0;
-    final footerHeight = (isShort || keyboardOpen) ? 72.0 : 120.0;
+    final footerHeight = (isShort || keyboardOpen) ? 72.0 : 112.0;
+
+    final actions = <_CommunityAction>[
+      _CommunityAction(
+        icon: Icons.mic_rounded,
+        title: '사내 업무 커뮤니티',
+        accent: cs.secondary,
+        onAccent: cs.onSecondary,
+        onTap: () => _openWalkieFlow(context),
+        onLongPress: () => _openWalkieTutorial(context),
+      ),
+      _CommunityAction(
+        icon: Icons.videogame_asset_rounded,
+        title: '아케이드',
+        accent: cs.secondary,
+        onAccent: cs.onSecondary,
+        onTap: () => _openArcadeSheet(context),
+      ),
+      _CommunityAction(
+        icon: Icons.contact_support_rounded,
+        title: '문의하기',
+        accent: cs.primary,
+        onAccent: cs.onPrimary,
+        onTap: _openContactForm,
+      ),
+      _CommunityAction(
+        icon: Icons.description_rounded,
+        title: '이용약관',
+        accent: cs.tertiary,
+        onAccent: cs.onTertiary,
+        onTap: _openTermsOfService,
+      ),
+      _CommunityAction(
+        icon: Icons.privacy_tip_rounded,
+        title: '개인정보보호처리방침',
+        accent: cs.primaryContainer,
+        onAccent: cs.onPrimaryContainer,
+        onTap: _openPrivacyPolicy,
+      ),
+    ];
 
     return Scaffold(
-      backgroundColor: tokens.pageBackground,
-      appBar: AppBar(
-        backgroundColor: tokens.appBarBackground,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        centerTitle: true,
-        automaticallyImplyLeading: true,
-        leading: const BackButton(),
-        systemOverlayStyle: SystemUiOverlayStyle(
+      backgroundColor: cs.background,
+      body: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: SystemUiOverlayStyle(
           statusBarColor: Colors.transparent,
           statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
           statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
         ),
-        title: Text(
-          '커뮤니티 허브',
-          style: text.titleMedium?.copyWith(
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.2,
-            color: tokens.appBarForeground,
-          ),
-        ),
-        iconTheme: IconThemeData(color: tokens.appBarForeground),
-        actionsIconTheme: IconThemeData(color: tokens.appBarForeground),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: tokens.divider),
-        ),
-      ),
-      body: SafeArea(
-        child: Container(
-          color: tokens.pageBackground,
-          width: double.infinity,
-          padding: const EdgeInsets.all(24),
+        child: SafeArea(
+          bottom: false,
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const _HeaderBanner(),
-              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+                child: _CommunityHeader(
+                  title: '커뮤니티 허브',
+                  actionCount: actions.length,
+                  onBack: () => Navigator.of(context).maybePop(),
+                ),
+              ),
               Expanded(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final width = constraints.maxWidth;
-                    final crossAxisCount = width >= 1100
-                        ? 4
-                        : width >= 800
-                        ? 3
-                        : 2;
-
-                    const spacing = 12.0;
-                    final textScale =
-                    MediaQuery.of(context).textScaleFactor.clamp(1.0, 1.3);
-                    final tileWidth = (width - spacing * (crossAxisCount - 1)) /
-                        crossAxisCount;
-                    const baseTileHeight = 150.0;
-                    final tileHeight = baseTileHeight * textScale;
-                    final childAspectRatio = tileWidth / tileHeight;
-
-                    final cards = <Widget>[
-                      _ActionCard(
-                        icon: Icons.mic_rounded,
-                        title: '사내 업무 커뮤니티',
-                        subtitle: 'Discord',
-                        accent: cs.secondary,
-                        onAccent: cs.onSecondary,
-                        onTap: () => _openWalkieFlow(context),
-                        onLongPress: () => _openWalkieTutorial(context),
-                      ),
-                      _ActionCard(
-                        icon: Icons.videogame_asset_rounded,
-                        title: '아케이드',
-                        subtitle: 'Arcade',
-                        accent: cs.secondary,
-                        onAccent: cs.onSecondary,
-                        onTap: () => _openArcadeSheet(context),
-                      ),
-                      _ActionCard(
-                        icon: Icons.contact_support_rounded,
-                        title: '문의하기',
-                        subtitle: 'Google Forms',
-                        accent: cs.primary,
-                        onAccent: cs.onPrimary,
-                        onTap: _openContactForm,
-                      ),
-                      _ActionCard(
-                        icon: Icons.description_rounded,
-                        title: '이용약관',
-                        subtitle: '서비스 이용 안내',
-                        accent: cs.tertiary,
-                        onAccent: cs.onTertiary,
-                        onTap: _openTermsOfService,
-                      ),
-                      _ActionCard(
-                        icon: Icons.privacy_tip_rounded,
-                        title: '개인정보보호처리방침',
-                        subtitle: '개인정보 처리 안내',
-                        accent: cs.primaryContainer,
-                        onAccent: cs.onPrimaryContainer,
-                        onTap: _openPrivacyPolicy,
-                      ),
-                    ];
-
-                    return GridView.builder(
-                      padding: EdgeInsets.zero,
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: crossAxisCount,
-                        mainAxisSpacing: spacing,
-                        crossAxisSpacing: spacing,
-                        childAspectRatio: childAspectRatio,
-                      ),
-                      itemCount: cards.length,
-                      itemBuilder: (context, i) => cards[i],
-                    );
-                  },
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 18),
+                  children: [
+                    _CommunityMetricRow(
+                      actions: actions.length,
+                    ),
+                    const SizedBox(height: 12),
+                    _GameControlPanel(),
+                    const SizedBox(height: 12),
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final width = constraints.maxWidth;
+                        final crossAxisCount = width >= 980
+                            ? 4
+                            : width >= 680
+                                ? 3
+                                : 2;
+                        const spacing = 10.0;
+                        final tileWidth =
+                            (width - spacing * (crossAxisCount - 1)) /
+                                crossAxisCount;
+                        const tileHeight = 124.0;
+                        return GridView.builder(
+                          padding: EdgeInsets.zero,
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: crossAxisCount,
+                            mainAxisSpacing: spacing,
+                            crossAxisSpacing: spacing,
+                            childAspectRatio: tileWidth / tileHeight,
+                          ),
+                          itemCount: actions.length,
+                          itemBuilder: (context, i) =>
+                              _CommunityActionTile(action: actions[i]),
+                        );
+                      },
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -301,20 +246,15 @@ class CommunityStubPage extends StatelessWidget {
           top: false,
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: tokens.pageBackground,
-              border: Border(top: BorderSide(color: tokens.divider, width: 1)),
+              color: cs.background,
+              border: Border(
+                top: BorderSide(color: cs.outlineVariant.withOpacity(.65)),
+              ),
             ),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(8),
-                onTap: null,
-                child: SizedBox(
-                  height: footerHeight,
-                  child: Center(
-                    child: _BrandTintedLogo(height: footerHeight),
-                  ),
-                ),
+            child: SizedBox(
+              height: footerHeight,
+              child: Center(
+                child: _BrandTintedLogo(height: footerHeight),
               ),
             ),
           ),
@@ -324,91 +264,244 @@ class CommunityStubPage extends StatelessWidget {
   }
 }
 
+class _CommunityHeader extends StatelessWidget {
+  const _CommunityHeader({
+    required this.title,
+    required this.actionCount,
+    required this.onBack,
+  });
 
-class _HeaderBanner extends StatelessWidget {
-  const _HeaderBanner();
+  final String title;
+  final int actionCount;
+  final VoidCallback onBack;
 
   @override
   Widget build(BuildContext context) {
-    final text = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
-
-    final base = cs.secondary;
-    final container = cs.secondaryContainer;
-    final onContainer = cs.onSecondaryContainer;
-    final border = cs.outlineVariant.withOpacity(0.85);
-    final bg0 = Color.alphaBlend(container.withOpacity(0.92), cs.background);
-    final bg1 = Color.alphaBlend(base.withOpacity(0.10), cs.background);
+    final tt = Theme.of(context).textTheme;
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [bg0, bg1],
-        ),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: border),
+        color: cs.inverseSurface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: cs.outlineVariant.withOpacity(.5)),
+      ),
+      child: Row(
+        children: [
+          IconButton.filledTonal(
+            tooltip: '뒤로가기',
+            onPressed: onBack,
+            icon: const Icon(Icons.arrow_back_rounded),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: cs.secondary,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(Icons.forum_rounded, color: cs.onSecondary),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: (tt.titleLarge ?? const TextStyle(fontSize: 20)).copyWith(
+                color: cs.onInverseSurface,
+                fontWeight: FontWeight.w900,
+                letterSpacing: -.3,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          _HeaderCountPill(
+            icon: Icons.apps_rounded,
+            label: '$actionCount',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeaderCountPill extends StatelessWidget {
+  const _HeaderCountPill({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    return Container(
+      height: 34,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: cs.onInverseSurface.withOpacity(.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: cs.onInverseSurface.withOpacity(.22)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: cs.onInverseSurface),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: (tt.labelMedium ?? const TextStyle(fontSize: 12)).copyWith(
+              color: cs.onInverseSurface,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CommunityMetricRow extends StatelessWidget {
+  const _CommunityMetricRow({required this.actions});
+
+  final int actions;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          _MetricChip(
+            icon: Icons.apps_rounded,
+            label: '기능',
+            value: '$actions',
+            color: cs.primary,
+          ),
+          const SizedBox(width: 8),
+          ValueListenableBuilder<bool>(
+            valueListenable: GameQuickActions.enabled,
+            builder: (context, on, _) {
+              return _MetricChip(
+                icon: on ? Icons.bolt_rounded : Icons.power_settings_new_rounded,
+                label: '게임',
+                value: on ? 'ON' : 'OFF',
+                color: on ? cs.secondary : cs.onSurfaceVariant,
+              );
+            },
+          ),
+          const SizedBox(width: 8),
+          _MetricChip(
+            icon: Icons.open_in_new_rounded,
+            label: '외부',
+            value: '3',
+            color: cs.tertiary,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MetricChip extends StatelessWidget {
+  const _MetricChip({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    return Container(
+      height: 40,
+      padding: const EdgeInsets.symmetric(horizontal: 11),
+      decoration: BoxDecoration(
+        color: Color.alphaBlend(color.withOpacity(.10), cs.surface),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withOpacity(.25)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 7),
+          Text(
+            label,
+            style: (tt.labelMedium ?? const TextStyle(fontSize: 12)).copyWith(
+              color: cs.onSurfaceVariant,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(width: 7),
+          Text(
+            value,
+            style: (tt.titleSmall ?? const TextStyle(fontSize: 14)).copyWith(
+              color: cs.onSurface,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GameControlPanel extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    return Container(
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cs.outlineVariant.withOpacity(.65)),
       ),
       child: Row(
         children: [
           Container(
-            width: 44,
-            height: 44,
+            width: 38,
+            height: 38,
             decoration: BoxDecoration(
-              color: base.withOpacity(0.14),
-              shape: BoxShape.circle,
-              border: Border.all(color: base.withOpacity(0.22)),
+              color: cs.secondaryContainer,
+              borderRadius: BorderRadius.circular(13),
             ),
-            alignment: Alignment.center,
-            child: Icon(Icons.videogame_asset_rounded, color: base),
+            child: Icon(Icons.sports_esports_rounded, color: cs.onSecondaryContainer),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '커뮤니티 허브 입니다.',
-                  style: text.bodyMedium?.copyWith(
-                    color: onContainer,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '게임 퀵버블을 켜면 다른 화면에서도 테트리스를 열 수 있습니다.',
-                  style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-                ),
-              ],
+            child: Text(
+              '게임 퀵버블',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: (tt.titleSmall ?? const TextStyle(fontSize: 15)).copyWith(
+                color: cs.onSurface,
+                fontWeight: FontWeight.w900,
+              ),
             ),
           ),
-          const SizedBox(width: 12),
           ValueListenableBuilder<bool>(
             valueListenable: GameQuickActions.enabled,
             builder: (context, on, _) {
-              final pillBg = on ? base.withOpacity(0.12) : cs.surfaceVariant;
-              final pillBorder = on ? base.withOpacity(0.30) : cs.outlineVariant;
-              final pillFg = on ? base : cs.onSurfaceVariant;
               return Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: pillBg,
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: pillBorder),
-                    ),
-                    child: Text(
-                      on ? 'Game ON' : 'Game OFF',
-                      style: text.labelMedium?.copyWith(
-                        color: pillFg,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: .2,
-                      ),
-                    ),
+                  _StatusPill(
+                    label: on ? 'ON' : 'OFF',
+                    color: on ? cs.secondary : cs.onSurfaceVariant,
                   ),
                   Switch.adaptive(
                     value: on,
@@ -419,7 +512,7 @@ class _HeaderBanner extends StatelessWidget {
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            content: Text(v ? '게임 퀵버블이 켜졌습니다.' : '게임 퀵버블이 꺼졌습니다.'),
+                            content: Text(v ? '게임 퀵버블 ON' : '게임 퀵버블 OFF'),
                             behavior: SnackBarBehavior.floating,
                             duration: const Duration(milliseconds: 900),
                           ),
@@ -437,11 +530,38 @@ class _HeaderBanner extends StatelessWidget {
   }
 }
 
-class _ActionCard extends StatelessWidget {
-  const _ActionCard({
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: Color.alphaBlend(color.withOpacity(.10), cs.surface),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withOpacity(.28)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.w900,
+          fontSize: 12,
+        ),
+      ),
+    );
+  }
+}
+
+class _CommunityAction {
+  const _CommunityAction({
     required this.icon,
     required this.title,
-    required this.subtitle,
     required this.accent,
     required this.onAccent,
     this.onTap,
@@ -450,89 +570,64 @@ class _ActionCard extends StatelessWidget {
 
   final IconData icon;
   final String title;
-  final String subtitle;
   final Color accent;
   final Color onAccent;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
+}
+
+class _CommunityActionTile extends StatelessWidget {
+  const _CommunityActionTile({required this.action});
+
+  final _CommunityAction action;
 
   @override
   Widget build(BuildContext context) {
-    final tokens = _CommunityTokens.of(context);
     final cs = Theme.of(context).colorScheme;
-    final tint = Color.alphaBlend(accent.withOpacity(0.10), tokens.cardSurface);
-
-    return Card(
-      elevation: 0,
-      color: tokens.cardSurface,
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: BorderSide(color: tokens.cardBorder, width: 1),
-      ),
+    final tt = Theme.of(context).textTheme;
+    return Material(
+      color: Colors.transparent,
       child: InkWell(
-        onTap: onTap,
-        onLongPress: onLongPress,
-        child: Ink(
+        onTap: action.onTap,
+        onLongPress: action.onLongPress,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [tokens.cardSurface, tint],
-            ),
+            color: cs.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: cs.outlineVariant.withOpacity(.65)),
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Semantics(
-                  button: true,
-                  label: title,
-                  child: Container(
-                    width: 48,
-                    height: 48,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
                     decoration: BoxDecoration(
-                      color: accent,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: cs.shadow.withOpacity(0.10),
-                          blurRadius: 8,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
+                      color: action.accent,
+                      borderRadius: BorderRadius.circular(13),
                     ),
-                    alignment: Alignment.center,
-                    child: Icon(icon, color: onAccent, size: 26),
+                    child: Icon(action.icon, color: action.onAccent, size: 22),
                   ),
+                  const Spacer(),
+                  Icon(Icons.chevron_right_rounded, color: cs.onSurfaceVariant),
+                ],
+              ),
+              const Spacer(),
+              Text(
+                action.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: (tt.titleSmall ?? const TextStyle(fontSize: 15)).copyWith(
+                  color: cs.onSurface,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -.1,
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  title,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w800,
-                    color: tokens.title,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: tokens.subtitle,
-                    fontSize: 12,
-                    height: 1.15,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  softWrap: true,
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),

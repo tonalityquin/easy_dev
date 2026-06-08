@@ -1,24 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
-import '../../../domain/models/tablet/tablet_model.dart';
-import 'widgets/tablet_validation_helpers.dart';
-import 'widgets/tablet_input_section.dart';
-import 'widgets/tablet_password_display.dart';
-import 'widgets/tablet_role_dropdown_section.dart';
-import 'widgets/tablet_role_type.dart';
 import '../../../../../shared/auth/five_digit_password_generator.dart';
+import '../../../../../shared/secondary/widgets/ops_console_widgets.dart';
+import '../../../domain/models/tablet/tablet_model.dart';
+import 'widgets/tablet_role_type.dart';
 
 class TabletSettingBottomSheet extends StatefulWidget {
-  
   final Function(
-      String name,
-      String handle,
-      String email,
-      String role,
-      String password,
-      String area,
-      String division,
-      ) onSave;
+    String name,
+    String handle,
+    String email,
+    String role,
+    String password,
+    String area,
+    String division,
+  ) onSave;
 
   final String areaValue;
   final String division;
@@ -39,66 +36,39 @@ class TabletSettingBottomSheet extends StatefulWidget {
 }
 
 class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
-  
-  static const String _screenTag = 'tablet setting';
-
-  
   final _nameController = TextEditingController();
-  final _handleController = TextEditingController(); 
-  final _emailController = TextEditingController(); 
+  final _handleController = TextEditingController();
+  final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
   final _nameFocus = FocusNode();
   final _handleFocus = FocusNode();
   final _emailFocus = FocusNode();
 
-  
   TabletRoleType _selectedRole = TabletRoleType.lowField;
   String? _errorMessage;
 
-  
-  static const int _panelBasic = 0;
-  static const int _panelRole = 1;
-  static const int _panelPassword = 2;
-
-  late final List<bool> _expanded;
-  final ScrollController _scrollController = ScrollController();
-
-  final GlobalKey _keyBasic = GlobalKey();
-  final GlobalKey _keyRole = GlobalKey();
-  final GlobalKey _keyPassword = GlobalKey();
+  bool get isEditMode => widget.isEditMode;
+  bool get _nameOk => _nameController.text.trim().isNotEmpty;
+  bool get _handleOk => RegExp(r'^[a-z]{3,20}$').hasMatch(_handleController.text.trim());
+  bool get _emailOk => _emailController.text.trim().isNotEmpty && _isValidEmailLocalPart(_emailController.text.trim());
 
   @override
   void initState() {
     super.initState();
-
-    _expanded = List<bool>.filled(3, false);
-    _expanded[_panelBasic] = true;
-
     final user = widget.initialUser;
     if (user != null) {
       _nameController.text = user.name;
       _handleController.text = user.handle;
-      _emailController.text = user.email.split('@').first; 
+      _emailController.text = user.email.split('@').first;
       _passwordController.text = user.password;
       _selectedRole = TabletRoleType.values.firstWhere(
-            (r) => r.name == user.role,
+        (role) => role.name == user.role,
         orElse: () => TabletRoleType.lowField,
       );
     } else {
-      _passwordController.text = _generateRandomPassword();
+      _passwordController.text = FiveDigitPasswordGenerator.generate();
     }
-
-    
-    _nameFocus.addListener(() {
-      if (_nameFocus.hasFocus) _openPanelAndScroll(_panelBasic);
-    });
-    _handleFocus.addListener(() {
-      if (_handleFocus.hasFocus) _openPanelAndScroll(_panelBasic);
-    });
-    _emailFocus.addListener(() {
-      if (_emailFocus.hasFocus) _openPanelAndScroll(_panelBasic);
-    });
   }
 
   @override
@@ -107,25 +77,14 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
     _handleController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
-
     _nameFocus.dispose();
     _handleFocus.dispose();
     _emailFocus.dispose();
-
-    _scrollController.dispose();
     super.dispose();
   }
 
-  
-
-  bool _validateInputs() {
-    final error = validateTabletInputs({
-      '이름': _nameController.text.trim(),
-      '아이디': _handleController.text.trim(),
-      '이메일': _emailController.text.trim(),
-    });
-    _setErrorMessage(error);
-    return error == null;
+  bool _isValidEmailLocalPart(String input) {
+    return RegExp(r'^[a-zA-Z0-9._-]+$').hasMatch(input.trim());
   }
 
   void _setErrorMessage(String? message) {
@@ -133,515 +92,212 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
   }
 
   void _clearErrorIfAny() {
-    if (_errorMessage != null) {
-      setState(() => _errorMessage = null);
-    }
+    setState(() => _errorMessage = null);
   }
 
-  
-  bool _isValidEmailLocalPart(String input) {
-    final reg = RegExp(r'^[a-zA-Z0-9._-]+$');
-    return input.isNotEmpty && reg.hasMatch(input);
-  }
-
-  
-  bool _isValidHandle(String input) {
-    return RegExp(r'^[a-z]{3,20}$').hasMatch(input);
-  }
-
-  String _generateRandomPassword() {
-    return FiveDigitPasswordGenerator.generate();
-  }
-
-  
-  Widget _buildScreenTag(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final base = Theme.of(context).textTheme.labelSmall;
-
-    final style = (base ??
-        const TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-        ))
-        .copyWith(
-      color: cs.onSurfaceVariant.withOpacity(.72),
-      fontWeight: FontWeight.w600,
-      letterSpacing: 0.2,
-    );
-
-    return IgnorePointer(
-      child: Align(
-        alignment: Alignment.topLeft,
-        child: Padding(
-          padding: const EdgeInsets.only(left: 12, top: 4),
-          child: Semantics(
-            label: 'screen_tag: $_screenTag',
-            child: Text(_screenTag, style: style),
-          ),
-        ),
-      ),
-    );
-  }
-
-  
-
-  bool get _isBasicInfoComplete {
-    final nameOk = _nameController.text.trim().isNotEmpty;
-    final handleOk = _isValidHandle(_handleController.text.trim());
-    final emailOk = _emailController.text.trim().isNotEmpty;
-    final emailLocalOk = _isValidEmailLocalPart(_emailController.text.trim());
-    return nameOk && handleOk && emailOk && emailLocalOk;
-  }
-
-  String get _basicSummary {
-    final name = _nameController.text.trim();
-    final handle = _handleController.text.trim();
-    final email = _emailController.text.trim();
-    final shownName = name.isEmpty ? '이름 미입력' : name;
-    final shownHandle = handle.isEmpty ? '아이디 미입력' : handle;
-    final shownEmail = email.isEmpty ? '이메일 미입력' : '$email@gmail.com';
-    return '$shownName · $shownHandle · $shownEmail';
-  }
-
-  String get _roleSummary => _selectedRole.label;
-
-  void _openPanelAndScroll(int panelIndex) {
+  Future<void> _copyPassword() async {
+    await Clipboard.setData(ClipboardData(text: _passwordController.text));
     if (!mounted) return;
-
-    setState(() {
-      for (int i = 0; i < _expanded.length; i++) {
-        _expanded[i] = i == panelIndex;
-      }
-    });
-
-    GlobalKey key = _keyBasic;
-    if (panelIndex == _panelRole) key = _keyRole;
-    if (panelIndex == _panelPassword) key = _keyPassword;
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final ctx = key.currentContext;
-      if (ctx != null) {
-        Scrollable.ensureVisible(
-          ctx,
-          alignment: 0.12,
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOut,
-        );
-      }
-    });
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('태블릿 비밀번호를 복사했습니다.')));
   }
 
-  Widget _buildPanelHeader({
-    required ColorScheme cs,
-    required int step,
-    required String title,
-    required String summary,
-    required bool isDone,
-    required bool isExpanded,
-  }) {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      leading: Container(
-        width: 34,
-        height: 34,
-        decoration: BoxDecoration(
-          color: isExpanded ? cs.primary.withOpacity(.12) : cs.primaryContainer.withOpacity(.30),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: isExpanded ? cs.primary.withOpacity(.35) : cs.outlineVariant.withOpacity(.65),
-          ),
-        ),
-        child: Center(
-          child: isDone
-              ? Icon(Icons.check, color: cs.onSurface, size: 20)
-              : Text(
-            '$step',
-            style: TextStyle(
-              fontWeight: FontWeight.w900,
-              color: cs.onSurface,
-            ),
-          ),
-        ),
-      ),
-      title: Text(
-        title,
-        style: TextStyle(
-          fontWeight: FontWeight.w900,
-          color: cs.onSurface,
-        ),
-      ),
-      subtitle: Text(
-        summary,
-        style: TextStyle(
-          color: cs.onSurfaceVariant.withOpacity(.78),
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-      trailing: Icon(
-        isExpanded ? Icons.expand_less : Icons.expand_more,
-        color: cs.onSurface,
-      ),
+  void _handleSave() {
+    FocusScope.of(context).unfocus();
+    if (!_nameOk) {
+      _setErrorMessage('태블릿 이름을 입력하세요');
+      return;
+    }
+    if (!_handleOk) {
+      _setErrorMessage('아이디는 소문자 영어 3~20자로 입력하세요');
+      return;
+    }
+    if (!_emailOk) {
+      _setErrorMessage(_emailController.text.trim().isEmpty ? '이메일을 입력하세요' : '이메일을 다시 확인하세요');
+      return;
+    }
+
+    widget.onSave(
+      _nameController.text.trim(),
+      _handleController.text.trim(),
+      '${_emailController.text.trim()}@gmail.com',
+      _selectedRole.name,
+      _passwordController.text.trim(),
+      widget.areaValue,
+      widget.division,
     );
+
+    if (mounted) Navigator.pop(context);
   }
 
-  Widget _buildPanelBody({
-    required ColorScheme cs,
-    required Widget child,
-    int? nextPanel,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+  Widget _buildIdentitySection(BuildContext context) {
+    return OpsWorkSection(
+      title: '태블릿 식별 정보',
+      subtitle: isEditMode ? '운영 단말의 이름, 핸들, 구글 이메일을 갱신합니다.' : '현장에 배정할 태블릿 계정의 식별값을 등록합니다.',
+      icon: Icons.tablet_mac_rounded,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          child,
-          if (nextPanel != null) ...[
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: () => _openPanelAndScroll(nextPanel),
-              icon: const Icon(Icons.arrow_forward),
-              label: const Text('다음 단계로 이동'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: cs.onSurface,
-                side: BorderSide(color: cs.outlineVariant.withOpacity(.75)),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-              ),
+          TextField(
+            controller: _nameController,
+            focusNode: _nameFocus,
+            onChanged: (_) => _clearErrorIfAny(),
+            textInputAction: TextInputAction.next,
+            onSubmitted: (_) => FocusScope.of(context).nextFocus(),
+            decoration: opsInputDecoration(
+              context,
+              label: '태블릿 이름',
+              hintText: '예: A동 입구 태블릿',
+              prefixIcon: const Icon(Icons.tablet_mac_rounded),
+              errorText: _errorMessage == '태블릿 이름을 입력하세요' ? _errorMessage : null,
             ),
-          ],
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _handleController,
+            focusNode: _handleFocus,
+            onChanged: (_) => _clearErrorIfAny(),
+            textInputAction: TextInputAction.next,
+            onSubmitted: (_) => FocusScope.of(context).nextFocus(),
+            inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[a-z]')), LengthLimitingTextInputFormatter(20)],
+            decoration: opsInputDecoration(
+              context,
+              label: '태블릿 아이디',
+              hintText: '소문자 영어 3~20자',
+              helperText: '계정 ID는 저장 경로에 사용됩니다.',
+              prefixIcon: const Icon(Icons.alternate_email_rounded),
+              errorText: _errorMessage == '아이디는 소문자 영어 3~20자로 입력하세요' ? _errorMessage : null,
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _emailController,
+            focusNode: _emailFocus,
+            onChanged: (_) => _clearErrorIfAny(),
+            textInputAction: TextInputAction.done,
+            keyboardType: TextInputType.emailAddress,
+            inputFormatters: [FilteringTextInputFormatter.deny(RegExp(r'\s'))],
+            decoration: opsInputDecoration(
+              context,
+              label: '이메일',
+              hintText: 'google 계정 앞부분',
+              suffixText: '@gmail.com',
+              prefixIcon: const Icon(Icons.mail_rounded),
+              errorText: (_errorMessage == '이메일을 입력하세요' || _errorMessage == '이메일을 다시 확인하세요') ? _errorMessage : null,
+            ),
+          ),
         ],
       ),
     );
   }
 
-  
+  Widget _buildRoleSection(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return OpsWorkSection(
+      title: '운영 권한',
+      subtitle: '태블릿 단말이 수행할 수 있는 현장 역할을 지정합니다.',
+      icon: Icons.security_rounded,
+      trailing: OpsStatusBadge(label: _selectedRole.label, color: cs.primary, icon: Icons.verified_user_rounded),
+      child: DropdownButtonFormField<TabletRoleType>(
+        value: _selectedRole,
+        isExpanded: true,
+        decoration: opsInputDecoration(context, label: '권한', prefixIcon: const Icon(Icons.admin_panel_settings_rounded)),
+        items: TabletRoleType.values
+            .map((role) => DropdownMenuItem<TabletRoleType>(
+                  value: role,
+                  child: Text(role.label, overflow: TextOverflow.ellipsis),
+                ))
+            .toList(growable: false),
+        onChanged: (role) {
+          if (role == null) return;
+          _clearErrorIfAny();
+          setState(() => _selectedRole = role);
+        },
+      ),
+    );
+  }
+
+  Widget _buildPasswordSection(BuildContext context) {
+    return OpsWorkSection(
+      title: '단말 로그인 비밀번호',
+      subtitle: '자동 생성된 비밀번호를 태블릿 초기 세팅 시 사용합니다.',
+      icon: Icons.lock_rounded,
+      child: TextField(
+        controller: _passwordController,
+        readOnly: true,
+        enableSuggestions: false,
+        autocorrect: false,
+        decoration: opsInputDecoration(
+          context,
+          label: '비밀번호',
+          prefixIcon: const Icon(Icons.password_rounded),
+          suffixIcon: IconButton(
+            tooltip: '복사',
+            onPressed: _copyPassword,
+            icon: const Icon(Icons.copy_rounded),
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
+    final cs = Theme.of(context).colorScheme;
+    final title = isEditMode ? '태블릿 계정 수정' : '태블릿 등록';
+    final subtitle = isEditMode ? '현장 단말의 배정 정보와 권한을 갱신합니다.' : '운영 구역에 배정할 태블릿 계정을 프로비저닝합니다.';
+    final areaLabel = widget.division.trim().isEmpty ? widget.areaValue : '${widget.division} · ${widget.areaValue}';
 
-    final isEditMode = widget.isEditMode || (widget.initialUser != null);
-
-    
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-    final screenHeight = MediaQuery.of(context).size.height;
-    final effectiveHeight = screenHeight - bottomInset;
-
-    return SafeArea(
-      child: Stack(
+    return OpsWorkSheet(
+      title: title,
+      subtitle: subtitle,
+      icon: Icons.tablet_mac_rounded,
+      areaLabel: areaLabel,
+      metrics: [
+        OpsMetric(label: '이름', value: _nameOk ? '완료' : '필수', icon: Icons.tablet_rounded, color: _nameOk ? cs.primary : cs.error),
+        OpsMetric(label: '아이디', value: _handleOk ? '정상' : '검증', icon: Icons.alternate_email_rounded, color: _handleOk ? cs.primary : cs.error),
+        OpsMetric(label: '권한', value: _selectedRole.label, icon: Icons.security_rounded, color: cs.primary),
+        OpsMetric(label: '이메일', value: _emailOk ? '정상' : '필수', icon: Icons.mail_rounded, color: _emailOk ? cs.primary : cs.error),
+      ],
+      bottomBar: OpsBottomActionBar(
         children: [
-          Padding(
-            padding: EdgeInsets.only(bottom: bottomInset),
-            child: SizedBox(
-              height: effectiveHeight,
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: cs.surface,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-                  border: Border.all(color: cs.outlineVariant.withOpacity(.55)),
-                ),
-                child: Column(
-                  children: [
-                    
-                    Center(
-                      child: Container(
-                        width: 40,
-                        height: 4,
-                        margin: const EdgeInsets.only(bottom: 16),
-                        decoration: BoxDecoration(
-                          color: cs.outlineVariant.withOpacity(.65),
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ),
-
-                    
-                    Row(
-                      children: [
-                        Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: cs.primaryContainer.withOpacity(.65),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: cs.outlineVariant.withOpacity(.65)),
-                          ),
-                          child: Icon(Icons.tablet_mac_rounded, color: cs.primary),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            isEditMode ? '태블릿 사용자 수정' : '태블릿 사용자 생성',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w900,
-                              color: cs.onSurface,
-                            ),
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: cs.surfaceVariant.withOpacity(.55),
-                            borderRadius: BorderRadius.circular(999),
-                            border: Border.all(color: cs.outlineVariant.withOpacity(.55)),
-                          ),
-                          child: Text(
-                            widget.areaValue,
-                            style: TextStyle(
-                              color: cs.onSurface,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-
-                    
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: cs.surfaceContainerLow,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: cs.outlineVariant.withOpacity(.65)),
-                      ),
-                      child: Text(
-                        '단계별로 하나씩 입력하세요. 완료된 단계는 체크 표시로 바뀝니다.',
-                        style: TextStyle(
-                          color: cs.onSurface,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-
-                    
-                    Expanded(
-                      child: SingleChildScrollView(
-                        controller: _scrollController,
-                        child: ExpansionPanelList(
-                          expansionCallback: (index, isExpanded) {
-                            _clearErrorIfAny();
-                            FocusScope.of(context).unfocus();
-                            _openPanelAndScroll(index); 
-                          },
-                          children: [
-                            
-                            ExpansionPanel(
-                              canTapOnHeader: true,
-                              isExpanded: _expanded[_panelBasic],
-                              headerBuilder: (ctx, _) => KeyedSubtree(
-                                key: _keyBasic,
-                                child: _buildPanelHeader(
-                                  cs: cs,
-                                  step: 1,
-                                  title: '기본 정보',
-                                  summary: _basicSummary,
-                                  isDone: _isBasicInfoComplete,
-                                  isExpanded: _expanded[_panelBasic],
-                                ),
-                              ),
-                              body: _buildPanelBody(
-                                cs: cs,
-                                nextPanel: _panelRole,
-                                child: TabletInputSection(
-                                  nameController: _nameController,
-                                  handleController: _handleController,
-                                  emailController: _emailController,
-                                  nameFocus: _nameFocus,
-                                  handleFocus: _handleFocus,
-                                  emailFocus: _emailFocus,
-                                  errorMessage: _errorMessage,
-                                  onEdited: _clearErrorIfAny,
-                                  emailLocalPartValidator: _isValidEmailLocalPart,
-                                ),
-                              ),
-                            ),
-
-                            
-                            ExpansionPanel(
-                              canTapOnHeader: true,
-                              isExpanded: _expanded[_panelRole],
-                              headerBuilder: (ctx, _) => KeyedSubtree(
-                                key: _keyRole,
-                                child: _buildPanelHeader(
-                                  cs: cs,
-                                  step: 2,
-                                  title: '권한',
-                                  summary: _roleSummary,
-                                  isDone: true,
-                                  isExpanded: _expanded[_panelRole],
-                                ),
-                              ),
-                              body: _buildPanelBody(
-                                cs: cs,
-                                nextPanel: _panelPassword,
-                                child: Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    color: cs.surfaceContainerLow,
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: cs.outlineVariant.withOpacity(.65)),
-                                  ),
-                                  child: TabletRoleDropdownSection(
-                                    selectedRole: _selectedRole,
-                                    onChanged: (value) {
-                                      _clearErrorIfAny();
-                                      setState(() => _selectedRole = value);
-                                    },
-                                  ),
-                                ),
-                              ),
-                            ),
-
-                            
-                            ExpansionPanel(
-                              canTapOnHeader: true,
-                              isExpanded: _expanded[_panelPassword],
-                              headerBuilder: (ctx, _) => KeyedSubtree(
-                                key: _keyPassword,
-                                child: _buildPanelHeader(
-                                  cs: cs,
-                                  step: 3,
-                                  title: '비밀번호',
-                                  summary: '자동 생성/복사 가능',
-                                  isDone: _passwordController.text.trim().isNotEmpty,
-                                  isExpanded: _expanded[_panelPassword],
-                                ),
-                              ),
-                              body: _buildPanelBody(
-                                cs: cs,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                                  children: [
-                                    TabletPasswordDisplay(
-                                      controller: _passwordController,
-                                      enableMonospace: true,
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Container(
-                                      padding: const EdgeInsets.all(10),
-                                      decoration: BoxDecoration(
-                                        color: cs.surfaceContainerLow,
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(color: cs.outlineVariant.withOpacity(.65)),
-                                      ),
-                                      child: Text(
-                                        '비밀번호는 읽기 전용입니다. 우측 복사 버튼으로 전달하세요.',
-                                        style: TextStyle(
-                                          color: cs.onSurface,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    
-                    if (_errorMessage != null)
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: cs.errorContainer.withOpacity(.55),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: cs.error.withOpacity(.35)),
-                        ),
-                        child: Text(
-                          _errorMessage!,
-                          style: TextStyle(
-                            color: cs.onErrorContainer,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-
-                    const SizedBox(height: 12),
-
-                    
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () => Navigator.pop(context),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: cs.onSurface,
-                              side: BorderSide(color: cs.outlineVariant.withOpacity(.75)),
-                              shape: const StadiumBorder(),
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                            ),
-                            child: const Text('취소'),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () {
-                              FocusScope.of(context).unfocus();
-
-                              
-                              if (!_validateInputs()) {
-                                _openPanelAndScroll(_panelBasic);
-                                return;
-                              }
-
-                              
-                              if (!_isValidEmailLocalPart(_emailController.text)) {
-                                _setErrorMessage('이메일을 다시 확인하세요');
-                                _openPanelAndScroll(_panelBasic);
-                                return;
-                              }
-
-                              final fullEmail = '${_emailController.text.trim()}@gmail.com';
-
-                              
-                              widget.onSave(
-                                _nameController.text.trim(),
-                                _handleController.text.trim(),
-                                fullEmail,
-                                _selectedRole.name,
-                                _passwordController.text,
-                                widget.areaValue,
-                                widget.division,
-                              );
-
-                              Navigator.pop(context);
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: cs.primary,
-                              foregroundColor: cs.onPrimary,
-                              shape: const StadiumBorder(),
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              elevation: 0,
-                            ),
-                            child: Text(isEditMode ? '수정' : '생성'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
+          Expanded(
+            child: OpsActionButton(
+              label: '취소',
+              icon: Icons.close_rounded,
+              onPressed: () => Navigator.pop(context),
+              tonal: true,
             ),
           ),
-
-          
-          _buildScreenTag(context),
+          const SizedBox(width: 8),
+          Expanded(
+            child: OpsActionButton(
+              label: isEditMode ? '태블릿 수정' : '태블릿 등록',
+              icon: isEditMode ? Icons.save_rounded : Icons.add_to_queue_rounded,
+              onPressed: _handleSave,
+            ),
+          ),
+        ],
+      ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          OpsInlineMessage(message: _errorMessage),
+          OpsCommandPanel(
+            children: [
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  OpsInfoPill(text: isEditMode ? '수정 모드' : '등록 모드', icon: isEditMode ? Icons.edit_rounded : Icons.add_to_queue_rounded),
+                  OpsInfoPill(text: _selectedRole.label, icon: Icons.verified_user_rounded),
+                  OpsInfoPill(text: widget.areaValue.trim().isEmpty ? '지역 미설정' : widget.areaValue, icon: Icons.business_rounded),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _buildIdentitySection(context),
+          _buildRoleSection(context),
+          _buildPasswordSection(context),
         ],
       ),
     );

@@ -51,6 +51,16 @@ class UpdateBottomSheet extends StatelessWidget {
 
   static final List<UpdateEntry> defaultEntries = [
     UpdateEntry(
+      version: 'v0.1.3',
+      highlights: [
+        '휴무, 휴게 상세 옵션 설정 기능 추가',
+        '정기(월) 주차 관리 기능의 접근성 개선',
+        '정기(월) 주차 관리의 상태 메모 시 한글로 작성이 되지 않던 버그 수정',
+        '보조 페이지의 관리자 화면 개선',
+        '대시보드 및 본사 페이지와 시트 UI 개선',
+      ],
+    ),
+    UpdateEntry(
       version: 'v0.1.2',
       highlights: [
         '업무 별 통계 시각화 기능 개선',

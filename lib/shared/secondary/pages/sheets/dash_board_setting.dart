@@ -1,12 +1,14 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../../app/init/logout_helper.dart';
+import '../../../../app/utils/ops_delayed_refresh_gate.dart';
 import '../../../../features/dev/application/area_state.dart';
 import '../../../../features/location/applications/location_state.dart';
 import '../../../../features/payment/applications/bill_state.dart';
+import '../../../secondary/widgets/ops_console_widgets.dart';
 import '../../../tts/application/tts_sync_helper.dart';
 import '../../../tts/application/tts_user_filters.dart';
 
@@ -26,17 +28,13 @@ class _DashboardSettingState extends State<DashboardSetting> {
   bool _applying = false;
   bool _refreshing = false;
   bool _locked = true;
+  bool? _hasMonthlyParking;
   DateTime? _lastRefreshAt;
 
   @override
   void initState() {
     super.initState();
     _bootstrap();
-  }
-
-  @override
-  void dispose() {
-    super.dispose();
   }
 
   Future<void> _bootstrap() async {
@@ -107,8 +105,16 @@ class _DashboardSettingState extends State<DashboardSetting> {
         save: false,
         showSnackbar: false,
       );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('현재 설정을 포그라운드 서비스에 재적용했습니다.')),
+      );
     } catch (e) {
       debugPrint('FG 재전송 실패: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('포그라운드 서비스 재적용에 실패했습니다.')),
+      );
     }
   }
 
@@ -129,10 +135,8 @@ class _DashboardSettingState extends State<DashboardSetting> {
           .get();
 
       final exists = qs.docs.isNotEmpty;
-
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_prefsHasMonthlyKey, exists);
-
       return exists;
     } catch (e) {
       debugPrint('월주차 존재 여부 확인 실패: $e');
@@ -145,18 +149,35 @@ class _DashboardSettingState extends State<DashboardSetting> {
 
     setState(() => _refreshing = true);
     try {
+      final shouldRefresh = await OpsDelayedRefreshGate.waitIfNeeded(
+        context: context,
+        title: '운영 데이터 동기화',
+        message: '주차 구역, 정산 타입, 월정기 사용 여부를 새로고침하기 전 요청을 준비하고 있습니다.',
+      );
+      if (!shouldRefresh || !mounted) return;
+
       final locationState = context.read<LocationState>();
       final billState = context.read<BillState>();
 
       await locationState.manualLocationRefresh();
       await billState.manualBillRefresh();
-      await _syncHasMonthlyParkingFlag();
+      final monthlyFlag = await _syncHasMonthlyParkingFlag();
 
       if (mounted) {
-        setState(() => _lastRefreshAt = DateTime.now());
+        setState(() {
+          _lastRefreshAt = DateTime.now();
+          _hasMonthlyParking = monthlyFlag;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('운영 데이터를 새로고침했습니다.')),
+        );
       }
     } catch (e) {
       debugPrint('수동 새로고침 실패: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('운영 데이터 새로고침에 실패했습니다.')),
+      );
     } finally {
       if (!mounted) return;
       setState(() => _refreshing = false);
@@ -171,408 +192,199 @@ class _DashboardSettingState extends State<DashboardSetting> {
     );
   }
 
-  String _formatLastSync(DateTime dt) {
-    String two(int n) => n.toString().padLeft(2, '0');
-    final d = dt.toLocal();
-    return '${d.year}-${two(d.month)}-${two(d.day)} ${two(d.hour)}:${two(d.minute)}';
-  }
-
-  Widget _buildScreenTag(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final base = Theme.of(context).textTheme.labelSmall;
-
-    final style =
-        (base ?? const TextStyle(fontSize: 11, fontWeight: FontWeight.w600))
-            .copyWith(
-      color: cs.onSurfaceVariant.withOpacity(.72),
-      fontWeight: FontWeight.w600,
-      letterSpacing: 0.2,
-    );
-
-    return SafeArea(
-      child: IgnorePointer(
-        child: Align(
-          alignment: Alignment.topLeft,
-          child: Padding(
-            padding: const EdgeInsets.only(left: 12, top: 4),
-            child: Semantics(
-              label: 'screen_tag: Setting',
-              child: Text('Setting', style: style),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   Future<void> _toggleLock() async {
     final next = !_locked;
     setState(() => _locked = next);
     await _saveLockState(next);
   }
 
+  String _formatLastSync(DateTime dt) {
+    String two(int n) => n.toString().padLeft(2, '0');
+    final d = dt.toLocal();
+    return '${d.year}-${two(d.month)}-${two(d.day)} ${two(d.hour)}:${two(d.minute)}';
+  }
+
+  int get _enabledTtsCount {
+    var count = 0;
+    if (_filters.parking) count++;
+    if (_filters.departure) count++;
+    if (_filters.completed) count++;
+    return count;
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
+    final currentArea = context.select<AreaState, String>((s) => s.currentArea.trim());
+    final areaLabel = currentArea.isEmpty ? '지역 미설정' : currentArea;
+    final monthlyLabel = _hasMonthlyParking == null ? '대기' : (_hasMonthlyParking! ? '있음' : '없음');
 
-    final currentArea = context.select<AreaState, String>((s) => s.currentArea);
-
-    final bodyList = <Widget>[
-      const SizedBox(height: 4),
-      const _HeaderBanner(),
-      const SizedBox(height: 12),
-      if (currentArea.isEmpty)
-        const _Section(
-          title: '지역 설정 필요',
-          icon: Icons.info_outline,
-          tone: _Tone.warning,
-          child: Text(
-            '현재 지역 정보가 비어 있습니다. FG 서비스에서 지역 기반 구독을 사용하는 경우, 지역 설정 완료 후 다시 적용하세요.',
-          ),
-        ),
-      _Section(
-        title: 'TTS 알림 설정',
-        icon: Icons.record_voice_over_rounded,
-        subtitle: '스위치를 변경하면 즉시 저장되고 FG 서비스에 적용됩니다.',
-        trailing: _applying
-            ? const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : null,
-        child: Column(
-          children: [
-            _SwitchTile(
-              title: '입차 요청',
-              subtitle: '입차 요청 발생 시 음성 안내',
-              value: _filters.parking,
-              onChanged: _applying
-                  ? null
-                  : (v) => _apply(_filters.copyWith(parking: v)),
-              icon: Icons.local_parking_rounded,
-            ),
-            Divider(height: 1, color: cs.outlineVariant.withOpacity(.75)),
-            _SwitchTile(
-              title: '출차 요청',
-              subtitle: '출차 요청 발생 시 음성 안내',
-              value: _filters.departure,
-              onChanged: _applying
-                  ? null
-                  : (v) => _apply(_filters.copyWith(departure: v)),
-              icon: Icons.exit_to_app_rounded,
-            ),
-            Divider(height: 1, color: cs.outlineVariant.withOpacity(.75)),
-            _SwitchTile(
-              title: '출차 완료(2회)',
-              subtitle: '출차 완료 발생 시 2회 안내',
-              value: _filters.completed,
-              onChanged: _applying
-                  ? null
-                  : (v) => _apply(_filters.copyWith(completed: v)),
-              icon: Icons.done_all_rounded,
-            ),
-          ],
-        ),
+    return OpsConsoleScaffold(
+      title: '대시보드 설정',
+      icon: Icons.dashboard_customize_rounded,
+      areaLabel: areaLabel,
+      loading: _loading,
+      trailing: IconButton.filledTonal(
+        tooltip: _locked ? '잠금 해제' : '잠금',
+        onPressed: _loading ? null : _toggleLock,
+        icon: Icon(_locked ? Icons.lock_rounded : Icons.lock_open_rounded),
       ),
-      _Section(
-        title: '현재 지역',
-        icon: Icons.place_outlined,
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                currentArea.isEmpty ? '(미설정)' : currentArea,
-                style:
-                    (tt.titleSmall ?? const TextStyle(fontSize: 14)).copyWith(
-                  fontWeight: FontWeight.w800,
-                  color: cs.onSurface,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            FilledButton.tonalIcon(
-              onPressed: _loading ? null : _resendToForeground,
-              icon: const Icon(Icons.send),
-              label: const Text('재적용'),
-              style: FilledButton.styleFrom(
-                minimumSize: const Size(1, 44),
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-              ),
-            ),
-          ],
-        ),
-      ),
-      _Section(
-        title: '데이터 새로고침',
-        icon: Icons.refresh_rounded,
-        subtitle: '주차 구역/정산 데이터를 수동으로 동기화합니다.',
-        trailing: _refreshing
-            ? const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : (_lastRefreshAt != null
-                ? _Pill(text: '마지막: ${_formatLastSync(_lastRefreshAt!)}')
-                : null),
-        child: Row(
-          children: [
-            Expanded(
-              child: FilledButton.icon(
-                onPressed: _loading || _refreshing ? null : _manualRefreshAll,
-                icon: _refreshing
-                    ? SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor:
-                              AlwaysStoppedAnimation<Color>(cs.onPrimary),
-                        ),
-                      )
-                    : const Icon(Icons.sync),
-                label: const Text('지금 새로고침'),
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(48),
-                  backgroundColor: cs.primary,
-                  foregroundColor: cs.onPrimary,
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-      _Section(
-        title: '로그아웃',
-        icon: Icons.logout_rounded,
-        tone: _Tone.danger,
-        subtitle: '포그라운드 서비스를 중지하고 로그인 화면(허브 선택 경유)으로 이동합니다.',
-        child: Row(
-          children: [
-            Expanded(
-              child: FilledButton.tonalIcon(
-                onPressed: _loading ? null : _logout,
-                icon: const Icon(Icons.logout),
-                label: const Text('로그아웃'),
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(48),
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  backgroundColor: cs.errorContainer,
-                  foregroundColor: cs.onErrorContainer,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-      const SizedBox(height: 8),
-    ];
-
-    final listView = _loading
-        ? const Center(child: CircularProgressIndicator())
-        : RefreshIndicator(
-            onRefresh: _manualRefreshAll,
-            edgeOffset: 80,
-            color: cs.primary,
-            child: ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-              children: bodyList,
-            ),
-          );
-
-    final content = Stack(
-      children: [
-        AbsorbPointer(
-          absorbing: _locked,
-          child: listView,
-        ),
-        if (_locked)
-          Positioned.fill(
-            child: Container(
-              color: cs.scrim.withOpacity(0.10),
-              alignment: Alignment.center,
-              child: _LockOverlay(onUnlock: _toggleLock),
-            ),
-          ),
+      metrics: [
+        OpsMetric(label: 'TTS ON', value: '$_enabledTtsCount/3', icon: Icons.record_voice_over_rounded, color: cs.primary),
+        OpsMetric(label: '잠금', value: _locked ? 'ON' : 'OFF', icon: _locked ? Icons.lock_rounded : Icons.lock_open_rounded, color: _locked ? cs.error : cs.primary),
+        OpsMetric(label: '월정기', value: monthlyLabel, icon: Icons.local_parking_rounded, color: _hasMonthlyParking == true ? cs.primary : cs.onInverseSurface),
+        OpsMetric(label: '새로고침', value: _lastRefreshAt == null ? '-' : _formatLastSync(_lastRefreshAt!).substring(11), icon: Icons.sync_rounded, color: cs.primary),
       ],
-    );
-
-    return Scaffold(
-      backgroundColor: cs.surface,
-      appBar: AppBar(
-        title: const Text('대시보드 설정'),
-        backgroundColor: cs.surface,
-        foregroundColor: cs.onSurface,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        centerTitle: true,
-        automaticallyImplyLeading: false,
-        flexibleSpace: _buildScreenTag(context),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child:
-              Container(height: 1, color: cs.outlineVariant.withOpacity(.70)),
-        ),
-        actions: [
-          IconButton(
-            tooltip: _locked ? '잠금 해제' : '잠금',
-            onPressed: _loading ? null : _toggleLock,
-            icon: Icon(_locked ? Icons.lock_rounded : Icons.lock_open_rounded),
-          ),
-          const SizedBox(width: 6),
-        ],
-      ),
-      body: content,
-    );
-  }
-}
-
-enum _Tone { neutral, warning, danger }
-
-class _HeaderBanner extends StatelessWidget {
-  const _HeaderBanner();
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-
-    final titleStyle =
-        (tt.titleLarge ?? const TextStyle(fontSize: 20)).copyWith(
-      fontWeight: FontWeight.w900,
-      color: cs.onSurface,
-    );
-    final subStyle = (tt.bodyMedium ?? const TextStyle(fontSize: 13)).copyWith(
-      color: cs.onSurfaceVariant,
-      height: 1.25,
-    );
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
-      decoration: BoxDecoration(
-        color: cs.primaryContainer.withOpacity(.55),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: cs.outlineVariant.withOpacity(.85)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: cs.primary.withOpacity(.12),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Icon(Icons.tune_rounded, color: cs.primary),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      body: _loading
+          ? const SizedBox.shrink()
+          : Stack(
               children: [
-                Text('설정', style: titleStyle),
-                const SizedBox(height: 4),
-                Text('TTS 및 주요 동기화/세션 기능을 제어합니다.', style: subStyle),
+                AbsorbPointer(
+                  absorbing: _locked,
+                  child: RefreshIndicator(
+                    onRefresh: _manualRefreshAll,
+                    color: cs.primary,
+                    child: ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+                      children: [
+                        if (currentArea.isEmpty) ...[
+                          OpsPanel(
+                            accentColor: cs.error,
+                            child: const OpsSectionTitle(
+                              title: '지역 설정 필요',
+                              subtitle: '지역 기반 구독과 데이터 동기화를 사용하려면 현재 지역을 먼저 설정하세요.',
+                              icon: Icons.info_outline_rounded,
+                            ),
+                          ),
+                        ],
+                        OpsPanel(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              OpsSectionTitle(
+                                title: 'TTS 알림 채널',
+                                subtitle: '변경 즉시 저장되고 포그라운드 서비스로 동기화됩니다.',
+                                icon: Icons.campaign_rounded,
+                                trailing: _applying
+                                    ? SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(strokeWidth: 2, color: cs.primary),
+                                      )
+                                    : OpsStatusBadge(label: '$_enabledTtsCount개 활성', color: cs.primary),
+                              ),
+                              const SizedBox(height: 12),
+                              _SwitchTile(
+                                title: '입차 요청',
+                                subtitle: '입차 요청 발생 시 음성 안내',
+                                value: _filters.parking,
+                                onChanged: _applying ? null : (v) => _apply(_filters.copyWith(parking: v)),
+                                icon: Icons.local_parking_rounded,
+                              ),
+                              const OpsDivider(),
+                              _SwitchTile(
+                                title: '출차 요청',
+                                subtitle: '출차 요청 발생 시 음성 안내',
+                                value: _filters.departure,
+                                onChanged: _applying ? null : (v) => _apply(_filters.copyWith(departure: v)),
+                                icon: Icons.exit_to_app_rounded,
+                              ),
+                              const OpsDivider(),
+                              _SwitchTile(
+                                title: '출차 완료 2회',
+                                subtitle: '출차 완료 발생 시 반복 안내',
+                                value: _filters.completed,
+                                onChanged: _applying ? null : (v) => _apply(_filters.copyWith(completed: v)),
+                                icon: Icons.done_all_rounded,
+                              ),
+                            ],
+                          ),
+                        ),
+                        OpsPanel(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              OpsSectionTitle(
+                                title: '현재 운영 지점',
+                                subtitle: currentArea.isEmpty ? '지역 값이 비어 있습니다.' : '$currentArea 기준으로 구독과 캐시를 맞춥니다.',
+                                icon: Icons.place_outlined,
+                              ),
+                              const SizedBox(height: 14),
+                              Row(
+                                children: [
+                                  Expanded(child: OpsInfoPill(text: currentArea.isEmpty ? '미설정' : currentArea, icon: Icons.business_rounded)),
+                                  const SizedBox(width: 10),
+                                  OpsActionButton(
+                                    label: '재적용',
+                                    icon: Icons.send_rounded,
+                                    onPressed: _loading ? null : _resendToForeground,
+                                    tonal: true,
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        OpsPanel(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              OpsSectionTitle(
+                                title: '운영 데이터 동기화',
+                                subtitle: '주차 구역, 정산 타입, 월정기 사용 여부를 수동으로 재조회합니다.',
+                                icon: Icons.sync_rounded,
+                                trailing: _lastRefreshAt == null ? null : OpsStatusBadge(label: _formatLastSync(_lastRefreshAt!), color: cs.primary),
+                              ),
+                              const SizedBox(height: 14),
+                              SizedBox(
+                                width: double.infinity,
+                                child: OpsActionButton(
+                                  label: _refreshing ? '새로고침 중' : '지금 새로고침',
+                                  icon: Icons.refresh_rounded,
+                                  onPressed: _loading || _refreshing ? null : _manualRefreshAll,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        OpsPanel(
+                          accentColor: cs.error,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const OpsSectionTitle(
+                                title: '세션 종료',
+                                subtitle: '포그라운드 서비스를 중지하고 로그인 화면으로 이동합니다.',
+                                icon: Icons.logout_rounded,
+                              ),
+                              const SizedBox(height: 14),
+                              SizedBox(
+                                width: double.infinity,
+                                child: OpsActionButton(
+                                  label: '로그아웃',
+                                  icon: Icons.logout_rounded,
+                                  onPressed: _loading ? null : _logout,
+                                  danger: true,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (_locked)
+                  Positioned.fill(
+                    child: Container(
+                      color: cs.scrim.withOpacity(.10),
+                      alignment: Alignment.center,
+                      child: _LockOverlay(onUnlock: _toggleLock),
+                    ),
+                  ),
               ],
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Section extends StatelessWidget {
-  final String title;
-  final String? subtitle;
-  final IconData icon;
-  final Widget child;
-  final Widget? trailing;
-  final _Tone tone;
-
-  const _Section({
-    required this.title,
-    required this.icon,
-    required this.child,
-    this.subtitle,
-    this.trailing,
-    this.tone = _Tone.neutral,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-
-    Color border;
-    Color bg;
-    Color iconColor;
-
-    switch (tone) {
-      case _Tone.warning:
-        border = Colors.amber.withOpacity(.35);
-        bg = Color.alphaBlend(Colors.amber.withOpacity(.14), cs.surface);
-        iconColor = Colors.amber.shade800;
-        break;
-      case _Tone.danger:
-        border = cs.error.withOpacity(.35);
-        bg = cs.errorContainer.withOpacity(.45);
-        iconColor = cs.error;
-        break;
-      case _Tone.neutral:
-        border = cs.outlineVariant.withOpacity(.85);
-        bg = cs.surfaceContainerLow;
-        iconColor = cs.primary;
-        break;
-    }
-
-    final titleStyle =
-        (tt.titleSmall ?? const TextStyle(fontSize: 14)).copyWith(
-      fontWeight: FontWeight.w800,
-      color: cs.onSurface,
-    );
-    final subStyle = (tt.bodySmall ?? const TextStyle(fontSize: 12.5)).copyWith(
-      color: cs.onSurfaceVariant,
-      height: 1.25,
-    );
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: border),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(icon, size: 18, color: iconColor),
-                const SizedBox(width: 8),
-                Expanded(child: Text(title, style: titleStyle)),
-                if (trailing != null) trailing!,
-              ],
-            ),
-            if (subtitle != null) ...[
-              const SizedBox(height: 6),
-              Text(subtitle!, style: subStyle),
-            ],
-            const SizedBox(height: 10),
-            child,
-          ],
-        ),
-      ),
     );
   }
 }
@@ -596,54 +408,52 @@ class _SwitchTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-
-    final titleStyle = (tt.bodyLarge ?? const TextStyle(fontSize: 14)).copyWith(
-      fontWeight: FontWeight.w700,
-      color: cs.onSurface,
-    );
-    final subStyle = (tt.bodySmall ?? const TextStyle(fontSize: 12.5)).copyWith(
-      color: cs.onSurfaceVariant,
-    );
-
-    return ListTile(
-      dense: false,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-      minLeadingWidth: 24,
-      leading: Icon(icon, color: cs.primary),
-      title: Text(title, style: titleStyle),
-      subtitle: (subtitle == null) ? null : Text(subtitle!, style: subStyle),
-      trailing: Switch.adaptive(
-        value: value,
-        onChanged: onChanged,
-      ),
+    return InkWell(
       onTap: onChanged == null ? null : () => onChanged!(!value),
-    );
-  }
-}
-
-class _Pill extends StatelessWidget {
-  final String text;
-
-  const _Pill({required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-
-    final style = (tt.labelSmall ?? const TextStyle(fontSize: 11.5)).copyWith(
-      color: cs.onSurfaceVariant,
-      fontWeight: FontWeight.w700,
-    );
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: cs.surfaceVariant.withOpacity(.55),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: cs.outlineVariant.withOpacity(.85)),
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: value ? cs.primary.withOpacity(.12) : cs.surfaceVariant.withOpacity(.45),
+                borderRadius: BorderRadius.circular(11),
+                border: Border.all(color: value ? cs.primary.withOpacity(.22) : cs.outlineVariant.withOpacity(.75)),
+              ),
+              child: Icon(icon, color: value ? cs.primary : cs.onSurfaceVariant, size: 18),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: (tt.bodyMedium ?? const TextStyle(fontSize: 14)).copyWith(
+                      color: cs.onSurface,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle!,
+                      style: (tt.bodySmall ?? const TextStyle(fontSize: 12)).copyWith(
+                        color: cs.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            Switch.adaptive(value: value, onChanged: onChanged),
+          ],
+        ),
       ),
-      child: Text(text, style: style),
     );
   }
 }
@@ -657,70 +467,49 @@ class _LockOverlay extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-
-    final titleStyle =
-        (tt.titleMedium ?? const TextStyle(fontSize: 16)).copyWith(
-      fontWeight: FontWeight.w900,
-      color: cs.onSurface,
-    );
-    final bodyStyle =
-        (tt.bodySmall ?? const TextStyle(fontSize: 12.5)).copyWith(
-      color: cs.onSurfaceVariant,
-      height: 1.25,
-    );
-
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 420),
-      child: Container(
+      child: OpsPanel(
         margin: const EdgeInsets.symmetric(horizontal: 18),
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
-        decoration: BoxDecoration(
-          color: cs.surface,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: cs.outlineVariant.withOpacity(.85)),
-          boxShadow: [
-            BoxShadow(
-              color: cs.shadow.withOpacity(.18),
-              blurRadius: 18,
-              offset: const Offset(0, 10),
-            ),
-          ],
-        ),
+        padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 52,
-              height: 52,
+              width: 58,
+              height: 58,
               decoration: BoxDecoration(
-                color: cs.primaryContainer.withOpacity(.65),
+                color: cs.primary.withOpacity(.12),
                 borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: cs.outlineVariant.withOpacity(.65)),
+                border: Border.all(color: cs.primary.withOpacity(.22)),
               ),
-              child: Icon(Icons.lock_rounded, color: cs.primary),
-            ),
-            const SizedBox(height: 10),
-            Text('잠금 상태', style: titleStyle),
-            const SizedBox(height: 6),
-            Text(
-              '설정 변경을 막기 위해 화면이 잠겨 있습니다.\n오른쪽 상단의 잠금 버튼 또는 아래 버튼으로 해제할 수 있습니다.',
-              textAlign: TextAlign.center,
-              style: bodyStyle,
+              child: Icon(Icons.lock_rounded, color: cs.primary, size: 28),
             ),
             const SizedBox(height: 12),
+            Text(
+              '설정 잠금',
+              style: (tt.titleMedium ?? const TextStyle(fontSize: 16)).copyWith(
+                color: cs.onSurface,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '운영 설정 변경을 막기 위해 잠겨 있습니다. 잠금 해제 후 TTS와 동기화 항목을 조정하세요.',
+              textAlign: TextAlign.center,
+              style: (tt.bodySmall ?? const TextStyle(fontSize: 12.5)).copyWith(
+                color: cs.onSurfaceVariant,
+                fontWeight: FontWeight.w700,
+                height: 1.3,
+              ),
+            ),
+            const SizedBox(height: 14),
             SizedBox(
               width: double.infinity,
-              child: FilledButton.icon(
+              child: OpsActionButton(
+                label: '잠금 해제',
+                icon: Icons.lock_open_rounded,
                 onPressed: onUnlock,
-                icon: const Icon(Icons.lock_open_rounded),
-                label: const Text('잠금 해제'),
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(48),
-                  backgroundColor: cs.primary,
-                  foregroundColor: cs.onPrimary,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                ),
               ),
             ),
           ],

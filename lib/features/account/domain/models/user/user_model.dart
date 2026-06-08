@@ -12,6 +12,7 @@ class UserModel {
   final TimeOfDay? endTime;
   final String? englishSelectedAreaName;
   final List<String> fixedHolidays;
+  final List<String> breakDays;
   final bool isSaved;
   final bool isSelected;
   final bool isWorking;
@@ -36,6 +37,7 @@ class UserModel {
     this.endTime,
     this.englishSelectedAreaName,
     this.fixedHolidays = const <String>[],
+    this.breakDays = const <String>[],
     required this.isSaved,
     required this.isSelected,
     required this.isWorking,
@@ -61,6 +63,7 @@ class UserModel {
     TimeOfDay? endTime,
     String? englishSelectedAreaName,
     List<String>? fixedHolidays,
+    List<String>? breakDays,
     bool? isSaved,
     bool? isSelected,
     bool? isWorking,
@@ -84,7 +87,8 @@ class UserModel {
       email: email ?? this.email,
       endTime: endTime ?? this.endTime,
       englishSelectedAreaName: englishSelectedAreaName ?? this.englishSelectedAreaName,
-      fixedHolidays: fixedHolidays ?? this.fixedHolidays,
+      fixedHolidays: _normalizeDayList(fixedHolidays ?? this.fixedHolidays),
+      breakDays: _normalizeDayList(breakDays ?? this.breakDays),
       isSaved: isSaved ?? this.isSaved,
       isSelected: isSelected ?? this.isSelected,
       isWorking: isWorking ?? this.isWorking,
@@ -102,7 +106,7 @@ class UserModel {
   }
 
   factory UserModel.fromMap(String id, Map<String, dynamic> data) {
-    final fixedHolidays = List<String>.from(data['fixedHolidays'] ?? const <String>[]);
+    final fixedHolidays = _decodeDayList(data['fixedHolidays']);
     final startTime = _parseTime(data['startTime']);
     final endTime = _parseTime(data['endTime']);
     final startByWeekday = _decodeWeekdayMap(
@@ -115,6 +119,13 @@ class UserModel {
       legacyTime: endTime,
       fixedHolidays: fixedHolidays,
     );
+    final breakDays = data.containsKey('breakDays')
+        ? _decodeDayList(data['breakDays'])
+        : _inferBreakDays(
+            startByWeekday: startByWeekday,
+            endByWeekday: endByWeekday,
+            fixedHolidays: fixedHolidays,
+          );
 
     return UserModel(
       id: id,
@@ -126,6 +137,11 @@ class UserModel {
       endTime: endTime ?? _pickRepresentative(endByWeekday),
       englishSelectedAreaName: data['englishSelectedAreaName'],
       fixedHolidays: fixedHolidays,
+      breakDays: _normalizeBreakDaysForWorkingMap(
+        breakDays: breakDays,
+        startByWeekday: startByWeekday,
+        endByWeekday: endByWeekday,
+      ),
       isSaved: data['isSaved'] ?? false,
       isSelected: data['isSelected'] ?? false,
       isWorking: data['isWorking'] ?? false,
@@ -151,7 +167,8 @@ class UserModel {
       'email': email,
       'endTime': _timeToMap(endTime),
       'englishSelectedAreaName': englishSelectedAreaName,
-      'fixedHolidays': fixedHolidays,
+      'fixedHolidays': _normalizeDayList(fixedHolidays),
+      'breakDays': _normalizeDayList(breakDays),
       'isSaved': isSaved,
       'isSelected': isSelected,
       'isWorking': isWorking,
@@ -213,6 +230,32 @@ class UserModel {
     return out;
   }
 
+  static List<String> _decodeDayList(dynamic raw) {
+    if (raw is Iterable) {
+      return _normalizeDayList(raw.map((value) => value.toString()));
+    }
+    if (raw is Map) {
+      final out = <String>[];
+      for (final day in weekdays) {
+        final value = raw[day];
+        if (value == true) out.add(day);
+      }
+      return out;
+    }
+    return const <String>[];
+  }
+
+  static List<String> _normalizeDayList(Iterable<String> raw) {
+    final set = raw.map((value) => value.trim()).where((value) => value.isNotEmpty).toSet();
+    final out = <String>[
+      for (final day in weekdays)
+        if (set.contains(day)) day,
+      for (final value in set)
+        if (!weekdays.contains(value)) value,
+    ];
+    return out;
+  }
+
   static Map<String, TimeOfDay?> _decodeWeekdayMap(
     dynamic raw, {
     required TimeOfDay? legacyTime,
@@ -230,6 +273,40 @@ class UserModel {
     final offDays = fixedHolidays.map((e) => e.trim()).where((e) => e.isNotEmpty).toSet();
     for (final day in weekdays) {
       out[day] = offDays.contains(day) ? null : legacyTime;
+    }
+    return out;
+  }
+
+  static List<String> _inferBreakDays({
+    required Map<String, TimeOfDay?> startByWeekday,
+    required Map<String, TimeOfDay?> endByWeekday,
+    required List<String> fixedHolidays,
+  }) {
+    final holidays = fixedHolidays.map((value) => value.trim()).where((value) => value.isNotEmpty).toSet();
+    final out = <String>[];
+    for (final day in weekdays) {
+      if (holidays.contains(day)) continue;
+      if (startByWeekday[day] != null && endByWeekday[day] != null) {
+        out.add(day);
+      }
+    }
+    return out;
+  }
+
+  static List<String> _normalizeBreakDaysForWorkingMap({
+    required List<String> breakDays,
+    required Map<String, TimeOfDay?> startByWeekday,
+    required Map<String, TimeOfDay?> endByWeekday,
+  }) {
+    final breakSet = breakDays.map((value) => value.trim()).where((value) => value.isNotEmpty).toSet();
+    final out = <String>[];
+    for (final day in weekdays) {
+      if (!breakSet.contains(day)) continue;
+      if (startByWeekday[day] == null || endByWeekday[day] == null) continue;
+      out.add(day);
+    }
+    for (final value in breakSet) {
+      if (!weekdays.contains(value)) out.add(value);
     }
     return out;
   }

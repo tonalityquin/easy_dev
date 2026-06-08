@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../../app/init/app_exit_service.dart';
 import '../../../../../app/init/logout_helper.dart';
+import '../../../../../app/utils/ops_delayed_refresh_gate.dart';
 import '../../../../../app/theme/brand_theme.dart';
 import '../../../../../app/utils/dev_firebase_debug_dialog.dart';
 import '../../../../../app/theme/theme_prefs_controller.dart';
@@ -123,6 +124,13 @@ class _TabletTopNavigationState extends State<TabletTopNavigation> {
     refreshDialog();
 
     try {
+      final shouldRefresh = await OpsDelayedRefreshGate.waitIfNeeded(
+        context: context,
+        title: '데이터 새로고침',
+        message: '주차 구역, 정산 데이터, 월정기 사용 여부를 새로고침하기 전 요청을 준비하고 있습니다.',
+      );
+      if (!shouldRefresh || !mounted) return;
+
       final locationState = context.read<LocationState>();
       final billState = context.read<BillState>();
 

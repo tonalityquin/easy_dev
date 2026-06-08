@@ -76,6 +76,7 @@ Future<void> showMinorDashboardPunchCardFeedback(
   BuildContext context, {
   required AttBrkModeType type,
   required DateTime dateTime,
+  required bool requiresBreak,
 }) async {
   _traceMinorPunch(context, type, dateTime);
 
@@ -94,6 +95,7 @@ Future<void> showMinorDashboardPunchCardFeedback(
       return _PunchCardSheet(
         type: type,
         dateTime: dateTime,
+        requiresBreak: requiresBreak,
       );
     },
     transitionBuilder: (ctx, anim, secondaryAnim, child) {
@@ -117,10 +119,12 @@ Future<void> showMinorDashboardPunchCardFeedback(
 class _PunchCardSheet extends StatefulWidget {
   final AttBrkModeType type;
   final DateTime dateTime;
+  final bool requiresBreak;
 
   const _PunchCardSheet({
     required this.type,
     required this.dateTime,
+    required this.requiresBreak,
   });
 
   @override
@@ -399,6 +403,7 @@ class _PunchCardSheetState extends State<_PunchCardSheet>
                                         child: _PunchStatusCell(
                                           punched: _punchedBreak,
                                           label: '휴게',
+                                          notRequired: !widget.requiresBreak,
                                           accentColor: _accentColorForType(
                                               cs, AttBrkModeType.breakTime),
                                           highlighted: widget.type ==
@@ -481,6 +486,7 @@ class _PunchStatusCell extends StatelessWidget {
   final String label;
   final Color accentColor;
   final bool highlighted;
+  final bool notRequired;
   final double flashStrength;
 
   const _PunchStatusCell({
@@ -488,16 +494,39 @@ class _PunchStatusCell extends StatelessWidget {
     required this.label,
     required this.accentColor,
     required this.highlighted,
+    this.notRequired = false,
     required this.flashStrength,
   });
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    final showCheck = punched;
-    final glow = highlighted ? flashStrength : 0.0;
+    final bool showCheck = punched;
+    final bool showNotRequired = notRequired;
+    final bool effectiveHighlighted = highlighted && !showNotRequired;
+    final double glow = effectiveHighlighted ? flashStrength : 0.0;
+    final IconData icon = showNotRequired
+        ? Icons.remove_circle_outline
+        : showCheck
+            ? Icons.check_circle_rounded
+            : Icons.radio_button_unchecked;
+    final Color iconColor = showNotRequired
+        ? colorScheme.onSurfaceVariant.withOpacity(0.85)
+        : showCheck
+            ? accentColor.withOpacity(0.95)
+            : colorScheme.outlineVariant.withOpacity(0.9);
+    final String statusText = showNotRequired
+        ? '휴게 없음'
+        : showCheck
+            ? label
+            : '';
+    final Color textColor = showNotRequired
+        ? colorScheme.onSurfaceVariant
+        : showCheck
+            ? colorScheme.onSurface
+            : colorScheme.onSurfaceVariant;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
@@ -507,11 +536,11 @@ class _PunchStatusCell extends StatelessWidget {
         curve: Curves.easeOut,
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
         decoration: BoxDecoration(
-          color: highlighted
-              ? accentColor.withOpacity(0.15 + 0.20 * glow)
+          color: effectiveHighlighted
+              ? accentColor.withOpacity(0.14 + 0.20 * glow)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(10),
-          boxShadow: highlighted && glow > 0
+          boxShadow: effectiveHighlighted && glow > 0
               ? [
                   BoxShadow(
                     color: accentColor.withOpacity(0.40 * glow),
@@ -519,29 +548,25 @@ class _PunchStatusCell extends StatelessWidget {
                     offset: Offset(0, 3 * glow),
                   ),
                 ]
-              : const [],
+              : [],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              showCheck
-                  ? Icons.check_circle_rounded
-                  : Icons.radio_button_unchecked,
+              icon,
               size: 16,
-              color: showCheck
-                  ? accentColor.withOpacity(0.95)
-                  : cs.outlineVariant.withOpacity(0.90),
+              color: iconColor,
             ),
             const SizedBox(height: 2),
             Text(
-              showCheck ? label : '',
+              statusText,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: textTheme.labelSmall?.copyWith(
                 fontSize: 10,
-                fontWeight: FontWeight.w800,
-                color: showCheck ? cs.onSurface : cs.onSurfaceVariant,
+                fontWeight: FontWeight.w700,
+                color: textColor,
               ),
             ),
           ],

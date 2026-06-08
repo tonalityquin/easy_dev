@@ -143,6 +143,7 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
   bool _privateCodeObscure = true;
 
   bool _bootLoading = true;
+  bool _isSimpleAppMode = false;
   OverlayMode _overlayMode = OverlayMode.bubble;
 
   OverlayEdgeSide _edgeSide = OverlayEdgeSide.left;
@@ -176,9 +177,18 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
       await _ensureBrandPresetAllowedForSelectedArea();
 
       _devModeEnabled = prefs.getBool(kDevModeEnabledKey) ?? false;
+      _isSimpleAppMode =
+          (prefs.getString('mode') ?? '').trim().toLowerCase() == 'simple';
 
       final currentOverlayMode = await OverlayModeConfig.getMode();
-      _overlayMode = currentOverlayMode;
+      if (_isSimpleAppMode) {
+        _overlayMode = OverlayMode.bubble;
+        if (currentOverlayMode != OverlayMode.bubble) {
+          await OverlayModeConfig.setMode(OverlayMode.bubble);
+        }
+      } else {
+        _overlayMode = currentOverlayMode;
+      }
 
       _edgeSide = await OverlayEdgeSideConfig.getSide();
 
@@ -681,8 +691,9 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            '앱이 백그라운드로 이동했을 때 사용할 오버레이 형태를 선택합니다.\n'
-                '하나만 선택되며, 선택된 모드만 실행/종료 조건을 공유합니다.',
+            _isSimpleAppMode
+                ? '싱글모드는 단순 출퇴근 및 휴게 기록기 용도이므로 퇴근 시간이 지나도 상단 50% 포그라운드를 사용하지 않고 플로팅 버블만 사용합니다.'
+                : '앱이 백그라운드로 이동했을 때 사용할 오버레이 형태를 선택합니다.\n하나만 선택되며, 선택된 모드만 실행/종료 조건을 공유합니다.',
             style: text.bodyMedium?.copyWith(fontSize: 13, color: t.pageFg),
           ),
           const SizedBox(height: 12),
@@ -710,21 +721,24 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
               ),
               ChoiceChip(
                 label: const Text('상단 50% 포그라운드'),
-                selected: _overlayMode == OverlayMode.topHalf,
-                onSelected: (selected) async {
-                  if (!selected) return;
-                  setState(() => _overlayMode = OverlayMode.topHalf);
-                  await OverlayModeConfig.setMode(OverlayMode.topHalf);
+                selected:
+                    !_isSimpleAppMode && _overlayMode == OverlayMode.topHalf,
+                onSelected: _isSimpleAppMode
+                    ? null
+                    : (selected) async {
+                        if (!selected) return;
+                        setState(() => _overlayMode = OverlayMode.topHalf);
+                        await OverlayModeConfig.setMode(OverlayMode.topHalf);
 
-                  try {
-                    if (await FlutterOverlayWindow.isActive()) {
-                      await FlutterOverlayWindow.shareData('__mode:topHalf__');
-                      await FlutterOverlayWindow.shareData('__collapse__');
-                    }
-                  } catch (_) {}
+                        try {
+                          if (await FlutterOverlayWindow.isActive()) {
+                            await FlutterOverlayWindow.shareData('__mode:topHalf__');
+                            await FlutterOverlayWindow.shareData('__collapse__');
+                          }
+                        } catch (_) {}
 
-                  if (!mounted) return;
-                },
+                        if (!mounted) return;
+                      },
               ),
             ],
           ),

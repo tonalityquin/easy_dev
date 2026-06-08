@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 double _contrastRatio(Color a, Color b) {
   final la = a.computeLuminance();
@@ -53,8 +54,6 @@ class _BrandTintedLogo extends StatelessWidget {
 class _FaqTokens {
   const _FaqTokens({
     required this.pageBackground,
-    required this.appBarBackground,
-    required this.appBarForeground,
     required this.divider,
     required this.searchFill,
     required this.searchBorder,
@@ -64,42 +63,24 @@ class _FaqTokens {
     required this.itemBorder,
     required this.itemTitle,
     required this.itemBody,
-    required this.metaText,
-    required this.emptySurface,
-    required this.emptyBorder,
-    required this.primaryActionBg,
-    required this.primaryActionFg,
   });
 
   final Color pageBackground;
-  final Color appBarBackground;
-  final Color appBarForeground;
   final Color divider;
-
   final Color searchFill;
   final Color searchBorder;
   final Color searchFocusBorder;
   final Color searchIcon;
-
   final Color itemSurface;
   final Color itemBorder;
   final Color itemTitle;
   final Color itemBody;
-
-  final Color metaText;
-  final Color emptySurface;
-  final Color emptyBorder;
-
-  final Color primaryActionBg;
-  final Color primaryActionFg;
 
   factory _FaqTokens.of(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
     return _FaqTokens(
       pageBackground: cs.background,
-      appBarBackground: cs.background,
-      appBarForeground: cs.onSurface,
       divider: cs.outlineVariant,
       searchFill: Color.alphaBlend(cs.primary.withOpacity(0.08), cs.surface),
       searchBorder: cs.outlineVariant.withOpacity(0.85),
@@ -109,11 +90,6 @@ class _FaqTokens {
       itemBorder: cs.outlineVariant.withOpacity(0.85),
       itemTitle: cs.onSurface,
       itemBody: cs.onSurfaceVariant,
-      metaText: cs.onSurfaceVariant,
-      emptySurface: cs.surfaceContainerLow,
-      emptyBorder: cs.outlineVariant.withOpacity(0.85),
-      primaryActionBg: cs.primary,
-      primaryActionFg: cs.onPrimary,
     );
   }
 }
@@ -277,146 +253,79 @@ class _FaqPageState extends State<FaqPage> {
         .toList();
   }
 
+  static const String _contactFormUrl = 'https://forms.gle/nbwaFeLhJfAKAf6o8';
+
+  Future<void> _openContactForm() async {
+    final uri = Uri.tryParse(_contactFormUrl);
+    if (uri == null) return;
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {}
+  }
+
   @override
   Widget build(BuildContext context) {
     final tokens = _FaqTokens.of(context);
-    final text = Theme.of(context).textTheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-
     final media = MediaQuery.of(context);
     final bool isShort = media.size.height < 640;
     final bool keyboardOpen = media.viewInsets.bottom > 0;
-    final double footerHeight = (isShort || keyboardOpen) ? 72 : 120;
+    final double footerHeight = (isShort || keyboardOpen) ? 72 : 112;
+    final filtered = _filtered;
 
     return Scaffold(
       backgroundColor: tokens.pageBackground,
-      appBar: AppBar(
-        backgroundColor: tokens.appBarBackground,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        centerTitle: true,
-        systemOverlayStyle: SystemUiOverlayStyle(
+      body: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: SystemUiOverlayStyle(
           statusBarColor: Colors.transparent,
           statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
           statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
         ),
-        title: Text(
-          'FAQ / 문의',
-          style: text.titleMedium?.copyWith(
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.2,
-            color: tokens.appBarForeground,
-          ),
-        ),
-        iconTheme: IconThemeData(color: tokens.appBarForeground),
-        actionsIconTheme: IconThemeData(color: tokens.appBarForeground),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: tokens.divider),
-        ),
-      ),
-      body: SafeArea(
-        child: Container(
-          color: tokens.pageBackground,
-          width: double.infinity,
-          child: ListView(
-            padding: const EdgeInsets.all(24),
+        child: SafeArea(
+          bottom: false,
+          child: Column(
             children: [
-              TextField(
-                controller: _searchCtrl,
-                onChanged: (v) => setState(() => _query = v),
-                textInputAction: TextInputAction.search,
-                decoration: InputDecoration(
-                  labelText: '코드 검색 (예: service_area_page_02)',
-                  hintText: 'common_user_00, service_area_page_01 등',
-                  isDense: true,
-                  filled: true,
-                  fillColor: tokens.searchFill,
-                  prefixIcon:
-                      Icon(Icons.search_rounded, color: tokens.searchIcon),
-                  suffixIcon: _query.isEmpty
-                      ? null
-                      : IconButton(
-                          icon: Icon(Icons.clear_rounded,
-                              color: tokens.searchIcon),
-                          tooltip: '지우기',
-                          onPressed: () {
-                            _searchCtrl.clear();
-                            setState(() => _query = '');
-                          },
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+                child: _FaqHeader(
+                  totalCount: _allFaqs.length,
+                  filteredCount: filtered.length,
+                  onBack: () => Navigator.of(context).maybePop(),
+                ),
+              ),
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 18),
+                  children: [
+                    _FaqMetricRow(
+                      totalCount: _allFaqs.length,
+                      filteredCount: filtered.length,
+                      queryActive: _query.trim().isNotEmpty,
+                    ),
+                    const SizedBox(height: 12),
+                    _FaqSearchPanel(
+                      controller: _searchCtrl,
+                      query: _query,
+                      onChanged: (v) => setState(() => _query = v),
+                      onClear: () {
+                        _searchCtrl.clear();
+                        setState(() => _query = '');
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    if (filtered.isEmpty)
+                      _FaqEmptyPanel()
+                    else
+                      ...filtered.map(
+                        (e) => _FaqItem(
+                          question: e.question,
+                          answer: e.answer,
                         ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: tokens.searchBorder),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: tokens.searchBorder),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide:
-                        BorderSide(color: tokens.searchFocusBorder, width: 1.6),
-                  ),
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      ),
+                    const SizedBox(height: 10),
+                    _ContactActionButton(onPressed: _openContactForm),
+                  ],
                 ),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Icon(Icons.filter_alt_rounded,
-                      size: 16, color: tokens.searchIcon),
-                  const SizedBox(width: 6),
-                  Text(
-                    _query.isEmpty
-                        ? '전체 ${_allFaqs.length}건'
-                        : '검색 결과 ${_filtered.length}건',
-                    style: text.bodySmall?.copyWith(
-                      color: tokens.metaText,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              if (_filtered.isEmpty)
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: tokens.emptySurface,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: tokens.emptyBorder),
-                  ),
-                  child: Text(
-                    '검색 결과가 없습니다. 철자를 다시 확인해주세요.',
-                    style: text.bodyMedium?.copyWith(
-                      color: tokens.itemTitle,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                )
-              else
-                ..._filtered.map(
-                  (e) => _FaqItem(
-                    question: e.question,
-                    answer: e.answer,
-                  ),
-                ),
-              const SizedBox(height: 24),
-              FilledButton.icon(
-                style: FilledButton.styleFrom(
-                  backgroundColor: tokens.primaryActionBg,
-                  foregroundColor: tokens.primaryActionFg,
-                ),
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('문의 채널로 연결됩니다. (구현 필요)')),
-                  );
-                },
-                icon: const Icon(Icons.support_agent_rounded),
-                label: const Text('문의하기'),
               ),
             ],
           ),
@@ -432,19 +341,320 @@ class _FaqPageState extends State<FaqPage> {
               color: tokens.pageBackground,
               border: Border(top: BorderSide(color: tokens.divider, width: 1)),
             ),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: null,
-                child: SizedBox(
-                  height: footerHeight,
-                  child: Center(
-                    child: _BrandTintedLogo(height: footerHeight),
-                  ),
-                ),
+            child: SizedBox(
+              height: footerHeight,
+              child: Center(
+                child: _BrandTintedLogo(height: footerHeight),
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FaqHeader extends StatelessWidget {
+  const _FaqHeader({
+    required this.totalCount,
+    required this.filteredCount,
+    required this.onBack,
+  });
+
+  final int totalCount;
+  final int filteredCount;
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+      decoration: BoxDecoration(
+        color: cs.inverseSurface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: cs.outlineVariant.withOpacity(.5)),
+      ),
+      child: Row(
+        children: [
+          IconButton.filledTonal(
+            tooltip: '뒤로가기',
+            onPressed: onBack,
+            icon: const Icon(Icons.arrow_back_rounded),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: cs.primary,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(Icons.help_center_rounded, color: cs.onPrimary),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'FAQ / 문의',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: (tt.titleLarge ?? const TextStyle(fontSize: 20)).copyWith(
+                color: cs.onInverseSurface,
+                fontWeight: FontWeight.w900,
+                letterSpacing: -.3,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          _FaqHeaderPill(
+            icon: Icons.filter_alt_rounded,
+            label: '$filteredCount/$totalCount',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FaqHeaderPill extends StatelessWidget {
+  const _FaqHeaderPill({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      height: 34,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: cs.onInverseSurface.withOpacity(.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: cs.onInverseSurface.withOpacity(.22)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: cs.onInverseSurface),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              color: cs.onInverseSurface,
+              fontWeight: FontWeight.w900,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FaqMetricRow extends StatelessWidget {
+  const _FaqMetricRow({
+    required this.totalCount,
+    required this.filteredCount,
+    required this.queryActive,
+  });
+
+  final int totalCount;
+  final int filteredCount;
+  final bool queryActive;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          _FaqMetricChip(
+            icon: Icons.inventory_2_rounded,
+            label: '전체',
+            value: '$totalCount',
+            color: cs.primary,
+          ),
+          const SizedBox(width: 8),
+          _FaqMetricChip(
+            icon: Icons.filter_alt_rounded,
+            label: '표시',
+            value: '$filteredCount',
+            color: cs.secondary,
+          ),
+          const SizedBox(width: 8),
+          _FaqMetricChip(
+            icon: queryActive ? Icons.search_rounded : Icons.search_off_rounded,
+            label: '검색',
+            value: queryActive ? 'ON' : 'OFF',
+            color: queryActive ? cs.tertiary : cs.onSurfaceVariant,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FaqMetricChip extends StatelessWidget {
+  const _FaqMetricChip({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      height: 40,
+      padding: const EdgeInsets.symmetric(horizontal: 11),
+      decoration: BoxDecoration(
+        color: Color.alphaBlend(color.withOpacity(.10), cs.surface),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withOpacity(.25)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 7),
+          Text(
+            label,
+            style: TextStyle(
+              color: cs.onSurfaceVariant,
+              fontWeight: FontWeight.w800,
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(width: 7),
+          Text(
+            value,
+            style: TextStyle(
+              color: cs.onSurface,
+              fontWeight: FontWeight.w900,
+              fontSize: 14,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FaqSearchPanel extends StatelessWidget {
+  const _FaqSearchPanel({
+    required this.controller,
+    required this.query,
+    required this.onChanged,
+    required this.onClear,
+  });
+
+  final TextEditingController controller;
+  final String query;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = _FaqTokens.of(context);
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cs.outlineVariant.withOpacity(.65)),
+      ),
+      child: TextField(
+        controller: controller,
+        onChanged: onChanged,
+        textInputAction: TextInputAction.search,
+        decoration: InputDecoration(
+          labelText: '코드 검색',
+          isDense: true,
+          filled: true,
+          fillColor: tokens.searchFill,
+          prefixIcon: Icon(Icons.search_rounded, color: tokens.searchIcon),
+          suffixIcon: query.isEmpty
+              ? null
+              : IconButton(
+                  icon: Icon(Icons.clear_rounded, color: tokens.searchIcon),
+                  tooltip: '지우기',
+                  onPressed: onClear,
+                ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: tokens.searchBorder),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: tokens.searchBorder),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: tokens.searchFocusBorder, width: 1.6),
+          ),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+        ),
+      ),
+    );
+  }
+}
+
+class _FaqEmptyPanel extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cs.outlineVariant.withOpacity(.65)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.search_off_rounded, color: cs.onSurfaceVariant),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              '검색 결과 없음',
+              style: TextStyle(
+                color: cs.onSurface,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ContactActionButton extends StatelessWidget {
+  const _ContactActionButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 52,
+      child: FilledButton.icon(
+        onPressed: onPressed,
+        icon: const Icon(Icons.support_agent_rounded),
+        label: const Text('문의하기'),
+        style: FilledButton.styleFrom(
+          textStyle: const TextStyle(fontWeight: FontWeight.w900),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         ),
       ),
     );
@@ -470,35 +680,68 @@ class _FaqItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = _FaqTokens.of(context);
+    final cs = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         color: tokens.itemSurface,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: tokens.itemBorder),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            question,
-            style: text.titleMedium?.copyWith(
-              fontWeight: FontWeight.w800,
-              color: tokens.itemTitle,
-            ),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+          childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+          iconColor: cs.primary,
+          collapsedIconColor: cs.onSurfaceVariant,
+          title: Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: cs.primaryContainer,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(Icons.article_rounded, color: cs.onPrimaryContainer, size: 18),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  question,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: text.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w900,
+                    color: tokens.itemTitle,
+                  ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            answer,
-            style: text.bodyMedium?.copyWith(
-              color: tokens.itemBody,
-              height: 1.25,
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: cs.surface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: cs.outlineVariant.withOpacity(.5)),
+              ),
+              child: Text(
+                answer.trim(),
+                style: text.bodyMedium?.copyWith(
+                  color: tokens.itemBody,
+                  height: 1.28,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

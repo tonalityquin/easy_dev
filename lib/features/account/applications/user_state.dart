@@ -55,6 +55,7 @@ class UserState extends ChangeNotifier {
     'startTime',
     'endTime',
     'fixedHolidays',
+    WorkSchedulePrefs.breakDaysKey,
     WorkSchedulePrefs.startMapKey,
     WorkSchedulePrefs.endMapKey,
     _prefsKeyCachedUser,
@@ -458,6 +459,23 @@ class UserState extends ChangeNotifier {
     await WorkSchedulePrefs.refreshReminderFromPrefs(prefs);
   }
 
+
+  List<String> _normalizedBreakDaysForUser({
+    required UserModel user,
+    required SharedPreferences prefs,
+    required Map<String, TimeOfDay?> startByWeekday,
+    required Map<String, TimeOfDay?> endByWeekday,
+  }) {
+    final raw = prefs.containsKey(WorkSchedulePrefs.breakDaysKey)
+        ? WorkSchedulePrefs.readBreakDaysFromPrefs(prefs)
+        : user.breakDays;
+    return WorkSchedulePrefs.normalizeBreakDaysForWorkingMap(
+      breakDays: raw,
+      startByDay: startByWeekday,
+      endByDay: endByWeekday,
+    );
+  }
+
   Future<bool> setCurrentUserWeekdayEndTime({
     required String day,
     required TimeOfDay endTime,
@@ -506,6 +524,8 @@ class UserState extends ChangeNotifier {
       _user!.endTimeByWeekday,
     );
 
+    final wasWorking = normalizedStart[day] != null && normalizedEnd[day] != null;
+
     normalizedStart[day] = startTime;
     normalizedEnd[day] = endTime;
 
@@ -527,6 +547,23 @@ class UserState extends ChangeNotifier {
         if (!WorkSchedulePrefs.days.contains(value)) value,
     ];
 
+    final breakSet = _user!.breakDays
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toSet();
+
+    if (startTime == null && endTime == null) {
+      breakSet.remove(day);
+    } else if (!wasWorking) {
+      breakSet.add(day);
+    }
+
+    final breakDays = WorkSchedulePrefs.normalizeBreakDaysForWorkingMap(
+      breakDays: breakSet,
+      startByDay: normalizedStart,
+      endByDay: normalizedEnd,
+    );
+
     final current = _user!;
     final updatedUser = UserModel(
       id: current.id,
@@ -538,6 +575,7 @@ class UserState extends ChangeNotifier {
       endTime: WorkSchedulePrefs.pickRepresentative(normalizedEnd),
       englishSelectedAreaName: current.englishSelectedAreaName,
       fixedHolidays: fixedHolidays,
+      breakDays: breakDays,
       isSaved: current.isSaved,
       isSelected: current.isSelected,
       isWorking: current.isWorking,
@@ -572,6 +610,53 @@ class UserState extends ChangeNotifier {
       startTime: startTime,
       endTime: endTime,
     );
+  }
+
+
+  Future<bool> setCurrentUserBreakDayLocalOnly({
+    required String day,
+    required bool hasBreak,
+  }) async {
+    if (_isTablet || _user == null) return false;
+    if (!WorkSchedulePrefs.days.contains(day)) return false;
+
+    final normalizedStart = WorkSchedulePrefs.normalizeDayTimeMap(
+      _user!.startTimeByWeekday,
+    );
+    final normalizedEnd = WorkSchedulePrefs.normalizeDayTimeMap(
+      _user!.endTimeByWeekday,
+    );
+
+    if (hasBreak && (normalizedStart[day] == null || normalizedEnd[day] == null)) {
+      return false;
+    }
+
+    final breakSet = _user!.breakDays
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toSet();
+
+    if (hasBreak) {
+      breakSet.add(day);
+    } else {
+      breakSet.remove(day);
+    }
+
+    final breakDays = WorkSchedulePrefs.normalizeBreakDaysForWorkingMap(
+      breakDays: breakSet,
+      startByDay: normalizedStart,
+      endByDay: normalizedEnd,
+    );
+
+    final updatedUser = _user!.copyWith(breakDays: breakDays);
+
+    try {
+      await _applyCurrentUserScheduleLocalOnly(updatedUser);
+      return true;
+    } catch (e, st) {
+      debugPrint('setCurrentUserBreakDayLocalOnly error: $e\n$st');
+      return false;
+    }
   }
 
   Future<void> updateLoginTablet(TabletModel updatedTablet) async {
@@ -923,6 +1008,19 @@ class UserState extends ChangeNotifier {
       _isTablet = false;
       final trimmedArea = selectedArea.trim();
 
+      final effectiveStartByWeekday = startTimeByWeekday.values.any((value) => value != null)
+          ? startTimeByWeekday
+          : userData.startTimeByWeekday;
+      final effectiveEndByWeekday = endTimeByWeekday.values.any((value) => value != null)
+          ? endTimeByWeekday
+          : userData.endTimeByWeekday;
+      final effectiveBreakDays = _normalizedBreakDaysForUser(
+        user: userData,
+        prefs: prefs,
+        startByWeekday: effectiveStartByWeekday,
+        endByWeekday: effectiveEndByWeekday,
+      );
+
       userData = userData.copyWith(
         currentArea: trimmedArea,
         role: role ?? userData.role,
@@ -931,13 +1029,9 @@ class UserState extends ChangeNotifier {
         endTime: _stringToTimeOfDay(endTimeStr) ?? userData.endTime,
         fixedHolidays:
             fixedHolidays.isNotEmpty ? fixedHolidays : userData.fixedHolidays,
-        startTimeByWeekday:
-            startTimeByWeekday.values.any((value) => value != null)
-                ? startTimeByWeekday
-                : userData.startTimeByWeekday,
-        endTimeByWeekday: endTimeByWeekday.values.any((value) => value != null)
-            ? endTimeByWeekday
-            : userData.endTimeByWeekday,
+        breakDays: effectiveBreakDays,
+        startTimeByWeekday: effectiveStartByWeekday,
+        endTimeByWeekday: effectiveEndByWeekday,
         divisions: division != null ? [division] : userData.divisions,
         isSaved: true,
       );
@@ -990,6 +1084,19 @@ class UserState extends ChangeNotifier {
 
       await _repository.updateLoadCurrentArea(phone, trimmedArea, trimmedArea);
 
+      final effectiveStartByWeekday = startTimeByWeekday.values.any((value) => value != null)
+          ? startTimeByWeekday
+          : userData.startTimeByWeekday;
+      final effectiveEndByWeekday = endTimeByWeekday.values.any((value) => value != null)
+          ? endTimeByWeekday
+          : userData.endTimeByWeekday;
+      final effectiveBreakDays = _normalizedBreakDaysForUser(
+        user: userData,
+        prefs: prefs,
+        startByWeekday: effectiveStartByWeekday,
+        endByWeekday: effectiveEndByWeekday,
+      );
+
       userData = userData.copyWith(
         currentArea: trimmedArea,
         role: role ?? userData.role,
@@ -998,13 +1105,9 @@ class UserState extends ChangeNotifier {
         endTime: _stringToTimeOfDay(endTimeStr) ?? userData.endTime,
         fixedHolidays:
             fixedHolidays.isNotEmpty ? fixedHolidays : userData.fixedHolidays,
-        startTimeByWeekday:
-            startTimeByWeekday.values.any((value) => value != null)
-                ? startTimeByWeekday
-                : userData.startTimeByWeekday,
-        endTimeByWeekday: endTimeByWeekday.values.any((value) => value != null)
-            ? endTimeByWeekday
-            : userData.endTimeByWeekday,
+        breakDays: effectiveBreakDays,
+        startTimeByWeekday: effectiveStartByWeekday,
+        endTimeByWeekday: effectiveEndByWeekday,
         divisions: division != null ? [division] : userData.divisions,
         isSaved: true,
       );

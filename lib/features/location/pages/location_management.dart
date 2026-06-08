@@ -9,6 +9,7 @@ import '../domain/models/parking_grid_model.dart';
 import 'sheets/location_setting.dart';
 import 'sheets/widgets/location_draft.dart';
 import 'sheets/widgets/parking_grid_preview.dart';
+import '../../../shared/secondary/widgets/ops_console_widgets.dart';
 
 class LocationManagement extends StatefulWidget {
   const LocationManagement({super.key});
@@ -20,9 +21,13 @@ class LocationManagement extends StatefulWidget {
 class _LocationManagementState extends State<LocationManagement> {
   String _filter = 'all';
 
+  String _query = '';
+
   bool _showOnlySelectedChild = false;
 
   bool _showSelectedChildSlotNumbers = true;
+
+  String? _focusedParentKey;
 
   static String _normalizeName(String raw) =>
       raw.trim().replaceAll(RegExp(r'\s+'), ' ');
@@ -66,59 +71,148 @@ class _LocationManagementState extends State<LocationManagement> {
     return out;
   }
 
-  static const double _fabBottomGap = 48.0;
-  static const double _fabSpacing = 10.0;
 
   static const String _miscGroupKey = '__misc__';
 
-  Widget _buildScreenTag(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final base = Theme.of(context).textTheme.labelSmall;
 
-    final style = (base ??
-            const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-            ))
-        .copyWith(
-      color: cs.onSurfaceVariant.withOpacity(.72),
-      fontWeight: FontWeight.w600,
-      letterSpacing: 0.2,
-    );
-
-    return SafeArea(
-      child: IgnorePointer(
-        child: Align(
-          alignment: Alignment.topLeft,
-          child: Padding(
-            padding: const EdgeInsets.only(left: 12, top: 4),
-            child: Semantics(
-              label: 'screen_tag: location management',
-              child: Text('location management', style: style),
-            ),
-          ),
-        ),
-      ),
-    );
+  void _openFocusedParent(String key) {
+    setState(() => _focusedParentKey = key);
   }
+
+  void _closeFocusedParent() {
+    if (_focusedParentKey == null) return;
+    setState(() => _focusedParentKey = null);
+  }
+
+  LocationModel? _selectedLocation(LocationState state) {
+    final id = state.selectedLocationId;
+    if (id == null) return null;
+    for (final loc in state.locations) {
+      if (loc.id == id) return loc;
+    }
+    return null;
+  }
+
+
 
   Future<bool> _confirmDelete(BuildContext context) async {
     return await showDialog<bool>(
           context: context,
-          builder: (_) => AlertDialog(
-            title: const Text('삭제 확인'),
-            content: const Text('선택한 주차 구역을 삭제하시겠습니까?'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('취소'),
+          barrierColor: Theme.of(context).colorScheme.scrim.withOpacity(.42),
+          builder: (ctx) {
+            final cs = Theme.of(ctx).colorScheme;
+            final tt = Theme.of(ctx).textTheme;
+            return Dialog(
+              elevation: 0,
+              backgroundColor: Colors.transparent,
+              insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 430),
+                child: OpsPanel(
+                  margin: EdgeInsets.zero,
+                  padding: EdgeInsets.zero,
+                  accentColor: cs.error,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+                        decoration: BoxDecoration(
+                          color: cs.inverseSurface,
+                          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: cs.error,
+                                borderRadius: BorderRadius.circular(13),
+                              ),
+                              child: Icon(Icons.delete_forever_rounded, color: cs.onError, size: 21),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '구역 삭제 확인',
+                                    style: (tt.titleMedium ?? const TextStyle(fontSize: 17)).copyWith(
+                                      color: cs.onInverseSurface,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: -.2,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    '선택한 현장 구역을 삭제하기 전 마지막으로 확인합니다.',
+                                    style: (tt.bodySmall ?? const TextStyle(fontSize: 12)).copyWith(
+                                      color: cs.onInverseSurface.withOpacity(.72),
+                                      fontWeight: FontWeight.w800,
+                                      height: 1.25,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton.filledTonal(
+                              tooltip: '닫기',
+                              onPressed: () => Navigator.of(ctx).pop(false),
+                              icon: const Icon(Icons.close_rounded),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 6),
+                        child: OpsInlineMessage(
+                          message: '삭제하면 선택한 주차 구역이 운영 목록에서 제거됩니다. 연결된 운영 데이터와 화면 배치를 확인한 뒤 진행하세요.',
+                          icon: Icons.warning_amber_rounded,
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: FilledButton.tonalIcon(
+                                onPressed: () => Navigator.of(ctx).pop(false),
+                                icon: const Icon(Icons.close_rounded, size: 18),
+                                label: const Text('취소'),
+                                style: FilledButton.styleFrom(
+                                  minimumSize: const Size.fromHeight(46),
+                                  textStyle: const TextStyle(fontWeight: FontWeight.w900),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: FilledButton.icon(
+                                onPressed: () => Navigator.of(ctx).pop(true),
+                                icon: const Icon(Icons.delete_forever_rounded, size: 18),
+                                label: const Text('삭제'),
+                                style: FilledButton.styleFrom(
+                                  minimumSize: const Size.fromHeight(46),
+                                  backgroundColor: cs.error,
+                                  foregroundColor: cs.onError,
+                                  textStyle: const TextStyle(fontWeight: FontWeight.w900),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              FilledButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('삭제'),
-              ),
-            ],
-          ),
+            );
+          },
         ) ??
         false;
   }
@@ -798,38 +892,242 @@ class _LocationManagementState extends State<LocationManagement> {
     if (!mounted) return;
   }
 
+  bool _matchesLocationQuery(LocationModel loc) {
+    final q = _query.trim().toLowerCase();
+    if (q.isEmpty) return true;
+    final parts = <String>[
+      loc.locationName,
+      loc.area,
+      loc.type ?? '',
+      loc.parent ?? '',
+      loc.capacity.toString(),
+      loc.isTowerChild ? '타워' : '',
+      _slotSummaryText(loc.childSlots),
+    ];
+    return parts.join(' ').toLowerCase().contains(q);
+  }
+
+  Widget _buildCommandBar(BuildContext context, int visible, int total) {
+    final cs = Theme.of(context).colorScheme;
+    return OpsCommandPanel(
+      children: [
+        OpsSearchField(
+          hint: '구역명 · 부모 구역 · 슬롯 타입 검색',
+          onChanged: (value) => setState(() => _query = value),
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            OpsFilterChip(
+              label: '전체',
+              selected: _filter == 'all',
+              icon: Icons.grid_view_rounded,
+              onSelected: () => setState(() => _filter = 'all'),
+            ),
+            OpsFilterChip(
+              label: '복합',
+              selected: _filter == 'composite',
+              icon: Icons.account_tree_rounded,
+              onSelected: () => setState(() => _filter = 'composite'),
+            ),
+            OpsFilterChip(
+              label: '선택 자식만',
+              selected: _showOnlySelectedChild,
+              icon: Icons.center_focus_strong_rounded,
+              onSelected: () => setState(() => _showOnlySelectedChild = !_showOnlySelectedChild),
+            ),
+            OpsFilterChip(
+              label: '슬롯번호',
+              selected: _showSelectedChildSlotNumbers,
+              icon: Icons.tag_rounded,
+              onSelected: () => setState(() => _showSelectedChildSlotNumbers = !_showSelectedChildSlotNumbers),
+            ),
+            OpsFilterChip(
+              label: '$visible/$total',
+              selected: false,
+              icon: Icons.filter_alt_rounded,
+              onSelected: () {},
+            ),
+            IconButton.filledTonal(
+              tooltip: '자식 슬롯 재계산',
+              onPressed: () => _handleRebuildChildSlots(context),
+              icon: Icon(Icons.sync_alt_rounded, color: cs.primary),
+            ),
+            IconButton.filledTonal(
+              tooltip: '새로고침',
+              onPressed: () => _handleRefresh(context),
+              icon: Icon(Icons.refresh_rounded, color: cs.primary),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBottomBar(BuildContext context, bool hasSelection, bool canEdit, bool canEditParent, bool canEditChild) {
+    if (!hasSelection) {
+      return OpsBottomActionBar(
+        children: [
+          Expanded(
+            child: OpsActionButton(
+              label: '구역 추가',
+              icon: Icons.add_location_alt_rounded,
+              onPressed: () => _handleAdd(context),
+            ),
+          ),
+        ],
+      );
+    }
+
+    final editLabel = canEditParent ? '부모 수정' : (canEditChild ? '자식 수정' : '구역 수정');
+    return OpsBottomActionBar(
+      children: [
+        Expanded(
+          child: OpsActionButton(
+            label: '추가',
+            icon: Icons.add_location_alt_rounded,
+            onPressed: () => _handleAdd(context),
+            tonal: true,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: OpsActionButton(
+            label: editLabel,
+            icon: Icons.edit_location_alt_rounded,
+            onPressed: !canEdit
+                ? null
+                : () {
+                    if (canEditParent) {
+                      _handleEditParent(context);
+                      return;
+                    }
+                    if (canEditChild) {
+                      _handleEditChild(context);
+                      return;
+                    }
+                    _handleEditPlainText(context);
+                  },
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: OpsActionButton(
+            label: '삭제',
+            icon: Icons.delete_forever_rounded,
+            onPressed: () => _handleDelete(context),
+            danger: true,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFocusedBottomBar({
+    required BuildContext context,
+    required LocationModel? parentModel,
+    required List<LocationModel> children,
+    required LocationModel? selectedLocation,
+  }) {
+    final selectedId = selectedLocation?.id;
+    final parentSelected = parentModel != null && selectedId == parentModel.id;
+    final childSelected = selectedId != null && children.any((child) => child.id == selectedId);
+    final canEditParent = parentModel != null && parentSelected && parentModel.parkingGrid != null;
+    final canEditChild = childSelected && selectedLocation != null && selectedLocation.childRect != null;
+    final hasFocusedSelection = parentSelected || childSelected;
+
+    if (!hasFocusedSelection) {
+      return OpsBottomActionBar(
+        children: [
+          Expanded(
+            child: OpsActionButton(
+              label: '자식 추가',
+              icon: Icons.add_location_alt_rounded,
+              onPressed: () => _handleAdd(context),
+              tonal: true,
+            ),
+          ),
+          if (parentModel != null) ...[
+            const SizedBox(width: 8),
+            Expanded(
+              child: OpsActionButton(
+                label: '부모 선택',
+                icon: Icons.account_tree_rounded,
+                onPressed: () => context.read<LocationState>().toggleLocationSelection(parentModel.id),
+              ),
+            ),
+          ],
+        ],
+      );
+    }
+
+    return OpsBottomActionBar(
+      children: [
+        Expanded(
+          child: OpsActionButton(
+            label: '추가',
+            icon: Icons.add_location_alt_rounded,
+            onPressed: () => _handleAdd(context),
+            tonal: true,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: OpsActionButton(
+            label: parentSelected ? '부모 수정' : '자식 수정',
+            icon: Icons.edit_location_alt_rounded,
+            onPressed: parentSelected
+                ? (canEditParent ? () => _handleEditParent(context) : null)
+                : (canEditChild ? () => _handleEditChild(context) : null),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: OpsActionButton(
+            label: '삭제',
+            icon: Icons.delete_forever_rounded,
+            onPressed: () => _handleDelete(context),
+            danger: true,
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final locationState = context.watch<LocationState>();
     final cs = Theme.of(context).colorScheme;
     final currentArea = context.watch<AreaState>().currentArea.trim();
-
     final storageKeyPrefix = 'location_management_${currentArea.toString()}';
 
-    final allInArea = locationState.locations
-        .where((l) => l.area.trim() == currentArea)
-        .toList();
+    final allInArea = locationState.locations.where((l) => l.area.trim() == currentArea).toList();
+    final queriedInArea = allInArea.where(_matchesLocationQuery).toList();
 
-    final legacySingles = allInArea.where((loc) {
+    final legacySingles = queriedInArea.where((loc) {
       final t = loc.type;
       return t == null || t == 'single';
     }).toList();
 
-    final parents = allInArea.where(_isCompositeParent).toList();
-    final children = allInArea.where(_isCompositeChild).toList();
+    final parents = queriedInArea.where(_isCompositeParent).toList();
+    final children = queriedInArea.where(_isCompositeChild).toList();
+    final allParents = allInArea.where(_isCompositeParent).toList();
+    final allChildren = allInArea.where(_isCompositeChild).toList();
 
     final Map<String, LocationModel> parentByKey = {
-      for (final p in parents) _nameKey(p.locationName): p,
+      for (final p in allParents) _nameKey(p.locationName): p,
     };
 
     final Map<String, String> groupDisplayNameByKey = {
-      for (final p in parents)
-        _nameKey(p.locationName): _normalizeName(p.locationName),
+      for (final p in allParents) _nameKey(p.locationName): _normalizeName(p.locationName),
     };
 
     final Map<String, List<LocationModel>> groupedChildren = {};
     for (final child in children) {
-      final rawParent = (child.parent ?? '');
+      final rawParent = child.parent ?? '';
       final parentTrim = rawParent.trim();
 
       if (parentTrim.isEmpty) {
@@ -845,168 +1143,168 @@ class _LocationManagementState extends State<LocationManagement> {
       groupDisplayNameByKey.putIfAbsent(pKey, () => pDisplay);
     }
 
-    final hasSelection = locationState.selectedLocationId != null;
-
-    LocationModel? selectedLocation;
-    if (hasSelection) {
-      final id = locationState.selectedLocationId;
-      for (final l in locationState.locations) {
-        if (l.id == id) {
-          selectedLocation = l;
-          break;
-        }
-      }
-    }
-
-    final canEditParent = selectedLocation != null &&
-        _isCompositeParent(selectedLocation) &&
-        selectedLocation.parkingGrid != null;
-
-    final canEditChild = selectedLocation != null &&
-        _isCompositeChild(selectedLocation) &&
-        selectedLocation.childRect != null;
-    final canEditPlainText = selectedLocation != null &&
-        !_isCompositeParent(selectedLocation) &&
-        !_isCompositeChild(selectedLocation);
-
+    final selectedLocation = _selectedLocation(locationState);
+    final hasSelection = selectedLocation != null;
+    final canEditParent = selectedLocation != null && _isCompositeParent(selectedLocation) && selectedLocation.parkingGrid != null;
+    final canEditChild = selectedLocation != null && _isCompositeChild(selectedLocation) && selectedLocation.childRect != null;
+    final canEditPlainText = selectedLocation != null && !_isCompositeParent(selectedLocation) && !_isCompositeChild(selectedLocation);
     final canEdit = canEditParent || canEditChild || canEditPlainText;
-    final isEmptyAll =
-        legacySingles.isEmpty && parents.isEmpty && children.isEmpty;
+    final isEmptyAll = allInArea.isEmpty;
+    final visibleCount = legacySingles.length + parents.length + children.length;
+    final totalCount = allInArea.length;
+    final totalCapacity = allInArea.fold<int>(0, (sum, loc) => sum + loc.capacity);
+    final areaLabel = currentArea.isEmpty ? '지역 미설정' : currentArea;
+    final rawFocusedParentKey = _focusedParentKey;
+    final focusedParentKey = rawFocusedParentKey != null && (parentByKey.containsKey(rawFocusedParentKey) || groupedChildren.containsKey(rawFocusedParentKey))
+        ? rawFocusedParentKey
+        : null;
 
-    return Scaffold(
-      backgroundColor: cs.surface,
-      appBar: AppBar(
-        backgroundColor: cs.surface,
-        elevation: 0,
-        foregroundColor: cs.onSurface,
-        surfaceTintColor: Colors.transparent,
-        flexibleSpace: _buildScreenTag(context),
-        title:
-            const Text('주차구역', style: TextStyle(fontWeight: FontWeight.bold)),
-        centerTitle: true,
-        automaticallyImplyLeading: false,
-        actions: [
-          IconButton(
-            tooltip: '기존 자식 슬롯 재계산',
-            onPressed: () => _handleRebuildChildSlots(context),
-            icon: const Icon(Icons.sync_alt),
-          ),
-          IconButton(
-            tooltip: '새로고침',
-            onPressed: () => _handleRefresh(context),
-            icon: const Icon(Icons.refresh),
-          ),
-        ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child:
-              Container(height: 1, color: cs.outlineVariant.withOpacity(.75)),
-        ),
-      ),
+    final listScaffold = OpsConsoleScaffold(
+      key: const ValueKey<String>('location-management-list'),
+      title: '구역 관리',
+      icon: Icons.location_on_rounded,
+      areaLabel: areaLabel,
+      loading: locationState.isLoading,
+      metrics: [
+        OpsMetric(label: '전체', value: '$totalCount', icon: Icons.location_on_rounded, color: cs.onInverseSurface),
+        OpsMetric(label: '부모', value: '${allParents.length}', icon: Icons.account_tree_rounded, color: cs.primary),
+        OpsMetric(label: '자식', value: '${allChildren.length}', icon: Icons.subdirectory_arrow_right_rounded, color: cs.secondary),
+        OpsMetric(label: '공간', value: '$totalCapacity', icon: Icons.local_parking_rounded, color: cs.primary),
+      ],
+      commandBar: _buildCommandBar(context, visibleCount, totalCount),
+      bottomBar: _buildBottomBar(context, hasSelection, canEdit, canEditParent, canEditChild),
       body: locationState.isLoading
-          ? Center(
-              child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
-              ),
-            )
+          ? const SizedBox.shrink()
           : isEmptyAll
-              ? const Center(child: Text('현재 지역에 주차 구역이 없습니다.'))
-              : Column(
-                  children: [
-                    Container(
-                      width: double.infinity,
-                      color: cs.surface,
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Column(
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              _FilterChip(
-                                label: '전체',
-                                selected: _filter == 'all',
-                                onSelected: () =>
-                                    setState(() => _filter = 'all'),
-                              ),
-                              const SizedBox(width: 8),
-                              _FilterChip(
-                                label: '복합',
-                                selected: _filter == 'composite',
-                                onSelected: () =>
-                                    setState(() => _filter = 'composite'),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            child: Wrap(
-                              spacing: 10,
-                              runSpacing: 8,
-                              alignment: WrapAlignment.center,
-                              children: [
-                                FilterChip(
-                                  label: const Text('선택 자식만 표시'),
-                                  selected: _showOnlySelectedChild,
-                                  onSelected: (v) => setState(
-                                      () => _showOnlySelectedChild = v),
-                                ),
-                                FilterChip(
-                                  label: const Text('선택 자식 슬롯번호'),
-                                  selected: _showSelectedChildSlotNumbers,
-                                  onSelected: (v) => setState(
-                                      () => _showSelectedChildSlotNumbers = v),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Divider(
-                        height: 1, color: cs.outlineVariant.withOpacity(.75)),
-                    Expanded(
-                      child: _filter == 'composite'
-                          ? _buildCompositeList(
-                              parentByKey: parentByKey,
-                              groupedChildren: groupedChildren,
-                              groupDisplayNameByKey: groupDisplayNameByKey,
-                              state: locationState,
-                              cs: cs,
-                              storageKeyPrefix: storageKeyPrefix,
-                            )
-                          : _buildAllListView(
-                              legacySingles: legacySingles,
-                              parentByKey: parentByKey,
-                              groupedChildren: groupedChildren,
-                              groupDisplayNameByKey: groupDisplayNameByKey,
-                              state: locationState,
-                              cs: cs,
-                              storageKeyPrefix: storageKeyPrefix,
-                            ),
-                    ),
-                  ],
-                ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-      floatingActionButton: _FabStack(
-        bottomGap: _fabBottomGap,
-        spacing: _fabSpacing,
-        hasSelection: hasSelection,
-        onAdd: () => _handleAdd(context),
-        onEdit: !canEdit
-            ? null
-            : () {
-                if (canEditParent) {
-                  _handleEditParent(context);
-                  return;
-                }
-                if (canEditChild) {
-                  _handleEditChild(context);
-                  return;
-                }
-                _handleEditPlainText(context);
-              },
-        onDelete: hasSelection ? () => _handleDelete(context) : null,
+              ? OpsEmptyState(
+                  icon: Icons.add_location_alt_rounded,
+                  title: '현재 지역에 주차 구역이 없습니다',
+                  message: '구역을 추가해 현장 주차면과 복합 슬롯 구조를 등록하세요.',
+                  action: FilledButton.icon(
+                    onPressed: () => _handleAdd(context),
+                    icon: const Icon(Icons.add_location_alt_rounded),
+                    label: const Text('구역 추가'),
+                  ),
+                )
+              : visibleCount == 0
+                  ? const OpsEmptyState(
+                      icon: Icons.search_off_rounded,
+                      title: '검색 결과가 없습니다',
+                      message: '검색어와 필터를 조정하세요.',
+                    )
+                  : _filter == 'composite'
+                      ? _buildCompositeList(
+                          parentByKey: parentByKey,
+                          groupedChildren: groupedChildren,
+                          groupDisplayNameByKey: groupDisplayNameByKey,
+                          state: locationState,
+                          cs: cs,
+                          storageKeyPrefix: storageKeyPrefix,
+                        )
+                      : _buildAllListView(
+                          legacySingles: legacySingles,
+                          parentByKey: parentByKey,
+                          groupedChildren: groupedChildren,
+                          groupDisplayNameByKey: groupDisplayNameByKey,
+                          state: locationState,
+                          cs: cs,
+                          storageKeyPrefix: storageKeyPrefix,
+                        ),
+    );
+
+    final focusedScaffold = focusedParentKey == null
+        ? null
+        : _buildFocusedParentScaffold(
+            context: context,
+            keyValue: focusedParentKey,
+            groupName: groupDisplayNameByKey[focusedParentKey] ?? focusedParentKey,
+            parentModel: parentByKey[focusedParentKey],
+            children: [...(groupedChildren[focusedParentKey] ?? const <LocationModel>[])],
+            state: locationState,
+            selectedLocation: selectedLocation,
+            cs: cs,
+            areaLabel: areaLabel,
+            storageKeyPrefix: storageKeyPrefix,
+          );
+
+    return PopScope(
+      canPop: focusedParentKey == null,
+      onPopInvoked: (didPop) {
+        if (didPop) return;
+        if (_focusedParentKey != null) _closeFocusedParent();
+      },
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 260),
+        reverseDuration: const Duration(milliseconds: 220),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        transitionBuilder: (child, animation) {
+          final position = Tween<Offset>(
+            begin: const Offset(.07, 0),
+            end: Offset.zero,
+          ).animate(animation);
+          return FadeTransition(
+            opacity: animation,
+            child: SlideTransition(
+              position: position,
+              child: child,
+            ),
+          );
+        },
+        child: focusedScaffold ?? listScaffold,
+      ),
+    );
+  }
+
+  Widget _buildFocusedParentScaffold({
+    required BuildContext context,
+    required String keyValue,
+    required String groupName,
+    required LocationModel? parentModel,
+    required List<LocationModel> children,
+    required LocationState state,
+    required LocationModel? selectedLocation,
+    required ColorScheme cs,
+    required String areaLabel,
+    required String storageKeyPrefix,
+  }) {
+    children.sort((a, b) => a.locationName.compareTo(b.locationName));
+    final totalCapacity = children.fold<int>(0, (sum, loc) => sum + loc.capacity);
+    final grid = parentModel?.parkingGrid;
+    final selectedInFocus = selectedLocation != null && (selectedLocation.id == parentModel?.id || children.any((child) => child.id == selectedLocation.id));
+    final selectedLabel = selectedInFocus ? '선택됨' : '미선택';
+
+    return OpsConsoleScaffold(
+      key: ValueKey<String>('location-focused-$keyValue'),
+      title: groupName,
+      icon: Icons.account_tree_rounded,
+      areaLabel: areaLabel,
+      loading: state.isLoading,
+      trailing: IconButton.filledTonal(
+        tooltip: '목록으로 돌아가기',
+        onPressed: _closeFocusedParent,
+        icon: const Icon(Icons.close_rounded),
+      ),
+      metrics: [
+        OpsMetric(label: '자식', value: '${children.length}', icon: Icons.subdirectory_arrow_right_rounded, color: cs.secondary),
+        OpsMetric(label: '공간', value: '$totalCapacity', icon: Icons.local_parking_rounded, color: cs.primary),
+        OpsMetric(label: '그리드', value: grid == null ? '없음' : '${grid.rows}×${grid.cols}', icon: Icons.grid_on_rounded, color: cs.primary),
+        OpsMetric(label: '선택', value: selectedLabel, icon: Icons.check_circle_rounded, color: selectedInFocus ? cs.primary : cs.onInverseSurface),
+      ],
+      bottomBar: _buildFocusedBottomBar(
+        context: context,
+        parentModel: parentModel,
+        children: children,
+        selectedLocation: selectedLocation,
+      ),
+      body: _buildFocusedParentView(
+        groupKey: keyValue,
+        groupName: groupName,
+        parentModel: parentModel,
+        children: children,
+        state: state,
+        cs: cs,
+        storageKeyPrefix: storageKeyPrefix,
       ),
     );
   }
@@ -1042,7 +1340,7 @@ class _LocationManagementState extends State<LocationManagement> {
       tiles.add(Divider(color: cs.outlineVariant.withOpacity(.55)));
     }
 
-    if (groupedChildren.isNotEmpty) {
+    if (groupedChildren.isNotEmpty || parentByKey.isNotEmpty) {
       tiles.add(
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
@@ -1082,6 +1380,7 @@ class _LocationManagementState extends State<LocationManagement> {
   }) {
     return ListView(
       key: PageStorageKey<String>('${storageKeyPrefix}_composite_list'),
+      padding: const EdgeInsets.only(top: 10),
       children: _buildCompositeTiles(
         parentByKey: parentByKey,
         groupedChildren: groupedChildren,
@@ -1102,50 +1401,64 @@ class _LocationManagementState extends State<LocationManagement> {
       final loc = list[index];
       final isSelected = state.selectedLocationId == loc.id;
 
-      return Card(
-        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        color: cs.surface,
-        elevation: isSelected ? 3 : 1,
-        surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(
-            color: isSelected ? cs.primary : cs.outlineVariant.withOpacity(.65),
-            width: isSelected ? 1.5 : 1,
-          ),
-        ),
-        child: ListTile(
-          title: const Text(' ', style: TextStyle(fontSize: 0)),
-          subtitle: DefaultTextStyle(
-            style: TextStyle(color: cs.onSurfaceVariant, height: 1.2),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  loc.locationName,
-                  style: TextStyle(
-                      fontWeight: FontWeight.w800, color: cs.onSurface),
-                ),
-                if (loc.capacity > 0) Text('공간 ${loc.capacity}대'),
-              ],
-            ),
-          ),
-          leading: Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: cs.primaryContainer.withOpacity(.55),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: cs.outlineVariant.withOpacity(.55)),
-            ),
-            child: Icon(Icons.location_on, color: cs.primary, size: 20),
-          ),
-          trailing: isSelected
-              ? Icon(Icons.check_circle, color: cs.primary)
-              : Icon(Icons.chevron_right,
-                  color: cs.onSurfaceVariant.withOpacity(.75)),
+      return InkWell(
+        onTap: () => state.toggleLocationSelection(loc.id),
+        borderRadius: BorderRadius.circular(16),
+        child: OpsPanel(
           selected: isSelected,
-          onTap: () => state.toggleLocationSelection(loc.id),
+          padding: EdgeInsets.zero,
+          child: Row(
+            children: [
+              Container(
+                width: 6,
+                height: 96,
+                decoration: BoxDecoration(
+                  color: cs.primary,
+                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(16)),
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              loc.locationName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontWeight: FontWeight.w900, color: cs.onSurface, fontSize: 16),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          OpsStatusBadge(label: '단일', color: cs.primary, icon: Icons.location_on_rounded),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          OpsInfoPill(text: loc.capacity > 0 ? '공간 ${loc.capacity}대' : '공간 미지정', icon: Icons.local_parking_rounded),
+                          OpsInfoPill(text: loc.area.isEmpty ? '지역 미설정' : loc.area, icon: Icons.business_rounded),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: Icon(
+                  isSelected ? Icons.check_circle_rounded : Icons.chevron_right_rounded,
+                  color: isSelected ? cs.primary : cs.onSurfaceVariant.withOpacity(.7),
+                ),
+              ),
+            ],
+          ),
         ),
       );
     });
@@ -1166,416 +1479,389 @@ class _LocationManagementState extends State<LocationManagement> {
         return ad.compareTo(bd);
       });
 
-    final remainingKeys =
-        groupedChildren.keys.where((k) => !parentByKey.containsKey(k)).toList()
-          ..sort((a, b) {
-            final ad = groupDisplayNameByKey[a] ?? a;
-            final bd = groupDisplayNameByKey[b] ?? b;
-            return ad.compareTo(bd);
-          });
+    final remainingKeys = groupedChildren.keys.where((k) => !parentByKey.containsKey(k)).toList()
+      ..sort((a, b) {
+        final ad = groupDisplayNameByKey[a] ?? a;
+        final bd = groupDisplayNameByKey[b] ?? b;
+        return ad.compareTo(bd);
+      });
 
     final groupKeys = [...parentKeysOrdered, ...remainingKeys];
 
-    final selectedId = state.selectedLocationId;
-    final selectedLoc = (selectedId == null)
-        ? null
-        : state.locations.cast<LocationModel?>().firstWhere(
-              (l) => l != null && l.id == selectedId,
-              orElse: () => null,
-            );
-
     return groupKeys.map((gKey) {
       final groupName = groupDisplayNameByKey[gKey] ?? gKey;
-
-      final children = (groupedChildren[gKey] ?? <LocationModel>[])
-        ..sort((a, b) => a.locationName.compareTo(b.locationName));
-
-      final totalCapacity =
-          children.fold<int>(0, (sum, loc) => sum + loc.capacity);
-
+      final children = [...(groupedChildren[gKey] ?? const <LocationModel>[])]..sort((a, b) => a.locationName.compareTo(b.locationName));
+      final totalCapacity = children.fold<int>(0, (sum, loc) => sum + loc.capacity);
       final parentModel = parentByKey[gKey];
       final parentId = parentModel?.id;
-      final parentSelected =
-          parentId != null && state.selectedLocationId == parentId;
-
+      final parentSelected = parentId != null && state.selectedLocationId == parentId;
       final grid = parentModel?.parkingGrid;
+      final selectedChildCount = children.where((child) => state.selectedLocationId == child.id).length;
+      final accent = selectedChildCount > 0 ? cs.secondary : cs.primary;
 
-      LocationModel? selectedChildInThisGroup;
-      if (selectedLoc != null && _isCompositeChild(selectedLoc)) {
-        final pk = _nameKey((selectedLoc.parent ?? '').trim());
-        if (pk == gKey) {
-          selectedChildInThisGroup = selectedLoc;
-        }
-      }
-
-      final overlaysAll = <ChildRegionOverlay>[];
-      for (final c in children) {
-        final rect = c.childRect;
-        if (rect == null) continue;
-        overlaysAll.add(
-          ChildRegionOverlay(
-            rect: rect,
-            label: c.locationName.trim(),
-            isSelected: (selectedId != null && c.id == selectedId),
-          ),
-        );
-      }
-
-      final overlays =
-          (_showOnlySelectedChild && selectedChildInThisGroup != null)
-              ? overlaysAll.where((o) => o.isSelected).toList()
-              : overlaysAll;
-
-      final childSlotsToLabel =
-          (selectedChildInThisGroup != null && _showSelectedChildSlotNumbers)
-              ? selectedChildInThisGroup.childSlots
-              : const <ChildSlot>[];
-
-      final emptyCells = (grid != null) ? _countEmptyCells(grid) : null;
-      final parkingAreas = (grid != null) ? _countParkingAreas(grid) : null;
-      final parkingAreaCells =
-          (grid != null) ? _countParkingAreaCells(grid) : null;
-
-      final layoutMeta = (grid == null)
-          ? ''
-          : ' · 빈칸 $emptyCells'
-              '${(parkingAreas ?? 0) > 0 ? ' · 주차면적 $parkingAreas' : ''}'
-              '${(parkingAreaCells ?? 0) > 0 ? ' · 면적셀 $parkingAreaCells' : ''}';
-
-      final parkingKindSummary =
-          grid == null ? '' : _parkingAreaKindSummary(grid);
-      final selectedChildSlotSummary = selectedChildInThisGroup == null
-          ? ''
-          : _slotSummaryText(selectedChildInThisGroup.childSlots);
-
-      final childrenForList = (_showOnlySelectedChild &&
-              selectedChildInThisGroup != null)
-          ? children.where((c) => c.id == selectedChildInThisGroup!.id).toList()
-          : children;
-
-      return Card(
-        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: cs.outlineVariant.withOpacity(.65)),
-        ),
-        color: cs.surface,
-        elevation: 1,
-        surfaceTintColor: Colors.transparent,
-        child: Theme(
-          data: Theme.of(context).copyWith(
-            dividerColor: Colors.transparent,
-            expansionTileTheme: ExpansionTileThemeData(
-              iconColor: cs.primary,
-              collapsedIconColor: cs.onSurfaceVariant,
-              textColor: cs.onSurface,
-              collapsedTextColor: cs.onSurface,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-              collapsedShape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-            ),
-          ),
-          child: ExpansionTile(
-            key: PageStorageKey<String>('${storageKeyPrefix}_exp_$gKey'),
-            title: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '부모 구역: $groupName (공간 $totalCapacity대)',
-                    style: TextStyle(
-                        fontWeight: FontWeight.w800, color: cs.onSurface),
-                  ),
-                ),
-                if (parentId != null)
-                  IconButton(
-                    tooltip: parentSelected ? '부모 선택 해제' : '부모 선택',
-                    icon: Icon(
-                      parentSelected
-                          ? Icons.check_circle
-                          : Icons.radio_button_unchecked,
-                      color: parentSelected ? cs.primary : cs.onSurfaceVariant,
-                    ),
-                    onPressed: () => state.toggleLocationSelection(parentId),
-                  ),
-              ],
-            ),
-            childrenPadding: const EdgeInsets.only(bottom: 8),
+      return InkWell(
+        onTap: () => _openFocusedParent(gKey),
+        borderRadius: BorderRadius.circular(16),
+        child: OpsPanel(
+          selected: parentSelected || selectedChildCount > 0,
+          padding: EdgeInsets.zero,
+          accentColor: accent,
+          margin: const EdgeInsets.fromLTRB(16, 6, 16, 10),
+          child: Row(
             children: [
-              if (grid != null) ...[
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+              Container(
+                width: 6,
+                height: 112,
+                decoration: BoxDecoration(
+                  color: accent,
+                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(16)),
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 13, 10, 13),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        '레이아웃 그리드 (${grid.rows}×${grid.cols})$layoutMeta',
-                        style: TextStyle(
-                          color: cs.onSurface,
-                          fontWeight: FontWeight.w900,
-                        ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              groupName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: cs.onSurface,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 16.5,
+                                letterSpacing: -.2,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          OpsStatusBadge(
+                            label: grid == null ? '도면 없음' : '도면',
+                            color: grid == null ? cs.onSurfaceVariant : cs.primary,
+                            icon: grid == null ? Icons.grid_off_rounded : Icons.grid_on_rounded,
+                          ),
+                        ],
                       ),
-                      if (parkingKindSummary.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          parkingKindSummary,
-                          style: TextStyle(
-                            color: cs.onSurfaceVariant,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                      if (selectedChildSlotSummary.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          '선택 자식 슬롯: $selectedChildSlotSummary',
-                          style: TextStyle(
-                            color: cs.primary,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 8),
-                      ParkingGridPreview(
-                        grid: grid,
-                        maxExtent: 320,
-                        showLegend: true,
-                        showChildRegions: true,
-                        childRegions: overlays,
-                        showChildRegionLabels: true,
-                        showAllChildRegionLabels: false,
-                        showChildSlotNumbers: _showSelectedChildSlotNumbers,
-                        childSlotsToLabel: childSlotsToLabel,
+                      const SizedBox(height: 9),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          OpsInfoPill(text: '자식 ${children.length}개', icon: Icons.subdirectory_arrow_right_rounded),
+                          OpsInfoPill(text: '공간 $totalCapacity대', icon: Icons.local_parking_rounded),
+                          OpsInfoPill(text: grid == null ? '그리드 미지정' : '${grid.rows}×${grid.cols}', icon: Icons.grid_view_rounded),
+                          if (selectedChildCount > 0) OpsInfoPill(text: '자식 선택됨', icon: Icons.check_circle_rounded),
+                        ],
                       ),
                     ],
                   ),
                 ),
-                Divider(height: 1, color: cs.outlineVariant.withOpacity(.55)),
-              ] else ...[
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
-                  child: Text(
-                    '⚠️ 이 부모 구역은 parkingGrid가 없습니다. (저장/마이그레이션 확인 필요)',
-                    style: TextStyle(
-                      color: cs.onSurfaceVariant.withOpacity(.85),
-                      fontWeight: FontWeight.w700,
-                    ),
+              ),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton.filledTonal(
+                    tooltip: parentSelected ? '부모 선택 해제' : '부모 선택',
+                    onPressed: parentId == null ? null : () => state.toggleLocationSelection(parentId),
+                    icon: Icon(parentSelected ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded),
                   ),
-                ),
-                Divider(height: 1, color: cs.outlineVariant.withOpacity(.55)),
-              ],
-              ...childrenForList.map((loc) {
-                final isSelected = state.selectedLocationId == loc.id;
-                final subtitleParts = <String>[];
-                if (loc.isTowerChild) {
-                  subtitleParts.add('타워');
-                }
-                if (loc.capacity > 0) {
-                  subtitleParts.add('공간 ${loc.capacity}대');
-                }
-                final slotSummary = _slotSummaryText(loc.childSlots);
-                if (!loc.isTowerChild && slotSummary.isNotEmpty) {
-                  subtitleParts.add(slotSummary);
-                }
-
-                return ListTile(
-                  title: Text(
-                    loc.locationName,
-                    style: TextStyle(
-                        fontWeight: FontWeight.w700, color: cs.onSurface),
+                  const SizedBox(height: 5),
+                  Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: Icon(Icons.open_in_full_rounded, color: cs.primary, size: 20),
                   ),
-                  subtitle: subtitleParts.isNotEmpty
-                      ? Text(
-                          subtitleParts.join(' · '),
-                          style: TextStyle(color: cs.onSurfaceVariant),
-                        )
-                      : null,
-                  leading: Icon(Icons.subdirectory_arrow_right,
-                      color: cs.onSurfaceVariant),
-                  trailing: isSelected
-                      ? Icon(Icons.check_circle, color: cs.primary)
-                      : null,
-                  selected: isSelected,
-                  onTap: () => state.toggleLocationSelection(loc.id),
-                );
-              }).toList(),
+                ],
+              ),
             ],
           ),
         ),
       );
     }).toList();
   }
-}
 
-class _FabStack extends StatelessWidget {
-  const _FabStack({
-    required this.bottomGap,
-    required this.spacing,
-    required this.hasSelection,
-    required this.onAdd,
-    this.onEdit,
-    required this.onDelete,
-  });
-
-  final double bottomGap;
-  final double spacing;
-  final bool hasSelection;
-  final VoidCallback onAdd;
-  final VoidCallback? onEdit;
-  final VoidCallback? onDelete;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    final ButtonStyle primaryStyle = ElevatedButton.styleFrom(
-      backgroundColor: cs.primary,
-      foregroundColor: cs.onPrimary,
-      elevation: 3,
-      shadowColor: cs.primary.withOpacity(0.25),
-      shape: const StadiumBorder(),
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-      textStyle: const TextStyle(fontWeight: FontWeight.w700),
-    );
-
-    final ButtonStyle deleteStyle = ElevatedButton.styleFrom(
-      backgroundColor: cs.error,
-      foregroundColor: cs.onError,
-      elevation: 3,
-      shadowColor: cs.error.withOpacity(0.35),
-      shape: const StadiumBorder(),
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-      textStyle: const TextStyle(fontWeight: FontWeight.w700),
-    );
-
-    final ButtonStyle editStyle = ElevatedButton.styleFrom(
-      backgroundColor: cs.secondary,
-      foregroundColor: cs.onSecondary,
-      elevation: 3,
-      shadowColor: cs.secondary.withOpacity(0.25),
-      shape: const StadiumBorder(),
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-      textStyle: const TextStyle(fontWeight: FontWeight.w700),
-    );
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        _ElevatedPillButton.icon(
-          icon: Icons.add,
-          label: '추가',
-          style: primaryStyle,
-          onPressed: onAdd,
-        ),
-        if (onEdit != null) ...[
-          SizedBox(height: spacing),
-          _ElevatedPillButton.icon(
-            icon: Icons.edit,
-            label: '수정',
-            style: editStyle,
-            onPressed: onEdit!,
-          ),
-        ],
-        if (hasSelection) ...[
-          SizedBox(height: spacing),
-          _ElevatedPillButton.icon(
-            icon: Icons.delete,
-            label: '삭제',
-            style: deleteStyle,
-            onPressed: onDelete!,
-          ),
-        ],
-        SizedBox(height: bottomGap),
-      ],
-    );
-  }
-}
-
-class _ElevatedPillButton extends StatelessWidget {
-  const _ElevatedPillButton({
-    required this.child,
-    required this.onPressed,
-    required this.style,
-  });
-
-  factory _ElevatedPillButton.icon({
-    required IconData icon,
-    required String label,
-    required VoidCallback onPressed,
-    required ButtonStyle style,
+  Widget _buildFocusedParentView({
+    required String groupKey,
+    required String groupName,
+    required LocationModel? parentModel,
+    required List<LocationModel> children,
+    required LocationState state,
+    required ColorScheme cs,
+    required String storageKeyPrefix,
   }) {
-    return _ElevatedPillButton(
-      onPressed: onPressed,
-      style: style,
-      child: _FabLabel(icon: icon, label: label),
-    );
-  }
+    final selectedId = state.selectedLocationId;
+    final selectedLoc = _selectedLocation(state);
+    final grid = parentModel?.parkingGrid;
 
-  final Widget child;
-  final VoidCallback onPressed;
-  final ButtonStyle style;
+    LocationModel? selectedChildInThisGroup;
+    if (selectedLoc != null && _isCompositeChild(selectedLoc)) {
+      final pk = _nameKey((selectedLoc.parent ?? '').trim());
+      if (pk == groupKey) {
+        selectedChildInThisGroup = selectedLoc;
+      }
+    }
 
-  @override
-  Widget build(BuildContext context) {
-    return ElevatedButton(
-      onPressed: onPressed,
-      style: style,
-      child: child,
-    );
-  }
-}
+    final overlaysAll = <ChildRegionOverlay>[];
+    for (final child in children) {
+      final rect = child.childRect;
+      if (rect == null) continue;
+      overlaysAll.add(
+        ChildRegionOverlay(
+          rect: rect,
+          label: child.locationName.trim(),
+          isSelected: selectedId != null && child.id == selectedId,
+        ),
+      );
+    }
 
-class _FabLabel extends StatelessWidget {
-  const _FabLabel({required this.icon, required this.label});
+    final overlays = (_showOnlySelectedChild && selectedChildInThisGroup != null) ? overlaysAll.where((o) => o.isSelected).toList() : overlaysAll;
+    final childSlotsToLabel = (selectedChildInThisGroup != null && _showSelectedChildSlotNumbers) ? selectedChildInThisGroup.childSlots : const <ChildSlot>[];
+    final childrenForList = (_showOnlySelectedChild && selectedChildInThisGroup != null) ? children.where((c) => c.id == selectedChildInThisGroup!.id).toList() : children;
+    final emptyCells = grid == null ? null : _countEmptyCells(grid);
+    final parkingAreas = grid == null ? null : _countParkingAreas(grid);
+    final parkingAreaCells = grid == null ? null : _countParkingAreaCells(grid);
+    final parkingKindSummary = grid == null ? '' : _parkingAreaKindSummary(grid);
+    final selectedChildSlotSummary = selectedChildInThisGroup == null ? '' : _slotSummaryText(selectedChildInThisGroup.childSlots);
 
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
+    return ListView(
+      key: PageStorageKey<String>('${storageKeyPrefix}_focused_$groupKey'),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
       children: [
-        Icon(icon, size: 20),
-        const SizedBox(width: 8),
-        Text(label),
+        OpsCommandPanel(
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '부모 구역 작업 화면',
+                    style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w900, fontSize: 14.5, letterSpacing: -.15),
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: _closeFocusedParent,
+                  icon: const Icon(Icons.arrow_back_rounded, size: 18),
+                  label: const Text('목록'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                OpsFilterChip(
+                  label: '선택 자식만',
+                  selected: _showOnlySelectedChild,
+                  icon: Icons.center_focus_strong_rounded,
+                  onSelected: () => setState(() => _showOnlySelectedChild = !_showOnlySelectedChild),
+                ),
+                OpsFilterChip(
+                  label: '슬롯번호',
+                  selected: _showSelectedChildSlotNumbers,
+                  icon: Icons.tag_rounded,
+                  onSelected: () => setState(() => _showSelectedChildSlotNumbers = !_showSelectedChildSlotNumbers),
+                ),
+                if (parentModel != null)
+                  OpsFilterChip(
+                    label: state.selectedLocationId == parentModel.id ? '부모 선택됨' : '부모 선택',
+                    selected: state.selectedLocationId == parentModel.id,
+                    icon: Icons.account_tree_rounded,
+                    onSelected: () => state.toggleLocationSelection(parentModel.id),
+                  ),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (grid != null)
+          OpsPanel(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '레이아웃 그리드 ${grid.rows}×${grid.cols}',
+                        style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w900, fontSize: 15.5),
+                      ),
+                    ),
+                    OpsStatusBadge(label: '도면', color: cs.primary, icon: Icons.grid_on_rounded),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    OpsInfoPill(text: '빈칸 $emptyCells', icon: Icons.crop_free_rounded),
+                    if ((parkingAreas ?? 0) > 0) OpsInfoPill(text: '주차면적 $parkingAreas', icon: Icons.local_parking_rounded),
+                    if ((parkingAreaCells ?? 0) > 0) OpsInfoPill(text: '면적셀 $parkingAreaCells', icon: Icons.grid_4x4_rounded),
+                  ],
+                ),
+                if (parkingKindSummary.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    parkingKindSummary,
+                    style: TextStyle(color: cs.onSurfaceVariant, fontWeight: FontWeight.w800, fontSize: 12),
+                  ),
+                ],
+                if (selectedChildSlotSummary.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    '선택 자식 슬롯: $selectedChildSlotSummary',
+                    style: TextStyle(color: cs.primary, fontWeight: FontWeight.w900, fontSize: 12),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                ParkingGridPreview(
+                  grid: grid,
+                  maxExtent: 360,
+                  showLegend: true,
+                  showChildRegions: true,
+                  childRegions: overlays,
+                  showChildRegionLabels: true,
+                  showAllChildRegionLabels: false,
+                  showChildSlotNumbers: _showSelectedChildSlotNumbers,
+                  childSlotsToLabel: childSlotsToLabel,
+                ),
+              ],
+            ),
+          )
+        else
+          OpsPanel(
+            accentColor: cs.error,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.grid_off_rounded, color: cs.error),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    '이 부모 구역은 parkingGrid가 없습니다. 저장 상태나 마이그레이션 결과를 확인하세요.',
+                    style: TextStyle(color: cs.onSurfaceVariant, fontWeight: FontWeight.w800, height: 1.28),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        const SizedBox(height: 6),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(2, 8, 2, 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '자식 주차 구역',
+                  style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w900, fontSize: 15.5, letterSpacing: -.15),
+                ),
+              ),
+              OpsStatusBadge(label: '${childrenForList.length}/${children.length}', color: cs.secondary, icon: Icons.segment_rounded),
+            ],
+          ),
+        ),
+        if (childrenForList.isEmpty)
+          OpsPanel(
+            child: Column(
+              children: [
+                Icon(Icons.subdirectory_arrow_right_rounded, color: cs.onSurfaceVariant, size: 30),
+                const SizedBox(height: 8),
+                Text(
+                  _showOnlySelectedChild ? '선택된 자식 구역이 없습니다' : '등록된 자식 구역이 없습니다',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w900),
+                ),
+              ],
+            ),
+          )
+        else
+          ...childrenForList.map((loc) => _buildFocusedChildTile(loc, state, cs)).toList(),
       ],
     );
   }
-}
 
-class _FilterChip extends StatelessWidget {
-  const _FilterChip({
-    required this.label,
-    required this.selected,
-    required this.onSelected,
-  });
+  Widget _buildFocusedChildTile(LocationModel loc, LocationState state, ColorScheme cs) {
+    final isSelected = state.selectedLocationId == loc.id;
+    final subtitleParts = <String>[];
+    if (loc.isTowerChild) {
+      subtitleParts.add('타워');
+    }
+    if (loc.capacity > 0) {
+      subtitleParts.add('공간 ${loc.capacity}대');
+    }
+    final slotSummary = _slotSummaryText(loc.childSlots);
+    if (!loc.isTowerChild && slotSummary.isNotEmpty) {
+      subtitleParts.add(slotSummary);
+    }
 
-  final String label;
-  final bool selected;
-  final VoidCallback onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return ChoiceChip(
-      label: Text(label),
-      selected: selected,
-      labelStyle: TextStyle(
-        fontWeight: FontWeight.w800,
-        color: selected ? cs.onPrimary : cs.onSurfaceVariant,
+    return InkWell(
+      onTap: () => state.toggleLocationSelection(loc.id),
+      borderRadius: BorderRadius.circular(16),
+      child: OpsPanel(
+        selected: isSelected,
+        accentColor: cs.secondary,
+        padding: EdgeInsets.zero,
+        child: Row(
+          children: [
+            Container(
+              width: 6,
+              height: 94,
+              decoration: BoxDecoration(
+                color: isSelected ? cs.secondary : cs.outlineVariant,
+                borderRadius: const BorderRadius.horizontal(left: Radius.circular(16)),
+              ),
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 12, 10, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            loc.locationName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w900, fontSize: 15.5),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        OpsStatusBadge(
+                          label: loc.isTowerChild ? '타워' : '자식',
+                          color: isSelected ? cs.secondary : cs.onSurfaceVariant,
+                          icon: loc.isTowerChild ? Icons.view_in_ar_rounded : Icons.subdirectory_arrow_right_rounded,
+                        ),
+                      ],
+                    ),
+                    if (subtitleParts.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: subtitleParts.map((part) => OpsInfoPill(text: part, icon: Icons.info_outline_rounded)).toList(),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: Icon(
+                isSelected ? Icons.check_circle_rounded : Icons.touch_app_rounded,
+                color: isSelected ? cs.secondary : cs.onSurfaceVariant.withOpacity(.7),
+              ),
+            ),
+          ],
+        ),
       ),
-      selectedColor: cs.primary,
-      backgroundColor: cs.surface,
-      side: BorderSide(
-        color: selected ? cs.primary : cs.outlineVariant.withOpacity(.6),
-      ),
-      onSelected: (_) => onSelected(),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
     );
   }
 }

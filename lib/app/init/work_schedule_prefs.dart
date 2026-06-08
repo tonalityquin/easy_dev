@@ -7,6 +7,7 @@ import '../../features/dashboard/applications/common/endtime_reminder_service.da
 class WorkSchedulePrefs {
   static const String startMapKey = 'startTimeByWeekday';
   static const String endMapKey = 'endTimeByWeekday';
+  static const String breakDaysKey = 'breakDays';
   static const List<String> days = <String>['월', '화', '수', '목', '금', '토', '일'];
 
   static int dayToWeekdayInt(String day) {
@@ -98,6 +99,70 @@ class WorkSchedulePrefs {
     return out;
   }
 
+
+  static List<String> normalizeDayList(Iterable<String> raw) {
+    final set = raw.map((value) => value.trim()).where((value) => value.isNotEmpty).toSet();
+    final out = <String>[
+      for (final day in days)
+        if (set.contains(day)) day,
+      for (final value in set)
+        if (!days.contains(value)) value,
+    ];
+    return out;
+  }
+
+  static List<String> readBreakDaysFromPrefs(
+    SharedPreferences prefs, {
+    Iterable<String> fallback = const <String>[],
+  }) {
+    if (!prefs.containsKey(breakDaysKey)) {
+      return normalizeDayList(fallback);
+    }
+    return normalizeDayList(prefs.getStringList(breakDaysKey) ?? const <String>[]);
+  }
+
+  static bool requiresBreakOnDateFromPrefs(
+    SharedPreferences prefs,
+    DateTime date, {
+    bool defaultWhenUnset = true,
+  }) {
+    if (!prefs.containsKey(breakDaysKey)) return defaultWhenUnset;
+    final index = date.weekday - 1;
+    if (index < 0 || index >= days.length) return defaultWhenUnset;
+    return readBreakDaysFromPrefs(prefs).contains(days[index]);
+  }
+
+  static List<String> inferBreakDaysFromWorkingMap({
+    required Map<String, TimeOfDay?> startByDay,
+    required Map<String, TimeOfDay?> endByDay,
+  }) {
+    final out = <String>[];
+    for (final day in days) {
+      if (startByDay[day] != null && endByDay[day] != null) {
+        out.add(day);
+      }
+    }
+    return out;
+  }
+
+  static List<String> normalizeBreakDaysForWorkingMap({
+    required Iterable<String> breakDays,
+    required Map<String, TimeOfDay?> startByDay,
+    required Map<String, TimeOfDay?> endByDay,
+  }) {
+    final breakSet = normalizeDayList(breakDays).toSet();
+    final out = <String>[];
+    for (final day in days) {
+      if (!breakSet.contains(day)) continue;
+      if (startByDay[day] == null || endByDay[day] == null) continue;
+      out.add(day);
+    }
+    for (final value in breakSet) {
+      if (!days.contains(value)) out.add(value);
+    }
+    return out;
+  }
+
   static Map<String, TimeOfDay?> fillAllDays(
     TimeOfDay? time, {
     Set<String> excludedDays = const <String>{},
@@ -172,6 +237,7 @@ class WorkSchedulePrefs {
     required Map<String, TimeOfDay?> startByDay,
     required Map<String, TimeOfDay?> endByDay,
     List<String> fixedHolidays = const <String>[],
+    List<String> breakDays = const <String>[],
   }) async {
     final normalizedStart = normalizeDayTimeMap(startByDay);
     final normalizedEnd = normalizeDayTimeMap(endByDay);
@@ -180,7 +246,8 @@ class WorkSchedulePrefs {
     await prefs.setString(endMapKey, encodeDayTimeMap(normalizedEnd));
     await prefs.setString('startTime', formatTime(pickRepresentative(normalizedStart)) ?? '');
     await prefs.setString('endTime', formatTime(pickRepresentative(normalizedEnd)) ?? '');
-    await prefs.setStringList('fixedHolidays', fixedHolidays);
+    await prefs.setStringList('fixedHolidays', normalizeDayList(fixedHolidays));
+    await prefs.setStringList(breakDaysKey, normalizeDayList(breakDays));
   }
 
   static Future<void> saveUserSchedule({
@@ -192,6 +259,11 @@ class WorkSchedulePrefs {
       startByDay: resolveStartMap(user),
       endByDay: resolveEndMap(user),
       fixedHolidays: user.fixedHolidays,
+      breakDays: normalizeBreakDaysForWorkingMap(
+        breakDays: user.breakDays,
+        startByDay: resolveStartMap(user),
+        endByDay: resolveEndMap(user),
+      ),
     );
   }
 

@@ -8,6 +8,7 @@ import '../../../../app/di/routes.dart';
 import '../../../../app/init/app_exit_service.dart';
 import '../../../../app/utils/dev_firebase_debug_dialog.dart';
 import '../../../../app/theme/brand_theme.dart';
+import '../../../../app/utils/ops_delayed_refresh_gate.dart';
 import '../../../../app/theme/theme_prefs_controller.dart';
 import '../../../../shared/plate/domain/repositories/plate_repository.dart';
 import '../../../dev/application/area_state.dart';
@@ -85,6 +86,13 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
     final debugArea = context.read<AreaState>().currentArea.trim();
     setState(() => _refreshing = true);
     try {
+      final shouldRefresh = await OpsDelayedRefreshGate.waitIfNeeded(
+        context: context,
+        title: '데이터 갱신',
+        message: '내 차량, 위치, 정산 데이터를 다시 불러오기 전 요청을 준비하고 있습니다.',
+      );
+      if (!shouldRefresh || !mounted) return;
+
       await context.read<LocationState>().manualLocationRefresh();
       await context.read<BillState>().manualBillRefresh();
       await _syncHasMonthlyParkingFlag();

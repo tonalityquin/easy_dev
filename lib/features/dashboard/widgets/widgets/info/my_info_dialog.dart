@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../../../app/init/work_schedule_prefs.dart';
 import '../../../../account/applications/user_state.dart';
 
 Future<void> showMyInfoDialog({required BuildContext context}) {
@@ -22,9 +23,9 @@ class MyInfoDialog extends StatefulWidget {
 }
 
 class _MyInfoDialogState extends State<MyInfoDialog> {
-  static const List<String> _days = ['월', '화', '수', '목', '금', '토', '일'];
-  static const String _kStartMapKey = 'startTimeByWeekday';
-  static const String _kEndMapKey = 'endTimeByWeekday';
+  static const List<String> _days = WorkSchedulePrefs.days;
+  static const String _kStartMapKey = WorkSchedulePrefs.startMapKey;
+  static const String _kEndMapKey = WorkSchedulePrefs.endMapKey;
 
   bool _loading = true;
   String? _savingDay;
@@ -38,13 +39,13 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
 
   Map<String, TimeOfDay?> _startByDay = <String, TimeOfDay?>{};
   Map<String, TimeOfDay?> _endByDay = <String, TimeOfDay?>{};
+  Set<String> _breakDays = <String>{};
 
   @override
   void initState() {
     super.initState();
     _loadPrefs();
   }
-
 
   String _formatTime(TimeOfDay? t) {
     if (t == null) return '-';
@@ -77,6 +78,20 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
     return <String, dynamic>{};
   }
 
+  List<String> _readStringList(dynamic raw) {
+    if (raw is Iterable) {
+      return WorkSchedulePrefs.normalizeDayList(raw.map((value) => value.toString()));
+    }
+    if (raw is Map) {
+      final out = <String>[];
+      for (final day in _days) {
+        if (raw[day] == true) out.add(day);
+      }
+      return out;
+    }
+    return const <String>[];
+  }
+
   Map<String, TimeOfDay?> _readDayTimeMapFromPrefs(SharedPreferences prefs, String key) {
     final raw = (prefs.getString(key) ?? '').trim();
     if (raw.isEmpty) return <String, TimeOfDay?>{};
@@ -93,10 +108,21 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
     return out;
   }
 
-  Map<String, TimeOfDay?> _fillAllDays(TimeOfDay? t) {
+  Map<String, TimeOfDay?> _fillAllDays(TimeOfDay? t, {Iterable<String> excludedDays = const <String>[]}) {
+    final excluded = excludedDays.map((value) => value.trim()).where((value) => value.isNotEmpty).toSet();
     final out = <String, TimeOfDay?>{};
     for (final d in _days) {
-      out[d] = t;
+      out[d] = excluded.contains(d) ? null : t;
+    }
+    return out;
+  }
+
+  Set<String> _workingDaySet(Map<String, TimeOfDay?> startMap, Map<String, TimeOfDay?> endMap) {
+    final out = <String>{};
+    for (final day in _days) {
+      if (startMap[day] != null && endMap[day] != null) {
+        out.add(day);
+      }
     }
     return out;
   }
@@ -117,13 +143,14 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
     final name = ((cached['name'] as String?) ?? '').trim();
     final phoneFromCached = ((cached['phone'] as String?) ?? '').trim();
     final phone = prefsPhone.isNotEmpty ? prefsPhone : phoneFromCached;
+    final fixedHolidays = prefs.getStringList('fixedHolidays') ?? _readStringList(cached['fixedHolidays']);
 
     var startMap = _readDayTimeMapFromPrefs(prefs, _kStartMapKey);
     var endMap = _readDayTimeMapFromPrefs(prefs, _kEndMapKey);
 
     if (startMap.isEmpty) {
       final legacyStart = (prefs.getString('startTime') ?? '').trim();
-      startMap = _fillAllDays(_parseHHmm(legacyStart));
+      startMap = _fillAllDays(_parseHHmm(legacyStart), excludedDays: fixedHolidays);
     } else {
       for (final d in _days) {
         startMap.putIfAbsent(d, () => null);
@@ -132,12 +159,19 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
 
     if (endMap.isEmpty) {
       final legacyEnd = (prefs.getString('endTime') ?? '').trim();
-      endMap = _fillAllDays(_parseHHmm(legacyEnd));
+      endMap = _fillAllDays(_parseHHmm(legacyEnd), excludedDays: fixedHolidays);
     } else {
       for (final d in _days) {
         endMap.putIfAbsent(d, () => null);
       }
     }
+
+    final workingDays = _workingDaySet(startMap, endMap);
+    final cachedBreakDays = _readStringList(cached['breakDays']);
+    final breakDays = prefs.containsKey(WorkSchedulePrefs.breakDaysKey)
+        ? WorkSchedulePrefs.readBreakDaysFromPrefs(prefs)
+        : (cached.containsKey('breakDays') ? cachedBreakDays : workingDays.toList(growable: false));
+    final normalizedBreakDays = WorkSchedulePrefs.normalizeDayList(breakDays).where(workingDays.contains).toSet();
 
     if (!mounted) return;
 
@@ -150,6 +184,7 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
       _position = prefsPosition;
       _startByDay = startMap;
       _endByDay = endMap;
+      _breakDays = normalizedBreakDays;
       _loading = false;
     });
   }
@@ -175,6 +210,7 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
       return;
     }
 
+    final wasHoliday = _startByDay[day] == null && _endByDay[day] == null;
     setState(() => _savingDay = day);
 
     final ok = await context.read<UserState>().setCurrentUserWeekdayWorkTimeLocalOnly(
@@ -189,6 +225,13 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
       setState(() {
         _startByDay = Map<String, TimeOfDay?>.of(_startByDay)..[day] = startTime;
         _endByDay = Map<String, TimeOfDay?>.of(_endByDay)..[day] = endTime;
+        final nextBreakDays = <String>{..._breakDays};
+        if (startTime == null && endTime == null) {
+          nextBreakDays.remove(day);
+        } else if (wasHoliday) {
+          nextBreakDays.add(day);
+        }
+        _breakDays = nextBreakDays;
         _savingDay = null;
       });
       _showSnack(startTime == null && endTime == null ? '$day요일이 휴무로 저장되었습니다.' : '$day요일 근무 시간이 저장되었습니다.');
@@ -199,6 +242,56 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
     await _loadPrefs();
     if (!mounted) return;
     _showSnack('근무 시간 저장에 실패했습니다.');
+  }
+
+  Future<void> _setHoliday(String day, bool value) async {
+    if (_savingDay != null) return;
+    if (value) {
+      await _saveWeeklyTime(day: day, startTime: null, endTime: null);
+    } else {
+      await _saveWeeklyTime(
+        day: day,
+        startTime: _startByDay[day] ?? const TimeOfDay(hour: 9, minute: 0),
+        endTime: _endByDay[day] ?? const TimeOfDay(hour: 18, minute: 0),
+      );
+    }
+  }
+
+  Future<void> _toggleBreakDay(String day, bool value) async {
+    if (_savingDay != null) return;
+    if (_startByDay[day] == null || _endByDay[day] == null) {
+      _showSnack('근무 시간이 있는 요일만 휴게를 설정할 수 있습니다.');
+      return;
+    }
+
+    setState(() => _savingDay = day);
+
+    final ok = await context.read<UserState>().setCurrentUserBreakDayLocalOnly(
+          day: day,
+          hasBreak: value,
+        );
+
+    if (!mounted) return;
+
+    if (ok) {
+      setState(() {
+        final next = <String>{..._breakDays};
+        if (value) {
+          next.add(day);
+        } else {
+          next.remove(day);
+        }
+        _breakDays = next;
+        _savingDay = null;
+      });
+      _showSnack(value ? '$day요일 휴게가 설정되었습니다.' : '$day요일 휴게가 해제되었습니다.');
+      return;
+    }
+
+    setState(() => _savingDay = null);
+    await _loadPrefs();
+    if (!mounted) return;
+    _showSnack('휴게 설정 저장에 실패했습니다.');
   }
 
   Future<void> _pickWeeklyTime({
@@ -227,11 +320,6 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
     final nextEnd = isStart ? currentEnd ?? const TimeOfDay(hour: 18, minute: 0) : picked;
 
     await _saveWeeklyTime(day: day, startTime: nextStart, endTime: nextEnd);
-  }
-
-  Future<void> _clearWeeklyTime(String day) async {
-    if (_savingDay != null) return;
-    await _saveWeeklyTime(day: day, startTime: null, endTime: null);
   }
 
   @override
@@ -289,11 +377,13 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
                 days: _days,
                 startByDay: _startByDay,
                 endByDay: _endByDay,
+                breakDays: _breakDays,
                 savingDay: _savingDay,
                 formatTime: _formatTime,
                 onPickStart: (d) => _pickWeeklyTime(day: d, isStart: true),
                 onPickEnd: (d) => _pickWeeklyTime(day: d, isStart: false),
-                onClearDay: _clearWeeklyTime,
+                onHolidayChanged: _setHoliday,
+                onBreakChanged: _toggleBreakDay,
               ),
               const SizedBox(height: 14),
               SizedBox(
@@ -454,21 +544,25 @@ class _WeeklyWorkTimeCard extends StatelessWidget {
   final List<String> days;
   final Map<String, TimeOfDay?> startByDay;
   final Map<String, TimeOfDay?> endByDay;
+  final Set<String> breakDays;
   final String? savingDay;
   final String Function(TimeOfDay? t) formatTime;
   final Future<void> Function(String day) onPickStart;
   final Future<void> Function(String day) onPickEnd;
-  final Future<void> Function(String day) onClearDay;
+  final Future<void> Function(String day, bool value) onHolidayChanged;
+  final Future<void> Function(String day, bool value) onBreakChanged;
 
   const _WeeklyWorkTimeCard({
     required this.days,
     required this.startByDay,
     required this.endByDay,
+    required this.breakDays,
     required this.savingDay,
     required this.formatTime,
     required this.onPickStart,
     required this.onPickEnd,
-    required this.onClearDay,
+    required this.onHolidayChanged,
+    required this.onBreakChanged,
   });
 
   @override
@@ -491,11 +585,11 @@ class _WeeklyWorkTimeCard extends StatelessWidget {
       final isSaving = savingDay == d;
       final isHoliday = st == null && et == null;
       final hasPartial = (st == null) != (et == null);
+      final hasBreak = breakDays.contains(d) && !isHoliday && !hasPartial;
       final badgeBg = isHoliday ? cs.secondaryContainer.withOpacity(0.55) : cs.surfaceContainerHigh.withOpacity(0.55);
       final badgeFg = isHoliday ? cs.onSecondaryContainer : cs.onSurface.withOpacity(0.78);
       final badgeBorder = hasPartial ? cs.error.withOpacity(0.75) : cs.outlineVariant.withOpacity(0.55);
-      final status = hasPartial ? '시간 확인 필요' : isHoliday ? '휴무' : '${formatTime(st)} ~ ${formatTime(et)}';
-      final clearVisible = !isHoliday || hasPartial;
+      final status = hasPartial ? '시간 확인 필요' : isHoliday ? '휴무' : '${formatTime(st)} ~ ${formatTime(et)} · ${hasBreak ? '휴게 있음' : '휴게 없음'}';
 
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 7),
@@ -569,22 +663,31 @@ class _WeeklyWorkTimeCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (clearVisible) ...[
-                  const SizedBox(width: 8),
-                  SizedBox(
-                    height: 38,
-                    child: TextButton.icon(
-                      onPressed: isSaving ? null : () => onClearDay(d),
-                      icon: const Icon(Icons.close_rounded, size: 18),
-                      label: const Text('휴무'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: cs.error,
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                        textStyle: (tt.labelMedium ?? const TextStyle(fontSize: 12)).copyWith(fontWeight: FontWeight.w900),
-                      ),
-                    ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Expanded(
+                  child: CheckboxListTile(
+                    value: isHoliday,
+                    onChanged: isSaving ? null : (value) => onHolidayChanged(d, value ?? false),
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    title: const Text('휴무'),
                   ),
-                ],
+                ),
+                Expanded(
+                  child: CheckboxListTile(
+                    value: hasBreak,
+                    onChanged: isSaving || isHoliday || hasPartial ? null : (value) => onBreakChanged(d, value ?? false),
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    title: const Text('휴게'),
+                  ),
+                ),
               ],
             ),
             if (hasPartial) ...[
@@ -634,7 +737,7 @@ class _WeeklyWorkTimeCard extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              '휴무 요일은 출근/퇴근 시간을 모두 비워 저장할 수 있습니다.',
+              '휴무 요일은 근무 시간 없이 저장되고, 휴게가 체크된 요일만 퇴근 전 휴게 펀칭이 필요합니다.',
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,

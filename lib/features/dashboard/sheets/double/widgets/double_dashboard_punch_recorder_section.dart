@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../../../app/config/commute_true_false_mode_config.dart';
 import '../../../../../../app/init/app_exit_service.dart';
-import '../../../../../../app/utils/block_dialog/work_end_duration_blocking_dialog.dart';
+import '../../../../../../app/init/work_schedule_prefs.dart';
 import '../../../../../../features/commute/domain/repositories/commute_true_false_repository.dart';
 import '../../../../../../features/mode_single/application/att_brk_repository.dart';
 import 'double_dashboard_punch_card_feedback.dart';
@@ -36,6 +37,7 @@ class _DoubleDashboardInsidePunchRecorderSectionState
   String? _breakTime;
   String? _workOutTime;
   bool _loading = true;
+  bool _requiresBreak = true;
 
   final CommuteTrueFalseRepository _commuteTrueFalseRepo = CommuteTrueFalseRepository();
 
@@ -57,12 +59,19 @@ class _DoubleDashboardInsidePunchRecorderSectionState
     });
 
     final events = await AttBrkRepository.instance.getEventsForDate(date);
+    final prefs = await SharedPreferences.getInstance();
+    final requiresBreak = WorkSchedulePrefs.requiresBreakOnDateFromPrefs(
+      prefs,
+      date,
+      defaultWhenUnset: true,
+    );
 
     setState(() {
       _selectedDate = date;
       _workInTime = events[AttBrkModeType.workIn];
       _breakTime = events[AttBrkModeType.breakTime];
       _workOutTime = events[AttBrkModeType.workOut];
+      _requiresBreak = requiresBreak;
       _loading = false;
     });
   }
@@ -137,23 +146,10 @@ class _DoubleDashboardInsidePunchRecorderSectionState
       return;
     }
 
-    if (type == AttBrkModeType.workOut && (!_hasWorkIn || !_hasBreak)) {
+    if (type == AttBrkModeType.workOut && (!_hasWorkIn || (_requiresBreak && !_hasBreak))) {
       return;
     }
 
-    if (type == AttBrkModeType.workIn || type == AttBrkModeType.workOut) {
-      final isClockIn = type == AttBrkModeType.workIn;
-
-      final proceed = await showWorkEndDurationBlockingDialog(
-        context,
-        message: isClockIn
-            ? '출근을 펀칭하면 근무가 시작됩니다.\n약 5초 정도 소요됩니다.'
-            : '퇴근을 펀칭하면 오늘 근무가 종료되고 앱이 종료됩니다.\n약 5초 정도 소요됩니다.',
-        duration: const Duration(seconds: 5),
-      );
-
-      if (!proceed) return;
-    }
 
     final now = DateTime.now();
 
@@ -177,6 +173,7 @@ class _DoubleDashboardInsidePunchRecorderSectionState
       context,
       type: type,
       dateTime: targetDateTime,
+      requiresBreak: _requiresBreak,
     );
 
     if (type == AttBrkModeType.workIn) {
@@ -198,8 +195,8 @@ class _DoubleDashboardInsidePunchRecorderSectionState
     final textTheme = Theme.of(context).textTheme;
 
     final bool canPunchWorkIn = !_disableWorkInPunch ? true : false;
-    final bool canPunchBreak = _hasWorkIn;
-    final bool canPunchWorkOut = _hasWorkIn && _hasBreak;
+    final bool canPunchBreak = _hasWorkIn && _requiresBreak;
+    final bool canPunchWorkOut = _hasWorkIn && (!_requiresBreak || _hasBreak);
 
     return Card(
       elevation: 0,

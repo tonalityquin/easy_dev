@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../../app/utils/block_dialog/break_duration_blocking_dialog.dart';
-import '../../../app/utils/block_dialog/work_end_duration_blocking_dialog.dart';
 import '../document/backup/backup_form_page.dart';
 import '../document/user_statement/user_statement_form_page.dart';
 import '../document/work_end_report/dashboard_end_report_form_page.dart';
@@ -47,12 +46,6 @@ Future<void> executeDocumentBoxAction(
       );
       return;
     case DocumentBoxAction.submitLeaderCommuteRecords:
-      final proceed = await showWorkEndDurationBlockingDialog(
-        context,
-        message: '단말기에 저장된 출퇴근 기록을\n서버에 제출합니다.\n\n제출을 원치 않으면 아래 [취소] 버튼을 눌러 주세요.',
-        duration: const Duration(seconds: 5),
-      );
-      if (!proceed) return;
       await submitLeaderCommuteRecordsFromSqlite(context);
       return;
     case DocumentBoxAction.submitLeaderRestTimeRecords:
@@ -65,12 +58,6 @@ Future<void> executeDocumentBoxAction(
       await submitLeaderRestTimeRecordsFromSqlite(context);
       return;
     case DocumentBoxAction.submitFielderCommuteRecords:
-      final proceed = await showWorkEndDurationBlockingDialog(
-        context,
-        message: '단말기에 저장된 출퇴근 기록을\n서버에 제출합니다.\n\n제출을 원치 않으면 아래 [취소] 버튼을 눌러 주세요.',
-        duration: const Duration(seconds: 5),
-      );
-      if (!proceed) return;
       await submitFielderCommuteRecordsFromSqlite(context);
       return;
     case DocumentBoxAction.submitFielderRestTimeRecords:

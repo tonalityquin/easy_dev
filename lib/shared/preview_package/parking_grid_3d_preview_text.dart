@@ -422,8 +422,6 @@ extension _ParkingGridTextPreviewPart on _ParkingGrid3DPreviewCardState {
           height: _ParkingGrid3DPreviewCardState._previewHeight,
           child: previewBody,
         ),
-        const SizedBox(height: _ParkingGrid3DPreviewCardState._footerGap),
-        _footerButtons(cs: cs, tt: tt),
       ],
     );
   }

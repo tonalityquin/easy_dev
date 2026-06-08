@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -25,75 +23,82 @@ class _SecondaryPageState extends State<SecondaryPage> {
 
   @override
   Widget build(BuildContext context) {
-    return const _SecondaryScaffold(key: ValueKey('secondary_scaffold'));
+    return const _SecondaryConsoleRoot(key: ValueKey('secondary_console_root'));
   }
 }
 
-class _SecondaryScaffold extends StatelessWidget {
-  const _SecondaryScaffold({super.key});
+class _SecondaryConsoleRoot extends StatelessWidget {
+  const _SecondaryConsoleRoot({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Consumer<SecondaryState>(
       builder: (context, state, _) {
+        final cs = Theme.of(context).colorScheme;
         if (state.pages.isEmpty) {
           return Scaffold(
-            backgroundColor: Theme.of(context).colorScheme.surface,
-            appBar: _appBar(context),
-            body: const Center(child: Text('표시할 탭이 없습니다')),
+            backgroundColor: cs.surfaceVariant.withOpacity(.22),
+            body: const Center(child: Text('표시할 관리 항목이 없습니다')),
           );
         }
 
-        final int safeIndex = state.selectedIndex.clamp(0, state.pages.length - 1);
+        final safeIndex = state.selectedIndex.clamp(0, state.pages.length - 1);
+        final selectedPage = state.pages[safeIndex];
 
-        return _ChunkedTabsRoot(
-          pages: state.pages,
-          selectedIndex: safeIndex,
-          isLoading: state.isLoading,
-          onSelect: state.onItemTapped,
+        return Scaffold(
+          backgroundColor: cs.surfaceVariant.withOpacity(.22),
+          body: Column(
+            children: [
+              SafeArea(
+                bottom: false,
+                child: _SecondaryNavBar(
+                  pages: state.pages,
+                  selectedIndex: safeIndex,
+                  isLoading: state.isLoading,
+                  onSelect: state.onItemTapped,
+                ),
+              ),
+              Expanded(
+                child: Stack(
+                  children: [
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 180),
+                      child: KeyedSubtree(
+                        key: ValueKey<String>('secondary_page_${selectedPage.title}_$safeIndex'),
+                        child: MediaQuery.removePadding(
+                          context: context,
+                          removeTop: true,
+                          child: selectedPage.page,
+                        ),
+                      ),
+                    ),
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        ignoring: !state.isLoading,
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 180),
+                          child: state.isLoading ? const _LoadingOverlay() : const SizedBox.shrink(),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         );
       },
     );
   }
-
-  PreferredSizeWidget _appBar(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-
-    return AppBar(
-      automaticallyImplyLeading: false,
-      backgroundColor: cs.surface,
-      foregroundColor: cs.onSurface,
-      surfaceTintColor: Colors.transparent,
-      elevation: 0,
-      centerTitle: true,
-      title: Text(
-        '보조 페이지',
-        style: (tt.titleMedium ?? const TextStyle(fontSize: 16)).copyWith(
-          fontWeight: FontWeight.w700,
-          color: cs.onSurface,
-        ),
-      ),
-      iconTheme: IconThemeData(color: cs.onSurface),
-      actionsIconTheme: IconThemeData(color: cs.onSurface),
-      bottom: PreferredSize(
-        preferredSize: const Size.fromHeight(1),
-        child: Container(
-          height: 1,
-          color: cs.outlineVariant.withOpacity(.75),
-        ),
-      ),
-    );
-  }
 }
 
-class _ChunkedTabsRoot extends StatefulWidget {
+class _SecondaryNavBar extends StatelessWidget {
   final List<SecondaryInfo> pages;
   final int selectedIndex;
   final bool isLoading;
   final ValueChanged<int> onSelect;
 
-  const _ChunkedTabsRoot({
+  const _SecondaryNavBar({
     required this.pages,
     required this.selectedIndex,
     required this.isLoading,
@@ -101,182 +106,130 @@ class _ChunkedTabsRoot extends StatefulWidget {
   });
 
   @override
-  State<_ChunkedTabsRoot> createState() => _ChunkedTabsRootState();
-}
-
-class _ChunkedTabsRootState extends State<_ChunkedTabsRoot> {
-  static const int _chunkSize = 2;
-  late final PageController _chunkController;
-  int _currentChunk = 0;
-
-  int get _chunkCount => (widget.pages.length / _chunkSize).ceil().clamp(1, 9999);
-
-  int _chunkOf(int globalIndex) => globalIndex ~/ _chunkSize;
-
-  @override
-  void initState() {
-    super.initState();
-    _currentChunk = _chunkOf(widget.selectedIndex);
-    _chunkController = PageController(initialPage: _currentChunk);
-  }
-
-  @override
-  void didUpdateWidget(covariant _ChunkedTabsRoot oldWidget) {
-    super.didUpdateWidget(oldWidget);
-
-    final desiredChunk = _chunkOf(widget.selectedIndex);
-    if (desiredChunk != _currentChunk && _chunkController.hasClients) {
-      _currentChunk = desiredChunk;
-
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || !_chunkController.hasClients) return;
-        _chunkController.animateToPage(
-          _currentChunk,
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOut,
-        );
-      });
-    }
-  }
-
-  @override
-  void dispose() {
-    _chunkController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-
-    final tabLabelStyle = Theme.of(context).textTheme.titleSmall?.copyWith(
-          fontWeight: FontWeight.w800,
-        );
-
-    return Scaffold(
-      backgroundColor: cs.surface,
-      appBar: _appBar(context),
-      body: Stack(
+    final tt = Theme.of(context).textTheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+      decoration: BoxDecoration(
+        color: cs.inverseSurface,
+        border: Border(bottom: BorderSide(color: cs.outlineVariant.withOpacity(.28))),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          PageView.builder(
-            controller: _chunkController,
-            itemCount: _chunkCount,
-            onPageChanged: (page) {
-              _currentChunk = page;
-              final firstIndexOfChunk = page * _chunkSize;
-
-              if (widget.selectedIndex < firstIndexOfChunk ||
-                  widget.selectedIndex >= firstIndexOfChunk + _chunkSize) {
-                widget.onSelect(firstIndexOfChunk);
-              }
-            },
-            itemBuilder: (context, chunk) {
-              final start = chunk * _chunkSize;
-              final end = math.min(start + _chunkSize, widget.pages.length);
-              final items = widget.pages.sublist(start, end);
-
-              final localInitial =
-                  (widget.selectedIndex >= start && widget.selectedIndex < end)
-                      ? widget.selectedIndex - start
-                      : 0;
-
-              return DefaultTabController(
-                length: items.length,
-                initialIndex: localInitial,
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: cs.primary,
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                child: Icon(Icons.admin_panel_settings_rounded, color: cs.onPrimary, size: 21),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Material(
-                      color: cs.surface,
-                      elevation: 0,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          border: Border(
-                            bottom: BorderSide(
-                              color: cs.outlineVariant.withOpacity(.75),
-                              width: 1,
-                            ),
-                          ),
-                        ),
-                        child: TabBar(
-                          isScrollable: false,
-                          onTap: (localIdx) {
-                            final globalIdx = start + localIdx;
-                            if (globalIdx != widget.selectedIndex) {
-                              widget.onSelect(globalIdx);
-                            }
-                          },
-                          labelColor: cs.primary,
-                          unselectedLabelColor: cs.onSurfaceVariant.withOpacity(.75),
-                          labelStyle: tabLabelStyle,
-                          indicator: UnderlineTabIndicator(
-                            borderSide: BorderSide(
-                              color: cs.primary,
-                              width: 2.5,
-                            ),
-                          ),
-                          dividerColor: Colors.transparent,
-                          tabs: [
-                            for (final p in items) Tab(text: p.title, icon: p.icon),
-                          ],
-                        ),
+                    Text(
+                      '보조 운영 콘솔',
+                      style: (tt.titleMedium ?? const TextStyle(fontSize: 16)).copyWith(
+                        color: cs.onInverseSurface,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -.2,
                       ),
                     ),
-                    Expanded(
-                      child: TabBarView(
-                        physics: const NeverScrollableScrollPhysics(),
-                        children: [
-                          for (var i = 0; i < items.length; i++)
-                            KeyedSubtree(
-                              key: PageStorageKey<String>('secondary_${start + i}'),
-                              child: items[i].page,
-                            ),
-                        ],
+                    const SizedBox(height: 2),
+                    Text(
+                      '설정·계정·구역·태블릿·정산 관리',
+                      style: (tt.bodySmall ?? const TextStyle(fontSize: 12)).copyWith(
+                        color: cs.onInverseSurface.withOpacity(.70),
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
                   ],
                 ),
-              );
-            },
-          ),
-          Positioned.fill(
-            child: IgnorePointer(
-              ignoring: !widget.isLoading,
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 200),
-                child: widget.isLoading ? const _LoadingOverlay() : const SizedBox.shrink(),
               ),
+              if (isLoading)
+                SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 42,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: pages.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              itemBuilder: (context, index) {
+                final item = pages[index];
+                final selected = index == selectedIndex;
+                return _NavChip(
+                  title: item.title,
+                  icon: item.icon.icon ?? Icons.circle,
+                  selected: selected,
+                  onTap: () => onSelect(index),
+                );
+              },
             ),
           ),
         ],
       ),
     );
   }
+}
 
-  PreferredSizeWidget _appBar(BuildContext context) {
+class _NavChip extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _NavChip({
+    required this.title,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-
-    return AppBar(
-      automaticallyImplyLeading: false,
-      backgroundColor: cs.surface,
-      foregroundColor: cs.onSurface,
-      surfaceTintColor: Colors.transparent,
-      elevation: 0,
-      centerTitle: true,
-      title: Text(
-        '보조 페이지',
-        style: (tt.titleMedium ?? const TextStyle(fontSize: 16)).copyWith(
-          fontWeight: FontWeight.w700,
-          color: cs.onSurface,
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? cs.onInverseSurface : cs.onInverseSurface.withOpacity(.08),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: selected ? cs.onInverseSurface : cs.onInverseSurface.withOpacity(.15)),
         ),
-      ),
-      iconTheme: IconThemeData(color: cs.onSurface),
-      actionsIconTheme: IconThemeData(color: cs.onSurface),
-      bottom: PreferredSize(
-        preferredSize: const Size.fromHeight(1),
-        child: Container(
-          height: 1,
-          color: cs.outlineVariant.withOpacity(.75),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 17, color: selected ? cs.inverseSurface : cs.onInverseSurface.withOpacity(.74)),
+            const SizedBox(width: 6),
+            Text(
+              title,
+              style: TextStyle(
+                color: selected ? cs.inverseSurface : cs.onInverseSurface.withOpacity(.78),
+                fontWeight: FontWeight.w900,
+                fontSize: 12.5,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -289,7 +242,6 @@ class _LoadingOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-
     return Container(
       color: cs.scrim.withOpacity(.10),
       alignment: Alignment.center,

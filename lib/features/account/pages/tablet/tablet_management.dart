@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
+import '../../../../shared/secondary/widgets/ops_console_widgets.dart';
 import '../../../dev/application/area_state.dart';
 import '../../applications/user_state.dart';
 import '../../domain/models/tablet/tablet_model.dart';
@@ -23,14 +25,13 @@ class TabletManagement extends StatefulWidget {
 }
 
 class _TabletManagementState extends State<TabletManagement> {
-  static const String screenTag = 'tablet management';
-  static const double _fabBottomGap = 48.0;
-  static const double _fabSpacing = 10.0;
+  String _query = '';
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       context.read<UserState>().loadTabletsOnly();
     });
   }
@@ -40,37 +41,6 @@ class _TabletManagementState extends State<TabletManagement> {
     if (id != null) {
       userState.toggleUserCard(id);
     }
-  }
-
-  Widget _buildScreenTag(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final base = Theme.of(context).textTheme.labelSmall;
-
-    final style = (base ??
-            const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-            ))
-        .copyWith(
-      color: cs.onSurfaceVariant.withOpacity(.72),
-      fontWeight: FontWeight.w600,
-      letterSpacing: 0.2,
-    );
-
-    return SafeArea(
-      child: IgnorePointer(
-        child: Align(
-          alignment: Alignment.topLeft,
-          child: Padding(
-            padding: const EdgeInsets.only(left: 12, top: 4),
-            child: Semantics(
-              label: 'screen_tag: $screenTag',
-              child: Text(screenTag, style: style),
-            ),
-          ),
-        ),
-      ),
-    );
   }
 
   void buildUserBottomSheet({
@@ -112,8 +82,8 @@ class _TabletManagementState extends State<TabletManagement> {
     return await showDialog<bool>(
           context: context,
           builder: (_) => AlertDialog(
-            title: const Text('삭제 확인'),
-            content: const Text('선택한 계정을 삭제하시겠습니까?'),
+            title: const Text('태블릿 삭제 확인'),
+            content: const Text('선택한 태블릿 계정을 삭제하시겠습니까?'),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
@@ -146,10 +116,7 @@ class _TabletManagementState extends State<TabletManagement> {
           division,
         ) async {
           try {
-            final englishName = await context
-                .read<UserRepository>()
-                .getEnglishNameByArea(area, division);
-
+            final englishName = await context.read<UserRepository>().getEnglishNameByArea(area, division);
             final newTablet = TabletModel(
               id: '$handle-$area',
               name: name,
@@ -168,11 +135,7 @@ class _TabletManagementState extends State<TabletManagement> {
               fixedHolidays: const <String>[],
             );
 
-            await userState.addTabletCard(
-              newTablet,
-              onError: (_) {},
-            );
-
+            await userState.addTabletCard(newTablet, onError: (_) {});
             if (!context.mounted) return;
             _clearSelection(userState);
           } catch (_) {
@@ -184,8 +147,7 @@ class _TabletManagementState extends State<TabletManagement> {
       return;
     }
 
-    final selectedUser =
-        userState.tabletUsers.firstWhereOrNull((u) => u.id == selectedId);
+    final selectedUser = userState.tabletUsers.firstWhereOrNull((u) => u.id == selectedId);
     if (selectedUser == null) {
       _clearSelection(userState);
       return;
@@ -204,10 +166,7 @@ class _TabletManagementState extends State<TabletManagement> {
         division,
       ) async {
         try {
-          final englishName = await context
-              .read<UserRepository>()
-              .getEnglishNameByArea(area, division);
-
+          final englishName = await context.read<UserRepository>().getEnglishNameByArea(area, division);
           final updatedTablet = selectedUser.copyWith(
             id: '$handle-$area',
             name: name,
@@ -241,287 +200,230 @@ class _TabletManagementState extends State<TabletManagement> {
   Future<void> _handleDelete(BuildContext context) async {
     final userState = context.read<UserState>();
     final selectedId = userState.selectedUserId;
-    if (selectedId == null) {
-      return;
-    }
+    if (selectedId == null) return;
 
     final ok = await _confirmDelete(context);
     if (!ok) return;
 
-    await userState.deleteTabletCard(
-      [selectedId],
-      onError: (_) {},
-    );
-
+    await userState.deleteTabletCard([selectedId], onError: (_) {});
     if (!context.mounted) return;
     _clearSelection(userState);
   }
 
+  Future<void> _refresh(BuildContext context) async {
+    final userState = context.read<UserState>();
+    try {
+      await userState.refreshTabletsBySelectedAreaAndCache();
+      if (!context.mounted) return;
+      _clearSelection(userState);
+    } catch (_) {}
+  }
+
+  bool _matchesSearch(TabletModel tablet) {
+    final q = _query.trim().toLowerCase();
+    if (q.isEmpty) return true;
+    final haystack = <String>[
+      tablet.name,
+      tablet.handle,
+      tablet.email,
+      tablet.role,
+      tablet.position ?? '',
+      tablet.areas.join(' '),
+      tablet.divisions.join(' '),
+    ].join(' ').toLowerCase();
+    return haystack.contains(q);
+  }
+
+  Widget _buildTabletRow(BuildContext context, UserState userState, TabletModel tablet) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final isSelected = userState.selectedUserId == tablet.id;
+    final titleStyle = (tt.titleMedium ?? const TextStyle(fontSize: 16)).copyWith(
+      color: cs.onSurface,
+      fontWeight: FontWeight.w900,
+      letterSpacing: -.15,
+    );
+
+    return InkWell(
+      onTap: () => userState.toggleUserCard(tablet.id),
+      borderRadius: BorderRadius.circular(16),
+      child: OpsPanel(
+        selected: isSelected,
+        padding: EdgeInsets.zero,
+        child: Row(
+          children: [
+            Container(
+              width: 6,
+              height: 118,
+              decoration: BoxDecoration(
+                color: cs.primary,
+                borderRadius: const BorderRadius.horizontal(left: Radius.circular(16)),
+              ),
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(child: Text(tablet.name.isEmpty ? tablet.handle : tablet.name, style: titleStyle, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                        const SizedBox(width: 8),
+                        OpsStatusBadge(label: '태블릿', color: cs.primary, icon: Icons.tablet_mac_rounded),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      tablet.email.isEmpty ? '이메일 미등록' : tablet.email,
+                      style: (tt.bodySmall ?? const TextStyle(fontSize: 12)).copyWith(
+                        color: cs.onSurfaceVariant,
+                        fontWeight: FontWeight.w800,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        OpsInfoPill(text: tablet.handle.isEmpty ? '핸들 미등록' : tablet.handle, icon: Icons.alternate_email_rounded),
+                        OpsInfoPill(text: tablet.role.isEmpty ? '역할 없음' : tablet.role, icon: Icons.verified_user_rounded),
+                        if (tablet.divisions.isNotEmpty) OpsInfoPill(text: tablet.divisions.join(', '), icon: Icons.business_rounded),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: Icon(
+                isSelected ? Icons.check_circle_rounded : Icons.chevron_right_rounded,
+                color: isSelected ? cs.primary : cs.onSurfaceVariant.withOpacity(.7),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCommandBar(BuildContext context, int visible, int total) {
+    final cs = Theme.of(context).colorScheme;
+    return OpsCommandPanel(
+      children: [
+        OpsSearchField(
+          hint: '태블릿명 · 핸들 · 이메일 · 역할 검색',
+          onChanged: (value) => setState(() => _query = value),
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            OpsFilterChip(label: '$visible/$total', selected: false, icon: Icons.filter_alt_rounded, onSelected: () {}),
+            IconButton.filledTonal(
+              tooltip: '새로고침',
+              onPressed: () => _refresh(context),
+              icon: Icon(Icons.refresh_rounded, color: cs.primary),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBottomBar(BuildContext context, bool hasSelection) {
+    if (!hasSelection) {
+      return OpsBottomActionBar(
+        children: [
+          Expanded(
+            child: OpsActionButton(
+              label: '태블릿 등록',
+              icon: Icons.add_to_queue_rounded,
+              onPressed: () => _handlePrimaryAction(context),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return OpsBottomActionBar(
+      children: [
+        Expanded(
+          child: OpsActionButton(
+            label: '수정',
+            icon: Icons.edit_rounded,
+            onPressed: () => _handlePrimaryAction(context),
+            tonal: true,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: OpsActionButton(
+            label: '삭제',
+            icon: Icons.delete_forever_rounded,
+            onPressed: () => _handleDelete(context),
+            danger: true,
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-
     final userState = context.watch<UserState>();
     final areaState = context.watch<AreaState>();
-    final currentArea = areaState.currentArea;
-    final currentDivision = areaState.currentDivision;
+    final currentArea = areaState.currentArea.trim();
+    final currentDivision = areaState.currentDivision.trim();
 
-    bool matches(TabletModel u) {
-      final areas = u.areas;
-      final divisions = u.divisions;
-      final areaOk = currentArea.isEmpty || areas.contains(currentArea);
-      final divisionOk =
-          currentDivision.isEmpty || divisions.contains(currentDivision);
+    bool matchesScope(TabletModel tablet) {
+      final areaOk = currentArea.isEmpty || tablet.areas.contains(currentArea);
+      final divisionOk = currentDivision.isEmpty || tablet.divisions.contains(currentDivision);
       return areaOk && divisionOk;
     }
 
-    final filteredTablets = userState.tabletUsers.where(matches).toList();
-    final bool hasSelection = userState.selectedUserId != null;
+    final scopedTablets = userState.tabletUsers.where(matchesScope).toList();
+    final visibleTablets = scopedTablets.where(_matchesSearch).toList();
+    final hasSelection = userState.selectedUserId != null;
+    final areaLabel = currentArea.isEmpty ? '지역 전체' : currentArea;
 
-    return Scaffold(
-      backgroundColor: cs.surface,
-      appBar: AppBar(
-        centerTitle: true,
-        backgroundColor: cs.surface,
-        foregroundColor: cs.onSurface,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        flexibleSpace: _buildScreenTag(context),
-        title: const Text('태블릿 계정 관리',
-            style: TextStyle(fontWeight: FontWeight.bold)),
-        automaticallyImplyLeading: false,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: '새로고침',
-            onPressed: () async {
-              try {
-                await userState.refreshTabletsBySelectedAreaAndCache();
-                if (!context.mounted) return;
-                _clearSelection(userState);
-              } catch (_) {
-                if (!context.mounted) return;
-              }
-            },
-          ),
-        ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child:
-              Container(height: 1, color: cs.outlineVariant.withOpacity(.75)),
-        ),
-      ),
+    return OpsConsoleScaffold(
+      title: '태블릿 관리',
+      icon: Icons.tablet_mac_rounded,
+      areaLabel: areaLabel,
+      loading: userState.isLoading,
+      metrics: [
+        OpsMetric(label: '전체', value: '${scopedTablets.length}', icon: Icons.tablet_mac_rounded, color: cs.onInverseSurface),
+        OpsMetric(label: '표시', value: '${visibleTablets.length}', icon: Icons.visibility_rounded, color: cs.primary),
+        OpsMetric(label: '선택', value: hasSelection ? '1' : '0', icon: Icons.touch_app_rounded, color: hasSelection ? cs.primary : cs.onInverseSurface),
+        OpsMetric(label: '사업소', value: currentDivision.isEmpty ? '-' : currentDivision, icon: Icons.business_rounded, color: cs.primary),
+      ],
+      commandBar: _buildCommandBar(context, visibleTablets.length, scopedTablets.length),
+      bottomBar: _buildBottomBar(context, hasSelection),
       body: userState.isLoading
-          ? Center(
-              child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
-              ),
-            )
-          : filteredTablets.isEmpty
-              ? Center(
-                  child: userState.tabletUsers.isEmpty
-                      ? const Text('전체 계정 데이터가 없습니다')
-                      : const Text('현재 지역/사업소에 해당하는 계정이 없습니다'),
+          ? const SizedBox.shrink()
+          : visibleTablets.isEmpty
+              ? OpsEmptyState(
+                  icon: Icons.tablet_mac_rounded,
+                  title: scopedTablets.isEmpty ? '등록된 태블릿이 없습니다' : '검색 결과가 없습니다',
+                  message: scopedTablets.isEmpty ? '현장 태블릿 계정을 등록해 구역별 운영 단말을 배정하세요.' : '검색어를 조정하세요.',
+                  action: FilledButton.icon(
+                    onPressed: () => _handlePrimaryAction(context),
+                    icon: const Icon(Icons.add_to_queue_rounded),
+                    label: const Text('태블릿 등록'),
+                  ),
                 )
               : ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
-                  itemCount: filteredTablets.length,
-                  itemBuilder: (context, index) {
-                    final user = filteredTablets[index];
-                    final isSelected = userState.selectedUserId == user.id;
-
-                    return Card(
-                      color: cs.surface,
-                      elevation: 1,
-                      surfaceTintColor: Colors.transparent,
-                      margin: const EdgeInsets.symmetric(vertical: 6),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(
-                          color: isSelected
-                              ? cs.primary.withOpacity(.25)
-                              : cs.outlineVariant.withOpacity(.65),
-                        ),
-                      ),
-                      child: ListTile(
-                        key: ValueKey(user.id),
-                        leading: CircleAvatar(
-                          radius: 18,
-                          backgroundColor: cs.primaryContainer.withOpacity(.65),
-                          foregroundColor: cs.onPrimaryContainer,
-                          child: const Icon(Icons.tablet_mac_rounded, size: 18),
-                        ),
-                        title: Text(
-                          user.name,
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: cs.onSurface,
-                          ),
-                        ),
-                        subtitle: Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: DefaultTextStyle(
-                            style: TextStyle(
-                                color: cs.onSurfaceVariant, height: 1.25),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('이메일: ${user.email}'),
-                                Text('역할: ${user.role}'),
-                                if (user.position?.isNotEmpty == true)
-                                  Text('직책: ${user.position!}'),
-                              ],
-                            ),
-                          ),
-                        ),
-                        trailing: isSelected
-                            ? Icon(Icons.check_circle, color: cs.primary)
-                            : null,
-                        selected: isSelected,
-                        selectedTileColor: cs.primaryContainer.withOpacity(.22),
-                        onTap: () => userState.toggleUserCard(user.id),
-                      ),
-                    );
-                  },
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+                  itemCount: visibleTablets.length,
+                  itemBuilder: (context, index) => _buildTabletRow(context, userState, visibleTablets[index]),
                 ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-      floatingActionButton: _FabStack(
-        bottomGap: _fabBottomGap,
-        spacing: _fabSpacing,
-        hasSelection: hasSelection,
-        onPrimary: () => _handlePrimaryAction(context),
-        onDelete: hasSelection ? () => _handleDelete(context) : null,
-      ),
-    );
-  }
-}
-
-class _FabStack extends StatelessWidget {
-  const _FabStack({
-    required this.bottomGap,
-    required this.spacing,
-    required this.hasSelection,
-    required this.onPrimary,
-    required this.onDelete,
-  });
-
-  final double bottomGap;
-  final double spacing;
-  final bool hasSelection;
-  final VoidCallback onPrimary;
-  final VoidCallback? onDelete;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    final ButtonStyle primaryStyle = ElevatedButton.styleFrom(
-      backgroundColor: cs.primary,
-      foregroundColor: cs.onPrimary,
-      elevation: 3,
-      shadowColor: cs.primary.withOpacity(0.25),
-      shape: const StadiumBorder(),
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-      textStyle: const TextStyle(fontWeight: FontWeight.w700),
-    );
-
-    final ButtonStyle deleteStyle = ElevatedButton.styleFrom(
-      backgroundColor: cs.error,
-      foregroundColor: cs.onError,
-      elevation: 3,
-      shadowColor: cs.error.withOpacity(0.35),
-      shape: const StadiumBorder(),
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-      textStyle: const TextStyle(fontWeight: FontWeight.w700),
-    );
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        if (hasSelection) ...[
-          _ElevatedPillButton.icon(
-            icon: Icons.edit,
-            label: '수정',
-            style: primaryStyle,
-            onPressed: onPrimary,
-          ),
-          SizedBox(height: spacing),
-          _ElevatedPillButton.icon(
-            icon: Icons.delete,
-            label: '삭제',
-            style: deleteStyle,
-            onPressed: onDelete!,
-          ),
-        ] else ...[
-          _ElevatedPillButton.icon(
-            icon: Icons.add,
-            label: '추가',
-            style: primaryStyle,
-            onPressed: onPrimary,
-          ),
-        ],
-        SizedBox(height: bottomGap),
-      ],
-    );
-  }
-}
-
-class _ElevatedPillButton extends StatelessWidget {
-  const _ElevatedPillButton({
-    required this.child,
-    required this.onPressed,
-    required this.style,
-    Key? key,
-  }) : super(key: key);
-
-  factory _ElevatedPillButton.icon({
-    required IconData icon,
-    required String label,
-    required VoidCallback onPressed,
-    required ButtonStyle style,
-    Key? key,
-  }) {
-    return _ElevatedPillButton(
-      key: key,
-      onPressed: onPressed,
-      style: style,
-      child: _FabLabel(icon: icon, label: label),
-    );
-  }
-
-  final Widget child;
-  final VoidCallback onPressed;
-  final ButtonStyle style;
-
-  @override
-  Widget build(BuildContext context) {
-    return ElevatedButton(
-      onPressed: onPressed,
-      style: style,
-      child: child,
-    );
-  }
-}
-
-class _FabLabel extends StatelessWidget {
-  const _FabLabel({
-    required this.icon,
-    required this.label,
-  });
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 18),
-        const SizedBox(width: 8),
-        Text(label),
-      ],
     );
   }
 }

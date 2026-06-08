@@ -6,7 +6,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../app/di/routes.dart';
 import '../../../../app/init/app_exit_service.dart';
 import '../../../../app/init/logout_helper.dart';
-import '../../../../app/utils/block_dialog/work_end_duration_blocking_dialog.dart';
 import '../../../../shared/plate/domain/enums/plate_type.dart';
 import '../../../../shared/plate/domain/repositories/plate_repository.dart';
 import '../../../../shared/sheet_tool/document_box_action_executor.dart';
@@ -377,33 +376,14 @@ class _CommonHqDashBoardPageState extends State<CommonHqDashBoardPage> {
     );
 
     if (userState.isWorking) {
-      final confirmed = await showWorkEndDurationBlockingDialog(
-        context,
-        message: '지금 퇴근 처리하시겠습니까?\n5초 안에 취소하지 않으면 자동으로 진행됩니다.',
-        duration: const Duration(seconds: 5),
-      );
-
       _trace(
-        '퇴근 다이얼로그 결과',
+        '퇴근 다이얼로그 생략',
         meta: <String, dynamic>{
           'screen': widget.screenName,
-          'action': 'clockout_dialog_result',
-          'confirmed': confirmed,
-          'durationSeconds': 5,
+          'action': 'clockout_dialog_skipped',
+          'reason': 'immediate_clockout_required',
         },
       );
-
-      if (!confirmed) {
-        _trace(
-          '퇴근 처리 취소',
-          meta: <String, dynamic>{
-            'screen': widget.screenName,
-            'action': 'clockout_aborted',
-            'reason': 'user_cancelled_dialog',
-          },
-        );
-        return;
-      }
     }
 
     await _handleClockOutFlow(context, userState);
@@ -458,158 +438,550 @@ class _CommonHqDashBoardPageState extends State<CommonHqDashBoardPage> {
     return actions;
   }
 
-  Widget _buildUtilityActions(BuildContext context) {
-    final buttons = <Widget>[
-      Expanded(
-        child: SizedBox(
-          height: 52,
-          child: ElevatedButton.icon(
-            icon: const Icon(Icons.settings_rounded),
-            label: const Text('설정'),
-            style: HqDashBoardButtonStyles.utilityAccent(
-              context,
-              widget.stylePreset,
-            ),
-            onPressed: () => _openServiceSettings(context),
+
+  String _modeLabel() {
+    final screen = widget.screenName.toLowerCase();
+    if (screen.contains('minor')) return '확장형';
+    if (screen.contains('triple')) return '기본형';
+    if (screen.contains('double') || screen.contains('lite')) return '경량형';
+    return '경량형';
+  }
+
+  String _safe(String value, {String fallback = '-'}) {
+    final v = value.trim();
+    return v.isEmpty ? fallback : v;
+  }
+
+  String _roleLabel(UserState userState) {
+    final raw = userState.session?.role;
+    final role = raw == null ? '' : raw.toString().trim();
+    return role.isEmpty ? '-' : role;
+  }
+
+  String _workLabel(UserState userState) {
+    return userState.isWorking ? '근무중' : '대기';
+  }
+
+  Widget _buildOpsHeader(
+    BuildContext context,
+    UserState userState,
+    int menuCount,
+  ) {
+    final cs = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final name = _safe(userState.name);
+    final position = _safe(userState.position);
+    final area = _safe(userState.currentArea, fallback: _safe(userState.area));
+    final division = _safe(userState.division);
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+      decoration: BoxDecoration(
+        color: cs.inverseSurface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: cs.outlineVariant.withOpacity(.42)),
+        boxShadow: [
+          BoxShadow(
+            color: cs.shadow.withOpacity(.08),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
           ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: cs.primary,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(Icons.apartment_rounded, color: cs.onPrimary),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '본사 대시보드',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: (textTheme.titleLarge ?? const TextStyle(fontSize: 22)).copyWith(
+                              color: cs.onInverseSurface,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -.3,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        _OpsHqBadge(
+                          label: _modeLabel(),
+                          color: cs.primary,
+                          foreground: cs.onPrimary,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        _OpsHqHeaderPill(icon: Icons.person_rounded, text: name),
+                        _OpsHqHeaderPill(icon: Icons.badge_rounded, text: position),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _OpsHqMetric(label: '근무', value: _workLabel(userState), icon: Icons.timer_rounded, color: userState.isWorking ? cs.primary : cs.onInverseSurface),
+                const SizedBox(width: 8),
+                _OpsHqMetric(label: '구역', value: area, icon: Icons.location_on_rounded, color: cs.secondary),
+                const SizedBox(width: 8),
+                _OpsHqMetric(label: '본부', value: division, icon: Icons.domain_rounded, color: cs.tertiary),
+                const SizedBox(width: 8),
+                _OpsHqMetric(label: '메뉴', value: '$menuCount', icon: Icons.grid_view_rounded, color: cs.primary),
+                const SizedBox(width: 8),
+                _OpsHqMetric(label: '권한', value: _roleLabel(userState), icon: Icons.verified_user_rounded, color: cs.secondary),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWorkPanel(BuildContext context, UserState userState) {
+    final cs = Theme.of(context).colorScheme;
+    return _OpsHqPanel(
+      title: '근무 액션',
+      icon: Icons.work_history_rounded,
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(child: widget.breakButton),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _OpsHqActionTile(
+                label: '퇴근하기',
+                icon: Icons.exit_to_app_rounded,
+                color: cs.error,
+                danger: true,
+                onTap: () => _onClockOutPressed(context, userState),
+              ),
+            ),
+          ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildMenuPanel(
+    BuildContext context,
+    List<_DashboardMenuAction> menuActions,
+  ) {
+    return _OpsHqPanel(
+      title: '업무 메뉴',
+      icon: Icons.dashboard_customize_rounded,
+      child: Column(
+        children: [
+          for (int i = 0; i < menuActions.length; i++) ...[
+            _OpsHqActionTile(
+              label: menuActions[i].label,
+              icon: menuActions[i].icon,
+              color: _toneColor(context, menuActions[i].tone),
+              onTap: menuActions[i].isEnabled ? menuActions[i].onTap : null,
+            ),
+            if (i != menuActions.length - 1) const SizedBox(height: 8),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Color _toneColor(BuildContext context, _DashboardMenuTone tone) {
+    final cs = Theme.of(context).colorScheme;
+    switch (tone) {
+      case _DashboardMenuTone.primary:
+        return cs.primary;
+      case _DashboardMenuTone.secondary:
+        return cs.secondary;
+      case _DashboardMenuTone.tertiary:
+        return cs.tertiary;
+      case _DashboardMenuTone.neutral:
+        return cs.onSurfaceVariant;
+    }
+  }
+
+  Widget _buildUtilityActions(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final children = <Widget>[
+      _OpsHqActionTile(
+        label: '설정',
+        icon: Icons.settings_rounded,
+        color: cs.primary,
+        onTap: () => _openServiceSettings(context),
       ),
     ];
 
     if (widget.showLogout) {
-      buttons.add(const SizedBox(width: 12));
-      buttons.add(
-        Expanded(
-          child: SizedBox(
-            height: 52,
-            child: ElevatedButton.icon(
-              icon: const Icon(Icons.logout),
-              label: const Text('로그아웃'),
-              style: HqDashBoardButtonStyles.utilityNeutral(
-                context,
-                widget.stylePreset,
-              ),
-              onPressed: () => _handleLogout(context),
-            ),
-          ),
+      children.add(const SizedBox(height: 8));
+      children.add(
+        _OpsHqActionTile(
+          label: '로그아웃',
+          icon: Icons.logout_rounded,
+          color: cs.error,
+          danger: true,
+          onTap: () => _handleLogout(context),
         ),
       );
     }
 
-    return Row(children: buttons);
+    return _OpsHqPanel(
+      title: '설정 및 계정',
+      icon: Icons.manage_accounts_rounded,
+      child: Column(children: children),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
     final menuActions = _menuActions(context);
 
     return Scaffold(
-      backgroundColor: cs.background,
+      backgroundColor: cs.surfaceVariant.withOpacity(.20),
       body: SafeArea(
         child: Consumer<UserState>(
           builder: (context, userState, _) {
-            return SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  widget.userInfoCard,
-                  const SizedBox(height: 20),
-                  Text(
-                    '근무 액션',
-                    style: textTheme.titleSmall?.copyWith(
-                      color: cs.primary,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  IntrinsicHeight(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Expanded(child: widget.breakButton),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: SizedBox(
-                            height: double.infinity,
-                            child: ElevatedButton.icon(
-                              icon: const Icon(Icons.exit_to_app),
-                              label: const Text('퇴근하기'),
-                              style: HqDashBoardButtonStyles.clockOut(
-                                context,
-                                widget.stylePreset,
-                              ),
-                              onPressed: () =>
-                                  _onClockOutPressed(context, userState),
-                            ),
-                          ),
-                        ),
+            return CustomScrollView(
+              slivers: [
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
+                  sliver: SliverList(
+                    delegate: SliverChildListDelegate(
+                      [
+                        _buildOpsHeader(context, userState, menuActions.length),
+                        const SizedBox(height: 12),
+                        _buildWorkPanel(context, userState),
+                        const SizedBox(height: 12),
+                        _buildMenuPanel(context, menuActions),
+                        const SizedBox(height: 12),
+                        _buildUtilityActions(context),
+                        const SizedBox(height: 18),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 24),
-                  Text(
-                    '업무 메뉴',
-                    style: textTheme.titleSmall?.copyWith(
-                      color: cs.primary,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: menuActions.length,
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      mainAxisSpacing: 12,
-                      crossAxisSpacing: 12,
-                      childAspectRatio: 1.35,
-                    ),
-                    itemBuilder: (context, index) {
-                      final item = menuActions[index];
-                      return ElevatedButton(
-                        style: HqDashBoardButtonStyles.menuTile(
-                          context,
-                          item.tone,
-                          widget.stylePreset,
-                        ),
-                        onPressed: item.isEnabled ? item.onTap : null,
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(item.icon, size: 26),
-                            const SizedBox(height: 10),
-                            Text(
-                              item.label,
-                              textAlign: TextAlign.center,
-                              style: textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 24),
-                  Text(
-                    '설정 및 계정',
-                    style: textTheme.titleSmall?.copyWith(
-                      color: cs.primary,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  _buildUtilityActions(context),
-                  const SizedBox(height: 32),
-                ],
-              ),
+                ),
+              ],
             );
           },
+        ),
+      ),
+    );
+  }
+
+}
+
+
+class _OpsHqBadge extends StatelessWidget {
+  const _OpsHqBadge({
+    required this.label,
+    required this.color,
+    required this.foreground,
+  });
+
+  final String label;
+  final Color color;
+  final Color foreground;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: foreground,
+          fontWeight: FontWeight.w900,
+          fontSize: 12,
+          letterSpacing: -.1,
+        ),
+      ),
+    );
+  }
+}
+
+class _OpsHqHeaderPill extends StatelessWidget {
+  const _OpsHqHeaderPill({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 170),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: cs.onInverseSurface.withOpacity(.10),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: cs.onInverseSurface.withOpacity(.14)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: cs.onInverseSurface.withOpacity(.82)),
+          const SizedBox(width: 5),
+          Flexible(
+            child: Text(
+              text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: cs.onInverseSurface.withOpacity(.88),
+                fontSize: 11.5,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OpsHqMetric extends StatelessWidget {
+  const _OpsHqMetric({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      width: 112,
+      padding: const EdgeInsets.fromLTRB(10, 9, 10, 9),
+      decoration: BoxDecoration(
+        color: cs.onInverseSurface.withOpacity(.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: cs.onInverseSurface.withOpacity(.12)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: cs.onInverseSurface.withOpacity(.62),
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: cs.onInverseSurface,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -.1,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OpsHqPanel extends StatelessWidget {
+  const _OpsHqPanel({
+    required this.title,
+    required this.icon,
+    required this.child,
+  });
+
+  final String title;
+  final IconData icon;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: cs.outlineVariant.withOpacity(.70)),
+        boxShadow: [
+          BoxShadow(
+            color: cs.shadow.withOpacity(.04),
+            blurRadius: 12,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: cs.primaryContainer,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: cs.onPrimaryContainer, size: 17),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: cs.onSurface,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -.15,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _OpsHqActionTile extends StatelessWidget {
+  const _OpsHqActionTile({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+    this.danger = false,
+  });
+
+  final String label;
+  final IconData icon;
+  final Color color;
+  final VoidCallback? onTap;
+  final bool danger;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final enabled = onTap != null;
+    final effectiveColor = enabled ? color : cs.onSurfaceVariant.withOpacity(.45);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(15),
+        child: Ink(
+          height: 58,
+          decoration: BoxDecoration(
+            color: enabled ? cs.surface : cs.surfaceVariant.withOpacity(.28),
+            borderRadius: BorderRadius.circular(15),
+            border: Border.all(
+              color: danger
+                  ? cs.error.withOpacity(enabled ? .45 : .20)
+                  : cs.outlineVariant.withOpacity(.70),
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 5,
+                decoration: BoxDecoration(
+                  color: effectiveColor,
+                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(15)),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: effectiveColor.withOpacity(.12),
+                  borderRadius: BorderRadius.circular(11),
+                  border: Border.all(color: effectiveColor.withOpacity(.20)),
+                ),
+                child: Icon(icon, color: effectiveColor, size: 18),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: enabled ? (danger ? cs.error : cs.onSurface) : cs.onSurfaceVariant.withOpacity(.55),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -.1,
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(right: 10),
+                child: Icon(
+                  Icons.chevron_right_rounded,
+                  color: enabled ? cs.onSurfaceVariant.withOpacity(.75) : cs.onSurfaceVariant.withOpacity(.35),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1270,32 +1642,58 @@ class _BranchWorkStatusFullScreenDialogState
     final tt = Theme.of(context).textTheme;
 
     return _bodyShell(
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              '지사 별 업무 현황',
-              style: tt.titleLarge?.copyWith(
-                fontWeight: FontWeight.w900,
-                color: cs.onBackground,
-                letterSpacing: -0.3,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+        decoration: BoxDecoration(
+          color: cs.inverseSurface,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: cs.outlineVariant.withOpacity(.5)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: cs.primary,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(Icons.domain_rounded, color: cs.onPrimary),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                '지사 별 업무 현황',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: (tt.titleLarge ?? const TextStyle(fontSize: 20)).copyWith(
+                  fontWeight: FontWeight.w900,
+                  color: cs.onInverseSurface,
+                  letterSpacing: -.3,
+                ),
               ),
             ),
-          ),
-          IconButton(
-            tooltip: '더보기',
-            visualDensity: VisualDensity.compact,
-            onPressed: () => _openAreaRefreshAccessMenu(context),
-            icon: Icon(
-              Icons.more_horiz_rounded,
-              color: cs.onSurfaceVariant,
+            const SizedBox(width: 8),
+            _BranchHeaderPill(
+              icon: Icons.sd_storage_rounded,
+              label: _cacheCountText(),
             ),
-          ),
-          IconButton.filledTonal(
-            onPressed: () => Navigator.of(context).pop(),
-            icon: const Icon(Icons.close_rounded),
-          ),
-        ],
+            const SizedBox(width: 6),
+            IconButton.filledTonal(
+              tooltip: '지역 갱신',
+              onPressed: () => _openAreaRefreshAccessMenu(context),
+              icon: Icon(
+                _areaRefreshLockedToday ? Icons.lock_clock_rounded : Icons.refresh_rounded,
+              ),
+            ),
+            const SizedBox(width: 4),
+            IconButton.filledTonal(
+              tooltip: '닫기',
+              onPressed: () => Navigator.of(context).pop(),
+              icon: const Icon(Icons.close_rounded),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1354,15 +1752,27 @@ class _BranchWorkStatusFullScreenDialogState
     BuildContext context,
     _BranchWorkStatusViewData data,
   ) {
+    final parkingTotal = data.areaCounts.fold<int>(
+      0,
+      (sum, item) => sum + item.parkingCompletedCount,
+    );
+    final departureTotal = data.areaCounts.fold<int>(
+      0,
+      (sum, item) => sum + item.departureCompletedCount,
+    );
+
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
       child: _bodyShell(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _BranchStatusMetaRail(
+            _BranchMetricStrip(
               division: data.division,
-              cachedAreaCountText: _cacheCountText(),
+              branchCount: data.areaCounts.length,
+              cachedCount: _cachedAreaCount,
+              parkingTotal: parkingTotal,
+              departureTotal: departureTotal,
               refreshLockText: _refreshLockText(),
               lockedToday: _areaRefreshLockedToday,
             ),
@@ -1374,11 +1784,9 @@ class _BranchWorkStatusFullScreenDialogState
                   )
                 : _BranchSectionFrame(
                     title: '지사',
-                    child: _BranchMiniRail(
+                    child: Column(
                       children: data.areaCounts
-                          .map(
-                            (item) => _BranchAreaMiniCard(item: item),
-                          )
+                          .map((item) => _BranchAreaMiniCard(item: item))
                           .toList(growable: false),
                     ),
                   ),
@@ -1431,19 +1839,34 @@ class _BranchWorkStatusFullScreenDialogState
         decoration: BoxDecoration(
           color: cs.background,
           border: Border(
-            top: BorderSide(
-              color: cs.outlineVariant.withOpacity(0.45),
-            ),
+            top: BorderSide(color: cs.outlineVariant.withOpacity(0.45)),
           ),
         ),
         child: _bottomBarShell(
-          child: _BranchDialogActionButton(
-            icon: Icons.sync_rounded,
-            label: '집계 갱신',
-            loading: _isRefreshingAggregations,
-            disabled: false,
-            onPressed: _refreshAggregations,
-            primary: false,
+          child: Row(
+            children: [
+              Expanded(
+                child: _BranchDialogActionButton(
+                  icon: Icons.sync_rounded,
+                  label: '집계 갱신',
+                  loading: _isRefreshingAggregations,
+                  disabled: false,
+                  onPressed: _refreshAggregations,
+                  primary: false,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _BranchDialogActionButton(
+                  icon: Icons.refresh_rounded,
+                  label: _areaRefreshLockedToday ? '지역 완료' : '지역 갱신',
+                  loading: _isRefreshingAreas,
+                  disabled: _areaRefreshLockedToday,
+                  onPressed: _refreshAreas,
+                  primary: true,
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -1483,6 +1906,41 @@ class _BranchWorkStatusFullScreenDialogState
   }
 }
 
+class _BranchHeaderPill extends StatelessWidget {
+  const _BranchHeaderPill({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      height: 34,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: cs.onInverseSurface.withOpacity(.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: cs.onInverseSurface.withOpacity(.22)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: cs.onInverseSurface),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+            ).copyWith(color: cs.onInverseSurface),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _BranchSectionFrame extends StatelessWidget {
   const _BranchSectionFrame({
     required this.title,
@@ -1501,20 +1959,36 @@ class _BranchSectionFrame extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: cs.surface,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(
-          color: cs.outlineVariant.withOpacity(0.42),
-        ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: cs.outlineVariant.withOpacity(0.55)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: tt.titleMedium?.copyWith(
-              fontWeight: FontWeight.w900,
-              color: cs.onSurface,
-            ),
+          Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: cs.primaryContainer,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(Icons.domain_rounded, color: cs.onPrimaryContainer, size: 18),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: tt.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                    color: cs.onSurface,
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 10),
           child,
@@ -1524,70 +1998,130 @@ class _BranchSectionFrame extends StatelessWidget {
   }
 }
 
-class _BranchMiniRail extends StatelessWidget {
-  const _BranchMiniRail({
-    required this.children,
-  });
-
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    if (children.isEmpty) return const SizedBox.shrink();
-
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      physics: const BouncingScrollPhysics(),
-      child: Row(
-        children: [
-          for (int i = 0; i < children.length; i++) ...[
-            if (i > 0) const SizedBox(width: 10),
-            children[i],
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _BranchStatusMetaRail extends StatelessWidget {
-  const _BranchStatusMetaRail({
+class _BranchMetricStrip extends StatelessWidget {
+  const _BranchMetricStrip({
     required this.division,
-    required this.cachedAreaCountText,
+    required this.branchCount,
+    required this.cachedCount,
+    required this.parkingTotal,
+    required this.departureTotal,
     required this.refreshLockText,
     required this.lockedToday,
   });
 
   final String division;
-  final String cachedAreaCountText;
+  final int branchCount;
+  final int cachedCount;
+  final int parkingTotal;
+  final int departureTotal;
   final String refreshLockText;
   final bool lockedToday;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      physics: const BouncingScrollPhysics(),
+      child: Row(
+        children: [
+          _BranchMetricChip(
+            icon: Icons.corporate_fare_rounded,
+            label: '본부',
+            value: division.isEmpty ? '-' : division,
+            color: cs.primary,
+          ),
+          const SizedBox(width: 8),
+          _BranchMetricChip(
+            icon: Icons.domain_rounded,
+            label: '지사',
+            value: '$branchCount',
+            color: cs.secondary,
+          ),
+          const SizedBox(width: 8),
+          _BranchMetricChip(
+            icon: Icons.local_parking_rounded,
+            label: '주차',
+            value: '$parkingTotal',
+            color: cs.primary,
+          ),
+          const SizedBox(width: 8),
+          _BranchMetricChip(
+            icon: Icons.exit_to_app_rounded,
+            label: '출차',
+            value: '$departureTotal',
+            color: cs.tertiary,
+          ),
+          const SizedBox(width: 8),
+          _BranchMetricChip(
+            icon: Icons.sd_storage_rounded,
+            label: '캐시',
+            value: '$cachedCount',
+            color: cs.onSurfaceVariant,
+          ),
+          const SizedBox(width: 8),
+          _BranchMetricChip(
+            icon: lockedToday ? Icons.lock_clock_rounded : Icons.refresh_rounded,
+            label: '지역',
+            value: refreshLockText,
+            color: lockedToday ? cs.error : cs.secondary,
+          ),
+        ],
+      ),
+    );
+  }
+}
 
-    return _BranchMiniRail(
-      children: [
-        _BranchCompactBadge(
-          icon: Icons.corporate_fare_rounded,
-          text: division.isEmpty ? 'division 없음' : division,
-          tone: cs.primaryContainer,
-          onTone: cs.onPrimaryContainer,
-        ),
-        _BranchCompactBadge(
-          icon: Icons.sd_storage_rounded,
-          text: cachedAreaCountText,
-          tone: cs.secondaryContainer,
-          onTone: cs.onSecondaryContainer,
-        ),
-        _BranchCompactBadge(
-          icon: lockedToday ? Icons.lock_clock_rounded : Icons.refresh_rounded,
-          text: refreshLockText,
-          tone: lockedToday ? cs.tertiaryContainer : cs.surfaceContainerHighest,
-          onTone: lockedToday ? cs.onTertiaryContainer : cs.onSurface,
-        ),
-      ],
+class _BranchMetricChip extends StatelessWidget {
+  const _BranchMetricChip({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      height: 40,
+      padding: const EdgeInsets.symmetric(horizontal: 11),
+      decoration: BoxDecoration(
+        color: Color.alphaBlend(color.withOpacity(.10), cs.surface),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withOpacity(.25)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 7),
+          Text(
+            label,
+            style: TextStyle(
+              color: cs.onSurfaceVariant,
+              fontWeight: FontWeight.w800,
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(width: 7),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: cs.onSurface,
+              fontWeight: FontWeight.w900,
+              fontSize: 14,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1611,66 +2145,51 @@ class _BranchGuideCard extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
 
     return Container(
-      constraints: const BoxConstraints(maxWidth: 420),
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+      constraints: const BoxConstraints(maxWidth: 520),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: cs.surface,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: cs.outlineVariant.withOpacity(0.42)),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: cs.outlineVariant.withOpacity(0.55)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              color: cs.primaryContainer,
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Icon(
-              Icons.domain_verification_rounded,
-              color: cs.onPrimaryContainer,
-              size: 26,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            '대기',
-            style: tt.titleMedium?.copyWith(
-              fontWeight: FontWeight.w900,
-              color: cs.onSurface,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            alignment: WrapAlignment.center,
-            spacing: 8,
-            runSpacing: 8,
+          Row(
             children: [
-              _BranchCompactBadge(
-                icon: Icons.corporate_fare_rounded,
-                text: division.isEmpty ? 'division 없음' : division,
-                tone: cs.primaryContainer,
-                onTone: cs.onPrimaryContainer,
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: cs.primaryContainer,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(Icons.domain_verification_rounded, color: cs.onPrimaryContainer),
               ),
-              _BranchCompactBadge(
-                icon: Icons.sd_storage_rounded,
-                text: cachedAreaCountText,
-                tone: cs.secondaryContainer,
-                onTone: cs.onSecondaryContainer,
-              ),
-              _BranchCompactBadge(
-                icon: lockedToday
-                    ? Icons.lock_clock_rounded
-                    : Icons.refresh_rounded,
-                text: refreshLockText,
-                tone: lockedToday
-                    ? cs.tertiaryContainer
-                    : cs.surfaceContainerHighest,
-                onTone: lockedToday ? cs.onTertiaryContainer : cs.onSurface,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  '대기',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: tt.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                    color: cs.onSurface,
+                  ),
+                ),
               ),
             ],
+          ),
+          const SizedBox(height: 12),
+          _BranchMetricStrip(
+            division: division,
+            branchCount: int.tryParse(cachedAreaCountText) ?? 0,
+            cachedCount: int.tryParse(cachedAreaCountText) ?? 0,
+            parkingTotal: 0,
+            departureTotal: 0,
+            refreshLockText: refreshLockText,
+            lockedToday: lockedToday,
           ),
         ],
       ),
@@ -1678,39 +2197,62 @@ class _BranchGuideCard extends StatelessWidget {
   }
 }
 
-class _BranchCompactBadge extends StatelessWidget {
-  const _BranchCompactBadge({
+
+
+class _BranchStateCard extends StatelessWidget {
+  const _BranchStateCard({
     required this.icon,
-    required this.text,
-    required this.tone,
-    required this.onTone,
+    required this.label,
+    this.loading = false,
   });
 
   final IconData icon;
-  final String text;
-  final Color tone;
-  final Color onTone;
+  final String label;
+  final bool loading;
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      constraints: const BoxConstraints(maxWidth: 460),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: tone,
-        borderRadius: BorderRadius.circular(16),
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: cs.outlineVariant.withOpacity(0.55)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: onTone),
-          const SizedBox(width: 8),
-          Text(
-            text,
-            style: tt.labelLarge?.copyWith(
-              color: onTone,
-              fontWeight: FontWeight.w800,
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: cs.primaryContainer,
+              borderRadius: BorderRadius.circular(15),
+            ),
+            child: loading
+                ? Padding(
+                    padding: const EdgeInsets.all(11),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.4,
+                      color: cs.onPrimaryContainer,
+                    ),
+                  )
+                : Icon(icon, color: cs.onPrimaryContainer),
+          ),
+          const SizedBox(width: 12),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: (tt.titleMedium ?? const TextStyle(fontSize: 16)).copyWith(
+                color: cs.onSurface,
+                fontWeight: FontWeight.w900,
+              ),
             ),
           ),
         ],
@@ -1739,119 +2281,38 @@ class _BranchDialogActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final background = primary ? cs.primaryContainer : cs.surface;
-    final foreground = primary ? cs.onPrimaryContainer : cs.onSurface;
-    final borderColor = primary
-        ? cs.primary.withOpacity(0.12)
-        : cs.outlineVariant.withOpacity(0.55);
+    final enabled = !disabled && !loading;
+    final baseColor = primary ? cs.primary : cs.secondary;
+    final effectiveColor = enabled ? baseColor : cs.onSurfaceVariant.withOpacity(.48);
 
     return SizedBox(
-      height: 52,
-      child: ElevatedButton(
-        onPressed: (loading || disabled) ? null : onPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: background,
-          foregroundColor: foreground,
-          disabledBackgroundColor: background.withOpacity(0.56),
-          disabledForegroundColor: foreground.withOpacity(0.52),
-          elevation: 0,
-          side: BorderSide(color: borderColor),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-        ),
-        child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 180),
-          child: loading
-              ? SizedBox(
-                  key: ValueKey('${label}_loading'),
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.2,
-                    color: foreground,
-                  ),
-                )
-              : Row(
-                  key: ValueKey('${label}_${disabled ? 'disabled' : 'idle'}'),
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      disabled ? Icons.lock_clock_rounded : icon,
-                      size: 18,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      label,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ],
+      height: 48,
+      child: FilledButton.icon(
+        onPressed: enabled ? onPressed : null,
+        icon: loading
+            ? SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.2,
+                  color: primary ? cs.onPrimary : cs.onSecondaryContainer,
                 ),
+              )
+            : Icon(icon, size: 18),
+        label: Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
-      ),
-    );
-  }
-}
-
-class _BranchStateCard extends StatelessWidget {
-  const _BranchStateCard({
-    required this.icon,
-    required this.label,
-    this.loading = false,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool loading;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 24,
-        vertical: 22,
-      ),
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: cs.outlineVariant.withOpacity(0.42)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.max,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          loading
-              ? SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.2,
-                    color: cs.primary,
-                  ),
-                )
-              : Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: cs.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(icon, size: 20, color: cs.onSurface),
-                ),
-          const SizedBox(width: 10),
-          Text(
-            label,
-            style: tt.titleSmall?.copyWith(
-              fontWeight: FontWeight.w900,
-              color: cs.onSurface,
-            ),
-          ),
-        ],
+        style: FilledButton.styleFrom(
+          backgroundColor: primary ? effectiveColor : Color.alphaBlend(effectiveColor.withOpacity(.12), cs.surface),
+          foregroundColor: primary ? cs.onPrimary : effectiveColor,
+          disabledBackgroundColor: cs.surfaceVariant.withOpacity(.34),
+          disabledForegroundColor: cs.onSurfaceVariant.withOpacity(.48),
+          textStyle: const TextStyle(fontWeight: FontWeight.w900),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          side: BorderSide(color: effectiveColor.withOpacity(primary ? .0 : .28)),
+        ),
       ),
     );
   }
@@ -1884,9 +2345,7 @@ class _BranchWorkStatusAreaCount {
 }
 
 class _BranchAreaMiniCard extends StatelessWidget {
-  const _BranchAreaMiniCard({
-    required this.item,
-  });
+  const _BranchAreaMiniCard({required this.item});
 
   final _BranchWorkStatusAreaCount item;
 
@@ -1894,69 +2353,88 @@ class _BranchAreaMiniCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    final total = item.parkingCompletedCount + item.departureCompletedCount;
 
     return Container(
-      width: 176,
-      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: cs.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: cs.outlineVariant.withOpacity(0.34)),
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cs.outlineVariant.withOpacity(0.55)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
+      child: Row(
         children: [
-          Row(
-            children: [
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: cs.primaryContainer,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  Icons.store_mall_directory_rounded,
-                  size: 18,
-                  color: cs.onPrimaryContainer,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  item.areaName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: tt.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    color: cs.onSurface,
-                  ),
-                ),
-              ),
-            ],
+          Container(
+            width: 6,
+            height: 92,
+            decoration: BoxDecoration(
+              color: cs.primary,
+              borderRadius: const BorderRadius.horizontal(left: Radius.circular(16)),
+            ),
           ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: _BranchAreaValueChip(
-                  icon: Icons.local_parking_rounded,
-                  value: '${item.parkingCompletedCount}',
-                  tone: cs.primaryContainer,
-                  onTone: cs.onPrimaryContainer,
-                ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: cs.primaryContainer,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          Icons.store_mall_directory_rounded,
+                          size: 18,
+                          color: cs.onPrimaryContainer,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          item.areaName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: tt.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w900,
+                            color: cs.onSurface,
+                          ),
+                        ),
+                      ),
+                      _BranchAreaValueChip(
+                        icon: Icons.functions_rounded,
+                        value: '$total',
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 9),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _BranchAreaValueChip(
+                          icon: Icons.local_parking_rounded,
+                          value: '${item.parkingCompletedCount}',
+                          color: cs.primary,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _BranchAreaValueChip(
+                          icon: Icons.exit_to_app_rounded,
+                          value: '${item.departureCompletedCount}',
+                          color: cs.tertiary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _BranchAreaValueChip(
-                  icon: Icons.exit_to_app_rounded,
-                  value: '${item.departureCompletedCount}',
-                  tone: cs.secondaryContainer,
-                  onTone: cs.onSecondaryContainer,
-                ),
-              ),
-            ],
+            ),
           ),
         ],
       ),
@@ -1968,38 +2446,39 @@ class _BranchAreaValueChip extends StatelessWidget {
   const _BranchAreaValueChip({
     required this.icon,
     required this.value,
-    required this.tone,
-    required this.onTone,
+    required this.color,
   });
 
   final IconData icon;
   final String value;
-  final Color tone;
-  final Color onTone;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-
+    final cs = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      height: 34,
+      padding: const EdgeInsets.symmetric(horizontal: 9),
       decoration: BoxDecoration(
-        color: tone,
-        borderRadius: BorderRadius.circular(14),
+        color: Color.alphaBlend(color.withOpacity(.10), cs.surface),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(.25)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: onTone),
+          Icon(icon, size: 15, color: color),
           const SizedBox(width: 6),
           Flexible(
             child: Text(
               value,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: tt.titleSmall?.copyWith(
-                color: onTone,
+              style: TextStyle(
+                color: cs.onSurface,
                 fontWeight: FontWeight.w900,
+                fontSize: 14,
               ),
             ),
           ),

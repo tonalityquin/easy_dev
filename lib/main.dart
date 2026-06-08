@@ -85,6 +85,10 @@ String _overlayModeToWire(OverlayMode mode) {
   }
 }
 
+Future<bool> _isSimpleAppMode() async {
+  return (await OverlayAccessGuard.currentMode()) == 'simple';
+}
+
 String _ts() => DateTime.now().toIso8601String();
 
 @pragma('vm:entry-point')
@@ -163,13 +167,20 @@ Future<void> openQuickOverlay(BuildContext context) async {
   if (await OverlayAccessGuard.closeIfBlocked()) return;
   if (!await ensureOverlayPermission(context)) return;
 
-  final mode = await OverlayModeConfig.getMode();
+  final requestedMode = await OverlayModeConfig.getMode();
+  final isSimpleMode = await _isSimpleAppMode();
+  final mode = isSimpleMode ? OverlayMode.bubble : requestedMode;
   final wire = _overlayModeToWire(mode);
 
   if (await FlutterOverlayWindow.isActive()) {
-    await FlutterOverlayWindow.shareData('__mode:${wire}__');
-    await FlutterOverlayWindow.shareData('__collapse__');
-    return;
+    if (!isSimpleMode) {
+      await FlutterOverlayWindow.shareData('__mode:${wire}__');
+      await FlutterOverlayWindow.shareData('__collapse__');
+      return;
+    }
+
+    await FlutterOverlayWindow.closeOverlay();
+    await Future<void>.delayed(const Duration(milliseconds: 120));
   }
 
   final config = await _buildOverlayWindowConfig(mode);
@@ -412,7 +423,16 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   }
 
   Future<_LifecycleOverlayRequest> _resolveLifecycleOverlayRequest() async {
+    final isSimpleMode = await _isSimpleAppMode();
     final nudge = await CheckoutNudgeGuard.evaluate();
+
+    if (isSimpleMode) {
+      return const _LifecycleOverlayRequest(
+        mode: OverlayMode.bubble,
+        checkoutNudge: false,
+        workFinished: false,
+      );
+    }
 
     if (nudge.shouldShowWorkFinished) {
       return const _LifecycleOverlayRequest(

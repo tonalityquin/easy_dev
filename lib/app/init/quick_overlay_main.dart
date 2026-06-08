@@ -155,11 +155,14 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
     if (await OverlayAccessGuard.closeIfBlocked()) return;
     if (!mounted) return;
 
+    final simpleMode = await _syncAppMode();
+    if (!mounted) return;
+
     if (event == '__work_finished__') {
       _cancelShortBreak();
       if (!mounted) return;
       setState(() {
-        _uiMode = OverlayUIMode.workFinished;
+        _uiMode = simpleMode ? OverlayUIMode.bubble : OverlayUIMode.workFinished;
         _overlayStartedAt = DateTime.now();
         _elapsed = Duration.zero;
       });
@@ -170,7 +173,7 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
       _cancelShortBreak();
       if (!mounted) return;
       setState(() {
-        _uiMode = OverlayUIMode.checkoutNudge;
+        _uiMode = simpleMode ? OverlayUIMode.bubble : OverlayUIMode.checkoutNudge;
         _overlayStartedAt = DateTime.now();
         _elapsed = Duration.zero;
       });
@@ -203,27 +206,30 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
     }
   }
 
-  Future<void> _loadAppMode() async {
+  Future<bool> _syncAppMode() async {
     final prefs = await SharedPreferences.getInstance();
     final mode = prefs.getString(kAppModePrefsKey);
 
     if (OverlayAccessGuard.isBlockedMode(mode)) {
       await OverlayAccessGuard.closeIfBlocked();
-      return;
+      return _isSimpleMode;
     }
 
     final isSimple = OverlayAccessGuard.normalizeMode(mode) == kAppModeSimpleValue;
 
-    if (!mounted) return;
+    if (!mounted) return isSimple;
     setState(() {
       _isSimpleMode = isSimple;
-
-      if (_isSimpleMode && _uiMode != OverlayUIMode.checkoutNudge &&
-          _uiMode != OverlayUIMode.workFinished) {
+      if (_isSimpleMode && _uiMode != OverlayUIMode.bubble) {
         _cancelShortBreak();
         _uiMode = OverlayUIMode.bubble;
       }
     });
+    return isSimple;
+  }
+
+  Future<void> _loadAppMode() async {
+    await _syncAppMode();
   }
 
   Future<void> _loadEdgeSide() async {
@@ -1104,6 +1110,13 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
 
   @override
   Widget build(BuildContext context) {
+    if (_isSimpleMode) {
+      return Material(
+        color: Colors.transparent,
+        child: _buildBubbleOverlay(context),
+      );
+    }
+
     if (_uiMode == OverlayUIMode.workFinished) {
       return Material(
         color: Colors.transparent,

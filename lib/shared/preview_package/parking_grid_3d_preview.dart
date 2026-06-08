@@ -2,9 +2,6 @@ import 'dart:convert';
 import 'dart:math';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
- import '../../../features/dashboard/widgets/widgets/calendar/calendar_dialog.dart';
-import '../../../features/dashboard/widgets/widgets/info/my_info_dialog.dart';
-import '../../../features/dashboard/widgets/widgets/todo/todo_dialog.dart';
 import '../../../features/location/domain/models/grid_rect.dart';
 import '../../../features/location/domain/models/location_model.dart';
 import '../../../features/location/domain/models/parking_grid_model.dart';
@@ -187,6 +184,25 @@ class _PreviewEntry {
   bool get isStructured => kind == _PreviewEntryKind.structured;
 
   bool get isText => kind == _PreviewEntryKind.text;
+}
+
+@immutable
+class _PreviewStatusSummary {
+  final int parkingCompletedCount;
+  final int parkingRequestCount;
+  final int departureRequestCount;
+  final int departureInProgressCount;
+  final String scopeLabel;
+  final IconData scopeIcon;
+
+  const _PreviewStatusSummary({
+    required this.parkingCompletedCount,
+    required this.parkingRequestCount,
+    required this.departureRequestCount,
+    required this.departureInProgressCount,
+    required this.scopeLabel,
+    required this.scopeIcon,
+  });
 }
 
 int? _asInt(Object? v) {
@@ -1236,69 +1252,7 @@ class _ParkingGrid3DPreviewCardState extends State<ParkingGrid3DPreviewCard> {
   int _navDir = 0;
 
   static const double _bodyFixedHeight = 382.0;
-  static const double _footerGap = 10.0;
-  static const double _footerButtonHeight = 44.0;
-  static const double _previewHeight =
-      _bodyFixedHeight - _footerGap - _footerButtonHeight;
-
-  Widget _footerButtons({required ColorScheme cs, required TextTheme tt}) {
-    final baseStyle = OutlinedButton.styleFrom(
-      foregroundColor: cs.onSurface,
-      side: BorderSide(color: cs.outlineVariant.withOpacity(0.75)),
-      shape: const StadiumBorder(),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      backgroundColor: cs.surface.withOpacity(0.22),
-      textStyle: (tt.labelLarge ?? const TextStyle(fontSize: 14))
-          .copyWith(fontWeight: FontWeight.w800),
-    );
-
-    Widget btn({
-      required IconData icon,
-      required String label,
-      required VoidCallback onPressed,
-    }) {
-      return SizedBox(
-        height: _footerButtonHeight,
-        child: OutlinedButton.icon(
-          onPressed: onPressed,
-          icon: Icon(icon, size: 18),
-          label: Text(label),
-          style: baseStyle,
-        ),
-      );
-    }
-
-    return SizedBox(
-      height: _footerButtonHeight,
-      child: Row(
-        children: [
-          Expanded(
-            child: btn(
-              icon: Icons.person_rounded,
-              label: '내 정보',
-              onPressed: () => showMyInfoDialog(context: context),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: btn(
-              icon: Icons.calendar_month_rounded,
-              label: '달력',
-              onPressed: () => showCalendarDialog(context: context),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: btn(
-              icon: Icons.checklist_rounded,
-              label: '할 일',
-              onPressed: () => showTodoDialog(context: context),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  static const double _previewHeight = _bodyFixedHeight;
 
   List<LocationModel> _readCompositeParents() {
     final parents = <LocationModel>[];
@@ -1580,29 +1534,160 @@ class _ParkingGrid3DPreviewCardState extends State<ParkingGrid3DPreviewCard> {
     );
   }
 
-  Widget _kindBadge({
+  List<LocationModel> _childrenForParent(LocationModel parent) {
+    final parentArea = (() {
+      try {
+        return _trimOrEmpty((parent as dynamic).area);
+      } catch (_) {
+        return '';
+      }
+    })();
+
+    final out = <LocationModel>[];
+    for (final l in widget.locations) {
+      if (!_isCompositeChildType(l.type)) continue;
+      if (!_matchesParentRef(parent, l)) continue;
+
+      final childArea = (() {
+        try {
+          return _trimOrEmpty((l as dynamic).area);
+        } catch (_) {
+          return '';
+        }
+      })();
+
+      if (!_matchesAreaLoose(parentArea, childArea)) continue;
+      out.add(l);
+    }
+    return out;
+  }
+
+  int _slotCountForParent(LocationModel parent) {
+    final children = _childrenForParent(parent);
+    var count = 0;
+    for (final child in children) {
+      final name = _trimOrEmpty(child.locationName);
+      count += _readChildSlotsFromLocation(
+        child,
+        groupName: name.isEmpty ? 'group' : name,
+      ).length;
+    }
+
+    if (count > 0) return count;
+
+    final grid = parent.parkingGrid;
+    if (grid == null) return 0;
+    return _readSlotsFromRaw(
+      _extractParkingAreasRawFromGrid(grid),
+      groupName: 'parkingAreas',
+    ).length;
+  }
+
+  _PreviewStatusSummary _statusSummaryForEntry(_PreviewEntry entry) {
+    var parked = 0;
+    var parkingRequest = 0;
+    var departureRequest = 0;
+    var departureInProgress = 0;
+
+    void add(ParkingSlotStatus status) {
+      switch (status) {
+        case ParkingSlotStatus.departureInProgress:
+          departureInProgress++;
+          return;
+        case ParkingSlotStatus.departureRequest:
+          departureRequest++;
+          return;
+        case ParkingSlotStatus.parkingRequest:
+          parkingRequest++;
+          return;
+        case ParkingSlotStatus.parked:
+          parked++;
+          return;
+        case ParkingSlotStatus.empty:
+          return;
+      }
+    }
+
+    if (entry.isStructured) {
+      final parentName = _trimOrEmpty(entry.location.locationName);
+      final overlay = widget.overlay.forParent(parentName);
+      for (final status in overlay.slotStatusByKey.values) {
+        add(status);
+      }
+      for (final status in overlay.groupStatusByKey.values) {
+        add(status);
+      }
+
+      final childCount = _childrenForParent(entry.location).length;
+      final slotCount = _slotCountForParent(entry.location);
+      final scopeLabel = slotCount > 0
+          ? '슬롯 $slotCount'
+          : (childCount > 0 ? '자식 $childCount' : '도면');
+
+      return _PreviewStatusSummary(
+        parkingCompletedCount: parked,
+        parkingRequestCount: parkingRequest,
+        departureRequestCount: departureRequest,
+        departureInProgressCount: departureInProgress,
+        scopeLabel: scopeLabel,
+        scopeIcon: slotCount > 0
+            ? Icons.local_parking_rounded
+            : Icons.account_tree_rounded,
+      );
+    }
+
+    final metrics = resolveTextParkingPreviewMetrics(
+      location: entry.location,
+      metricsByLocation: widget.textMetricsByLocation,
+    );
+    final capacity = _locationLooseInt(entry.location, [
+      'capacity',
+      'carLimit',
+      'vehicleLimit',
+      'maxCars',
+      'maxCount',
+      'parkingLimit',
+    ]);
+
+    return _PreviewStatusSummary(
+      parkingCompletedCount: metrics?.parkingCompletedCount ?? 0,
+      parkingRequestCount: 0,
+      departureRequestCount: metrics?.departureRequestCount ?? 0,
+      departureInProgressCount: metrics?.departureInProgressCount ?? 0,
+      scopeLabel: capacity != null && capacity > 0 ? '한도 $capacity' : '텍스트',
+      scopeIcon: capacity != null && capacity > 0
+          ? Icons.local_parking_rounded
+          : Icons.text_fields_rounded,
+    );
+  }
+
+  Widget _headerBadge({
     required ColorScheme cs,
-    required TextTheme tt,
     required String label,
     required IconData icon,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      height: 32,
+      padding: const EdgeInsets.symmetric(horizontal: 9),
       decoration: BoxDecoration(
-        color: cs.surfaceContainerHigh,
+        color: cs.onInverseSurface.withOpacity(0.10),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: cs.outlineVariant.withOpacity(0.75)),
+        border: Border.all(color: cs.onInverseSurface.withOpacity(0.22)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: cs.onSurfaceVariant),
-          const SizedBox(width: 6),
+          Icon(icon, size: 14, color: cs.onInverseSurface.withOpacity(0.86)),
+          const SizedBox(width: 5),
           Text(
             label,
-            style: (tt.labelSmall ?? const TextStyle(fontSize: 11)).copyWith(
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: cs.onInverseSurface.withOpacity(0.9),
+              fontSize: 11,
               fontWeight: FontWeight.w900,
-              color: cs.onSurfaceVariant,
+              letterSpacing: -0.1,
             ),
           ),
         ],
@@ -1610,71 +1695,181 @@ class _ParkingGrid3DPreviewCardState extends State<ParkingGrid3DPreviewCard> {
     );
   }
 
-  Widget _headerRow({
+  Widget _opsHeaderRow({
     required String title,
+    required String kindLabel,
+    required IconData kindIcon,
     required VoidCallback? onPick,
-    String? kindLabel,
-    IconData? kindIcon,
   }) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
-    final btnStyle = OutlinedButton.styleFrom(
-      foregroundColor: cs.onSurface,
-      side: BorderSide(color: cs.outlineVariant.withOpacity(0.75)),
-      shape: const StadiumBorder(),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-    );
-
-    Widget actionButtons() {
-      return IntrinsicWidth(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            SizedBox(
-              height: 44,
-              child: OutlinedButton.icon(
-                onPressed: onPick,
-                icon: const Icon(Icons.layers_rounded, size: 18),
-                label: const Text('구역 선택'),
-                style: btnStyle,
+    return Container(
+      height: 58,
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+      decoration: BoxDecoration(
+        color: cs.inverseSurface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: cs.outlineVariant.withOpacity(0.45)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: cs.primary,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(Icons.view_in_ar_rounded, color: cs.onPrimary, size: 21),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: (tt.titleMedium ?? const TextStyle(fontSize: 16)).copyWith(
+                color: cs.onInverseSurface,
+                fontWeight: FontWeight.w900,
+                letterSpacing: -0.25,
               ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 82),
+            child: _headerBadge(cs: cs, label: kindLabel, icon: kindIcon),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            height: 36,
+            child: FilledButton.tonalIcon(
+              onPressed: onPick,
+              icon: const Icon(Icons.layers_rounded, size: 17),
+              label: const Text('구역 변경', maxLines: 1),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _summaryPill({
+    required ColorScheme cs,
+    required String label,
+    required String value,
+    required IconData icon,
+    required Color tone,
+    bool active = false,
+  }) {
+    return Container(
+      height: 38,
+      margin: const EdgeInsets.only(right: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: active ? tone.withOpacity(0.13) : cs.surfaceContainerHighest.withOpacity(0.58),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: active ? tone.withOpacity(0.42) : cs.outlineVariant.withOpacity(0.62),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: active ? tone : cs.onSurfaceVariant),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: cs.onSurfaceVariant,
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+              letterSpacing: -0.1,
+            ),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: active ? tone : cs.onSurface,
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+              letterSpacing: -0.15,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _statusSummaryRow(_PreviewStatusSummary summary) {
+    final cs = Theme.of(context).colorScheme;
+    final inProgressTone = cs.error;
+    final departureTone = cs.tertiary;
+    final requestTone = cs.secondary;
+    final parkedTone = cs.primary;
+    final scopeTone = cs.onSurfaceVariant;
+
+    return SizedBox(
+      height: 38,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        child: Row(
+          children: [
+            _summaryPill(
+              cs: cs,
+              label: '출차중',
+              value: '${summary.departureInProgressCount}',
+              icon: Icons.directions_car_filled_rounded,
+              tone: inProgressTone,
+              active: summary.departureInProgressCount > 0,
+            ),
+            _summaryPill(
+              cs: cs,
+              label: '출차요청',
+              value: '${summary.departureRequestCount}',
+              icon: Icons.exit_to_app_rounded,
+              tone: departureTone,
+              active: summary.departureRequestCount > 0,
+            ),
+            _summaryPill(
+              cs: cs,
+              label: '입차요청',
+              value: '${summary.parkingRequestCount}',
+              icon: Icons.login_rounded,
+              tone: requestTone,
+              active: summary.parkingRequestCount > 0,
+            ),
+            _summaryPill(
+              cs: cs,
+              label: '주차완료',
+              value: '${summary.parkingCompletedCount}',
+              icon: Icons.local_parking_rounded,
+              tone: parkedTone,
+              active: summary.parkingCompletedCount > 0,
+            ),
+            _summaryPill(
+              cs: cs,
+              label: '대상',
+              value: summary.scopeLabel,
+              icon: summary.scopeIcon,
+              tone: scopeTone,
+              active: false,
             ),
           ],
         ),
-      );
-    }
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(Icons.view_in_ar, color: cs.onSurfaceVariant, size: 18),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: (tt.titleMedium ?? const TextStyle(fontSize: 16)).copyWith(
-                  fontWeight: FontWeight.w800,
-                  color: cs.onSurface,
-                ),
-              ),
-              if (kindLabel != null && kindLabel.trim().isNotEmpty) ...[
-                const SizedBox(height: 6),
-                _kindBadge(
-                  cs: cs,
-                  tt: tt,
-                  label: kindLabel,
-                  icon: kindIcon ?? Icons.label_rounded,
-                ),
-              ],
-            ],
-          ),
-        ),
-        actionButtons(),
-      ],
+      ),
     );
   }
 
@@ -1689,13 +1884,19 @@ class _ParkingGrid3DPreviewCardState extends State<ParkingGrid3DPreviewCard> {
       return _cardShell(
         child: Column(
           children: [
-            _headerRow(title: '선택 : 주차 구역', onPick: null),
+            _opsHeaderRow(
+              title: '주차 구역 현황',
+              kindLabel: '대기',
+              kindIcon: Icons.hourglass_empty_rounded,
+              onPick: null,
+            ),
             const SizedBox(height: 10),
             Text(
               '표시할 구조형 또는 텍스트형 주차 구역이 없습니다.',
               textAlign: TextAlign.center,
               style: (tt.bodyMedium ?? const TextStyle(fontSize: 13)).copyWith(
                 color: cs.onSurfaceVariant,
+                fontWeight: FontWeight.w800,
               ),
             ),
           ],
@@ -1709,11 +1910,10 @@ class _ParkingGrid3DPreviewCardState extends State<ParkingGrid3DPreviewCard> {
 
     final nameTrimmed = _trimOrEmpty(loc.locationName);
     final displayName = nameTrimmed.isEmpty ? '무명 구역' : nameTrimmed;
-    final headerTitle = '선택 : $displayName';
 
     final pickBtn = count <= 1 ? null : () => _openPicker(entries);
 
-    final kindLabel = entry.isStructured ? '구조형 주차 구역' : '텍스트형 주차 구역';
+    final kindLabel = entry.isStructured ? '구조형' : '텍스트형';
     final kindIcon =
     entry.isStructured ? Icons.account_tree_rounded : Icons.text_fields_rounded;
 
@@ -1732,6 +1932,7 @@ class _ParkingGrid3DPreviewCardState extends State<ParkingGrid3DPreviewCard> {
       cs: cs,
       tt: tt,
     );
+    final summary = _statusSummaryForEntry(entry);
 
     final contentKey = ValueKey<String>(
       '${entry.kind.name}_${idx}_${_nameKey(nameTrimmed)}',
@@ -1742,12 +1943,14 @@ class _ParkingGrid3DPreviewCardState extends State<ParkingGrid3DPreviewCard> {
       child: _cardShell(
         child: Column(
           children: [
-            _headerRow(
-              title: headerTitle,
+            _opsHeaderRow(
+              title: displayName,
               onPick: pickBtn,
               kindLabel: kindLabel,
               kindIcon: kindIcon,
             ),
+            const SizedBox(height: 8),
+            _statusSummaryRow(summary),
             const SizedBox(height: 10),
             _animatedBody(key: contentKey, child: body),
           ],
