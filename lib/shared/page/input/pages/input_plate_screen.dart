@@ -127,6 +127,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   ScrollController? _sheetScrollController;
 
   _DockField? _dockEditing;
+  bool _singleFieldDockEdit = false;
 
   String _midBeforeEdit = '';
   static const double _sheetClosed = 0.16;
@@ -873,11 +874,10 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       _resolvedMonthlyDocId = null;
       _lastPlateStatusDialogKey = null;
 
-      if (promptMid || mid.isEmpty) {
-        controller.showKeypad = true;
-        controller.setActiveController(controller.controllerMidDigit);
+      if (promptMid || !controller.isInputValid()) {
+        _activateNextIncompleteFieldOrFinish();
       } else {
-        controller.showKeypad = false;
+        _finishPlateEditing();
       }
     });
     controller.suppressOcrEditCount(false);
@@ -1086,8 +1086,10 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   void _beginDockEdit(_DockField field) {
     final prevMid =
         field == _DockField.mid ? controller.controllerMidDigit.text : null;
+    final wasPlateComplete = controller.isInputValid();
     setState(() {
       _dockEditing = field;
+      _singleFieldDockEdit = wasPlateComplete;
 
       _monthlyDocExists = false;
       _resolvedMonthlyDocId = null;
@@ -1113,6 +1115,79 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     });
   }
 
+  TextEditingController? _findNextIncompleteController() {
+    final requiredFrontLength = controller.isThreeDigit ? 3 : 2;
+
+    if (controller.controllerFrontDigit.text.length != requiredFrontLength) {
+      return controller.controllerFrontDigit;
+    }
+
+    if (controller.controllerMidDigit.text.length != 1) {
+      return controller.controllerMidDigit;
+    }
+
+    if (controller.controllerBackDigit.text.length != 4) {
+      return controller.controllerBackDigit;
+    }
+
+    return null;
+  }
+
+  TextEditingController _controllerForDockField(_DockField field) {
+    switch (field) {
+      case _DockField.front:
+        return controller.controllerFrontDigit;
+      case _DockField.mid:
+        return controller.controllerMidDigit;
+      case _DockField.back:
+        return controller.controllerBackDigit;
+    }
+  }
+
+  void _finishPlateEditing() {
+    controller.showKeypad = false;
+    _dockEditing = null;
+    _singleFieldDockEdit = false;
+    _midBeforeEdit = '';
+  }
+
+  void _activateNextIncompleteFieldOrFinish() {
+    final next = _findNextIncompleteController();
+    if (next == null) {
+      _finishPlateEditing();
+      return;
+    }
+    controller.setActiveController(next);
+  }
+
+  void _completeCurrentPlateField() {
+    if (_dockEditing == _DockField.mid &&
+        controller.controllerMidDigit.text.isEmpty &&
+        _midBeforeEdit.isNotEmpty) {
+      controller.controllerMidDigit.text = _midBeforeEdit;
+    }
+
+    if (_dockEditing != null && _singleFieldDockEdit) {
+      if (controller.isInputValid()) {
+        _finishPlateEditing();
+        return;
+      }
+      controller.setActiveController(_controllerForDockField(_dockEditing!));
+      return;
+    }
+
+    _dockEditing = null;
+    _singleFieldDockEdit = false;
+    _midBeforeEdit = '';
+
+    if (controller.isInputValid()) {
+      _finishPlateEditing();
+      return;
+    }
+
+    _activateNextIncompleteFieldOrFinish();
+  }
+
   Widget _buildKeypad() {
     final active = controller.activeController;
 
@@ -1121,14 +1196,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
         key: const ValueKey('frontKeypad'),
         controller: controller.controllerFrontDigit,
         maxLength: controller.isThreeDigit ? 3 : 2,
-        onComplete: () => setState(() {
-          if (_dockEditing == _DockField.front) {
-            controller.showKeypad = false;
-            _dockEditing = null;
-          } else {
-            controller.setActiveController(controller.controllerMidDigit);
-          }
-        }),
+        onComplete: () => setState(_completeCurrentPlateField),
         onChangeFrontDigitMode: (defaultThree) {
           setState(() {
             controller.setFrontDigitMode(defaultThree);
@@ -1142,20 +1210,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       return KorKeypad(
         key: const ValueKey('midKeypad'),
         controller: controller.controllerMidDigit,
-        onComplete: () => setState(() {
-          if (_dockEditing == _DockField.mid) {
-            if (controller.controllerMidDigit.text.isEmpty &&
-                _midBeforeEdit.isNotEmpty) {
-              controller.controllerMidDigit.text = _midBeforeEdit;
-            }
-            controller.showKeypad = false;
-            _dockEditing = null;
-            _midBeforeEdit = '';
-          } else {
-            _midBeforeEdit = '';
-            controller.setActiveController(controller.controllerBackDigit);
-          }
-        }),
+        onComplete: () => setState(_completeCurrentPlateField),
       );
     }
 
@@ -1163,16 +1218,15 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       key: const ValueKey('backKeypad'),
       controller: controller.controllerBackDigit,
       maxLength: 4,
-      onComplete: () => setState(() {
-        controller.showKeypad = false;
-        _dockEditing = null;
-      }),
+      onComplete: () => setState(_completeCurrentPlateField),
       enableDigitModeSwitch: false,
       onReset: () {
         setState(() {
           controller.clearInput();
           controller.setActiveController(controller.controllerFrontDigit);
           _dockEditing = null;
+          _singleFieldDockEdit = false;
+          _midBeforeEdit = '';
           _monthlyDocExists = false;
           _resolvedMonthlyDocId = null;
           _lastPlateStatusDialogKey = null;

@@ -202,7 +202,7 @@ class BillState extends ChangeNotifier {
           type: BillType.regular,
           regularType: billData['regularType'],
           regularAmount: billData['regularAmount'],
-          regularDurationHours: billData['regularDurationHours'],
+          regularDurationValue: billData['regularDurationValue'] ?? billData['regularDurationHours'],
         );
 
         await _repository.addRegularBill(bill);

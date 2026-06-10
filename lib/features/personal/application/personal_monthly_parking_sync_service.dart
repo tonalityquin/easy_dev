@@ -307,8 +307,13 @@ class PersonalMonthlyParkingSyncService {
   String _paymentNote(PlateStatusPaymentRecord payment) {
     final amount = (payment.amountText ?? '').trim();
     final extended = (payment.extendedText ?? '').trim();
+    final regularType = (payment.regularType ?? '').trim();
+    final periodUnit = (payment.periodUnit ?? '').trim();
+    final durationValue = payment.durationValue ?? payment.regularDurationValue;
     final parts = <String>[];
     if (amount.isNotEmpty) parts.add('금액 $amount');
+    if (regularType.isNotEmpty) parts.add(regularType);
+    if (durationValue != null && durationValue > 0 && periodUnit.isNotEmpty) parts.add('$durationValue$periodUnit');
     if (extended.isNotEmpty) parts.add('연장 $extended');
     return parts.isEmpty ? '월주차 결제' : parts.join(' · ');
   }

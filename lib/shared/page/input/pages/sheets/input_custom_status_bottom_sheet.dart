@@ -15,9 +15,31 @@ String _formatDate(DateTime? value, String? raw) {
   return '시간 정보 없음';
 }
 
+String _formatWon(int? value) {
+  if (value == null) return '';
+  return '₩${NumberFormat('#,###', 'ko_KR').format(value)}';
+}
+
+String _durationLabel(String? regularType, int? durationValue, String? periodUnit) {
+  if (durationValue == null || durationValue <= 0) return '';
+  final type = regularType?.trim() ?? '';
+  final unit = periodUnit?.trim() ?? '';
+  if (type == '주말권' && unit == '주') return '주말 $durationValue회';
+  if (unit.isEmpty) return '$durationValue';
+  return '$durationValue$unit';
+}
+
+String _paymentExtendedLabel(String? value) {
+  final text = value?.trim();
+  if (text == null || text.isEmpty) return '';
+  if (text == 'true') return '예';
+  if (text == 'false') return '아니오';
+  return text;
+}
+
 Widget _infoRow(BuildContext context, String label, String? value) {
   final cs = Theme.of(context).colorScheme;
-  if (value == null || value.isEmpty) return const SizedBox.shrink();
+  if (value == null || value.trim().isEmpty) return const SizedBox.shrink();
 
   return Padding(
     padding: const EdgeInsets.only(bottom: 8),
@@ -88,7 +110,7 @@ Future<Map<String, dynamic>?> inputCustomStatusBottomSheet(
   final String? startDate = data.startDate;
   final String? endDate = data.endDate;
   final int? regularAmount = data.regularAmount;
-  final int? regularDurationHours = data.regularDurationHours;
+  final int? regularDurationValue = data.regularDurationValue ?? data.regularDurationHours;
   final List<PlateStatusPaymentRecord> paymentHistory = data.paymentHistory;
 
   final formattedUpdatedAt = _formatDate(data.updatedAt, data.updatedAtRaw);
@@ -228,18 +250,18 @@ Future<Map<String, dynamic>?> inputCustomStatusBottomSheet(
                   ),
                 ),
                 const SizedBox(height: 12),
-                _infoRow(context, 'Type', type),
-                _infoRow(context, 'Count Type', countType),
-                _infoRow(context, 'Regular Type', regularType),
-                _infoRow(context, 'Regular Amount', regularAmount?.toString()),
+                _infoRow(context, '정산 유형', type),
+                _infoRow(context, '정산명', countType),
+                _infoRow(context, '상품', regularType),
+                _infoRow(context, '상품 금액', _formatWon(regularAmount)),
                 _infoRow(
                   context,
-                  'Regular Duration (hours)',
-                  regularDurationHours?.toString(),
+                  '기간',
+                  _durationLabel(regularType, regularDurationValue, periodUnit),
                 ),
-                _infoRow(context, 'Period Unit', periodUnit),
-                _infoRow(context, 'Start Date', startDate),
-                _infoRow(context, 'End Date', endDate),
+                _infoRow(context, '기간 단위', periodUnit),
+                _infoRow(context, '시작일', startDate),
+                _infoRow(context, '종료일', endDate),
                 if (paymentHistory.isNotEmpty) ...[
                   const SizedBox(height: 24),
                   Text(
@@ -254,6 +276,25 @@ Future<Map<String, dynamic>?> inputCustomStatusBottomSheet(
                   ...paymentHistory.map((payment) {
                     final paidAt =
                         _formatDate(payment.paidAt, payment.paidAtRaw);
+                    final paymentAmountText = payment.paymentAmountText ?? payment.amountText;
+                    final paymentAmount = int.tryParse(paymentAmountText ?? '');
+                    final paymentDuration = payment.durationValue ?? payment.regularDurationValue;
+                    final paymentDurationText = _durationLabel(
+                      payment.regularType,
+                      paymentDuration,
+                      payment.periodUnit,
+                    );
+                    final productText = [
+                      payment.regularType,
+                      paymentDurationText,
+                    ].where((e) => e != null && e.trim().isNotEmpty).join(' · ');
+                    final rangeText = (payment.startDate != null &&
+                            payment.startDate!.isNotEmpty &&
+                            payment.endDate != null &&
+                            payment.endDate!.isNotEmpty)
+                        ? '${payment.startDate} ~ ${payment.endDate}'
+                        : '';
+                    final extendedText = _paymentExtendedLabel(payment.extendedText);
 
                     return Container(
                       margin: const EdgeInsets.only(bottom: 10),
@@ -266,7 +307,7 @@ Future<Map<String, dynamic>?> inputCustomStatusBottomSheet(
                       ),
                       child: ListTile(
                         title: Text(
-                          '금액: ${payment.amountText ?? '-'}',
+                          '결제 금액: ${paymentAmount != null ? _formatWon(paymentAmount) : paymentAmountText ?? '-'}',
                           style: TextStyle(
                             fontWeight: FontWeight.w900,
                             color: cs2.onSurface,
@@ -286,10 +327,19 @@ Future<Map<String, dynamic>?> inputCustomStatusBottomSheet(
                                 '결제자: ${payment.paidBy}',
                                 style: TextStyle(color: cs2.onSurfaceVariant),
                               ),
-                            if (payment.extendedText != null &&
-                                payment.extendedText!.isNotEmpty)
+                            if (extendedText.isNotEmpty)
                               Text(
-                                '연장결제: ${payment.extendedText}',
+                                '연장결제: $extendedText',
+                                style: TextStyle(color: cs2.onSurfaceVariant),
+                              ),
+                            if (productText.isNotEmpty)
+                              Text(
+                                '상품: $productText',
+                                style: TextStyle(color: cs2.onSurfaceVariant),
+                              ),
+                            if (rangeText.isNotEmpty)
+                              Text(
+                                '적용 기간: $rangeText',
                                 style: TextStyle(color: cs2.onSurfaceVariant),
                               ),
                             if (payment.note != null &&
@@ -340,7 +390,8 @@ Future<Map<String, dynamic>?> inputCustomStatusBottomSheet(
     'countType': countType,
     'regularType': regularType,
     'regularAmount': regularAmount,
-    'regularDurationHours': regularDurationHours,
+    'regularDurationValue': regularDurationValue,
+    'regularDurationHours': regularDurationValue,
     'periodUnit': periodUnit,
     'startDate': startDate,
     'endDate': endDate,

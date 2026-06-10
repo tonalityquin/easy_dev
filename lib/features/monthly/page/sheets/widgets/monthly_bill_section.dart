@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../domain/monthly_parking_options.dart';
+
 const _billInk = Color(0xFF101828);
 const _billMuted = Color(0xFF667085);
 const _billPanel = Color(0xFFFFFFFF);
@@ -67,8 +69,7 @@ class MonthlyBillSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final regularTypeOptions = ['월 주차', '주간권', '야간권', '주말권'];
-    final periodUnitOptions = ['일', '주', '월'];
+    final regularTypeOptions = MonthlyParkingOptions.regularTypes;
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -157,19 +158,16 @@ class MonthlyBillSection extends StatelessWidget {
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: DropdownButtonFormField<String>(
-                  value: selectedPeriodUnit,
-                  decoration: _inputDecoration(label: '기간 단위'),
-                  dropdownColor: _billPanel,
-                  iconEnabledColor: _billMuted,
-                  style: const TextStyle(color: _billInk, fontWeight: FontWeight.w900),
-                  items: periodUnitOptions.map((unit) {
-                    return DropdownMenuItem<String>(
-                      value: unit,
-                      child: Text(unit),
-                    );
-                  }).toList(),
-                  onChanged: onPeriodUnitChanged,
+                child: InputDecorator(
+                  decoration: _inputDecoration(
+                    label: '기간 단위',
+                    suffixIcon: const Icon(Icons.lock_outline, color: _billMuted, size: 18),
+                    disabledTone: true,
+                  ),
+                  child: Text(
+                    selectedPeriodUnit,
+                    style: const TextStyle(color: _billInk, fontWeight: FontWeight.w900),
+                  ),
                 ),
               ),
             ],
@@ -186,7 +184,7 @@ class MonthlyBillSection extends StatelessWidget {
                   style: const TextStyle(color: _billInk, fontWeight: FontWeight.w900),
                   decoration: _inputDecoration(
                     label: '기간',
-                    hint: selectedPeriodUnit == '월' ? '1개월' : selectedPeriodUnit == '주' ? '2주' : '3일',
+                    hint: selectedType == MonthlyParkingOptions.weekend ? '1회' : selectedPeriodUnit == '월' ? '1개월' : selectedPeriodUnit == '주' ? '2주' : '3일',
                     suffixText: selectedPeriodUnit,
                   ),
                 ),
@@ -208,7 +206,7 @@ class MonthlyBillSection extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Text(
-            isEditMode ? '차량번호와 정산 이름은 수정 모드에서 잠깁니다.' : '요금과 기간을 입력하면 기간 섹션에서 종료일이 자동 계산됩니다.',
+            isEditMode ? '차량번호와 정산 이름은 수정 모드에서 잠깁니다.' : '상품을 선택하면 기간 단위가 자동 고정되고 종료일이 계산됩니다.',
             style: const TextStyle(color: _billMuted, fontWeight: FontWeight.w700, fontSize: 12),
           ),
         ],

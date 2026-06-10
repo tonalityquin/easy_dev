@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../app/models/capability.dart';
+import '../../account/applications/user_state.dart';
 import '../../dev/application/area_state.dart';
 import '../../dashboard/widgets/productivity_sheet.dart';
 import '../minor_departure_completed_bottom_sheet.dart';
@@ -26,9 +27,13 @@ class MinorParkingCompletedControlButtons extends StatelessWidget {
     final Color selectedItemColor = cs.primary;
     final Color unselectedItemColor = cs.onSurfaceVariant.withOpacity(.65);
 
-    final canUseMonthly = context.select<AreaState, bool>(
+    final hasMonthlyCapability = context.select<AreaState, bool>(
       (state) => state.capabilitiesOfCurrentArea.contains(Capability.monthly),
     );
+    final isFieldCommon = context.select<UserState, bool>(
+      (state) => state.role.trim() == 'fieldCommon',
+    );
+    final canUseMonthly = hasMonthlyCapability && !isFieldCommon;
 
     final Color productivityColor =
         canUseMonthly ? cs.secondary : cs.onSurfaceVariant.withOpacity(.38);

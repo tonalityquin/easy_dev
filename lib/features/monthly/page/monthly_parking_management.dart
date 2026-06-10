@@ -8,6 +8,7 @@ import '../../account/applications/user_state.dart';
 import '../../dev/application/area_state.dart';
 import '../application/monthly_area_resolver.dart';
 import '../controllers/monthly_plate_controller.dart';
+import '../domain/monthly_parking_options.dart';
 import 'sheets/monthly_plate_bottom_sheet.dart';
 import 'sheets/monthly_plate_payment_bottom_sheet.dart';
 
@@ -40,6 +41,11 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
   _MonthlyFilter _filter = _MonthlyFilter.all;
   _MonthlySort _sort = _MonthlySort.updatedDesc;
   String? _selectedDocId;
+  List<Map<String, dynamic>> _records = const <Map<String, dynamic>>[];
+  String _loadedArea = '';
+  String? _pendingArea;
+  bool _loading = false;
+  Object? _loadError;
 
   @override
   void dispose() {
@@ -79,9 +85,32 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
   }
 
   int _paymentCount(Map<String, dynamic> data) {
+    final explicit = _asInt(data['paymentCount']);
+    if (explicit > 0) return explicit;
     final raw = data['payment_history'];
     if (raw is List) return raw.length;
     return 0;
+  }
+
+  DateTime? _dateTimeValue(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value;
+    try {
+      final dynamic dynamicValue = value;
+      final converted = dynamicValue.toDate();
+      if (converted is DateTime) return converted;
+    } catch (_) {}
+    if (value is int) {
+      try {
+        if (value > 100000000000) {
+          return DateTime.fromMillisecondsSinceEpoch(value);
+        }
+        return DateTime.fromMillisecondsSinceEpoch(value * 1000);
+      } catch (_) {
+        return null;
+      }
+    }
+    return DateTime.tryParse(value.toString().trim());
   }
 
   _MonthlyStatus _statusOf(int? daysLeft) {
@@ -91,33 +120,44 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
     return _MonthlyStatus.active;
   }
 
-  List<_MonthlyPlateVM> _toItems(List<PlateStatusRecord> records) {
-    return records.map((record) {
-      final data = record.toMap();
-      final docId = record.docId ?? '';
-      final plateNumber = docId.split('_').first;
-      final endDate = (data['endDate'] ?? '').toString();
-      final daysLeft = _daysLeft(endDate);
-      return _MonthlyPlateVM(
-        docId: docId,
-        record: record,
-        data: data,
-        plateNumber: plateNumber,
-        countType: (data['countType'] ?? '').toString(),
-        regularType: (data['regularType'] ?? '').toString(),
-        amount: _asInt(data['regularAmount']),
-        duration: _asInt(data['regularDurationHours']),
-        periodUnit: (data['periodUnit'] ?? '월').toString(),
-        startDate: (data['startDate'] ?? '').toString(),
-        endDate: endDate,
-        customStatus: (data['customStatus'] ?? '').toString(),
-        paymentCount: _paymentCount(data),
-        daysLeft: daysLeft,
-        updatedAt: record.updatedAt,
-        hasMemo: _hasMemo(data),
-        status: _statusOf(daysLeft),
-      );
-    }).toList(growable: false);
+  _MonthlyPlateVM _toItem(Map<String, dynamic> raw) {
+    final data = Map<String, dynamic>.from(raw);
+    final docId = (data['docId'] ?? '').toString();
+    final plateNumber = (data['plateNumber'] ?? (docId.split('_').isEmpty ? '' : docId.split('_').first)).toString();
+    final endDate = (data['endDate'] ?? '').toString();
+    final daysLeft = _daysLeft(endDate);
+    return _MonthlyPlateVM(
+      docId: docId,
+      data: data,
+      plateNumber: plateNumber,
+      countType: (data['countType'] ?? '').toString(),
+      regularType: (data['regularType'] ?? '').toString(),
+      amount: _asInt(data['regularAmount']),
+      duration: _asInt(data['regularDurationValue'] ?? data['regularDurationHours']),
+      periodUnit: (data['periodUnit'] ?? '월').toString(),
+      startDate: (data['startDate'] ?? '').toString(),
+      endDate: endDate,
+      customStatus: (data['customStatus'] ?? '').toString(),
+      paymentCount: _paymentCount(data),
+      daysLeft: daysLeft,
+      updatedAt: _dateTimeValue(data['updatedAt']),
+      hasMemo: data['hasMemo'] == true || _hasMemo(data),
+      status: _statusOf(daysLeft),
+    );
+  }
+
+  _MonthlyPlateVM _toItemFromSourceRecord(PlateStatusRecord record) {
+    final data = record.toMap();
+    final docId = record.docId ?? '';
+    data['docId'] = docId;
+    data['plateNumber'] = docId.split('_').first;
+    data['updatedAt'] = record.updatedAt ?? record.updatedAtRaw;
+    data['paymentCount'] = record.paymentHistory.length;
+    return _toItem(data);
+  }
+
+  List<_MonthlyPlateVM> _toItems(List<Map<String, dynamic>> records) {
+    return records.map(_toItem).toList(growable: false);
   }
 
   List<_MonthlyPlateVM> _filteredSorted(List<_MonthlyPlateVM> items) {
@@ -174,6 +214,83 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
     );
   }
 
+  void _scheduleLoadIfNeeded(String area) {
+    final safeArea = area.trim();
+    if (_loadedArea == safeArea || _pendingArea == safeArea || _loading) return;
+    _pendingArea = safeArea;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final target = _pendingArea ?? safeArea;
+      _pendingArea = null;
+      _loadMonthlyPlateView(target);
+    });
+  }
+
+  Future<void> _loadMonthlyPlateView(String area) async {
+    final safeArea = area.trim();
+    if (safeArea.isEmpty) {
+      if (!mounted) return;
+      setState(() {
+        _records = const <Map<String, dynamic>>[];
+        _loadedArea = '';
+        _loading = false;
+        _loadError = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _loadError = null;
+    });
+
+    try {
+      final records = await context.read<PlateRepository>().fetchMonthlyPlateStatusView(area: safeArea);
+      if (!mounted) return;
+      setState(() {
+        _records = records;
+        _loadedArea = safeArea;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _records = const <Map<String, dynamic>>[];
+        _loadedArea = safeArea;
+        _loading = false;
+        _loadError = e;
+      });
+      ScaffoldMessenger.maybeOf(context)
+        ?..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('정기 주차 목록을 불러오지 못했습니다. 아래로 당겨 다시 시도해주세요.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+    }
+  }
+
+  Future<void> _refreshMonthlyPlateView() async {
+    final area = MonthlyAreaResolver.readCurrentArea(context);
+    await _loadMonthlyPlateView(area);
+  }
+
+  Future<_MonthlyPlateVM> _hydrateFromSource(_MonthlyPlateVM item) async {
+    final area = (item.data['area'] ?? _loadedArea).toString().trim();
+    if (item.plateNumber.trim().isEmpty || area.isEmpty) return item;
+    try {
+      final record = await context.read<PlateRepository>().fetchMonthlyPlateStatus(
+            plateNumber: item.plateNumber,
+            area: area,
+          );
+      if (record == null) return item;
+      return _toItemFromSourceRecord(record);
+    } catch (_) {
+      return item;
+    }
+  }
+
   Future<void> _openAddDialog() async {
     FocusScope.of(context).unfocus();
     await showDialog<void>(
@@ -182,20 +299,24 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
       barrierDismissible: true,
       builder: (_) => const MonthlyPlateBottomSheet(),
     );
+    if (mounted) await _refreshMonthlyPlateView();
   }
 
   Future<void> _openEditDialog(_MonthlyPlateVM item) async {
     FocusScope.of(context).unfocus();
+    final sourceItem = await _hydrateFromSource(item);
+    if (!mounted) return;
     await showDialog<void>(
       context: context,
       useSafeArea: true,
       barrierDismissible: true,
       builder: (_) => MonthlyPlateBottomSheet(
         isEditMode: true,
-        initialDocId: item.docId,
-        initialData: item.data,
+        initialDocId: sourceItem.docId,
+        initialData: sourceItem.data,
       ),
     );
+    if (mounted) await _refreshMonthlyPlateView();
   }
 
   Future<void> _openPaymentDialog(_MonthlyPlateVM item) async {
@@ -216,7 +337,8 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
       regularDurationController: durationController,
     );
 
-    await controller.loadExistingData(item.data, docId: item.docId);
+    final sourceItem = await _hydrateFromSource(item);
+    await controller.loadExistingData(sourceItem.data, docId: sourceItem.docId);
     controller.showKeypad = false;
 
     if (!mounted) {
@@ -243,6 +365,7 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
     durationController.dispose();
     startDateController.dispose();
     endDateController.dispose();
+    if (mounted) await _refreshMonthlyPlateView();
   }
 
   Future<void> _deleteItem(_MonthlyPlateVM item) async {
@@ -268,6 +391,7 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
             behavior: SnackBarBehavior.floating,
           ),
         );
+      await _refreshMonthlyPlateView();
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.maybeOf(context)
@@ -284,6 +408,8 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
   Future<void> _openDetailSheet(_MonthlyPlateVM item) async {
     FocusScope.of(context).unfocus();
     setState(() => _selectedDocId = item.docId);
+    final sourceItem = await _hydrateFromSource(item);
+    if (!mounted) return;
 
     await showModalBottomSheet<void>(
       context: context,
@@ -291,23 +417,51 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
       useSafeArea: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _MonthlyDetailPanel(
-        item: item,
+        item: sourceItem,
         onEdit: () async {
           Navigator.of(context).pop();
-          await _openEditDialog(item);
+          await _openEditDialog(sourceItem);
         },
         onPay: () async {
           Navigator.of(context).pop();
-          await _openPaymentDialog(item);
+          await _openPaymentDialog(sourceItem);
         },
         onDelete: () async {
           Navigator.of(context).pop();
-          await _deleteItem(item);
+          await _deleteItem(sourceItem);
         },
       ),
     );
 
     if (mounted) setState(() {});
+  }
+
+  Widget _refreshableBody({
+    required Widget child,
+  }) {
+    return RefreshIndicator(
+      onRefresh: _refreshMonthlyPlateView,
+      color: _opsBlue,
+      child: child,
+    );
+  }
+
+  Widget _centerScrollBody(Widget child) {
+    return _refreshableBody(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            controller: _scrollController,
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight - 42),
+              child: Center(child: child),
+            ),
+          );
+        },
+      ),
+    );
   }
 
   @override
@@ -319,76 +473,84 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
       areaStateArea: areaStateArea,
     );
 
+    _scheduleLoadIfNeeded(currentArea);
+
+    final allItems = _toItems(_records);
+    final summary = _summaryOf(allItems);
+    final visibleItems = _filteredSorted(allItems);
+
+    Widget body;
+    if (_loading && _records.isEmpty) {
+      body = const _MonthlyLoadingView();
+    } else if (_loadError != null && _records.isEmpty) {
+      body = _centerScrollBody(
+        _MonthlyLoadErrorState(onRetry: _refreshMonthlyPlateView),
+      );
+    } else if (_records.isEmpty) {
+      body = _centerScrollBody(_MonthlyEmptyState(onAdd: _openAddDialog));
+    } else if (visibleItems.isEmpty) {
+      body = _centerScrollBody(
+        _MonthlyNoResultState(onReset: () {
+          _searchController.clear();
+          setState(() {
+            _query = '';
+            _filter = _MonthlyFilter.all;
+            _sort = _MonthlySort.updatedDesc;
+          });
+        }),
+      );
+    } else {
+      body = _refreshableBody(
+        child: ListView.separated(
+          controller: _scrollController,
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
+          itemCount: visibleItems.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 10),
+          itemBuilder: (context, index) {
+            final item = visibleItems[index];
+            return _MonthlyPlateOpsRow(
+              item: item,
+              selected: _selectedDocId == item.docId,
+              onTap: () => _openDetailSheet(item),
+              onPay: () => _openPaymentDialog(item),
+            );
+          },
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: _opsCanvas,
-      body: StreamBuilder<List<PlateStatusRecord>>(
-        stream: context.read<PlateRepository>().watchMonthlyPlateStatuses(area: currentArea),
-        builder: (context, snapshot) {
-          final loading = snapshot.connectionState == ConnectionState.waiting;
-          final records = snapshot.data ?? const <PlateStatusRecord>[];
-          final allItems = _toItems(records);
-          final summary = _summaryOf(allItems);
-          final visibleItems = _filteredSorted(allItems);
-
-          return Column(
-            children: [
-              _MonthlyOpsHeader(
-                area: currentArea,
-                summary: summary,
-                onAdd: _openAddDialog,
-              ),
-              _MonthlyCommandBar(
-                controller: _searchController,
-                query: _query,
-                filter: _filter,
-                sort: _sort,
-                totalCount: summary.total,
-                visibleCount: visibleItems.length,
-                onQueryChanged: (value) => setState(() => _query = value.trim()),
-                onQueryClear: () {
-                  _searchController.clear();
-                  setState(() => _query = '');
-                },
-                onFilterChanged: (value) => setState(() => _filter = value),
-                onSortChanged: (value) => setState(() => _sort = value),
-              ),
-              Expanded(
-                child: loading
-                    ? const _MonthlyLoadingView()
-                    : records.isEmpty
-                        ? _MonthlyEmptyState(onAdd: _openAddDialog)
-                        : visibleItems.isEmpty
-                            ? _MonthlyNoResultState(onReset: () {
-                                _searchController.clear();
-                                setState(() {
-                                  _query = '';
-                                  _filter = _MonthlyFilter.all;
-                                  _sort = _MonthlySort.updatedDesc;
-                                });
-                              })
-                            : ListView.separated(
-                                controller: _scrollController,
-                                padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
-                                itemCount: visibleItems.length,
-                                separatorBuilder: (_, __) => const SizedBox(height: 10),
-                                itemBuilder: (context, index) {
-                                  final item = visibleItems[index];
-                                  return _MonthlyPlateOpsRow(
-                                    item: item,
-                                    selected: _selectedDocId == item.docId,
-                                    onTap: () => _openDetailSheet(item),
-                                    onPay: () => _openPaymentDialog(item),
-                                  );
-                                },
-                              ),
-              ),
-            ],
-          );
-        },
+      body: Column(
+        children: [
+          _MonthlyOpsHeader(
+            area: currentArea,
+            summary: summary,
+            onAdd: _openAddDialog,
+          ),
+          _MonthlyCommandBar(
+            controller: _searchController,
+            query: _query,
+            filter: _filter,
+            sort: _sort,
+            totalCount: summary.total,
+            visibleCount: visibleItems.length,
+            onQueryChanged: (value) => setState(() => _query = value.trim()),
+            onQueryClear: () {
+              _searchController.clear();
+              setState(() => _query = '');
+            },
+            onFilterChanged: (value) => setState(() => _filter = value),
+            onSortChanged: (value) => setState(() => _sort = value),
+          ),
+          Expanded(child: body),
+        ],
       ),
     );
   }
 }
+
 
 class _MonthlySummary {
   const _MonthlySummary({
@@ -411,7 +573,6 @@ enum _MonthlyStatus { active, expiringSoon, expired, unknown }
 class _MonthlyPlateVM {
   const _MonthlyPlateVM({
     required this.docId,
-    required this.record,
     required this.data,
     required this.plateNumber,
     required this.countType,
@@ -430,7 +591,6 @@ class _MonthlyPlateVM {
   });
 
   final String docId;
-  final PlateStatusRecord record;
   final Map<String, dynamic> data;
   final String plateNumber;
   final String countType;
@@ -1153,7 +1313,14 @@ class _MonthlyDetailPanel extends StatelessWidget {
                           _KV(label: '정산명', value: item.countType.isEmpty ? '-' : item.countType),
                           _KV(label: '주차 타입', value: item.regularType.isEmpty ? '-' : item.regularType),
                           _KV(label: '요금', value: '₩${won.format(item.amount)}'),
-                          _KV(label: '기간 단위', value: '${item.duration}${item.periodUnit}'),
+                          _KV(
+                            label: '기간 단위',
+                            value: MonthlyParkingOptions.durationLabel(
+                              regularType: item.regularType,
+                              duration: item.duration,
+                              periodUnit: item.periodUnit,
+                            ),
+                          ),
                           _KV(label: '사용 기간', value: '${item.startDate} ~ ${item.endDate}'),
                           _KV(label: '상태 메모', value: item.customStatus.trim().isEmpty ? '-' : item.customStatus),
                         ],
@@ -1364,11 +1531,24 @@ class _PaymentHistoryRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final amount = _amountValue(payment['amount']);
+    final amount = _amountValue(payment['paymentAmount'] ?? payment['amount']);
     final paidBy = _textValue(payment['paidBy']);
     final note = _textValue(payment['note'], fallback: '');
     final extended = payment['extended'] == true || payment['extended']?.toString() == 'true';
     final paidAt = _paidAt(payment['paidAt']);
+    final regularType = _textValue(payment['regularType'], fallback: '');
+    final periodUnit = _textValue(payment['periodUnit'], fallback: '');
+    final duration = _amountValue(payment['durationValue'] ?? payment['regularDurationValue']);
+    final startDate = _textValue(payment['startDate'], fallback: '');
+    final endDate = _textValue(payment['endDate'], fallback: '');
+    final durationText = duration > 0
+        ? MonthlyParkingOptions.durationLabel(
+            regularType: regularType,
+            duration: duration,
+            periodUnit: periodUnit,
+          )
+        : '';
+    final hasRange = startDate.isNotEmpty && endDate.isNotEmpty;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 9),
@@ -1405,6 +1585,28 @@ class _PaymentHistoryRow extends StatelessWidget {
               fontSize: 13,
             ),
           ),
+          if (regularType.isNotEmpty || durationText.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              [regularType, durationText].where((e) => e.trim().isNotEmpty).join(' · '),
+              style: const TextStyle(
+                color: _opsSlate,
+                fontWeight: FontWeight.w900,
+                fontSize: 13,
+              ),
+            ),
+          ],
+          if (hasRange) ...[
+            const SizedBox(height: 5),
+            Text(
+              '적용 기간 $startDate ~ $endDate',
+              style: const TextStyle(
+                color: _opsGreen,
+                fontWeight: FontWeight.w900,
+                fontSize: 13,
+              ),
+            ),
+          ],
           if (note.isNotEmpty) ...[
             const SizedBox(height: 6),
             Text(
@@ -1483,6 +1685,44 @@ class _MonthlyDeleteDialog extends StatelessWidget {
           child: const Text('삭제'),
         ),
       ],
+    );
+  }
+}
+
+class _MonthlyLoadErrorState extends StatelessWidget {
+  const _MonthlyLoadErrorState({required this.onRetry});
+
+  final Future<void> Function() onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.error_outline_rounded, color: _opsRed, size: 48),
+          const SizedBox(height: 12),
+          const Text(
+            '목록을 불러오지 못했습니다.',
+            style: TextStyle(color: _opsInk, fontWeight: FontWeight.w900, fontSize: 17),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            '아래로 당기거나 다시 시도 버튼을 눌러 갱신하세요.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: _opsMuted, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 16),
+          OutlinedButton.icon(
+            onPressed: () {
+              onRetry();
+            },
+            icon: const Icon(Icons.refresh),
+            label: const Text('다시 시도'),
+          ),
+        ],
+      ),
     );
   }
 }

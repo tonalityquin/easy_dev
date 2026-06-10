@@ -310,17 +310,13 @@ class InputPlateController {
       return;
     }
 
-    final String ct = (selectedBill ?? '').trim().isNotEmpty
-        ? (selectedBill ?? '').trim()
-        : countTypeController.text.trim();
-
-    await plateRepo.upsertMonthlyMemoAndStatus(
+    await plateRepo.setMonthlyMemoAndStatusOnly(
       plateNumber: plateNumber,
       area: area,
       createdBy: userName,
       customStatus: memo,
       statusList: statuses,
-      countType: ct.isNotEmpty ? ct : null,
+      skipIfDocMissing: true,
     );
   }
 

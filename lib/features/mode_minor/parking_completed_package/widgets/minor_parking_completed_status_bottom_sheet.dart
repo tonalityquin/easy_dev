@@ -671,7 +671,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
         addAmount: _plate.addAmount ?? 0,
         billingType: _plate.billingType ?? '변동',
         regularAmount: _plate.regularAmount,
-        regularDurationHours: _plate.regularDurationHours,
+        regularDurationValue: _plate.regularDurationValue,
       );
       if (result == null) return;
 

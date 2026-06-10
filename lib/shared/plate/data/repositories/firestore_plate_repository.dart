@@ -16,6 +16,8 @@ import '../../domain/services/plate_status_service.dart';
 import '../../domain/services/plate_write_service.dart';
 const String _kLocSep = ' - ';
 const String _kLocUnknown = '미지정';
+const String _monthlyPlateStatusCollection = 'monthly_plate_status';
+const String _monthlyPlateStatusViewCollection = 'monthly_plate_status_view';
 
 Map<String, dynamic> _locationToMap(String display) {
   final raw = display.trim();
@@ -202,6 +204,221 @@ class FirestorePlateRepository implements PlateRepository {
     final safeArea = _safeArea(area);
     final canonical = _canonicalPlateNumber(plateNumber);
     return '${canonical}_$safeArea';
+  }
+
+  int _intValue(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString().trim() ?? '') ?? 0;
+  }
+
+  String _textValue(dynamic value) {
+    return value?.toString().trim() ?? '';
+  }
+
+  List<String> _stringListValue(dynamic value) {
+    if (value is! List) return const <String>[];
+    return value.map((e) => e.toString()).toList(growable: false);
+  }
+
+  int _paymentCountFromData(Map<String, dynamic> data) {
+    final explicit = data['paymentCount'];
+    if (explicit != null) return _intValue(explicit);
+    final history = data['payment_history'];
+    if (history is List) return history.length;
+    return 0;
+  }
+
+  bool _hasMonthlyMemo(Map<String, dynamic> data) {
+    final customStatus = _textValue(data['customStatus']);
+    if (customStatus.isNotEmpty && customStatus != '없음') return true;
+    final statusList = data['statusList'];
+    return statusList is List && statusList.isNotEmpty;
+  }
+
+  bool _isEmptyMonthlyPayload({
+    required String customStatus,
+    required List<String> statusList,
+    required String countType,
+    required int regularAmount,
+    required int regularDurationValue,
+    required String regularType,
+    required String startDate,
+    required String endDate,
+    required String periodUnit,
+    String? specialNote,
+    bool? isExtended,
+  }) {
+    return customStatus.trim().isEmpty &&
+        statusList.isEmpty &&
+        countType.trim().isEmpty &&
+        regularAmount == 0 &&
+        regularDurationValue == 0 &&
+        regularType.trim().isEmpty &&
+        startDate.trim().isEmpty &&
+        endDate.trim().isEmpty &&
+        periodUnit.trim().isEmpty &&
+        (specialNote ?? '').trim().isEmpty &&
+        isExtended == null;
+  }
+
+  Map<String, dynamic> _monthlyViewItemFromData({
+    required String docId,
+    required Map<String, dynamic> data,
+    Object? updatedAt,
+  }) {
+    final plateNumber = _textValue(data['plateNumber']).isNotEmpty
+        ? _textValue(data['plateNumber'])
+        : _fallbackPlateNumberFromDocId(docId);
+    final duration = _intValue(data['regularDurationValue'] ?? data['regularDurationHours']);
+    final statusList = _stringListValue(data['statusList']);
+    final merged = <String, dynamic>{
+      'docId': docId,
+      'plateNumber': plateNumber,
+      'area': _textValue(data['area']),
+      'region': _textValue(data['region']).isEmpty ? '전국' : _textValue(data['region']),
+      'type': '정기',
+      'countType': _textValue(data['countType']),
+      'regularType': _textValue(data['regularType']),
+      'regularAmount': _intValue(data['regularAmount']),
+      'regularDurationValue': duration,
+      'regularDurationHours': duration,
+      'periodUnit': _textValue(data['periodUnit']),
+      'startDate': _textValue(data['startDate']),
+      'endDate': _textValue(data['endDate']),
+      'customStatus': _textValue(data['customStatus']),
+      'statusList': statusList,
+      'hasMemo': _hasMonthlyMemo(data),
+      'paymentCount': _paymentCountFromData(data),
+      'updatedAt': updatedAt ?? data['updatedAt'] ?? FieldValue.serverTimestamp(),
+    };
+    return merged;
+  }
+
+  Map<String, dynamic> _monthlyViewItemFromWritePayload({
+    required String docId,
+    required String plateNumber,
+    required String area,
+    required String region,
+    required String customStatus,
+    required List<String> statusList,
+    required String countType,
+    required int regularAmount,
+    required int regularDurationValue,
+    required String regularType,
+    required String startDate,
+    required String endDate,
+    required String periodUnit,
+    required int paymentCount,
+  }) {
+    return <String, dynamic>{
+      'docId': docId,
+      'plateNumber': plateNumber,
+      'area': area,
+      'region': region.trim().isEmpty ? '전국' : region.trim(),
+      'type': '정기',
+      'countType': countType,
+      'regularType': regularType,
+      'regularAmount': regularAmount,
+      'regularDurationValue': regularDurationValue,
+      'regularDurationHours': regularDurationValue,
+      'periodUnit': periodUnit,
+      'startDate': startDate,
+      'endDate': endDate,
+      'customStatus': customStatus.trim(),
+      'statusList': statusList,
+      'hasMemo': customStatus.trim().isNotEmpty || statusList.isNotEmpty,
+      'paymentCount': paymentCount,
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+  }
+
+  Future<void> _mergeMonthlyViewItem({
+    required String area,
+    required String docId,
+    required Map<String, dynamic> item,
+  }) {
+    final safeArea = area.trim();
+    if (safeArea.isEmpty || docId.trim().isEmpty) return Future<void>.value();
+    return _firestore.collection(_monthlyPlateStatusViewCollection).doc(safeArea).set(
+      <String, dynamic>{
+        'area': safeArea,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'items': <String, dynamic>{
+          docId: item,
+        },
+      },
+      SetOptions(merge: true),
+    );
+  }
+
+  Future<void> _removeMonthlyViewItem({
+    required String area,
+    required String docId,
+  }) {
+    final safeArea = area.trim();
+    if (safeArea.isEmpty || docId.trim().isEmpty) return Future<void>.value();
+    return _firestore.collection(_monthlyPlateStatusViewCollection).doc(safeArea).set(
+      <String, dynamic>{
+        'area': safeArea,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'items': <String, dynamic>{
+          docId: FieldValue.delete(),
+        },
+      },
+      SetOptions(merge: true),
+    );
+  }
+
+  Future<void> _rebuildMonthlyViewFromQuery({
+    required String area,
+    required List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+  }) async {
+    final safeArea = area.trim();
+    if (safeArea.isEmpty) return;
+    final items = <String, dynamic>{};
+    for (final doc in docs) {
+      final data = doc.data();
+      items[doc.id] = _monthlyViewItemFromData(
+        docId: doc.id,
+        data: data,
+        updatedAt: data['updatedAt'],
+      );
+    }
+    await _firestore.collection(_monthlyPlateStatusViewCollection).doc(safeArea).set(
+      <String, dynamic>{
+        'area': safeArea,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'items': items,
+      },
+      SetOptions(merge: true),
+    );
+  }
+
+  Future<void> _syncMonthlyViewItemFromSource({
+    required String plateNumber,
+    required String area,
+  }) async {
+    final safeArea = area.trim();
+    if (safeArea.isEmpty) return;
+    final canonicalPlate = _canonicalPlateNumber(plateNumber);
+    final docId = _plateDocId(canonicalPlate, safeArea);
+    final doc = await _firestore.collection(_monthlyPlateStatusCollection).doc(docId).get();
+    if (!doc.exists) {
+      await _removeMonthlyViewItem(area: safeArea, docId: docId);
+      return;
+    }
+    final data = doc.data();
+    if (data == null) return;
+    await _mergeMonthlyViewItem(
+      area: safeArea,
+      docId: docId,
+      item: _monthlyViewItemFromData(
+        docId: docId,
+        data: data,
+        updatedAt: data['updatedAt'],
+      ),
+    );
   }
 
   Future<void> _showMonthlyFirebaseDebug({
@@ -819,6 +1036,7 @@ class FirestorePlateRepository implements PlateRepository {
         statusList: statusList,
         countType: countType,
       );
+      await _syncMonthlyViewItemFromSource(plateNumber: plateNumber, area: area);
     } on FirebaseException catch (e, st) {
       await _showMonthlyFirebaseDebug(
         operation: 'monthly.upsertMonthlyMemoAndStatus',
@@ -895,6 +1113,7 @@ class FirestorePlateRepository implements PlateRepository {
         plateNumber: plateNumber,
         area: area,
       );
+      await _syncMonthlyViewItemFromSource(plateNumber: plateNumber, area: area);
     } on FirebaseException catch (e, st) {
       await _showMonthlyFirebaseDebug(
         operation: 'monthly.clearMonthlyMemoAndStatus',
@@ -1065,6 +1284,248 @@ class FirestorePlateRepository implements PlateRepository {
   }
 
   @override
+  Future<List<Map<String, dynamic>>> fetchMonthlyPlateStatusView({
+    required String area,
+  }) async {
+    final safeArea = area.trim();
+    if (safeArea.isEmpty) {
+      return const <Map<String, dynamic>>[];
+    }
+
+    try {
+      final doc = await _firestore
+          .collection(_monthlyPlateStatusViewCollection)
+          .doc(safeArea)
+          .get()
+          .timeout(const Duration(seconds: 10));
+      final data = doc.data() ?? const <String, dynamic>{};
+      final items = data['items'];
+      if (items is Map && items.isNotEmpty) {
+        final out = <Map<String, dynamic>>[];
+        for (final entry in items.entries) {
+          final value = entry.value;
+          if (value is! Map) continue;
+          final item = Map<String, dynamic>.from(value);
+          item['docId'] = item['docId']?.toString().trim().isNotEmpty == true
+              ? item['docId'].toString().trim()
+              : entry.key.toString();
+          item['plateNumber'] = item['plateNumber']?.toString().trim().isNotEmpty == true
+              ? item['plateNumber'].toString().trim()
+              : _fallbackPlateNumberFromDocId(item['docId'].toString());
+          item['area'] = item['area']?.toString().trim().isNotEmpty == true
+              ? item['area'].toString().trim()
+              : safeArea;
+          out.add(item);
+        }
+        out.sort((a, b) {
+          final av = _viewRowToDate(a['updatedAt'])?.millisecondsSinceEpoch ?? 0;
+          final bv = _viewRowToDate(b['updatedAt'])?.millisecondsSinceEpoch ?? 0;
+          return bv.compareTo(av);
+        });
+        return List<Map<String, dynamic>>.unmodifiable(out);
+      }
+
+      final source = await _firestore
+          .collection(_monthlyPlateStatusCollection)
+          .where('type', isEqualTo: '정기')
+          .where('area', isEqualTo: safeArea)
+          .orderBy('updatedAt', descending: true)
+          .get()
+          .timeout(const Duration(seconds: 10));
+      if (source.docs.isEmpty) {
+        return const <Map<String, dynamic>>[];
+      }
+      await _rebuildMonthlyViewFromQuery(area: safeArea, docs: source.docs);
+      return List<Map<String, dynamic>>.unmodifiable(
+        source.docs.map((doc) {
+          final data = Map<String, dynamic>.from(doc.data());
+          final item = _monthlyViewItemFromData(
+            docId: doc.id,
+            data: data,
+            updatedAt: data['updatedAt'],
+          );
+          item['area'] = safeArea;
+          return item;
+        }).toList(growable: false),
+      );
+    } on FirebaseException catch (e, st) {
+      await _showMonthlyFirebaseDebug(
+        operation: 'monthly.fetchMonthlyPlateStatusView',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': _monthlyPlateStatusViewCollection,
+          'sourceCollection': _monthlyPlateStatusCollection,
+          'area': safeArea,
+          'viewPath': '$_monthlyPlateStatusViewCollection/$safeArea',
+        },
+      );
+      throw MonthlyPlateStatusReadException(
+        'monthly_plate_status_view 조회에 실패했습니다.',
+        cause: e,
+      );
+    } on TimeoutException catch (e, st) {
+      await _showMonthlyFirebaseDebug(
+        operation: 'monthly.fetchMonthlyPlateStatusView.timeout',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': _monthlyPlateStatusViewCollection,
+          'sourceCollection': _monthlyPlateStatusCollection,
+          'area': safeArea,
+          'viewPath': '$_monthlyPlateStatusViewCollection/$safeArea',
+        },
+      );
+      throw MonthlyPlateStatusReadException(
+        'monthly_plate_status_view 조회 중 시간이 초과되었습니다.',
+        cause: e,
+      );
+    } catch (e, st) {
+      await _showMonthlyFirebaseDebug(
+        operation: 'monthly.fetchMonthlyPlateStatusView.unknown',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': _monthlyPlateStatusViewCollection,
+          'sourceCollection': _monthlyPlateStatusCollection,
+          'area': safeArea,
+          'viewPath': '$_monthlyPlateStatusViewCollection/$safeArea',
+        },
+      );
+      throw MonthlyPlateStatusReadException(
+        'monthly_plate_status_view 조회 중 알 수 없는 오류가 발생했습니다.',
+        cause: e,
+      );
+    }
+  }
+
+  @override
+  Future<MonthlyPlateViewRebuildResult> rebuildAllMonthlyPlateStatusViews() async {
+    try {
+      final source = await _firestore
+          .collection(_monthlyPlateStatusCollection)
+          .where('type', isEqualTo: '정기')
+          .get()
+          .timeout(const Duration(seconds: 30));
+
+      final grouped = <String, Map<String, dynamic>>{};
+      var skippedCount = 0;
+      var itemCount = 0;
+
+      for (final doc in source.docs) {
+        final data = Map<String, dynamic>.from(doc.data());
+        final area = _textValue(data['area']);
+        if (area.isEmpty) {
+          skippedCount++;
+          continue;
+        }
+        final item = _monthlyViewItemFromData(
+          docId: doc.id,
+          data: data,
+          updatedAt: data['updatedAt'],
+        );
+        item['area'] = area;
+        grouped.putIfAbsent(area, () => <String, dynamic>{})[doc.id] = item;
+        itemCount++;
+      }
+
+      final existingViews = await _firestore
+          .collection(_monthlyPlateStatusViewCollection)
+          .get()
+          .timeout(const Duration(seconds: 30));
+
+      WriteBatch batch = _firestore.batch();
+      var pendingWrites = 0;
+      var deletedViewCount = 0;
+
+      Future<void> commitIfFull() async {
+        if (pendingWrites < 450) return;
+        await batch.commit().timeout(const Duration(seconds: 30));
+        batch = _firestore.batch();
+        pendingWrites = 0;
+      }
+
+      for (final entry in grouped.entries) {
+        batch.set(
+          _firestore.collection(_monthlyPlateStatusViewCollection).doc(entry.key),
+          <String, dynamic>{
+            'area': entry.key,
+            'updatedAt': FieldValue.serverTimestamp(),
+            'totalCount': entry.value.length,
+            'items': entry.value,
+          },
+        );
+        pendingWrites++;
+        await commitIfFull();
+      }
+
+      for (final doc in existingViews.docs) {
+        if (grouped.containsKey(doc.id)) continue;
+        batch.delete(doc.reference);
+        pendingWrites++;
+        deletedViewCount++;
+        await commitIfFull();
+      }
+
+      if (pendingWrites > 0) {
+        await batch.commit().timeout(const Duration(seconds: 30));
+      }
+
+      return MonthlyPlateViewRebuildResult(
+        areaCount: grouped.length,
+        itemCount: itemCount,
+        skippedCount: skippedCount,
+        deletedViewCount: deletedViewCount,
+      );
+    } on FirebaseException catch (e, st) {
+      await _showMonthlyFirebaseDebug(
+        operation: 'monthly.rebuildAllMonthlyPlateStatusViews',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': _monthlyPlateStatusCollection,
+          'viewCollection': _monthlyPlateStatusViewCollection,
+          'query': 'where(type == 정기)',
+        },
+      );
+      throw MonthlyPlateStatusWriteException(
+        'monthly_plate_status_view 전체 재생성에 실패했습니다.',
+        cause: e,
+      );
+    } on TimeoutException catch (e, st) {
+      await _showMonthlyFirebaseDebug(
+        operation: 'monthly.rebuildAllMonthlyPlateStatusViews.timeout',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': _monthlyPlateStatusCollection,
+          'viewCollection': _monthlyPlateStatusViewCollection,
+          'query': 'where(type == 정기)',
+        },
+      );
+      throw MonthlyPlateStatusWriteException(
+        'monthly_plate_status_view 전체 재생성이 시간 초과되었습니다.',
+        cause: e,
+      );
+    } catch (e, st) {
+      await _showMonthlyFirebaseDebug(
+        operation: 'monthly.rebuildAllMonthlyPlateStatusViews.unknown',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': _monthlyPlateStatusCollection,
+          'viewCollection': _monthlyPlateStatusViewCollection,
+          'query': 'where(type == 정기)',
+        },
+      );
+      throw MonthlyPlateStatusWriteException(
+        'monthly_plate_status_view 전체 재생성 중 알 수 없는 오류가 발생했습니다.',
+        cause: e,
+      );
+    }
+  }
+
+  @override
   Future<void> deleteMonthlyPlateStatus({
     required String documentId,
   }) async {
@@ -1073,17 +1534,37 @@ class FirestorePlateRepository implements PlateRepository {
       return;
     }
 
+    final areaIndex = trimmed.lastIndexOf('_');
+    final area = areaIndex >= 0 && areaIndex + 1 < trimmed.length ? trimmed.substring(areaIndex + 1) : '';
+
     try {
-      await _firestore.collection('monthly_plate_status').doc(trimmed).delete();
+      final batch = _firestore.batch();
+      batch.delete(_firestore.collection(_monthlyPlateStatusCollection).doc(trimmed));
+      if (area.trim().isNotEmpty) {
+        batch.set(
+          _firestore.collection(_monthlyPlateStatusViewCollection).doc(area.trim()),
+          <String, dynamic>{
+            'area': area.trim(),
+            'updatedAt': FieldValue.serverTimestamp(),
+            'items': <String, dynamic>{
+              trimmed: FieldValue.delete(),
+            },
+          },
+          SetOptions(merge: true),
+        );
+      }
+      await batch.commit().timeout(const Duration(seconds: 10));
     } catch (e, st) {
       await _showMonthlyFirebaseDebug(
         operation: 'monthly.deleteMonthlyPlateStatus',
         error: e,
         stackTrace: st,
         details: <String, Object?>{
-          'collection': 'monthly_plate_status',
+          'collection': _monthlyPlateStatusCollection,
+          'viewCollection': _monthlyPlateStatusViewCollection,
           'docId': trimmed,
-          'writePath': 'monthly_plate_status/$trimmed delete',
+          'area': area,
+          'writePath': '$_monthlyPlateStatusCollection/$trimmed delete + $_monthlyPlateStatusViewCollection/$area items delete',
         },
       );
       rethrow;
@@ -1095,21 +1576,34 @@ class FirestorePlateRepository implements PlateRepository {
     required String plateNumber,
     required String area,
     required String paidBy,
-    required int amount,
+    required int paymentAmount,
     required String note,
     required bool extended,
+    required String regularType,
+    required String periodUnit,
+    required int durationValue,
     String? startDate,
     String? endDate,
     String? extendedBy,
   }) async {
-    final docId = _plateDocId(plateNumber, area);
-    final ref = _firestore.collection('monthly_plate_status').doc(docId);
+    final safeArea = area.trim();
+    final canonicalPlate = _canonicalPlateNumber(plateNumber);
+    final docId = _plateDocId(canonicalPlate, safeArea);
+    final ref = _firestore.collection(_monthlyPlateStatusCollection).doc(docId);
+    final viewRef = _firestore.collection(_monthlyPlateStatusViewCollection).doc(safeArea);
     final historyEntry = <String, dynamic>{
       'paidAt': DateTime.now().toIso8601String(),
       'paidBy': paidBy,
-      'amount': amount,
+      'amount': paymentAmount,
+      'paymentAmount': paymentAmount,
       'note': note,
       'extended': extended,
+      'regularType': regularType,
+      'periodUnit': periodUnit,
+      'durationValue': durationValue,
+      'regularDurationValue': durationValue,
+      if (startDate != null && startDate.trim().isNotEmpty) 'startDate': startDate.trim(),
+      if (endDate != null && endDate.trim().isNotEmpty) 'endDate': endDate.trim(),
     };
 
     final payload = <String, dynamic>{
@@ -1128,29 +1622,63 @@ class FirestorePlateRepository implements PlateRepository {
       payload['extendedBy'] = extendedBy ?? paidBy;
     }
 
-    final batch = _firestore.batch();
-    batch.set(ref, payload, SetOptions(merge: true));
-
     try {
-      await batch.commit();
+      await _firestore.runTransaction((tx) async {
+        final snap = await tx.get(ref).timeout(const Duration(seconds: 10));
+        final existing = snap.data() ?? <String, dynamic>{};
+        tx.update(ref, payload);
+
+        final viewData = Map<String, dynamic>.from(existing);
+        viewData['plateNumber'] = canonicalPlate;
+        viewData['area'] = safeArea;
+        viewData['paymentCount'] = _paymentCountFromData(existing) + 1;
+        viewData['updatedAt'] = FieldValue.serverTimestamp();
+        if (extended &&
+            startDate != null &&
+            startDate.trim().isNotEmpty &&
+            endDate != null &&
+            endDate.trim().isNotEmpty) {
+          viewData['startDate'] = startDate.trim();
+          viewData['endDate'] = endDate.trim();
+        }
+        tx.set(
+          viewRef,
+          <String, dynamic>{
+            'area': safeArea,
+            'updatedAt': FieldValue.serverTimestamp(),
+            'items': <String, dynamic>{
+              docId: _monthlyViewItemFromData(
+                docId: docId,
+                data: viewData,
+                updatedAt: FieldValue.serverTimestamp(),
+              ),
+            },
+          },
+          SetOptions(merge: true),
+        );
+      }).timeout(const Duration(seconds: 10));
     } catch (e, st) {
       await _showMonthlyFirebaseDebug(
         operation: 'monthly.recordMonthlyPaymentAndMaybeExtend',
         error: e,
         stackTrace: st,
         details: <String, Object?>{
-          'collection': 'monthly_plate_status',
+          'collection': _monthlyPlateStatusCollection,
+          'viewCollection': _monthlyPlateStatusViewCollection,
           'docId': docId,
-          'plateNumber': plateNumber,
-          'area': area,
+          'plateNumber': canonicalPlate,
+          'area': safeArea,
           'paidBy': paidBy,
-          'amount': amount,
+          'paymentAmount': paymentAmount,
           'note': note,
           'extended': extended,
+          'regularType': regularType,
+          'periodUnit': periodUnit,
+          'durationValue': durationValue,
           'startDate': startDate,
           'endDate': endDate,
           'extendedBy': extendedBy,
-          'writePath': 'monthly_plate_status/$docId batch.set merge',
+          'writePath': '$_monthlyPlateStatusCollection/$docId update + $_monthlyPlateStatusViewCollection/$safeArea items.$docId update',
           'fieldUpdates': payload.keys.toList(growable: false),
         },
       );
@@ -1166,32 +1694,60 @@ class FirestorePlateRepository implements PlateRepository {
     required String endDate,
     required String extendedBy,
   }) async {
-    final docId = _plateDocId(plateNumber, area);
+    final safeArea = area.trim();
+    final canonicalPlate = _canonicalPlateNumber(plateNumber);
+    final docId = _plateDocId(canonicalPlate, safeArea);
+    final ref = _firestore.collection(_monthlyPlateStatusCollection).doc(docId);
+    final viewRef = _firestore.collection(_monthlyPlateStatusViewCollection).doc(safeArea);
     try {
-      await _firestore.collection('monthly_plate_status').doc(docId).set(
-        <String, dynamic>{
+      await _firestore.runTransaction((tx) async {
+        final snap = await tx.get(ref).timeout(const Duration(seconds: 10));
+        final existing = snap.data() ?? <String, dynamic>{};
+        final payload = <String, dynamic>{
           'startDate': startDate,
           'endDate': endDate,
           'updatedAt': FieldValue.serverTimestamp(),
           'extendedAt': FieldValue.serverTimestamp(),
           'extendedBy': extendedBy,
-        },
-        SetOptions(merge: true),
-      );
+        };
+        tx.update(ref, payload);
+        final viewData = Map<String, dynamic>.from(existing);
+        viewData['plateNumber'] = canonicalPlate;
+        viewData['area'] = safeArea;
+        viewData['startDate'] = startDate;
+        viewData['endDate'] = endDate;
+        viewData['updatedAt'] = FieldValue.serverTimestamp();
+        tx.set(
+          viewRef,
+          <String, dynamic>{
+            'area': safeArea,
+            'updatedAt': FieldValue.serverTimestamp(),
+            'items': <String, dynamic>{
+              docId: _monthlyViewItemFromData(
+                docId: docId,
+                data: viewData,
+                updatedAt: FieldValue.serverTimestamp(),
+              ),
+            },
+          },
+          SetOptions(merge: true),
+        );
+      }).timeout(const Duration(seconds: 10));
     } catch (e, st) {
       await _showMonthlyFirebaseDebug(
         operation: 'monthly.extendMonthlyDateRange',
         error: e,
         stackTrace: st,
         details: <String, Object?>{
-          'collection': 'monthly_plate_status',
+          'collection': _monthlyPlateStatusCollection,
+          'viewCollection': _monthlyPlateStatusViewCollection,
           'docId': docId,
-          'plateNumber': plateNumber,
-          'area': area,
+          'plateNumber': canonicalPlate,
+          'area': safeArea,
           'startDate': startDate,
           'endDate': endDate,
           'extendedBy': extendedBy,
-          'writePath': 'monthly_plate_status/$docId set merge',
+          'writePath': '$_monthlyPlateStatusCollection/$docId update + $_monthlyPlateStatusViewCollection/$safeArea items.$docId update',
         },
       );
       rethrow;
@@ -1204,30 +1760,59 @@ class FirestorePlateRepository implements PlateRepository {
     required String area,
     required String clearedBy,
   }) async {
-    final docId = _plateDocId(plateNumber, area);
+    final safeArea = area.trim();
+    final canonicalPlate = _canonicalPlateNumber(plateNumber);
+    final docId = _plateDocId(canonicalPlate, safeArea);
+    final ref = _firestore.collection(_monthlyPlateStatusCollection).doc(docId);
+    final viewRef = _firestore.collection(_monthlyPlateStatusViewCollection).doc(safeArea);
     try {
-      await _firestore.collection('monthly_plate_status').doc(docId).set(
-        <String, dynamic>{
+      await _firestore.runTransaction((tx) async {
+        final snap = await tx.get(ref).timeout(const Duration(seconds: 10));
+        final existing = snap.data() ?? <String, dynamic>{};
+        final payload = <String, dynamic>{
           'customStatus': '',
           'statusList': <String>[],
           'updatedAt': FieldValue.serverTimestamp(),
           'clearedAt': FieldValue.serverTimestamp(),
           'clearedBy': clearedBy,
-        },
-        SetOptions(merge: true),
-      );
+        };
+        tx.update(ref, payload);
+        final viewData = Map<String, dynamic>.from(existing);
+        viewData['plateNumber'] = canonicalPlate;
+        viewData['area'] = safeArea;
+        viewData['customStatus'] = '';
+        viewData['statusList'] = <String>[];
+        viewData['hasMemo'] = false;
+        viewData['updatedAt'] = FieldValue.serverTimestamp();
+        tx.set(
+          viewRef,
+          <String, dynamic>{
+            'area': safeArea,
+            'updatedAt': FieldValue.serverTimestamp(),
+            'items': <String, dynamic>{
+              docId: _monthlyViewItemFromData(
+                docId: docId,
+                data: viewData,
+                updatedAt: FieldValue.serverTimestamp(),
+              ),
+            },
+          },
+          SetOptions(merge: true),
+        );
+      }).timeout(const Duration(seconds: 10));
     } catch (e, st) {
       await _showMonthlyFirebaseDebug(
         operation: 'monthly.clearMonthlyMemoAndStatusWithAudit',
         error: e,
         stackTrace: st,
         details: <String, Object?>{
-          'collection': 'monthly_plate_status',
+          'collection': _monthlyPlateStatusCollection,
+          'viewCollection': _monthlyPlateStatusViewCollection,
           'docId': docId,
-          'plateNumber': plateNumber,
-          'area': area,
+          'plateNumber': canonicalPlate,
+          'area': safeArea,
           'clearedBy': clearedBy,
-          'writePath': 'monthly_plate_status/$docId set merge',
+          'writePath': '$_monthlyPlateStatusCollection/$docId update + $_monthlyPlateStatusViewCollection/$safeArea items.$docId update',
         },
       );
       rethrow;
@@ -1380,7 +1965,7 @@ class FirestorePlateRepository implements PlateRepository {
     required List<String> statusList,
     required String countType,
     required int regularAmount,
-    required int regularDurationHours,
+    required int regularDurationValue,
     required String regularType,
     required String startDate,
     required String endDate,
@@ -1388,17 +1973,19 @@ class FirestorePlateRepository implements PlateRepository {
     String? specialNote,
     bool? isExtended,
   }) async {
+    final safeArea = area.trim();
+    final canonicalPlate = _canonicalPlateNumber(plateNumber);
+    final docId = _plateDocId(canonicalPlate, safeArea);
+    final ref = _firestore.collection(_monthlyPlateStatusCollection).doc(docId);
+    final viewRef = _firestore.collection(_monthlyPlateStatusViewCollection).doc(safeArea);
+
     try {
-      await _statusService.setMonthlyPlateStatus(
-        plateNumber: plateNumber,
-        area: area,
-        region: region,
-        createdBy: createdBy,
+      final emptyMonthly = _isEmptyMonthlyPayload(
         customStatus: customStatus,
         statusList: statusList,
         countType: countType,
         regularAmount: regularAmount,
-        regularDurationHours: regularDurationHours,
+        regularDurationValue: regularDurationValue,
         regularType: regularType,
         startDate: startDate,
         endDate: endDate,
@@ -1406,30 +1993,104 @@ class FirestorePlateRepository implements PlateRepository {
         specialNote: specialNote,
         isExtended: isExtended,
       );
+
+      await _firestore.runTransaction((tx) async {
+        final snap = await tx.get(ref).timeout(const Duration(seconds: 10));
+        final existing = snap.data() ?? <String, dynamic>{};
+
+        if (emptyMonthly) {
+          tx.delete(ref);
+          if (safeArea.isNotEmpty) {
+            tx.set(
+              viewRef,
+              <String, dynamic>{
+                'area': safeArea,
+                'updatedAt': FieldValue.serverTimestamp(),
+                'items': <String, dynamic>{
+                  docId: FieldValue.delete(),
+                },
+              },
+              SetOptions(merge: true),
+            );
+          }
+          return;
+        }
+
+        final base = <String, dynamic>{
+          'customStatus': customStatus.trim(),
+          'statusList': statusList,
+          'updatedAt': FieldValue.serverTimestamp(),
+          'createdBy': createdBy,
+          'type': '정기',
+          'countType': countType,
+          'regularAmount': regularAmount,
+          'regularDurationValue': regularDurationValue,
+          'regularDurationHours': regularDurationValue,
+          'regularType': regularType,
+          'startDate': startDate,
+          'endDate': endDate,
+          'periodUnit': periodUnit,
+          'area': safeArea,
+          'region': region.trim().isEmpty ? '전국' : region.trim(),
+          if (specialNote != null) 'specialNote': specialNote,
+          if (isExtended != null) 'isExtended': isExtended,
+        };
+
+        if (!snap.exists) base['createdAt'] = FieldValue.serverTimestamp();
+
+        tx.set(ref, base, SetOptions(merge: true));
+        tx.set(
+          viewRef,
+          <String, dynamic>{
+            'area': safeArea,
+            'updatedAt': FieldValue.serverTimestamp(),
+            'items': <String, dynamic>{
+              docId: _monthlyViewItemFromWritePayload(
+                docId: docId,
+                plateNumber: canonicalPlate,
+                area: safeArea,
+                region: region,
+                customStatus: customStatus,
+                statusList: statusList,
+                countType: countType,
+                regularAmount: regularAmount,
+                regularDurationValue: regularDurationValue,
+                regularType: regularType,
+                startDate: startDate,
+                endDate: endDate,
+                periodUnit: periodUnit,
+                paymentCount: _paymentCountFromData(existing),
+              ),
+            },
+          },
+          SetOptions(merge: true),
+        );
+      }).timeout(const Duration(seconds: 10));
     } on FirebaseException catch (e, st) {
       await _showMonthlyFirebaseDebug(
         operation: 'monthly.setMonthlyPlateStatus',
         error: e,
         stackTrace: st,
         details: <String, Object?>{
-          'collection': 'monthly_plate_status',
-          'docId': _plateDocId(plateNumber, area),
-          'plateNumber': plateNumber,
-          'area': area,
+          'collection': _monthlyPlateStatusCollection,
+          'viewCollection': _monthlyPlateStatusViewCollection,
+          'docId': docId,
+          'plateNumber': canonicalPlate,
+          'area': safeArea,
           'region': region,
           'createdBy': createdBy,
           'customStatus': customStatus,
           'statusList': statusList,
           'countType': countType,
           'regularAmount': regularAmount,
-          'regularDurationHours': regularDurationHours,
+          'regularDurationValue': regularDurationValue,
           'regularType': regularType,
           'startDate': startDate,
           'endDate': endDate,
           'periodUnit': periodUnit,
           'specialNote': specialNote,
           'isExtended': isExtended,
-          'writePath': 'PlateStatusService.setMonthlyPlateStatus',
+          'writePath': '$_monthlyPlateStatusCollection/$docId set + $_monthlyPlateStatusViewCollection/$safeArea items.$docId set',
         },
       );
       throw MonthlyPlateStatusWriteException(
@@ -1442,24 +2103,25 @@ class FirestorePlateRepository implements PlateRepository {
         error: e,
         stackTrace: st,
         details: <String, Object?>{
-          'collection': 'monthly_plate_status',
-          'docId': _plateDocId(plateNumber, area),
-          'plateNumber': plateNumber,
-          'area': area,
+          'collection': _monthlyPlateStatusCollection,
+          'viewCollection': _monthlyPlateStatusViewCollection,
+          'docId': docId,
+          'plateNumber': canonicalPlate,
+          'area': safeArea,
           'region': region,
           'createdBy': createdBy,
           'customStatus': customStatus,
           'statusList': statusList,
           'countType': countType,
           'regularAmount': regularAmount,
-          'regularDurationHours': regularDurationHours,
+          'regularDurationValue': regularDurationValue,
           'regularType': regularType,
           'startDate': startDate,
           'endDate': endDate,
           'periodUnit': periodUnit,
           'specialNote': specialNote,
           'isExtended': isExtended,
-          'writePath': 'PlateStatusService.setMonthlyPlateStatus',
+          'writePath': '$_monthlyPlateStatusCollection/$docId set + $_monthlyPlateStatusViewCollection/$safeArea items.$docId set',
         },
       );
       throw MonthlyPlateStatusWriteException(
@@ -1472,24 +2134,25 @@ class FirestorePlateRepository implements PlateRepository {
         error: e,
         stackTrace: st,
         details: <String, Object?>{
-          'collection': 'monthly_plate_status',
-          'docId': _plateDocId(plateNumber, area),
-          'plateNumber': plateNumber,
-          'area': area,
+          'collection': _monthlyPlateStatusCollection,
+          'viewCollection': _monthlyPlateStatusViewCollection,
+          'docId': docId,
+          'plateNumber': canonicalPlate,
+          'area': safeArea,
           'region': region,
           'createdBy': createdBy,
           'customStatus': customStatus,
           'statusList': statusList,
           'countType': countType,
           'regularAmount': regularAmount,
-          'regularDurationHours': regularDurationHours,
+          'regularDurationValue': regularDurationValue,
           'regularType': regularType,
           'startDate': startDate,
           'endDate': endDate,
           'periodUnit': periodUnit,
           'specialNote': specialNote,
           'isExtended': isExtended,
-          'writePath': 'PlateStatusService.setMonthlyPlateStatus',
+          'writePath': '$_monthlyPlateStatusCollection/$docId set + $_monthlyPlateStatusViewCollection/$safeArea items.$docId set',
         },
       );
       throw MonthlyPlateStatusWriteException(
@@ -1517,6 +2180,7 @@ class FirestorePlateRepository implements PlateRepository {
         statusList: statusList,
         skipIfDocMissing: skipIfDocMissing,
       );
+      await _syncMonthlyViewItemFromSource(plateNumber: plateNumber, area: area);
     } on FirebaseException catch (e, st) {
       await _showMonthlyFirebaseDebug(
         operation: 'monthly.setMonthlyMemoAndStatusOnly',

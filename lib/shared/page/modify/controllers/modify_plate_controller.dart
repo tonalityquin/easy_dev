@@ -167,7 +167,7 @@ class ModifyPlateController {
     selectedAddStandard = plate.addStandard ?? 0;
     selectedAddAmount = plate.addAmount ?? 0;
     selectedRegularAmount = plate.regularAmount ?? 0;
-    selectedRegularDurationHours = plate.regularDurationHours ?? 0;
+    selectedRegularDurationHours = plate.regularDurationValue ?? 0;
 
     isLocationSelected = locationController.text.isNotEmpty;
     fetchedCustomStatus = plate.customStatus;
@@ -210,7 +210,7 @@ class ModifyPlateController {
       selectedBillType = '고정';
 
       selectedRegularAmount = bill.regularAmount;
-      selectedRegularDurationHours = bill.regularDurationHours;
+      selectedRegularDurationHours = bill.regularDurationValue;
 
       selectedBasicAmount = 0;
       selectedBasicStandard = 0;
@@ -355,7 +355,7 @@ class ModifyPlateController {
         plateNumber: plateNumber,
         region: dropdownValue,
         regularAmount: selectedRegularAmount,
-        regularDurationHours: selectedRegularDurationHours,
+        regularDurationValue: selectedRegularDurationHours,
         requestTime: plate.requestTime,
         selectedBy: null,
         statusList: selectedStatuses,

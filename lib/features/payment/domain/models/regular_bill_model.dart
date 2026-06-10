@@ -6,7 +6,7 @@ class RegularBillModel {
   final String countType;
   final String area;
   final int regularAmount;
-  final int regularDurationHours;
+  final int regularDurationValue;
   final String regularType;
   final BillType type;
 
@@ -15,10 +15,19 @@ class RegularBillModel {
     required this.countType,
     required this.area,
     required this.regularAmount,
-    required this.regularDurationHours,
+    int? regularDurationValue,
+    int? regularDurationHours,
     required this.regularType,
     this.type = BillType.regular,
-  });
+  }) : regularDurationValue = regularDurationValue ?? regularDurationHours ?? 0;
+
+  int get regularDurationHours => regularDurationValue;
+
+  static int _readInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? 0;
+  }
 
   factory RegularBillModel.fromMap(String id, Map<String, dynamic> data) {
     try {
@@ -26,12 +35,8 @@ class RegularBillModel {
         id: id,
         countType: data['CountType'] ?? '',
         area: data['area'] ?? '',
-        regularAmount: (data['regularAmount'] is int)
-            ? data['regularAmount']
-            : int.tryParse(data['regularAmount'].toString()) ?? 0,
-        regularDurationHours: (data['regularDurationHours'] is int)
-            ? data['regularDurationHours']
-            : int.tryParse(data['regularDurationHours'].toString()) ?? 0,
+        regularAmount: _readInt(data['regularAmount']),
+        regularDurationValue: _readInt(data['regularDurationValue'] ?? data['regularDurationHours']),
         regularType: data['regularType'] ?? '',
         type: billTypeFromString(data['type']),
       );
@@ -46,7 +51,8 @@ class RegularBillModel {
       'CountType': countType,
       'area': area,
       'regularAmount': regularAmount,
-      'regularDurationHours': regularDurationHours,
+      'regularDurationValue': regularDurationValue,
+      'regularDurationHours': regularDurationValue,
       'regularType': regularType,
       'type': billTypeToString(type),
     };
@@ -58,7 +64,8 @@ class RegularBillModel {
       'CountType': countType,
       'area': area,
       'regularAmount': regularAmount,
-      'regularDurationHours': regularDurationHours,
+      'regularDurationValue': regularDurationValue,
+      'regularDurationHours': regularDurationValue,
       'regularType': regularType,
       'type': billTypeToString(type),
     };
@@ -69,8 +76,8 @@ class RegularBillModel {
       id: data['id'] ?? '',
       countType: data['CountType'] ?? '',
       area: data['area'] ?? '',
-      regularAmount: data['regularAmount'] ?? 0,
-      regularDurationHours: data['regularDurationHours'] ?? 0,
+      regularAmount: _readInt(data['regularAmount']),
+      regularDurationValue: _readInt(data['regularDurationValue'] ?? data['regularDurationHours']),
       regularType: data['regularType'] ?? '',
       type: billTypeFromString(data['type']),
     );
@@ -78,6 +85,6 @@ class RegularBillModel {
 
   @override
   String toString() {
-    return 'RegularBillModel(id: $id, type: ${billTypeToString(type)}, countType: $countType, area: $area, regularType: $regularType, regularAmount: $regularAmount, regularDurationHours: $regularDurationHours)';
+    return 'RegularBillModel(id: $id, type: ${billTypeToString(type)}, countType: $countType, area: $area, regularType: $regularType, regularAmount: $regularAmount, regularDurationValue: $regularDurationValue)';
   }
 }

@@ -227,7 +227,7 @@ class _BillManagementState extends State<BillManagement> {
                       children: [
                         OpsInfoPill(text: bill.regularType.isEmpty ? '유형 미지정' : bill.regularType, icon: Icons.local_parking_rounded),
                         OpsInfoPill(text: '₩${won.format(bill.regularAmount)}', icon: Icons.payments_rounded),
-                        OpsInfoPill(text: '${bill.regularDurationHours}시간', icon: Icons.schedule_rounded),
+                        OpsInfoPill(text: '기간값 ${bill.regularDurationValue}', icon: Icons.schedule_rounded),
                       ],
                     ),
                   ],
@@ -317,7 +317,7 @@ class _BillManagementState extends State<BillManagement> {
             ? generalBills.where((bill) => _matchesQuery(bill.countType, bill.area, '${bill.basicStandard} ${bill.basicAmount} ${bill.addStandard} ${bill.addAmount}')).toList()
             : <BillModel>[];
         final visibleRegular = (_typeFilter == null || _typeFilter == BillType.regular)
-            ? regularBills.where((bill) => _matchesQuery(bill.countType, bill.area, '${bill.regularType} ${bill.regularAmount} ${bill.regularDurationHours}')).toList()
+            ? regularBills.where((bill) => _matchesQuery(bill.countType, bill.area, '${bill.regularType} ${bill.regularAmount} ${bill.regularDurationValue}')).toList()
             : <RegularBillModel>[];
         final total = generalBills.length + regularBills.length;
         final visible = visibleGeneral.length + visibleRegular.length;

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../controllers/monthly_plate_controller.dart';
+import '../../domain/monthly_parking_options.dart';
 import '../widgets/monthly_animated_action_button.dart';
 import '../widgets/monthly_bottom_navigation.dart';
 import 'monthly_plate_payment_bottom_sheet.dart';
@@ -46,7 +47,7 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
   final TextEditingController _endDateController = TextEditingController();
 
   String? _selectedRegularType;
-  String _selectedPeriodUnit = '월';
+  String _selectedPeriodUnit = MonthlyParkingOptions.defaultPeriodUnit(MonthlyParkingOptions.monthly) ?? '월';
   late VoidCallback _backListener;
 
   @override
@@ -92,12 +93,16 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
     controller.dropdownValue = (data['region'] ?? '전국').toString();
     _regularNameController.text = (data['countType'] ?? '').toString();
     _regularAmountController.text = (data['regularAmount'] ?? '').toString();
-    _regularDurationController.text = (data['regularDurationHours'] ?? '').toString();
+    controller.paymentAmountController.text = (data['regularAmount'] ?? '').toString();
+    _regularDurationController.text = (data['regularDurationValue'] ?? data['regularDurationHours'] ?? '').toString();
     _startDateController.text = (data['startDate'] ?? '').toString();
     _endDateController.text = (data['endDate'] ?? '').toString();
 
-    _selectedPeriodUnit = (data['periodUnit'] ?? '월').toString();
-    _selectedRegularType = data['regularType']?.toString();
+    _selectedRegularType = MonthlyParkingOptions.normalizeRegularType(data['regularType']?.toString());
+    _selectedPeriodUnit = MonthlyParkingOptions.resolvePeriodUnit(
+      regularType: _selectedRegularType,
+      periodUnit: data['periodUnit']?.toString(),
+    );
     controller.selectedPeriodUnit = _selectedPeriodUnit;
     controller.selectedRegularType = _selectedRegularType;
     controller.customStatusController.text = (data['customStatus'] ?? '').toString();
@@ -375,16 +380,14 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
                               durationController: _regularDurationController,
                               selectedType: _selectedRegularType,
                               onTypeChanged: (val) => setState(() {
-                                _selectedRegularType = val;
-                                controller.selectedRegularType = val;
+                                controller.applyRegularType(val);
+                                _selectedRegularType = controller.selectedRegularType;
+                                _selectedPeriodUnit = controller.selectedPeriodUnit;
                               }),
                               selectedPeriodUnit: _selectedPeriodUnit,
                               onPeriodUnitChanged: (val) {
-                                if (val == null) return;
                                 setState(() {
-                                  controller.selectedPeriodUnit = val;
-                                  _selectedPeriodUnit = val;
-                                  controller.updateEndDateFromDuration();
+                                  _selectedPeriodUnit = controller.selectedPeriodUnit;
                                 });
                               },
                               onDurationChanged: (_) {
@@ -400,6 +403,7 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
                               endDateController: _endDateController,
                               periodUnit: _selectedPeriodUnit,
                               duration: int.tryParse(_regularDurationController.text) ?? 1,
+                              regularType: _selectedRegularType,
                             ),
                             const SizedBox(height: 12),
                             MonthlyCustomStatusSection(

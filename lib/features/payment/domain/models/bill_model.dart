@@ -34,7 +34,7 @@ class BillModel {
   final BillType type;
 
   final int? regularAmount;
-  final int? regularDurationHours;
+  final int? regularDurationValue;
 
   BillModel({
     required this.id,
@@ -45,9 +45,12 @@ class BillModel {
     this.basicAmount,
     this.basicStandard,
     this.regularAmount,
-    this.regularDurationHours,
+    int? regularDurationValue,
+    int? regularDurationHours,
     required this.type,
-  });
+  }) : regularDurationValue = regularDurationValue ?? regularDurationHours;
+
+  int? get regularDurationHours => regularDurationValue;
 
   factory BillModel.fromMap(String id, Map<String, dynamic> data) {
     try {
@@ -71,9 +74,9 @@ class BillModel {
         regularAmount: (data['regularAmount'] is int)
             ? data['regularAmount']
             : int.tryParse(data['regularAmount']?.toString() ?? ''),
-        regularDurationHours: (data['regularDurationHours'] is int)
-            ? data['regularDurationHours']
-            : int.tryParse(data['regularDurationHours']?.toString() ?? ''),
+        regularDurationValue: (data['regularDurationValue'] is int)
+            ? data['regularDurationValue']
+            : int.tryParse((data['regularDurationValue'] ?? data['regularDurationHours'])?.toString() ?? ''),
         type: type,
       );
     } catch (e) {
@@ -91,7 +94,8 @@ class BillModel {
       'basicAmount': basicAmount,
       'basicStandard': basicStandard,
       'regularAmount': regularAmount,
-      'regularDurationHours': regularDurationHours,
+      'regularDurationValue': regularDurationValue,
+      'regularDurationHours': regularDurationValue,
       'type': billTypeToString(type),
     };
   }
@@ -106,7 +110,8 @@ class BillModel {
       'basicAmount': basicAmount,
       'basicStandard': basicStandard,
       'regularAmount': regularAmount,
-      'regularDurationHours': regularDurationHours,
+      'regularDurationValue': regularDurationValue,
+      'regularDurationHours': regularDurationValue,
       'type': billTypeToString(type),
     };
   }
@@ -121,7 +126,7 @@ class BillModel {
       basicAmount: data['basicAmount'],
       basicStandard: data['basicStandard'],
       regularAmount: data['regularAmount'],
-      regularDurationHours: data['regularDurationHours'],
+      regularDurationValue: data['regularDurationValue'] ?? data['regularDurationHours'],
       type: billTypeFromString(data['type']),
     );
   }
@@ -130,6 +135,6 @@ class BillModel {
   String toString() {
     return 'BillModel(id: $id, type: ${billTypeToString(type)}, countType: $countType, area: $area, '
         'basicStandard: $basicStandard, basicAmount: $basicAmount, addStandard: $addStandard, addAmount: $addAmount, '
-        'regularAmount: $regularAmount, regularDurationHours: $regularDurationHours)';
+        'regularAmount: $regularAmount, regularDurationValue: $regularDurationValue)';
   }
 }

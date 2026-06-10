@@ -82,7 +82,7 @@ class BillReadService {
       final data = doc.data();
       final type = (data['type'] as String?) ?? '변동';
 
-      if (type == '고정') {
+      if (type == '정기' || type == '고정') {
         final item = await tryParse<RegularBillModel>(
           () => RegularBillModel.fromMap(doc.id, data),
           id: doc.id,

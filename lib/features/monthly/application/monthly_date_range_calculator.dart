@@ -1,5 +1,11 @@
+import '../domain/monthly_parking_options.dart';
+
 class MonthlyDateRangeCalculator {
   const MonthlyDateRangeCalculator._();
+
+  static DateTime normalizeDate(DateTime date) {
+    return DateTime(date.year, date.month, date.day);
+  }
 
   static DateTime addMonths(DateTime date, int months) {
     final year = date.year + ((date.month - 1 + months) ~/ 12);
@@ -9,37 +15,92 @@ class MonthlyDateRangeCalculator {
     return DateTime(year, month, day);
   }
 
+  static DateTime calculateMonthlyEndDate({
+    required DateTime startDate,
+    required int duration,
+  }) {
+    final normalizedStart = normalizeDate(startDate);
+    final safeDuration = duration <= 0 ? 1 : duration;
+    final anchor = addMonths(normalizedStart, safeDuration);
+    if (anchor.day != normalizedStart.day) return anchor;
+    return anchor.subtract(const Duration(days: 1));
+  }
+
+  static DateTime nextSaturdayOnOrAfter(DateTime date) {
+    final normalized = normalizeDate(date);
+    if (normalized.weekday == DateTime.saturday) return normalized;
+    final daysUntilSaturday = (DateTime.saturday - normalized.weekday + 7) % 7;
+    return normalized.add(Duration(days: daysUntilSaturday));
+  }
+
+  static DateTime normalizeStartDate({
+    required DateTime startDate,
+    String? regularType,
+  }) {
+    final normalized = normalizeDate(startDate);
+    if (MonthlyParkingOptions.isWeekendType(regularType)) {
+      return nextSaturdayOnOrAfter(normalized);
+    }
+    return normalized;
+  }
+
   static DateTime calculateEndDate({
     required DateTime startDate,
     required int duration,
     required String periodUnit,
+    String? regularType,
   }) {
-    if (duration <= 0) return startDate;
-    switch (periodUnit) {
+    final safeDuration = duration <= 0 ? 1 : duration;
+    final normalizedStart = normalizeStartDate(
+      startDate: startDate,
+      regularType: regularType,
+    );
+
+    if (MonthlyParkingOptions.isWeekendType(regularType)) {
+      return normalizedStart.add(Duration(days: ((safeDuration - 1) * 7) + 1));
+    }
+
+    switch (periodUnit.trim()) {
       case '일':
-        return startDate.add(Duration(days: duration - 1));
+        return normalizedStart.add(Duration(days: safeDuration - 1));
       case '주':
-        return startDate.add(Duration(days: duration * 7 - 1));
+        return normalizedStart.add(Duration(days: safeDuration * 7 - 1));
       case '월':
+        return calculateMonthlyEndDate(
+          startDate: normalizedStart,
+          duration: safeDuration,
+        );
       default:
-        return addMonths(startDate, duration).subtract(const Duration(days: 1));
+        throw ArgumentError('지원하지 않는 기간 단위입니다: $periodUnit');
     }
   }
 
-  static DateTime calculateNextStartDate(DateTime currentEndDate) {
-    return currentEndDate.add(const Duration(days: 1));
+  static DateTime calculateNextStartDate(
+    DateTime currentEndDate, {
+    String? regularType,
+  }) {
+    final next = normalizeDate(currentEndDate.add(const Duration(days: 1)));
+    if (MonthlyParkingOptions.isWeekendType(regularType)) {
+      return nextSaturdayOnOrAfter(next);
+    }
+    return next;
   }
 
   static DateTime calculateNextEndDate({
     required DateTime currentEndDate,
     required int duration,
     required String periodUnit,
+    String? regularType,
   }) {
-    final nextStart = calculateNextStartDate(currentEndDate);
+    final nextStart = calculateNextStartDate(
+      currentEndDate,
+      regularType: regularType,
+    );
     return calculateEndDate(
       startDate: nextStart,
       duration: duration,
       periodUnit: periodUnit,
+      regularType: regularType,
     );
   }
 
@@ -83,8 +144,8 @@ class MonthlyDateRangeCalculator {
   }
 
   static int daysBetweenInclusive(DateTime start, DateTime end) {
-    final s = DateTime(start.year, start.month, start.day);
-    final e = DateTime(end.year, end.month, end.day);
+    final s = normalizeDate(start);
+    final e = normalizeDate(end);
     return e.difference(s).inDays + 1;
   }
 }

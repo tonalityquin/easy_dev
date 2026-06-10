@@ -956,6 +956,12 @@ class _MonthlyParkingInfoCard extends StatelessWidget {
                           ),
                           const SizedBox(height: 7),
                           _MonthlyInfoRow(
+                            icon: Icons.confirmation_number_rounded,
+                            label: '상품',
+                            value: _monthlyProductSummary(record),
+                          ),
+                          const SizedBox(height: 7),
+                          _MonthlyInfoRow(
                             icon: Icons.payments_rounded,
                             label: '요금',
                             value: _formatWon(record.regularAmount),
@@ -1563,6 +1569,14 @@ String _monthlyPeriodSummary(PlateStatusRecord record) {
   final dday = _monthlyDdayText(record);
   if (range == '-') return '$status · $dday';
   return '$range · $status · $dday';
+}
+
+String _monthlyProductSummary(PlateStatusRecord record) {
+  final regularType = _emptyDash(record.regularType);
+  final durationValue = record.regularDurationValue ?? record.regularDurationHours;
+  final periodUnit = _emptyDash(record.periodUnit);
+  if (durationValue == null || durationValue <= 0 || periodUnit == '-') return regularType;
+  return '$regularType · $durationValue$periodUnit';
 }
 
 String _formatWon(int? value) {

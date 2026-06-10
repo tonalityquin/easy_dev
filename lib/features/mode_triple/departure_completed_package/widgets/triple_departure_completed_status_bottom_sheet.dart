@@ -400,7 +400,7 @@ Future<PlateModel?> _settlePlate({
     addAmount: plate.addAmount ?? 0,
     billingType: plate.billingType ?? '변동',
     regularAmount: plate.regularAmount,
-    regularDurationHours: plate.regularDurationHours,
+    regularDurationValue: plate.regularDurationValue,
   );
 
   if (result == null) return null;

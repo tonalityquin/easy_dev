@@ -260,7 +260,7 @@ class PlateCreationService {
         addStandard = billData['addStandard'] ?? 0;
         addAmount = billData['addAmount'] ?? 0;
         regularAmount = billData['regularAmount'];
-        regularDurationHours = billData['regularDurationHours'];
+        regularDurationHours = billData['regularDurationValue'] ?? billData['regularDurationHours'];
       } catch (e, st) {
         debugPrint("🔥 정산 정보 로드 실패: $e");
         if (kDebugMode) {
@@ -656,18 +656,19 @@ class PlateCreationService {
       'customStatus': memo,
       'statusList': statuses,
       'updatedAt': FieldValue.serverTimestamp(),
-      'createdBy': userName,
-      'area': area,
-      'type': '정기',
-      if (billingType != null && billingType.trim().isNotEmpty)
-        'countType': billingType.trim(),
+      'lastMemoUpdatedBy': userName,
+      'lastMemoSource': 'PlateCreationService.addPlate',
     };
 
     try {
-      await statusDocRef.set(payload, SetOptions(merge: true));
+      await _firestore.runTransaction((tx) async {
+        final statusSnap = await tx.get(statusDocRef);
+        if (!statusSnap.exists) return;
+        tx.set(statusDocRef, payload, SetOptions(merge: true));
+      });
     } on FirebaseException catch (e, st) {
       await DevFirebaseDebugDialog.show(
-        operation: 'monthly.plateCreation.memoStatus.upsert',
+        operation: 'monthly.plateCreation.memoStatus.updateExisting',
         error: e,
         stackTrace: st,
         details: <String, Object?>{
@@ -680,13 +681,13 @@ class PlateCreationService {
           'createdBy': userName,
           'customStatus': memo,
           'statusList': statuses,
-          'writePath': 'PlateCreationService.addPlate monthly_plate_status set merge',
+          'writePath': 'PlateCreationService.addPlate monthly_plate_status existing-doc update',
         },
       );
       rethrow;
     } catch (e, st) {
       await DevFirebaseDebugDialog.show(
-        operation: 'monthly.plateCreation.memoStatus.upsert.unknown',
+        operation: 'monthly.plateCreation.memoStatus.updateExisting.unknown',
         error: e,
         stackTrace: st,
         details: <String, Object?>{
@@ -699,7 +700,7 @@ class PlateCreationService {
           'createdBy': userName,
           'customStatus': memo,
           'statusList': statuses,
-          'writePath': 'PlateCreationService.addPlate monthly_plate_status set merge',
+          'writePath': 'PlateCreationService.addPlate monthly_plate_status existing-doc update',
         },
       );
       rethrow;

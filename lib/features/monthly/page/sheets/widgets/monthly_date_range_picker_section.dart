@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../application/monthly_date_range_calculator.dart';
+import '../../../domain/monthly_parking_options.dart';
 
 const _dateInk = Color(0xFF101828);
 const _dateMuted = Color(0xFF667085);
@@ -16,6 +17,7 @@ class MonthlyDateRangePickerSection extends StatefulWidget {
   final TextEditingController endDateController;
   final String periodUnit;
   final int duration;
+  final String? regularType;
 
   const MonthlyDateRangePickerSection({
     super.key,
@@ -23,6 +25,7 @@ class MonthlyDateRangePickerSection extends StatefulWidget {
     required this.endDateController,
     required this.periodUnit,
     required this.duration,
+    this.regularType,
   });
 
   @override
@@ -53,7 +56,7 @@ class _MonthlyDateRangePickerSectionState extends State<MonthlyDateRangePickerSe
       oldWidget.endDateController.removeListener(_handleControllerChanged);
       widget.endDateController.addListener(_handleControllerChanged);
     }
-    if (oldWidget.duration != widget.duration || oldWidget.periodUnit != widget.periodUnit) {
+    if (oldWidget.duration != widget.duration || oldWidget.periodUnit != widget.periodUnit || oldWidget.regularType != widget.regularType) {
       _recalculateEndDateFromCurrentStart();
     }
   }
@@ -77,11 +80,19 @@ class _MonthlyDateRangePickerSectionState extends State<MonthlyDateRangePickerSe
       return;
     }
     final duration = widget.duration <= 0 ? 1 : widget.duration;
-    final end = MonthlyDateRangeCalculator.calculateEndDate(
+    final normalizedStart = MonthlyDateRangeCalculator.normalizeStartDate(
       startDate: start,
+      regularType: widget.regularType,
+    );
+    final end = MonthlyDateRangeCalculator.calculateEndDate(
+      startDate: normalizedStart,
       duration: duration,
       periodUnit: widget.periodUnit,
+      regularType: widget.regularType,
     );
+    if (_format(normalizedStart) != _format(start)) {
+      widget.startDateController.text = _format(normalizedStart);
+    }
     widget.endDateController.text = _format(end);
     _validateRange();
   }
@@ -104,20 +115,39 @@ class _MonthlyDateRangePickerSectionState extends State<MonthlyDateRangePickerSe
         _errorText = '유효한 날짜를 선택해주세요.';
       } else if (start.isAfter(end)) {
         _errorText = '시작일은 종료일보다 늦을 수 없습니다.';
+      } else if (MonthlyParkingOptions.isWeekendType(widget.regularType) &&
+          MonthlyDateRangeCalculator.format(start) !=
+              MonthlyDateRangeCalculator.format(MonthlyDateRangeCalculator.nextSaturdayOnOrAfter(start))) {
+        _errorText = '주말권 시작일은 토요일이어야 합니다.';
       } else {
-        _errorText = null;
+        final expectedEnd = MonthlyDateRangeCalculator.calculateEndDate(
+          startDate: start,
+          duration: widget.duration <= 0 ? 1 : widget.duration,
+          periodUnit: widget.periodUnit,
+          regularType: widget.regularType,
+        );
+        if (_format(expectedEnd) != _format(end)) {
+          _errorText = '종료일이 상품 기간 정보와 일치하지 않습니다.';
+        } else {
+          _errorText = null;
+        }
       }
     });
   }
 
   void _applyStartDate(DateTime selected) {
     final duration = widget.duration <= 0 ? 1 : widget.duration;
-    final end = MonthlyDateRangeCalculator.calculateEndDate(
+    final normalizedStart = MonthlyDateRangeCalculator.normalizeStartDate(
       startDate: selected,
+      regularType: widget.regularType,
+    );
+    final end = MonthlyDateRangeCalculator.calculateEndDate(
+      startDate: normalizedStart,
       duration: duration,
       periodUnit: widget.periodUnit,
+      regularType: widget.regularType,
     );
-    widget.startDateController.text = _format(selected);
+    widget.startDateController.text = _format(normalizedStart);
     widget.endDateController.text = _format(end);
     _validateRange();
   }
@@ -135,16 +165,20 @@ class _MonthlyDateRangePickerSectionState extends State<MonthlyDateRangePickerSe
     }
   }
 
-  int? _totalDays() {
+  String? _summaryBadgeText() {
+    if (MonthlyParkingOptions.isWeekendType(widget.regularType)) {
+      final duration = widget.duration <= 0 ? 1 : widget.duration;
+      return '주말 $duration회';
+    }
     final start = _parse(widget.startDateController.text);
     final end = _parse(widget.endDateController.text);
     if (start == null || end == null || start.isAfter(end)) return null;
-    return MonthlyDateRangeCalculator.daysBetweenInclusive(start, end);
+    return '총 ${MonthlyDateRangeCalculator.daysBetweenInclusive(start, end)}일';
   }
 
   @override
   Widget build(BuildContext context) {
-    final totalDays = _totalDays();
+    final summaryBadge = _summaryBadgeText();
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -177,13 +211,15 @@ class _MonthlyDateRangePickerSectionState extends State<MonthlyDateRangePickerSe
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '${widget.duration <= 0 ? 1 : widget.duration}${widget.periodUnit} 기준으로 종료일을 계산합니다.',
+                      MonthlyParkingOptions.isWeekendType(widget.regularType)
+                          ? '주말권은 토요일 시작, 기간 1은 주말 1회로 계산합니다.'
+                          : '${widget.duration <= 0 ? 1 : widget.duration}${widget.periodUnit} 기준으로 종료일을 계산합니다.',
                       style: const TextStyle(color: _dateMuted, fontWeight: FontWeight.w700, fontSize: 12),
                     ),
                   ],
                 ),
               ),
-              if (totalDays != null)
+              if (summaryBadge != null)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
@@ -192,7 +228,7 @@ class _MonthlyDateRangePickerSectionState extends State<MonthlyDateRangePickerSe
                     border: Border.all(color: _dateLine),
                   ),
                   child: Text(
-                    '총 $totalDays일',
+                    summaryBadge,
                     style: const TextStyle(color: _dateInk, fontWeight: FontWeight.w900, fontSize: 12),
                   ),
                 ),

@@ -67,40 +67,71 @@ List<String> _readStringList(dynamic value) {
 
 class PlateStatusPaymentRecord {
   final String? amountText;
+  final String? paymentAmountText;
   final String? extendedText;
   final String? note;
   final DateTime? paidAt;
   final String? paidAtRaw;
   final String? paidBy;
+  final String? regularType;
+  final String? periodUnit;
+  final int? durationValue;
+  final int? regularDurationValue;
+  final String? startDate;
+  final String? endDate;
 
   const PlateStatusPaymentRecord({
     required this.amountText,
+    required this.paymentAmountText,
     required this.extendedText,
     required this.note,
     required this.paidAt,
     required this.paidAtRaw,
     required this.paidBy,
+    required this.regularType,
+    required this.periodUnit,
+    required this.durationValue,
+    required this.regularDurationValue,
+    required this.startDate,
+    required this.endDate,
   });
 
   factory PlateStatusPaymentRecord.fromMap(Map<String, dynamic> data) {
     final rawPaidAt = data['paidAt'];
+    final paymentAmount = _readTrimmedString(data['paymentAmount']);
+    final legacyAmount = _readTrimmedString(data['amount']);
+    final duration = _readInt(data['durationValue']) ?? _readInt(data['regularDurationValue']);
     return PlateStatusPaymentRecord(
-      amountText: _readTrimmedString(data['amount']),
+      amountText: paymentAmount ?? legacyAmount,
+      paymentAmountText: paymentAmount,
       extendedText: _readTrimmedString(data['extended']),
       note: _readTrimmedString(data['note']),
       paidAt: _readDateTime(rawPaidAt),
       paidAtRaw: _readRawDateText(rawPaidAt),
       paidBy: _readTrimmedString(data['paidBy']),
+      regularType: _readTrimmedString(data['regularType']),
+      periodUnit: _readTrimmedString(data['periodUnit']),
+      durationValue: duration,
+      regularDurationValue: _readInt(data['regularDurationValue']) ?? duration,
+      startDate: _readTrimmedString(data['startDate']),
+      endDate: _readTrimmedString(data['endDate']),
     );
   }
 
   Map<String, dynamic> toMap() {
     return {
       'amount': amountText,
+      'paymentAmount': paymentAmountText ?? amountText,
       'extended': extendedText,
       'note': note,
       'paidAt': paidAtRaw ?? paidAt?.toIso8601String(),
       'paidBy': paidBy,
+      'regularType': regularType,
+      'periodUnit': periodUnit,
+      'durationValue': durationValue,
+      'regularDurationValue': regularDurationValue ?? durationValue,
+      'startDate': startDate,
+      'endDate': endDate,
     };
   }
 }
@@ -122,6 +153,7 @@ class PlateStatusRecord {
   final String? endDate;
   final int? regularAmount;
   final int? regularDurationHours;
+  final int? regularDurationValue;
   final List<PlateStatusPaymentRecord> paymentHistory;
 
   const PlateStatusRecord({
@@ -141,12 +173,14 @@ class PlateStatusRecord {
     required this.endDate,
     required this.regularAmount,
     required this.regularDurationHours,
+    required this.regularDurationValue,
     required this.paymentHistory,
   });
 
   factory PlateStatusRecord.fromMap(Map<String, dynamic> data, {String? docId}) {
     final rawUpdatedAt = data['updatedAt'];
     final paymentHistoryRaw = data['payment_history'];
+    final durationValue = _readInt(data['regularDurationValue']) ?? _readInt(data['regularDurationHours']);
 
     return PlateStatusRecord(
       docId: docId,
@@ -164,7 +198,8 @@ class PlateStatusRecord {
       startDate: _readTrimmedString(data['startDate']),
       endDate: _readTrimmedString(data['endDate']),
       regularAmount: _readInt(data['regularAmount']),
-      regularDurationHours: _readInt(data['regularDurationHours']),
+      regularDurationHours: _readInt(data['regularDurationHours']) ?? durationValue,
+      regularDurationValue: durationValue,
       paymentHistory: paymentHistoryRaw is List
           ? paymentHistoryRaw
                 .whereType<Map>()
@@ -187,7 +222,8 @@ class PlateStatusRecord {
       'countType': countType,
       'regularType': regularType,
       'regularAmount': regularAmount,
-      'regularDurationHours': regularDurationHours,
+      'regularDurationValue': regularDurationValue ?? regularDurationHours,
+      'regularDurationHours': regularDurationHours ?? regularDurationValue,
       'periodUnit': periodUnit,
       'startDate': startDate,
       'endDate': endDate,

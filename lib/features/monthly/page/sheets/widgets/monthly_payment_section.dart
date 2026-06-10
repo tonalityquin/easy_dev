@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../controllers/monthly_plate_controller.dart';
 
@@ -12,11 +13,13 @@ const _paymentGreen = Color(0xFF059669);
 class MonthlyPaymentSection extends StatefulWidget {
   final MonthlyPlateController controller;
   final Function(bool?) onExtendedChanged;
+  final VoidCallback? onPaymentAmountChanged;
 
   const MonthlyPaymentSection({
     super.key,
     required this.controller,
     required this.onExtendedChanged,
+    this.onPaymentAmountChanged,
   });
 
   @override
@@ -159,6 +162,15 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
             ],
           ),
           const SizedBox(height: 14),
+          TextFormField(
+            controller: widget.controller.paymentAmountController,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            onChanged: (_) => widget.onPaymentAmountChanged?.call(),
+            decoration: _inputDecoration(label: '이번 결제 금액'),
+            style: const TextStyle(color: _paymentInk, fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 12),
           TextFormField(
             controller: _noteController,
             decoration: _inputDecoration(label: '결제 메모'),

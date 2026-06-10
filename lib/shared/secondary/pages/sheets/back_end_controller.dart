@@ -6,6 +6,7 @@ import '../../../../features/dev/page/sheets/dev_quick_actions.dart';
 import '../../../../features/selector/application/dev_auth.dart';
 import '../../../../features/selector/sheets/service_bottom_sheet.dart';
 import '../../application/secondary_state.dart';
+import '../../../plate/domain/repositories/plate_repository.dart';
 
 class BackEndController extends StatefulWidget {
   const BackEndController({super.key});
@@ -17,6 +18,7 @@ class BackEndController extends StatefulWidget {
 class _BackEndControllerState extends State<BackEndController> {
   bool _checkingDevAuth = true;
   bool _devAuthorized = false;
+  bool _rebuildingMonthlyView = false;
 
   @override
   void initState() {
@@ -66,6 +68,54 @@ class _BackEndControllerState extends State<BackEndController> {
 
     final state = context.read<SecondaryState>();
     await state.refreshDeveloperLogin();
+  }
+
+  Future<void> _rebuildMonthlyPlateStatusViews() async {
+    if (_rebuildingMonthlyView) return;
+
+    final ok = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('정기 주차 View 전체 재생성'),
+            content: const Text(
+              'monthly_plate_status 원본 기준으로 monthly_plate_status_view 지역별 문서를 생성하거나 덮어씁니다. 계속하시겠습니까?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('취소'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('실행'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+
+    if (!ok || !mounted) return;
+
+    setState(() {
+      _rebuildingMonthlyView = true;
+    });
+
+    try {
+      final result = await context.read<PlateRepository>().rebuildAllMonthlyPlateStatusViews();
+      if (!mounted) return;
+      showSuccessSnackbar(
+        context,
+        '정기 주차 View 재생성 완료: 지역 ${result.areaCount}개 / 정기권 ${result.itemCount}건 / 건너뜀 ${result.skippedCount}건 / 삭제 ${result.deletedViewCount}건',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showFailedSnackbar(context, '정기 주차 View 재생성에 실패했습니다. ${e.toString()}');
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _rebuildingMonthlyView = false;
+      });
+    }
   }
 
   @override
@@ -169,6 +219,25 @@ class _BackEndControllerState extends State<BackEndController> {
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: _checkingDevAuth || !_devAuthorized || _rebuildingMonthlyView
+                    ? null
+                    : _rebuildMonthlyPlateStatusViews,
+                icon: _rebuildingMonthlyView
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.sync_alt_rounded),
+                label: Text(
+                  _rebuildingMonthlyView ? '정기 주차 View 재생성 중...' : '정기 주차 View 전체 재생성',
+                ),
+              ),
             ),
           ],
         ),

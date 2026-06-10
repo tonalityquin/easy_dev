@@ -31,6 +31,7 @@ Future<BillResult?> showOnTapBillingBottomSheet({
   required String billingType,
   int? regularAmount,
   int? regularDurationHours,
+  int? regularDurationValue,
 }) {
   return showModalBottomSheet<BillResult>(
     context: context,
@@ -46,7 +47,7 @@ Future<BillResult?> showOnTapBillingBottomSheet({
       addAmount: addAmount,
       billingType: billingType,
       regularAmount: regularAmount,
-      regularDurationHours: regularDurationHours,
+      regularDurationValue: regularDurationValue ?? regularDurationHours,
     ),
   );
 }
@@ -60,7 +61,7 @@ class BillingBottomSheet extends StatefulWidget {
   final int addAmount;
   final String billingType;
   final int? regularAmount;
-  final int? regularDurationHours;
+  final int? regularDurationValue;
 
   const BillingBottomSheet({
     super.key,
@@ -72,8 +73,9 @@ class BillingBottomSheet extends StatefulWidget {
     required this.addAmount,
     required this.billingType,
     this.regularAmount,
-    this.regularDurationHours,
-  });
+    int? regularDurationHours,
+    int? regularDurationValue,
+  }) : regularDurationValue = regularDurationValue ?? regularDurationHours;
 
   @override
   State<BillingBottomSheet> createState() => _BillingBottomSheetState();
@@ -299,9 +301,9 @@ class _BillingBottomSheetState extends State<BillingBottomSheet> {
                                         if (widget.regularAmount != null)
                                           _buildInfoRow(context, '고정 요금',
                                               '₩${formatCurrency.format(widget.regularAmount)}'),
-                                        if (widget.regularDurationHours != null)
-                                          _buildInfoRow(context, '고정 시간',
-                                              '${widget.regularDurationHours}시간'),
+                                        if (widget.regularDurationValue != null)
+                                          _buildInfoRow(context, '기간값',
+                                              '${widget.regularDurationValue}'),
                                         _buildInfoRow(context, '입차 시간',
                                             _getFormattedEntryTime()),
                                         _buildInfoRow(context, '주차 시간',

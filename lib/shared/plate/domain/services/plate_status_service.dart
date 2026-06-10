@@ -60,7 +60,7 @@ class PlateStatusService {
     required List<String> statusList,
     required String countType,
     required int regularAmount,
-    required int regularDurationHours,
+    required int regularDurationValue,
     required String regularType,
     required String startDate,
     required String endDate,
@@ -73,7 +73,7 @@ class PlateStatusService {
 
     final countTypeEmpty = countType.trim().isEmpty;
     final amountEmpty = regularAmount == 0;
-    final durationEmpty = regularDurationHours == 0;
+    final durationEmpty = regularDurationValue == 0;
 
     final regularTypeEmpty = regularType.trim().isEmpty;
     final startEmpty = startDate.trim().isEmpty;
@@ -176,7 +176,7 @@ class PlateStatusService {
     required List<String> statusList,
     required String countType,
     required int regularAmount,
-    required int regularDurationHours,
+    required int regularDurationValue,
     required String regularType,
     required String startDate,
     required String endDate,
@@ -192,7 +192,7 @@ class PlateStatusService {
         statusList: statusList,
         countType: countType,
         regularAmount: regularAmount,
-        regularDurationHours: regularDurationHours,
+        regularDurationValue: regularDurationValue,
         regularType: regularType,
         startDate: startDate,
         endDate: endDate,
@@ -216,7 +216,8 @@ class PlateStatusService {
         'type': '정기',
         'countType': countType,
         'regularAmount': regularAmount,
-        'regularDurationHours': regularDurationHours,
+        'regularDurationValue': regularDurationValue,
+        'regularDurationHours': regularDurationValue,
         'regularType': regularType,
         'startDate': startDate,
         'endDate': endDate,
@@ -288,16 +289,14 @@ class PlateStatusService {
       'customStatus': customStatus.trim(),
       'statusList': statusList,
       'updatedAt': FieldValue.serverTimestamp(),
-      'createdBy': createdBy,
-      'area': area,
-      'type': '정기',
+      'lastMemoUpdatedBy': createdBy,
       if ((countType ?? '').trim().isNotEmpty) 'countType': countType!.trim(),
     };
 
     try {
       await _firestore.runTransaction((tx) async {
         final snap = await tx.get(ref).timeout(const Duration(seconds: 10));
-        if (!snap.exists) data['createdAt'] = FieldValue.serverTimestamp();
+        if (!snap.exists) return;
         tx.set(ref, data, SetOptions(merge: true));
       }).timeout(const Duration(seconds: 10));
     } on FirebaseException {
@@ -316,15 +315,15 @@ class PlateStatusService {
     final ref = _monthlyDocRef(plateNumber, area);
 
     try {
-      await ref.set(
+      await ref.update(
         <String, dynamic>{
           'customStatus': '',
           'statusList': <String>[],
           'updatedAt': FieldValue.serverTimestamp(),
         },
-        SetOptions(merge: true),
       ).timeout(const Duration(seconds: 10));
-    } on FirebaseException {
+    } on FirebaseException catch (e) {
+      if (e.code == 'not-found') return;
       rethrow;
     } on TimeoutException {
       rethrow;

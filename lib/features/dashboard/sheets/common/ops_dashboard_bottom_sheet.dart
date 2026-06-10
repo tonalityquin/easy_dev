@@ -10,7 +10,6 @@ import '../../../../shared/secondary/pages/secondary_page.dart';
 import '../../../../shared/sheet_tool/document_box_action_executor.dart';
 import '../../../../shared/sheet_tool/fielder_document_box_sheet.dart';
 import '../../../../shared/sheet_tool/leader_document_box_sheet.dart';
-import '../../widgets/productivity_sheet.dart';
 import '../../widgets/widgets/info/my_info_dialog.dart';
 
 class OpsDashboardBottomSheet extends StatefulWidget {
@@ -94,14 +93,6 @@ class _OpsDashboardBottomSheetState extends State<OpsDashboardBottomSheet> {
     });
   }
 
-  Future<void> _openMemoSheet(BuildContext context) async {
-    await _closeCurrentSheetAndRun(context, (rootContext) async {
-      await ProductivitySheet.init();
-      ProductivitySheet.mountIfNeeded();
-      await ProductivitySheet.openPanel(tab: ProductivitySheetTab.memo);
-    });
-  }
-
   Future<void> _openServiceSettings(BuildContext context) async {
     await _closeCurrentSheetAndRun(context, (rootContext) async {
       await ServiceBottomSheet.show(context: rootContext);
@@ -111,12 +102,6 @@ class _OpsDashboardBottomSheetState extends State<OpsDashboardBottomSheet> {
   Future<void> _openCommunity(BuildContext context) async {
     await _closeCurrentSheetAndRun(context, (rootContext) async {
       await Navigator.of(rootContext, rootNavigator: true).pushNamed(AppRoutes.communityStub);
-    });
-  }
-
-  Future<void> _openFaq(BuildContext context) async {
-    await _closeCurrentSheetAndRun(context, (rootContext) async {
-      await Navigator.of(rootContext, rootNavigator: true).pushNamed(AppRoutes.faq);
     });
   }
 
@@ -444,7 +429,7 @@ class _OpsDashboardBottomSheetState extends State<OpsDashboardBottomSheet> {
 
   List<_DashboardAction> _actions(BuildContext context, bool isFieldCommon) {
     final cs = Theme.of(context).colorScheme;
-    return [
+    final actions = <_DashboardAction>[
       _DashboardAction(
         label: '내 정보',
         description: '계정과 근무 정보를 확인합니다',
@@ -458,20 +443,6 @@ class _OpsDashboardBottomSheetState extends State<OpsDashboardBottomSheet> {
         icon: Icons.groups_rounded,
         color: cs.secondary,
         onPressed: () => _openCommunity(context),
-      ),
-      _DashboardAction(
-        label: 'FAQ',
-        description: '도움말과 자주 묻는 질문을 엽니다',
-        icon: Icons.help_center_rounded,
-        color: cs.tertiary,
-        onPressed: () => _openFaq(context),
-      ),
-      _DashboardAction(
-        label: '메모',
-        description: '운영 메모 패널을 엽니다',
-        icon: Icons.sticky_note_2_rounded,
-        color: cs.primary,
-        onPressed: () => _openMemoSheet(context),
       ),
       _DashboardAction(
         label: '설정',
@@ -495,14 +466,21 @@ class _OpsDashboardBottomSheetState extends State<OpsDashboardBottomSheet> {
         color: cs.tertiary,
         onPressed: () => _openDocumentBox(context, isFieldCommon: isFieldCommon),
       ),
-      _DashboardAction(
-        label: '보조 페이지 열기',
-        description: '운영 관리 콘솔로 이동합니다',
-        icon: Icons.open_in_new_rounded,
-        color: cs.primary,
-        onPressed: () => _openSecondary(context),
-      ),
     ];
+
+    if (!isFieldCommon) {
+      actions.add(
+        _DashboardAction(
+          label: '보조 페이지 열기',
+          description: '운영 관리 콘솔로 이동합니다',
+          icon: Icons.open_in_new_rounded,
+          color: cs.primary,
+          onPressed: () => _openSecondary(context),
+        ),
+      );
+    }
+
+    return actions;
   }
 
   Widget _actionsHeader(BuildContext context, int actionCount) {

@@ -25,6 +25,20 @@ class PlateFetchResult {
   });
 }
 
+class MonthlyPlateViewRebuildResult {
+  final int areaCount;
+  final int itemCount;
+  final int skippedCount;
+  final int deletedViewCount;
+
+  const MonthlyPlateViewRebuildResult({
+    required this.areaCount,
+    required this.itemCount,
+    required this.skippedCount,
+    required this.deletedViewCount,
+  });
+}
+
 abstract class PlateRepository {
   Future<List<PlateModel>> fourDigitCommonQuery({
     required String plateFourDigit,
@@ -155,6 +169,12 @@ abstract class PlateRepository {
     required String area,
   });
 
+  Future<List<Map<String, dynamic>>> fetchMonthlyPlateStatusView({
+    required String area,
+  });
+
+  Future<MonthlyPlateViewRebuildResult> rebuildAllMonthlyPlateStatusViews();
+
   Future<void> deleteMonthlyPlateStatus({
     required String documentId,
   });
@@ -163,9 +183,12 @@ abstract class PlateRepository {
     required String plateNumber,
     required String area,
     required String paidBy,
-    required int amount,
+    required int paymentAmount,
     required String note,
     required bool extended,
+    required String regularType,
+    required String periodUnit,
+    required int durationValue,
     String? startDate,
     String? endDate,
     String? extendedBy,
@@ -261,7 +284,7 @@ abstract class PlateRepository {
     required List<String> statusList,
     required String countType,
     required int regularAmount,
-    required int regularDurationHours,
+    required int regularDurationValue,
     required String regularType,
     required String startDate,
     required String endDate,

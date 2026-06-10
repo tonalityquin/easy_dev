@@ -6,6 +6,7 @@ import '../../account/applications/user_state.dart';
 import '../../../shared/plate/domain/repositories/plate_repository.dart';
 import '../application/monthly_area_resolver.dart';
 import '../application/monthly_date_range_calculator.dart';
+import '../domain/monthly_parking_options.dart';
 
 class MonthlyPlateController {
   final TextEditingController controllerFrontDigit = TextEditingController();
@@ -18,6 +19,7 @@ class MonthlyPlateController {
   final TextEditingController? durationController;
   final TextEditingController? startDateController;
   final TextEditingController? endDateController;
+  final TextEditingController paymentAmountController = TextEditingController();
 
   late TextEditingController activeController;
 
@@ -33,7 +35,7 @@ class MonthlyPlateController {
   String specialNote = '';
   String? fetchedCustomStatus;
   String? selectedRegularType;
-  String selectedPeriodUnit = '월';
+  String selectedPeriodUnit = MonthlyParkingOptions.defaultPeriodUnit(MonthlyParkingOptions.monthly) ?? '월';
   String? docIdToEdit;
 
   int selectedBasicStandard = 0;
@@ -117,6 +119,52 @@ class MonthlyPlateController {
       );
   }
 
+  int _regularDurationValue() {
+    return int.tryParse(durationController?.text.trim() ?? '') ?? 0;
+  }
+
+  int _regularAmountValue() {
+    return int.tryParse(amountController?.text.trim() ?? '') ?? 0;
+  }
+
+  int _paymentAmountValue() {
+    final text = paymentAmountController.text.trim();
+    if (text.isNotEmpty) return int.tryParse(text) ?? 0;
+    return _regularAmountValue();
+  }
+
+  void ensurePaymentAmountDefault() {
+    if (paymentAmountController.text.trim().isNotEmpty) return;
+    final regularAmount = amountController?.text.trim() ?? '';
+    if (regularAmount.isNotEmpty) paymentAmountController.text = regularAmount;
+  }
+
+  String _readDurationText(Map<String, dynamic> data) {
+    final value = data['regularDurationValue'] ?? data['regularDurationHours'];
+    return (value ?? '').toString();
+  }
+
+  void applyRegularType(String? regularType) {
+    selectedRegularType = MonthlyParkingOptions.normalizeRegularType(regularType);
+    final resolvedUnit = MonthlyParkingOptions.defaultPeriodUnit(selectedRegularType);
+    if (resolvedUnit != null) selectedPeriodUnit = resolvedUnit;
+    updateEndDateFromDuration();
+  }
+
+  void normalizeStartDateForRegularType() {
+    final start = MonthlyDateRangeCalculator.parseStrict(
+      startDateController?.text.trim() ?? '',
+    );
+    if (start == null) return;
+    final normalized = MonthlyDateRangeCalculator.normalizeStartDate(
+      startDate: start,
+      regularType: selectedRegularType,
+    );
+    if (formatDate(normalized) != formatDate(start)) {
+      startDateController?.text = formatDate(normalized);
+    }
+  }
+
   bool _validateBeforeWrite(BuildContext context) {
     if (!isInputValid()) {
       _showMessage(context, '차량번호를 완성해주세요.');
@@ -140,14 +188,28 @@ class MonthlyPlateController {
       return false;
     }
 
-    final amount = int.tryParse(amountController?.text.trim() ?? '');
-    if (amount == null || amount <= 0) {
+    if (!MonthlyParkingOptions.isAllowedRegularType(selectedRegularType)) {
+      _showMessage(context, '지원하지 않는 주차 타입입니다.');
+      return false;
+    }
+
+    if (!MonthlyParkingOptions.isAllowedPeriodUnit(
+      regularType: selectedRegularType,
+      periodUnit: selectedPeriodUnit,
+    )) {
+      final expected = MonthlyParkingOptions.defaultPeriodUnit(selectedRegularType);
+      _showMessage(context, '${selectedRegularType ?? '선택한 상품'}은 $expected 단위만 사용할 수 있습니다.');
+      return false;
+    }
+
+    final amount = _regularAmountValue();
+    if (amount <= 0) {
       _showMessage(context, '정기 요금은 1원 이상이어야 합니다.');
       return false;
     }
 
-    final duration = int.tryParse(durationController?.text.trim() ?? '');
-    if (duration == null || duration <= 0) {
+    final duration = _regularDurationValue();
+    if (duration <= 0) {
       _showMessage(context, '기간은 1 이상이어야 합니다.');
       return false;
     }
@@ -169,7 +231,28 @@ class MonthlyPlateController {
       return false;
     }
 
-    if (start.isAfter(end)) {
+    final normalizedStart = MonthlyDateRangeCalculator.normalizeStartDate(
+      startDate: start,
+      regularType: selectedRegularType,
+    );
+    if (formatDate(normalizedStart) != formatDate(start)) {
+      startDateController?.text = formatDate(normalizedStart);
+    }
+
+    final expectedEnd = MonthlyDateRangeCalculator.calculateEndDate(
+      startDate: normalizedStart,
+      duration: duration,
+      periodUnit: selectedPeriodUnit,
+      regularType: selectedRegularType,
+    );
+    final expectedEndText = formatDate(expectedEnd);
+    if (endDateController?.text.trim() != expectedEndText) {
+      endDateController?.text = expectedEndText;
+      _showMessage(context, '종료일이 상품 기간 정보와 맞지 않아 자동 보정했습니다. 다시 저장해주세요.');
+      return false;
+    }
+
+    if (normalizedStart.isAfter(expectedEnd)) {
       _showMessage(context, '종료일은 시작일보다 빠를 수 없습니다.');
       return false;
     }
@@ -256,11 +339,12 @@ class MonthlyPlateController {
     regularDurationController?.clear();
     nameController?.clear();
     amountController?.clear();
+    paymentAmountController.clear();
     durationController?.clear();
     startDateController?.clear();
     endDateController?.clear();
     selectedRegularType = null;
-    selectedPeriodUnit = '월';
+    selectedPeriodUnit = MonthlyParkingOptions.defaultPeriodUnit(MonthlyParkingOptions.monthly) ?? '월';
     specialNote = '';
     isExtended = false;
     isEditMode = false;
@@ -275,12 +359,20 @@ class MonthlyPlateController {
     final start = MonthlyDateRangeCalculator.parseStrict(
       startDateController?.text.trim() ?? '',
     );
-    final duration = int.tryParse(durationController?.text.trim() ?? '');
-    if (start == null || duration == null || duration <= 0) return;
-    final end = MonthlyDateRangeCalculator.calculateEndDate(
+    final duration = _regularDurationValue();
+    if (start == null || duration <= 0) return;
+    final normalizedStart = MonthlyDateRangeCalculator.normalizeStartDate(
       startDate: start,
+      regularType: selectedRegularType,
+    );
+    if (formatDate(normalizedStart) != formatDate(start)) {
+      startDateController?.text = formatDate(normalizedStart);
+    }
+    final end = MonthlyDateRangeCalculator.calculateEndDate(
+      startDate: normalizedStart,
       duration: duration,
       periodUnit: selectedPeriodUnit,
+      regularType: selectedRegularType,
     );
     endDateController?.text = formatDate(end);
   }
@@ -290,7 +382,10 @@ class MonthlyPlateController {
       endDateController?.text.trim() ?? '',
     );
     if (currentEnd == null) return null;
-    return MonthlyDateRangeCalculator.calculateNextStartDate(currentEnd);
+    return MonthlyDateRangeCalculator.calculateNextStartDate(
+      currentEnd,
+      regularType: selectedRegularType,
+    );
   }
 
   DateTime? previewExtendedEndDate() {
@@ -303,6 +398,7 @@ class MonthlyPlateController {
       currentEndDate: currentEnd,
       duration: duration,
       periodUnit: selectedPeriodUnit,
+      regularType: selectedRegularType,
     );
   }
 
@@ -327,9 +423,29 @@ class MonthlyPlateController {
       return false;
     }
 
-    final amount = int.tryParse(amountController?.text.trim() ?? '');
-    if (amount == null || amount <= 0) {
+    ensurePaymentAmountDefault();
+    final paymentAmount = _paymentAmountValue();
+    if (paymentAmount <= 0) {
       _showMessage(context, '결제 금액은 1원 이상이어야 합니다.');
+      return false;
+    }
+
+    if (!MonthlyParkingOptions.isAllowedRegularType(selectedRegularType)) {
+      _showMessage(context, '지원하지 않는 주차 타입입니다. 정기권 정보를 먼저 확인해주세요.');
+      return false;
+    }
+
+    if (!MonthlyParkingOptions.isAllowedPeriodUnit(
+      regularType: selectedRegularType,
+      periodUnit: selectedPeriodUnit,
+    )) {
+      _showMessage(context, '상품과 기간 단위가 맞지 않습니다. 정기권 정보를 먼저 확인해주세요.');
+      return false;
+    }
+
+    final duration = _regularDurationValue();
+    if (duration <= 0) {
+      _showMessage(context, '기간은 1 이상이어야 합니다.');
       return false;
     }
 
@@ -365,9 +481,12 @@ class MonthlyPlateController {
       plateNumber: plateNumber,
       area: area,
       paidBy: userName,
-      amount: int.tryParse(amountController?.text.trim() ?? '') ?? 0,
+      paymentAmount: _paymentAmountValue(),
       note: specialNote,
       extended: isExtended,
+      regularType: selectedRegularType ?? '',
+      periodUnit: selectedPeriodUnit,
+      durationValue: _regularDurationValue(),
       startDate: nextStartText,
       endDate: nextEndText,
       extendedBy: isExtended ? userName : null,
@@ -419,9 +538,13 @@ class MonthlyPlateController {
     dropdownValue = (data['region'] ?? '전국').toString();
     nameController?.text = (data['countType'] ?? '').toString();
     amountController?.text = (data['regularAmount'] ?? '').toString();
-    durationController?.text = (data['regularDurationHours'] ?? '').toString();
-    selectedRegularType = (data['regularType'] ?? '').toString();
-    selectedPeriodUnit = (data['periodUnit'] ?? '월').toString();
+    paymentAmountController.text = (data['regularAmount'] ?? '').toString();
+    durationController?.text = _readDurationText(data);
+    selectedRegularType = MonthlyParkingOptions.normalizeRegularType(data['regularType']?.toString());
+    selectedPeriodUnit = MonthlyParkingOptions.resolvePeriodUnit(
+      regularType: selectedRegularType,
+      periodUnit: data['periodUnit']?.toString(),
+    );
     startDateController?.text = (data['startDate'] ?? '').toString();
     endDateController?.text = (data['endDate'] ?? '').toString();
     customStatusController.text = (data['customStatus'] ?? '').toString();
@@ -460,9 +583,9 @@ class MonthlyPlateController {
         statusList: selectedStatuses,
         createdBy: userName,
         countType: nameController?.text.trim() ?? '',
-        regularAmount: int.tryParse(amountController?.text.trim() ?? '') ?? 0,
-        regularDurationHours: int.tryParse(durationController?.text.trim() ?? '') ?? 0,
-        regularType: selectedRegularType ?? '정기 주차',
+        regularAmount: _regularAmountValue(),
+        regularDurationValue: _regularDurationValue(),
+        regularType: selectedRegularType ?? '',
         startDate: startDateController?.text.trim() ?? '',
         endDate: endDateController?.text.trim() ?? '',
         periodUnit: selectedPeriodUnit,
@@ -516,9 +639,9 @@ class MonthlyPlateController {
         statusList: selectedStatuses,
         createdBy: userName,
         countType: nameController?.text.trim() ?? '',
-        regularAmount: int.tryParse(amountController?.text.trim() ?? '') ?? 0,
-        regularDurationHours: int.tryParse(durationController?.text.trim() ?? '') ?? 0,
-        regularType: selectedRegularType ?? '정기 주차',
+        regularAmount: _regularAmountValue(),
+        regularDurationValue: _regularDurationValue(),
+        regularType: selectedRegularType ?? '',
         startDate: startDateController?.text.trim() ?? '',
         endDate: endDateController?.text.trim() ?? '',
         periodUnit: selectedPeriodUnit,
@@ -549,5 +672,6 @@ class MonthlyPlateController {
     controllerBackDigit.dispose();
     locationController.dispose();
     customStatusController.dispose();
+    paymentAmountController.dispose();
   }
 }

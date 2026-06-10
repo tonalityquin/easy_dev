@@ -129,6 +129,7 @@ class PlateFields {
   static const String plateNumber = 'plate_number';
   static const String region = 'region';
   static const String regularAmount = 'regularAmount';
+  static const String regularDurationValue = 'regularDurationValue';
   static const String regularDurationHours = 'regularDurationHours';
   static const String requestTime = 'request_time';
   static const String selectedBy = 'selectedBy';
@@ -170,7 +171,8 @@ class PlateModel {
   final String plateNumber;
   final String? region;
   final int? regularAmount;
-  final int? regularDurationHours;
+  final int? regularDurationValue;
+  int? get regularDurationHours => regularDurationValue;
   final DateTime requestTime;
   final String? selectedBy;
   final List<String> statusList;
@@ -208,7 +210,8 @@ class PlateModel {
     required this.plateNumber,
     this.region,
     this.regularAmount,
-    this.regularDurationHours,
+    int? regularDurationHours,
+    int? regularDurationValue,
     required this.requestTime,
     this.selectedBy,
     this.statusList = const [],
@@ -217,7 +220,7 @@ class PlateModel {
     this.userAdjustment,
     required this.userName,
     this.feeMode,
-  });
+  }) : regularDurationValue = regularDurationValue ?? regularDurationHours;
 
   factory PlateModel.fromDocument(DocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data() ?? {};
@@ -257,7 +260,7 @@ class PlateModel {
       plateNumber: data[PlateFields.plateNumber] ?? '',
       region: data[PlateFields.region],
       regularAmount: parseInt(data[PlateFields.regularAmount]),
-      regularDurationHours: parseInt(data[PlateFields.regularDurationHours]),
+      regularDurationValue: parseInt(data[PlateFields.regularDurationValue] ?? data[PlateFields.regularDurationHours]),
       requestTime:
           (timestamp is Timestamp) ? timestamp.toDate() : DateTime.now(),
       selectedBy: data[PlateFields.selectedBy],
@@ -307,8 +310,10 @@ class PlateModel {
       PlateFields.plateNumber: plateNumber,
       PlateFields.region: region,
       if (regularAmount != null) PlateFields.regularAmount: regularAmount,
-      if (regularDurationHours != null)
-        PlateFields.regularDurationHours: regularDurationHours,
+      if (regularDurationValue != null) ...{
+        PlateFields.regularDurationValue: regularDurationValue,
+        PlateFields.regularDurationHours: regularDurationValue,
+      },
       PlateFields.requestTime: requestTime,
       PlateFields.selectedBy: selectedBy,
       PlateFields.statusList: statusList,
@@ -358,6 +363,7 @@ class PlateModel {
     String? region,
     int? regularAmount,
     int? regularDurationHours,
+    int? regularDurationValue,
     DateTime? requestTime,
     String? selectedBy,
     List<String>? statusList,
@@ -398,7 +404,7 @@ class PlateModel {
       plateNumber: plateNumber ?? this.plateNumber,
       region: region ?? this.region,
       regularAmount: regularAmount ?? this.regularAmount,
-      regularDurationHours: regularDurationHours ?? this.regularDurationHours,
+      regularDurationValue: regularDurationValue ?? regularDurationHours ?? this.regularDurationValue,
       requestTime: requestTime ?? this.requestTime,
       selectedBy: selectedBy ?? this.selectedBy,
       statusList: statusList ?? this.statusList,
@@ -523,10 +529,10 @@ class PlateModel {
         'after': other.regularAmount
       };
     }
-    if (regularDurationHours != other.regularDurationHours) {
-      changes['regularDurationHours'] = {
-        'before': regularDurationHours,
-        'after': other.regularDurationHours
+    if (regularDurationValue != other.regularDurationValue) {
+      changes['regularDurationValue'] = {
+        'before': regularDurationValue,
+        'after': other.regularDurationValue
       };
     }
     if (!listEquals(statusList, other.statusList)) {

@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 
 import '../../application/monthly_date_range_calculator.dart';
 import '../../controllers/monthly_plate_controller.dart';
+import '../../domain/monthly_parking_options.dart';
 import 'widgets/monthly_payment_section.dart';
 
 const _payInk = Color(0xFF101828);
@@ -37,8 +38,16 @@ class _MonthlyPaymentBottomSheetState extends State<MonthlyPaymentBottomSheet> {
     final plate = c.buildPlateNumber();
     final countType = (c.nameController?.text.trim().isNotEmpty ?? false) ? c.nameController!.text.trim() : '-';
     final regularType = (c.selectedRegularType?.trim().isNotEmpty ?? false) ? c.selectedRegularType!.trim() : '-';
-    final amount = (c.amountController?.text.trim().isNotEmpty ?? false) ? c.amountController!.text.trim() : '-';
-    final duration = (c.durationController?.text.trim().isNotEmpty ?? false) ? c.durationController!.text.trim() : '-';
+    c.ensurePaymentAmountDefault();
+    final amount = c.paymentAmountController.text.trim().isNotEmpty ? c.paymentAmountController.text.trim() : '-';
+    final durationValue = int.tryParse(c.durationController?.text.trim() ?? '') ?? 0;
+    final duration = durationValue > 0
+        ? MonthlyParkingOptions.durationLabel(
+            regularType: c.selectedRegularType,
+            duration: durationValue,
+            periodUnit: c.selectedPeriodUnit,
+          )
+        : '-';
     final startDate = c.startDateController?.text.trim() ?? '';
     final endDate = c.endDateController?.text.trim() ?? '';
     final nextStart = c.previewExtendedStartDate();
@@ -126,7 +135,7 @@ class _MonthlyPaymentBottomSheetState extends State<MonthlyPaymentBottomSheet> {
           ),
           const SizedBox(height: 14),
           _PayKv(label: '현재 기간', value: '$startDate ~ $endDate'),
-          _PayKv(label: '기간 단위', value: '$duration ${c.selectedPeriodUnit}'),
+          _PayKv(label: '기간 단위', value: duration),
           _PayKv(label: '번호판 지역', value: c.dropdownValue),
           if (c.isExtended && nextStart != null && nextEnd != null) ...[
             const SizedBox(height: 10),
@@ -227,6 +236,7 @@ class _MonthlyPaymentBottomSheetState extends State<MonthlyPaymentBottomSheet> {
                         const SizedBox(height: 14),
                         MonthlyPaymentSection(
                           controller: widget.controller,
+                          onPaymentAmountChanged: () => setState(() {}),
                           onExtendedChanged: (val) {
                             setState(() => widget.controller.isExtended = val ?? false);
                           },
