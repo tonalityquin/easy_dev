@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback, rootBundle;
 import 'package:googleapis/gmail/v1.dart' as gmail;
@@ -13,6 +15,7 @@ import '../../../../app/config/email_config.dart';
 import '../../../../app/init/app_navigator.dart';
 import '../../../../app/utils/status_dialog.dart';
 import '../../../dev/debug/debug_api_logger.dart';
+import '../../../selector/application/dev_auth.dart';
 
 class HeadMemoTodo {
   const HeadMemoTodo({
@@ -278,6 +281,26 @@ class HeadMemoRecipient {
   }
 }
 
+class HeadMemoRemoteSyncResult {
+  const HeadMemoRemoteSyncResult({
+    required this.documentPath,
+    required this.bookCount,
+    required this.pageCount,
+    required this.todoCount,
+    required this.completedTodoCount,
+    required this.activeBookName,
+    required this.syncedAt,
+  });
+
+  final String documentPath;
+  final int bookCount;
+  final int pageCount;
+  final int todoCount;
+  final int completedTodoCount;
+  final String activeBookName;
+  final DateTime syncedAt;
+}
+
 class HeadMemo {
   HeadMemo._();
 
@@ -310,8 +333,11 @@ class HeadMemo {
   static const String _tMemoUi = 'head_memo/ui';
   static const String _tMemoPrefs = 'head_memo/prefs';
   static const String _tMemoEmail = 'head_memo/email';
+  static const String _tMemoFirestore = 'head_memo/firestore';
   static const String _tEmailConfig = 'email_config';
   static const String _tGmailSend = 'gmail/send';
+  static const String _remoteLibraryCollection = 'head_memo_libraries';
+  static const String _remoteLibraryDocument = 'headquarter_default';
 
   static HeadMemoBook _emptyBook({String? name}) {
     final now = DateTime.now();
@@ -344,6 +370,8 @@ class HeadMemo {
   }
 
   static DateTime? _parseDate(Object? value) {
+    if (value is DateTime) return value;
+    if (value is Timestamp) return value.toDate();
     if (value is String && value.trim().isNotEmpty) {
       return DateTime.tryParse(value.trim());
     }
@@ -641,6 +669,182 @@ class HeadMemo {
   }
 
   static Future<void> _saveBook() => _saveBooks();
+
+  static List<HeadMemoBook> _normalizedBooksForRemote() {
+    final current = book.value;
+    final list = books.value.isEmpty
+        ? <HeadMemoBook>[current]
+        : List<HeadMemoBook>.from(books.value);
+    final index = list.indexWhere((e) => e.id == current.id);
+    if (index < 0) {
+      list.insert(0, current);
+    } else {
+      list[index] = current;
+    }
+    return _sortBooks(list);
+  }
+
+  static int _remotePageCount(List<HeadMemoBook> value) {
+    return value.fold<int>(0, (sum, item) => sum + item.pages.length);
+  }
+
+  static int _remoteTodoCount(List<HeadMemoBook> value) {
+    return value.fold<int>(
+      0,
+      (sum, item) => sum + item.pages.fold<int>(0, (pageSum, page) => pageSum + page.todos.length),
+    );
+  }
+
+  static int _remoteCompletedTodoCount(List<HeadMemoBook> value) {
+    return value.fold<int>(
+      0,
+      (sum, item) => sum + item.pages.fold<int>(
+        0,
+        (pageSum, page) => pageSum + page.todos.where((todo) => todo.done).length,
+      ),
+    );
+  }
+
+  static String get remoteLibraryPath => '$_remoteLibraryCollection/$_remoteLibraryDocument';
+
+  static Future<HeadMemoRemoteSyncResult> pushLibraryToFirestore() async {
+    await _ensureInited();
+    final user = FirebaseAuth.instance.currentUser;
+    final googleUser = GoogleAuthSession.instance.currentUser;
+    final remoteBooks = _normalizedBooksForRemote();
+    final pageCount = _remotePageCount(remoteBooks);
+    final todoCount = _remoteTodoCount(remoteBooks);
+    final completedTodoCount = _remoteCompletedTodoCount(remoteBooks);
+    final now = DateTime.now();
+    final payload = <String, dynamic>{
+      'schemaVersion': 1,
+      'status': 'onAir',
+      'source': 'head_memo_local_first',
+      'activeBookId': activeBookId.value ?? book.value.id,
+      'bookId': book.value.id,
+      'bookName': book.value.name,
+      'books': remoteBooks.map((e) => e.toJson()).toList(),
+      'recipients': recipients.value.map((e) => e.toJson()).toList(),
+      'bookCount': remoteBooks.length,
+      'pageCount': pageCount,
+      'todoCount': todoCount,
+      'completedTodoCount': completedTodoCount,
+      'pushedAt': now.toIso8601String(),
+      'pushedByUid': user?.uid,
+      'pushedByEmail': user?.email ?? googleUser?.email,
+      'serverUpdatedAt': FieldValue.serverTimestamp(),
+    };
+
+    try {
+      await FirebaseFirestore.instance
+          .collection(_remoteLibraryCollection)
+          .doc(_remoteLibraryDocument)
+          .set(payload, SetOptions(merge: true));
+      return HeadMemoRemoteSyncResult(
+        documentPath: remoteLibraryPath,
+        bookCount: remoteBooks.length,
+        pageCount: pageCount,
+        todoCount: todoCount,
+        completedTodoCount: completedTodoCount,
+        activeBookName: book.value.name,
+        syncedAt: now,
+      );
+    } catch (e) {
+      await _logApiError(
+        tag: 'HeadMemo.pushLibraryToFirestore',
+        message: '본사 메모북 Firestore 업로드 실패',
+        error: e,
+        extra: <String, dynamic>{
+          'documentPath': remoteLibraryPath,
+          'bookCount': remoteBooks.length,
+          'pageCount': pageCount,
+          'todoCount': todoCount,
+          'uid': user?.uid,
+          'email': user?.email ?? googleUser?.email,
+        },
+        tags: const <String>[_tMemo, _tMemoFirestore],
+      );
+      rethrow;
+    }
+  }
+
+  static Future<HeadMemoRemoteSyncResult> pullLibraryFromFirestore() async {
+    await _ensureInited();
+
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection(_remoteLibraryCollection)
+          .doc(_remoteLibraryDocument)
+          .get();
+      final data = snapshot.data();
+      if (data == null) {
+        throw StateError('remote_head_memo_library_not_found');
+      }
+
+      final rawBooks = data['books'];
+      final parsedBooks = rawBooks is List
+          ? rawBooks
+              .whereType<Map>()
+              .map((e) => HeadMemoBook.fromJson(Map<String, dynamic>.from(e)))
+              .toList()
+          : <HeadMemoBook>[];
+      if (parsedBooks.isEmpty) {
+        throw StateError('remote_head_memo_books_empty');
+      }
+
+      final sortedBooks = _sortBooks(parsedBooks);
+      final remoteActiveId = (data['activeBookId'] as String?)?.trim();
+      final selected = sortedBooks.firstWhere(
+        (item) => item.id == remoteActiveId,
+        orElse: () => sortedBooks.first,
+      );
+
+      final rawRecipients = data['recipients'];
+      final parsedRecipients = rawRecipients is List
+          ? rawRecipients
+              .whereType<Map>()
+              .map((e) => HeadMemoRecipient.fromJson(Map<String, dynamic>.from(e)))
+              .where((e) => _isValidEmail(e.email))
+              .toList()
+          : <HeadMemoRecipient>[];
+
+      books.value = sortedBooks;
+      activeBookId.value = selected.id;
+      book.value = selected;
+      recipients.value = parsedRecipients;
+      _syncLegacyNotes();
+      await _saveBooks();
+      await _saveRecipients();
+
+      final pageCount = _remotePageCount(sortedBooks);
+      final todoCount = _remoteTodoCount(sortedBooks);
+      final completedTodoCount = _remoteCompletedTodoCount(sortedBooks);
+      final syncedAt = _parseDate(data['pushedAt']) ??
+          _parseDate(data['serverUpdatedAt']) ??
+          DateTime.now();
+
+      return HeadMemoRemoteSyncResult(
+        documentPath: remoteLibraryPath,
+        bookCount: sortedBooks.length,
+        pageCount: pageCount,
+        todoCount: todoCount,
+        completedTodoCount: completedTodoCount,
+        activeBookName: selected.name,
+        syncedAt: syncedAt,
+      );
+    } catch (e) {
+      await _logApiError(
+        tag: 'HeadMemo.pullLibraryFromFirestore',
+        message: '본사 메모북 Firestore 내려받기 실패',
+        error: e,
+        extra: <String, dynamic>{
+          'documentPath': remoteLibraryPath,
+        },
+        tags: const <String>[_tMemo, _tMemoFirestore],
+      );
+      rethrow;
+    }
+  }
 
   static void _replaceActiveBook(HeadMemoBook updated, {bool sort = true}) {
     final list = List<HeadMemoBook>.from(books.value);
@@ -1085,6 +1289,9 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
   final TextEditingController _todoCtrl = TextEditingController();
 
   bool _sending = false;
+  bool _pushingOnAir = false;
+  bool _pullingOnAir = false;
+  bool _developerMode = false;
   bool _preview = false;
   bool _recipientValid = true;
   int _currentPage = 0;
@@ -1096,6 +1303,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
   @override
   void initState() {
     super.initState();
+    _loadDeveloperMode();
     _nameCtrl.text = HeadMemo.book.value.name;
     _nameCtrl.addListener(() {
       final value = _nameCtrl.text.trim();
@@ -1114,6 +1322,12 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
         setState(() => _recipientValid = valid);
       }
     });
+  }
+
+  Future<void> _loadDeveloperMode() async {
+    final enabled = await DevAuth.isDeveloperLoggedIn();
+    if (!mounted) return;
+    setState(() => _developerMode = enabled);
   }
 
   @override
@@ -1246,22 +1460,43 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
               ],
             ),
           ),
-          ValueListenableBuilder<bool>(
-            valueListenable: HeadMemo.enabled,
-            builder: (_, on, __) {
-              return Switch.adaptive(
-                value: on,
-                onChanged: (value) {
-                  HeadMemo.enabled.value = value;
-                  HapticFeedback.selectionClick();
-                },
-              );
-            },
-          ),
+          _buildDeveloperRemoteActions(),
           IconButton(
             tooltip: '닫기',
             onPressed: () => Navigator.of(context).maybePop(),
             icon: const Icon(Icons.close_rounded),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDeveloperRemoteActions() {
+    if (!_developerMode) return const SizedBox.shrink();
+    final disabled = _pushingOnAir || _pullingOnAir;
+    return Padding(
+      padding: const EdgeInsets.only(left: 8),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _RemoteActionButton(
+            icon: _pushingOnAir
+                ? Icons.hourglass_top_rounded
+                : Icons.radio_button_checked_rounded,
+            label: _pushingOnAir ? 'UP' : 'ON AIR',
+            tooltip: '로컬 본사 메모를 Firebase에 업로드',
+            background: Colors.red.shade600,
+            foreground: Colors.white,
+            onTap: disabled ? null : _pushOnAir,
+          ),
+          const SizedBox(width: 6),
+          _RemoteActionButton(
+            icon: _pullingOnAir
+                ? Icons.hourglass_top_rounded
+                : Icons.cloud_download_rounded,
+            label: _pullingOnAir ? 'DOWN' : 'PULL',
+            tooltip: 'Firebase 본사 메모를 로컬로 내려받기',
+            onTap: disabled ? null : _pullOnAir,
           ),
         ],
       ),
@@ -2478,6 +2713,93 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
     HapticFeedback.selectionClick();
   }
 
+  Future<void> _pushOnAir() async {
+    if (_pushingOnAir || _pullingOnAir) return;
+    setState(() => _pushingOnAir = true);
+    try {
+      final result = await HeadMemo.pushLibraryToFirestore();
+      if (!mounted) return;
+      HapticFeedback.mediumImpact();
+      await StatusDialog.showSuccess(
+        context,
+        title: 'ON AIR 저장 완료',
+        description:
+            '${result.bookCount}권 · ${result.pageCount}쪽 · 투두 ${result.todoCount}개를 Firebase에 저장했습니다.\n${result.documentPath}',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      await StatusDialog.showFailure(
+        context,
+        title: 'ON AIR 저장 실패',
+        description: 'Firebase 저장에 실패했습니다. 로그인, 네트워크, Firestore 권한을 확인하세요.',
+      );
+    } finally {
+      if (mounted) setState(() => _pushingOnAir = false);
+    }
+  }
+
+  Future<void> _pullOnAir() async {
+    if (_pushingOnAir || _pullingOnAir) return;
+    final confirmed = await _confirmPullFromFirestore();
+    if (confirmed != true || !mounted) return;
+    setState(() => _pullingOnAir = true);
+    try {
+      final result = await HeadMemo.pullLibraryFromFirestore();
+      if (!mounted) return;
+      _searchCtrl.clear();
+      setState(() {
+        _preview = false;
+        _currentPage = 0;
+        _activeBookRenderId = null;
+        _nameCtrl.text = HeadMemo.book.value.name;
+        _query = '';
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_pageController.hasClients) return;
+        _pageController.jumpToPage(0);
+      });
+      HapticFeedback.mediumImpact();
+      await StatusDialog.showSuccess(
+        context,
+        title: 'Firebase 내려받기 완료',
+        description:
+            '${result.bookCount}권 · ${result.pageCount}쪽 · 투두 ${result.todoCount}개를 로컬 메모북에 반영했습니다.\n활성 메모북: ${result.activeBookName}',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      await StatusDialog.showFailure(
+        context,
+        title: 'Firebase 내려받기 실패',
+        description: '원격 본사 메모를 가져오지 못했습니다. 문서 존재 여부, 네트워크, Firestore 권한을 확인하세요.',
+      );
+    } finally {
+      if (mounted) setState(() => _pullingOnAir = false);
+    }
+  }
+
+  Future<bool?> _confirmPullFromFirestore() {
+    return showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Firebase에서 내려받기'),
+          content: const Text('원격 본사 메모로 현재 로컬 책장과 수신자 보관함을 덮어씁니다. 계속할까요?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('취소'),
+            ),
+            FilledButton.icon(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              icon: const Icon(Icons.cloud_download_rounded),
+              label: const Text('내려받기'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Future<void> _sendBookByEmail() async {
     final selected = HeadMemo.selectedRecipients();
     if (selected.isEmpty) {
@@ -3149,6 +3471,66 @@ class _BookshelfEmptyState extends StatelessWidget {
               label: const Text('새 메모북'),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RemoteActionButton extends StatelessWidget {
+  const _RemoteActionButton({
+    required this.icon,
+    required this.label,
+    required this.tooltip,
+    required this.onTap,
+    this.background,
+    this.foreground,
+  });
+
+  final IconData icon;
+  final String label;
+  final String tooltip;
+  final VoidCallback? onTap;
+  final Color? background;
+  final Color? foreground;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final bg = background ?? cs.primaryContainer;
+    final fg = foreground ?? cs.onPrimaryContainer;
+    final enabled = onTap != null;
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: enabled ? bg : cs.surfaceContainerHighest.withOpacity(.48),
+        borderRadius: BorderRadius.circular(999),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(999),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  size: 16,
+                  color: enabled ? fg : cs.outline,
+                ),
+                const SizedBox(width: 5),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: enabled ? fg : cs.outline,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 12,
+                    letterSpacing: .5,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
