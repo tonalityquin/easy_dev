@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../app/di/routes.dart';
+import '../../../../app/init/app_exit_service.dart';
 import '../../../../app/init/db_connection_status_section.dart';
 import '../../../../app/init/logout_helper.dart';
 import '../../../../app/utils/status_dialog.dart';
@@ -74,6 +75,10 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen> {
       checkWorking: false,
       delay: const Duration(milliseconds: 500),
     );
+  }
+
+  Future<void> _handleAppExit(BuildContext context) async {
+    await AppExitService.exitApp(context);
   }
 
   Future<void> _goToSelector(BuildContext context) async {
@@ -181,6 +186,7 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen> {
         onSelected: (value) {
           if (value == 'selector') _goToSelector(context);
           if (value == 'clock_in_issue') _resolveClockInIssue(context);
+          if (value == 'exit_app') _handleAppExit(context);
           if (value == 'logout') _handleLogout(context);
         },
         itemBuilder: (context) => [
@@ -206,6 +212,16 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen> {
             ),
           ),
           const PopupMenuDivider(),
+          PopupMenuItem(
+            value: 'exit_app',
+            child: Row(
+              children: [
+                Icon(Icons.power_settings_new_rounded, color: cs.error),
+                const SizedBox(width: 8),
+                const Text('앱 종료'),
+              ],
+            ),
+          ),
           PopupMenuItem(
             value: 'logout',
             child: Row(

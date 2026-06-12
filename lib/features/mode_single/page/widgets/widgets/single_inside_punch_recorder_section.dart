@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -7,7 +6,6 @@ import '../../../../../app/config/commute_true_false_mode_config.dart';
 import '../../../../../app/init/app_exit_service.dart';
 import '../../../../../app/init/work_schedule_prefs.dart';
 import '../../../../../app/init/missing_weekday_end_time_dialog.dart';
-import '../../../../../app/utils/block_dialog/work_start_duration_blocking_dialog.dart';
 import '../../../../commute/domain/repositories/commute_true_false_repository.dart';
 import '../../../application/att_brk_repository.dart';
 import 'single_punch_card_feedback.dart';
@@ -158,15 +156,6 @@ class _SingleInsidePunchRecorderSectionState
 
     if (type == AttBrkModeType.workOut && (!_hasWorkIn || (_requiresBreak && !_hasBreak))) {
       return;
-    }
-
-    if (type == AttBrkModeType.workIn) {
-      final proceed = await showWorkStartDurationBlockingDialog(
-        context,
-        message: '출근을 펀칭하면 근무가 시작됩니다.\n약 5초 정도 소요됩니다.',
-        duration: const Duration(seconds: 5),
-      );
-      if (!proceed) return;
     }
 
     final now = DateTime.now();

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../app/init/app_exit_service.dart';
 import '../../../app/init/db_connection_status_section.dart';
 import '../../../app/init/logout_helper.dart';
 import '../../account/applications/user_state.dart';
@@ -27,6 +28,7 @@ const String _tUi = 'ui';
 enum _SingleInsideMenuAction {
   logout,
   settings,
+  exitApp,
 }
 
 double _contrastRatio(Color a, Color b) {
@@ -204,6 +206,20 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
     }
   }
 
+  Future<void> _handleAppExit(BuildContext context) async {
+    try {
+      await AppExitService.exitApp(context);
+    } catch (e) {
+      await _logApiError(
+        tag: 'SingleInsideScreen._handleAppExit',
+        message: '앱 종료 처리 실패',
+        error: e,
+        tags: const <String>[_tSingle, _tSingleInside, _tUi],
+      );
+      rethrow;
+    }
+  }
+
   Future<void> _handleMenuAction(
       BuildContext context,
       _SingleInsideMenuAction action,
@@ -214,6 +230,9 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
         break;
       case _SingleInsideMenuAction.settings:
         await _openSettings(context);
+        break;
+      case _SingleInsideMenuAction.exitApp:
+        await _handleAppExit(context);
         break;
     }
   }
@@ -296,6 +315,16 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
                 Icon(Icons.settings_outlined, color: cs.primary),
                 const SizedBox(width: 8),
                 const Text('설정'),
+              ],
+            ),
+          ),
+          PopupMenuItem<_SingleInsideMenuAction>(
+            value: _SingleInsideMenuAction.exitApp,
+            child: Row(
+              children: [
+                Icon(Icons.power_settings_new_rounded, color: cs.error),
+                const SizedBox(width: 8),
+                const Text('앱 종료'),
               ],
             ),
           ),

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../app/init/missing_weekday_end_time_dialog.dart';
-import '../../../../app/utils/block_dialog/work_start_duration_blocking_dialog.dart';
 import '../../../../app/utils/status_dialog.dart';
 import '../../../account/applications/user_state.dart';
 import '../../../dev/debug/debug_action_recorder.dart';
@@ -69,6 +68,8 @@ class CommonCommuteInWorkButtonWidget extends StatelessWidget {
       onPressed: isWorking
           ? null
           : () async {
+        var loadingTurnedOn = false;
+
         _trace(
           context,
           '출근하기 버튼',
@@ -79,39 +80,7 @@ class CommonCommuteInWorkButtonWidget extends StatelessWidget {
           },
         );
 
-        var loadingTurnedOn = false;
-
         try {
-          final proceed = await showWorkStartDurationBlockingDialog(
-            context,
-            message: '출근을 펀칭하면 근무가 시작됩니다.\n약 5초 정도 소요됩니다.',
-            duration: const Duration(seconds: 5),
-          );
-
-          _trace(
-            context,
-            '출근 다이얼로그 결과',
-            meta: <String, dynamic>{
-              'screen': screenId,
-              'action': 'work_start_dialog_result',
-              'proceed': proceed,
-              'durationSeconds': 5,
-            },
-          );
-
-          if (!proceed) {
-            _trace(
-              context,
-              '출근 처리 종료',
-              meta: <String, dynamic>{
-                'screen': screenId,
-                'action': 'work_start_aborted',
-                'reason': 'user_cancelled_dialog',
-              },
-            );
-            return;
-          }
-
           if (!context.mounted) return;
 
           onLoadingChanged(true);
@@ -213,8 +182,6 @@ class CommonCommuteInWorkButtonWidget extends StatelessWidget {
           rethrow;
         } finally {
           if (context.mounted && loadingTurnedOn) {
-            onLoadingChanged(false);
-          } else if (context.mounted) {
             onLoadingChanged(false);
           }
         }

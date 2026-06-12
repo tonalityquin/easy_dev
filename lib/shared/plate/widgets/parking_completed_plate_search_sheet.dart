@@ -343,7 +343,10 @@ class _ParkingCompletedPlateSearchSheetState
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final rootContext = Navigator.of(context, rootNavigator: true).context;
-    final topInset = MediaQuery.of(context).padding.top;
+    final mediaQuery = MediaQuery.of(context);
+    final topInset = mediaQuery.padding.top;
+    final bottomInset = mediaQuery.viewPadding.bottom;
+    final searchButtonBottomPadding = 14.0 + (_hasSearched ? bottomInset : 0.0);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -433,7 +436,12 @@ class _ParkingCompletedPlateSearchSheetState
                       ),
                     ),
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 10, 20, 14),
+                      padding: EdgeInsets.fromLTRB(
+                        20,
+                        10,
+                        20,
+                        searchButtonBottomPadding,
+                      ),
                       child: ValueListenableBuilder<TextEditingValue>(
                         valueListenable: _controller,
                         builder: (context, value, child) {

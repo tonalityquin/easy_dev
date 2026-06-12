@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../app/di/routes.dart';
 import '../../../../app/init/app_exit_service.dart';
 import '../../../../app/init/logout_helper.dart';
+import '../../../../app/utils/ops_delayed_refresh_gate.dart';
 import '../../../../shared/plate/domain/enums/plate_type.dart';
 import '../../../../shared/plate/domain/repositories/plate_repository.dart';
 import '../../../../shared/sheet_tool/document_box_action_executor.dart';
@@ -230,20 +231,27 @@ class _CommonHqDashBoardPageState extends State<CommonHqDashBoardPage> {
       return;
     }
 
-    _trace(
-      '지역 마스터 갱신 시작',
-      meta: <String, dynamic>{
-        'screen': widget.screenName,
-        'action': 'refresh_area_master_start',
-        'division': division,
-      },
-    );
-
     setState(() {
       _isRefreshingAreaMaster = true;
     });
 
     try {
+      final shouldRefresh = await OpsDelayedRefreshGate.waitIfNeeded(
+        context: context,
+        title: '지역 마스터 갱신',
+        message: '지역 마스터를 갱신하기 전 요청을 준비하고 있습니다.',
+      );
+      if (!shouldRefresh || !mounted) return;
+
+      _trace(
+        '지역 마스터 갱신 시작',
+        meta: <String, dynamic>{
+          'screen': widget.screenName,
+          'action': 'refresh_area_master_start',
+          'division': division,
+        },
+      );
+
       final snapshot = await AreaMasterCache.refreshDivision(division);
       if (!mounted) return;
 
