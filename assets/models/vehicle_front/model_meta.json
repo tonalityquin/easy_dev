@@ -1,0 +1,140 @@
+{
+  "model_name": "vehicle_front_mobilenetv2",
+  "model_version": "v1_mobilenetv2_2class",
+  "created_at": "2026-06-17T19:10:46",
+  "framework": "tensorflow.keras",
+  "architecture": "MobileNetV2",
+  "purpose": "vehicle_front_make_model_classification_mvp",
+  "preprocess_version": "v2_paint_manual_mask",
+  "input": {
+    "image_size": [
+      224,
+      224
+    ],
+    "channels": 3,
+    "color_order": "RGB",
+    "preprocess": "tf.keras.applications.mobilenet_v2.preprocess_input"
+  },
+  "classes": [
+    "genesis_g80",
+    "kia_carnival"
+  ],
+  "class_index": {
+    "genesis_g80": 0,
+    "kia_carnival": 1
+  },
+  "dataset": {
+    "split_root": "processed_split/v2_paint_manual_mask",
+    "counts": [
+      {
+        "split": "train",
+        "label": "genesis_g80",
+        "image_count": 116
+      },
+      {
+        "split": "train",
+        "label": "kia_carnival",
+        "image_count": 149
+      },
+      {
+        "split": "val",
+        "label": "genesis_g80",
+        "image_count": 19
+      },
+      {
+        "split": "val",
+        "label": "kia_carnival",
+        "image_count": 24
+      },
+      {
+        "split": "test",
+        "label": "genesis_g80",
+        "image_count": 27
+      },
+      {
+        "split": "test",
+        "label": "kia_carnival",
+        "image_count": 24
+      }
+    ]
+  },
+  "training": {
+    "batch_size": 16,
+    "seed": 42,
+    "head_epochs_config": 30,
+    "fine_tuning_enabled": true,
+    "fine_tune_epochs_config": 15,
+    "class_weight": {
+      "0": 1.1422413793103448,
+      "1": 0.889261744966443
+    }
+  },
+  "evaluation": {
+    "val_loss": 0.11007120460271835,
+    "val_accuracy": 1.0,
+    "test_loss": 0.21329954266548157,
+    "test_accuracy": 0.9019607901573181,
+    "test_image_count": 51,
+    "wrong_prediction_count": 5
+  },
+  "decision_thresholds_initial": {
+    "min_confidence": 0.85,
+    "min_margin": 0.25
+  },
+  "artifacts": {
+    "keras_model": "model_registry/v1_mobilenetv2_2class/vehicle_front_mobilenetv2.keras",
+    "labels_txt": "model_registry/v1_mobilenetv2_2class/labels.txt",
+    "vehicle_labels_json": "model_registry/v1_mobilenetv2_2class/vehicle_labels.json",
+    "test_predictions_csv": "reports/04_test_predictions.csv",
+    "classification_report_csv": "reports/04_classification_report.csv",
+    "confusion_matrix_csv": "reports/04_confusion_matrix.csv"
+  },
+  "notes": [
+    "MVP 2-class baseline model.",
+    "License plate area is manually masked before training.",
+    "Do not treat MobileNetV2 as final production architecture.",
+    "TFLite conversion is handled in the next notebook."
+  ],
+  "updated_at_after_tflite_conversion": "2026-06-17T19:27:49",
+  "tflite_conversion": {
+    "float32_tflite": "model_registry/v1_mobilenetv2_2class/vehicle_front_mobilenetv2_float32.tflite",
+    "dynamic_range_tflite": "model_registry/v1_mobilenetv2_2class/vehicle_front_mobilenetv2_dynamic_range.tflite",
+    "active_flutter_model": "vehicle_classifier.tflite",
+    "source_inference_keras_model": "model_registry/v1_mobilenetv2_2class/vehicle_front_mobilenetv2_inference.keras",
+    "keras_tflite_float32_compare": {
+      "model": "model_registry/v1_mobilenetv2_2class/vehicle_front_mobilenetv2_float32.tflite",
+      "compare_image_count": 51,
+      "max_abs_diff": 1.6987323760986328e-06,
+      "mean_abs_diff": 2.070944020715615e-07,
+      "top1_match_count": 51,
+      "top1_mismatch_count": 0
+    }
+  },
+  "runtime_input": {
+    "dtype": "float32",
+    "shape": [
+      1,
+      224,
+      224,
+      3
+    ],
+    "color_order": "RGB",
+    "value_range": "0..255",
+    "normalization_in_flutter": "none",
+    "preprocess_inside_model": "tf.keras.applications.mobilenet_v2.preprocess_input"
+  },
+  "runtime_output": {
+    "dtype": "float32",
+    "shape": [
+      1,
+      2
+    ],
+    "activation": "softmax",
+    "labels_file": "labels.txt"
+  },
+  "decision_thresholds_recommended_for_v1_baseline": {
+    "min_confidence": 0.95,
+    "min_margin": 0.5,
+    "reason": "v1 baseline had a high-confidence G80→Carnival hard-case misclassification; conservative thresholds reduce wrong-confirm risk."
+  }
+}

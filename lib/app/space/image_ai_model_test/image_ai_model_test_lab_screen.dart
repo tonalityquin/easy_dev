@@ -22,7 +22,7 @@ class _ImageAiModelTestLabScreenState extends State<ImageAiModelTestLabScreen> {
   final TextEditingController _backController = TextEditingController();
   final ScrollController _logScrollController = ScrollController();
 
-  String _selectedModel = '번호판 OCR + RPS TFLite 통합 모델';
+  String _selectedModel = '번호판 OCR + 차량 전면부 TFLite 통합 모델';
   bool _openingScanner = false;
   bool _autoStarted = false;
   bool _plateRecognitionEnabled = true;
@@ -35,15 +35,14 @@ class _ImageAiModelTestLabScreenState extends State<ImageAiModelTestLabScreen> {
   List<String> _processLogs = const [];
 
   static const List<String> _models = [
-    '번호판 OCR + RPS TFLite 통합 모델',
-    '번호판 OCR + RPS 확률 검증 모델',
-    '번호판 OCR 보정 강화 + RPS 통합 모델',
+    '번호판 OCR + 차량 전면부 TFLite 통합 모델',
+    '번호판 OCR + 차량 전면부 확률 검증 모델',
+    '번호판 OCR 보정 강화 + 차량 전면부 통합 모델',
   ];
 
   static const Map<String, String> _rpsDisplayLabels = {
-    'paper': '보자기',
-    'rock': '주먹',
-    'scissors': '가위',
+    'genesis_g80': '제네시스 G80',
+    'kia_carnival': '기아 카니발',
   };
 
   static const List<String> _allowedKoreanMids = [
@@ -212,9 +211,9 @@ class _ImageAiModelTestLabScreenState extends State<ImageAiModelTestLabScreen> {
   String _recognitionConditionLabel({bool? plate, bool? image}) {
     final plateOn = plate ?? _plateRecognitionEnabled;
     final imageOn = image ?? _imageRecognitionEnabled;
-    if (plateOn && imageOn) return 'plate+rps';
+    if (plateOn && imageOn) return 'plate+vehicle';
     if (plateOn) return 'plate';
-    if (imageOn) return 'rps';
+    if (imageOn) return 'vehicle';
     return 'none';
   }
 
@@ -282,7 +281,7 @@ class _ImageAiModelTestLabScreenState extends State<ImageAiModelTestLabScreen> {
     _appendProcessLog('후보값=${result.candidateValues.isEmpty ? '-' : result.candidateValues.join(', ')}');
     _appendProcessLog('마지막 OCR 텍스트=${result.lastOcrText ?? '-'}');
     _appendProcessLog(
-      'RPS 결과=${result.rpsDisplayLabel ?? '-'} confidence=${_formatProbability(result.rpsConfidence)} '
+      '차량 인식 결과=${result.rpsDisplayLabel ?? '-'} confidence=${_formatProbability(result.rpsConfidence)} '
       'mode=${_rpsSelectionMode(result)} autoAccepted=${result.rpsAutoAccepted} '
       'top1=${result.rpsTopDisplayLabel ?? '-'} ${_formatProbability(result.rpsTopConfidence)} '
       'top2=${result.rpsSecondDisplayLabel ?? '-'} ${_formatProbability(result.rpsSecondConfidence)} '
@@ -301,7 +300,7 @@ class _ImageAiModelTestLabScreenState extends State<ImageAiModelTestLabScreen> {
         _rawPlateText = null;
         _requiresMidCompletion = false;
       });
-      _appendProcessLog('번호판 인식 미실행 imageStatus=${result.imageExecutionStatus} rps=${result.rpsDisplayLabel ?? '-'}');
+      _appendProcessLog('번호판 인식 미실행 imageStatus=${result.imageExecutionStatus} vehicle=${result.rpsDisplayLabel ?? '-'}');
       return;
     }
 
@@ -314,9 +313,9 @@ class _ImageAiModelTestLabScreenState extends State<ImageAiModelTestLabScreen> {
       });
       _appendProcessLog(applied ? '번호판 데이터 삽입 완료 plate=${result.plate}' : '번호판 원문만 표시 plate=${result.plate}');
       if (result.enabledRecognitionSuccess) {
-        _appendProcessLog('선택 기능 인식 성공 plate=${result.plate ?? '-'} rps=${result.rpsDisplayLabel ?? '-'} condition=${_recognitionConditionLabel(plate: result.plateRecognitionEnabled, image: result.imageRecognitionEnabled)}');
+        _appendProcessLog('선택 기능 인식 성공 plate=${result.plate ?? '-'} vehicle=${result.rpsDisplayLabel ?? '-'} condition=${_recognitionConditionLabel(plate: result.plateRecognitionEnabled, image: result.imageRecognitionEnabled)}');
       } else {
-        _appendProcessLog('선택 기능 조건 미충족 plateStatus=${result.plateExecutionStatus} imageStatus=${result.imageExecutionStatus} rpsFailure=${result.rpsFailureReason ?? '-'}');
+        _appendProcessLog('선택 기능 조건 미충족 plateStatus=${result.plateExecutionStatus} imageStatus=${result.imageExecutionStatus} vehicleFailure=${result.rpsFailureReason ?? '-'}');
       }
       return;
     }
@@ -565,7 +564,7 @@ class _ImageAiModelTestLabScreenState extends State<ImageAiModelTestLabScreen> {
       '----- OCR SESSION LOG -----',
       result == null || result.logText.isEmpty ? '로그가 없습니다.' : result.logText,
       '',
-      '----- RPS MODEL LOG -----',
+      '----- 차량 인식 MODEL LOG -----',
       result == null || result.rpsLogText.isEmpty ? '로그가 없습니다.' : result.rpsLogText,
     ]);
 
@@ -643,11 +642,11 @@ class _ImageAiModelTestLabScreenState extends State<ImageAiModelTestLabScreen> {
       '통합 인식 성공' => Icons.check_circle_rounded,
       '번호판 인식 성공' => Icons.check_circle_rounded,
       '이미지 인식 성공' => Icons.check_circle_rounded,
-      '번호판 성공, RPS 실패' => Icons.warning_amber_rounded,
+      '번호판 성공, 차량 인식 실패' => Icons.warning_amber_rounded,
       '번호판 표시 확인 필요' => Icons.warning_amber_rounded,
-      '부분 번호판, RPS 성공' => Icons.warning_amber_rounded,
+      '부분 번호판, 차량 인식 성공' => Icons.warning_amber_rounded,
       '부분 인식, 통합 조건 미충족' => Icons.warning_amber_rounded,
-      'RPS 성공, 번호판 실패' => Icons.error_outline_rounded,
+      '차량 인식 성공, 번호판 실패' => Icons.error_outline_rounded,
       '인식 실패' => Icons.error_outline_rounded,
       '이미지 인식 실패' => Icons.error_outline_rounded,
       '번호판 인식 실패' => Icons.error_outline_rounded,
@@ -899,7 +898,7 @@ class _ImageAiModelTestLabScreenState extends State<ImageAiModelTestLabScreen> {
               title: '가위바위보 이미지 모델 출력',
               child: result == null
                   ? Text(
-                      '아직 완료된 RPS 모델 결과가 없습니다.',
+                      '아직 완료된 차량 인식 모델 결과가 없습니다.',
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: cs.onSurfaceVariant,
                       ),
@@ -914,7 +913,7 @@ class _ImageAiModelTestLabScreenState extends State<ImageAiModelTestLabScreen> {
                   : Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _SummaryRow(label: 'RPS 결과', value: result.rpsDisplayLabel ?? '-'),
+                        _SummaryRow(label: '차량 인식 결과', value: result.rpsDisplayLabel ?? '-'),
                         _SummaryRow(label: '원본 라벨', value: result.rpsLabel ?? '-'),
                         _SummaryRow(label: '신뢰도', value: _formatProbability(result.rpsConfidence)),
                         _SummaryRow(label: '선택 방식', value: _rpsSelectionMode(result)),
@@ -924,8 +923,8 @@ class _ImageAiModelTestLabScreenState extends State<ImageAiModelTestLabScreen> {
                         _SummaryRow(label: '2위 후보', value: '${result.rpsSecondDisplayLabel ?? '-'} ${_formatProbability(result.rpsSecondConfidence)}'),
                         _SummaryRow(label: '1위-2위 차이', value: _formatProbability(result.rpsConfidenceMargin)),
                         _SummaryRow(label: '자동 기준', value: '${_formatProbability(result.rpsMinAutoConfidence)} / 차이 ${_formatProbability(result.rpsMinAutoMargin)}'),
-                        _SummaryRow(label: 'RPS 실패 사유', value: result.rpsFailureReason ?? '-'),
-                        _SummaryRow(label: 'RPS 불안정 사유', value: result.rpsInstabilityReason ?? '-'),
+                        _SummaryRow(label: '차량 인식 실패 사유', value: result.rpsFailureReason ?? '-'),
+                        _SummaryRow(label: '차량 인식 불안정 사유', value: result.rpsInstabilityReason ?? '-'),
                         const SizedBox(height: 8),
                         if (result.rpsProbabilities.isEmpty)
                           Text(
@@ -1006,9 +1005,9 @@ class _ImageAiModelTestLabScreenState extends State<ImageAiModelTestLabScreen> {
                         _SummaryRow(label: '최근 OCR', value: result.lastOcrText ?? '-'),
                         _SummaryRow(label: '통합 성공', value: '${result.combinedSuccess}'),
                         _SummaryRow(label: '번호판 성공', value: '${result.plateSuccess}'),
-                        _SummaryRow(label: 'RPS 성공', value: '${result.rpsSuccess}'),
-                        _SummaryRow(label: 'RPS 결과', value: result.rpsDisplayLabel ?? '-'),
-                        _SummaryRow(label: 'RPS 확률', value: _formatRpsProbabilities(result.rpsProbabilities)),
+                        _SummaryRow(label: '차량 인식 성공', value: '${result.rpsSuccess}'),
+                        _SummaryRow(label: '차량 인식 결과', value: result.rpsDisplayLabel ?? '-'),
+                        _SummaryRow(label: '차량 인식 확률', value: _formatRpsProbabilities(result.rpsProbabilities)),
                       ],
                     ),
             ),
@@ -1055,7 +1054,7 @@ class _ImageAiModelTestLabScreenState extends State<ImageAiModelTestLabScreen> {
       '----- OCR SESSION LOG -----',
       result == null || result.logText.isEmpty ? '로그가 없습니다.' : result.logText,
       '',
-      '----- RPS MODEL LOG -----',
+      '----- 차량 인식 MODEL LOG -----',
       result == null || result.rpsLogText.isEmpty ? '로그가 없습니다.' : result.rpsLogText,
     ];
     return values.join('\n');

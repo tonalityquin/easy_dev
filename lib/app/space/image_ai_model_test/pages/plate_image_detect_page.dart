@@ -9,7 +9,7 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:permission_handler/permission_handler.dart';
 
 import '../data/ocr_learning_repository.dart';
-import '../data/rps_image_classifier.dart';
+import '../data/vehicle_image_classifier.dart';
 
 class _KoreanPlatePolicy {
   static const List<String> allowedNewMids = [
@@ -193,8 +193,8 @@ class LiveOcrSessionResult {
     this.rpsSecondDisplayLabel,
     this.rpsSecondConfidence,
     this.rpsConfidenceMargin,
-    this.rpsMinAutoConfidence = RpsImageClassifier.minAutoConfidence,
-    this.rpsMinAutoMargin = RpsImageClassifier.minAutoMargin,
+    this.rpsMinAutoConfidence = VehicleImageClassifier.minAutoConfidence,
+    this.rpsMinAutoMargin = VehicleImageClassifier.minAutoMargin,
   });
 
   String get logText => logs.join('\n');
@@ -291,7 +291,7 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
   TextRecognizer? _recognizer;
 
   final OcrLearningRepository _learningRepo = OcrLearningRepository.instance;
-  final RpsImageClassifier _rpsClassifier = RpsImageClassifier.instance;
+  final VehicleImageClassifier _rpsClassifier = VehicleImageClassifier.instance;
 
   bool _initialized = false;
   bool _autoRunning = false;
@@ -441,7 +441,7 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
     if (widget.imageRecognitionEnabled) {
       await _loadRpsModel();
     } else {
-      _appendLog('이미지 인식 OFF: RPS 모델 로드를 생략합니다.');
+      _appendLog('이미지 인식 OFF: 차량 인식 모델 로드를 생략합니다.');
       if (mounted) {
         setState(() => _rpsModelReady = false);
       }
@@ -456,7 +456,7 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
       for (final log in logs) {
         _appendRpsLog(log);
       }
-      _appendLog('RPS 모델 준비 완료');
+      _appendLog('차량 인식 모델 준비 완료');
       if (mounted) {
         setState(() => _rpsModelReady = true);
       } else {
@@ -464,8 +464,8 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
       }
     } catch (e) {
       _lastRpsFailureReason = e.toString();
-      _appendLog('RPS 모델 준비 오류 $e');
-      _appendRpsLog('RPS 모델 준비 오류 $e');
+      _appendLog('차량 인식 모델 준비 오류 $e');
+      _appendRpsLog('차량 인식 모델 준비 오류 $e');
       if (mounted) {
         setState(() => _rpsModelReady = false);
       }
@@ -701,8 +701,27 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
         _captureErrorStreak = 0;
 
         if (widget.imageRecognitionEnabled) {
-          final rpsResult = await _rpsClassifier.classifyFile(captured.path);
-          _applyRpsResult(rpsResult);
+          if (!(_rpsUserSelected && _selectedRpsLabel != null)) {
+            final rpsResult = await _rpsClassifier.classifyFile(captured.path);
+            _applyRpsResult(rpsResult);
+            if (_hasRpsResultForEnabledSuccess &&
+                _pendingPlate != null &&
+                _pendingPlateExitType != null) {
+              final pendingPlate = _pendingPlate!;
+              final pendingExitType = _pendingPlateExitType!;
+              final selectedChipLabel = _pendingSelectedChipLabel;
+              _pendingPlate = null;
+              _pendingPlateExitType = null;
+              _pendingSelectedChipLabel = null;
+              _appendLog('번호판 대기값과 차량 인식값 조건 충족 plate=$pendingPlate rps=${_selectedRpsDisplayLabel ?? _selectedRpsLabel}');
+              await _finishAndPop(
+                plate: pendingPlate,
+                exitType: pendingExitType,
+                selectedChipLabel: selectedChipLabel,
+              );
+              return;
+            }
+          }
         }
 
         RecognizedText? ocrResult;
@@ -936,7 +955,7 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
     }
   }
 
-  void _applyRpsResult(RpsImageClassifierResult result) {
+  void _applyRpsResult(VehicleImageClassifierResult result) {
     for (final log in result.logs) {
       _appendRpsLog(log);
     }
@@ -955,9 +974,9 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
       _selectedRpsConfidence = null;
       _rpsUserSelected = false;
       _rpsAutoAccepted = false;
-      _lastRpsFailureReason = result.failureReason ?? 'rps_inference_failed';
+      _lastRpsFailureReason = result.failureReason ?? 'vehicle_inference_failed';
       _lastRpsInstabilityReason = null;
-      _appendLog('RPS 인식 실패 reason=${_lastRpsFailureReason ?? '-'}');
+      _appendLog('차량 인식 인식 실패 reason=${_lastRpsFailureReason ?? '-'}');
       if (mounted) {
         setState(() {});
       }
@@ -973,7 +992,7 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
     } else {
       _lastRpsFailureReason = null;
       _appendLog(
-        'RPS 확률 후보 갱신 inputMode=${RpsImageClassifier.inputMode} '
+        '차량 인식 확률 후보 갱신 inputMode=${VehicleImageClassifier.inputMode} '
         'top1=${result.topLabel ?? '-'} ${_formatProbability(result.topConfidence)} '
         'top2=${result.secondLabel ?? '-'} ${_formatProbability(result.secondConfidence)} '
         'margin=${_formatProbability(result.confidenceMargin)} '
@@ -988,7 +1007,7 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
     }
   }
 
-  void _applyAutomaticRpsDecisionFromResult(RpsImageClassifierResult result) {
+  void _applyAutomaticRpsDecisionFromResult(VehicleImageClassifierResult result) {
     if (result.autoAcceptable && result.label != null && result.label!.isNotEmpty) {
       _selectedRpsLabel = result.label;
       _selectedRpsDisplayLabel = result.displayLabel;
@@ -998,7 +1017,7 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
       _lastRpsFailureReason = null;
       _lastRpsInstabilityReason = null;
       _appendLog(
-        'RPS 자동 판정 승인 inputMode=${RpsImageClassifier.inputMode} '
+        '차량 인식 자동 판정 승인 inputMode=${VehicleImageClassifier.inputMode} '
         'label=${result.label} display=${result.displayLabel} '
         'confidence=${_formatProbability(result.confidence)} '
         'margin=${_formatProbability(result.confidenceMargin)} '
@@ -1013,9 +1032,9 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
     _selectedRpsConfidence = null;
     _rpsUserSelected = false;
     _rpsAutoAccepted = false;
-    _lastRpsFailureReason = result.instabilityReason ?? 'rps_unstable_confidence';
+    _lastRpsFailureReason = result.instabilityReason ?? 'vehicle_unstable_confidence';
     _appendLog(
-      'RPS 자동 판정 보류 inputMode=${RpsImageClassifier.inputMode} '
+      '차량 인식 자동 판정 보류 inputMode=${VehicleImageClassifier.inputMode} '
       'top1=${result.topLabel ?? '-'} ${_formatProbability(result.topConfidence)} '
       'top2=${result.secondLabel ?? '-'} ${_formatProbability(result.secondConfidence)} '
       'margin=${_formatProbability(result.confidenceMargin)} '
@@ -1035,25 +1054,25 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
     final second = ranked.length < 2 ? null : ranked[1];
     final margin = second == null ? null : top.value - second.value;
     final accepted = margin != null &&
-        top.value >= RpsImageClassifier.minAutoConfidence &&
-        margin >= RpsImageClassifier.minAutoMargin;
+        top.value >= VehicleImageClassifier.minAutoConfidence &&
+        margin >= VehicleImageClassifier.minAutoMargin;
     _rpsTopLabel = top.key;
-    _rpsTopDisplayLabel = RpsImageClassifier.displayLabels[top.key] ?? top.key;
+    _rpsTopDisplayLabel = VehicleImageClassifier.displayLabels[top.key] ?? top.key;
     _rpsTopConfidence = top.value;
     _rpsSecondLabel = second?.key;
-    _rpsSecondDisplayLabel = second == null ? null : RpsImageClassifier.displayLabels[second.key] ?? second.key;
+    _rpsSecondDisplayLabel = second == null ? null : VehicleImageClassifier.displayLabels[second.key] ?? second.key;
     _rpsSecondConfidence = second?.value;
     _rpsConfidenceMargin = margin;
     if (accepted) {
       _selectedRpsLabel = top.key;
-      _selectedRpsDisplayLabel = RpsImageClassifier.displayLabels[top.key] ?? top.key;
+      _selectedRpsDisplayLabel = VehicleImageClassifier.displayLabels[top.key] ?? top.key;
       _selectedRpsConfidence = top.value;
       _rpsUserSelected = false;
       _rpsAutoAccepted = true;
       _lastRpsFailureReason = null;
       _lastRpsInstabilityReason = null;
       _appendLog(
-        'RPS 자동 모드 전환 승인 label=$top.key confidence=${_formatProbability(top.value)} margin=${_formatProbability(margin)}',
+        '차량 인식 자동 모드 전환 승인 label=$top.key confidence=${_formatProbability(top.value)} margin=${_formatProbability(margin)}',
       );
       return;
     }
@@ -1065,26 +1084,26 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
     _lastRpsFailureReason = _buildStoredRpsInstabilityReason(top.value, margin);
     _lastRpsInstabilityReason = _lastRpsFailureReason;
     _appendLog(
-      'RPS 자동 모드 전환 보류 top1=${top.key} ${_formatProbability(top.value)} top2=${second?.key ?? '-'} ${_formatProbability(second?.value)} margin=${_formatProbability(margin)} reason=${_lastRpsFailureReason ?? '-'}',
+      '차량 인식 자동 모드 전환 보류 top1=${top.key} ${_formatProbability(top.value)} top2=${second?.key ?? '-'} ${_formatProbability(second?.value)} margin=${_formatProbability(margin)} reason=${_lastRpsFailureReason ?? '-'}',
     );
   }
 
   String _buildStoredRpsInstabilityReason(double topConfidence, double? margin) {
     if (margin == null) {
-      return 'rps_probability_unavailable';
+      return 'vehicle_probability_unavailable';
     }
-    final lowConfidence = topConfidence < RpsImageClassifier.minAutoConfidence;
-    final lowMargin = margin < RpsImageClassifier.minAutoMargin;
+    final lowConfidence = topConfidence < VehicleImageClassifier.minAutoConfidence;
+    final lowMargin = margin < VehicleImageClassifier.minAutoMargin;
     if (lowConfidence && lowMargin) {
-      return 'rps_low_confidence_and_low_margin';
+      return 'vehicle_low_confidence_and_low_margin';
     }
     if (lowConfidence) {
-      return 'rps_low_confidence';
+      return 'vehicle_low_confidence';
     }
     if (lowMargin) {
-      return 'rps_low_margin';
+      return 'vehicle_low_margin';
     }
-    return 'rps_unstable_confidence';
+    return 'vehicle_unstable_confidence';
   }
 
   bool get _hasRpsResultForEnabledSuccess {
@@ -1123,19 +1142,13 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
       return true;
     }
 
-    if (_rpsProbabilityMode && _lastRpsProbabilities.isNotEmpty) {
-      _pendingPlate = normalizedPlate;
-      _pendingPlateExitType = exitType;
-      _pendingSelectedChipLabel = selectedChipLabel;
-      _appendLog('번호판 확정 후 RPS 사용자 선택 대기 plate=$normalizedPlate probabilities=${_formatRpsProbabilities(_lastRpsProbabilities)}');
-      _stopAuto();
-      if (mounted) {
-        setState(() {});
-      }
-      return false;
+    _pendingPlate = normalizedPlate;
+    _pendingPlateExitType = exitType;
+    _pendingSelectedChipLabel = selectedChipLabel;
+    _appendLog('번호판 선택 반영 plate=$normalizedPlate 차량 인식 후보 선택 대기 probabilities=${_formatRpsProbabilities(_lastRpsProbabilities)} rpsFailure=${_lastRpsFailureReason ?? '-'}');
+    if (mounted) {
+      setState(() {});
     }
-
-    _appendLog('선택 기능 조건 미충족 plate=$normalizedPlate rpsReady=false rpsFailure=${_lastRpsFailureReason ?? '-'}');
     return false;
   }
 
@@ -1145,15 +1158,29 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
       return;
     }
 
+    if (_rpsUserSelected && _selectedRpsLabel == label) {
+      setState(() {
+        _selectedRpsLabel = null;
+        _selectedRpsDisplayLabel = null;
+        _selectedRpsConfidence = null;
+        _rpsUserSelected = false;
+        _rpsAutoAccepted = false;
+        _lastRpsFailureReason = null;
+      });
+      _appendLog('차량 인식 사용자 선택 해제 label=$label 모델 추론 재개');
+      return;
+    }
+
     setState(() {
       _selectedRpsLabel = label;
-      _selectedRpsDisplayLabel = RpsImageClassifier.displayLabels[label] ?? label;
+      _selectedRpsDisplayLabel = VehicleImageClassifier.displayLabels[label] ?? label;
       _selectedRpsConfidence = probability;
       _rpsUserSelected = true;
       _rpsAutoAccepted = false;
       _lastRpsFailureReason = null;
+      _lastRpsInstabilityReason = null;
     });
-    _appendLog('RPS 사용자 선택 label=$label display=$_selectedRpsDisplayLabel confidence=${_formatProbability(probability)}');
+    _appendLog('차량 인식 사용자 선택 label=$label display=$_selectedRpsDisplayLabel confidence=${_formatProbability(probability)} 모델 추론 일시정지');
 
     final pendingPlate = _pendingPlate;
     final pendingExitType = _pendingPlateExitType;
@@ -1185,26 +1212,26 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
 
   String _formatRpsProbabilities(Map<String, double> probabilities) {
     if (probabilities.isEmpty) return '-';
-    final ordered = ['scissors', 'rock', 'paper'];
+    final ordered = VehicleImageClassifier.fallbackLabels;
     final values = <String>[];
     for (final key in ordered) {
       final value = probabilities[key];
       if (value == null) continue;
-      final display = RpsImageClassifier.displayLabels[key] ?? key;
+      final display = VehicleImageClassifier.displayLabels[key] ?? key;
       values.add('$display:${_formatProbability(value)}');
     }
     for (final entry in probabilities.entries) {
       if (ordered.contains(entry.key)) continue;
-      final display = RpsImageClassifier.displayLabels[entry.key] ?? entry.key;
+      final display = VehicleImageClassifier.displayLabels[entry.key] ?? entry.key;
       values.add('$display:${_formatProbability(entry.value)}');
     }
     return values.join(', ');
   }
 
   String _rpsStatusText() {
-    if (!widget.imageRecognitionEnabled) return 'RPS 미실행';
+    if (!widget.imageRecognitionEnabled) return '차량 인식 미실행';
     if (_selectedRpsDisplayLabel != null) {
-      final mode = _rpsUserSelected ? '사용자 선택' : '자동 판정';
+      final mode = _rpsUserSelected ? '사용자 선택, 다시 누르면 해제' : '자동 판정';
       return '$mode ${_selectedRpsDisplayLabel!} ${_formatProbability(_selectedRpsConfidence)}';
     }
     if (_rpsProbabilityMode && _lastRpsProbabilities.isNotEmpty) {
@@ -1212,9 +1239,9 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
       return '확률 표시 중, 사용자 선택 필요$unstable';
     }
     if (_lastRpsFailureReason != null) {
-      return 'RPS 보류 ${_lastRpsFailureReason!}';
+      return '차량 인식 보류 ${_lastRpsFailureReason!}';
     }
-    return _rpsModelReady ? 'RPS 대기 중' : 'RPS 모델 준비 중';
+    return _rpsModelReady ? '차량 인식 대기 중' : '차량 인식 모델 준비 중';
   }
 
   String _joinForLog(List<String> values) {
@@ -2204,8 +2231,8 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
         rpsSecondDisplayLabel: _rpsSecondDisplayLabel,
         rpsSecondConfidence: _rpsSecondConfidence,
         rpsConfidenceMargin: _rpsConfidenceMargin,
-        rpsMinAutoConfidence: RpsImageClassifier.minAutoConfidence,
-        rpsMinAutoMargin: RpsImageClassifier.minAutoMargin,
+        rpsMinAutoConfidence: VehicleImageClassifier.minAutoConfidence,
+        rpsMinAutoMargin: VehicleImageClassifier.minAutoMargin,
       ),
     );
   }
@@ -2253,15 +2280,84 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
     );
   }
 
-  void _showLogsDialog() {
-    final cs = Theme.of(context).colorScheme;
-    final logText = [
+  String _buildRecognitionLogText() {
+    _DisplayChip? weakChip;
+    for (final chip in _displayChips) {
+      if (chip.requiresMidCompletion) {
+        weakChip = chip;
+        break;
+      }
+    }
+    final requiresMidCompletion = weakChip?.requiresMidCompletion ?? false;
+    final weakFront = weakChip?.weakFront;
+    final weakBack = weakChip?.weakBack;
+    final weakObservedValue = weakChip?.weakObservedValue ?? weakChip?.value;
+
+    final lines = <String>[
+      '----- RECOGNITION DEBUG LOG -----',
+      'time=${DateTime.now().toIso8601String()}',
+      'sessionId=${widget.sessionId}',
+      'plateRecognitionEnabled=${widget.plateRecognitionEnabled}',
+      'imageRecognitionEnabled=${widget.imageRecognitionEnabled}',
+      'autoRunning=$_autoRunning',
+      '',
+      '----- THRESHOLD -----',
+      'vehicleMinConfidence=${_formatProbability(VehicleImageClassifier.minAutoConfidence)}',
+      'vehicleMinMargin=${_formatProbability(VehicleImageClassifier.minAutoMargin)}',
+      'vehicleModelPausedByUserSelection=${_rpsUserSelected && _selectedRpsLabel != null}',
+      'vehicleInputMode=${VehicleImageClassifier.inputMode}',
+      'vehicleModelAsset=${VehicleImageClassifier.modelAssetPath}',
+      'vehicleLabelsAsset=${VehicleImageClassifier.labelsAssetPath}',
+      '',
+      '----- LAST OCR STATE -----',
+      'lastText=${_lastText ?? '-'}',
+      'lastFailureReason=${_lastFailureReason ?? '-'}',
+      'pendingPlate=${_pendingPlate ?? '-'}',
+      'requiresMidCompletion=$requiresMidCompletion',
+      'weakFront=${weakFront ?? '-'}',
+      'weakBack=${weakBack ?? '-'}',
+      'weakObservedValue=${weakObservedValue ?? '-'}',
+      '',
+      '----- LAST VEHICLE STATE -----',
+      'modelReady=$_rpsModelReady',
+      'probabilityMode=$_rpsProbabilityMode',
+      'selectedLabel=${_selectedRpsLabel ?? '-'}',
+      'selectedDisplay=${_selectedRpsDisplayLabel ?? '-'}',
+      'selectedConfidence=${_formatProbability(_selectedRpsConfidence)}',
+      'top1=${_rpsTopLabel ?? '-'}',
+      'top1Display=${_rpsTopDisplayLabel ?? '-'}',
+      'top1Confidence=${_formatProbability(_rpsTopConfidence)}',
+      'top2=${_rpsSecondLabel ?? '-'}',
+      'top2Display=${_rpsSecondDisplayLabel ?? '-'}',
+      'top2Confidence=${_formatProbability(_rpsSecondConfidence)}',
+      'margin=${_formatProbability(_rpsConfidenceMargin)}',
+      'autoAccepted=$_rpsAutoAccepted',
+      'userSelected=$_rpsUserSelected',
+      'failureReason=${_lastRpsFailureReason ?? '-'}',
+      'probabilities=${_formatRpsProbabilities(_lastRpsProbabilities)}',
+      'rawScores=${_formatRpsProbabilities(_lastRpsRawScores)}',
+      '',
       '----- OCR SESSION LOG -----',
       _sessionLogs.isEmpty ? '로그가 없습니다.' : _sessionLogs.join('\n'),
       '',
-      '----- RPS MODEL LOG -----',
+      '----- VEHICLE MODEL LOG -----',
       _rpsSessionLogs.isEmpty ? '로그가 없습니다.' : _rpsSessionLogs.join('\n'),
-    ].join('\n');
+    ];
+    return lines.join('\n');
+  }
+
+  Future<void> _copyRecognitionLogToClipboard() async {
+    final logText = _buildRecognitionLogText();
+    await Clipboard.setData(ClipboardData(text: logText));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('인식 로그를 클립보드에 복사했습니다.')),
+    );
+  }
+
+  void _showLogsDialog() {
+    final cs = Theme.of(context).colorScheme;
+    final logText = _buildRecognitionLogText();
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
@@ -2282,6 +2378,9 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
               await Clipboard.setData(ClipboardData(text: logText));
               if (!mounted) return;
               Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('인식 로그를 클립보드에 복사했습니다.')),
+              );
             },
             child: const Text('복사'),
           ),
@@ -2347,7 +2446,7 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
           surfaceTintColor: Colors.transparent,
           actions: [
             IconButton(
-              tooltip: widget.imageRecognitionEnabled ? (_rpsProbabilityMode ? 'RPS 확률 표시 ON' : 'RPS 확률 표시 OFF') : 'RPS 확률 표시 OFF',
+              tooltip: widget.imageRecognitionEnabled ? (_rpsProbabilityMode ? '차량 인식 확률 표시 ON' : '차량 인식 확률 표시 OFF') : '차량 인식 확률 표시 OFF',
               onPressed: widget.imageRecognitionEnabled ? () {
                 final nextMode = !_rpsProbabilityMode;
                 setState(() {
@@ -2367,12 +2466,12 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
                     setState(() {});
                   }
                 }
-                _appendLog('RPS 확률 표시 ${_rpsProbabilityMode ? 'ON' : 'OFF'}');
+                _appendLog('차량 인식 확률 표시 ${_rpsProbabilityMode ? 'ON' : 'OFF'}');
               } : null,
               icon: Icon(_rpsProbabilityMode ? Icons.percent : Icons.percent_outlined),
             ),
             IconButton(
-              tooltip: '인식 로그',
+              tooltip: '인식 로그 보기',
               onPressed: _showLogsDialog,
               icon: const Icon(Icons.article_outlined),
             ),
@@ -2497,12 +2596,12 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
                             _infoPill(
                               cs: cs,
                               icon: _rpsProbabilityMode ? Icons.percent : Icons.auto_awesome,
-                              text: widget.imageRecognitionEnabled ? (_rpsProbabilityMode ? 'RPS 확률ON' : 'RPS 자동') : 'RPS OFF',
+                              text: widget.imageRecognitionEnabled ? (_rpsProbabilityMode ? '차량 인식 확률ON' : '차량 인식 자동') : '차량 인식 OFF',
                             ),
                             _infoPill(
                               cs: cs,
-                              icon: Icons.sports_mma,
-                              text: widget.imageRecognitionEnabled ? _rpsStatusText() : 'RPS 미실행',
+                              icon: Icons.directions_car_filled_outlined,
+                              text: widget.imageRecognitionEnabled ? _rpsStatusText() : '차량 인식 미실행',
                             ),
                             if (usedLearningNow)
                               _infoPill(
@@ -2533,11 +2632,32 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
                     if (widget.imageRecognitionEnabled && widget.plateRecognitionEnabled)
                       const SizedBox(height: 8),
                     if (widget.plateRecognitionEnabled) _buildCandidates(),
+                    const SizedBox(height: 8),
+                    _buildLogCopyButton(),
                   ],
                 ),
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLogCopyButton() {
+    final cs = Theme.of(context).colorScheme;
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: _copyRecognitionLogToClipboard,
+        icon: const Icon(Icons.copy_all_outlined, size: 18),
+        label: const Text('인식 로그 복사'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: cs.surface,
+          side: BorderSide(color: cs.surface.withOpacity(0.28)),
+          backgroundColor: cs.surface.withOpacity(0.08),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          textStyle: const TextStyle(fontWeight: FontWeight.w700),
         ),
       ),
     );
@@ -2585,7 +2705,7 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
           borderRadius: BorderRadius.circular(16),
         ),
         child: Text(
-          '이미지 인식이 OFF라 RPS 모델을 실행하지 않습니다.',
+          '이미지 인식이 OFF라 차량 인식 모델을 실행하지 않습니다.',
           style: TextStyle(color: cs.surface.withOpacity(0.78), fontWeight: FontWeight.w600),
           textAlign: TextAlign.center,
         ),
@@ -2593,7 +2713,8 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
     }
     final theme = Theme.of(context);
     final probabilities = _lastRpsProbabilities;
-    final waitingUserChoice = _rpsProbabilityMode && probabilities.isNotEmpty && _selectedRpsLabel == null;
+    final waitingUserChoice = probabilities.isNotEmpty && _selectedRpsLabel == null;
+    final vehicleSelectionPaused = _rpsUserSelected && _selectedRpsLabel != null;
     final pendingPlate = _pendingPlate;
 
     if (probabilities.isEmpty && _selectedRpsLabel == null && _lastRpsFailureReason == null) {
@@ -2606,7 +2727,7 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
           borderRadius: BorderRadius.circular(16),
         ),
         child: Text(
-          _rpsModelReady ? 'RPS 모델 대기 중입니다. 카메라 프레임을 분석하면 결과가 표시됩니다.' : 'RPS 모델을 준비 중입니다.',
+          _rpsModelReady ? '차량 인식 모델 대기 중입니다. 카메라 프레임을 분석하면 결과가 표시됩니다.' : '차량 인식 모델을 준비 중입니다.',
           style: TextStyle(color: cs.surface.withOpacity(0.78), fontWeight: FontWeight.w600),
           textAlign: TextAlign.center,
         ),
@@ -2628,7 +2749,7 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Text(
-            '가위바위보 이미지 모델',
+            '차량 전면부 인식 모델',
             style: theme.textTheme.titleSmall?.copyWith(
               color: cs.surface,
               fontWeight: FontWeight.w800,
@@ -2636,13 +2757,13 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
           ),
           const SizedBox(height: 6),
           Text(
-            pendingPlate == null ? _rpsStatusText() : '번호판 $pendingPlate 확정, RPS 결과 선택 후 완료',
+            pendingPlate == null ? _rpsStatusText() : vehicleSelectionPaused ? '번호판 $pendingPlate, 차종 $_selectedRpsDisplayLabel 선택 완료' : '번호판 $pendingPlate 선택됨, 차량 후보 선택 후 완료',
             style: TextStyle(color: cs.surface.withOpacity(0.78), fontSize: 12),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 4),
           Text(
-            '입력: 전체 프레임 · 자동 기준 ${_formatProbability(RpsImageClassifier.minAutoConfidence)} / 차이 ${_formatProbability(RpsImageClassifier.minAutoMargin)}',
+            '입력: 전체 프레임 · 자동 기준 ${_formatProbability(VehicleImageClassifier.minAutoConfidence)} / 차이 ${_formatProbability(VehicleImageClassifier.minAutoMargin)} · 후보 선택 시 모델 일시정지',
             style: TextStyle(color: cs.surface.withOpacity(0.62), fontSize: 11),
             textAlign: TextAlign.center,
           ),
@@ -2661,7 +2782,7 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
               runSpacing: 8,
               alignment: WrapAlignment.center,
               children: entries.map((entry) {
-                final display = RpsImageClassifier.displayLabels[entry.key] ?? entry.key;
+                final display = VehicleImageClassifier.displayLabels[entry.key] ?? entry.key;
                 final selected = _selectedRpsLabel == entry.key;
                 return ActionChip(
                   label: Text('$display ${_formatProbability(entry.value)}'),
@@ -2675,8 +2796,8 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
                     fontWeight: FontWeight.w700,
                   ),
                   backgroundColor: selected ? cs.primary : cs.surface,
-                  tooltip: '이 RPS 값을 결과로 선택',
-                  onPressed: _rpsProbabilityMode ? () => _selectRpsResult(entry.key) : null,
+                  tooltip: selected ? '차량 선택을 해제하고 모델 추론을 재개' : '이 차량 인식 값을 선택하고 모델 추론 일시정지',
+                  onPressed: () => _selectRpsResult(entry.key),
                 );
               }).toList(),
             ),
@@ -2684,7 +2805,7 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
           if (_lastRpsFailureReason != null) ...[
             const SizedBox(height: 8),
             Text(
-              '마지막 RPS 실패: $_lastRpsFailureReason',
+              '마지막 차량 인식 실패: $_lastRpsFailureReason',
               style: TextStyle(color: cs.errorContainer, fontSize: 12),
               textAlign: TextAlign.center,
             ),
@@ -2734,22 +2855,29 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
           runAlignment: WrapAlignment.center,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: _displayChips.map((chip) {
-            final backgroundColor = switch (chip.tier) {
+            final normalizedValue = _normalizeCandidateKey(chip.value);
+            final selected = _pendingPlate == normalizedValue;
+            final backgroundColor = selected
+                ? Colors.amber
+                : switch (chip.tier) {
               _ChipTier.stable => Theme.of(context).colorScheme.primary,
               _ChipTier.tentative => Colors.teal,
               _ChipTier.weak => cs.surface,
             };
-            final labelColor = switch (chip.tier) {
+            final labelColor = selected
+                ? Colors.black
+                : switch (chip.tier) {
               _ChipTier.stable => cs.onPrimary,
               _ChipTier.tentative => Colors.white,
               _ChipTier.weak => cs.onSurface,
             };
             return ActionChip(
-              label: Text(chip.label),
+              label: Text(selected ? '${chip.label} 선택됨' : chip.label),
+              avatar: selected ? const Icon(Icons.check_circle, size: 18, color: Colors.black) : null,
               labelStyle:
               TextStyle(color: labelColor, fontWeight: FontWeight.w600),
               backgroundColor: backgroundColor,
-              tooltip: '이 값으로 삽입',
+              tooltip: selected ? '선택된 번호판' : '이 번호판 값을 선택',
               onPressed: () async {
                 _appendLog('후보칩 선택 label=${chip.label} value=${chip.value}');
                 if (chip.requiresMidCompletion) {

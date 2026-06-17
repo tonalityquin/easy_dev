@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0",
+  "task": "vehicle_front_make_model_classification",
+  "mvp_classes": [
+    "genesis_g80",
+    "kia_carnival"
+  ],
+  "hierarchy": {
+    "genesis": {
+      "models": [
+        "genesis_g80"
+      ]
+    },
+    "kia": {
+      "models": [
+        "kia_carnival"
+      ]
+    }
+  },
+  "notes": [
+    "MVP 2-class hierarchy only.",
+    "Future versions should separate make/model/generation/facelift."
+  ]
+}

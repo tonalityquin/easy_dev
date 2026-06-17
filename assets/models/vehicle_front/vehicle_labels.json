@@ -1,0 +1,20 @@
+{
+  "labels": [
+    {
+      "index": 0,
+      "id": "genesis_g80",
+      "display_name": {
+        "ko": "제네시스 G80",
+        "en": "Genesis G80"
+      }
+    },
+    {
+      "index": 1,
+      "id": "kia_carnival",
+      "display_name": {
+        "ko": "기아 카니발",
+        "en": "Kia Carnival"
+      }
+    }
+  ]
+}

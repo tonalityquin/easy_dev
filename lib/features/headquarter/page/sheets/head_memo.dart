@@ -281,6 +281,48 @@ class HeadMemoRecipient {
   }
 }
 
+
+class HeadMemoRemoteBookSummary {
+  const HeadMemoRemoteBookSummary({
+    required this.id,
+    required this.name,
+    required this.order,
+    required this.pageCount,
+    required this.todoCount,
+    required this.completedTodoCount,
+    required this.characterCount,
+    required this.updatedAt,
+  });
+
+  final String id;
+  final String name;
+  final int order;
+  final int pageCount;
+  final int todoCount;
+  final int completedTodoCount;
+  final int characterCount;
+  final DateTime? updatedAt;
+
+  String get displayName => name.trim().isEmpty ? '이름 없는 메모북' : name.trim();
+
+  factory HeadMemoRemoteBookSummary.fromJson(Map<String, dynamic> json, {int fallbackOrder = 0}) {
+    final id = ((json['id'] as String?) ?? '').trim();
+    final name = ((json['name'] as String?) ?? '').trim();
+    return HeadMemoRemoteBookSummary(
+      id: id,
+      name: name.isEmpty ? '원격 메모북' : name,
+      order: HeadMemo._readInt(json['order'], fallbackOrder),
+      pageCount: HeadMemo._readInt(json['pageCount'], 0),
+      todoCount: HeadMemo._readInt(json['todoCount'], 0),
+      completedTodoCount: HeadMemo._readInt(json['completedTodoCount'], 0),
+      characterCount: HeadMemo._readInt(json['characterCount'], 0),
+      updatedAt: HeadMemo._parseDate(json['updatedAt']) ??
+          HeadMemo._parseDate(json['pushedAt']) ??
+          HeadMemo._parseDate(json['serverUpdatedAt']),
+    );
+  }
+}
+
 class HeadMemoRemoteSyncResult {
   const HeadMemoRemoteSyncResult({
     required this.documentPath,
@@ -684,83 +726,384 @@ class HeadMemo {
     return _sortBooks(list);
   }
 
-  static int _remotePageCount(List<HeadMemoBook> value) {
-    return value.fold<int>(0, (sum, item) => sum + item.pages.length);
+  static int _readInt(Object? value, int fallback) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value) ?? fallback;
+    return fallback;
   }
 
-  static int _remoteTodoCount(List<HeadMemoBook> value) {
-    return value.fold<int>(
+  static int _bookTodoCount(HeadMemoBook value) {
+    return value.pages.fold<int>(0, (sum, page) => sum + page.todos.length);
+  }
+
+  static int _bookCompletedTodoCount(HeadMemoBook value) {
+    return value.pages.fold<int>(
       0,
-      (sum, item) => sum + item.pages.fold<int>(0, (pageSum, page) => pageSum + page.todos.length),
+      (sum, page) => sum + page.todos.where((todo) => todo.done).length,
     );
   }
 
-  static int _remoteCompletedTodoCount(List<HeadMemoBook> value) {
-    return value.fold<int>(
+  static int _bookCharacterCount(HeadMemoBook value) {
+    return value.pages.fold<int>(
       0,
-      (sum, item) => sum + item.pages.fold<int>(
-        0,
-        (pageSum, page) => pageSum + page.todos.where((todo) => todo.done).length,
-      ),
+      (sum, page) => sum + page.header.length + page.body.length,
     );
   }
 
-  static String get remoteLibraryPath => '$_remoteLibraryCollection/$_remoteLibraryDocument';
+  static int _pageCharacterCount(HeadMemoPage value) {
+    return value.header.length + value.body.length;
+  }
+
+  static List<String> _bookPageIds(HeadMemoBook value) {
+    return value.pages.map((page) => page.id).toList();
+  }
+
+  static Map<String, dynamic> _bookSummaryPayload(HeadMemoBook value, int order) {
+    return <String, dynamic>{
+      'id': value.id,
+      'name': value.name,
+      'order': order,
+      'pageCount': value.pages.length,
+      'todoCount': _bookTodoCount(value),
+      'completedTodoCount': _bookCompletedTodoCount(value),
+      'characterCount': _bookCharacterCount(value),
+      'createdAt': value.createdAt.toIso8601String(),
+      'updatedAt': value.updatedAt.toIso8601String(),
+    };
+  }
+
+  static Map<String, dynamic> _bookDocumentPayload({
+    required HeadMemoBook value,
+    required int order,
+    required DateTime now,
+    required String? uid,
+    required String? email,
+  }) {
+    return <String, dynamic>{
+      'schemaVersion': 2,
+      'syncMode': 'bookPageScoped',
+      'id': value.id,
+      'name': value.name,
+      'order': order,
+      'pageIds': _bookPageIds(value),
+      'headerFontSize': value.headerFontSize,
+      'bodyFontSize': value.bodyFontSize,
+      'createdAt': value.createdAt.toIso8601String(),
+      'updatedAt': value.updatedAt.toIso8601String(),
+      'pageCount': value.pages.length,
+      'todoCount': _bookTodoCount(value),
+      'completedTodoCount': _bookCompletedTodoCount(value),
+      'characterCount': _bookCharacterCount(value),
+      'pushedAt': now.toIso8601String(),
+      'pushedByUid': uid,
+      'pushedByEmail': email,
+      'serverUpdatedAt': FieldValue.serverTimestamp(),
+    };
+  }
+
+  static Map<String, dynamic> _pageDocumentPayload({
+    required HeadMemoBook parentBook,
+    required HeadMemoPage value,
+    required int order,
+    required DateTime now,
+  }) {
+    final payload = Map<String, dynamic>.from(value.toJson());
+    payload['schemaVersion'] = 2;
+    payload['bookId'] = parentBook.id;
+    payload['order'] = order;
+    payload['characterCount'] = _pageCharacterCount(value);
+    payload['pushedAt'] = now.toIso8601String();
+    payload['serverUpdatedAt'] = FieldValue.serverTimestamp();
+    return payload;
+  }
+
+  static DocumentReference<Map<String, dynamic>> get _remoteRootRef {
+    return FirebaseFirestore.instance
+        .collection(_remoteLibraryCollection)
+        .doc(_remoteLibraryDocument);
+  }
+
+  static DocumentReference<Map<String, dynamic>> get _remoteMetaRef {
+    return _remoteRootRef.collection('meta').doc('main');
+  }
+
+  static CollectionReference<Map<String, dynamic>> get _remoteBooksRef {
+    return _remoteRootRef.collection('books');
+  }
+
+  static DocumentReference<Map<String, dynamic>> _remoteBookRef(String bookId) {
+    return _remoteBooksRef.doc(bookId);
+  }
+
+  static CollectionReference<Map<String, dynamic>> _remotePagesRef(String bookId) {
+    return _remoteBookRef(bookId).collection('pages');
+  }
+
+  static String _remoteBookPath(String bookId) {
+    return '$_remoteLibraryCollection/$_remoteLibraryDocument/books/$bookId';
+  }
+
+  static String get remoteLibraryPath => _remoteBookPath(book.value.id);
+
+  static Future<List<HeadMemoRemoteBookSummary>> fetchRemoteBookIndex() async {
+    await _ensureInited();
+    try {
+      final metaSnapshot = await _remoteMetaRef.get();
+      final metaData = metaSnapshot.data();
+      final rawIndex = metaData?['bookIndex'];
+      final summaries = <HeadMemoRemoteBookSummary>[];
+      if (rawIndex is List) {
+        for (var i = 0; i < rawIndex.length; i += 1) {
+          final item = rawIndex[i];
+          if (item is! Map) continue;
+          final summary = HeadMemoRemoteBookSummary.fromJson(
+            Map<String, dynamic>.from(item),
+            fallbackOrder: i,
+          );
+          if (summary.id.isNotEmpty) summaries.add(summary);
+        }
+      }
+      if (summaries.isEmpty) {
+        final bookSnapshot = await _remoteBooksRef.get();
+        for (var i = 0; i < bookSnapshot.docs.length; i += 1) {
+          final doc = bookSnapshot.docs[i];
+          final data = Map<String, dynamic>.from(doc.data());
+          data['id'] = ((data['id'] as String?) ?? '').trim().isNotEmpty ? data['id'] : doc.id;
+          final summary = HeadMemoRemoteBookSummary.fromJson(data, fallbackOrder: i);
+          if (summary.id.isNotEmpty) summaries.add(summary);
+        }
+      }
+      summaries.sort((a, b) {
+        final byOrder = a.order.compareTo(b.order);
+        if (byOrder != 0) return byOrder;
+        return a.displayName.compareTo(b.displayName);
+      });
+      return summaries;
+    } catch (e) {
+      await _logApiError(
+        tag: 'HeadMemo.fetchRemoteBookIndex',
+        message: '본사 메모북 Firestore 원격 책 목록 조회 실패',
+        error: e,
+        extra: <String, dynamic>{
+          'documentPath': '$_remoteLibraryCollection/$_remoteLibraryDocument/meta/main',
+        },
+        tags: const <String>[_tMemo, _tMemoFirestore],
+      );
+      rethrow;
+    }
+  }
+
+  static Future<HeadMemoRemoteSyncResult> pullRemoteBookFromFirestore(String remoteBookId) async {
+    await _ensureInited();
+    final selectedBookId = remoteBookId.trim();
+    if (selectedBookId.isEmpty) throw StateError('remote_book_id_empty');
+    try {
+      final metaSnapshot = await _remoteMetaRef.get();
+      final metaData = metaSnapshot.data();
+      final selectedBookSnapshot = await _remoteBookRef(selectedBookId).get();
+      if (!selectedBookSnapshot.exists) {
+        throw StateError('remote_head_memo_book_not_found');
+      }
+      final bookData = Map<String, dynamic>.from(selectedBookSnapshot.data() ?? <String, dynamic>{});
+      bookData['id'] = (bookData['id'] as String?)?.trim().isNotEmpty == true ? bookData['id'] : selectedBookId;
+      final rawPageIds = bookData['pageIds'];
+      final pageIds = rawPageIds is List
+          ? rawPageIds.whereType<String>().where((id) => id.trim().isNotEmpty).toList()
+          : <String>[];
+      final pageSnapshot = await _remotePagesRef(selectedBookId).orderBy('order').get();
+      final entries = <MapEntry<HeadMemoPage, int>>[];
+      for (var i = 0; i < pageSnapshot.docs.length; i += 1) {
+        final doc = pageSnapshot.docs[i];
+        if (pageIds.isNotEmpty && !pageIds.contains(doc.id)) continue;
+        final pageData = Map<String, dynamic>.from(doc.data());
+        pageData['id'] = (pageData['id'] as String?)?.trim().isNotEmpty == true ? pageData['id'] : doc.id;
+        entries.add(
+          MapEntry<HeadMemoPage, int>(
+            HeadMemoPage.fromJson(pageData),
+            _readInt(pageData['order'], i),
+          ),
+        );
+      }
+      entries.sort((a, b) => a.value.compareTo(b.value));
+      final remotePages = entries.map((entry) => entry.key).toList();
+      if (remotePages.isEmpty) {
+        final rawLegacyPages = bookData['pages'];
+        if (rawLegacyPages is List) {
+          remotePages.addAll(
+            rawLegacyPages
+                .whereType<Map>()
+                .map((item) => HeadMemoPage.fromJson(Map<String, dynamic>.from(item))),
+          );
+        }
+      }
+      final remoteBook = HeadMemoBook.fromJson(
+        <String, dynamic>{
+          ...bookData,
+          'pages': remotePages.map((item) => item.toJson()).toList(),
+        },
+      );
+      final list = List<HeadMemoBook>.from(books.value);
+      final index = list.indexWhere((item) => item.id == remoteBook.id);
+      if (index < 0) {
+        list.add(remoteBook);
+      } else {
+        list[index] = remoteBook;
+      }
+      books.value = _sortBooks(list);
+      activeBookId.value = remoteBook.id;
+      book.value = remoteBook;
+      final rawRecipients = metaData?['recipients'];
+      if (rawRecipients is List) {
+        recipients.value = rawRecipients
+            .whereType<Map>()
+            .map((item) => HeadMemoRecipient.fromJson(Map<String, dynamic>.from(item)))
+            .where((item) => _isValidEmail(item.email))
+            .toList();
+      }
+      _syncLegacyNotes();
+      await _saveBooks();
+      await _saveRecipients();
+      final syncedAt = _parseDate(bookData['pushedAt']) ??
+          _parseDate(bookData['serverUpdatedAt']) ??
+          DateTime.now();
+      return HeadMemoRemoteSyncResult(
+        documentPath: _remoteBookPath(remoteBook.id),
+        bookCount: 1,
+        pageCount: remoteBook.pages.length,
+        todoCount: _bookTodoCount(remoteBook),
+        completedTodoCount: _bookCompletedTodoCount(remoteBook),
+        activeBookName: remoteBook.name,
+        syncedAt: syncedAt,
+      );
+    } catch (e) {
+      await _logApiError(
+        tag: 'HeadMemo.pullRemoteBookFromFirestore',
+        message: '본사 메모북 Firestore 선택 원격 메모북 내려받기 실패',
+        error: e,
+        extra: <String, dynamic>{
+          'documentPath': _remoteBookPath(selectedBookId),
+          'bookId': selectedBookId,
+        },
+        tags: const <String>[_tMemo, _tMemoFirestore],
+      );
+      rethrow;
+    }
+  }
 
   static Future<HeadMemoRemoteSyncResult> pushLibraryToFirestore() async {
     await _ensureInited();
     final user = FirebaseAuth.instance.currentUser;
     final googleUser = GoogleAuthSession.instance.currentUser;
+    final currentBook = book.value;
     final remoteBooks = _normalizedBooksForRemote();
-    final pageCount = _remotePageCount(remoteBooks);
-    final todoCount = _remoteTodoCount(remoteBooks);
-    final completedTodoCount = _remoteCompletedTodoCount(remoteBooks);
+    final currentBookIndex = remoteBooks.indexWhere((item) => item.id == currentBook.id);
+    final order = currentBookIndex < 0 ? 0 : currentBookIndex;
+    final pageCount = currentBook.pages.length;
+    final todoCount = _bookTodoCount(currentBook);
+    final completedTodoCount = _bookCompletedTodoCount(currentBook);
     final now = DateTime.now();
-    final payload = <String, dynamic>{
-      'schemaVersion': 1,
-      'status': 'onAir',
-      'source': 'head_memo_local_first',
-      'activeBookId': activeBookId.value ?? book.value.id,
-      'bookId': book.value.id,
-      'bookName': book.value.name,
-      'books': remoteBooks.map((e) => e.toJson()).toList(),
-      'recipients': recipients.value.map((e) => e.toJson()).toList(),
+    final uid = user?.uid;
+    final email = user?.email ?? googleUser?.email;
+    var batch = FirebaseFirestore.instance.batch();
+    var writeCount = 0;
+
+    Future<void> commitBatchIfNeeded({bool force = false}) async {
+      if (writeCount == 0) return;
+      if (!force && writeCount < 450) return;
+      await batch.commit();
+      batch = FirebaseFirestore.instance.batch();
+      writeCount = 0;
+    }
+
+    void setBatch(
+      DocumentReference<Map<String, dynamic>> ref,
+      Map<String, dynamic> payload,
+    ) {
+      batch.set(ref, payload, SetOptions(merge: true));
+      writeCount += 1;
+    }
+
+    final rootPayload = <String, dynamic>{
+      'schemaVersion': 2,
+      'syncMode': 'bookPageScoped',
+      'activeBookId': currentBook.id,
+      'updatedAt': now.toIso8601String(),
+      'serverUpdatedAt': FieldValue.serverTimestamp(),
+      'books': FieldValue.delete(),
+      'bookId': FieldValue.delete(),
+      'bookName': FieldValue.delete(),
+      'pageCount': FieldValue.delete(),
+      'todoCount': FieldValue.delete(),
+      'completedTodoCount': FieldValue.delete(),
+    };
+    final metaPayload = <String, dynamic>{
+      'schemaVersion': 2,
+      'syncMode': 'bookPageScoped',
+      'activeBookId': currentBook.id,
+      'bookIndex': remoteBooks
+          .asMap()
+          .entries
+          .map((entry) => _bookSummaryPayload(entry.value, entry.key))
+          .toList(),
+      'recipients': recipients.value.map((item) => item.toJson()).toList(),
       'bookCount': remoteBooks.length,
-      'pageCount': pageCount,
-      'todoCount': todoCount,
-      'completedTodoCount': completedTodoCount,
+      'updatedAt': now.toIso8601String(),
       'pushedAt': now.toIso8601String(),
-      'pushedByUid': user?.uid,
-      'pushedByEmail': user?.email ?? googleUser?.email,
+      'pushedByUid': uid,
+      'pushedByEmail': email,
       'serverUpdatedAt': FieldValue.serverTimestamp(),
     };
 
     try {
-      await FirebaseFirestore.instance
-          .collection(_remoteLibraryCollection)
-          .doc(_remoteLibraryDocument)
-          .set(payload, SetOptions(merge: true));
+      setBatch(_remoteRootRef, rootPayload);
+      setBatch(_remoteMetaRef, metaPayload);
+      setBatch(
+        _remoteBookRef(currentBook.id),
+        _bookDocumentPayload(
+          value: currentBook,
+          order: order,
+          now: now,
+          uid: uid,
+          email: email,
+        ),
+      );
+      for (var i = 0; i < currentBook.pages.length; i += 1) {
+        final page = currentBook.pages[i];
+        setBatch(
+          _remotePagesRef(currentBook.id).doc(page.id),
+          _pageDocumentPayload(
+            parentBook: currentBook,
+            value: page,
+            order: i,
+            now: now,
+          ),
+        );
+        await commitBatchIfNeeded();
+      }
+      await commitBatchIfNeeded(force: true);
       return HeadMemoRemoteSyncResult(
-        documentPath: remoteLibraryPath,
-        bookCount: remoteBooks.length,
+        documentPath: _remoteBookPath(currentBook.id),
+        bookCount: 1,
         pageCount: pageCount,
         todoCount: todoCount,
         completedTodoCount: completedTodoCount,
-        activeBookName: book.value.name,
+        activeBookName: currentBook.name,
         syncedAt: now,
       );
     } catch (e) {
       await _logApiError(
         tag: 'HeadMemo.pushLibraryToFirestore',
-        message: '본사 메모북 Firestore 업로드 실패',
+        message: '본사 메모북 Firestore 현재 메모북 업로드 실패',
         error: e,
         extra: <String, dynamic>{
-          'documentPath': remoteLibraryPath,
-          'bookCount': remoteBooks.length,
+          'documentPath': _remoteBookPath(currentBook.id),
+          'bookId': currentBook.id,
+          'bookName': currentBook.name,
           'pageCount': pageCount,
           'todoCount': todoCount,
-          'uid': user?.uid,
-          'email': user?.email ?? googleUser?.email,
+          'uid': uid,
+          'email': email,
         },
         tags: const <String>[_tMemo, _tMemoFirestore],
       );
@@ -772,78 +1115,176 @@ class HeadMemo {
     await _ensureInited();
 
     try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection(_remoteLibraryCollection)
-          .doc(_remoteLibraryDocument)
-          .get();
-      final data = snapshot.data();
-      if (data == null) {
-        throw StateError('remote_head_memo_library_not_found');
+      final localBookId = (activeBookId.value ?? book.value.id).trim();
+      final metaSnapshot = await _remoteMetaRef.get();
+      final metaData = metaSnapshot.data();
+      final metaActiveBookId = (metaData?['activeBookId'] as String?)?.trim();
+      final preferredBookIds = <String>[
+        if (localBookId.isNotEmpty) localBookId,
+        if (metaActiveBookId != null && metaActiveBookId.isNotEmpty && metaActiveBookId != localBookId)
+          metaActiveBookId,
+      ];
+
+      DocumentSnapshot<Map<String, dynamic>>? selectedBookSnapshot;
+      var selectedBookId = '';
+      for (final candidate in preferredBookIds) {
+        final snapshot = await _remoteBookRef(candidate).get();
+        if (snapshot.exists) {
+          selectedBookSnapshot = snapshot;
+          selectedBookId = candidate;
+          break;
+        }
       }
 
-      final rawBooks = data['books'];
-      final parsedBooks = rawBooks is List
-          ? rawBooks
-              .whereType<Map>()
-              .map((e) => HeadMemoBook.fromJson(Map<String, dynamic>.from(e)))
-              .toList()
-          : <HeadMemoBook>[];
-      if (parsedBooks.isEmpty) {
-        throw StateError('remote_head_memo_books_empty');
+      if (selectedBookSnapshot == null || !selectedBookSnapshot.exists) {
+        final legacySnapshot = await _remoteRootRef.get();
+        final legacyData = legacySnapshot.data();
+        if (legacyData != null && legacyData['books'] is List) {
+          return _pullLegacyLibraryFromFirestore(legacyData);
+        }
+        throw StateError('remote_head_memo_book_not_found');
       }
 
-      final sortedBooks = _sortBooks(parsedBooks);
-      final remoteActiveId = (data['activeBookId'] as String?)?.trim();
-      final selected = sortedBooks.firstWhere(
-        (item) => item.id == remoteActiveId,
-        orElse: () => sortedBooks.first,
+      final bookData = Map<String, dynamic>.from(selectedBookSnapshot.data() ?? <String, dynamic>{});
+      bookData['id'] = (bookData['id'] as String?)?.trim().isNotEmpty == true
+          ? bookData['id']
+          : selectedBookId;
+      final rawPageIds = bookData['pageIds'];
+      final pageIds = rawPageIds is List
+          ? rawPageIds.whereType<String>().where((id) => id.trim().isNotEmpty).toList()
+          : <String>[];
+      final pageSnapshot = await _remotePagesRef(selectedBookId).orderBy('order').get();
+      final entries = <MapEntry<HeadMemoPage, int>>[];
+      for (var i = 0; i < pageSnapshot.docs.length; i += 1) {
+        final doc = pageSnapshot.docs[i];
+        if (pageIds.isNotEmpty && !pageIds.contains(doc.id)) continue;
+        final pageData = Map<String, dynamic>.from(doc.data());
+        pageData['id'] = (pageData['id'] as String?)?.trim().isNotEmpty == true
+            ? pageData['id']
+            : doc.id;
+        entries.add(
+          MapEntry<HeadMemoPage, int>(
+            HeadMemoPage.fromJson(pageData),
+            _readInt(pageData['order'], i),
+          ),
+        );
+      }
+      entries.sort((a, b) => a.value.compareTo(b.value));
+      final remotePages = entries.map((entry) => entry.key).toList();
+      if (remotePages.isEmpty) {
+        final rawLegacyPages = bookData['pages'];
+        if (rawLegacyPages is List) {
+          remotePages.addAll(
+            rawLegacyPages
+                .whereType<Map>()
+                .map((item) => HeadMemoPage.fromJson(Map<String, dynamic>.from(item))),
+          );
+        }
+      }
+      final remoteBook = HeadMemoBook.fromJson(
+        <String, dynamic>{
+          ...bookData,
+          'pages': remotePages.map((item) => item.toJson()).toList(),
+        },
       );
-
-      final rawRecipients = data['recipients'];
-      final parsedRecipients = rawRecipients is List
-          ? rawRecipients
-              .whereType<Map>()
-              .map((e) => HeadMemoRecipient.fromJson(Map<String, dynamic>.from(e)))
-              .where((e) => _isValidEmail(e.email))
-              .toList()
-          : <HeadMemoRecipient>[];
-
-      books.value = sortedBooks;
-      activeBookId.value = selected.id;
-      book.value = selected;
-      recipients.value = parsedRecipients;
+      final list = List<HeadMemoBook>.from(books.value);
+      final index = list.indexWhere((item) => item.id == remoteBook.id);
+      if (index < 0) {
+        list.add(remoteBook);
+      } else {
+        list[index] = remoteBook;
+      }
+      books.value = _sortBooks(list);
+      activeBookId.value = remoteBook.id;
+      book.value = remoteBook;
+      final rawRecipients = metaData?['recipients'];
+      if (rawRecipients is List) {
+        recipients.value = rawRecipients
+            .whereType<Map>()
+            .map((item) => HeadMemoRecipient.fromJson(Map<String, dynamic>.from(item)))
+            .where((item) => _isValidEmail(item.email))
+            .toList();
+      }
       _syncLegacyNotes();
       await _saveBooks();
       await _saveRecipients();
-
-      final pageCount = _remotePageCount(sortedBooks);
-      final todoCount = _remoteTodoCount(sortedBooks);
-      final completedTodoCount = _remoteCompletedTodoCount(sortedBooks);
-      final syncedAt = _parseDate(data['pushedAt']) ??
-          _parseDate(data['serverUpdatedAt']) ??
+      final syncedAt = _parseDate(bookData['pushedAt']) ??
+          _parseDate(bookData['serverUpdatedAt']) ??
           DateTime.now();
-
       return HeadMemoRemoteSyncResult(
-        documentPath: remoteLibraryPath,
-        bookCount: sortedBooks.length,
-        pageCount: pageCount,
-        todoCount: todoCount,
-        completedTodoCount: completedTodoCount,
-        activeBookName: selected.name,
+        documentPath: _remoteBookPath(remoteBook.id),
+        bookCount: 1,
+        pageCount: remoteBook.pages.length,
+        todoCount: _bookTodoCount(remoteBook),
+        completedTodoCount: _bookCompletedTodoCount(remoteBook),
+        activeBookName: remoteBook.name,
         syncedAt: syncedAt,
       );
     } catch (e) {
       await _logApiError(
         tag: 'HeadMemo.pullLibraryFromFirestore',
-        message: '본사 메모북 Firestore 내려받기 실패',
+        message: '본사 메모북 Firestore 현재 메모북 내려받기 실패',
         error: e,
         extra: <String, dynamic>{
           'documentPath': remoteLibraryPath,
+          'activeBookId': activeBookId.value,
         },
         tags: const <String>[_tMemo, _tMemoFirestore],
       );
       rethrow;
     }
+  }
+
+  static Future<HeadMemoRemoteSyncResult> _pullLegacyLibraryFromFirestore(
+    Map<String, dynamic> data,
+  ) async {
+    final rawBooks = data['books'];
+    final parsedBooks = rawBooks is List
+        ? rawBooks
+            .whereType<Map>()
+            .map((item) => HeadMemoBook.fromJson(Map<String, dynamic>.from(item)))
+            .toList()
+        : <HeadMemoBook>[];
+    if (parsedBooks.isEmpty) {
+      throw StateError('remote_head_memo_books_empty');
+    }
+
+    final sortedBooks = _sortBooks(parsedBooks);
+    final remoteActiveId = (data['activeBookId'] as String?)?.trim();
+    final selected = sortedBooks.firstWhere(
+      (item) => item.id == remoteActiveId,
+      orElse: () => sortedBooks.first,
+    );
+
+    final rawRecipients = data['recipients'];
+    final parsedRecipients = rawRecipients is List
+        ? rawRecipients
+            .whereType<Map>()
+            .map((item) => HeadMemoRecipient.fromJson(Map<String, dynamic>.from(item)))
+            .where((item) => _isValidEmail(item.email))
+            .toList()
+        : <HeadMemoRecipient>[];
+
+    books.value = sortedBooks;
+    activeBookId.value = selected.id;
+    book.value = selected;
+    recipients.value = parsedRecipients;
+    _syncLegacyNotes();
+    await _saveBooks();
+    await _saveRecipients();
+
+    final syncedAt = _parseDate(data['pushedAt']) ??
+        _parseDate(data['serverUpdatedAt']) ??
+        DateTime.now();
+    return HeadMemoRemoteSyncResult(
+      documentPath: '$_remoteLibraryCollection/$_remoteLibraryDocument',
+      bookCount: sortedBooks.length,
+      pageCount: sortedBooks.fold<int>(0, (sum, item) => sum + item.pages.length),
+      todoCount: sortedBooks.fold<int>(0, (sum, item) => sum + _bookTodoCount(item)),
+      completedTodoCount: sortedBooks.fold<int>(0, (sum, item) => sum + _bookCompletedTodoCount(item)),
+      activeBookName: selected.name,
+      syncedAt: syncedAt,
+    );
   }
 
   static void _replaceActiveBook(HeadMemoBook updated, {bool sort = true}) {
@@ -1484,7 +1925,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
                 ? Icons.hourglass_top_rounded
                 : Icons.radio_button_checked_rounded,
             label: _pushingOnAir ? 'UP' : 'ON AIR',
-            tooltip: '로컬 본사 메모를 Firebase에 업로드',
+            tooltip: '현재 메모북만 Firebase에 업로드',
             background: Colors.red.shade600,
             foreground: Colors.white,
             onTap: disabled ? null : _pushOnAir,
@@ -1495,8 +1936,15 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
                 ? Icons.hourglass_top_rounded
                 : Icons.cloud_download_rounded,
             label: _pullingOnAir ? 'DOWN' : 'PULL',
-            tooltip: 'Firebase 본사 메모를 로컬로 내려받기',
+            tooltip: '현재 메모북만 Firebase에서 내려받기',
             onTap: disabled ? null : _pullOnAir,
+          ),
+          const SizedBox(width: 6),
+          _RemoteActionButton(
+            icon: Icons.cloud_queue_rounded,
+            label: 'REMOTE',
+            tooltip: '원격 책 목록에서 골라 가져오기',
+            onTap: disabled ? null : _openRemoteBooksSheet,
           ),
         ],
       ),
@@ -2763,7 +3211,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
         context,
         title: 'Firebase 내려받기 완료',
         description:
-            '${result.bookCount}권 · ${result.pageCount}쪽 · 투두 ${result.todoCount}개를 로컬 메모북에 반영했습니다.\n활성 메모북: ${result.activeBookName}',
+            '현재 메모북 ${result.activeBookName} · ${result.pageCount}쪽 · 투두 ${result.todoCount}개를 로컬에 반영했습니다.',
       );
     } catch (e) {
       if (!mounted) return;
@@ -2783,7 +3231,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
       builder: (dialogContext) {
         return AlertDialog(
           title: const Text('Firebase에서 내려받기'),
-          content: const Text('원격 본사 메모로 현재 로컬 책장과 수신자 보관함을 덮어씁니다. 계속할까요?'),
+          content: const Text('Firebase의 현재 메모북으로 로컬의 같은 메모북만 덮어씁니다. 다른 메모북은 유지됩니다. 계속할까요?'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -2798,6 +3246,201 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
         );
       },
     );
+  }
+
+  Future<void> _openRemoteBooksSheet() async {
+    if (!_developerMode || _pushingOnAir || _pullingOnAir) return;
+    final future = HeadMemo.fetchRemoteBookIndex();
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final cs = Theme.of(ctx).colorScheme;
+        final theme = Theme.of(ctx);
+        return FractionallySizedBox(
+          heightFactor: .76,
+          child: ClipRRect(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            child: Material(
+              color: cs.surface,
+              child: SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const _DragHandle(),
+                      const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: cs.tertiaryContainer,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Icon(Icons.cloud_queue_rounded, color: cs.onTertiaryContainer),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('원격 책 목록', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
+                                Text('Firebase bookIndex에서 책을 골라 현재 기기로 가져옵니다.', style: theme.textTheme.labelMedium?.copyWith(color: cs.outline)),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: '닫기',
+                            onPressed: () => Navigator.of(ctx).pop(),
+                            icon: const Icon(Icons.close_rounded),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Expanded(
+                        child: FutureBuilder<List<HeadMemoRemoteBookSummary>>(
+                          future: future,
+                          builder: (context, snapshot) {
+                            if (snapshot.connectionState != ConnectionState.done) {
+                              return const Center(child: CircularProgressIndicator());
+                            }
+                            if (snapshot.hasError) {
+                              return _RemoteBooksMessage(
+                                icon: Icons.cloud_off_rounded,
+                                title: '원격 책 목록을 가져오지 못했습니다',
+                                message: '네트워크, Firestore 문서, 권한을 확인하세요.',
+                              );
+                            }
+                            final remoteBooks = snapshot.data ?? const <HeadMemoRemoteBookSummary>[];
+                            if (remoteBooks.isEmpty) {
+                              return const _RemoteBooksMessage(
+                                icon: Icons.menu_book_outlined,
+                                title: '원격 책이 없습니다',
+                                message: '먼저 모바일 또는 클라이언트에서 ON AIR로 책을 올리세요.',
+                              );
+                            }
+                            final localIds = HeadMemo.books.value.map((item) => item.id).toSet();
+                            return ListView.separated(
+                              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                              itemCount: remoteBooks.length,
+                              separatorBuilder: (_, __) => const SizedBox(height: 10),
+                              itemBuilder: (context, index) {
+                                final item = remoteBooks[index];
+                                final exists = localIds.contains(item.id);
+                                final updated = item.updatedAt == null ? '시간 없음' : HeadMemo._fmtDateTime(item.updatedAt!);
+                                return Container(
+                                  decoration: BoxDecoration(
+                                    color: exists ? cs.primaryContainer.withOpacity(.34) : cs.surfaceContainerHighest.withOpacity(.48),
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(color: exists ? cs.primary.withOpacity(.38) : cs.outlineVariant.withOpacity(.75)),
+                                  ),
+                                  child: ListTile(
+                                    contentPadding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
+                                    leading: CircleAvatar(
+                                      backgroundColor: exists ? cs.primary : cs.tertiaryContainer,
+                                      foregroundColor: exists ? cs.onPrimary : cs.onTertiaryContainer,
+                                      child: Icon(exists ? Icons.library_books_rounded : Icons.cloud_download_rounded),
+                                    ),
+                                    title: Text(item.displayName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900)),
+                                    subtitle: Text(
+                                      '${item.pageCount}쪽 · 투두 ${item.completedTodoCount}/${item.todoCount} · ${item.characterCount}자 · $updated · ${exists ? '로컬에 있음' : '원격 전용'}',
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    trailing: FilledButton.tonalIcon(
+                                      onPressed: () async {
+                                        Navigator.of(ctx).pop();
+                                        await _pullRemoteBook(item);
+                                      },
+                                      icon: const Icon(Icons.download_rounded),
+                                      label: Text(exists ? '교체' : '가져오기'),
+                                    ),
+                                  ),
+                                );
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _pullRemoteBook(HeadMemoRemoteBookSummary summary) async {
+    if (_pushingOnAir || _pullingOnAir) return;
+    final exists = HeadMemo.books.value.any((item) => item.id == summary.id);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(exists ? '원격 책으로 교체' : '원격 책 가져오기'),
+          content: Text(exists
+              ? '${summary.displayName} 메모북을 Firebase 원격본으로 교체합니다. 다른 메모북은 유지됩니다. 계속할까요?'
+              : '${summary.displayName} 메모북을 Firebase에서 새로 가져옵니다. 계속할까요?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('취소'),
+            ),
+            FilledButton.icon(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              icon: const Icon(Icons.cloud_download_rounded),
+              label: const Text('가져오기'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _pullingOnAir = true);
+    try {
+      final result = await HeadMemo.pullRemoteBookFromFirestore(summary.id);
+      if (!mounted) return;
+      _resetAfterRemoteBookChange();
+      HapticFeedback.mediumImpact();
+      await StatusDialog.showSuccess(
+        context,
+        title: '원격 책 가져오기 완료',
+        description: '${result.activeBookName} · ${result.pageCount}쪽 · 투두 ${result.todoCount}개를 로컬에 반영했습니다.',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      await StatusDialog.showFailure(
+        context,
+        title: '원격 책 가져오기 실패',
+        description: '선택한 원격 책을 가져오지 못했습니다. 네트워크, Firestore 문서, 권한을 확인하세요.',
+      );
+    } finally {
+      if (mounted) setState(() => _pullingOnAir = false);
+    }
+  }
+
+  void _resetAfterRemoteBookChange() {
+    _searchCtrl.clear();
+    setState(() {
+      _preview = false;
+      _currentPage = 0;
+      _activeBookRenderId = null;
+      _nameCtrl.text = HeadMemo.book.value.name;
+      _query = '';
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_pageController.hasClients) return;
+      _pageController.jumpToPage(0);
+    });
   }
 
   Future<void> _sendBookByEmail() async {
@@ -3469,6 +4112,55 @@ class _BookshelfEmptyState extends StatelessWidget {
               onPressed: onCreate,
               icon: const Icon(Icons.add_rounded),
               label: const Text('새 메모북'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RemoteBooksMessage extends StatelessWidget {
+  const _RemoteBooksMessage({
+    required this.icon,
+    required this.title,
+    required this.message,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 84,
+              height: 84,
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHighest.withOpacity(.7),
+                borderRadius: BorderRadius.circular(28),
+              ),
+              child: Icon(icon, size: 40, color: cs.outline),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium?.copyWith(color: cs.outline),
             ),
           ],
         ),

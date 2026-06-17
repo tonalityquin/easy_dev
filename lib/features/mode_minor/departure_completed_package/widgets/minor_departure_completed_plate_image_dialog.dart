@@ -33,9 +33,7 @@ class MinorDepartureCompletedPlateImageDialog extends StatelessWidget {
           plateNumber: plateNumber,
         ),
         builder: (context, snapshot) {
-          final state = snapshot.connectionState;
-
-          if (state == ConnectionState.waiting) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
 
@@ -43,17 +41,14 @@ class MinorDepartureCompletedPlateImageDialog extends StatelessWidget {
             return _ErrorState(
               title: '이미지 불러오기 실패',
               message: '${snapshot.error}',
-              onRetry: () {
-                
-                Navigator.of(context).maybePop();
-              },
+              onRetry: () => Navigator.of(context).maybePop(),
             );
           }
 
           final urls = (snapshot.data ?? <String>[]).where((e) => e.trim().isNotEmpty).toList();
 
           if (urls.isEmpty) {
-            return const _EmptyState(message: 'DB에 저장된 이미지가 없습니다.');
+            return const _EmptyState(message: '저장된 이미지가 없습니다.');
           }
 
           return ListView.separated(
@@ -61,13 +56,11 @@ class MinorDepartureCompletedPlateImageDialog extends StatelessWidget {
             separatorBuilder: (_, __) => Divider(height: 1, color: cs.outlineVariant.withOpacity(0.6)),
             itemBuilder: (context, index) {
               final url = urls[index];
-
-              final meta = _ImageMeta.fromUrl(url);
-
-              final dateText = meta.date.isNotEmpty ? meta.date : '날짜 없음';
-              final plateText = meta.plate.isNotEmpty ? meta.plate : '번호판 없음';
-              final userText = meta.user.isNotEmpty ? meta.user : '미상';
-              final timeText = meta.time.isNotEmpty ? meta.time : '';
+              final meta = _ImageMeta.fromUrl(
+                url,
+                fallbackPlateNumber: plateNumber,
+              );
+              final infoLines = _buildListInfoLines(context, meta);
 
               return Material(
                 color: Colors.transparent,
@@ -76,6 +69,7 @@ class MinorDepartureCompletedPlateImageDialog extends StatelessWidget {
                     context,
                     urls,
                     index,
+                    fallbackPlateNumber: plateNumber,
                   ),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10.0),
@@ -93,28 +87,7 @@ class MinorDepartureCompletedPlateImageDialog extends StatelessWidget {
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('📅 $dateText${timeText.isNotEmpty ? ' $timeText' : ''}',
-                                  style: Theme.of(context).textTheme.bodyMedium),
-                              const SizedBox(height: 4),
-                              Text('🚘 $plateText', style: Theme.of(context).textTheme.bodyMedium),
-                              const SizedBox(height: 4),
-                              Text('👤 $userText',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodyMedium
-                                      ?.copyWith(color: cs.onSurfaceVariant)),
-                              const SizedBox(height: 2),
-                              Text(
-                                meta.rawFileName.isNotEmpty ? meta.rawFileName : '',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .labelSmall
-                                    ?.copyWith(color: cs.onSurfaceVariant.withOpacity(0.75)),
-                              ),
-                            ],
+                            children: infoLines,
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -132,12 +105,12 @@ class MinorDepartureCompletedPlateImageDialog extends StatelessWidget {
   }
 }
 
-
 Future<void> showMinorDepartureCompletedFullScreenImageViewerFromUrls(
-    BuildContext context,
-    List<String> urls,
-    int initialIndex,
-    ) async {
+  BuildContext context,
+  List<String> urls,
+  int initialIndex, {
+  String fallbackPlateNumber = '',
+}) async {
   await showDialog<void>(
     context: context,
     useSafeArea: true,
@@ -147,16 +120,17 @@ Future<void> showMinorDepartureCompletedFullScreenImageViewerFromUrls(
       urlImages: urls,
       fileImages: const <XFile>[],
       initialIndex: initialIndex,
+      fallbackPlateNumber: fallbackPlateNumber,
     ),
   );
 }
 
-
 Future<void> showMinorDepartureCompletedFullScreenImageViewerFromFiles(
-    BuildContext context,
-    List<XFile> files,
-    int initialIndex,
-    ) async {
+  BuildContext context,
+  List<XFile> files,
+  int initialIndex, {
+  String fallbackPlateNumber = '',
+}) async {
   await showDialog<void>(
     context: context,
     useSafeArea: true,
@@ -166,12 +140,10 @@ Future<void> showMinorDepartureCompletedFullScreenImageViewerFromFiles(
       urlImages: const <String>[],
       fileImages: files,
       initialIndex: initialIndex,
+      fallbackPlateNumber: fallbackPlateNumber,
     ),
   );
 }
-
-
-
 
 enum _ViewerMode { urls, files }
 
@@ -181,14 +153,16 @@ class _MinorFullScreenImageViewer extends StatefulWidget {
     required this.urlImages,
     required this.fileImages,
     required this.initialIndex,
+    required this.fallbackPlateNumber,
   });
 
   final _ViewerMode mode;
   final List<String> urlImages;
   final List<XFile> fileImages;
   final int initialIndex;
+  final String fallbackPlateNumber;
 
-  int get length => (mode == _ViewerMode.urls) ? urlImages.length : fileImages.length;
+  int get length => mode == _ViewerMode.urls ? urlImages.length : fileImages.length;
 
   @override
   State<_MinorFullScreenImageViewer> createState() => _MinorFullScreenImageViewerState();
@@ -214,11 +188,17 @@ class _MinorFullScreenImageViewerState extends State<_MinorFullScreenImageViewer
   String _metadataForIndex(int i) {
     if (widget.mode == _ViewerMode.urls) {
       final url = widget.urlImages[i];
-      final meta = _ImageMeta.fromUrl(url);
+      final meta = _ImageMeta.fromUrl(
+        url,
+        fallbackPlateNumber: widget.fallbackPlateNumber,
+      );
       return meta.toOverlayText();
     }
     final file = widget.fileImages[i];
-    final meta = _ImageMeta.fromFileName(file.path.split(Platform.pathSeparator).last);
+    final meta = _ImageMeta.fromFileName(
+      file.path.split(Platform.pathSeparator).last,
+      fallbackPlateNumber: widget.fallbackPlateNumber,
+    );
     return meta.toOverlayText();
   }
 
@@ -315,8 +295,6 @@ class _MinorFullScreenImageViewerState extends State<_MinorFullScreenImageViewer
                 );
               },
             ),
-
-            
             Align(
               alignment: Alignment.topRight,
               child: Padding(
@@ -328,8 +306,6 @@ class _MinorFullScreenImageViewerState extends State<_MinorFullScreenImageViewer
                 ),
               ),
             ),
-
-            
             Align(
               alignment: Alignment.topCenter,
               child: Padding(
@@ -358,9 +334,6 @@ class _MinorFullScreenImageViewerState extends State<_MinorFullScreenImageViewer
     );
   }
 }
-
-
-
 
 class _Thumb extends StatelessWidget {
   final String url;
@@ -391,7 +364,13 @@ class _Thumb extends StatelessWidget {
         fit: BoxFit.cover,
         loadingBuilder: (context, child, progress) {
           if (progress == null) return child;
-          return const Center(child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)));
+          return const Center(
+            child: SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          );
         },
         errorBuilder: (_, __, ___) => const Center(
           child: Icon(Icons.broken_image, color: Colors.red),
@@ -401,11 +380,9 @@ class _Thumb extends StatelessWidget {
   }
 }
 
-
-
-
 class _EmptyState extends StatelessWidget {
   final String message;
+
   const _EmptyState({required this.message});
 
   @override
@@ -480,13 +457,48 @@ class _ErrorState extends StatelessWidget {
   }
 }
 
+List<Widget> _buildListInfoLines(BuildContext context, _ImageMeta meta) {
+  final theme = Theme.of(context);
+  final cs = theme.colorScheme;
+  final baseStyle = theme.textTheme.bodyMedium;
+  final mutedStyle = theme.textTheme.labelSmall?.copyWith(color: cs.onSurfaceVariant.withOpacity(0.75));
+  final dateTime = meta.dateTimeText;
+  final widgets = <Widget>[];
 
+  if (dateTime.isNotEmpty) {
+    widgets.add(Text('📅 $dateTime', style: baseStyle));
+    widgets.add(const SizedBox(height: 4));
+  }
+  if (meta.plate.isNotEmpty) {
+    widgets.add(Text('🚘 ${meta.plate}', style: baseStyle));
+    widgets.add(const SizedBox(height: 4));
+  }
+  if (meta.user.isNotEmpty) {
+    widgets.add(Text('👤 ${meta.user}', style: baseStyle?.copyWith(color: cs.onSurfaceVariant)));
+    widgets.add(const SizedBox(height: 2));
+  }
+  if (meta.rawFileName.isNotEmpty) {
+    widgets.add(
+      Text(
+        meta.rawFileName,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: mutedStyle,
+      ),
+    );
+  }
 
+  while (widgets.isNotEmpty && widgets.last is SizedBox) {
+    widgets.removeLast();
+  }
+
+  return widgets;
+}
 
 class _ImageMeta {
-  final String rawFileName; 
-  final String date; 
-  final String time; 
+  final String rawFileName;
+  final String date;
+  final String time;
   final String plate;
   final String user;
 
@@ -498,67 +510,65 @@ class _ImageMeta {
     required this.user,
   });
 
+  String get dateTimeText {
+    if (date.isEmpty) return '';
+    return time.isNotEmpty ? '$date $time' : date;
+  }
+
   String toOverlayText() {
     final parts = <String>[];
-    if (date.isNotEmpty) {
-      final dt = time.isNotEmpty ? '$date $time' : date;
-      parts.add('촬영일: $dt');
-    }
+    final dt = dateTimeText;
+    if (dt.isNotEmpty) parts.add('촬영일: $dt');
     if (plate.isNotEmpty) parts.add('차량번호: $plate');
     if (user.isNotEmpty) parts.add('촬영자: $user');
     return parts.join('\n');
   }
 
-  static _ImageMeta fromUrl(String url) {
+  static _ImageMeta fromUrl(
+    String url, {
+    String fallbackPlateNumber = '',
+  }) {
     try {
       final uri = Uri.parse(url);
-      final seg = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : '';
-      final fileName = Uri.decodeComponent(seg.split('?').first);
-      return fromFileName(fileName);
+      final segment = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : url.split('/').last;
+      final fileName = Uri.decodeComponent(segment.split('?').first);
+      return fromFileName(
+        fileName,
+        fallbackPlateNumber: fallbackPlateNumber,
+      );
     } catch (_) {
-      
-      return const _ImageMeta(rawFileName: '', date: '', time: '', plate: '', user: '');
+      return _ImageMeta.empty(fallbackPlateNumber: fallbackPlateNumber);
     }
   }
 
-  static _ImageMeta fromFileName(String fileName) {
+  static _ImageMeta fromFileName(
+    String fileName, {
+    String fallbackPlateNumber = '',
+  }) {
     try {
-      var f = fileName.trim();
-      if (f.isEmpty) {
-        return const _ImageMeta(rawFileName: '', date: '', time: '', plate: '', user: '');
+      var name = Uri.decodeComponent(fileName.trim());
+      if (name.isEmpty) {
+        return _ImageMeta.empty(fallbackPlateNumber: fallbackPlateNumber);
       }
 
-      
-      if (f.contains('?')) f = f.split('?').first;
+      if (name.contains('?')) name = name.split('?').first;
+      final raw = name;
+      name = name.replaceFirst(RegExp(r'\.(jpg|jpeg|png|webp)$', caseSensitive: false), '');
 
-      final raw = f;
+      final fallbackPlate = _cleanPlate(fallbackPlateNumber);
+      final parts = name.split('_').map((e) => e.trim()).toList();
 
-      
-      final lower = f.toLowerCase();
-      if (lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.png') || lower.endsWith('.webp')) {
-        final dot = f.lastIndexOf('.');
-        if (dot > 0) f = f.substring(0, dot);
-      }
-
-      
-      final parts = f.split('_');
-      if (parts.length < 4) {
-        
-        return _ImageMeta(rawFileName: raw, date: '', time: '', plate: '', user: '');
-      }
-
-      final date = parts[0].trim();
-      final millis = int.tryParse(parts[1].trim()) ?? 0;
-      final plate = parts[2].trim();
-
-      
-      final user = parts.sublist(3).join('_').trim();
-
+      String date = '';
       String time = '';
-      if (millis > 0) {
-        final dt = DateTime.fromMillisecondsSinceEpoch(millis);
-        time =
-        '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}:${dt.second.toString().padLeft(2, '0')}';
+      String plate = fallbackPlate;
+      String user = '';
+
+      if (parts.length >= 4) {
+        date = _normalizeDate(parts[0]);
+        time = _normalizeTime(parts[1]);
+        final parsedPlate = _cleanPlate(parts[2]);
+        if (parsedPlate.isNotEmpty) plate = parsedPlate;
+        user = _cleanUser(parts.sublist(3).join('_'));
       }
 
       return _ImageMeta(
@@ -569,9 +579,51 @@ class _ImageMeta {
         user: user,
       );
     } catch (_) {
-      return _ImageMeta(rawFileName: fileName, date: '', time: '', plate: '', user: '');
+      return _ImageMeta.empty(fallbackPlateNumber: fallbackPlateNumber);
     }
   }
+
+  static _ImageMeta empty({String fallbackPlateNumber = ''}) {
+    return _ImageMeta(
+      rawFileName: '',
+      date: '',
+      time: '',
+      plate: _cleanPlate(fallbackPlateNumber),
+      user: '',
+    );
+  }
+}
+
+String _normalizeDate(String value) {
+  final v = value.trim();
+  if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(v)) return v;
+  if (RegExp(r'^\d{8}$').hasMatch(v)) {
+    return '${v.substring(0, 4)}-${v.substring(4, 6)}-${v.substring(6, 8)}';
+  }
+  return '';
+}
+
+String _normalizeTime(String value) {
+  final v = value.trim();
+  if (RegExp(r'^\d{6}$').hasMatch(v)) {
+    return '${v.substring(0, 2)}:${v.substring(2, 4)}:${v.substring(4, 6)}';
+  }
+  final millis = int.tryParse(v);
+  if (millis == null || millis <= 0) return '';
+  final dt = DateTime.fromMillisecondsSinceEpoch(millis);
+  return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}:${dt.second.toString().padLeft(2, '0')}';
+}
+
+String _cleanPlate(String value) {
+  final v = value.trim();
+  if (v.isEmpty) return '';
+  return v;
+}
+
+String _cleanUser(String value) {
+  final v = value.trim();
+  if (v.isEmpty || v.toLowerCase() == 'unknown') return '';
+  return v;
 }
 
 String _heroTagForUrl(String url) => 'minor_url::$url';
