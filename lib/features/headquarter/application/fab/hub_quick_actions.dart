@@ -6,11 +6,13 @@ import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../../app/di/routes.dart';
 import '../../../../app/init/app_navigator.dart';
 import '../../page/sheets/company_calendar_page.dart';
 import '../../page/sheets/head_memo.dart';
 import '../../page/sheets/head_tutorials.dart';
 import '../../page/sheets/roadmap_bottom_sheet.dart';
+import '../../../selector/application/dev_auth.dart';
 import '../../widgets/hr/attendance_calendar.dart' as hr_att;
 import '../../widgets/hr/break_calendar.dart' as hr_break;
 import '../../widgets/mgmt/field.dart' as mgmt;
@@ -227,6 +229,8 @@ class _HubBubbleState extends State<_HubBubble>
 
   bool get _expanded => _ctrl.value > 0.001;
 
+  bool _developerMode = false;
+
   final TextEditingController _searchCtrl = TextEditingController();
   final FocusNode _searchFocus = FocusNode();
 
@@ -246,6 +250,14 @@ class _HubBubbleState extends State<_HubBubble>
     _searchCtrl.addListener(() {
       if (mounted) setState(() {});
     });
+    _refreshDeveloperMode();
+  }
+
+  Future<void> _refreshDeveloperMode() async {
+    final enabled = await DevAuth.isDeveloperLoggedIn();
+    if (!mounted) return;
+    if (_developerMode == enabled) return;
+    setState(() => _developerMode = enabled);
   }
 
   @override
@@ -261,6 +273,7 @@ class _HubBubbleState extends State<_HubBubble>
       _searchFocus.unfocus();
       _ctrl.reverse();
     } else {
+      _refreshDeveloperMode();
       _searchCtrl.clear();
       _ctrl.forward();
     }
@@ -397,6 +410,20 @@ class _HubBubbleState extends State<_HubBubble>
           }
         },
       ),
+      if (_developerMode)
+        _DockAction(
+          id: 'notensystem',
+          icon: Icons.auto_stories_rounded,
+          label: 'notensystem',
+          hint: '소설 설계 및 집필 스튜디오',
+          color: const Color(0xFF5B5BD6),
+          hiddenUntilExactQuery: true,
+          onTap: () async {
+            await closeMenu();
+            await HeadHubActions.navigatorKey.currentState
+                ?.pushNamed(AppRoutes.noteSystem);
+          },
+        ),
       _DockAction(
         id: 'contact',
         icon: Icons.contact_support_rounded,
@@ -603,9 +630,14 @@ class _CommandPaletteDock extends StatelessWidget {
 
     final filtered = query.isEmpty
         ? actions
-        : actions
-            .where((a) => _normalize(a.searchText).contains(query))
-            .toList(growable: false);
+            .where((a) => !a.hiddenUntilExactQuery)
+            .toList(growable: false)
+        : actions.where((a) {
+            if (a.hiddenUntilExactQuery) {
+              return query == _normalize(a.id) || query == _normalize(a.label);
+            }
+            return _normalize(a.searchText).contains(query);
+          }).toList(growable: false);
 
     final titleText = query.isEmpty ? '빠른 실행' : '검색 결과';
 
@@ -843,6 +875,7 @@ class _DockAction {
   final String label;
   final String? hint;
   final Color color;
+  final bool hiddenUntilExactQuery;
   final Future<void> Function() onTap;
 
   _DockAction({
@@ -851,10 +884,11 @@ class _DockAction {
     required this.label,
     required this.hint,
     required this.color,
+    this.hiddenUntilExactQuery = false,
     required this.onTap,
   });
 
-  String get searchText => [label, hint].whereType<String>().join(' ');
+  String get searchText => [id, label, hint].whereType<String>().join(' ');
 }
 
 class _EdgeHandle extends StatelessWidget {

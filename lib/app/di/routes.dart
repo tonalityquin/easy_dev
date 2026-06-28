@@ -14,6 +14,7 @@ import '../../features/headquarter/page/sheets/company_calendar_page.dart';
 import '../../features/headquarter/page/sheets/timesheet_page.dart';
 import '../../features/login/pages/common/login_screen.dart';
 import '../../features/mode_single/page/single_inside_screen.dart';
+import '../../features/novel/presentation/novel_mobile_writing_page.dart';
 import '../../features/personal/pages/personal_page.dart';
 import '../../features/selector/page/selector_hubs_page.dart';
 import '../../features/tablet/pages/tablet_page.dart';
@@ -77,6 +78,7 @@ class AppRoutes {
 
   static const attendanceSheet = '/attendance_sheet';
   static const breakSheet = '/break_sheet';
+  static const noteSystem = '/notensystem';
 }
 
 final Map<String, WidgetBuilder> appRoutes = {
@@ -129,4 +131,5 @@ final Map<String, WidgetBuilder> appRoutes = {
   AppRoutes.breakSheet: (context) => const TimesheetPage(
         initialTab: TimesheetTab.breakTime,
       ),
+  AppRoutes.noteSystem: (context) => const NovelMobileWritingPage(),
 };

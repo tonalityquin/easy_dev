@@ -14,7 +14,7 @@ class GcsImageUploader {
   GcsImageUploader({String? bucketName})
       : bucketName = bucketName ?? AuthConfig.gcsBucketName;
 
-  Future<String?> _uploadForImage(
+  Future<String?> _uploadForImage(  
     File file,
     String destinationPath, {
     String? purpose,
