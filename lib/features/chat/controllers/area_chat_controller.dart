@@ -66,15 +66,16 @@ class AreaChatController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final channel = await _channelRepository.ensureForArea(cleanArea);
+      final channel = _channelRepository.channelForArea(cleanArea);
       _channel = channel;
-      _subscription = _messageRepository.watchMessages(channel.id).listen(
+      _subscription = _messageRepository.watchMessages(channel.id, limit: 50).listen(
         (messages) {
           _messages = messages;
           _loading = false;
           _errorText = null;
           notifyListeners();
-          unawaited(AreaChatReadReceipts.markRead(cleanArea));
+          final readSeq = messages.isEmpty ? 0 : messages.last.seq;
+          unawaited(AreaChatReadReceipts.markRead(cleanArea, seq: readSeq));
         },
         onError: (Object error) {
           _loading = false;
@@ -107,7 +108,6 @@ class AreaChatController extends ChangeNotifier {
         session: session,
         text: clean,
       );
-      await AreaChatReadReceipts.markRead(_areaName);
     } catch (e) {
       _errorText = '$e';
     } finally {

@@ -11,6 +11,8 @@ import '../../../../app/di/routes.dart';
 import '../../../../app/init/app_navigator.dart';
 import '../../../../app/utils/ops_delayed_refresh_gate.dart';
 import '../../../account/applications/user_state.dart';
+import '../../../chat/application/chat_area_key.dart';
+import '../../../chat/presentation/area_chat_panel.dart';
 import '../../application/area/area_master_cache.dart';
 import '../../page/sheets/company_calendar_page.dart';
 import '../../page/sheets/head_memo.dart';
@@ -168,6 +170,33 @@ class HeadHubActions {
     return opened;
   }
 
+
+  static Future<void> openHeadquarterChat([BuildContext? context]) async {
+    final ctx = context ?? _bestContext();
+    if (ctx == null) return;
+
+    await openSheetExclusively<void>((sheetContext) {
+      return showModalBottomSheet<void>(
+        context: sheetContext,
+        isScrollControlled: true,
+        useSafeArea: true,
+        backgroundColor: Colors.transparent,
+        builder: (bottomSheetContext) {
+          return FractionallySizedBox(
+            heightFactor: 0.88,
+            child: ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              child: AreaChatPanel(
+                areaName: headquarterChatAreaName,
+                showCloseButton: true,
+                onClose: () => Navigator.of(bottomSheetContext).pop(),
+              ),
+            ),
+          );
+        },
+      );
+    });
+  }
 
   static Future<void> refreshAreaMasterFromQuickAction([BuildContext? context]) async {
     final ctx = context ?? _bestContext();
@@ -335,6 +364,17 @@ class _HubBubbleState extends State<_HubBubble>
     }
 
     return <_DockAction>[
+      _DockAction(
+        id: 'headquarter_chat',
+        icon: Icons.forum_rounded,
+        label: '본사 채팅',
+        hint: '본사 전용 텍스트 채팅',
+        color: const Color(0xFF5E35B1),
+        onTap: () async {
+          await closeMenu();
+          await HeadHubActions.openHeadquarterChat();
+        },
+      ),
       _DockAction(
         id: 'memo',
         icon: Icons.sticky_note_2_rounded,

@@ -5,6 +5,7 @@ class ChatMessage {
     required this.id,
     required this.areaKey,
     required this.areaName,
+    required this.seq,
     required this.senderId,
     required this.senderName,
     required this.senderIdentity,
@@ -15,6 +16,7 @@ class ChatMessage {
   final String id;
   final String areaKey;
   final String areaName;
+  final int seq;
   final String senderId;
   final String senderName;
   final String senderIdentity;
@@ -35,6 +37,7 @@ class ChatMessage {
       id: storedId.isNotEmpty ? storedId : id,
       areaKey: rawAreaKey is String ? rawAreaKey.trim() : '',
       areaName: rawAreaName is String ? rawAreaName.trim() : '',
+      seq: _readInt(data['seq']),
       senderId: rawSenderId is String ? rawSenderId.trim() : '',
       senderName: rawSenderName is String ? rawSenderName.trim() : '',
       senderIdentity: rawSenderIdentity is String ? rawSenderIdentity.trim() : '',
@@ -43,16 +46,17 @@ class ChatMessage {
     );
   }
 
+  static int _readInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value.trim()) ?? 0;
+    return 0;
+  }
+
   static DateTime _readDate(dynamic value) {
-    if (value is Timestamp) {
-      return value.toDate();
-    }
-    if (value is DateTime) {
-      return value;
-    }
-    if (value is int) {
-      return DateTime.fromMillisecondsSinceEpoch(value);
-    }
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    if (value is int) return DateTime.fromMillisecondsSinceEpoch(value);
     return DateTime.now();
   }
 }

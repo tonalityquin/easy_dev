@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
+import '../../domain/models/chat_channel.dart';
 import '../../domain/models/chat_message.dart';
 
 class ChatLocalNotificationService {
@@ -60,21 +61,45 @@ class ChatLocalNotificationService {
     }
   }
 
-  int _makeId(ChatMessage message) {
-    final value = '${message.areaKey}:${message.id}'.hashCode ^ 31;
+  int _makeMessageId(String areaKey, String messageId) {
+    final value = '$areaKey:$messageId'.hashCode ^ 31;
     return value & 0x7fffffff;
   }
 
   Future<void> showChatMessage(ChatMessage message) async {
+    await _show(
+      areaKey: message.areaKey,
+      messageId: message.id,
+      areaName: message.areaName,
+      senderName: message.senderName,
+      text: message.text,
+    );
+  }
+
+  Future<void> showChatChannelSummary(ChatChannel channel) async {
+    await _show(
+      areaKey: channel.areaKey,
+      messageId: channel.lastMessageId,
+      areaName: channel.areaName,
+      senderName: channel.lastSenderName,
+      text: channel.lastMessageText,
+    );
+  }
+
+  Future<void> _show({
+    required String areaKey,
+    required String messageId,
+    required String areaName,
+    required String senderName,
+    required String text,
+  }) async {
     await ensureInitialized();
 
-    final area = message.areaName.trim();
-    final sender = message.senderName.trim().isEmpty
-        ? '새 메시지'
-        : message.senderName.trim();
-    final text = message.text.trim().isEmpty ? '(내용 없음)' : message.text.trim();
+    final area = areaName.trim();
+    final sender = senderName.trim().isEmpty ? '새 메시지' : senderName.trim();
+    final bodyText = text.trim().isEmpty ? '(내용 없음)' : text.trim();
     final title = area.isEmpty ? '채팅 새 메시지' : '$area 채팅 새 메시지';
-    final body = '$sender: $text';
+    final body = '$sender: $bodyText';
 
     final androidDetails = AndroidNotificationDetails(
       _channelId,
@@ -99,11 +124,11 @@ class ChatLocalNotificationService {
 
     try {
       await _plugin.show(
-        _makeId(message),
+        _makeMessageId(areaKey, messageId),
         title,
         body,
         details,
-        payload: message.areaName,
+        payload: areaName,
       );
     } catch (e, st) {
       debugPrint('[ChatNotif] show failed: $e\n$st');

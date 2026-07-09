@@ -25,14 +25,15 @@ class FirestoreChatMessageRepository implements ChatMessageRepository {
   }
 
   @override
-  Stream<List<ChatMessage>> watchMessages(String channelId, {int limit = 100}) {
+  Stream<List<ChatMessage>> watchMessages(String channelId, {int limit = 50}) {
     final id = channelId.trim();
     if (id.isEmpty) {
       return const Stream<List<ChatMessage>>.empty();
     }
+    final safeLimit = limit <= 0 ? 50 : limit;
     return _messagesRef(id)
         .orderBy('createdAt', descending: true)
-        .limit(limit)
+        .limit(safeLimit)
         .snapshots()
         .map((snapshot) {
       final messages = snapshot.docs
@@ -51,9 +52,10 @@ class FirestoreChatMessageRepository implements ChatMessageRepository {
     if (id.isEmpty) {
       return const Stream<ChatMessageChangeBatch>.empty();
     }
+    final safeLimit = limit <= 0 ? 20 : limit;
     return _messagesRef(id)
         .orderBy('createdAt', descending: true)
-        .limit(limit)
+        .limit(safeLimit)
         .snapshots()
         .map((snapshot) {
       final changes = snapshot.docChanges
@@ -85,31 +87,50 @@ class FirestoreChatMessageRepository implements ChatMessageRepository {
   }) async {
     final clean = text.trim();
     if (clean.isEmpty) return;
+
     final messageId = _uuid.v4();
     final identity = _identityOf(session);
-    final data = <String, dynamic>{
-      'id': messageId,
-      'areaKey': channel.areaKey,
-      'areaName': channel.areaName,
-      'senderId': session.id,
-      'senderName': session.displayName,
-      'senderIdentity': identity,
-      'text': clean,
-      'createdAt': FieldValue.serverTimestamp(),
-    };
-    await _messagesRef(channel.id).doc(messageId).set(data);
-    await _channelRef(channel.id).set(
-      <String, dynamic>{
+    final channelDoc = _channelRef(channel.id);
+    final messageDoc = _messagesRef(channel.id).doc(messageId);
+
+    await _firestore.runTransaction((transaction) async {
+      final channelSnapshot = await transaction.get(channelDoc);
+      final currentSeq = _readInt(channelSnapshot.data()?['messageSeq']);
+      final nextSeq = currentSeq + 1;
+      final messageData = <String, dynamic>{
+        'id': messageId,
+        'areaKey': channel.areaKey,
+        'areaName': channel.areaName,
+        'seq': nextSeq,
+        'senderId': session.id,
+        'senderName': session.displayName,
+        'senderIdentity': identity,
+        'text': clean,
+        'createdAt': FieldValue.serverTimestamp(),
+      };
+      final channelData = <String, dynamic>{
         'areaKey': channel.areaKey,
         'areaName': channel.areaName,
         'lastMessageId': messageId,
         'lastMessageText': clean,
         'lastSenderId': session.id,
         'lastSenderName': session.displayName,
+        'lastSenderIdentity': identity,
+        'lastMessageCreatedAt': FieldValue.serverTimestamp(),
+        'messageSeq': nextSeq,
+        'messageCount': nextSeq,
         'updatedAt': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
-    );
+      };
+      transaction.set(messageDoc, messageData);
+      transaction.set(channelDoc, channelData, SetOptions(merge: true));
+    });
+  }
+
+  int _readInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value.trim()) ?? 0;
+    return 0;
   }
 
   String _identityOf(SessionAccount session) {

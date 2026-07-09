@@ -639,6 +639,8 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
 
     Widget out = AreaChatAlertWatcher(
       areaNames: <String>[chatAreaName],
+      enabled: !talkUiEnabled,
+      suppressedAreaNames: talkUiEnabled ? <String>[chatAreaName] : const <String>[],
       child: Container(
       color: cs.surface,
       child: Column(

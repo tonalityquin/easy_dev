@@ -8,7 +8,7 @@ import '../../../../app/init/logout_helper.dart';
 import '../../../../shared/plate/domain/enums/plate_type.dart';
 import '../../../../shared/plate/domain/repositories/plate_repository.dart';
 import '../../../account/applications/user_state.dart';
-import '../../../chat/presentation/area_chat_alert_watcher.dart';
+import '../../../chat/presentation/area_chat_inbox_scope.dart';
 import '../../../chat/presentation/area_chat_icon_button.dart';
 import '../../../chat/presentation/area_chat_panel.dart';
 import '../../../dev/debug/debug_action_recorder.dart';
@@ -1588,15 +1588,25 @@ class _BranchWorkStatusInlinePanelState
               )
             : _BranchSectionFrame(
                 title: '지사',
-                child: AreaChatAlertWatcher(
+                child: AreaChatInboxScope(
                   areaNames: data.areaCounts
                       .map((item) => item.areaName)
                       .toList(growable: false),
-                  child: Column(
-                    children: data.areaCounts
-                        .map((item) => _BranchAreaMiniCard(item: item))
-                        .toList(growable: false),
-                  ),
+                  builder: (context, inbox, currentUserId) {
+                    return Column(
+                      children: data.areaCounts
+                          .map(
+                            (item) => _BranchAreaMiniCard(
+                              item: item,
+                              unreadCount: inbox.unreadCountForArea(
+                                item.areaName,
+                                currentUserId,
+                              ),
+                            ),
+                          )
+                          .toList(growable: false),
+                    );
+                  },
                 ),
               ),
       ],
@@ -2150,9 +2160,13 @@ class _AreaChatReadOpenHelper {
 }
 
 class _BranchAreaMiniCard extends StatelessWidget {
-  const _BranchAreaMiniCard({required this.item});
+  const _BranchAreaMiniCard({
+    required this.item,
+    required this.unreadCount,
+  });
 
   final _BranchWorkStatusAreaCount item;
+  final int unreadCount;
 
   Future<void> _openChat(BuildContext context) async {
     final area = item.areaName.trim();
@@ -2220,6 +2234,7 @@ class _BranchAreaMiniCard extends StatelessWidget {
                       ),
                       AreaChatIconButton(
                         areaName: item.areaName,
+                        unreadCount: unreadCount,
                         onPressed: () => _openChat(context),
                       ),
                     ],
