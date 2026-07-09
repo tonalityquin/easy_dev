@@ -1,24 +1,48 @@
 {
-  "schema_version": "1.0",
+  "schema_version": 1,
   "task": "vehicle_front_make_model_classification",
-  "mvp_classes": [
-    "genesis_g80",
-    "kia_carnival"
-  ],
-  "hierarchy": {
-    "genesis": {
-      "models": [
-        "genesis_g80"
-      ]
-    },
-    "kia": {
-      "models": [
-        "kia_carnival"
+  "model_version": "v1_mobilenetv2_2class",
+  "run_id": "run_20260702_173050",
+  "input": {
+    "image_size": [
+      224,
+      224
+    ],
+    "channels": 3,
+    "dtype": "float32",
+    "pixel_range": [
+      0,
+      255
+    ],
+    "preprocess_inside_model": "tf.keras.applications.mobilenet_v2.preprocess_input",
+    "flutter_extra_normalization": false
+  },
+  "thresholds": {
+    "min_confidence": 0.85,
+    "min_margin": 0.25,
+    "behavior_below_threshold": "request_review_or_retake"
+  },
+  "levels": [
+    {
+      "name": "vehicle_model",
+      "labels": [
+        {
+          "index": 0,
+          "id": "genesis_g80",
+          "display_name": {
+            "ko": "제네시스 G80",
+            "en": "Genesis G80"
+          }
+        },
+        {
+          "index": 1,
+          "id": "kia_carnival",
+          "display_name": {
+            "ko": "기아 카니발",
+            "en": "Kia Carnival"
+          }
+        }
       ]
     }
-  },
-  "notes": [
-    "MVP 2-class hierarchy only.",
-    "Future versions should separate make/model/generation/facelift."
   ]
 }

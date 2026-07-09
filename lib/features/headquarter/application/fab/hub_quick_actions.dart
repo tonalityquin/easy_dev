@@ -3,11 +3,15 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../app/di/routes.dart';
 import '../../../../app/init/app_navigator.dart';
+import '../../../../app/utils/ops_delayed_refresh_gate.dart';
+import '../../../account/applications/user_state.dart';
+import '../../application/area/area_master_cache.dart';
 import '../../page/sheets/company_calendar_page.dart';
 import '../../page/sheets/head_memo.dart';
 import '../../page/sheets/head_tutorials.dart';
@@ -162,6 +166,43 @@ class HeadHubActions {
     }
 
     return opened;
+  }
+
+
+  static Future<void> refreshAreaMasterFromQuickAction([BuildContext? context]) async {
+    final ctx = context ?? _bestContext();
+    if (ctx == null) return;
+
+    final division = ctx.read<UserState>().division.trim();
+    if (division.isEmpty) return;
+
+    final shouldRefresh = await OpsDelayedRefreshGate.waitIfNeeded(
+      context: ctx,
+      title: '지역 마스터 갱신',
+      message: '지역 마스터를 갱신하기 전 요청을 준비하고 있습니다.',
+    );
+    if (!shouldRefresh) return;
+
+    try {
+      final snapshot = await AreaMasterCache.refreshDivision(division);
+      final messenger = ScaffoldMessenger.maybeOf(ctx);
+      messenger?.showSnackBar(
+        SnackBar(
+          content: Text('지역 마스터 갱신 완료: ${snapshot.items.length}개'),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(milliseconds: 1200),
+        ),
+      );
+    } catch (_) {
+      final messenger = ScaffoldMessenger.maybeOf(ctx);
+      messenger?.showSnackBar(
+        const SnackBar(
+          content: Text('지역 마스터 갱신에 실패했습니다.'),
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(milliseconds: 1200),
+        ),
+      );
+    }
   }
 
   static Offset _restorePos() {
@@ -357,6 +398,43 @@ class _HubBubbleState extends State<_HubBubble>
           await HeadHubActions.openSheetExclusively<dynamic>((ctx) {
             return mgmt.Field.showAsBottomSheet(ctx);
           });
+        },
+      ),
+      _DockAction(
+        id: 'area_master_refresh',
+        icon: Icons.refresh_rounded,
+        label: '지역 마스터 갱신',
+        hint: '지사·본사 지역 목록 갱신',
+        color: const Color(0xFF2E7D32),
+        onTap: () async {
+          await closeMenu();
+          final ctx = HeadHubActions.currentContext();
+          await HeadHubActions.refreshAreaMasterFromQuickAction(ctx);
+        },
+      ),
+      _DockAction(
+        id: 'community',
+        icon: Icons.groups_rounded,
+        label: 'Community',
+        hint: '커뮤니티 화면 열기',
+        color: const Color(0xFF00838F),
+        onTap: () async {
+          await closeMenu();
+          await HeadHubActions.closeAnySheet();
+          await HeadHubActions.navigatorKey.currentState
+              ?.pushNamed(AppRoutes.communityStub);
+        },
+      ),
+      _DockAction(
+        id: 'faq',
+        icon: Icons.help_center_rounded,
+        label: 'FAQ',
+        hint: '자주 묻는 질문',
+        color: const Color(0xFF546E7A),
+        onTap: () async {
+          await closeMenu();
+          await HeadHubActions.closeAnySheet();
+          await HeadHubActions.navigatorKey.currentState?.pushNamed(AppRoutes.faq);
         },
       ),
       _DockAction(

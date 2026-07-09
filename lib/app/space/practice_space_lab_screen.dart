@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../app/di/routes.dart';
-import 'chat/practice_chat_lab_screen.dart';
 import 'image_ai_model_test/image_ai_model_test_lab_screen.dart';
 
 class PracticeSpaceLabScreen extends StatelessWidget {
@@ -9,14 +8,8 @@ class PracticeSpaceLabScreen extends StatelessWidget {
 
   static const List<_PracticeExperimentItem> _experiments = [
     _PracticeExperimentItem(
-      icon: Icons.chat_bubble_rounded,
-      title: '실험 1: 채팅 기능',
-      subtitle: '로컬 상태 기반 채팅 UI/입력/에코 응답 테스트',
-      page: PracticeChatLabScreen(),
-    ),
-    _PracticeExperimentItem(
       icon: Icons.image_search_rounded,
-      title: '실험 2: 이미지 AI 모델 테스트',
+      title: '이미지 AI 모델 테스트',
       subtitle: '번호판 이미지 인식, 결과 삽입, 성공/실패 로그 출력 테스트',
       page: ImageAiModelTestLabScreen(),
     ),
@@ -67,7 +60,7 @@ class PracticeSpaceLabScreen extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                '여기에 기능을 자유롭게 추가하세요.\n이 화면은 운영 기능과 분리된 실험 공간입니다.',
+                '운영 기능과 분리된 이미지 AI 모델 테스트 공간입니다.',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: cs.onSurfaceVariant,
                     ),

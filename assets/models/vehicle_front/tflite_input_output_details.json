@@ -1,0 +1,126 @@
+{
+  "float32": {
+    "path": "model_registry/v1_mobilenetv2_2class/run_20260702_173050/vehicle_front_mobilenetv2_float32.tflite",
+    "abs_path": "/mnt/c/Users/surge/Workspace/vehicle_ai_colab_practice/model_registry/v1_mobilenetv2_2class/run_20260702_173050/vehicle_front_mobilenetv2_float32.tflite",
+    "size_bytes": 8909232,
+    "sha256": "cd52818e56e96012a82c8b56eff649d145aeadecb34deb8e05e6a0b2ada33170",
+    "input_details": [
+      {
+        "name": "serving_default_input_image:0",
+        "index": 0,
+        "shape": [
+          1,
+          224,
+          224,
+          3
+        ],
+        "shape_signature": [
+          -1,
+          224,
+          224,
+          3
+        ],
+        "dtype": "numpy.float32",
+        "quantization": [
+          0.0,
+          0
+        ],
+        "quantization_parameters": {
+          "scales": [],
+          "zero_points": [],
+          "quantized_dimension": 0,
+          "block_size": 0
+        },
+        "sparsity_parameters": {}
+      }
+    ],
+    "output_details": [
+      {
+        "name": "StatefulPartitionedCall_1:0",
+        "index": 176,
+        "shape": [
+          1,
+          2
+        ],
+        "shape_signature": [
+          -1,
+          2
+        ],
+        "dtype": "numpy.float32",
+        "quantization": [
+          0.0,
+          0
+        ],
+        "quantization_parameters": {
+          "scales": [],
+          "zero_points": [],
+          "quantized_dimension": 0,
+          "block_size": 0
+        },
+        "sparsity_parameters": {}
+      }
+    ]
+  },
+  "dynamic_range": {
+    "path": "model_registry/v1_mobilenetv2_2class/run_20260702_173050/vehicle_front_mobilenetv2_dynamic_range.tflite",
+    "abs_path": "/mnt/c/Users/surge/Workspace/vehicle_ai_colab_practice/model_registry/v1_mobilenetv2_2class/run_20260702_173050/vehicle_front_mobilenetv2_dynamic_range.tflite",
+    "size_bytes": 2543712,
+    "sha256": "307a29d6e43e57399f7429d7c8edb063e22c1417bd889cfd6628bc27e4b7d038",
+    "input_details": [
+      {
+        "name": "serving_default_input_image:0",
+        "index": 0,
+        "shape": [
+          1,
+          224,
+          224,
+          3
+        ],
+        "shape_signature": [
+          -1,
+          224,
+          224,
+          3
+        ],
+        "dtype": "numpy.float32",
+        "quantization": [
+          0.0,
+          0
+        ],
+        "quantization_parameters": {
+          "scales": [],
+          "zero_points": [],
+          "quantized_dimension": 0,
+          "block_size": 0
+        },
+        "sparsity_parameters": {}
+      }
+    ],
+    "output_details": [
+      {
+        "name": "StatefulPartitionedCall_1:0",
+        "index": 176,
+        "shape": [
+          1,
+          2
+        ],
+        "shape_signature": [
+          -1,
+          2
+        ],
+        "dtype": "numpy.float32",
+        "quantization": [
+          0.0,
+          0
+        ],
+        "quantization_parameters": {
+          "scales": [],
+          "zero_points": [],
+          "quantized_dimension": 0,
+          "block_size": 0
+        },
+        "sparsity_parameters": {}
+      }
+    ]
+  }
+}

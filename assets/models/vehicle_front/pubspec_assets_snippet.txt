@@ -1,9 +1,0 @@
-# pubspec.yaml 예시
-# 실제 Flutter 프로젝트의 pubspec.yaml assets 섹션에 맞게 추가하세요.
-flutter:
-  assets:
-    - assets/models/vehicle_front/vehicle_classifier.tflite
-    - assets/models/vehicle_front/labels.txt
-    - assets/models/vehicle_front/vehicle_labels.json
-    - assets/models/vehicle_front/model_meta.json
-    - assets/models/vehicle_front/hierarchy_meta.json

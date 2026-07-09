@@ -1,10 +1,15 @@
 {
   "model_name": "vehicle_front_mobilenetv2",
   "model_version": "v1_mobilenetv2_2class",
-  "created_at": "2026-06-17T19:10:46",
+  "run_id": "run_20260702_173050",
+  "created_at": "2026-07-02T17:37:02",
   "framework": "tensorflow.keras",
+  "tensorflow_version": "2.21.0",
+  "python_version": "3.10.12 (main, Mar  3 2026, 11:56:32) [GCC 11.4.0]",
+  "platform": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.35",
   "architecture": "MobileNetV2",
   "purpose": "vehicle_front_make_model_classification_mvp",
+  "mask_version": "v2_paint_manual_mask",
   "preprocess_version": "v2_paint_manual_mask",
   "input": {
     "image_size": [
@@ -25,116 +30,94 @@
   },
   "dataset": {
     "split_root": "processed_split/v2_paint_manual_mask",
+    "final_metadata": "reports/03_final_metadata_with_split.csv",
+    "split_manifest": "reports/03_2_split_manifest.csv",
+    "training_manifest": "reports/04_training_file_manifest.csv",
+    "training_input_check": "reports/04_training_input_check.csv",
     "counts": [
       {
-        "split": "train",
-        "label": "genesis_g80",
-        "image_count": 116
-      },
-      {
-        "split": "train",
-        "label": "kia_carnival",
-        "image_count": 149
-      },
-      {
-        "split": "val",
-        "label": "genesis_g80",
-        "image_count": 19
-      },
-      {
-        "split": "val",
-        "label": "kia_carnival",
-        "image_count": 24
-      },
-      {
         "split": "test",
         "label": "genesis_g80",
-        "image_count": 27
+        "image_count": 25,
+        "vehicle_count": 4
       },
       {
         "split": "test",
         "label": "kia_carnival",
-        "image_count": 24
+        "image_count": 29,
+        "vehicle_count": 4
+      },
+      {
+        "split": "train",
+        "label": "genesis_g80",
+        "image_count": 111,
+        "vehicle_count": 14
+      },
+      {
+        "split": "train",
+        "label": "kia_carnival",
+        "image_count": 138,
+        "vehicle_count": 18
+      },
+      {
+        "split": "val",
+        "label": "genesis_g80",
+        "image_count": 26,
+        "vehicle_count": 4
+      },
+      {
+        "split": "val",
+        "label": "kia_carnival",
+        "image_count": 30,
+        "vehicle_count": 4
       }
-    ]
+    ],
+    "source_file_hashes": {
+      "03_final_metadata_with_split.csv": "26222a35602f9da93061c3a869668d1304c1cd42dcfbe060272b747718a3eacb",
+      "03_2_split_manifest.csv": "79d8c535cb1638f5190df1967dc505fe9acf03e2282983d8405f6aecf3afebca",
+      "04_training_file_manifest.csv": "81364945237b5f330e5fae7348a0784b912fd7bf59a64b2d59748ced455d0517",
+      "04_training_input_check.csv": "fda260e24b48fd295a003aca2f52bf52474a88d341fd5667dc8e00b101eec160",
+      "03_2_split_copy_manifest.csv": "8f009f0374f82ef7f4f4e6e4706fae380eee38147e98868495ed79ba86cf7558",
+      "03_2_split_image_check.csv": "22bd3e37e3c9b2ad3bc6bf7141dfe9c2a90a0ec0f59ddffc757803edbf51ca22"
+    }
   },
   "training": {
     "batch_size": 16,
     "seed": 42,
+    "cache_datasets": true,
     "head_epochs_config": 30,
+    "head_learning_rate": 0.001,
     "fine_tuning_enabled": true,
-    "fine_tune_epochs_config": 15,
+    "fine_tune_epochs_config": 5,
+    "fine_tune_learning_rate": 5e-06,
+    "fine_tune_at": 120,
+    "dropout_rate": 0.3,
     "class_weight": {
-      "0": 1.1422413793103448,
-      "1": 0.889261744966443
-    }
+      "0": 1.1216216216216217,
+      "1": 0.9021739130434783
+    },
+    "model_selection_monitor": "val_loss",
+    "model_selection_mode": "min",
+    "best_checkpoint": "model_registry/v1_mobilenetv2_2class/run_20260702_173050/best_finetuned.keras"
   },
   "evaluation": {
-    "val_loss": 0.11007120460271835,
-    "val_accuracy": 1.0,
-    "test_loss": 0.21329954266548157,
-    "test_accuracy": 0.9019607901573181,
-    "test_image_count": 51,
-    "wrong_prediction_count": 5
-  },
-  "decision_thresholds_initial": {
+    "val_loss": 0.05331813171505928,
+    "val_accuracy": 0.9821428656578064,
+    "test_loss": 0.06502261757850647,
+    "test_accuracy": 0.9444444179534912,
+    "test_count": 54,
+    "wrong_count": 3,
+    "threshold_review_count": 5,
     "min_confidence": 0.85,
     "min_margin": 0.25
   },
   "artifacts": {
-    "keras_model": "model_registry/v1_mobilenetv2_2class/vehicle_front_mobilenetv2.keras",
-    "labels_txt": "model_registry/v1_mobilenetv2_2class/labels.txt",
-    "vehicle_labels_json": "model_registry/v1_mobilenetv2_2class/vehicle_labels.json",
-    "test_predictions_csv": "reports/04_test_predictions.csv",
-    "classification_report_csv": "reports/04_classification_report.csv",
-    "confusion_matrix_csv": "reports/04_confusion_matrix.csv"
-  },
-  "notes": [
-    "MVP 2-class baseline model.",
-    "License plate area is manually masked before training.",
-    "Do not treat MobileNetV2 as final production architecture.",
-    "TFLite conversion is handled in the next notebook."
-  ],
-  "updated_at_after_tflite_conversion": "2026-06-17T19:27:49",
-  "tflite_conversion": {
-    "float32_tflite": "model_registry/v1_mobilenetv2_2class/vehicle_front_mobilenetv2_float32.tflite",
-    "dynamic_range_tflite": "model_registry/v1_mobilenetv2_2class/vehicle_front_mobilenetv2_dynamic_range.tflite",
-    "active_flutter_model": "vehicle_classifier.tflite",
-    "source_inference_keras_model": "model_registry/v1_mobilenetv2_2class/vehicle_front_mobilenetv2_inference.keras",
-    "keras_tflite_float32_compare": {
-      "model": "model_registry/v1_mobilenetv2_2class/vehicle_front_mobilenetv2_float32.tflite",
-      "compare_image_count": 51,
-      "max_abs_diff": 1.6987323760986328e-06,
-      "mean_abs_diff": 2.070944020715615e-07,
-      "top1_match_count": 51,
-      "top1_mismatch_count": 0
-    }
-  },
-  "runtime_input": {
-    "dtype": "float32",
-    "shape": [
-      1,
-      224,
-      224,
-      3
-    ],
-    "color_order": "RGB",
-    "value_range": "0..255",
-    "normalization_in_flutter": "none",
-    "preprocess_inside_model": "tf.keras.applications.mobilenet_v2.preprocess_input"
-  },
-  "runtime_output": {
-    "dtype": "float32",
-    "shape": [
-      1,
-      2
-    ],
-    "activation": "softmax",
-    "labels_file": "labels.txt"
-  },
-  "decision_thresholds_recommended_for_v1_baseline": {
-    "min_confidence": 0.95,
-    "min_margin": 0.5,
-    "reason": "v1 baseline had a high-confidence G80→Carnival hard-case misclassification; conservative thresholds reduce wrong-confirm risk."
+    "final_model": "model_registry/v1_mobilenetv2_2class/run_20260702_173050/vehicle_front_mobilenetv2.keras",
+    "labels_txt": "model_registry/v1_mobilenetv2_2class/run_20260702_173050/labels.txt",
+    "vehicle_labels_json": "model_registry/v1_mobilenetv2_2class/run_20260702_173050/vehicle_labels.json",
+    "test_predictions": "reports/04_test_predictions.csv",
+    "threshold_analysis": "reports/04_threshold_analysis.csv",
+    "confusion_matrix_csv": "reports/04_confusion_matrix.csv",
+    "classification_report_csv": "reports/04_classification_report.csv"
   }
 }

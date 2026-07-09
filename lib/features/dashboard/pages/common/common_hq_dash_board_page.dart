@@ -3,18 +3,17 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../../app/di/routes.dart';
 import '../../../../app/init/app_exit_service.dart';
 import '../../../../app/init/logout_helper.dart';
-import '../../../../app/utils/ops_delayed_refresh_gate.dart';
 import '../../../../shared/plate/domain/enums/plate_type.dart';
 import '../../../../shared/plate/domain/repositories/plate_repository.dart';
-import '../../../../shared/sheet_tool/document_box_action_executor.dart';
-import '../../../../shared/sheet_tool/leader_document_box_sheet.dart';
 import '../../../account/applications/user_state.dart';
+import '../../../chat/presentation/area_chat_alert_watcher.dart';
+import '../../../chat/presentation/area_chat_icon_button.dart';
+import '../../../chat/presentation/area_chat_panel.dart';
 import '../../../dev/debug/debug_action_recorder.dart';
 import '../../../dev/domain/repositories/area_repo_package/area_repository.dart';
-import '../../../headquarter/application/area/area_master_cache.dart';
+import '../../../headquarter/application/fab/hub_quick_actions.dart';
 import '../../../mode_single/application/att_brk_repository.dart';
 import '../../../selector/sheets/service_bottom_sheet.dart';
 
@@ -53,8 +52,6 @@ class CommonHqDashBoardPage extends StatefulWidget {
 }
 
 class _CommonHqDashBoardPageState extends State<CommonHqDashBoardPage> {
-  bool _isRefreshingAreaMaster = false;
-
   void _trace(String name, {Map<String, dynamic>? meta}) {
     DebugActionRecorder.instance.recordAction(
       name,
@@ -74,84 +71,7 @@ class _CommonHqDashBoardPageState extends State<CommonHqDashBoardPage> {
     await LogoutHelper.logoutAndGoToLogin(context);
   }
 
-  Future<void> _openHeadQuarter(BuildContext context) async {
-    _trace(
-      '본사 오픈 시도',
-      meta: <String, dynamic>{
-        'screen': widget.screenName,
-        'action': 'open_headquarter_attempt',
-      },
-    );
-
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final division = (prefs.getString('division') ?? '').trim();
-      final selectedArea = (prefs.getString('selectedArea') ?? '').trim();
-
-      final allowed = division.isNotEmpty &&
-          selectedArea.isNotEmpty &&
-          division == selectedArea;
-
-      if (!mounted) return;
-
-      if (allowed) {
-        _trace(
-          '본사 오픈 성공',
-          meta: <String, dynamic>{
-            'screen': widget.screenName,
-            'action': 'open_headquarter_success',
-            'division': division,
-            'selectedArea': selectedArea,
-          },
-        );
-        Navigator.of(context).pushNamed(AppRoutes.headStub);
-      } else {
-        _trace(
-          '본사 오픈 거부',
-          meta: <String, dynamic>{
-            'screen': widget.screenName,
-            'action': 'open_headquarter_denied',
-            'division': division,
-            'selectedArea': selectedArea,
-          },
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
-      _trace(
-        '본사 오픈 오류',
-        meta: <String, dynamic>{
-          'screen': widget.screenName,
-          'action': 'open_headquarter_error',
-          'error': e.toString(),
-        },
-      );
-    }
-  }
-
-  void _openCommunity(BuildContext context) {
-    _trace(
-      '커뮤니티 오픈',
-      meta: <String, dynamic>{
-        'screen': widget.screenName,
-        'action': 'open_community',
-      },
-    );
-    Navigator.of(context).pushNamed(AppRoutes.communityStub);
-  }
-
-  void _openFaq(BuildContext context) {
-    _trace(
-      'FAQ 오픈',
-      meta: <String, dynamic>{
-        'screen': widget.screenName,
-        'action': 'open_faq',
-      },
-    );
-    Navigator.of(context).pushNamed(AppRoutes.faq);
-  }
-
-  Future<void> _openServiceSettings(BuildContext context) async {
+Future<void> _openServiceSettings(BuildContext context) async {
     _trace(
       '서비스 설정 오픈',
       meta: <String, dynamic>{
@@ -166,126 +86,7 @@ class _CommonHqDashBoardPageState extends State<CommonHqDashBoardPage> {
     );
   }
 
-  Future<void> _openDocumentBox(BuildContext context) async {
-    _trace(
-      '서류함 오픈',
-      meta: <String, dynamic>{
-        'screen': widget.screenName,
-        'action': 'open_document_box',
-      },
-    );
-    final action = await openLeaderDocumentBox(context);
-    if (!mounted || action == null) return;
-    await executeDocumentBoxAction(context, action);
-  }
-
-  Future<void> _openBranchWorkStatusDialog(BuildContext context) async {
-    final division = context.read<UserState>().division.trim();
-
-    _trace(
-      '지사 별 업무 현황 오픈',
-      meta: <String, dynamic>{
-        'screen': widget.screenName,
-        'action': 'open_branch_work_status',
-        'division': division,
-      },
-    );
-
-    await showGeneralDialog<void>(
-      context: context,
-      barrierLabel: '지사 별 업무 현황',
-      barrierDismissible: true,
-      barrierColor: Colors.black54,
-      transitionDuration: const Duration(milliseconds: 220),
-      pageBuilder: (context, animation, secondaryAnimation) {
-        return _BranchWorkStatusFullScreenDialog(
-          screenName: widget.screenName,
-          division: division,
-        );
-      },
-      transitionBuilder: (context, animation, secondaryAnimation, child) {
-        final curved = CurvedAnimation(
-          parent: animation,
-          curve: Curves.easeOutCubic,
-        );
-
-        return FadeTransition(
-          opacity: curved,
-          child: SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(0, 0.03),
-              end: Offset.zero,
-            ).animate(curved),
-            child: child,
-          ),
-        );
-      },
-    );
-  }
-
-  Future<void> _refreshAreaMasterFromMenu(BuildContext context) async {
-    if (_isRefreshingAreaMaster) return;
-
-    final division = context.read<UserState>().division.trim();
-    if (division.isEmpty) {
-      return;
-    }
-
-    setState(() {
-      _isRefreshingAreaMaster = true;
-    });
-
-    try {
-      final shouldRefresh = await OpsDelayedRefreshGate.waitIfNeeded(
-        context: context,
-        title: '지역 마스터 갱신',
-        message: '지역 마스터를 갱신하기 전 요청을 준비하고 있습니다.',
-      );
-      if (!shouldRefresh || !mounted) return;
-
-      _trace(
-        '지역 마스터 갱신 시작',
-        meta: <String, dynamic>{
-          'screen': widget.screenName,
-          'action': 'refresh_area_master_start',
-          'division': division,
-        },
-      );
-
-      final snapshot = await AreaMasterCache.refreshDivision(division);
-      if (!mounted) return;
-
-      _trace(
-        '지역 마스터 갱신 성공',
-        meta: <String, dynamic>{
-          'screen': widget.screenName,
-          'action': 'refresh_area_master_success',
-          'division': division,
-          'areaCount': snapshot.items.length,
-          'refreshedAtIso': snapshot.refreshedAtIso,
-        },
-      );
-    } catch (e) {
-      if (!mounted) return;
-
-      _trace(
-        '지역 마스터 갱신 실패',
-        meta: <String, dynamic>{
-          'screen': widget.screenName,
-          'action': 'refresh_area_master_error',
-          'division': division,
-          'error': e.toString(),
-        },
-      );
-    } finally {
-      if (!mounted) return;
-      setState(() {
-        _isRefreshingAreaMaster = false;
-      });
-    }
-  }
-
-  Future<void> _exitAppAfterClockOut(BuildContext context) async {
+Future<void> _exitAppAfterClockOut(BuildContext context) async {
     try {
       if (DebugActionRecorder.instance.isRecording) {
         await DebugActionRecorder.instance.stopAndSave(
@@ -397,55 +198,236 @@ class _CommonHqDashBoardPageState extends State<CommonHqDashBoardPage> {
     await _handleClockOutFlow(context, userState);
   }
 
-  List<_DashboardMenuAction> _menuActions(BuildContext context) {
-    final actions = <_DashboardMenuAction>[
-      _DashboardMenuAction(
-        label: '지사 별 업무 현황',
-        icon: Icons.domain_rounded,
-        tone: _DashboardMenuTone.primary,
-        onTap: () => _openBranchWorkStatusDialog(context),
-      ),
-      _DashboardMenuAction(
-        label: _isRefreshingAreaMaster ? '지역 마스터 갱신 중' : '지역 마스터 갱신',
-        icon: Icons.map_rounded,
-        tone: _DashboardMenuTone.secondary,
-        onTap: () => _refreshAreaMasterFromMenu(context),
-        isEnabled: !_isRefreshingAreaMaster,
-      ),
-      _DashboardMenuAction(
-        label: 'HeadQuarter',
-        icon: Icons.apartment_rounded,
-        tone: _DashboardMenuTone.secondary,
-        onTap: () => _openHeadQuarter(context),
-      ),
-      _DashboardMenuAction(
-        label: 'Community',
-        icon: Icons.groups_rounded,
-        tone: _DashboardMenuTone.tertiary,
-        onTap: () => _openCommunity(context),
-      ),
-      _DashboardMenuAction(
-        label: 'FAQ',
-        icon: Icons.help_center_rounded,
-        tone: _DashboardMenuTone.neutral,
-        onTap: () => _openFaq(context),
-      ),
-    ];
+  Widget _dialogPanel({
+    required BuildContext context,
+    required String title,
+    required IconData icon,
+    required Widget child,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
 
-    if (widget.showDocumentBox) {
-      actions.add(
-        _DashboardMenuAction(
-          label: '서류함 열기',
-          icon: Icons.folder_open,
-          tone: _DashboardMenuTone.secondary,
-          onTap: () => _openDocumentBox(context),
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+      backgroundColor: cs.surface,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+        side: BorderSide(color: cs.outlineVariant.withOpacity(0.55)),
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: cs.primaryContainer,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(icon, color: cs.onPrimaryContainer),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: tt.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w900,
+                        color: cs.onSurface,
+                        letterSpacing: -.2,
+                      ),
+                    ),
+                  ),
+                  IconButton.filledTonal(
+                    tooltip: '닫기',
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              child,
+            ],
+          ),
         ),
-      );
-    }
-
-    return actions;
+      ),
+    );
   }
 
+  Future<void> _openSettingsActionsDialog(BuildContext context) async {
+    final cs = Theme.of(context).colorScheme;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        final children = <Widget>[
+          _OpsHqActionTile(
+            label: '설정',
+            icon: Icons.settings_rounded,
+            color: cs.primary,
+            onTap: () {
+              Navigator.of(dialogContext).pop();
+              _openServiceSettings(context);
+            },
+          ),
+        ];
+
+        if (widget.showLogout) {
+          children.add(const SizedBox(height: 8));
+          children.add(
+            _OpsHqActionTile(
+              label: '로그아웃',
+              icon: Icons.logout_rounded,
+              color: cs.error,
+              danger: true,
+              onTap: () {
+                Navigator.of(dialogContext).pop();
+                _handleLogout(context);
+              },
+            ),
+          );
+        }
+
+        return _dialogPanel(
+          context: dialogContext,
+          title: '설정 및 계정',
+          icon: Icons.manage_accounts_rounded,
+          child: Column(children: children),
+        );
+      },
+    );
+  }
+
+  Future<void> _openWorkActionsDialog(
+    BuildContext context,
+    UserState userState,
+  ) async {
+    final cs = Theme.of(context).colorScheme;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        return _dialogPanel(
+          context: dialogContext,
+          title: '근무 액션',
+          icon: Icons.work_history_rounded,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(width: double.infinity, child: widget.breakButton),
+              const SizedBox(height: 8),
+              _OpsHqActionTile(
+                label: '퇴근하기',
+                icon: Icons.exit_to_app_rounded,
+                color: cs.error,
+                danger: true,
+                onTap: () {
+                  Navigator.of(dialogContext).pop();
+                  _onClockOutPressed(context, userState);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _openHeadHubQuickActionsDialog(BuildContext context) async {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        final cs = Theme.of(dialogContext).colorScheme;
+        final tt = Theme.of(dialogContext).textTheme;
+
+        return _dialogPanel(
+          context: dialogContext,
+          title: '본사 퀵 버튼',
+          icon: Icons.bolt_rounded,
+          child: ValueListenableBuilder<bool>(
+            valueListenable: HeadHubActions.enabled,
+            builder: (context, on, _) {
+              return Container(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                decoration: BoxDecoration(
+                  color: cs.surfaceVariant.withOpacity(.24),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: cs.outlineVariant.withOpacity(.70)),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: on ? cs.primary : cs.surface,
+                        borderRadius: BorderRadius.circular(13),
+                        border: Border.all(
+                          color: on ? cs.primary : cs.outlineVariant,
+                        ),
+                      ),
+                      child: Icon(
+                        on ? Icons.flash_on_rounded : Icons.flash_off_rounded,
+                        color: on ? cs.onPrimary : cs.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            on ? '빠른 실행 ON' : '빠른 실행 OFF',
+                            style: tt.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w900,
+                              color: cs.onSurface,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            '본사 허브 퀵 버튼 활성화 여부를 선택합니다.',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: tt.bodySmall?.copyWith(
+                              color: cs.onSurfaceVariant,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Switch.adaptive(
+                      value: on,
+                      onChanged: (value) async {
+                        HeadHubActions.setEnabled(value);
+                        if (value) {
+                          await HeadHubActions.mountIfNeeded();
+                        }
+                        HapticFeedback.selectionClick();
+                      },
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
 
   String _modeLabel() {
     final screen = widget.screenName.toLowerCase();
@@ -479,7 +461,6 @@ class _CommonHqDashBoardPageState extends State<CommonHqDashBoardPage> {
     final textTheme = Theme.of(context).textTheme;
     final name = _safe(userState.name);
     final position = _safe(userState.position);
-    final area = _safe(userState.currentArea, fallback: _safe(userState.area));
     final division = _safe(userState.division);
 
     return Container(
@@ -556,11 +537,29 @@ class _CommonHqDashBoardPageState extends State<CommonHqDashBoardPage> {
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
-                _OpsHqMetric(label: '근무', value: _workLabel(userState), icon: Icons.timer_rounded, color: userState.isWorking ? cs.primary : cs.onInverseSurface),
+                _OpsHqMetric(
+                  label: '설정',
+                  value: '열기',
+                  icon: Icons.settings_rounded,
+                  color: cs.primary,
+                  onTap: () => _openSettingsActionsDialog(context),
+                ),
                 const SizedBox(width: 8),
-                _OpsHqMetric(label: '구역', value: area, icon: Icons.location_on_rounded, color: cs.secondary),
+                _OpsHqMetric(
+                  label: '근무',
+                  value: _workLabel(userState),
+                  icon: Icons.timer_rounded,
+                  color: userState.isWorking ? cs.primary : cs.onInverseSurface,
+                  onTap: () => _openWorkActionsDialog(context, userState),
+                ),
                 const SizedBox(width: 8),
-                _OpsHqMetric(label: '본부', value: division, icon: Icons.domain_rounded, color: cs.tertiary),
+                _OpsHqMetric(
+                  label: '본부',
+                  value: division,
+                  icon: Icons.domain_rounded,
+                  color: cs.tertiary,
+                  onTap: () => _openHeadHubQuickActionsDialog(context),
+                ),
                 const SizedBox(width: 8),
                 _OpsHqMetric(label: '메뉴', value: '$menuCount', icon: Icons.grid_view_rounded, color: cs.primary),
                 const SizedBox(width: 8),
@@ -573,104 +572,20 @@ class _CommonHqDashBoardPageState extends State<CommonHqDashBoardPage> {
     );
   }
 
-  Widget _buildWorkPanel(BuildContext context, UserState userState) {
-    final cs = Theme.of(context).colorScheme;
-    return _OpsHqPanel(
-      title: '근무 액션',
-      icon: Icons.work_history_rounded,
-      child: IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(child: widget.breakButton),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _OpsHqActionTile(
-                label: '퇴근하기',
-                icon: Icons.exit_to_app_rounded,
-                color: cs.error,
-                danger: true,
-                onTap: () => _onClockOutPressed(context, userState),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMenuPanel(
-    BuildContext context,
-    List<_DashboardMenuAction> menuActions,
-  ) {
+Widget _buildMenuPanel(BuildContext context, UserState userState) {
     return _OpsHqPanel(
       title: '업무 메뉴',
       icon: Icons.dashboard_customize_rounded,
-      child: Column(
-        children: [
-          for (int i = 0; i < menuActions.length; i++) ...[
-            _OpsHqActionTile(
-              label: menuActions[i].label,
-              icon: menuActions[i].icon,
-              color: _toneColor(context, menuActions[i].tone),
-              onTap: menuActions[i].isEnabled ? menuActions[i].onTap : null,
-            ),
-            if (i != menuActions.length - 1) const SizedBox(height: 8),
-          ],
-        ],
+      child: _BranchWorkStatusInlinePanel(
+        screenName: widget.screenName,
+        division: userState.division.trim(),
       ),
     );
   }
 
-  Color _toneColor(BuildContext context, _DashboardMenuTone tone) {
-    final cs = Theme.of(context).colorScheme;
-    switch (tone) {
-      case _DashboardMenuTone.primary:
-        return cs.primary;
-      case _DashboardMenuTone.secondary:
-        return cs.secondary;
-      case _DashboardMenuTone.tertiary:
-        return cs.tertiary;
-      case _DashboardMenuTone.neutral:
-        return cs.onSurfaceVariant;
-    }
-  }
-
-  Widget _buildUtilityActions(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final children = <Widget>[
-      _OpsHqActionTile(
-        label: '설정',
-        icon: Icons.settings_rounded,
-        color: cs.primary,
-        onTap: () => _openServiceSettings(context),
-      ),
-    ];
-
-    if (widget.showLogout) {
-      children.add(const SizedBox(height: 8));
-      children.add(
-        _OpsHqActionTile(
-          label: '로그아웃',
-          icon: Icons.logout_rounded,
-          color: cs.error,
-          danger: true,
-          onTap: () => _handleLogout(context),
-        ),
-      );
-    }
-
-    return _OpsHqPanel(
-      title: '설정 및 계정',
-      icon: Icons.manage_accounts_rounded,
-      child: Column(children: children),
-    );
-  }
-
-  @override
+@override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final menuActions = _menuActions(context);
 
     return Scaffold(
       backgroundColor: cs.surfaceVariant.withOpacity(.20),
@@ -684,13 +599,9 @@ class _CommonHqDashBoardPageState extends State<CommonHqDashBoardPage> {
                   sliver: SliverList(
                     delegate: SliverChildListDelegate(
                       [
-                        _buildOpsHeader(context, userState, menuActions.length),
+                        _buildOpsHeader(context, userState, 1),
                         const SizedBox(height: 12),
-                        _buildWorkPanel(context, userState),
-                        const SizedBox(height: 12),
-                        _buildMenuPanel(context, menuActions),
-                        const SizedBox(height: 12),
-                        _buildUtilityActions(context),
+                        _buildMenuPanel(context, userState),
                         const SizedBox(height: 18),
                       ],
                     ),
@@ -705,7 +616,6 @@ class _CommonHqDashBoardPageState extends State<CommonHqDashBoardPage> {
   }
 
 }
-
 
 class _OpsHqBadge extends StatelessWidget {
   const _OpsHqBadge({
@@ -787,23 +697,25 @@ class _OpsHqMetric extends StatelessWidget {
     required this.value,
     required this.icon,
     required this.color,
+    this.onTap,
   });
 
   final String label;
   final String value;
   final IconData icon;
   final Color color;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Container(
+    final content = Container(
       width: 112,
       padding: const EdgeInsets.fromLTRB(10, 9, 10, 9),
       decoration: BoxDecoration(
-        color: cs.onInverseSurface.withOpacity(.08),
+        color: cs.onInverseSurface.withOpacity(onTap == null ? .08 : .12),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: cs.onInverseSurface.withOpacity(.12)),
+        border: Border.all(color: cs.onInverseSurface.withOpacity(onTap == null ? .12 : .22)),
       ),
       child: Row(
         children: [
@@ -838,7 +750,32 @@ class _OpsHqMetric extends StatelessWidget {
               ],
             ),
           ),
+          if (onTap != null) ...[
+            const SizedBox(width: 4),
+            Icon(
+              Icons.chevron_right_rounded,
+              color: cs.onInverseSurface.withOpacity(.70),
+              size: 18,
+            ),
+          ],
         ],
+      ),
+    );
+
+    if (onTap == null) {
+      return content;
+    }
+
+    return Semantics(
+      button: true,
+      label: '$label 열기',
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: onTap,
+          child: content,
+        ),
       ),
     );
   }
@@ -1001,22 +938,6 @@ enum _DashboardMenuTone {
   secondary,
   tertiary,
   neutral,
-}
-
-class _DashboardMenuAction {
-  const _DashboardMenuAction({
-    required this.label,
-    required this.icon,
-    required this.tone,
-    required this.onTap,
-    this.isEnabled = true,
-  });
-
-  final String label;
-  final IconData icon;
-  final _DashboardMenuTone tone;
-  final VoidCallback onTap;
-  final bool isEnabled;
 }
 
 class HqDashBoardButtonStyles {
@@ -1248,8 +1169,8 @@ class HqDashBoardButtonStyles {
   }
 }
 
-class _BranchWorkStatusFullScreenDialog extends StatefulWidget {
-  const _BranchWorkStatusFullScreenDialog({
+class _BranchWorkStatusInlinePanel extends StatefulWidget {
+  const _BranchWorkStatusInlinePanel({
     required this.screenName,
     required this.division,
   });
@@ -1258,12 +1179,12 @@ class _BranchWorkStatusFullScreenDialog extends StatefulWidget {
   final String division;
 
   @override
-  State<_BranchWorkStatusFullScreenDialog> createState() =>
-      _BranchWorkStatusFullScreenDialogState();
+  State<_BranchWorkStatusInlinePanel> createState() =>
+      _BranchWorkStatusInlinePanelState();
 }
 
-class _BranchWorkStatusFullScreenDialogState
-    extends State<_BranchWorkStatusFullScreenDialog> {
+class _BranchWorkStatusInlinePanelState
+    extends State<_BranchWorkStatusInlinePanel> {
   Future<_BranchWorkStatusViewData>? _future;
   bool _hasRequestedLoad = false;
   bool _isRefreshingAreas = false;
@@ -1274,8 +1195,27 @@ class _BranchWorkStatusFullScreenDialogState
   @override
   void initState() {
     super.initState();
-    _future = null;
     _restoreLocalMeta();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _loadInitial();
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant _BranchWorkStatusInlinePanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.division != widget.division) {
+      _future = null;
+      _hasRequestedLoad = false;
+      _cachedAreaCount = 0;
+      _lastAreaRefreshDay = '';
+      _restoreLocalMeta();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _loadInitial();
+      });
+    }
   }
 
   String _areasCacheKey(String division) => 'branch_areas_$division';
@@ -1449,11 +1389,17 @@ class _BranchWorkStatusFullScreenDialogState
     );
   }
 
+  void _loadInitial() {
+    if (_hasRequestedLoad || _future != null) return;
+    setState(() {
+      _hasRequestedLoad = true;
+      _future = _load(forceRefreshAreas: false);
+    });
+  }
+
   Future<void> _refreshAreas() async {
     if (_isRefreshingAreas || _isRefreshingAggregations) return;
-    if (_areaRefreshLockedToday) {
-      return;
-    }
+    if (_areaRefreshLockedToday) return;
 
     final nextFuture = _load(forceRefreshAreas: true);
     final division = widget.division.trim();
@@ -1489,6 +1435,10 @@ class _BranchWorkStatusFullScreenDialogState
 
     if ((cached ?? []).isEmpty) {
       if (!mounted) return;
+      setState(() {
+        _hasRequestedLoad = true;
+        _future = _load(forceRefreshAreas: false);
+      });
       return;
     }
 
@@ -1514,244 +1464,93 @@ class _BranchWorkStatusFullScreenDialogState
     }
   }
 
-  Widget _bodyShell({required Widget child}) {
-    return Align(
-      alignment: Alignment.topCenter,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 920),
-        child: child,
-      ),
-    );
-  }
-
-  Widget _bottomBarShell({required Widget child}) {
-    return Align(
-      alignment: Alignment.center,
-      heightFactor: 1,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 920),
-        child: child,
-      ),
-    );
-  }
-
-  Future<void> _openAreaRefreshAccessMenu(BuildContext context) async {
-    if (_isRefreshingAreas || _isRefreshingAggregations) return;
-
+  Widget _buildTopBar(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
-    final picked = await showDialog<String>(
-      context: context,
-      barrierDismissible: true,
-      builder: (dialogContext) {
-        return Dialog(
-          insetPadding:
-              const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
-          backgroundColor: cs.surface,
-          surfaceTintColor: Colors.transparent,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
-            side: BorderSide(color: cs.outlineVariant.withOpacity(0.55)),
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+      decoration: BoxDecoration(
+        color: cs.inverseSurface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: cs.outlineVariant.withOpacity(.5)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: cs.primary,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(Icons.domain_rounded, color: cs.onPrimary),
           ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+          const SizedBox(width: 12),
+          Expanded(
             child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: cs.primaryContainer,
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Icon(
-                        _areaRefreshLockedToday
-                            ? Icons.lock_clock_rounded
-                            : Icons.refresh_rounded,
-                        color: cs.onPrimaryContainer,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        '지역 갱신',
-                        style: tt.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w900,
-                          color: cs.onSurface,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 18),
-                SizedBox(
-                  height: 52,
-                  child: ElevatedButton.icon(
-                    onPressed: _areaRefreshLockedToday
-                        ? null
-                        : () =>
-                            Navigator.of(dialogContext).pop('refresh_areas'),
-                    icon: Icon(
-                      _areaRefreshLockedToday
-                          ? Icons.lock_rounded
-                          : Icons.refresh_rounded,
-                    ),
-                    label: Text(
-                      _areaRefreshLockedToday ? '오늘 갱신 완료' : '지역 갱신 실행',
-                      style: const TextStyle(fontWeight: FontWeight.w800),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: cs.primaryContainer,
-                      foregroundColor: cs.onPrimaryContainer,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                    ),
+                Text(
+                  '지사 별 업무 현황',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: (tt.titleMedium ?? const TextStyle(fontSize: 16)).copyWith(
+                    fontWeight: FontWeight.w900,
+                    color: cs.onInverseSurface,
+                    letterSpacing: -.2,
                   ),
                 ),
-                const SizedBox(height: 10),
-                SizedBox(
-                  height: 48,
-                  child: TextButton(
-                    onPressed: () => Navigator.of(dialogContext).pop(),
-                    style: TextButton.styleFrom(
-                      foregroundColor: cs.onSurfaceVariant,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                    child: const Text(
-                      '닫기',
-                      style: TextStyle(fontWeight: FontWeight.w800),
-                    ),
+                const SizedBox(height: 3),
+                Text(
+                  '업무 메뉴 영역에서 지사별 주차·출차 집계를 확인합니다.',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: tt.bodySmall?.copyWith(
+                    color: cs.onInverseSurface.withOpacity(.72),
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ],
             ),
           ),
-        );
-      },
-    );
-
-    if (!mounted) return;
-    if (picked == 'refresh_areas') {
-      await _refreshAreas();
-    }
-  }
-
-  Widget _buildHeader(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-
-    return _bodyShell(
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-        decoration: BoxDecoration(
-          color: cs.inverseSurface,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: cs.outlineVariant.withOpacity(.5)),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: cs.primary,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Icon(Icons.domain_rounded, color: cs.onPrimary),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                '지사 별 업무 현황',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: (tt.titleLarge ?? const TextStyle(fontSize: 20)).copyWith(
-                  fontWeight: FontWeight.w900,
-                  color: cs.onInverseSurface,
-                  letterSpacing: -.3,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            _BranchHeaderPill(
-              icon: Icons.sd_storage_rounded,
-              label: _cacheCountText(),
-            ),
-            const SizedBox(width: 6),
-            IconButton.filledTonal(
-              tooltip: '지역 갱신',
-              onPressed: () => _openAreaRefreshAccessMenu(context),
-              icon: Icon(
-                _areaRefreshLockedToday ? Icons.lock_clock_rounded : Icons.refresh_rounded,
-              ),
-            ),
-            const SizedBox(width: 4),
-            IconButton.filledTonal(
-              tooltip: '닫기',
-              onPressed: () => Navigator.of(context).pop(),
-              icon: const Icon(Icons.close_rounded),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInitialState(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
-        child: _bodyShell(
-          child: _BranchGuideCard(
-            division: widget.division.trim(),
-            cachedAreaCountText: _cacheCountText(),
-            refreshLockText: _refreshLockText(),
-            lockedToday: _areaRefreshLockedToday,
+          const SizedBox(width: 8),
+          _BranchHeaderPill(
+            icon: Icons.sd_storage_rounded,
+            label: _cacheCountText(),
           ),
-        ),
+        ],
       ),
     );
   }
 
   Widget _buildLoadingState(BuildContext context) {
-    return Center(
-      child: _bodyShell(
-        child: const _BranchStateCard(
-          icon: Icons.sync_rounded,
-          label: '로딩',
-          loading: true,
-        ),
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 12),
+      child: _BranchStateCard(
+        icon: Icons.sync_rounded,
+        label: '로딩',
+        loading: true,
       ),
     );
   }
 
   Widget _buildErrorState(BuildContext context) {
-    return Center(
-      child: _bodyShell(
-        child: const _BranchStateCard(
-          icon: Icons.error_outline_rounded,
-          label: '오류',
-        ),
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 12),
+      child: _BranchStateCard(
+        icon: Icons.error_outline_rounded,
+        label: '오류',
       ),
     );
   }
 
   Widget _buildEmptyDivisionState(BuildContext context) {
-    return Center(
-      child: _bodyShell(
-        child: const _BranchStateCard(
-          icon: Icons.badge_outlined,
-          label: 'division 없음',
-        ),
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 12),
+      child: _BranchStateCard(
+        icon: Icons.badge_outlined,
+        label: 'division 없음',
       ),
     );
   }
@@ -1769,44 +1568,49 @@ class _BranchWorkStatusFullScreenDialogState
       (sum, item) => sum + item.departureCompletedCount,
     );
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
-      child: _bodyShell(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _BranchMetricStrip(
-              division: data.division,
-              branchCount: data.areaCounts.length,
-              cachedCount: _cachedAreaCount,
-              parkingTotal: parkingTotal,
-              departureTotal: departureTotal,
-              refreshLockText: _refreshLockText(),
-              lockedToday: _areaRefreshLockedToday,
-            ),
-            const SizedBox(height: 12),
-            data.areaCounts.isEmpty
-                ? const _BranchStateCard(
-                    icon: Icons.location_off_rounded,
-                    label: '지사 없음',
-                  )
-                : _BranchSectionFrame(
-                    title: '지사',
-                    child: Column(
-                      children: data.areaCounts
-                          .map((item) => _BranchAreaMiniCard(item: item))
-                          .toList(growable: false),
-                    ),
-                  ),
-          ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _BranchMetricStrip(
+          division: data.division,
+          branchCount: data.areaCounts.length,
+          cachedCount: _cachedAreaCount,
+          parkingTotal: parkingTotal,
+          departureTotal: departureTotal,
+          refreshLockText: _refreshLockText(),
+          lockedToday: _areaRefreshLockedToday,
         ),
-      ),
+        const SizedBox(height: 12),
+        data.areaCounts.isEmpty
+            ? const _BranchStateCard(
+                icon: Icons.location_off_rounded,
+                label: '지사 없음',
+              )
+            : _BranchSectionFrame(
+                title: '지사',
+                child: AreaChatAlertWatcher(
+                  areaNames: data.areaCounts
+                      .map((item) => item.areaName)
+                      .toList(growable: false),
+                  child: Column(
+                    children: data.areaCounts
+                        .map((item) => _BranchAreaMiniCard(item: item))
+                        .toList(growable: false),
+                  ),
+                ),
+              ),
+      ],
     );
   }
 
   Widget _buildBody(BuildContext context) {
     if (!_hasRequestedLoad || _future == null) {
-      return _buildInitialState(context);
+      return _BranchGuideCard(
+        division: widget.division.trim(),
+        cachedAreaCountText: _cacheCountText(),
+        refreshLockText: _refreshLockText(),
+        lockedToday: _areaRefreshLockedToday,
+      );
     }
 
     return FutureBuilder<_BranchWorkStatusViewData>(
@@ -1837,79 +1641,45 @@ class _BranchWorkStatusFullScreenDialogState
     );
   }
 
-  Widget _buildBottomActionBar(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return SafeArea(
-      top: false,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
-        decoration: BoxDecoration(
-          color: cs.background,
-          border: Border(
-            top: BorderSide(color: cs.outlineVariant.withOpacity(0.45)),
+  Widget _buildActions(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: _BranchDialogActionButton(
+            icon: Icons.sync_rounded,
+            label: '집계 갱신',
+            loading: _isRefreshingAggregations,
+            disabled: false,
+            onPressed: _refreshAggregations,
+            primary: false,
           ),
         ),
-        child: _bottomBarShell(
-          child: Row(
-            children: [
-              Expanded(
-                child: _BranchDialogActionButton(
-                  icon: Icons.sync_rounded,
-                  label: '집계 갱신',
-                  loading: _isRefreshingAggregations,
-                  disabled: false,
-                  onPressed: _refreshAggregations,
-                  primary: false,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _BranchDialogActionButton(
-                  icon: Icons.refresh_rounded,
-                  label: _areaRefreshLockedToday ? '지역 완료' : '지역 갱신',
-                  loading: _isRefreshingAreas,
-                  disabled: _areaRefreshLockedToday,
-                  onPressed: _refreshAreas,
-                  primary: true,
-                ),
-              ),
-            ],
+        const SizedBox(width: 8),
+        Expanded(
+          child: _BranchDialogActionButton(
+            icon: Icons.refresh_rounded,
+            label: _areaRefreshLockedToday ? '지역 완료' : '지역 갱신',
+            loading: _isRefreshingAreas,
+            disabled: _areaRefreshLockedToday,
+            onPressed: _refreshAreas,
+            primary: true,
           ),
         ),
-      ),
+      ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return Material(
-      color: cs.background,
-      child: Scaffold(
-        backgroundColor: cs.background,
-        body: SafeArea(
-          bottom: false,
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-                child: _buildHeader(context),
-              ),
-              Divider(
-                height: 1,
-                thickness: 1,
-                color: cs.outlineVariant.withOpacity(0.45),
-              ),
-              Expanded(
-                child: _buildBody(context),
-              ),
-            ],
-          ),
-        ),
-        bottomNavigationBar: _buildBottomActionBar(context),
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildTopBar(context),
+        const SizedBox(height: 12),
+        _buildBody(context),
+        const SizedBox(height: 12),
+        _buildActions(context),
+      ],
     );
   }
 }
@@ -2205,8 +1975,6 @@ class _BranchGuideCard extends StatelessWidget {
   }
 }
 
-
-
 class _BranchStateCard extends StatelessWidget {
   const _BranchStateCard({
     required this.icon,
@@ -2352,16 +2120,53 @@ class _BranchWorkStatusAreaCount {
   final int departureCompletedCount;
 }
 
+
+class _AreaChatReadOpenHelper {
+  const _AreaChatReadOpenHelper._();
+
+  static Future<void> open({
+    required BuildContext context,
+    required String areaName,
+  }) async {
+    final area = areaName.trim();
+    if (area.isEmpty) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      builder: (sheetContext) {
+        return FractionallySizedBox(
+          heightFactor: 0.88,
+          child: AreaChatPanel(
+            areaName: area,
+            showCloseButton: true,
+            onClose: () => Navigator.of(sheetContext).pop(),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _BranchAreaMiniCard extends StatelessWidget {
   const _BranchAreaMiniCard({required this.item});
 
   final _BranchWorkStatusAreaCount item;
 
+  Future<void> _openChat(BuildContext context) async {
+    final area = item.areaName.trim();
+    if (area.isEmpty) return;
+    await _AreaChatReadOpenHelper.open(
+      context: context,
+      areaName: area,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    final total = item.parkingCompletedCount + item.departureCompletedCount;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -2413,10 +2218,9 @@ class _BranchAreaMiniCard extends StatelessWidget {
                           ),
                         ),
                       ),
-                      _BranchAreaValueChip(
-                        icon: Icons.functions_rounded,
-                        value: '$total',
-                        color: cs.onSurfaceVariant,
+                      AreaChatIconButton(
+                        areaName: item.areaName,
+                        onPressed: () => _openChat(context),
                       ),
                     ],
                   ),

@@ -1,16 +1,17 @@
 import 'dart:async';
-
 import 'dart:ui' show FontFeature;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
-import '../../../features/account/applications/user_state.dart';
-import '../../../features/dev/application/area_state.dart';
-import '../../../shared/page/application/common/type_view_mode_state.dart';
-
-import '../../../shared/plate/application/common/view_doc_rows_store.dart';
+import '../../features/account/applications/user_state.dart';
+import '../../features/dev/application/area_state.dart';
+import '../../features/chat/application/chat_area_resolver.dart';
+import '../../features/chat/presentation/area_chat_alert_watcher.dart';
+import '../../features/chat/presentation/area_chat_panel.dart';
+import '../../features/voice/application/voice_appbar_ui_state.dart';
+import '../page/application/common/type_view_mode_state.dart';
+import '../plate/application/common/view_doc_rows_store.dart';
 import 'real_time_tab_controller.dart';
 import 'real_time_table_body.dart';
 import 'real_time_table_components.dart';
@@ -69,6 +70,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
   late List<bool> _enabled;
 
   TypeViewModeState? _viewMode;
+  VoiceAppbarUiState? _talkUi;
   Timer? _idleTimer;
   int _lastActivityAtMs = 0;
   int _autoPauseDepth = 0;
@@ -104,6 +106,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    _attachTalkUiListener();
     if (widget.viewModeAuto == null) {
       _detachViewModeListener();
       return;
@@ -121,6 +124,31 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     _syncIdleWithMode();
   }
 
+  void _attachTalkUiListener() {
+    VoiceAppbarUiState? next;
+    try {
+      next = context.read<VoiceAppbarUiState>();
+    } catch (_) {
+      next = null;
+    }
+    if (_talkUi == next) return;
+    _talkUi?.removeListener(_onTalkUiChanged);
+    _talkUi = next;
+    _talkUi?.addListener(_onTalkUiChanged);
+    _syncIdleWithMode();
+  }
+
+  void _detachTalkUiListener() {
+    _talkUi?.removeListener(_onTalkUiChanged);
+    _talkUi = null;
+  }
+
+  void _onTalkUiChanged() {
+    if (!mounted) return;
+    _syncIdleWithMode();
+    setState(() {});
+  }
+
   void _detachViewModeListener() {
     _idleTimer?.cancel();
     _idleTimer = null;
@@ -136,7 +164,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
   void _syncIdleWithMode() {
     final auto = widget.viewModeAuto;
     final vm = _viewMode;
-    if (auto == null || vm == null) {
+    if (auto == null || vm == null || _talkUi?.enabled == true) {
       _idleTimer?.cancel();
       _idleTimer = null;
       return;
@@ -151,13 +179,13 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
 
   void _scheduleIdle(RealTimeViewModeAutoSpec auto) {
     _idleTimer?.cancel();
-    if (_autoPauseDepth > 0) {
+    if (_autoPauseDepth > 0 || _talkUi?.enabled == true) {
       _idleTimer = null;
       return;
     }
     _idleTimer = Timer(auto.idleToStatusAfter, () {
       if (!mounted) return;
-      if (_autoPauseDepth > 0) return;
+      if (_autoPauseDepth > 0 || _talkUi?.enabled == true) return;
       final vm = _viewMode;
       if (vm == null) return;
       if (widget.viewModeAuto == null) return;
@@ -176,6 +204,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     if (!mounted) return;
     if (_transitionMaskOn) return;
     if (_autoPauseDepth > 0) return;
+    if (_talkUi?.enabled == true) return;
 
     setState(() {
       _transitionMaskMessage = '현황 전환 중...';
@@ -191,7 +220,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
       if (vm == null) return;
       if (widget.viewModeAuto == null) return;
       if (vm.mode != TypeViewMode.table) return;
-      if (_autoPauseDepth > 0) return;
+      if (_autoPauseDepth > 0 || _talkUi?.enabled == true) return;
 
       final now = DateTime.now().millisecondsSinceEpoch;
       if (now - _lastActivityAtMs < auto.idleToStatusAfter.inMilliseconds) {
@@ -217,7 +246,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
   void _onUserActivity() {
     final auto = widget.viewModeAuto;
     final vm = _viewMode;
-    if (auto == null || vm == null) return;
+    if (auto == null || vm == null || _talkUi?.enabled == true) return;
     if (vm.mode != TypeViewMode.table) return;
     final now = DateTime.now().millisecondsSinceEpoch;
     if (now - _lastActivityAtMs < 80) return;
@@ -365,6 +394,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
   @override
   void dispose() {
     _detachViewModeListener();
+    _detachTalkUiListener();
     _tabCtrl.dispose();
     super.dispose();
   }
@@ -437,6 +467,11 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
 
     if (!_isTabEnabled(index)) {
       _tabCtrl.animateTo(_firstEnabledTabOr(_tabCtrl.index));
+      _handlingTap = false;
+      return;
+    }
+
+    if (_talkUi?.enabled == true) {
       _handlingTap = false;
       return;
     }
@@ -599,77 +634,105 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final talkUiEnabled = _talkUi?.enabled ?? false;
+    final chatAreaName = ChatAreaResolver.watch(context);
 
-    Widget out = Container(
+    Widget out = AreaChatAlertWatcher(
+      areaNames: <String>[chatAreaName],
+      child: Container(
       color: cs.surface,
       child: Column(
         children: [
           Expanded(
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                TabBarView(
-                  controller: _tabCtrl,
-                  physics: const NeverScrollableScrollPhysics(),
-                  children: List<Widget>.generate(widget.tabs.length, (i) {
-                    final t = widget.tabs[i];
-                    if (_isTabEnabled(i)) {
-                      final table = KeyedSubtree(
-                        key: ValueKey<String>('table:${t.id}'),
-                        child: RealTimeTableBody(
-                          controller: _controllers[i],
-                          spec: t,
-                          description: widget.description,
-                          screen: widget.screen,
-                          onUserActivity: _onUserActivity,
-                          onAutoPauseStart: _beginAutoPause,
-                          onAutoPauseEnd: _endAutoPause,
-                        ),
-                      );
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 260),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: _sharedAxisYTransition,
+              layoutBuilder: (currentChild, previousChildren) {
+                return Stack(
+                  fit: StackFit.expand,
+                  children: <Widget>[
+                    ...previousChildren,
+                    if (currentChild != null) currentChild,
+                  ],
+                );
+              },
+              child: talkUiEnabled
+                  ? const KeyedSubtree(
+                      key: ValueKey<String>('area-chat-panel'),
+                      child: AreaChatPanel(),
+                    )
+                  : KeyedSubtree(
+                      key: const ValueKey<String>('real-time-tab-content'),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          TabBarView(
+                            controller: _tabCtrl,
+                            physics: const NeverScrollableScrollPhysics(),
+                            children: List<Widget>.generate(widget.tabs.length, (i) {
+                              final t = widget.tabs[i];
+                              if (_isTabEnabled(i)) {
+                                final table = KeyedSubtree(
+                                  key: ValueKey<String>('table:${t.id}'),
+                                  child: RealTimeTableBody(
+                                    controller: _controllers[i],
+                                    spec: t,
+                                    description: widget.description,
+                                    screen: widget.screen,
+                                    onUserActivity: _onUserActivity,
+                                    onAutoPauseStart: _beginAutoPause,
+                                    onAutoPauseEnd: _endAutoPause,
+                                  ),
+                                );
 
-                      final custom = widget.bodyBuilder;
-                      final showCustom = custom != null;
+                                final custom = widget.bodyBuilder;
+                                final showCustom = custom != null;
 
-                      final status = showCustom
-                          ? KeyedSubtree(
-                        key: ValueKey<String>('status:${t.id}'),
-                        child: custom(context, t, _controllers[i]),
-                      )
-                          : null;
+                                final Widget activeChild = showCustom
+                                    ? KeyedSubtree(
+                                        key: ValueKey<String>('status:${t.id}'),
+                                        child: custom(context, t, _controllers[i]),
+                                      )
+                                    : table;
 
-                      return AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 260),
-                        switchInCurve: Curves.easeOutCubic,
-                        switchOutCurve: Curves.easeInCubic,
-                        transitionBuilder: _sharedAxisYTransition,
-                        layoutBuilder: (currentChild, previousChildren) {
-                          return Stack(
-                            fit: StackFit.expand,
-                            children: <Widget>[
-                              ...previousChildren,
-                              if (currentChild != null) currentChild,
-                            ],
-                          );
-                        },
-                        child: showCustom ? status : table,
-                      );
-                    }
+                                return AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 260),
+                                  switchInCurve: Curves.easeOutCubic,
+                                  switchOutCurve: Curves.easeInCubic,
+                                  transitionBuilder: _sharedAxisYTransition,
+                                  layoutBuilder: (currentChild, previousChildren) {
+                                    return Stack(
+                                      fit: StackFit.expand,
+                                      children: <Widget>[
+                                        ...previousChildren,
+                                        if (currentChild != null) currentChild,
+                                      ],
+                                    );
+                                  },
+                                  child: activeChild,
+                                );
+                              }
 
-                    return RealTimeLockedPanel(
-                      title: '${t.label} 실시간 탭이 비활성화되어 있습니다',
-                      message:
-                      '설정에서 “${t.label} 실시간 모드(탭) 사용”을 ON으로 변경한 뒤 다시 시도해 주세요.',
-                    );
-                  }),
-                ),
-                if (_transitionMaskOn)
-                  _transitionMask(context, message: _transitionMaskMessage),
-              ],
+                              return RealTimeLockedPanel(
+                                title: '${t.label} 실시간 탭이 비활성화되어 있습니다',
+                                message:
+                                    '설정에서 “${t.label} 실시간 모드(탭) 사용”을 ON으로 변경한 뒤 다시 시도해 주세요.',
+                              );
+                            }),
+                          ),
+                          if (_transitionMaskOn)
+                            _transitionMask(context, message: _transitionMaskMessage),
+                        ],
+                      ),
+                    ),
             ),
           ),
           _buildBottomTabBar(cs),
         ],
       ),
+    ),
     );
 
     if (widget.viewModeAuto != null && _viewMode != null) {

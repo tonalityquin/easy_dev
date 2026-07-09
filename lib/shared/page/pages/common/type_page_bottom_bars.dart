@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../../features/voice/application/voice_appbar_ui_state.dart';
 import '../../application/common/type_view_mode_state.dart';
 
 class TypePageBottomBars extends StatelessWidget {
@@ -20,8 +21,17 @@ class TypePageBottomBars extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final mode = context.watch<TypeViewModeState>().mode;
+    bool talkUiEnabled = false;
 
-    final child = mode == TypeViewMode.table
+    try {
+      talkUiEnabled = context.watch<VoiceAppbarUiState>().enabled;
+    } catch (_) {
+      talkUiEnabled = false;
+    }
+
+    final showTableBars = mode == TypeViewMode.table || talkUiEnabled;
+
+    final child = showTableBars
         ? Column(
             key: const ValueKey<String>('bars:table'),
             mainAxisSize: MainAxisSize.min,

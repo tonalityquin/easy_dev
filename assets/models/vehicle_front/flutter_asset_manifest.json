@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "created_at": "2026-07-02T19:53:10",
+  "model_version": "v1_mobilenetv2_2class",
+  "run_id": "run_20260702_173050",
+  "asset_dir": "flutter_assets/vehicle_front/run_20260702_173050",
+  "active_model_file": "vehicle_classifier.tflite",
+  "optional_dynamic_range_model_file": "vehicle_classifier_dynamic_range.tflite",
+  "thresholds": {
+    "min_confidence": 0.85,
+    "min_margin": 0.25
+  },
+  "files": [
+    {
+      "src": "model_registry/v1_mobilenetv2_2class/run_20260702_173050/vehicle_front_mobilenetv2_float32.tflite",
+      "dst": "flutter_assets/vehicle_front/run_20260702_173050/vehicle_classifier.tflite",
+      "sha256": "cd52818e56e96012a82c8b56eff649d145aeadecb34deb8e05e6a0b2ada33170",
+      "size_bytes": 8909232
+    },
+    {
+      "src": "model_registry/v1_mobilenetv2_2class/run_20260702_173050/vehicle_front_mobilenetv2_dynamic_range.tflite",
+      "dst": "flutter_assets/vehicle_front/run_20260702_173050/vehicle_classifier_dynamic_range.tflite",
+      "sha256": "307a29d6e43e57399f7429d7c8edb063e22c1417bd889cfd6628bc27e4b7d038",
+      "size_bytes": 2543712
+    },
+    {
+      "src": "model_registry/v1_mobilenetv2_2class/run_20260702_173050/labels.txt",
+      "dst": "flutter_assets/vehicle_front/run_20260702_173050/labels.txt",
+      "sha256": "ac9f9500b1bebaaac4286e9875343991096e148e37959d26c5b91e7f6c2dd22d",
+      "size_bytes": 25
+    },
+    {
+      "src": "model_registry/v1_mobilenetv2_2class/run_20260702_173050/vehicle_labels.json",
+      "dst": "flutter_assets/vehicle_front/run_20260702_173050/vehicle_labels.json",
+      "sha256": "41ce06a2b01f11d6f3d6ccd416c5f75c6cb4ef209927b882c7ab93a6dc056e19",
+      "size_bytes": 326
+    },
+    {
+      "src": "model_registry/v1_mobilenetv2_2class/run_20260702_173050/model_meta.json",
+      "dst": "flutter_assets/vehicle_front/run_20260702_173050/model_meta.json",
+      "sha256": "4142d303c68cedac3c33fb58970dbbc031b4a0bdfcea23f254c1fc3a69315fc4",
+      "size_bytes": 4144
+    },
+    {
+      "src": "model_registry/v1_mobilenetv2_2class/run_20260702_173050/hierarchy_meta.json",
+      "dst": "flutter_assets/vehicle_front/run_20260702_173050/hierarchy_meta.json",
+      "sha256": "5c0e6602a28ac1521458c5c92c018ac93886d7278c86688bc8d77960504f3339",
+      "size_bytes": 1031
+    },
+    {
+      "src": "model_registry/v1_mobilenetv2_2class/run_20260702_173050/tflite_input_output_details.json",
+      "dst": "flutter_assets/vehicle_front/run_20260702_173050/tflite_input_output_details.json",
+      "sha256": "d0c1b52aad0cf9de0098c12fa4149776f540ad4df560408af4ad529cc990eb6d",
+      "size_bytes": 3092
+    }
+  ],
+  "flutter_input_rule": {
+    "image_size": [
+      224,
+      224
+    ],
+    "channels": 3,
+    "dtype": "float32",
+    "pixel_range": [
+      0,
+      255
+    ],
+    "do_not_apply_minus_one_to_one_normalization_in_flutter": true
+  }
+}
