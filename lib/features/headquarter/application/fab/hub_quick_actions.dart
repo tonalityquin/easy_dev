@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../app/di/routes.dart';
+import '../../../../app/init/app_exit_service.dart';
 import '../../../../app/init/app_navigator.dart';
 import '../../../../app/utils/ops_delayed_refresh_gate.dart';
 import '../../../account/applications/user_state.dart';
@@ -176,29 +177,16 @@ class HeadHubActions {
     if (ctx == null) return;
 
     await openSheetExclusively<void>((sheetContext) {
-      return showModalBottomSheet<void>(
+      return AreaChatPanel.showSheet(
         context: sheetContext,
-        isScrollControlled: true,
-        useSafeArea: true,
-        backgroundColor: Colors.transparent,
-        builder: (bottomSheetContext) {
-          return FractionallySizedBox(
-            heightFactor: 0.88,
-            child: ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-              child: AreaChatPanel(
-                areaName: headquarterChatAreaName,
-                showCloseButton: true,
-                onClose: () => Navigator.of(bottomSheetContext).pop(),
-              ),
-            ),
-          );
-        },
+        areaName: headquarterChatAreaName,
       );
     });
   }
 
-  static Future<void> refreshAreaMasterFromQuickAction([BuildContext? context]) async {
+  static Future<void> refreshAreaMasterFromQuickAction([
+    BuildContext? context,
+  ]) async {
     final ctx = context ?? _bestContext();
     if (ctx == null) return;
 
@@ -214,21 +202,42 @@ class HeadHubActions {
 
     try {
       final snapshot = await AreaMasterCache.refreshDivision(division);
-      final messenger = ScaffoldMessenger.maybeOf(ctx);
-      messenger?.showSnackBar(
-        SnackBar(
-          content: Text('지역 마스터 갱신 완료: ${snapshot.items.length}개'),
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(milliseconds: 1200),
-        ),
+      if (!ctx.mounted) return;
+
+      await showDialog<void>(
+        context: ctx,
+        barrierDismissible: false,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text('지역 마스터 갱신 완료'),
+            content: Text(
+              '기존 지역 마스터를 삭제하고 '
+              '${snapshot.items.length}개 지역 정보를 새로 저장했습니다.\n\n'
+              '변경 사항 적용을 위해 앱을 종료합니다. '
+              '앱을 다시 실행해 주세요.',
+            ),
+            actions: [
+              FilledButton.icon(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                icon: const Icon(Icons.power_settings_new_rounded),
+                label: const Text('확인 및 종료'),
+              ),
+            ],
+          );
+        },
       );
+
+      final exitContext = _bestContext();
+      if (exitContext == null || !exitContext.mounted) return;
+      await AppExitService.exitApp(exitContext);
     } catch (_) {
+      if (!ctx.mounted) return;
       final messenger = ScaffoldMessenger.maybeOf(ctx);
       messenger?.showSnackBar(
         const SnackBar(
           content: Text('지역 마스터 갱신에 실패했습니다.'),
           behavior: SnackBarBehavior.floating,
-          duration: Duration(milliseconds: 1200),
+          duration: Duration(milliseconds: 1600),
         ),
       );
     }

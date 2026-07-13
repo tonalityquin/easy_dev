@@ -1,18 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../app/init/app_exit_service.dart';
 import '../../../../app/init/logout_helper.dart';
+import '../../../../app/models/capability.dart';
 import '../../../../shared/plate/domain/enums/plate_type.dart';
 import '../../../../shared/plate/domain/repositories/plate_repository.dart';
 import '../../../account/applications/user_state.dart';
+import '../../../calendar/presentation/headquarter_calendar_card.dart';
+import '../../../chat/application/chat_area_key.dart';
 import '../../../chat/presentation/area_chat_inbox_scope.dart';
 import '../../../chat/presentation/area_chat_icon_button.dart';
 import '../../../chat/presentation/area_chat_panel.dart';
 import '../../../dev/debug/debug_action_recorder.dart';
-import '../../../dev/domain/repositories/area_repo_package/area_repository.dart';
+import '../../../headquarter/application/area/area_master_cache.dart';
 import '../../../headquarter/application/fab/hub_quick_actions.dart';
 import '../../../mode_single/application/att_brk_repository.dart';
 import '../../../selector/sheets/service_bottom_sheet.dart';
@@ -612,9 +614,140 @@ Widget _buildMenuPanel(BuildContext context, UserState userState) {
           },
         ),
       ),
+      floatingActionButton: const _HeadquarterChatFloatingButton(),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 
+}
+
+class _HeadquarterChatFloatingButton extends StatelessWidget {
+  const _HeadquarterChatFloatingButton();
+
+  Future<void> _openChat(BuildContext context) async {
+    await _AreaChatReadOpenHelper.open(
+      context: context,
+      areaName: headquarterChatAreaName,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AreaChatInboxScope(
+      areaNames: const <String>[headquarterChatAreaName],
+      notificationsEnabled: false,
+      builder: (context, inbox, currentUserId) {
+        final unreadCount = inbox.unreadCountForArea(
+          headquarterChatAreaName,
+          currentUserId,
+        );
+        return _HeadquarterChatFabVisual(
+          unreadCount: unreadCount,
+          onPressed: () => _openChat(context),
+        );
+      },
+    );
+  }
+}
+
+class _HeadquarterChatFabVisual extends StatelessWidget {
+  const _HeadquarterChatFabVisual({
+    required this.unreadCount,
+    required this.onPressed,
+  });
+
+  final int unreadCount;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final active = unreadCount > 0;
+    final color = cs.primary;
+
+    return Tooltip(
+      message: '본사 채팅 열기',
+      child: SizedBox(
+        width: 64,
+        height: 64,
+        child: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.center,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOutCubic,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: color.withOpacity(active ? .28 : .18),
+                    blurRadius: active ? 18 : 12,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: FloatingActionButton(
+                heroTag: 'headquarter_chat_fab',
+                tooltip: '본사 채팅',
+                backgroundColor: cs.primaryContainer,
+                foregroundColor: cs.onPrimaryContainer,
+                elevation: active ? 8 : 5,
+                onPressed: onPressed,
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 180),
+                  switchInCurve: Curves.easeOutBack,
+                  switchOutCurve: Curves.easeInCubic,
+                  transitionBuilder: (child, animation) {
+                    return ScaleTransition(
+                      scale: animation,
+                      child: FadeTransition(opacity: animation, child: child),
+                    );
+                  },
+                  child: Icon(
+                    active
+                        ? Icons.mark_chat_unread_rounded
+                        : Icons.chat_bubble_outline_rounded,
+                    key: ValueKey<bool>(active),
+                  ),
+                ),
+              ),
+            ),
+            if (active)
+              Positioned(
+                right: 0,
+                top: 0,
+                child: AnimatedScale(
+                  scale: active ? 1 : .85,
+                  duration: const Duration(milliseconds: 160),
+                  curve: Curves.easeOutBack,
+                  child: Container(
+                    constraints: const BoxConstraints(minWidth: 22),
+                    height: 22,
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    decoration: BoxDecoration(
+                      color: cs.error,
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: cs.surface, width: 2),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      unreadCount > 99 ? '99+' : '$unreadCount',
+                      style: TextStyle(
+                        color: cs.onError,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                        height: 1,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _OpsHqBadge extends StatelessWidget {
@@ -1187,19 +1320,15 @@ class _BranchWorkStatusInlinePanelState
     extends State<_BranchWorkStatusInlinePanel> {
   Future<_BranchWorkStatusViewData>? _future;
   bool _hasRequestedLoad = false;
-  bool _isRefreshingAreas = false;
   bool _isRefreshingAggregations = false;
+  bool _expanded = false;
   int _cachedAreaCount = 0;
-  String _lastAreaRefreshDay = '';
+  String _areaMasterRefreshedAtIso = '';
 
   @override
   void initState() {
     super.initState();
-    _restoreLocalMeta();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _loadInitial();
-    });
+    _restoreAreaMasterMeta();
   }
 
   @override
@@ -1208,115 +1337,51 @@ class _BranchWorkStatusInlinePanelState
     if (oldWidget.division != widget.division) {
       _future = null;
       _hasRequestedLoad = false;
+      _expanded = false;
       _cachedAreaCount = 0;
-      _lastAreaRefreshDay = '';
-      _restoreLocalMeta();
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _loadInitial();
-      });
+      _areaMasterRefreshedAtIso = '';
+      _restoreAreaMasterMeta();
     }
   }
 
-  String _areasCacheKey(String division) => 'branch_areas_$division';
-
-  String _areasRefreshDateKey(String division) =>
-      'branch_areas_last_refresh_date_$division';
-
-  String _dayStamp(DateTime dateTime) {
-    final y = dateTime.year.toString().padLeft(4, '0');
-    final m = dateTime.month.toString().padLeft(2, '0');
-    final d = dateTime.day.toString().padLeft(2, '0');
-    return '$y-$m-$d';
-  }
-
-  String get _todayStamp => _dayStamp(DateTime.now());
-
-  bool get _areaRefreshLockedToday => _lastAreaRefreshDay == _todayStamp;
-
-  Future<void> _restoreLocalMeta() async {
-    final division = widget.division.trim();
-    if (division.isEmpty) return;
-
-    final prefs = await SharedPreferences.getInstance();
-    final cached =
-        prefs.getStringList(_areasCacheKey(division)) ?? const <String>[];
-    final lastRefresh = prefs.getString(_areasRefreshDateKey(division)) ?? '';
-
-    if (!mounted) return;
-
-    setState(() {
-      _cachedAreaCount = _filterBranchAreas(
-        areaNames: cached,
-        division: division,
-      ).length;
-      _lastAreaRefreshDay = lastRefresh;
-    });
-  }
-
-  Future<void> _writeLastAreaRefreshDay(String division, String day) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_areasRefreshDateKey(division), day);
-  }
-
-  void _syncMetaFromAreas({
-    required String division,
-    required List<String> areaNames,
-    String? refreshedDay,
-  }) {
-    if (!mounted) return;
-    setState(() {
-      _cachedAreaCount = _filterBranchAreas(
-        areaNames: areaNames,
-        division: division,
-      ).length;
-      if (refreshedDay != null) {
-        _lastAreaRefreshDay = refreshedDay;
-      }
-    });
-  }
-
-  String _cacheCountText() => _cachedAreaCount > 0 ? '$_cachedAreaCount' : '0';
-
-  String _refreshLockText() => _areaRefreshLockedToday ? '오늘 완료' : '가능';
-
-  List<String> _filterBranchAreas({
-    required List<String> areaNames,
+  List<AreaMasterItem> _filterBranchItems({
+    required List<AreaMasterItem> items,
     required String division,
   }) {
     final normalizedDivision = division.trim();
+    final byName = <String, AreaMasterItem>{};
 
-    return areaNames
-        .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
-        .where((e) => e != normalizedDivision)
-        .toSet()
-        .toList()
-      ..sort();
+    for (final item in items) {
+      final name = item.name.trim();
+      if (name.isEmpty) continue;
+      if (item.isHeadquarter) continue;
+      if (name == normalizedDivision) continue;
+      byName[name] = item;
+    }
+
+    final filtered = byName.values.toList(growable: false);
+    filtered.sort((a, b) => a.name.compareTo(b.name));
+    return filtered;
   }
 
-  Future<List<String>?> _readCachedAreas(String division) async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getStringList(_areasCacheKey(division));
-  }
+  Future<void> _restoreAreaMasterMeta() async {
+    final division = widget.division.trim();
+    if (division.isEmpty) return;
 
-  Future<void> _writeCachedAreas(String division, List<String> areas) async {
-    final prefs = await SharedPreferences.getInstance();
-    final filtered = _filterBranchAreas(
-      areaNames: areas,
-      division: division,
-    );
-    await prefs.setStringList(_areasCacheKey(division), filtered);
-  }
+    final snapshot = await AreaMasterCache.readSnapshot(division);
+    final branchItems = snapshot == null
+        ? const <AreaMasterItem>[]
+        : _filterBranchItems(
+            items: snapshot.items,
+            division: division,
+          );
 
-  Future<List<String>> _fetchAreasFromRepository(String division) async {
-    final areaRepository = context.read<AreaRepository>();
-    final rawNames = await areaRepository.getAreaNamesByDivision(division);
+    if (!mounted) return;
 
-    return _filterBranchAreas(
-      areaNames: rawNames,
-      division: division,
-    );
+    setState(() {
+      _cachedAreaCount = branchItems.length;
+      _areaMasterRefreshedAtIso = snapshot?.refreshedAtIso ?? '';
+    });
   }
 
   Future<int> _countPlates({
@@ -1330,132 +1395,119 @@ class _BranchWorkStatusInlinePanelState
     );
   }
 
-  Future<_BranchWorkStatusAreaCount> _buildAreaCount(String area) async {
+  Future<_BranchWorkStatusAreaCount> _buildAreaCount(
+    AreaMasterItem item,
+  ) async {
     final results = await Future.wait<int>([
-      _countPlates(area: area, plateType: PlateType.parkingCompleted),
-      _countPlates(area: area, plateType: PlateType.departureCompleted),
+      _countPlates(
+        area: item.name,
+        plateType: PlateType.parkingCompleted,
+      ),
+      _countPlates(
+        area: item.name,
+        plateType: PlateType.departureCompleted,
+      ),
     ]);
 
+    final normalizedModes = item.modes
+        .map((mode) => mode.trim().toLowerCase())
+        .where((mode) => mode.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    normalizedModes.sort();
+
     return _BranchWorkStatusAreaCount(
-      areaName: area,
+      areaName: item.name.trim(),
       parkingCompletedCount: results[0],
       departureCompletedCount: results[1],
+      modes: List<String>.unmodifiable(normalizedModes),
+      capabilities: Set<Capability>.unmodifiable(item.capabilities),
     );
   }
 
-  Future<_BranchWorkStatusViewData> _load({
-    required bool forceRefreshAreas,
-  }) async {
+  Future<_BranchWorkStatusViewData> _load() async {
     final division = widget.division.trim();
 
     if (division.isEmpty) {
       return const _BranchWorkStatusViewData(
         division: '',
-        areaNames: [],
-        areaCounts: [],
-        usedCachedAreas: false,
+        areaCounts: <_BranchWorkStatusAreaCount>[],
+        hasAreaMasterCache: false,
+        areaMasterRefreshedAtIso: '',
       );
     }
 
-    List<String> areaNames = [];
-
-    if (!forceRefreshAreas) {
-      final cached = await _readCachedAreas(division);
-      if (cached != null) {
-        areaNames = _filterBranchAreas(
-          areaNames: cached,
-          division: division,
-        );
-      }
+    final snapshot = await AreaMasterCache.readSnapshot(division);
+    if (snapshot == null) {
+      return _BranchWorkStatusViewData(
+        division: division,
+        areaCounts: const <_BranchWorkStatusAreaCount>[],
+        hasAreaMasterCache: false,
+        areaMasterRefreshedAtIso: '',
+      );
     }
 
-    bool usedCachedAreas = areaNames.isNotEmpty;
-
-    if (areaNames.isEmpty) {
-      areaNames = await _fetchAreasFromRepository(division);
-      await _writeCachedAreas(division, areaNames);
-      usedCachedAreas = false;
-    }
+    final branchItems = _filterBranchItems(
+      items: snapshot.items,
+      division: division,
+    );
 
     final areaCounts = await Future.wait<_BranchWorkStatusAreaCount>(
-      areaNames.map(_buildAreaCount),
+      branchItems.map(_buildAreaCount),
     );
 
     return _BranchWorkStatusViewData(
       division: division,
-      areaNames: areaNames,
       areaCounts: areaCounts,
-      usedCachedAreas: usedCachedAreas,
+      hasAreaMasterCache: true,
+      areaMasterRefreshedAtIso: snapshot.refreshedAtIso,
     );
   }
 
-  void _loadInitial() {
-    if (_hasRequestedLoad || _future != null) return;
+  Future<_BranchWorkStatusViewData> _loadAndSyncMeta() async {
+    final data = await _load();
+    if (!mounted) return data;
     setState(() {
-      _hasRequestedLoad = true;
-      _future = _load(forceRefreshAreas: false);
+      _cachedAreaCount = data.areaCounts.length;
+      _areaMasterRefreshedAtIso = data.areaMasterRefreshedAtIso;
     });
+    return data;
   }
 
-  Future<void> _refreshAreas() async {
-    if (_isRefreshingAreas || _isRefreshingAggregations) return;
-    if (_areaRefreshLockedToday) return;
-
-    final nextFuture = _load(forceRefreshAreas: true);
-    final division = widget.division.trim();
-    final today = _todayStamp;
-
+  void _toggleExpanded() {
+    final next = !_expanded;
     setState(() {
-      _hasRequestedLoad = true;
-      _isRefreshingAreas = true;
-      _future = nextFuture;
+      _expanded = next;
+      if (next) {
+        _hasRequestedLoad = true;
+        _future = _loadAndSyncMeta();
+      }
     });
+    HapticFeedback.selectionClick();
+  }
 
-    try {
-      final data = await nextFuture;
-      await _writeLastAreaRefreshDay(division, today);
-      _syncMetaFromAreas(
-        division: division,
-        areaNames: data.areaNames,
-        refreshedDay: today,
-      );
-    } finally {
-      if (!mounted) return;
-      setState(() {
-        _isRefreshingAreas = false;
-      });
-    }
+  void _collapse() {
+    if (!_expanded) return;
+    setState(() {
+      _expanded = false;
+    });
+    HapticFeedback.selectionClick();
   }
 
   Future<void> _refreshAggregations() async {
-    if (_isRefreshingAreas || _isRefreshingAggregations) return;
+    if (_isRefreshingAggregations) return;
 
-    final division = widget.division.trim();
-    final cached = await _readCachedAreas(division);
-
-    if ((cached ?? []).isEmpty) {
-      if (!mounted) return;
-      setState(() {
-        _hasRequestedLoad = true;
-        _future = _load(forceRefreshAreas: false);
-      });
-      return;
-    }
-
-    final nextFuture = _load(forceRefreshAreas: false);
+    final nextFuture = _loadAndSyncMeta();
 
     setState(() {
+      _expanded = true;
       _hasRequestedLoad = true;
       _isRefreshingAggregations = true;
       _future = nextFuture;
     });
 
     try {
-      final data = await nextFuture;
-      _syncMetaFromAreas(
-        division: division,
-        areaNames: data.areaNames,
-      );
+      await nextFuture;
     } finally {
       if (!mounted) return;
       setState(() {
@@ -1467,59 +1519,111 @@ class _BranchWorkStatusInlinePanelState
   Widget _buildTopBar(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    final statusLabel = _expanded ? '접기' : '펼치기';
+    final statusIcon = _expanded
+        ? Icons.keyboard_arrow_up_rounded
+        : Icons.keyboard_arrow_down_rounded;
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-      decoration: BoxDecoration(
-        color: cs.inverseSurface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: cs.outlineVariant.withOpacity(.5)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 42,
-            height: 42,
+    return Semantics(
+      button: true,
+      label: '지사 별 업무 현황 $statusLabel',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: _toggleExpanded,
+          borderRadius: BorderRadius.circular(18),
+          child: Ink(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
             decoration: BoxDecoration(
-              color: cs.primary,
-              borderRadius: BorderRadius.circular(14),
+              color: cs.inverseSurface,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: cs.outlineVariant.withOpacity(.5),
+              ),
             ),
-            child: Icon(Icons.domain_rounded, color: cs.onPrimary),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
               children: [
-                Text(
-                  '지사 별 업무 현황',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: (tt.titleMedium ?? const TextStyle(fontSize: 16)).copyWith(
-                    fontWeight: FontWeight.w900,
-                    color: cs.onInverseSurface,
-                    letterSpacing: -.2,
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: _expanded ? cs.primaryContainer : cs.primary,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(
+                    Icons.domain_rounded,
+                    color: _expanded
+                        ? cs.onPrimaryContainer
+                        : cs.onPrimary,
                   ),
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  '업무 메뉴 영역에서 지사별 주차·출차 집계를 확인합니다.',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: tt.bodySmall?.copyWith(
-                    color: cs.onInverseSurface.withOpacity(.72),
-                    fontWeight: FontWeight.w700,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '지사 별 업무 현황',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: (tt.titleMedium ??
+                                const TextStyle(fontSize: 16))
+                            .copyWith(
+                          fontWeight: FontWeight.w900,
+                          color: cs.onInverseSurface,
+                          letterSpacing: -.2,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        '마스터 ${_formatAreaMasterRefreshAt(_areaMasterRefreshedAtIso)}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: tt.bodySmall?.copyWith(
+                          color: cs.onInverseSurface.withOpacity(.72),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _BranchHeaderPill(
+                  icon: Icons.sd_storage_rounded,
+                  label: '$_cachedAreaCount',
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: cs.onInverseSurface.withOpacity(.12),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: cs.onInverseSurface.withOpacity(.22),
+                    ),
+                  ),
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 160),
+                    transitionBuilder: (child, animation) {
+                      return ScaleTransition(
+                        scale: animation,
+                        child: child,
+                      );
+                    },
+                    child: Icon(
+                      statusIcon,
+                      key: ValueKey<bool>(_expanded),
+                      size: 22,
+                      color: cs.onInverseSurface,
+                    ),
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 8),
-          _BranchHeaderPill(
-            icon: Icons.sd_storage_rounded,
-            label: _cacheCountText(),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -1529,7 +1633,7 @@ class _BranchWorkStatusInlinePanelState
       padding: EdgeInsets.symmetric(vertical: 12),
       child: _BranchStateCard(
         icon: Icons.sync_rounded,
-        label: '로딩',
+        label: '업무 현황을 불러오는 중입니다.',
         loading: true,
       ),
     );
@@ -1540,7 +1644,8 @@ class _BranchWorkStatusInlinePanelState
       padding: EdgeInsets.symmetric(vertical: 12),
       child: _BranchStateCard(
         icon: Icons.error_outline_rounded,
-        label: '오류',
+        label: '업무 현황을 불러오지 못했습니다.',
+        description: '집계 갱신을 다시 실행하세요.',
       ),
     );
   }
@@ -1550,7 +1655,7 @@ class _BranchWorkStatusInlinePanelState
       padding: EdgeInsets.symmetric(vertical: 12),
       child: _BranchStateCard(
         icon: Icons.badge_outlined,
-        label: 'division 없음',
+        label: 'division 정보가 없습니다.',
       ),
     );
   }
@@ -1559,49 +1664,46 @@ class _BranchWorkStatusInlinePanelState
     BuildContext context,
     _BranchWorkStatusViewData data,
   ) {
-    final parkingTotal = data.areaCounts.fold<int>(
-      0,
-      (sum, item) => sum + item.parkingCompletedCount,
-    );
-    final departureTotal = data.areaCounts.fold<int>(
-      0,
-      (sum, item) => sum + item.departureCompletedCount,
-    );
+    if (!data.hasAreaMasterCache) {
+      return const _BranchStateCard(
+        icon: Icons.cloud_download_outlined,
+        label: '저장된 지역 마스터가 없습니다.',
+        description: '빠른 실행에서 지역 마스터 갱신을 실행하세요.',
+      );
+    }
+
+    final chatAreaNames = data.areaCounts
+        .where((item) => item.chatEnabled)
+        .map((item) => item.areaName)
+        .toList(growable: false);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _BranchMetricStrip(
-          division: data.division,
-          branchCount: data.areaCounts.length,
-          cachedCount: _cachedAreaCount,
-          parkingTotal: parkingTotal,
-          departureTotal: departureTotal,
-          refreshLockText: _refreshLockText(),
-          lockedToday: _areaRefreshLockedToday,
-        ),
+        const _BranchCapabilityLegend(),
         const SizedBox(height: 12),
         data.areaCounts.isEmpty
             ? const _BranchStateCard(
                 icon: Icons.location_off_rounded,
-                label: '지사 없음',
+                label: '표시할 지사 지역이 없습니다.',
               )
             : _BranchSectionFrame(
                 title: '지사',
                 child: AreaChatInboxScope(
-                  areaNames: data.areaCounts
-                      .map((item) => item.areaName)
-                      .toList(growable: false),
+                  areaNames: chatAreaNames,
+                  notificationsEnabled: false,
                   builder: (context, inbox, currentUserId) {
                     return Column(
                       children: data.areaCounts
                           .map(
                             (item) => _BranchAreaMiniCard(
                               item: item,
-                              unreadCount: inbox.unreadCountForArea(
-                                item.areaName,
-                                currentUserId,
-                              ),
+                              unreadCount: item.chatEnabled
+                                  ? inbox.unreadCountForArea(
+                                      item.areaName,
+                                      currentUserId,
+                                    )
+                                  : 0,
                             ),
                           )
                           .toList(growable: false),
@@ -1615,12 +1717,7 @@ class _BranchWorkStatusInlinePanelState
 
   Widget _buildBody(BuildContext context) {
     if (!_hasRequestedLoad || _future == null) {
-      return _BranchGuideCard(
-        division: widget.division.trim(),
-        cachedAreaCountText: _cacheCountText(),
-        refreshLockText: _refreshLockText(),
-        lockedToday: _areaRefreshLockedToday,
-      );
+      return const _BranchGuideCard();
     }
 
     return FutureBuilder<_BranchWorkStatusViewData>(
@@ -1637,9 +1734,9 @@ class _BranchWorkStatusInlinePanelState
         final data = snapshot.data ??
             const _BranchWorkStatusViewData(
               division: '',
-              areaNames: [],
-              areaCounts: [],
-              usedCachedAreas: false,
+              areaCounts: <_BranchWorkStatusAreaCount>[],
+              hasAreaMasterCache: false,
+              areaMasterRefreshedAtIso: '',
             );
 
         if (data.division.isEmpty) {
@@ -1652,30 +1749,99 @@ class _BranchWorkStatusInlinePanelState
   }
 
   Widget _buildActions(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: _BranchDialogActionButton(
-            icon: Icons.sync_rounded,
-            label: '집계 갱신',
-            loading: _isRefreshingAggregations,
-            disabled: false,
-            onPressed: _refreshAggregations,
-            primary: false,
+    final cs = Theme.of(context).colorScheme;
+    final enabled = !_isRefreshingAggregations;
+
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Semantics(
+        button: true,
+        enabled: enabled,
+        label: '지역별 주차·출차 집계 갱신',
+        child: Tooltip(
+          message: '집계 갱신',
+          child: Material(
+            color: Color.alphaBlend(
+              cs.secondary.withOpacity(.10),
+              cs.surface,
+            ),
+            borderRadius: BorderRadius.circular(12),
+            child: InkWell(
+              onTap: enabled ? _refreshAggregations : null,
+              borderRadius: BorderRadius.circular(12),
+              child: SizedBox(
+                width: 42,
+                height: 42,
+                child: Center(
+                  child: _isRefreshingAggregations
+                      ? SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.2,
+                            color: cs.secondary,
+                          ),
+                        )
+                      : Icon(
+                          Icons.sync_rounded,
+                          size: 20,
+                          color: cs.secondary,
+                        ),
+                ),
+              ),
+            ),
           ),
         ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _BranchDialogActionButton(
-            icon: Icons.refresh_rounded,
-            label: _areaRefreshLockedToday ? '지역 완료' : '지역 갱신',
-            loading: _isRefreshingAreas,
-            disabled: _areaRefreshLockedToday,
-            onPressed: _refreshAreas,
-            primary: true,
-          ),
+      ),
+    );
+  }
+
+  Widget _buildCollapseButton(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Align(
+      alignment: Alignment.centerRight,
+      child: TextButton.icon(
+        onPressed: _collapse,
+        icon: const Icon(Icons.keyboard_arrow_up_rounded, size: 18),
+        label: const Text('접기'),
+        style: TextButton.styleFrom(
+          foregroundColor: cs.onSurfaceVariant,
+          textStyle: const TextStyle(fontWeight: FontWeight.w900),
         ),
-      ],
+      ),
+    );
+  }
+
+  Widget _buildExpandedContent(BuildContext context) {
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+      alignment: Alignment.topCenter,
+      child: _expanded
+          ? Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 220),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    child: KeyedSubtree(
+                      key: ValueKey<Future<_BranchWorkStatusViewData>?>(
+                        _future,
+                      ),
+                      child: _buildBody(context),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  _buildActions(context),
+                  const SizedBox(height: 2),
+                  _buildCollapseButton(context),
+                ],
+              ),
+            )
+          : const SizedBox.shrink(),
     );
   }
 
@@ -1685,10 +1851,9 @@ class _BranchWorkStatusInlinePanelState
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _buildTopBar(context),
+        _buildExpandedContent(context),
         const SizedBox(height: 12),
-        _buildBody(context),
-        const SizedBox(height: 12),
-        _buildActions(context),
+        const HeadquarterCalendarCard(),
       ],
     );
   }
@@ -1786,73 +1951,39 @@ class _BranchSectionFrame extends StatelessWidget {
   }
 }
 
-class _BranchMetricStrip extends StatelessWidget {
-  const _BranchMetricStrip({
-    required this.division,
-    required this.branchCount,
-    required this.cachedCount,
-    required this.parkingTotal,
-    required this.departureTotal,
-    required this.refreshLockText,
-    required this.lockedToday,
-  });
-
-  final String division;
-  final int branchCount;
-  final int cachedCount;
-  final int parkingTotal;
-  final int departureTotal;
-  final String refreshLockText;
-  final bool lockedToday;
+class _BranchCapabilityLegend extends StatelessWidget {
+  const _BranchCapabilityLegend();
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      physics: const BouncingScrollPhysics(),
-      child: Row(
+
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: cs.outlineVariant.withOpacity(.55),
+        ),
+      ),
+      child: Wrap(
+        spacing: 7,
+        runSpacing: 7,
+        crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          _BranchMetricChip(
-            icon: Icons.corporate_fare_rounded,
-            label: '본부',
-            value: division.isEmpty ? '-' : division,
-            color: cs.primary,
+          for (final capability in _capabilityDisplayOrder)
+            _BranchCapabilityLegendItem(
+              icon: _capabilityIcon(capability),
+              label: capability.label,
+            ),
+          const _BranchCapabilityStateLegend(
+            allowed: true,
+            label: '허용',
           ),
-          const SizedBox(width: 8),
-          _BranchMetricChip(
-            icon: Icons.domain_rounded,
-            label: '지사',
-            value: '$branchCount',
-            color: cs.secondary,
-          ),
-          const SizedBox(width: 8),
-          _BranchMetricChip(
-            icon: Icons.local_parking_rounded,
-            label: '주차',
-            value: '$parkingTotal',
-            color: cs.primary,
-          ),
-          const SizedBox(width: 8),
-          _BranchMetricChip(
-            icon: Icons.exit_to_app_rounded,
-            label: '출차',
-            value: '$departureTotal',
-            color: cs.tertiary,
-          ),
-          const SizedBox(width: 8),
-          _BranchMetricChip(
-            icon: Icons.sd_storage_rounded,
-            label: '캐시',
-            value: '$cachedCount',
-            color: cs.onSurfaceVariant,
-          ),
-          const SizedBox(width: 8),
-          _BranchMetricChip(
-            icon: lockedToday ? Icons.lock_clock_rounded : Icons.refresh_rounded,
-            label: '지역',
-            value: refreshLockText,
-            color: lockedToday ? cs.error : cs.secondary,
+          const _BranchCapabilityStateLegend(
+            allowed: false,
+            label: '비허용',
           ),
         ],
       ),
@@ -1860,128 +1991,112 @@ class _BranchMetricStrip extends StatelessWidget {
   }
 }
 
-class _BranchMetricChip extends StatelessWidget {
-  const _BranchMetricChip({
+class _BranchCapabilityLegendItem extends StatelessWidget {
+  const _BranchCapabilityLegendItem({
     required this.icon,
     required this.label,
-    required this.value,
-    required this.color,
   });
 
   final IconData icon;
   final String label;
-  final String value;
-  final Color color;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Container(
-      height: 40,
-      padding: const EdgeInsets.symmetric(horizontal: 11),
-      decoration: BoxDecoration(
-        color: Color.alphaBlend(color.withOpacity(.10), cs.surface),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withOpacity(.25)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: color),
-          const SizedBox(width: 7),
-          Text(
-            label,
-            style: TextStyle(
+
+    return Semantics(
+      label: label,
+      child: Container(
+        height: 34,
+        padding: const EdgeInsets.symmetric(horizontal: 9),
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerHighest.withOpacity(.62),
+          borderRadius: BorderRadius.circular(11),
+          border: Border.all(
+            color: cs.outlineVariant.withOpacity(.55),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 16,
               color: cs.onSurfaceVariant,
-              fontWeight: FontWeight.w800,
-              fontSize: 12,
             ),
-          ),
-          const SizedBox(width: 7),
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: cs.onSurface,
-              fontWeight: FontWeight.w900,
-              fontSize: 14,
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: cs.onSurface,
+                fontWeight: FontWeight.w800,
+                fontSize: 12,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BranchCapabilityStateLegend extends StatelessWidget {
+  const _BranchCapabilityStateLegend({
+    required this.allowed,
+    required this.label,
+  });
+
+  final bool allowed;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = allowed
+        ? Colors.green.shade700
+        : Colors.red.shade700;
+
+    return Semantics(
+      label: label,
+      child: Container(
+        height: 34,
+        padding: const EdgeInsets.symmetric(horizontal: 9),
+        decoration: BoxDecoration(
+          color: color.withOpacity(.10),
+          borderRadius: BorderRadius.circular(11),
+          border: Border.all(color: color.withOpacity(.50)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              allowed
+                  ? Icons.check_circle_rounded
+                  : Icons.cancel_rounded,
+              size: 16,
+              color: color,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.w900,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
 class _BranchGuideCard extends StatelessWidget {
-  const _BranchGuideCard({
-    required this.division,
-    required this.cachedAreaCountText,
-    required this.refreshLockText,
-    required this.lockedToday,
-  });
-
-  final String division;
-  final String cachedAreaCountText;
-  final String refreshLockText;
-  final bool lockedToday;
+  const _BranchGuideCard();
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-
-    return Container(
-      constraints: const BoxConstraints(maxWidth: 520),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: cs.outlineVariant.withOpacity(0.55)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: cs.primaryContainer,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(Icons.domain_verification_rounded, color: cs.onPrimaryContainer),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  '대기',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: tt.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    color: cs.onSurface,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _BranchMetricStrip(
-            division: division,
-            branchCount: int.tryParse(cachedAreaCountText) ?? 0,
-            cachedCount: int.tryParse(cachedAreaCountText) ?? 0,
-            parkingTotal: 0,
-            departureTotal: 0,
-            refreshLockText: refreshLockText,
-            lockedToday: lockedToday,
-          ),
-        ],
-      ),
-    );
+    return const _BranchCapabilityLegend();
   }
 }
 
@@ -1989,11 +2104,13 @@ class _BranchStateCard extends StatelessWidget {
   const _BranchStateCard({
     required this.icon,
     required this.label,
+    this.description,
     this.loading = false,
   });
 
   final IconData icon;
   final String label;
+  final String? description;
   final bool loading;
 
   @override
@@ -2002,12 +2119,14 @@ class _BranchStateCard extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
 
     return Container(
-      constraints: const BoxConstraints(maxWidth: 460),
+      constraints: const BoxConstraints(maxWidth: 520),
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: cs.surface,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: cs.outlineVariant.withOpacity(0.55)),
+        border: Border.all(
+          color: cs.outlineVariant.withOpacity(0.55),
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -2031,14 +2150,33 @@ class _BranchStateCard extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           Flexible(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: (tt.titleMedium ?? const TextStyle(fontSize: 16)).copyWith(
-                color: cs.onSurface,
-                fontWeight: FontWeight.w900,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: (tt.titleMedium ??
+                          const TextStyle(fontSize: 16))
+                      .copyWith(
+                    color: cs.onSurface,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                if (description != null && description!.trim().isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    description!,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: tt.bodySmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
         ],
@@ -2047,75 +2185,18 @@ class _BranchStateCard extends StatelessWidget {
   }
 }
 
-class _BranchDialogActionButton extends StatelessWidget {
-  const _BranchDialogActionButton({
-    required this.icon,
-    required this.label,
-    required this.loading,
-    required this.disabled,
-    required this.onPressed,
-    required this.primary,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool loading;
-  final bool disabled;
-  final VoidCallback onPressed;
-  final bool primary;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final enabled = !disabled && !loading;
-    final baseColor = primary ? cs.primary : cs.secondary;
-    final effectiveColor = enabled ? baseColor : cs.onSurfaceVariant.withOpacity(.48);
-
-    return SizedBox(
-      height: 48,
-      child: FilledButton.icon(
-        onPressed: enabled ? onPressed : null,
-        icon: loading
-            ? SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.2,
-                  color: primary ? cs.onPrimary : cs.onSecondaryContainer,
-                ),
-              )
-            : Icon(icon, size: 18),
-        label: Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        style: FilledButton.styleFrom(
-          backgroundColor: primary ? effectiveColor : Color.alphaBlend(effectiveColor.withOpacity(.12), cs.surface),
-          foregroundColor: primary ? cs.onPrimary : effectiveColor,
-          disabledBackgroundColor: cs.surfaceVariant.withOpacity(.34),
-          disabledForegroundColor: cs.onSurfaceVariant.withOpacity(.48),
-          textStyle: const TextStyle(fontWeight: FontWeight.w900),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          side: BorderSide(color: effectiveColor.withOpacity(primary ? .0 : .28)),
-        ),
-      ),
-    );
-  }
-}
-
 class _BranchWorkStatusViewData {
   const _BranchWorkStatusViewData({
     required this.division,
-    required this.areaNames,
     required this.areaCounts,
-    required this.usedCachedAreas,
+    required this.hasAreaMasterCache,
+    required this.areaMasterRefreshedAtIso,
   });
 
   final String division;
-  final List<String> areaNames;
   final List<_BranchWorkStatusAreaCount> areaCounts;
-  final bool usedCachedAreas;
+  final bool hasAreaMasterCache;
+  final String areaMasterRefreshedAtIso;
 }
 
 class _BranchWorkStatusAreaCount {
@@ -2123,13 +2204,35 @@ class _BranchWorkStatusAreaCount {
     required this.areaName,
     required this.parkingCompletedCount,
     required this.departureCompletedCount,
+    required this.modes,
+    required this.capabilities,
   });
 
   final String areaName;
   final int parkingCompletedCount;
   final int departureCompletedCount;
+  final List<String> modes;
+  final CapSet capabilities;
+
+  bool get chatEnabled => capabilities.contains(Capability.record);
+
+  List<String> get visibleModes => modes
+      .where((mode) => mode != 'record')
+      .toList(growable: false);
 }
 
+String _formatAreaMasterRefreshAt(String iso) {
+  final raw = iso.trim();
+  if (raw.isEmpty) return '-';
+  final parsed = DateTime.tryParse(raw);
+  if (parsed == null) return '-';
+  final local = parsed.toLocal();
+  final month = local.month.toString().padLeft(2, '0');
+  final day = local.day.toString().padLeft(2, '0');
+  final hour = local.hour.toString().padLeft(2, '0');
+  final minute = local.minute.toString().padLeft(2, '0');
+  return '$month.$day $hour:$minute';
+}
 
 class _AreaChatReadOpenHelper {
   const _AreaChatReadOpenHelper._();
@@ -2140,22 +2243,63 @@ class _AreaChatReadOpenHelper {
   }) async {
     final area = areaName.trim();
     if (area.isEmpty) return;
-    await showModalBottomSheet<void>(
+    await AreaChatPanel.showSheet(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      builder: (sheetContext) {
-        return FractionallySizedBox(
-          heightFactor: 0.88,
-          child: AreaChatPanel(
-            areaName: area,
-            showCloseButton: true,
-            onClose: () => Navigator.of(sheetContext).pop(),
-          ),
-        );
-      },
+      areaName: area,
     );
+  }
+}
+
+const List<Capability> _capabilityDisplayOrder = <Capability>[
+  Capability.location,
+  Capability.tablet,
+  Capability.monthly,
+  Capability.bill,
+  Capability.record,
+];
+
+IconData _capabilityIcon(Capability capability) {
+  switch (capability) {
+    case Capability.location:
+      return Icons.location_on_rounded;
+    case Capability.tablet:
+      return Icons.tablet_mac_rounded;
+    case Capability.monthly:
+      return Icons.calendar_month_rounded;
+    case Capability.bill:
+      return Icons.receipt_long_rounded;
+    case Capability.record:
+      return Icons.record_voice_over_rounded;
+  }
+}
+
+IconData _modeIcon(String mode) {
+  switch (mode.trim().toLowerCase()) {
+    case 'single':
+      return Icons.looks_one_rounded;
+    case 'double':
+      return Icons.filter_2_rounded;
+    case 'triple':
+      return Icons.filter_3_rounded;
+    case 'minor':
+      return Icons.account_tree_rounded;
+    default:
+      return Icons.extension_rounded;
+  }
+}
+
+String _modeLabel(String mode) {
+  switch (mode.trim().toLowerCase()) {
+    case 'single':
+      return '싱글 모드';
+    case 'double':
+      return '더블 모드';
+    case 'triple':
+      return '트리플 모드';
+    case 'minor':
+      return '마이너 모드';
+    default:
+      return mode.trim();
   }
 }
 
@@ -2169,6 +2313,7 @@ class _BranchAreaMiniCard extends StatelessWidget {
   final int unreadCount;
 
   Future<void> _openChat(BuildContext context) async {
+    if (!item.chatEnabled) return;
     final area = item.areaName.trim();
     if (area.isEmpty) return;
     await _AreaChatReadOpenHelper.open(
@@ -2184,86 +2329,209 @@ class _BranchAreaMiniCard extends StatelessWidget {
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 11),
       decoration: BoxDecoration(
         color: cs.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: cs.outlineVariant.withOpacity(0.55)),
+        border: Border.all(
+          color: cs.outlineVariant.withOpacity(0.55),
+        ),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 6,
-            height: 92,
-            decoration: BoxDecoration(
-              color: cs.primary,
-              borderRadius: const BorderRadius.horizontal(left: Radius.circular(16)),
-            ),
-          ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 34,
-                        height: 34,
-                        decoration: BoxDecoration(
-                          color: cs.primaryContainer,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Icon(
-                          Icons.store_mall_directory_rounded,
-                          size: 18,
-                          color: cs.onPrimaryContainer,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          item.areaName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: tt.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w900,
-                            color: cs.onSurface,
-                          ),
-                        ),
-                      ),
-                      AreaChatIconButton(
-                        areaName: item.areaName,
-                        unreadCount: unreadCount,
-                        onPressed: () => _openChat(context),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 9),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _BranchAreaValueChip(
-                          icon: Icons.local_parking_rounded,
-                          value: '${item.parkingCompletedCount}',
-                          color: cs.primary,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _BranchAreaValueChip(
-                          icon: Icons.exit_to_app_rounded,
-                          value: '${item.departureCompletedCount}',
-                          color: cs.tertiary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+          Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: cs.primaryContainer,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  Icons.store_mall_directory_rounded,
+                  size: 18,
+                  color: cs.onPrimaryContainer,
+                ),
               ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  item.areaName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: tt.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w900,
+                    color: cs.onSurface,
+                  ),
+                ),
+              ),
+              AreaChatIconButton(
+                areaName: item.areaName,
+                unreadCount: item.chatEnabled ? unreadCount : 0,
+                onPressed: item.chatEnabled
+                    ? () => _openChat(context)
+                    : null,
+                disabledTooltip: '채팅 비허용 · 채팅&무전기 기능이 허용되지 않았습니다.',
+              ),
+            ],
+          ),
+          const SizedBox(height: 9),
+          Row(
+            children: [
+              Expanded(
+                child: _BranchAreaValueChip(
+                  icon: Icons.local_parking_rounded,
+                  value: '${item.parkingCompletedCount}',
+                  color: cs.primary,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _BranchAreaValueChip(
+                  icon: Icons.exit_to_app_rounded,
+                  value: '${item.departureCompletedCount}',
+                  color: cs.tertiary,
+                ),
+              ),
+            ],
+          ),
+          if (item.visibleModes.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 5,
+              runSpacing: 5,
+              children: item.visibleModes
+                  .map(
+                    (mode) => _AllowedModeIcon(
+                      icon: _modeIcon(mode),
+                      label: _modeLabel(mode),
+                    ),
+                  )
+                  .toList(growable: false),
             ),
+          ],
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 5,
+            runSpacing: 5,
+            children: _capabilityDisplayOrder
+                .map(
+                  (capability) => _CapabilityStatusIcon(
+                    icon: _capabilityIcon(capability),
+                    label: capability.label,
+                    allowed: item.capabilities.contains(capability),
+                  ),
+                )
+                .toList(growable: false),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _AllowedModeIcon extends StatelessWidget {
+  const _AllowedModeIcon({
+    required this.icon,
+    required this.label,
+  });
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Semantics(
+      label: '$label 허용',
+      child: Tooltip(
+        message: '$label · 허용',
+        child: Container(
+          width: 28,
+          height: 28,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: cs.primaryContainer.withOpacity(.72),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: cs.primary.withOpacity(.30),
+            ),
+          ),
+          child: Icon(
+            icon,
+            size: 16,
+            color: cs.onPrimaryContainer,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CapabilityStatusIcon extends StatelessWidget {
+  const _CapabilityStatusIcon({
+    required this.icon,
+    required this.label,
+    required this.allowed,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool allowed;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final color = allowed ? Colors.green.shade700 : Colors.red.shade700;
+    final background = Color.alphaBlend(
+      color.withOpacity(allowed ? .12 : .10),
+      cs.surface,
+    );
+    final status = allowed ? '허용' : '비허용';
+
+    return Semantics(
+      label: '$label $status',
+      child: Tooltip(
+        message: '$label · $status',
+        child: Container(
+          width: 28,
+          height: 28,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: background,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: color.withOpacity(.55),
+            ),
+          ),
+          child: Stack(
+            clipBehavior: Clip.none,
+            alignment: Alignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 16,
+                color: color,
+              ),
+              if (!allowed)
+                Positioned(
+                  right: 2,
+                  bottom: 2,
+                  child: Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: color,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }

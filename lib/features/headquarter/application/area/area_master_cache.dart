@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../../app/models/capability.dart';
 import '../../../dev/data/repositories/area_repo_package/firestore_area_repository.dart';
 import '../../../dev/domain/repositories/area_repo_package/area_repository.dart';
 
@@ -9,18 +10,24 @@ class AreaMasterItem {
   final String name;
   final List<String> modes;
   final bool isHeadquarter;
+  final CapSet capabilities;
 
   const AreaMasterItem({
     required this.name,
     required this.modes,
     required this.isHeadquarter,
+    this.capabilities = const <Capability>{},
   });
 
   Map<String, dynamic> toJson() {
+    final capabilityKeys =
+        capabilities.map((capability) => capability.key).toList()..sort();
+
     return <String, dynamic>{
       'name': name,
       'modes': modes,
       'isHeadquarter': isHeadquarter,
+      'capabilities': capabilityKeys,
     };
   }
 
@@ -29,16 +36,20 @@ class AreaMasterItem {
     final modes = rawModes is List
         ? rawModes
             .whereType<String>()
-            .map((e) => e.trim())
-            .where((e) => e.isNotEmpty)
+            .map((mode) => mode.trim())
+            .where((mode) => mode.isNotEmpty)
             .toSet()
             .toList()
         : <String>[];
+    modes.sort();
 
     return AreaMasterItem(
       name: (json['name'] as String? ?? '').trim(),
       modes: modes,
       isHeadquarter: json['isHeadquarter'] == true,
+      capabilities: Set<Capability>.unmodifiable(
+        Cap.fromDynamic(json['capabilities']),
+      ),
     );
   }
 }
@@ -58,7 +69,7 @@ class AreaMasterSnapshot {
     return <String, dynamic>{
       'division': division,
       'refreshedAtIso': refreshedAtIso,
-      'items': items.map((e) => e.toJson()).toList(),
+      'items': items.map((item) => item.toJson()).toList(),
     };
   }
 
@@ -67,8 +78,12 @@ class AreaMasterSnapshot {
     final items = rawItems is List
         ? rawItems
             .whereType<Map>()
-            .map((e) => AreaMasterItem.fromJson(Map<String, dynamic>.from(e)))
-            .where((e) => e.name.isNotEmpty)
+            .map(
+              (item) => AreaMasterItem.fromJson(
+                Map<String, dynamic>.from(item),
+              ),
+            )
+            .where((item) => item.name.isNotEmpty)
             .toList()
         : <AreaMasterItem>[];
 
@@ -94,6 +109,8 @@ class AreaMasterSelectableData {
 
 class AreaMasterCache {
   static AreaRepository _repository = FirestoreAreaRepository();
+  static final Map<String, Future<AreaMasterSnapshot>> _activeRefreshes =
+      <String, Future<AreaMasterSnapshot>>{};
 
   static void configureRepository(AreaRepository repository) {
     _repository = repository;
@@ -135,14 +152,40 @@ class AreaMasterCache {
       throw ArgumentError('division is empty');
     }
 
+    final active = _activeRefreshes[normalizedDivision];
+    if (active != null) return active;
+
+    final future = _refreshDivisionInternal(normalizedDivision);
+    _activeRefreshes[normalizedDivision] = future;
+
+    try {
+      return await future;
+    } finally {
+      if (identical(_activeRefreshes[normalizedDivision], future)) {
+        _activeRefreshes.remove(normalizedDivision);
+      }
+    }
+  }
+
+  static Future<AreaMasterSnapshot> _refreshDivisionInternal(
+    String normalizedDivision,
+  ) async {
     final records = await _repository.getAreasByDivision(normalizedDivision);
 
     final items = records
-        .map((record) => AreaMasterItem(
-              name: record.name,
-              modes: record.modes.toSet().toList()..sort(),
-              isHeadquarter: record.isHeadquarter,
-            ))
+        .map(
+          (record) => AreaMasterItem(
+            name: record.name.trim(),
+            modes: record.modes
+                .map((mode) => mode.trim().toLowerCase())
+                .where((mode) => mode.isNotEmpty)
+                .toSet()
+                .toList()
+              ..sort(),
+            isHeadquarter: record.isHeadquarter,
+            capabilities: Set<Capability>.unmodifiable(record.capabilities),
+          ),
+        )
         .where((item) => item.name.isNotEmpty)
         .toList()
       ..sort((a, b) => a.name.compareTo(b.name));
@@ -153,13 +196,47 @@ class AreaMasterCache {
       items: items,
       refreshedAtIso: refreshedAtIso,
     );
-
+    final encoded = jsonEncode(snapshot.toJson());
+    final cacheKey = _cacheKey(normalizedDivision);
+    final refreshAtKey = _refreshAtKey(normalizedDivision);
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      _cacheKey(normalizedDivision),
-      jsonEncode(snapshot.toJson()),
-    );
-    await prefs.setString(_refreshAtKey(normalizedDivision), refreshedAtIso);
+
+    try {
+      await prefs.remove(cacheKey);
+      await prefs.remove(refreshAtKey);
+      await prefs.reload();
+
+      if (prefs.containsKey(cacheKey) || prefs.containsKey(refreshAtKey)) {
+        throw StateError('기존 지역 마스터 삭제 검증 실패');
+      }
+
+      final cacheSaved = await prefs.setString(cacheKey, encoded);
+      final refreshAtSaved = await prefs.setString(
+        refreshAtKey,
+        refreshedAtIso,
+      );
+
+      if (!cacheSaved || !refreshAtSaved) {
+        throw StateError('새 지역 마스터 저장 실패');
+      }
+
+      await prefs.reload();
+
+      final verifiedCache = prefs.getString(cacheKey);
+      final verifiedRefreshAt = prefs.getString(refreshAtKey);
+
+      if (verifiedCache != encoded ||
+          verifiedRefreshAt != refreshedAtIso) {
+        throw StateError('새 지역 마스터 저장 검증 실패');
+      }
+    } catch (_) {
+      try {
+        await prefs.remove(cacheKey);
+        await prefs.remove(refreshAtKey);
+        await prefs.reload();
+      } catch (_) {}
+      rethrow;
+    }
 
     return snapshot;
   }

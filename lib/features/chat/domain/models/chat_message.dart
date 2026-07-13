@@ -1,8 +1,14 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../application/chat_area_key.dart';
+
 class ChatMessage {
   const ChatMessage({
     required this.id,
+    required this.channelId,
+    required this.division,
+    required this.companyKey,
+    required this.channelType,
     required this.areaKey,
     required this.areaName,
     required this.seq,
@@ -14,6 +20,10 @@ class ChatMessage {
   });
 
   final String id;
+  final String channelId;
+  final String division;
+  final String companyKey;
+  final String channelType;
   final String areaKey;
   final String areaName;
   final int seq;
@@ -23,27 +33,33 @@ class ChatMessage {
   final String text;
   final DateTime createdAt;
 
-  factory ChatMessage.fromMap(String id, Map<String, dynamic> data) {
-    final rawId = data['id'];
-    final storedId = rawId is String ? rawId.trim() : '';
-    final rawAreaKey = data['areaKey'];
-    final rawAreaName = data['areaName'];
-    final rawSenderId = data['senderId'];
-    final rawSenderName = data['senderName'];
-    final rawSenderIdentity = data['senderIdentity'];
-    final rawText = data['text'];
+  bool get isHeadquarter => channelType == chatChannelTypeHeadquarter;
 
+  factory ChatMessage.fromMap(String id, Map<String, dynamic> data) {
+    final storedId = _readString(data['id']);
     return ChatMessage(
       id: storedId.isNotEmpty ? storedId : id,
-      areaKey: rawAreaKey is String ? rawAreaKey.trim() : '',
-      areaName: rawAreaName is String ? rawAreaName.trim() : '',
+      channelId: _readString(data['channelId']),
+      division: _readString(data['division']),
+      companyKey: _readString(data['companyKey']),
+      channelType: _readString(data['channelType']) ==
+                  chatChannelTypeHeadquarter ||
+              _readString(data['areaKey']) == headquarterChatAreaKey
+          ? chatChannelTypeHeadquarter
+          : chatChannelTypeArea,
+      areaKey: _readString(data['areaKey']),
+      areaName: _readString(data['areaName']),
       seq: _readInt(data['seq']),
-      senderId: rawSenderId is String ? rawSenderId.trim() : '',
-      senderName: rawSenderName is String ? rawSenderName.trim() : '',
-      senderIdentity: rawSenderIdentity is String ? rawSenderIdentity.trim() : '',
-      text: rawText is String ? rawText.trim() : '',
+      senderId: _readString(data['senderId']),
+      senderName: _readString(data['senderName']),
+      senderIdentity: _readString(data['senderIdentity']),
+      text: _readString(data['text']),
       createdAt: _readDate(data['createdAt']),
     );
+  }
+
+  static String _readString(dynamic value) {
+    return value is String ? value.trim() : '';
   }
 
   static int _readInt(dynamic value) {

@@ -3,8 +3,11 @@ class AreaChatNotificationGate {
 
   static final Set<String> _notifiedKeys = <String>{};
 
-  static bool allow({required String areaKey, required String messageId}) {
-    final key = '$areaKey::$messageId';
+  static bool allow({
+    required String channelId,
+    required String messageId,
+  }) {
+    final key = '$channelId::$messageId';
     if (_notifiedKeys.contains(key)) return false;
     _notifiedKeys.add(key);
     if (_notifiedKeys.length > 500) {

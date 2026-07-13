@@ -18,6 +18,7 @@ import 'app/init/quick_overlay_main.dart';
 import 'app/init/overlay_access_guard.dart';
 import 'app/theme/theme_prefs_controller.dart';
 import 'features/community/application/game/game_quick_actions.dart';
+import 'features/chat/presentation/work_chat_alert_host.dart';
 import 'features/dashboard/applications/common/firebase_google_auth_bridge.dart';
 import 'features/dashboard/widgets/productivity_sheet.dart';
 import 'features/dev/page/sheets/dev_quick_actions.dart';
@@ -575,11 +576,13 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                 DevQuickActions.mountIfNeeded();
               });
 
-              return Stack(
-                children: [
-                  child!,
-                  const _DevUnlockHotspot(),
-                ],
+              return WorkChatAlertHost(
+                child: Stack(
+                  children: [
+                    child!,
+                    const _DevUnlockHotspot(),
+                  ],
+                ),
               );
             },
           );

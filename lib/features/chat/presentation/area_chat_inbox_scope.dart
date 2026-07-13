@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../account/applications/user_state.dart';
-import '../application/chat_area_key.dart';
+import '../application/chat_account_scope.dart';
 import '../controllers/area_chat_inbox_controller.dart';
+import 'area_chat_status_dialog.dart';
 
 class AreaChatInboxScope extends StatefulWidget {
   const AreaChatInboxScope({
@@ -29,6 +32,7 @@ class AreaChatInboxScope extends StatefulWidget {
 
 class _AreaChatInboxScopeState extends State<AreaChatInboxScope> {
   late final AreaChatInboxController _controller;
+  String _lastDeveloperErrorSignature = '';
 
   @override
   void initState() {
@@ -45,25 +49,25 @@ class _AreaChatInboxScopeState extends State<AreaChatInboxScope> {
   @override
   void didUpdateWidget(covariant AreaChatInboxScope oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.areaNames.join('\u0001') != widget.areaNames.join('\u0001') ||
+    if (oldWidget.areaNames.join('\u0001') !=
+            widget.areaNames.join('\u0001') ||
         oldWidget.notificationsEnabled != widget.notificationsEnabled ||
-        oldWidget.suppressedAreaNames.join('\u0001') != widget.suppressedAreaNames.join('\u0001')) {
+        oldWidget.suppressedAreaNames.join('\u0001') !=
+            widget.suppressedAreaNames.join('\u0001')) {
       _configure();
     }
   }
 
-  void _configure() {
-    final currentUserId = context.read<UserState>().session?.id ?? '';
-    final suppressedAreaKeys = widget.suppressedAreaNames
-        .map((area) => area.trim())
-        .where((area) => area.isNotEmpty)
-        .map(normalizeChatAreaKey)
-        .toSet();
+  void _configure([ChatAccountScope? providedScope]) {
+    final scope = providedScope ??
+        ChatAccountScope.fromSession(context.read<UserState>().session);
     _controller.configure(
+      division: scope.division,
+      selectedArea: scope.selectedArea,
       areaNames: widget.areaNames,
-      currentUserId: currentUserId,
+      currentUserId: scope.userId,
       notificationsEnabled: widget.notificationsEnabled,
-      suppressedAreaKeys: suppressedAreaKeys,
+      suppressedAreaNames: widget.suppressedAreaNames,
     );
   }
 
@@ -75,20 +79,50 @@ class _AreaChatInboxScopeState extends State<AreaChatInboxScope> {
 
   @override
   Widget build(BuildContext context) {
-    final currentUserId = context.watch<UserState>().session?.id ?? '';
+    final userState = context.watch<UserState>();
+    final accountScope = ChatAccountScope.fromSession(userState.session);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      _configure();
+      _configure(accountScope);
     });
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, _) {
+        final snapshot = _controller.snapshot;
+        _showDeveloperChatIndexDialogIfNeeded(snapshot);
         return widget.builder(
           context,
-          _controller.snapshot,
-          currentUserId,
+          snapshot,
+          accountScope.userId,
         );
       },
     );
+  }
+
+  void _showDeveloperChatIndexDialogIfNeeded(AreaChatInboxSnapshot snapshot) {
+    final failure = snapshot.failure;
+    if (failure == null || !failure.isIndexRequired) {
+      _lastDeveloperErrorSignature = '';
+      return;
+    }
+    if (failure.signature == _lastDeveloperErrorSignature) return;
+    _lastDeveloperErrorSignature = failure.signature;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final accountScope =
+          ChatAccountScope.fromSession(context.read<UserState>().session);
+      unawaited(
+        AreaChatStatusDialog.showIndexFailure(
+          context,
+          failure: failure,
+          details: <String, Object?>{
+            'division': accountScope.division,
+            'selectedArea': accountScope.selectedArea,
+            'areaNames': widget.areaNames.join(', '),
+            'currentUserId': accountScope.userId,
+          },
+        ),
+      );
+    });
   }
 }

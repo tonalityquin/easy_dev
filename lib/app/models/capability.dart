@@ -33,7 +33,7 @@ extension CapabilityKey on Capability {
       case Capability.bill:
         return '정산';
       case Capability.record:
-        return '무전기';
+        return '채팅&무전기';
     }
   }
 }

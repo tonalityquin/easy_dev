@@ -61,14 +61,14 @@ class ChatLocalNotificationService {
     }
   }
 
-  int _makeMessageId(String areaKey, String messageId) {
-    final value = '$areaKey:$messageId'.hashCode ^ 31;
+  int _makeMessageId(String channelId, String messageId) {
+    final value = '$channelId:$messageId'.hashCode ^ 31;
     return value & 0x7fffffff;
   }
 
   Future<void> showChatMessage(ChatMessage message) async {
     await _show(
-      areaKey: message.areaKey,
+      channelId: message.channelId,
       messageId: message.id,
       areaName: message.areaName,
       senderName: message.senderName,
@@ -78,7 +78,7 @@ class ChatLocalNotificationService {
 
   Future<void> showChatChannelSummary(ChatChannel channel) async {
     await _show(
-      areaKey: channel.areaKey,
+      channelId: channel.id,
       messageId: channel.lastMessageId,
       areaName: channel.areaName,
       senderName: channel.lastSenderName,
@@ -87,7 +87,7 @@ class ChatLocalNotificationService {
   }
 
   Future<void> _show({
-    required String areaKey,
+    required String channelId,
     required String messageId,
     required String areaName,
     required String senderName,
@@ -124,7 +124,7 @@ class ChatLocalNotificationService {
 
     try {
       await _plugin.show(
-        _makeMessageId(areaKey, messageId),
+        _makeMessageId(channelId, messageId),
         title,
         body,
         details,

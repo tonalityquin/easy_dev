@@ -6,8 +6,6 @@ import 'package:provider/provider.dart';
 
 import '../../features/account/applications/user_state.dart';
 import '../../features/dev/application/area_state.dart';
-import '../../features/chat/application/chat_area_resolver.dart';
-import '../../features/chat/presentation/area_chat_alert_watcher.dart';
 import '../../features/chat/presentation/area_chat_panel.dart';
 import '../../features/voice/application/voice_appbar_ui_state.dart';
 import '../page/application/common/type_view_mode_state.dart';
@@ -635,13 +633,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final talkUiEnabled = _talkUi?.enabled ?? false;
-    final chatAreaName = ChatAreaResolver.watch(context);
-
-    Widget out = AreaChatAlertWatcher(
-      areaNames: <String>[chatAreaName],
-      enabled: !talkUiEnabled,
-      suppressedAreaNames: talkUiEnabled ? <String>[chatAreaName] : const <String>[],
-      child: Container(
+    Widget out = Container(
       color: cs.surface,
       child: Column(
         children: [
@@ -734,7 +726,6 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
           _buildBottomTabBar(cs),
         ],
       ),
-    ),
     );
 
     if (widget.viewModeAuto != null && _viewMode != null) {
