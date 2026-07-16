@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class HeadquarterCalendarEvent {
   const HeadquarterCalendarEvent({
     required this.id,
@@ -11,8 +9,6 @@ class HeadquarterCalendarEvent {
     required this.endDateKey,
     required this.dateKeys,
     required this.monthKeys,
-    required this.scopeKey,
-    required this.ownerUserId,
     required this.eventType,
     required this.priority,
     required this.priorityRank,
@@ -30,10 +26,6 @@ class HeadquarterCalendarEvent {
     required this.recurrenceFrequency,
     required this.recurrenceInterval,
     required this.recurrenceUntilDateKey,
-    required this.attendeeMode,
-    required this.attendeeIds,
-    required this.attendeeNames,
-    required this.targetCountSnapshot,
     required this.searchTokens,
     required this.searchTokenVersion,
     required this.schemaVersion,
@@ -48,8 +40,6 @@ class HeadquarterCalendarEvent {
   final String endDateKey;
   final List<String> dateKeys;
   final List<String> monthKeys;
-  final String scopeKey;
-  final String ownerUserId;
   final String eventType;
   final String priority;
   final int priorityRank;
@@ -67,10 +57,6 @@ class HeadquarterCalendarEvent {
   final String recurrenceFrequency;
   final int recurrenceInterval;
   final String recurrenceUntilDateKey;
-  final String attendeeMode;
-  final List<String> attendeeIds;
-  final Map<String, String> attendeeNames;
-  final int targetCountSnapshot;
   final List<String> searchTokens;
   final int searchTokenVersion;
   final int schemaVersion;
@@ -81,8 +67,6 @@ class HeadquarterCalendarEvent {
       );
 
   bool get isActive => !isDeleted;
-  bool get isPersonal => scopeKey.startsWith('user:');
-  bool get isCompany => !isPersonal;
   bool get isRecurring => seriesId.trim().isNotEmpty;
   bool get isSingleDay => startDateKey == endDateKey;
   int get durationDays => dateKeys.length;
@@ -93,163 +77,12 @@ class HeadquarterCalendarEvent {
   String get monthKey => monthKeys.isEmpty ? monthKeyOf(startDate) : monthKeys.first;
   bool get allDay => true;
 
-  factory HeadquarterCalendarEvent.fromMap(
-    String id,
-    Map<String, dynamic> data,
-  ) {
-    final legacyStart = _readDate(data['startsAt']) ?? DateTime.now();
-    final legacyEnd = _readDate(data['endsAt']) ?? legacyStart;
-    final rawStart = _readDate(data['startDate']) ?? legacyStart;
-    final rawEnd = _readDate(data['endDate']) ?? legacyEnd;
-    final start = dateOnly(rawStart);
-    final endCandidate = dateOnly(rawEnd);
-    final end = endCandidate.isBefore(start) ? start : endCandidate;
-    final startKey = _string(data['startDateKey']).isNotEmpty
-        ? _string(data['startDateKey'])
-        : _string(data['dateKey']).isNotEmpty
-            ? _string(data['dateKey'])
-            : dateKeyOf(start);
-    final endKey = _string(data['endDateKey']).isNotEmpty
-        ? _string(data['endDateKey'])
-        : dateKeyOf(end);
-    final dates = _stringList(data['dateKeys']);
-    final normalizedDates = dates.isEmpty
-        ? dateKeysBetween(start, end)
-        : dates;
-    final months = _stringList(data['monthKeys']);
-    final normalizedMonths = months.isEmpty
-        ? monthKeysForDateKeys(normalizedDates)
-        : months;
-    final priority = _string(data['priority']).isEmpty
-        ? 'normal'
-        : _string(data['priority']);
-    final scope = _string(data['scopeKey']).isEmpty
-        ? 'company'
-        : _string(data['scopeKey']);
-    final owner = _string(data['ownerUserId']).isNotEmpty
-        ? _string(data['ownerUserId'])
-        : scope.startsWith('user:')
-            ? scope.substring(5)
-            : '';
-    final attendeeNames = <String, String>{};
-    final rawNames = data['attendeeNames'];
-    if (rawNames is Map) {
-      for (final entry in rawNames.entries) {
-        final key = entry.key.toString().trim();
-        final value = entry.value.toString().trim();
-        if (key.isNotEmpty && value.isNotEmpty) attendeeNames[key] = value;
-      }
-    }
-
-    return HeadquarterCalendarEvent(
-      id: _string(data['id']).isEmpty ? id : _string(data['id']),
-      title: _string(data['title']).isEmpty ? '제목 없음' : _string(data['title']),
-      description: _string(data['description']),
-      startDate: start,
-      endDate: end,
-      startDateKey: startKey,
-      endDateKey: endKey,
-      dateKeys: List<String>.unmodifiable(normalizedDates),
-      monthKeys: List<String>.unmodifiable(normalizedMonths),
-      scopeKey: scope,
-      ownerUserId: owner,
-      eventType: _string(data['eventType']).isEmpty ? 'notice' : _string(data['eventType']),
-      priority: priority,
-      priorityRank: _readInt(data['priorityRank'], fallback: priorityRankOf(priority)),
-      createdBy: _string(data['createdBy']),
-      createdByName: _string(data['createdByName']),
-      updatedBy: _string(data['updatedBy']),
-      updatedByName: _string(data['updatedByName']),
-      createdAt: _readDate(data['createdAt']),
-      updatedAt: _readDate(data['updatedAt']),
-      deletedAt: _readDate(data['deletedAt']),
-      isDeleted: data['isDeleted'] == true,
-      requiresAck: data['requiresAck'] == true,
-      seriesId: _string(data['seriesId']),
-      occurrenceDateKey: _string(data['occurrenceDateKey']),
-      recurrenceFrequency: _string(data['recurrenceFrequency']).isEmpty
-          ? 'none'
-          : _string(data['recurrenceFrequency']),
-      recurrenceInterval: _readInt(data['recurrenceInterval'], fallback: 1),
-      recurrenceUntilDateKey: _string(data['recurrenceUntilDateKey']),
-      attendeeMode: _string(data['attendeeMode']).isEmpty
-          ? 'none'
-          : _string(data['attendeeMode']),
-      attendeeIds: List<String>.unmodifiable(_stringList(data['attendeeIds'])),
-      attendeeNames: Map<String, String>.unmodifiable(attendeeNames),
-      targetCountSnapshot: _readInt(data['targetCountSnapshot']),
-      searchTokens: List<String>.unmodifiable(_stringList(data['searchTokens'])),
-      searchTokenVersion: _readInt(data['searchTokenVersion']),
-      schemaVersion: _readInt(data['schemaVersion'], fallback: 1),
-    );
-  }
-
-  Map<String, dynamic> toCreateMap() {
-    return <String, dynamic>{
-      ...toCommonMap(),
-      'createdAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-      'isDeleted': false,
-    };
-  }
-
-  Map<String, dynamic> toUpdateMap() {
-    return <String, dynamic>{
-      ...toCommonMap(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    };
-  }
-
-  Map<String, dynamic> toCommonMap() {
-    return <String, dynamic>{
-      'id': id,
-      'title': title.trim(),
-      'description': description.trim(),
-      'startDate': Timestamp.fromDate(startDate),
-      'endDate': Timestamp.fromDate(endDate),
-      'endDateExclusive': Timestamp.fromDate(endDateExclusive),
-      'startsAt': Timestamp.fromDate(startDate),
-      'endsAt': Timestamp.fromDate(endDateExclusive.subtract(const Duration(seconds: 1))),
-      'startDateKey': startDateKey,
-      'endDateKey': endDateKey,
-      'dateKey': startDateKey,
-      'monthKey': monthKey,
-      'dateKeys': dateKeys,
-      'monthKeys': monthKeys,
-      'allDay': true,
-      'scopeKey': scopeKey,
-      'ownerUserId': ownerUserId,
-      'eventType': eventType,
-      'priority': priority,
-      'priorityRank': priorityRank,
-      'createdBy': createdBy,
-      'createdByName': createdByName,
-      'updatedBy': updatedBy,
-      'updatedByName': updatedByName,
-      'requiresAck': requiresAck,
-      'seriesId': seriesId,
-      'occurrenceDateKey': occurrenceDateKey,
-      'recurrenceFrequency': recurrenceFrequency,
-      'recurrenceInterval': recurrenceInterval,
-      'recurrenceUntilDateKey': recurrenceUntilDateKey,
-      'attendeeMode': attendeeMode,
-      'attendeeIds': attendeeIds,
-      'attendeeNames': attendeeNames,
-      'targetCountSnapshot': targetCountSnapshot,
-      'searchTokens': searchTokens,
-      'searchTokenVersion': searchTokenVersion,
-      'schemaVersion': schemaVersion,
-    };
-  }
-
   HeadquarterCalendarEvent copyWith({
     String? id,
     String? title,
     String? description,
     DateTime? startDate,
     DateTime? endDate,
-    String? scopeKey,
-    String? ownerUserId,
     String? eventType,
     String? priority,
     int? priorityRank,
@@ -267,10 +100,6 @@ class HeadquarterCalendarEvent {
     String? recurrenceFrequency,
     int? recurrenceInterval,
     String? recurrenceUntilDateKey,
-    String? attendeeMode,
-    List<String>? attendeeIds,
-    Map<String, String>? attendeeNames,
-    int? targetCountSnapshot,
     List<String>? searchTokens,
     int? searchTokenVersion,
     int? schemaVersion,
@@ -289,8 +118,6 @@ class HeadquarterCalendarEvent {
       endDateKey: dateKeyOf(nextEnd),
       dateKeys: nextDateKeys,
       monthKeys: monthKeysForDateKeys(nextDateKeys),
-      scopeKey: scopeKey ?? this.scopeKey,
-      ownerUserId: ownerUserId ?? this.ownerUserId,
       eventType: eventType ?? this.eventType,
       priority: priority ?? this.priority,
       priorityRank: priorityRank ?? this.priorityRank,
@@ -308,10 +135,6 @@ class HeadquarterCalendarEvent {
       recurrenceFrequency: recurrenceFrequency ?? this.recurrenceFrequency,
       recurrenceInterval: recurrenceInterval ?? this.recurrenceInterval,
       recurrenceUntilDateKey: recurrenceUntilDateKey ?? this.recurrenceUntilDateKey,
-      attendeeMode: attendeeMode ?? this.attendeeMode,
-      attendeeIds: attendeeIds ?? this.attendeeIds,
-      attendeeNames: attendeeNames ?? this.attendeeNames,
-      targetCountSnapshot: targetCountSnapshot ?? this.targetCountSnapshot,
       searchTokens: searchTokens ?? this.searchTokens,
       searchTokenVersion: searchTokenVersion ?? this.searchTokenVersion,
       schemaVersion: schemaVersion ?? this.schemaVersion,
@@ -387,37 +210,6 @@ class HeadquarterCalendarEvent {
     final result = values.toList()..sort();
     return result;
   }
-
-  static String _string(dynamic value) {
-    if (value is String) return value.trim();
-    if (value == null) return '';
-    return value.toString().trim();
-  }
-
-  static List<String> _stringList(dynamic value) {
-    if (value is! Iterable) return <String>[];
-    final result = value
-        .map((item) => item.toString().trim())
-        .where((item) => item.isNotEmpty)
-        .toSet()
-        .toList();
-    return result;
-  }
-
-  static DateTime? _readDate(dynamic value) {
-    if (value is Timestamp) return value.toDate();
-    if (value is DateTime) return value;
-    if (value is int) return DateTime.fromMillisecondsSinceEpoch(value);
-    if (value is String) return DateTime.tryParse(value.trim());
-    return null;
-  }
-
-  static int _readInt(dynamic value, {int fallback = 0}) {
-    if (value is int) return value;
-    if (value is num) return value.toInt();
-    if (value is String) return int.tryParse(value.trim()) ?? fallback;
-    return fallback;
-  }
 }
 
 class HeadquarterCalendarEventDraft {
@@ -426,36 +218,24 @@ class HeadquarterCalendarEventDraft {
     required this.description,
     required this.startDate,
     required this.endDate,
-    required this.scopeKey,
-    required this.ownerUserId,
     required this.eventType,
     required this.priority,
     required this.requiresAck,
     required this.recurrenceFrequency,
     required this.recurrenceInterval,
     required this.recurrenceUntilDate,
-    required this.attendeeMode,
-    required this.attendeeIds,
-    required this.attendeeNames,
-    required this.targetCountSnapshot,
   });
 
   final String title;
   final String description;
   final DateTime startDate;
   final DateTime endDate;
-  final String scopeKey;
-  final String ownerUserId;
   final String eventType;
   final String priority;
   final bool requiresAck;
   final String recurrenceFrequency;
   final int recurrenceInterval;
   final DateTime recurrenceUntilDate;
-  final String attendeeMode;
-  final List<String> attendeeIds;
-  final Map<String, String> attendeeNames;
-  final int targetCountSnapshot;
 
   bool get isRecurring => recurrenceFrequency != 'none';
 }

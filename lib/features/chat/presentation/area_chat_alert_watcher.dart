@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 
-import 'area_chat_inbox_scope.dart';
-
 class AreaChatAlertWatcher extends StatelessWidget {
   const AreaChatAlertWatcher({
     super.key,
@@ -18,13 +16,6 @@ class AreaChatAlertWatcher extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AreaChatInboxScope(
-      areaNames: enabled ? areaNames : const <String>[],
-      notificationsEnabled: enabled,
-      suppressedAreaNames: suppressedAreaNames,
-      builder: (context, snapshot, currentUserId) {
-        return child ?? const SizedBox.shrink();
-      },
-    );
+    return child ?? const SizedBox.shrink();
   }
 }

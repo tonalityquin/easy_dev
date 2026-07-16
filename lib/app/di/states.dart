@@ -3,6 +3,7 @@ import 'package:provider/single_child_widget.dart';
 
 import '../../features/account/applications/user_state.dart';
 import '../../features/account/domain/repositories/user_repository.dart';
+import '../../features/chat/controllers/area_chat_inbox_controller.dart';
 import '../../features/dashboard/applications/common/calendar_selection_state.dart';
 import '../../features/dev/application/area_state.dart';
 import '../../features/dev/application/field_calendar_state.dart';
@@ -82,6 +83,13 @@ final List<SingleChildWidget> stateProviders = [
       context.read<UserRepository>(),
       context.read<AreaState>(),
     ),
+  ),
+  ChangeNotifierProvider<AreaChatInboxController>(
+    create: (_) {
+      final controller = AreaChatInboxController();
+      controller.startReadReceiptStream();
+      return controller;
+    },
   ),
   Provider(create: (_) => PlateWriteService()),
   ChangeNotifierProvider(

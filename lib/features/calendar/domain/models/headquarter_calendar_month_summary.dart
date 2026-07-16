@@ -35,37 +35,6 @@ class HeadquarterCalendarMonthSummary {
     );
   }
 
-  factory HeadquarterCalendarMonthSummary.fromMap({
-    required String monthKey,
-    required Map<String, dynamic>? data,
-  }) {
-    if (data == null) return HeadquarterCalendarMonthSummary.empty(monthKey);
-    final rawDays = data['days'];
-    final days = <String, HeadquarterCalendarDaySummary>{};
-    if (rawDays is Map) {
-      for (final entry in rawDays.entries) {
-        final dateKey = entry.key.toString().trim();
-        if (dateKey.isEmpty || entry.value is! Map) continue;
-        final value = entry.value as Map;
-        final count = _readInt(value['count']);
-        final importantCount = _readInt(value['importantCount']);
-        if (count > 0 || importantCount > 0) {
-          days[dateKey] = HeadquarterCalendarDaySummary(
-            dateKey: dateKey,
-            count: count,
-            importantCount: importantCount,
-          );
-        }
-      }
-    }
-    return HeadquarterCalendarMonthSummary(
-      monthKey: monthKey,
-      days: Map<String, HeadquarterCalendarDaySummary>.unmodifiable(days),
-      eventCount: _readInt(data['eventCount']),
-      importantCount: _readInt(data['importantCount']),
-    );
-  }
-
   HeadquarterCalendarMonthSummary merge(
     HeadquarterCalendarMonthSummary other,
   ) {
@@ -97,10 +66,5 @@ class HeadquarterCalendarMonthSummary {
         );
   }
 
-  static int _readInt(dynamic value) {
-    if (value is int) return value;
-    if (value is num) return value.toInt();
-    if (value is String) return int.tryParse(value.trim()) ?? 0;
-    return 0;
-  }
+
 }

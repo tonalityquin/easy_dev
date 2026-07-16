@@ -184,7 +184,7 @@ class HeadHubActions {
     });
   }
 
-  static Future<void> refreshAreaMasterFromQuickAction([
+  static Future<void> refreshAreaMaster([
     BuildContext? context,
   ]) async {
     final ctx = context ?? _bestContext();
@@ -447,18 +447,6 @@ class _HubBubbleState extends State<_HubBubble>
           await HeadHubActions.openSheetExclusively<dynamic>((ctx) {
             return mgmt.Field.showAsBottomSheet(ctx);
           });
-        },
-      ),
-      _DockAction(
-        id: 'area_master_refresh',
-        icon: Icons.refresh_rounded,
-        label: '지역 마스터 갱신',
-        hint: '지사·본사 지역 목록 갱신',
-        color: const Color(0xFF2E7D32),
-        onTap: () async {
-          await closeMenu();
-          final ctx = HeadHubActions.currentContext();
-          await HeadHubActions.refreshAreaMasterFromQuickAction(ctx);
         },
       ),
       _DockAction(

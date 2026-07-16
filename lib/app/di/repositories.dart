@@ -2,7 +2,7 @@ import 'package:provider/provider.dart';
 import 'package:provider/single_child_widget.dart';
 
 import '../../features/account/data/repositories/firestore_user_repository.dart';
-import '../../features/calendar/data/repositories/firestore_headquarter_calendar_repository.dart';
+import '../../features/calendar/data/repositories/in_memory_headquarter_calendar_repository.dart';
 import '../../features/calendar/domain/repositories/headquarter_calendar_repository.dart';
 import '../../features/account/domain/repositories/user_repository.dart';
 import '../../features/dev/data/repositories/area_repo_package/firestore_area_repository.dart';
@@ -32,7 +32,12 @@ final List<SingleChildWidget> repositoryProviders = [
   ),
   Provider<HeadquarterCalendarRepository>(
     create: (_) {
-      return FirestoreHeadquarterCalendarRepository();
+      return InMemoryHeadquarterCalendarRepository();
+    },
+    dispose: (_, repository) {
+      if (repository is InMemoryHeadquarterCalendarRepository) {
+        repository.dispose();
+      }
     },
   ),
   Provider<AreaRepository>(

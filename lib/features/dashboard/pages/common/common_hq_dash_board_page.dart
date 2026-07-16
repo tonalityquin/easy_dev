@@ -9,8 +9,9 @@ import '../../../../shared/plate/domain/enums/plate_type.dart';
 import '../../../../shared/plate/domain/repositories/plate_repository.dart';
 import '../../../account/applications/user_state.dart';
 import '../../../calendar/presentation/headquarter_calendar_card.dart';
+import '../../../chat/application/chat_account_scope.dart';
 import '../../../chat/application/chat_area_key.dart';
-import '../../../chat/presentation/area_chat_inbox_scope.dart';
+import '../../../chat/controllers/area_chat_inbox_controller.dart';
 import '../../../chat/presentation/area_chat_icon_button.dart';
 import '../../../chat/presentation/area_chat_panel.dart';
 import '../../../dev/debug/debug_action_recorder.dart';
@@ -54,6 +55,23 @@ class CommonHqDashBoardPage extends StatefulWidget {
 }
 
 class _CommonHqDashBoardPageState extends State<CommonHqDashBoardPage> {
+  static const int _opsActionPageCount = 3;
+
+  late final PageController _opsActionPageController;
+  int _opsActionPageIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _opsActionPageController = PageController(initialPage: 1);
+  }
+
+  @override
+  void dispose() {
+    _opsActionPageController.dispose();
+    super.dispose();
+  }
+
   void _trace(String name, {Map<String, dynamic>? meta}) {
     DebugActionRecorder.instance.recordAction(
       name,
@@ -73,7 +91,7 @@ class _CommonHqDashBoardPageState extends State<CommonHqDashBoardPage> {
     await LogoutHelper.logoutAndGoToLogin(context);
   }
 
-Future<void> _openServiceSettings(BuildContext context) async {
+  Future<void> _openServiceSettings(BuildContext context) async {
     _trace(
       '서비스 설정 오픈',
       meta: <String, dynamic>{
@@ -88,7 +106,7 @@ Future<void> _openServiceSettings(BuildContext context) async {
     );
   }
 
-Future<void> _exitAppAfterClockOut(BuildContext context) async {
+  Future<void> _exitAppAfterClockOut(BuildContext context) async {
     try {
       if (DebugActionRecorder.instance.isRecording) {
         await DebugActionRecorder.instance.stopAndSave(
@@ -265,51 +283,6 @@ Future<void> _exitAppAfterClockOut(BuildContext context) async {
     );
   }
 
-  Future<void> _openSettingsActionsDialog(BuildContext context) async {
-    final cs = Theme.of(context).colorScheme;
-
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: true,
-      builder: (dialogContext) {
-        final children = <Widget>[
-          _OpsHqActionTile(
-            label: '설정',
-            icon: Icons.settings_rounded,
-            color: cs.primary,
-            onTap: () {
-              Navigator.of(dialogContext).pop();
-              _openServiceSettings(context);
-            },
-          ),
-        ];
-
-        if (widget.showLogout) {
-          children.add(const SizedBox(height: 8));
-          children.add(
-            _OpsHqActionTile(
-              label: '로그아웃',
-              icon: Icons.logout_rounded,
-              color: cs.error,
-              danger: true,
-              onTap: () {
-                Navigator.of(dialogContext).pop();
-                _handleLogout(context);
-              },
-            ),
-          );
-        }
-
-        return _dialogPanel(
-          context: dialogContext,
-          title: '설정 및 계정',
-          icon: Icons.manage_accounts_rounded,
-          child: Column(children: children),
-        );
-      },
-    );
-  }
-
   Future<void> _openWorkActionsDialog(
     BuildContext context,
     UserState userState,
@@ -346,89 +319,10 @@ Future<void> _exitAppAfterClockOut(BuildContext context) async {
     );
   }
 
-  Future<void> _openHeadHubQuickActionsDialog(BuildContext context) async {
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: true,
-      builder: (dialogContext) {
-        final cs = Theme.of(dialogContext).colorScheme;
-        final tt = Theme.of(dialogContext).textTheme;
-
-        return _dialogPanel(
-          context: dialogContext,
-          title: '본사 퀵 버튼',
-          icon: Icons.bolt_rounded,
-          child: ValueListenableBuilder<bool>(
-            valueListenable: HeadHubActions.enabled,
-            builder: (context, on, _) {
-              return Container(
-                padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-                decoration: BoxDecoration(
-                  color: cs.surfaceVariant.withOpacity(.24),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: cs.outlineVariant.withOpacity(.70)),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        color: on ? cs.primary : cs.surface,
-                        borderRadius: BorderRadius.circular(13),
-                        border: Border.all(
-                          color: on ? cs.primary : cs.outlineVariant,
-                        ),
-                      ),
-                      child: Icon(
-                        on ? Icons.flash_on_rounded : Icons.flash_off_rounded,
-                        color: on ? cs.onPrimary : cs.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            on ? '빠른 실행 ON' : '빠른 실행 OFF',
-                            style: tt.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w900,
-                              color: cs.onSurface,
-                            ),
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            '본사 허브 퀵 버튼 활성화 여부를 선택합니다.',
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: tt.bodySmall?.copyWith(
-                              color: cs.onSurfaceVariant,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Switch.adaptive(
-                      value: on,
-                      onChanged: (value) async {
-                        HeadHubActions.setEnabled(value);
-                        if (value) {
-                          await HeadHubActions.mountIfNeeded();
-                        }
-                        HapticFeedback.selectionClick();
-                      },
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-        );
-      },
-    );
+  Future<void> _toggleHeadHubQuickButton() async {
+    await HeadHubActions.init();
+    HeadHubActions.toggle();
+    HapticFeedback.selectionClick();
   }
 
   String _modeLabel() {
@@ -444,26 +338,168 @@ Future<void> _exitAppAfterClockOut(BuildContext context) async {
     return v.isEmpty ? fallback : v;
   }
 
-  String _roleLabel(UserState userState) {
-    final raw = userState.session?.role;
-    final role = raw == null ? '' : raw.toString().trim();
-    return role.isEmpty ? '-' : role;
+  void _onOpsActionPageChanged(int page) {
+    final int logicalPage;
+    if (page == 0) {
+      logicalPage = _opsActionPageCount - 1;
+    } else if (page == _opsActionPageCount + 1) {
+      logicalPage = 0;
+    } else {
+      logicalPage = page - 1;
+    }
+
+    if (_opsActionPageIndex != logicalPage) {
+      HapticFeedback.selectionClick();
+      setState(() {
+        _opsActionPageIndex = logicalPage;
+      });
+    }
+
+    if (page == 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_opsActionPageController.hasClients) return;
+        _opsActionPageController.jumpToPage(_opsActionPageCount);
+      });
+      return;
+    }
+
+    if (page == _opsActionPageCount + 1) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_opsActionPageController.hasClients) return;
+        _opsActionPageController.jumpToPage(1);
+      });
+    }
   }
 
-  String _workLabel(UserState userState) {
-    return userState.isWorking ? '근무중' : '대기';
+  int _logicalOpsActionPage(int page) {
+    if (page == 0) return _opsActionPageCount - 1;
+    if (page == _opsActionPageCount + 1) return 0;
+    return page - 1;
+  }
+
+  Widget _buildOpsActionPage(
+    BuildContext context,
+    UserState userState,
+    int page,
+  ) {
+    final cs = Theme.of(context).colorScheme;
+
+    switch (page) {
+      case 0:
+        return Row(
+          children: [
+            Expanded(
+              child: _OpsHqCarouselButton(
+                label: '환경설정',
+                icon: Icons.settings_rounded,
+                color: cs.primary,
+                onTap: () => _openServiceSettings(context),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _OpsHqCarouselButton(
+                label: '근무액션',
+                icon: Icons.work_history_rounded,
+                color: cs.secondary,
+                onTap: () => _openWorkActionsDialog(context, userState),
+              ),
+            ),
+          ],
+        );
+      case 1:
+        return Row(
+          children: [
+            Expanded(
+              child: ValueListenableBuilder<bool>(
+                valueListenable: HeadHubActions.enabled,
+                builder: (context, enabled, _) {
+                  return _OpsHqCarouselButton(
+                    label: '퀵버튼',
+                    icon: Icons.lightbulb_rounded,
+                    color: enabled
+                        ? Colors.amber.shade400
+                        : cs.onInverseSurface.withOpacity(.52),
+                    leading: _OpsHqQuickButtonIndicator(enabled: enabled),
+                    onTap: _toggleHeadHubQuickButton,
+                  );
+                },
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _OpsHqCarouselButton(
+                label: '다운받기',
+                icon: Icons.download_rounded,
+                color: cs.tertiary,
+                onTap: () => HeadHubActions.refreshAreaMaster(context),
+              ),
+            ),
+          ],
+        );
+      case 2:
+      default:
+        return Row(
+          children: [
+            Expanded(
+              child: _OpsHqCarouselButton(
+                label: '로그아웃',
+                icon: Icons.logout_rounded,
+                color: cs.error,
+                onTap: widget.showLogout ? () => _handleLogout(context) : null,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _OpsHqCarouselButton(
+                label: '가이드북',
+                icon: Icons.menu_book_rounded,
+                color: cs.secondary,
+              ),
+            ),
+          ],
+        );
+    }
+  }
+
+  Widget _buildOpsActionCarousel(
+    BuildContext context,
+    UserState userState,
+  ) {
+    return Column(
+      children: [
+        SizedBox(
+          height: 60,
+          child: PageView.builder(
+            controller: _opsActionPageController,
+            itemCount: _opsActionPageCount + 2,
+            onPageChanged: _onOpsActionPageChanged,
+            itemBuilder: (context, page) {
+              return _buildOpsActionPage(
+                context,
+                userState,
+                _logicalOpsActionPage(page),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 10),
+        _OpsHqPageDots(
+          count: _opsActionPageCount,
+          currentIndex: _opsActionPageIndex,
+        ),
+      ],
+    );
   }
 
   Widget _buildOpsHeader(
     BuildContext context,
     UserState userState,
-    int menuCount,
   ) {
     final cs = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final name = _safe(userState.name);
     final position = _safe(userState.position);
-    final division = _safe(userState.division);
 
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
@@ -505,7 +541,9 @@ Future<void> _exitAppAfterClockOut(BuildContext context) async {
                             '본사 대시보드',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: (textTheme.titleLarge ?? const TextStyle(fontSize: 22)).copyWith(
+                            style: (textTheme.titleLarge ??
+                                    const TextStyle(fontSize: 22))
+                                .copyWith(
                               color: cs.onInverseSurface,
                               fontWeight: FontWeight.w900,
                               letterSpacing: -.3,
@@ -525,8 +563,10 @@ Future<void> _exitAppAfterClockOut(BuildContext context) async {
                       spacing: 6,
                       runSpacing: 6,
                       children: [
-                        _OpsHqHeaderPill(icon: Icons.person_rounded, text: name),
-                        _OpsHqHeaderPill(icon: Icons.badge_rounded, text: position),
+                        _OpsHqHeaderPill(
+                            icon: Icons.person_rounded, text: name),
+                        _OpsHqHeaderPill(
+                            icon: Icons.badge_rounded, text: position),
                       ],
                     ),
                   ],
@@ -535,46 +575,13 @@ Future<void> _exitAppAfterClockOut(BuildContext context) async {
             ],
           ),
           const SizedBox(height: 14),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _OpsHqMetric(
-                  label: '설정',
-                  value: '열기',
-                  icon: Icons.settings_rounded,
-                  color: cs.primary,
-                  onTap: () => _openSettingsActionsDialog(context),
-                ),
-                const SizedBox(width: 8),
-                _OpsHqMetric(
-                  label: '근무',
-                  value: _workLabel(userState),
-                  icon: Icons.timer_rounded,
-                  color: userState.isWorking ? cs.primary : cs.onInverseSurface,
-                  onTap: () => _openWorkActionsDialog(context, userState),
-                ),
-                const SizedBox(width: 8),
-                _OpsHqMetric(
-                  label: '본부',
-                  value: division,
-                  icon: Icons.domain_rounded,
-                  color: cs.tertiary,
-                  onTap: () => _openHeadHubQuickActionsDialog(context),
-                ),
-                const SizedBox(width: 8),
-                _OpsHqMetric(label: '메뉴', value: '$menuCount', icon: Icons.grid_view_rounded, color: cs.primary),
-                const SizedBox(width: 8),
-                _OpsHqMetric(label: '권한', value: _roleLabel(userState), icon: Icons.verified_user_rounded, color: cs.secondary),
-              ],
-            ),
-          ),
+          _buildOpsActionCarousel(context, userState),
         ],
       ),
     );
   }
 
-Widget _buildMenuPanel(BuildContext context, UserState userState) {
+  Widget _buildMenuPanel(BuildContext context, UserState userState) {
     return _OpsHqPanel(
       title: '업무 메뉴',
       icon: Icons.dashboard_customize_rounded,
@@ -585,7 +592,7 @@ Widget _buildMenuPanel(BuildContext context, UserState userState) {
     );
   }
 
-@override
+  @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
@@ -601,7 +608,7 @@ Widget _buildMenuPanel(BuildContext context, UserState userState) {
                   sliver: SliverList(
                     delegate: SliverChildListDelegate(
                       [
-                        _buildOpsHeader(context, userState, 1),
+                        _buildOpsHeader(context, userState),
                         const SizedBox(height: 12),
                         _buildMenuPanel(context, userState),
                         const SizedBox(height: 18),
@@ -618,7 +625,6 @@ Widget _buildMenuPanel(BuildContext context, UserState userState) {
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
-
 }
 
 class _HeadquarterChatFloatingButton extends StatelessWidget {
@@ -633,19 +639,18 @@ class _HeadquarterChatFloatingButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AreaChatInboxScope(
-      areaNames: const <String>[headquarterChatAreaName],
-      notificationsEnabled: false,
-      builder: (context, inbox, currentUserId) {
-        final unreadCount = inbox.unreadCountForArea(
-          headquarterChatAreaName,
-          currentUserId,
-        );
-        return _HeadquarterChatFabVisual(
-          unreadCount: unreadCount,
-          onPressed: () => _openChat(context),
-        );
-      },
+    final currentUserId = context.select<UserState, String>(
+      (state) => ChatAccountScope.fromSession(state.session).userId,
+    );
+    final unreadCount = context.select<AreaChatInboxController, int>(
+      (controller) => controller.snapshot.unreadCountForArea(
+        headquarterChatAreaName,
+        currentUserId,
+      ),
+    );
+    return _HeadquarterChatFabVisual(
+      unreadCount: unreadCount,
+      onPressed: () => _openChat(context),
     );
   }
 }
@@ -824,84 +829,191 @@ class _OpsHqHeaderPill extends StatelessWidget {
   }
 }
 
-class _OpsHqMetric extends StatelessWidget {
-  const _OpsHqMetric({
+class _OpsHqQuickButtonIndicator extends StatefulWidget {
+  const _OpsHqQuickButtonIndicator({
+    required this.enabled,
+  });
+
+  final bool enabled;
+
+  @override
+  State<_OpsHqQuickButtonIndicator> createState() =>
+      _OpsHqQuickButtonIndicatorState();
+}
+
+class _OpsHqQuickButtonIndicatorState extends State<_OpsHqQuickButtonIndicator>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _pulse;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1050),
+    );
+    _pulse = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeInOut,
+    );
+    _syncAnimation();
+  }
+
+  @override
+  void didUpdateWidget(covariant _OpsHqQuickButtonIndicator oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.enabled != widget.enabled) {
+      _syncAnimation();
+    }
+  }
+
+  void _syncAnimation() {
+    if (widget.enabled) {
+      _controller.repeat(reverse: true);
+    } else {
+      _controller.stop();
+      _controller.value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return AnimatedBuilder(
+      animation: _pulse,
+      builder: (context, _) {
+        final value = widget.enabled ? _pulse.value : 0.0;
+        final activeColor = Colors.amber.shade400;
+        final inactiveColor = cs.onInverseSurface.withOpacity(.52);
+        final color = widget.enabled ? activeColor : inactiveColor;
+
+        return Transform.scale(
+          scale: widget.enabled ? 1 + (value * .07) : 1,
+          child: Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: color.withOpacity(
+                widget.enabled ? .20 + (value * .08) : .12,
+              ),
+              borderRadius: BorderRadius.circular(11),
+              border: Border.all(
+                color: color.withOpacity(widget.enabled ? .70 : .28),
+              ),
+              boxShadow: widget.enabled
+                  ? [
+                      BoxShadow(
+                        color: activeColor.withOpacity(.16 + (value * .18)),
+                        blurRadius: 7 + (value * 7),
+                        spreadRadius: value * 1.5,
+                      ),
+                    ]
+                  : const [],
+            ),
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 220),
+              transitionBuilder: (child, animation) {
+                return ScaleTransition(
+                  scale: animation,
+                  child: FadeTransition(opacity: animation, child: child),
+                );
+              },
+              child: Icon(
+                widget.enabled
+                    ? Icons.lightbulb_rounded
+                    : Icons.lightbulb_outline_rounded,
+                key: ValueKey<bool>(widget.enabled),
+                color: color,
+                size: 19,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _OpsHqCarouselButton extends StatelessWidget {
+  const _OpsHqCarouselButton({
     required this.label,
-    required this.value,
     required this.icon,
     required this.color,
+    this.leading,
     this.onTap,
   });
 
   final String label;
-  final String value;
   final IconData icon;
   final Color color;
+  final Widget? leading;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final content = Container(
-      width: 112,
-      padding: const EdgeInsets.fromLTRB(10, 9, 10, 9),
+      height: 60,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         color: cs.onInverseSurface.withOpacity(onTap == null ? .08 : .12),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: cs.onInverseSurface.withOpacity(onTap == null ? .12 : .22)),
+        border: Border.all(
+          color: cs.onInverseSurface.withOpacity(onTap == null ? .12 : .22),
+        ),
       ),
       child: Row(
         children: [
-          Icon(icon, color: color, size: 18),
+          leading ??
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(.18),
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: Icon(icon, color: color, size: 19),
+              ),
           const SizedBox(width: 8),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: cs.onInverseSurface.withOpacity(.62),
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: cs.onInverseSurface,
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -.1,
-                  ),
-                ),
-              ],
+            child: Text(
+              label,
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: cs.onInverseSurface,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w900,
+                letterSpacing: -.15,
+              ),
             ),
           ),
           if (onTap != null) ...[
-            const SizedBox(width: 4),
+            const SizedBox(width: 2),
             Icon(
               Icons.chevron_right_rounded,
-              color: cs.onInverseSurface.withOpacity(.70),
-              size: 18,
+              color: cs.onInverseSurface.withOpacity(.66),
+              size: 17,
             ),
           ],
         ],
       ),
     );
 
-    if (onTap == null) {
-      return content;
-    }
+    if (onTap == null) return content;
 
     return Semantics(
       button: true,
-      label: '$label 열기',
+      label: label,
       child: Material(
         type: MaterialType.transparency,
         child: InkWell(
@@ -910,6 +1022,39 @@ class _OpsHqMetric extends StatelessWidget {
           child: content,
         ),
       ),
+    );
+  }
+}
+
+class _OpsHqPageDots extends StatelessWidget {
+  const _OpsHqPageDots({
+    required this.count,
+    required this.currentIndex,
+  });
+
+  final int count;
+  final int currentIndex;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(count, (index) {
+        final active = index == currentIndex;
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          width: active ? 8 : 6,
+          height: active ? 8 : 6,
+          margin: const EdgeInsets.symmetric(horizontal: 4),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: active ? cs.primary : cs.onInverseSurface.withOpacity(.34),
+          ),
+        );
+      }),
     );
   }
 }
@@ -999,7 +1144,8 @@ class _OpsHqActionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final enabled = onTap != null;
-    final effectiveColor = enabled ? color : cs.onSurfaceVariant.withOpacity(.45);
+    final effectiveColor =
+        enabled ? color : cs.onSurfaceVariant.withOpacity(.45);
 
     return Material(
       color: Colors.transparent,
@@ -1023,7 +1169,8 @@ class _OpsHqActionTile extends StatelessWidget {
                 width: 5,
                 decoration: BoxDecoration(
                   color: effectiveColor,
-                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(15)),
+                  borderRadius:
+                      const BorderRadius.horizontal(left: Radius.circular(15)),
                 ),
               ),
               const SizedBox(width: 10),
@@ -1044,7 +1191,9 @@ class _OpsHqActionTile extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: enabled ? (danger ? cs.error : cs.onSurface) : cs.onSurfaceVariant.withOpacity(.55),
+                    color: enabled
+                        ? (danger ? cs.error : cs.onSurface)
+                        : cs.onSurfaceVariant.withOpacity(.55),
                     fontSize: 14,
                     fontWeight: FontWeight.w900,
                     letterSpacing: -.1,
@@ -1055,7 +1204,9 @@ class _OpsHqActionTile extends StatelessWidget {
                 padding: const EdgeInsets.only(right: 10),
                 child: Icon(
                   Icons.chevron_right_rounded,
-                  color: enabled ? cs.onSurfaceVariant.withOpacity(.75) : cs.onSurfaceVariant.withOpacity(.35),
+                  color: enabled
+                      ? cs.onSurfaceVariant.withOpacity(.75)
+                      : cs.onSurfaceVariant.withOpacity(.35),
                 ),
               ),
             ],
@@ -1553,9 +1704,7 @@ class _BranchWorkStatusInlinePanelState
                   ),
                   child: Icon(
                     Icons.domain_rounded,
-                    color: _expanded
-                        ? cs.onPrimaryContainer
-                        : cs.onPrimary,
+                    color: _expanded ? cs.onPrimaryContainer : cs.onPrimary,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -1567,8 +1716,7 @@ class _BranchWorkStatusInlinePanelState
                         '지사 별 업무 현황',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: (tt.titleMedium ??
-                                const TextStyle(fontSize: 16))
+                        style: (tt.titleMedium ?? const TextStyle(fontSize: 16))
                             .copyWith(
                           fontWeight: FontWeight.w900,
                           color: cs.onInverseSurface,
@@ -1668,14 +1816,8 @@ class _BranchWorkStatusInlinePanelState
       return const _BranchStateCard(
         icon: Icons.cloud_download_outlined,
         label: '저장된 지역 마스터가 없습니다.',
-        description: '빠른 실행에서 지역 마스터 갱신을 실행하세요.',
       );
     }
-
-    final chatAreaNames = data.areaCounts
-        .where((item) => item.chatEnabled)
-        .map((item) => item.areaName)
-        .toList(growable: false);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1689,26 +1831,14 @@ class _BranchWorkStatusInlinePanelState
               )
             : _BranchSectionFrame(
                 title: '지사',
-                child: AreaChatInboxScope(
-                  areaNames: chatAreaNames,
-                  notificationsEnabled: false,
-                  builder: (context, inbox, currentUserId) {
-                    return Column(
-                      children: data.areaCounts
-                          .map(
-                            (item) => _BranchAreaMiniCard(
-                              item: item,
-                              unreadCount: item.chatEnabled
-                                  ? inbox.unreadCountForArea(
-                                      item.areaName,
-                                      currentUserId,
-                                    )
-                                  : 0,
-                            ),
-                          )
-                          .toList(growable: false),
-                    );
-                  },
+                child: Column(
+                  children: data.areaCounts
+                      .map(
+                        (item) => _BranchAreaMiniCard(
+                          item: item,
+                        ),
+                      )
+                      .toList(growable: false),
                 ),
               ),
       ],
@@ -1927,7 +2057,8 @@ class _BranchSectionFrame extends StatelessWidget {
                   color: cs.primaryContainer,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(Icons.domain_rounded, color: cs.onPrimaryContainer, size: 18),
+                child: Icon(Icons.domain_rounded,
+                    color: cs.onPrimaryContainer, size: 18),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -2051,9 +2182,7 @@ class _BranchCapabilityStateLegend extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = allowed
-        ? Colors.green.shade700
-        : Colors.red.shade700;
+    final color = allowed ? Colors.green.shade700 : Colors.red.shade700;
 
     return Semantics(
       label: label,
@@ -2069,9 +2198,7 @@ class _BranchCapabilityStateLegend extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              allowed
-                  ? Icons.check_circle_rounded
-                  : Icons.cancel_rounded,
+              allowed ? Icons.check_circle_rounded : Icons.cancel_rounded,
               size: 16,
               color: color,
             ),
@@ -2157,8 +2284,7 @@ class _BranchStateCard extends StatelessWidget {
                   label,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: (tt.titleMedium ??
-                          const TextStyle(fontSize: 16))
+                  style: (tt.titleMedium ?? const TextStyle(fontSize: 16))
                       .copyWith(
                     color: cs.onSurface,
                     fontWeight: FontWeight.w900,
@@ -2216,9 +2342,8 @@ class _BranchWorkStatusAreaCount {
 
   bool get chatEnabled => capabilities.contains(Capability.record);
 
-  List<String> get visibleModes => modes
-      .where((mode) => mode != 'record')
-      .toList(growable: false);
+  List<String> get visibleModes =>
+      modes.where((mode) => mode != 'record').toList(growable: false);
 }
 
 String _formatAreaMasterRefreshAt(String iso) {
@@ -2306,11 +2431,9 @@ String _modeLabel(String mode) {
 class _BranchAreaMiniCard extends StatelessWidget {
   const _BranchAreaMiniCard({
     required this.item,
-    required this.unreadCount,
   });
 
   final _BranchWorkStatusAreaCount item;
-  final int unreadCount;
 
   Future<void> _openChat(BuildContext context) async {
     if (!item.chatEnabled) return;
@@ -2326,6 +2449,17 @@ class _BranchAreaMiniCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    final currentUserId = context.select<UserState, String>(
+      (state) => ChatAccountScope.fromSession(state.session).userId,
+    );
+    final unreadCount = context.select<AreaChatInboxController, int>(
+      (controller) => item.chatEnabled
+          ? controller.snapshot.unreadCountForArea(
+              item.areaName,
+              currentUserId,
+            )
+          : 0,
+    );
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -2370,9 +2504,7 @@ class _BranchAreaMiniCard extends StatelessWidget {
               AreaChatIconButton(
                 areaName: item.areaName,
                 unreadCount: item.chatEnabled ? unreadCount : 0,
-                onPressed: item.chatEnabled
-                    ? () => _openChat(context)
-                    : null,
+                onPressed: item.chatEnabled ? () => _openChat(context) : null,
                 disabledTooltip: '채팅 비허용 · 채팅&무전기 기능이 허용되지 않았습니다.',
               ),
             ],

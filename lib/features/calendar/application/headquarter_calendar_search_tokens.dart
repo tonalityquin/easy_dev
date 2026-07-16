@@ -1,4 +1,4 @@
-const int headquarterCalendarSearchTokenVersion = 1;
+const int headquarterCalendarSearchTokenVersion = 2;
 
 String normalizeHeadquarterCalendarSearchText(String input) {
   return input
@@ -14,10 +14,9 @@ List<String> buildHeadquarterCalendarSearchTokens({
   required String eventType,
   required String priority,
   required String createdByName,
-  required Iterable<String> attendeeNames,
 }) {
   final source = normalizeHeadquarterCalendarSearchText(
-    '$title $description $eventType $priority $createdByName ${attendeeNames.join(' ')}',
+    '$title $description $eventType $priority $createdByName',
   );
   if (source.isEmpty) return const <String>[];
   final result = <String>{};
