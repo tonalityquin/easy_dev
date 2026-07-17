@@ -315,7 +315,7 @@ class _TodoPanelState extends State<TodoPanel> {
         Expanded(
           child: SearchBar(
             controller: _searchCtrl,
-            hintText: '검색',
+
             leading: const Icon(Icons.search_rounded),
             trailing: trailing,
             elevation: const MaterialStatePropertyAll<double>(0),

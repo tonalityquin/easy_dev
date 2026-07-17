@@ -1183,7 +1183,7 @@ class _NovelMobileWritingPageState extends State<NovelMobileWritingPage> {
               decoration: const InputDecoration(border: InputBorder.none,
                   isDense: true,
                   prefixIcon: Icon(Icons.auto_stories_rounded),
-                  hintText: '소설 제목'),
+),
               style: Theme
                   .of(context)
                   .textTheme
@@ -1376,7 +1376,7 @@ class _NovelMobileWritingPageState extends State<NovelMobileWritingPage> {
               textAlignVertical: TextAlignVertical.top,
               keyboardType: TextInputType.multiline,
               decoration: InputDecoration(
-                  hintText: _editMode ? '본문을 작성하세요.' : '수정 모드 OFF 상태입니다.',
+
                   border: InputBorder.none,
                   contentPadding: const EdgeInsets.fromLTRB(18, 18, 18, 24)),
               style: Theme

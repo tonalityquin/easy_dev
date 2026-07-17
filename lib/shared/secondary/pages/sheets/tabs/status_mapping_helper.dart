@@ -447,7 +447,7 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
                 enabled: !_busy,
                 decoration: const InputDecoration(
                   labelText: 'activeLimit 활성 계정 제한',
-                  hintText: '예: 30',
+
                   border: OutlineInputBorder(),
                   isDense: true,
                   contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -460,7 +460,7 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
                 enabled: !_busy,
                 decoration: const InputDecoration(
                   labelText: 'totalLimit 전체 계정 제한',
-                  hintText: '예: 50',
+
                   border: OutlineInputBorder(),
                   isDense: true,
                   contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),

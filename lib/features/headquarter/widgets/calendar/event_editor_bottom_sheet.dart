@@ -933,7 +933,7 @@ class CheckInTemplate implements EventTemplate {
           ),
           decoration: const InputDecoration(
             labelText: '요청 문서',
-            hintText: '쉼표(,) 또는 줄바꿈으로 구분해 입력',
+
             isDense: true,
           ),
         ),
@@ -1017,7 +1017,7 @@ class FreeTemplate implements EventTemplate {
           ),
           decoration: const InputDecoration(
             labelText: '설명',
-            hintText: '자유롭게 설명을 입력하세요',
+
             isDense: true,
           ),
         ),
@@ -1147,7 +1147,7 @@ class _LabeledField extends StatelessWidget {
         ),
         decoration: InputDecoration(
           labelText: label,
-          hintText: hint,
+
           filled: true,
           fillColor: t.fieldFill,
           isDense: true,

@@ -1554,13 +1554,12 @@ class _DashboardEndReportFormPageState
   InputDecoration _inputDec(
       BuildContext context, {
         required String labelText,
-        String? hintText,
-      }) {
+          }) {
     final cs = Theme.of(context).colorScheme;
 
     return InputDecoration(
       labelText: labelText,
-      hintText: hintText,
+
       filled: true,
       fillColor: cs.surfaceContainerLow,
       border: OutlineInputBorder(
@@ -1794,11 +1793,7 @@ class _DashboardEndReportFormPageState
       decoration: _inputDec(
         context,
         labelText: '특이 사항',
-        hintText: '예)\n'
-            '- 육하원칙에 맞춰서 작성하세요.\n'
-            '- 컴플레인, 사고, 인사 갈등, 고객사와의 소통 발생 여부 및 내용\n'
-            '- 업무 프로세스, 업무 환경, 물품 파손 등 문제\n'
-            '- 발생 과정 및 조치 사항\n',
+
       ),
       keyboardType: TextInputType.multiline,
       minLines: 8,
@@ -1867,7 +1862,7 @@ class _DashboardEndReportFormPageState
           decoration: _inputDec(
             context,
             labelText: '메일 제목(자동 생성)',
-            hintText: '예: 콜센터 업무 종료 보고서 – 11월 25일자 12대 - 특이사항 있음',
+
           ),
           validator: (v) =>
           (v == null || v.trim().isEmpty) ? '메일 제목이 자동 생성되지 않았습니다.' : null,
@@ -1878,7 +1873,7 @@ class _DashboardEndReportFormPageState
           readOnly: true,
           enableInteractiveSelection: true,
           decoration: _inputDec(context,
-              labelText: '메일 본문(자동 생성)', hintText: '작성 시각 정보가 자동으로 입력됩니다.'),
+              labelText: '메일 본문(자동 생성)', ),
           minLines: 3,
           maxLines: 8,
         ),

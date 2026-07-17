@@ -433,7 +433,7 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
             decoration: opsInputDecoration(
               context,
               label: '이름',
-              hintText: '예: 홍길동',
+
               prefixIcon: const Icon(Icons.person_rounded),
               locked: isEditMode,
               errorText: _errorMessage == '이름을 다시 입력하세요' ? _errorMessage : null,
@@ -453,7 +453,7 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
             decoration: opsInputDecoration(
               context,
               label: '전화번호',
-              hintText: '숫자만 입력',
+
               helperText: '최소 9자리 이상',
               prefixIcon: const Icon(Icons.phone_rounded),
               locked: isEditMode,
@@ -472,7 +472,7 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
             decoration: opsInputDecoration(
               context,
               label: '이메일',
-              hintText: 'google 계정 앞부분',
+
               suffixText: '@gmail.com',
               prefixIcon: const Icon(Icons.mail_rounded),
               errorText: (_errorMessage == '이메일을 입력하세요' || _errorMessage == '이메일을 다시 확인하세요') ? _errorMessage : null,
@@ -550,7 +550,7 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
         decoration: opsInputDecoration(
           context,
           label: '직책',
-          hintText: '예: 매니저, 총괄, 팀장',
+
           prefixIcon: const Icon(Icons.badge_rounded),
         ),
       ),

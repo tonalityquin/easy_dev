@@ -6,14 +6,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../../app/init/app_exit_service.dart';
 import '../../../../../app/init/logout_helper.dart';
-import '../../../../../app/utils/ops_delayed_refresh_gate.dart';
+import '../../../../../app/utils/operational_data_sync_workflow.dart';
 import '../../../../../app/theme/brand_theme.dart';
-import '../../../../../app/utils/dev_firebase_debug_dialog.dart';
 import '../../../../../app/theme/theme_prefs_controller.dart';
-import '../../../../../shared/plate/domain/repositories/plate_repository.dart';
 import '../../../../dev/application/area_state.dart';
-import '../../../../location/applications/location_state.dart';
-import '../../../../payment/applications/bill_state.dart';
 import '../../../applications/tablet_pad_mode_state.dart';
 import '../../../applications/tablet_parking_completed_view_toggle_state.dart';
 import '../../../applications/tablet_work_session_state.dart';
@@ -31,10 +27,25 @@ class TabletTopNavigation extends StatefulWidget {
 }
 
 class _TabletTopNavigationState extends State<TabletTopNavigation> {
-  static const String _prefsHasMonthlyKey = 'has_monthly_parking';
 
   bool _refreshing = false;
   DateTime? _lastRefreshAt;
+
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLastRefreshAt();
+  }
+
+  Future<void> _loadLastRefreshAt() async {
+    final prefs = await SharedPreferences.getInstance();
+    final value = DateTime.tryParse(
+      prefs.getString(OperationalDataSyncWorkflow.lastSyncAtKey) ?? '',
+    );
+    if (!mounted) return;
+    setState(() => _lastRefreshAt = value);
+  }
 
   Color _tintOnSurface(ColorScheme cs, double opacity) {
     return Color.alphaBlend(cs.primary.withOpacity(opacity), cs.surface);
@@ -74,40 +85,6 @@ class _TabletTopNavigationState extends State<TabletTopNavigation> {
     return '${d.year}-${two(d.month)}-${two(d.day)} ${two(d.hour)}:${two(d.minute)}';
   }
 
-  Future<bool?> _syncHasMonthlyParkingFlag() async {
-    final area = context.read<AreaState>().currentArea.trim();
-
-    if (area.isEmpty) {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_prefsHasMonthlyKey, false);
-      return false;
-    }
-
-    try {
-      final repo = context.read<PlateRepository>();
-      final exists = await repo.hasMonthlyParkingByArea(area: area);
-
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_prefsHasMonthlyKey, exists);
-
-      return exists;
-    } catch (e, st) {
-      debugPrint('월주차 존재 여부 확인 실패: $e');
-      await DevFirebaseDebugDialog.show(
-        context: context,
-        operation: 'tablet.monthly_plate_status.exists',
-        error: e,
-        stackTrace: st,
-        details: <String, Object?>{
-          'collection': 'monthly_plate_status',
-          'area': area,
-          'widget': 'TabletTopNavigation',
-        },
-      );
-      return null;
-    }
-  }
-
   Future<void> _manualRefreshAll({
     StateSetter? setDialogState,
     BuildContext? dialogContext,
@@ -124,41 +101,11 @@ class _TabletTopNavigationState extends State<TabletTopNavigation> {
     refreshDialog();
 
     try {
-      final shouldRefresh = await OpsDelayedRefreshGate.waitIfNeeded(
+      await OperationalDataSyncWorkflow.run(
         context: context,
         title: '데이터 새로고침',
         message: '주차 구역, 정산 데이터, 월정기 사용 여부를 새로고침하기 전 요청을 준비하고 있습니다.',
       );
-      if (!shouldRefresh || !mounted) return;
-
-      final locationState = context.read<LocationState>();
-      final billState = context.read<BillState>();
-
-      await locationState.manualLocationRefresh();
-      await billState.manualBillRefresh();
-      await _syncHasMonthlyParkingFlag();
-
-      if (!mounted) return;
-
-      setState(() => _lastRefreshAt = DateTime.now());
-      refreshDialog();
-      debugPrint('데이터를 새로고침했습니다.');
-    } catch (e, st) {
-      debugPrint('수동 새로고침 실패: $e');
-      if (!mounted) return;
-      await DevFirebaseDebugDialog.show(
-        context: context,
-        operation: 'tablet.manualRefreshAll',
-        error: e,
-        stackTrace: st,
-        details: <String, Object?>{
-          'area': context.read<AreaState>().currentArea.trim(),
-          'widgets': 'LocationState.manualLocationRefresh, BillState.manualBillRefresh, monthly_plate_status',
-          'widget': 'TabletTopNavigation',
-        },
-      );
-      refreshDialog();
-      debugPrint('새로고침 실패: $e');
     } finally {
       if (!mounted) return;
       setState(() => _refreshing = false);

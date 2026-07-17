@@ -2,13 +2,12 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../app/di/routes.dart';
 import '../../../../shared/page/application/double/double_page_info.dart';
 import '../../../../shared/plate/application/double/double_plate_state.dart';
 import '../../../../shared/secondary/pages/secondary_page.dart';
-import '../../../dev/debug/debug_action_recorder.dart';
 import '../../../selector/application/dev_auth.dart';
 import '../../applications/double/double_hq_state.dart';
+import '../../widgets/headquarter_mode_switch_button.dart';
 
 class DoubleHeadquarterPage extends StatelessWidget {
   const DoubleHeadquarterPage({super.key});
@@ -44,222 +43,25 @@ class _BottomArea extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<DoubleHqState>();
     final pages = state.pages;
+    final switchButton = HeadquarterModeSwitchButton(
+      currentModeKey: 'double',
+      currentScreen: 'double_headquarter_page',
+      onBeforeSwitch: () => context.read<DoublePlateState>().doubleDisableAll(),
+    );
 
     if (pages.length < 2) {
-      return const Column(
+      return Column(
         mainAxisSize: MainAxisSize.min,
-        children: [
-          _HqModeSwitchButton(),
-        ],
+        children: [switchButton],
       );
     }
 
-    return const Column(
+    return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        PageBottomNavigation(),
-        _HqModeSwitchButton(),
+        const PageBottomNavigation(),
+        switchButton,
       ],
-    );
-  }
-}
-
-@immutable
-class _ModeTarget {
-  const _ModeTarget({
-    required this.title,
-    required this.routeName,
-    required this.icon,
-    required this.modeKey,
-  });
-
-  final String title;
-  final String routeName;
-  final IconData icon;
-  final String modeKey;
-}
-
-class _HqModeSwitchButton extends StatelessWidget {
-  const _HqModeSwitchButton();
-
-  static const List<_ModeTarget> _targets = <_ModeTarget>[
-    _ModeTarget(
-      title: '트리플 헤드쿼터로 이동',
-      routeName: AppRoutes.tripleHeadquarterPage,
-      icon: Icons.apartment,
-      modeKey: 'triple',
-    ),
-    _ModeTarget(
-      title: '마이너 헤드쿼터로 이동',
-      routeName: AppRoutes.minorHeadquarterPage,
-      icon: Icons.tune,
-      modeKey: 'minor',
-    ),
-  ];
-
-  void _trace(BuildContext context, String name, {Map<String, dynamic>? meta}) {
-    DebugActionRecorder.instance.recordAction(
-      name,
-      route: ModalRoute.of(context)?.settings.name,
-      meta: meta,
-    );
-  }
-
-  Future<_ModeTarget?> _pickTarget(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    final accent = cs.primary;
-    final border = cs.outlineVariant.withOpacity(0.85);
-    final textColor = cs.onSurface;
-
-    return showDialog<_ModeTarget>(
-      context: context,
-      barrierDismissible: true,
-      builder: (dialogContext) {
-        final cs2 = Theme.of(dialogContext).colorScheme;
-
-        return Dialog(
-          backgroundColor: cs2.surface,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        '헤드쿼터 모드 전환',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          color: textColor,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: '닫기',
-                      onPressed: () => Navigator.of(dialogContext).pop(),
-                      icon: Icon(Icons.close, color: textColor.withOpacity(.75)),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                ..._targets.map(
-                      (t) => Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: _ModeSwitchDialogOption(
-                      title: t.title,
-                      icon: t.icon,
-                      accentColor: accent,
-                      borderColor: border,
-                      textColor: textColor,
-                      onTap: () => Navigator.of(dialogContext).pop(t),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-      child: SizedBox(
-        width: double.infinity,
-        child: ElevatedButton.icon(
-          icon: const Icon(Icons.swap_horiz),
-          label: const Text('헤드쿼터 모드 전환'),
-          style: _switchBtnStyle(context),
-          onPressed: () async {
-            final target = await _pickTarget(context);
-            if (target == null) return;
-
-            _trace(
-              context,
-              '헤드쿼터 모드 전환',
-              meta: <String, dynamic>{
-                'screen': 'double_headquarter_page',
-                'action': 'switch_headquarter_mode',
-                'from': 'double',
-                'to': target.modeKey,
-                'toRoute': target.routeName,
-              },
-            );
-
-            context.read<DoublePlateState>().doubleDisableAll();
-
-            _replaceWithAnimatedRoute(
-              context,
-              target.routeName,
-              beginOffset: const Offset(-1.0, 0.0),
-            );
-          },
-        ),
-      ),
-    );
-  }
-}
-
-class _ModeSwitchDialogOption extends StatelessWidget {
-  const _ModeSwitchDialogOption({
-    required this.title,
-    required this.icon,
-    required this.accentColor,
-    required this.borderColor,
-    required this.textColor,
-    required this.onTap,
-  });
-
-  final String title;
-  final IconData icon;
-  final Color accentColor;
-  final Color borderColor;
-  final Color textColor;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return Material(
-      color: cs.surface,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          decoration: BoxDecoration(
-            color: cs.surface,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: borderColor, width: 1),
-          ),
-          child: Row(
-            children: [
-              Icon(icon, color: accentColor),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: textColor,
-                  ),
-                ),
-              ),
-              Icon(Icons.chevron_right, color: textColor.withOpacity(.6)),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }
@@ -411,71 +213,4 @@ class PageBottomNavigation extends StatelessWidget {
       },
     );
   }
-}
-
-ButtonStyle _switchBtnStyle(BuildContext context) {
-  final cs = Theme.of(context).colorScheme;
-
-  return ElevatedButton.styleFrom(
-    backgroundColor: cs.surface,
-    foregroundColor: cs.onSurface,
-    minimumSize: const Size.fromHeight(48),
-    padding: EdgeInsets.zero,
-    side: BorderSide(
-      color: cs.outlineVariant.withOpacity(.85),
-      width: 1.0,
-    ),
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-    elevation: 0,
-  ).copyWith(
-    overlayColor: MaterialStateProperty.resolveWith<Color?>(
-          (states) => states.contains(MaterialState.pressed) ? cs.outlineVariant.withOpacity(0.18) : null,
-    ),
-  );
-}
-
-void _replaceWithAnimatedRoute(
-    BuildContext context,
-    String routeName, {
-      required Offset beginOffset,
-    }) {
-  final builder = appRoutes[routeName];
-  if (builder == null) return;
-
-  Navigator.of(context).pushReplacement(
-    PageRouteBuilder(
-      settings: RouteSettings(name: routeName),
-      transitionDuration: const Duration(milliseconds: 220),
-      reverseTransitionDuration: const Duration(milliseconds: 220),
-      pageBuilder: (ctx, animation, secondaryAnimation) {
-        return builder(ctx);
-      },
-      transitionsBuilder: (ctx, animation, secondaryAnimation, child) {
-        final curved = CurvedAnimation(
-          parent: animation,
-          curve: Curves.easeOutCubic,
-        );
-
-        final slide = Tween<Offset>(
-          begin: beginOffset,
-          end: Offset.zero,
-        ).animate(curved);
-
-        final fade = Tween<double>(
-          begin: 0.0,
-          end: 1.0,
-        ).animate(
-          CurvedAnimation(parent: animation, curve: Curves.easeOut),
-        );
-
-        return SlideTransition(
-          position: slide,
-          child: FadeTransition(
-            opacity: fade,
-            child: child,
-          ),
-        );
-      },
-    ),
-  );
 }

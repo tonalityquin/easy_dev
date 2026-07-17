@@ -39,14 +39,22 @@ class BillState extends ChangeNotifier {
 
   Future<void> _saveCacheForArea(String area) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      'cached_general_bills_$area',
-      json.encode(_generalBills.map((e) => e.toCacheMap()).toList()),
-    );
-    await prefs.setString(
-      'cached_regular_bills_$area',
-      json.encode(_regularBills.map((e) => e.toCacheMap()).toList()),
-    );
+    final generalKey = 'cached_general_bills_$area';
+    final regularKey = 'cached_regular_bills_$area';
+    final generalJson =
+        json.encode(_generalBills.map((e) => e.toCacheMap()).toList());
+    final regularJson =
+        json.encode(_regularBills.map((e) => e.toCacheMap()).toList());
+    final generalSaved = await prefs.setString(generalKey, generalJson);
+    final regularSaved = await prefs.setString(regularKey, regularJson);
+    if (!generalSaved || !regularSaved) {
+      throw StateError('정산 데이터 로컬 저장 실패');
+    }
+    await prefs.reload();
+    if (prefs.getString(generalKey) != generalJson ||
+        prefs.getString(regularKey) != regularJson) {
+      throw StateError('정산 데이터 로컬 저장 검증 실패');
+    }
   }
 
   void _upsertGeneral(BillModel bill) {
@@ -109,23 +117,67 @@ class BillState extends ChangeNotifier {
   }
 
   Future<void> manualBillRefresh() async {
-    final currentArea = _areaState.currentArea.trim();
-    debugPrint('🔥 Firestore 새로고침 시작 → $currentArea');
+    await _refreshBills(rethrowErrors: false);
+  }
 
+  Future<void> clearCurrentAreaCache() async {
+    final currentArea = _areaState.currentArea.trim();
+    if (currentArea.isEmpty) {
+      throw StateError('현재 지역 정보가 없습니다.');
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final generalKey = 'cached_general_bills_$currentArea';
+    final regularKey = 'cached_regular_bills_$currentArea';
+    await prefs.remove(generalKey);
+    await prefs.remove(regularKey);
+    await prefs.reload();
+    if (prefs.containsKey(generalKey) || prefs.containsKey(regularKey)) {
+      throw StateError('기존 정산 로컬 데이터 삭제 검증 실패');
+    }
+
+    _generalBills = [];
+    _regularBills = [];
+    _selectedBillId = null;
+    _previousArea = currentArea;
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  Future<void> manualBillRefreshStrict() async {
+    await _refreshBills(rethrowErrors: true);
+
+    final currentArea = _areaState.currentArea.trim();
+    final prefs = await SharedPreferences.getInstance();
+    if (!prefs.containsKey('cached_general_bills_$currentArea') ||
+        !prefs.containsKey('cached_regular_bills_$currentArea')) {
+      throw StateError('정산 로컬 데이터 저장 결과가 없습니다.');
+    }
+  }
+
+  Future<void> _refreshBills({required bool rethrowErrors}) async {
+    final currentArea = _areaState.currentArea.trim();
+    if (currentArea.isEmpty) {
+      if (rethrowErrors) {
+        throw StateError('현재 지역 정보가 없습니다.');
+      }
+      return;
+    }
+
+    debugPrint('🔥 Firestore 새로고침 시작 → $currentArea');
     _isLoading = true;
     notifyListeners();
 
     try {
       final result = await _repository.getAllBills(currentArea);
-
       _generalBills = result.generalBills;
       _regularBills = result.regularBills;
       _selectedBillId = null;
-
       await _saveCacheForArea(currentArea);
       debugPrint('✅ Firestore 데이터 캐시 갱신 완료');
     } catch (e) {
       debugPrint('🔥 데이터 로드 실패: $e');
+      if (rethrowErrors) rethrow;
     } finally {
       _isLoading = false;
       notifyListeners();

@@ -429,7 +429,7 @@ class _LocalPrefsBottomSheetState extends State<LocalPrefsBottomSheet> {
                       controller: _searchCtrl,
                       focusNode: _searchFocus,
                       decoration: InputDecoration(
-                        hintText: '키 또는 값으로 검색…',
+
                         prefixIcon: const Icon(Icons.search_rounded),
                         suffixIcon: _searchCtrl.text.isEmpty
                             ? null

@@ -925,7 +925,7 @@ class _CalendarPanelState extends State<CalendarPanel> {
             textInputAction: TextInputAction.done,
             onSubmitted: (_) => _submitQuickAdd(),
             decoration: InputDecoration(
-              hintText: '예: 고객 미팅 / 차량 입고 / 전화',
+
               isDense: true,
               filled: true,
               fillColor: cs.surface.withOpacity(0.35),
@@ -1375,7 +1375,7 @@ Future<_EventDraft?> _openEventEditor(
                     controller: titleCtrl,
                     autofocus: true,
                     decoration:
-                    const InputDecoration(hintText: '예: 회의 / 병원 / 약속'),
+                    const InputDecoration(),
                   ),
                   const SizedBox(height: 12),
                   SwitchListTile(

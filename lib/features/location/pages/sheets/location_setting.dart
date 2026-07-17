@@ -723,7 +723,7 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
                             decoration: opsInputDecoration(
                               ctx,
                               label: '벽 그룹명',
-                              hintText: '예) 북측 벽, 출구앞 벽, 외곽1',
+
                               prefixIcon: const Icon(Icons.edit_rounded),
                             ),
                             onSubmitted: (_) => Navigator.of(ctx).pop(controller.text.trim()),
@@ -1516,12 +1516,11 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
   InputDecoration _inputDecoration(
     String label, {
     required ColorScheme cs,
-    String? hintText,
     Widget? prefixIcon,
   }) {
     return InputDecoration(
       labelText: label,
-      hintText: hintText,
+
       prefixIcon: prefixIcon,
       isDense: true,
       filled: true,
@@ -2175,7 +2174,7 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
                 decoration: _inputDecoration(
                   '구역명',
                   cs: cs,
-                  hintText: '예) 후문 앞, 외곽 주차장, 타워 2층',
+
                   prefixIcon: const Icon(Icons.text_fields_rounded),
                 ),
               ),
@@ -2193,7 +2192,7 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
                 decoration: _inputDecoration(
                   '수용 가능 차량 수',
                   cs: cs,
-                  hintText: '미입력 시 0',
+
                   prefixIcon: const Icon(Icons.local_parking_rounded),
                 ),
               ),
@@ -2346,7 +2345,7 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
             decoration: _inputDecoration(
               '번호',
               cs: cs,
-              hintText: '필수',
+
               prefixIcon: const Icon(Icons.numbers_rounded),
             ),
           ),
@@ -2800,7 +2799,7 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
             decoration: _inputDecoration(
               '부모 구역명',
               cs: cs,
-              hintText: '예) A동 지하 2층, 외곽 주차장',
+
               prefixIcon: const Icon(Icons.location_on_rounded),
             ),
           ),
@@ -2856,7 +2855,7 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
             decoration: _inputDecoration(
               '자식 구역명',
               cs: cs,
-              hintText: '예) A구역, B구역, 출구앞',
+
               prefixIcon: const Icon(Icons.edit_location_alt_rounded),
             ),
           ),
@@ -2871,7 +2870,7 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
             decoration: _inputDecoration(
               '수용 가능 차량 수',
               cs: cs,
-              hintText: '예) 42',
+
               prefixIcon: const Icon(Icons.local_parking_rounded),
             ),
           ),

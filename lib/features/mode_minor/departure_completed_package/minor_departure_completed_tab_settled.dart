@@ -237,7 +237,7 @@ class _MinorDepartureCompletedSettledTabState
               decoration: InputDecoration(
                 counterText: '',
                 labelText: '번호판 4자리',
-                hintText: '예) 1234',
+
                 border: const OutlineInputBorder(),
                 labelStyle: TextStyle(color: cs.onSurfaceVariant),
                 hintStyle: TextStyle(color: cs.onSurfaceVariant),

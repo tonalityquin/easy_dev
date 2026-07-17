@@ -847,7 +847,7 @@ class _MonthlyCommandBar extends StatelessWidget {
                       fontWeight: FontWeight.w800,
                     ),
                     decoration: InputDecoration(
-                      hintText: '번호판 · 정산명 · 주차 타입 검색',
+
                       hintStyle: const TextStyle(
                         color: _opsMuted,
                         fontWeight: FontWeight.w700,

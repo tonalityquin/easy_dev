@@ -1336,7 +1336,7 @@ class _MinorMergedLogSectionState extends State<MinorMergedLogSection> {
                 decoration: const InputDecoration(
                   counterText: '',
                   labelText: '번호판 4자리',
-                  hintText: '예) 4444',
+
                   border: OutlineInputBorder(),
                 ),
                 onSubmitted: (_) => _search(),

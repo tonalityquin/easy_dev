@@ -15,6 +15,7 @@ import '../../features/headquarter/page/sheets/timesheet_page.dart';
 import '../../features/login/pages/common/login_screen.dart';
 import '../../features/mode_single/page/single_inside_screen.dart';
 import '../../features/novel/presentation/novel_mobile_writing_page.dart';
+import '../../features/sprint/pages/sprint_mode_loading_page.dart';
 import '../../features/personal/pages/personal_page.dart';
 import '../../features/selector/page/selector_hubs_page.dart';
 import '../../features/tablet/pages/tablet_page.dart';
@@ -67,6 +68,8 @@ class AppRoutes {
 
   static const tablet = '/tablet_page';
   static const personal = '/personal_page';
+  static const sprintModeLoading = '/sprint_mode_loading';
+  static const sprintModeHome = '/sprint_mode_home';
   static const faq = '/faq';
 
   static const communityStub = '/community_stub';
@@ -79,6 +82,18 @@ class AppRoutes {
   static const attendanceSheet = '/attendance_sheet';
   static const breakSheet = '/break_sheet';
   static const noteSystem = '/notensystem';
+}
+
+Widget _buildSprintModeLoadingPage(BuildContext context) {
+  final arguments = ModalRoute.of(context)?.settings.arguments;
+  String? returnRouteName;
+  if (arguments is Map) {
+    final value = arguments['returnRouteName'];
+    if (value is String && value.trim().isNotEmpty) {
+      returnRouteName = value.trim();
+    }
+  }
+  return SprintModeLoadingPage(returnRouteName: returnRouteName);
 }
 
 final Map<String, WidgetBuilder> appRoutes = {
@@ -120,6 +135,8 @@ final Map<String, WidgetBuilder> appRoutes = {
   AppRoutes.minorTypePage: (context) => const MinorTypePage(),
   AppRoutes.tablet: (context) => const TabletPage(),
   AppRoutes.personal: (context) => const PersonalPage(),
+  AppRoutes.sprintModeLoading: _buildSprintModeLoadingPage,
+  AppRoutes.sprintModeHome: _buildSprintModeLoadingPage,
   AppRoutes.faq: (context) => const FaqPage(),
   AppRoutes.communityStub: (context) => const CommunityStubPage(),
   AppRoutes.headStub: (context) => const HeadStubPage(),

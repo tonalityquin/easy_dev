@@ -808,7 +808,7 @@ class _CalendarIdSection extends StatelessWidget {
               readOnly: locked,
               decoration: InputDecoration(
                 labelText: '캘린더 ID 또는 URL',
-                hintText: '예: someone@gmail.com 또는 Google Calendar URL',
+
                 prefixIcon: Icon(Icons.link_rounded, color: tokens.accent),
                 filled: true,
                 fillColor: tokens.fieldFill,

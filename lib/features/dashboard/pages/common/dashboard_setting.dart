@@ -2,10 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../../../features/location/applications/location_state.dart';
-import '../../../../../features/payment/applications/bill_state.dart';
 import '../../../../app/init/logout_helper.dart';
-import '../../../../shared/plate/domain/repositories/plate_repository.dart';
+import '../../../../app/utils/operational_data_sync_workflow.dart';
 import '../../../../shared/tts/application/tts_sync_helper.dart';
 import '../../../../shared/tts/application/tts_user_filters.dart';
 import '../../../dev/application/area_state.dart';
@@ -19,7 +17,6 @@ class DashboardSetting extends StatefulWidget {
 
 class _DashboardSettingState extends State<DashboardSetting> {
   static const _prefsLockedKey = 'dashboard_setting_locked';
-  static const _prefsHasMonthlyKey = 'has_monthly_parking';
 
   TtsUserFilters _filters = TtsUserFilters.defaults();
   bool _loading = true;
@@ -57,6 +54,10 @@ class _DashboardSettingState extends State<DashboardSetting> {
 
   Future<void> _load() async {
     final loaded = await TtsUserFilters.load();
+    final prefs = await SharedPreferences.getInstance();
+    final lastRefreshAt = DateTime.tryParse(
+      prefs.getString(OperationalDataSyncWorkflow.lastSyncAtKey) ?? '',
+    );
 
     try {
       await TtsSyncHelper.apply(
@@ -72,6 +73,7 @@ class _DashboardSettingState extends State<DashboardSetting> {
     if (!mounted) return;
     setState(() {
       _filters = loaded;
+      _lastRefreshAt = lastRefreshAt;
       _loading = false;
     });
   }
@@ -112,48 +114,12 @@ class _DashboardSettingState extends State<DashboardSetting> {
     }
   }
 
-  Future<bool?> _syncHasMonthlyParkingFlag() async {
-    final area = context.read<AreaState>().currentArea.trim();
-
-    if (area.isEmpty) {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_prefsHasMonthlyKey, false);
-      return false;
-    }
-
-    try {
-      final exists = await context.read<PlateRepository>().hasMonthlyParkingByArea(
-        area: area,
-      );
-
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_prefsHasMonthlyKey, exists);
-
-      return exists;
-    } catch (e) {
-      debugPrint('월주차 존재 여부 확인 실패: $e');
-      return null;
-    }
-  }
-
   Future<void> _manualRefreshAll() async {
     if (_refreshing) return;
 
     setState(() => _refreshing = true);
     try {
-      final locationState = context.read<LocationState>();
-      final billState = context.read<BillState>();
-
-      await locationState.manualLocationRefresh();
-      await billState.manualBillRefresh();
-      await context.read<AreaState>().refreshCurrentAreaCapabilities();
-      await _syncHasMonthlyParkingFlag();
-
-      if (mounted) {
-        setState(() => _lastRefreshAt = DateTime.now());
-      }
-    } catch (e) {
-      debugPrint('수동 새로고침 실패: $e');
+      await OperationalDataSyncWorkflow.run(context: context);
     } finally {
       if (!mounted) return;
       setState(() => _refreshing = false);

@@ -829,7 +829,7 @@ class _SearchField extends StatelessWidget {
               onSubmitted: (_) => onSubmit(),
               decoration: InputDecoration(
                 isDense: true,
-                hintText: '기능 검색',
+
                 border: InputBorder.none,
                 hintStyle: TextStyle(
                   color: cs.onSurfaceVariant.withOpacity(0.8),

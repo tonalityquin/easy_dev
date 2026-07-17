@@ -75,7 +75,7 @@ class InputBillSection extends StatelessWidget {
             enabled: true,
             decoration: InputDecoration(
               labelText: '정기 - 호실/구분(=countType)',
-              hintText: '예: 1901호',
+
               filled: true,
               fillColor: cs.surfaceContainerLow,
               labelStyle: TextStyle(color: cs.onSurfaceVariant),

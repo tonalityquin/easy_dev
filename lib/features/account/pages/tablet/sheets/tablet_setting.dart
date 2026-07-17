@@ -145,7 +145,6 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
             decoration: opsInputDecoration(
               context,
               label: '태블릿 이름',
-              hintText: '예: A동 입구 태블릿',
               prefixIcon: const Icon(Icons.tablet_mac_rounded),
               errorText: _errorMessage == '태블릿 이름을 입력하세요' ? _errorMessage : null,
             ),
@@ -161,7 +160,6 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
             decoration: opsInputDecoration(
               context,
               label: '태블릿 아이디',
-              hintText: '소문자 영어 3~20자',
               helperText: '계정 ID는 저장 경로에 사용됩니다.',
               prefixIcon: const Icon(Icons.alternate_email_rounded),
               errorText: _errorMessage == '아이디는 소문자 영어 3~20자로 입력하세요' ? _errorMessage : null,
@@ -178,7 +176,6 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
             decoration: opsInputDecoration(
               context,
               label: '이메일',
-              hintText: 'google 계정 앞부분',
               suffixText: '@gmail.com',
               prefixIcon: const Icon(Icons.mail_rounded),
               errorText: (_errorMessage == '이메일을 입력하세요' || _errorMessage == '이메일을 다시 확인하세요') ? _errorMessage : null,

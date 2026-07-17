@@ -1199,12 +1199,11 @@ class _BackupFormPageState extends State<BackupFormPage> {
 
   InputDecoration _inputDec({
     required String labelText,
-    String? hintText,
   }) {
     final cs = Theme.of(context).colorScheme;
     return InputDecoration(
       labelText: labelText,
-      hintText: hintText,
+
       filled: true,
       fillColor: cs.surfaceContainerLow,
       border: OutlineInputBorder(
@@ -1399,7 +1398,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
           focusNode: _nameNode,
           decoration: _inputDec(
             labelText: '성명 (필수)',
-            hintText: '예: 홍길동',
+
           ),
           validator: (v) {
             if (v == null || v.trim().isEmpty) {
@@ -1414,7 +1413,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
           focusNode: _rrnNode,
           decoration: _inputDec(
             labelText: '주민등록번호 (필수)',
-            hintText: '예: 900101-1******',
+
           ),
           validator: (v) {
             if (v == null || v.trim().isEmpty) {
@@ -1429,7 +1428,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
           focusNode: _positionNode,
           decoration: _inputDec(
             labelText: '직위 (필수)',
-            hintText: '예: 매니저, 사원',
+
           ),
           validator: (v) {
             if (v == null || v.trim().isEmpty) {
@@ -1444,7 +1443,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
           focusNode: _deptNode,
           decoration: _inputDec(
             labelText: '부서명 (필수)',
-            hintText: '예: 콜센터팀, 운영팀',
+
           ),
           validator: (v) {
             if (v == null || v.trim().isEmpty) {
@@ -1500,7 +1499,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
           controller: _reasonCtrl,
           decoration: _inputDec(
             labelText: '① (   ) 에 들어갈 내용 (필수)',
-            hintText: '예: 개인 사정, 병원 진료, 고객사 교육 등',
+
           ),
           onChanged: (_) => setState(() {}),
           validator: (v) =>
@@ -1511,7 +1510,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
           controller: _targetCtrl,
           decoration: _inputDec(
             labelText: '② (    ) 에 들어갈 내용 (필수)',
-            hintText: '예: 2025년 11월 26일, 11월 3주차, 주간 야간근무 등',
+
           ),
           onChanged: (_) => setState(() {}),
           validator: (v) =>
@@ -1522,7 +1521,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
           controller: _timeCtrl,
           decoration: _inputDec(
             labelText: '③ (   ) 시간대에 들어갈 내용 (필수)',
-            hintText: '예: 09:00~18:00, 야간, 오전, 오후 등',
+
           ),
           onChanged: (_) => setState(() {}),
           validator: (v) =>
@@ -1533,7 +1532,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
           controller: _processCtrl,
           decoration: _inputDec(
             labelText: '④ (    ) 로 처리됨을 에 들어갈 내용 (필수)',
-            hintText: '예: 연차, 결근, 반차 등',
+
           ),
           onChanged: (_) => setState(() {}),
           validator: (v) =>
@@ -1581,7 +1580,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
           enableInteractiveSelection: true,
           decoration: _inputDec(
             labelText: '메일 제목(자동 생성)',
-            hintText: '예: 콜센터 연차(결근) 지원 신청서 – 11월 25일자 - 계약직',
+
           ),
           validator: (v) =>
               (v == null || v.trim().isEmpty) ? '메일 제목이 자동 생성되지 않았습니다.' : null,
@@ -1593,7 +1592,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
           enableInteractiveSelection: true,
           decoration: _inputDec(
             labelText: '메일 본문(자동 생성)',
-            hintText: '연차(결근) 신청 일시 정보가 자동으로 입력됩니다.',
+
           ),
           minLines: 3,
           maxLines: 8,

@@ -1307,7 +1307,7 @@ class _DoubleMergedLogSectionState extends State<DoubleMergedLogSection> {
                 decoration: InputDecoration(
                   counterText: '',
                   labelText: '번호판 4자리',
-                  hintText: '예) 4444',
+
                   filled: true,
                   fillColor: cs.surfaceContainerLow,
                   border: OutlineInputBorder(

@@ -410,7 +410,7 @@ class _TimesheetPageState extends State<TimesheetPage>
               controller: _idCtrl,
               decoration: InputDecoration(
                 labelText: '스프레드시트 ID',
-                hintText: '예: 1AbCdEfGhIjK... (문서 URL 중간의 ID)',
+
                 prefixIcon: const Icon(Icons.link_rounded, color: _base),
                 isDense: true,
                 filled: true,

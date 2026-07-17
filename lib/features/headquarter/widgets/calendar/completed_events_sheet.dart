@@ -437,7 +437,7 @@ Future<void> _openSpreadsheetConfigSheet(BuildContext context) async {
         }) {
           return InputDecoration(
             labelText: label,
-            hintText: hint,
+
             filled: true,
             fillColor: t.fieldFill,
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),

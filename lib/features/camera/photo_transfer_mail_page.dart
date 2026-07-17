@@ -79,11 +79,10 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
 
   InputDecoration _inputDec({
     required String labelText,
-    String? hintText,
   }) {
     return InputDecoration(
       labelText: labelText,
-      hintText: hintText,
+
       filled: true,
       fillColor: Colors.white,
       border: OutlineInputBorder(
@@ -796,7 +795,7 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
                                 controller: _subjectCtrl,
                                 decoration: _inputDec(
                                   labelText: '제목',
-                                  hintText: '예) 현장 사진 전달드립니다.',
+
                                 ),
                                 validator: (v) =>
                                     (v == null || v.trim().isEmpty)
@@ -811,7 +810,7 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
                                 controller: _bodyCtrl,
                                 decoration: _inputDec(
                                   labelText: '본문',
-                                  hintText: '필요한 내용을 입력하세요.',
+
                                 ),
                                 minLines: 4,
                                 maxLines: 10,
@@ -1681,8 +1680,7 @@ class _ApiDebugBottomSheetState extends State<_ApiDebugBottomSheet> {
                                   controller: _searchCtrl,
                                   textInputAction: TextInputAction.search,
                                   decoration: InputDecoration(
-                                    hintText:
-                                        '검색 (메시지 또는 시간: yyyy-MM-dd HH:mm:ss)',
+
                                     isDense: true,
                                     filled: true,
                                     fillColor: cs.surfaceContainerHighest

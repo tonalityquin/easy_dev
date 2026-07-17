@@ -311,7 +311,7 @@ class OpsSearchField extends StatelessWidget {
       decoration: InputDecoration(
         isDense: true,
         prefixIcon: Icon(Icons.search_rounded, color: cs.onSurfaceVariant),
-        hintText: hint,
+
         hintStyle: TextStyle(color: cs.onSurfaceVariant.withOpacity(.78), fontWeight: FontWeight.w800),
         filled: true,
         fillColor: cs.surface,
@@ -838,7 +838,6 @@ class OpsInlineMessage extends StatelessWidget {
 InputDecoration opsInputDecoration(
   BuildContext context, {
   required String label,
-  String? hintText,
   String? helperText,
   String? errorText,
   Widget? prefixIcon,
@@ -849,7 +848,7 @@ InputDecoration opsInputDecoration(
   final cs = Theme.of(context).colorScheme;
   return InputDecoration(
     labelText: label,
-    hintText: hintText,
+
     helperText: helperText,
     errorText: errorText,
     prefixIcon: prefixIcon,

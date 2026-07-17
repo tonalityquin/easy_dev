@@ -249,16 +249,30 @@ class LocationState extends ChangeNotifier {
   }) async {
     final trimmedArea = area.trim();
     final jsonData = json.encode(data.map((e) => e.toCacheMap()).toList());
-    await prefs.setString(_cacheKeyForArea(trimmedArea), jsonData);
-
     final totalCapacity = _totalCapacityForCache(data);
-    await prefs.setInt(_capacityKeyForArea(trimmedArea), totalCapacity);
+    final locationSaved = await prefs.setString(
+      _cacheKeyForArea(trimmedArea),
+      jsonData,
+    );
+    final capacitySaved = await prefs.setInt(
+      _capacityKeyForArea(trimmedArea),
+      totalCapacity,
+    );
+    if (!locationSaved || !capacitySaved) {
+      throw StateError('주차 구역 로컬 저장 실패');
+    }
+    await prefs.reload();
+    if (prefs.getString(_cacheKeyForArea(trimmedArea)) != jsonData ||
+        prefs.getInt(_capacityKeyForArea(trimmedArea)) != totalCapacity) {
+      throw StateError('주차 구역 로컬 저장 검증 실패');
+    }
   }
 
   Future<void> _syncFromRepository({
     required String area,
     required bool setLoading,
     required String reason,
+    bool rethrowErrors = false,
   }) {
     final trimmedArea = area.trim();
     if (trimmedArea.isEmpty) {
@@ -279,6 +293,7 @@ class LocationState extends ChangeNotifier {
       area: trimmedArea,
       setLoading: setLoading,
       reason: reason,
+      rethrowErrors: rethrowErrors,
     );
 
     _repoSyncInFlightByArea[trimmedArea] = future;
@@ -294,6 +309,7 @@ class LocationState extends ChangeNotifier {
     required String area,
     required bool setLoading,
     required String reason,
+    required bool rethrowErrors,
   }) async {
     final trimmedArea = area.trim();
     final int seq = ++_repoSyncSeq;
@@ -317,6 +333,7 @@ class LocationState extends ChangeNotifier {
     } catch (e) {
       debugPrint(
           '🔥 LocationState repo sync 실패(reason=$reason, area=$trimmedArea): $e');
+      if (rethrowErrors) rethrow;
     } finally {
       if (_shouldDropRepoResult(seq: seq, requestedArea: trimmedArea)) return;
       _isLoading = false;
@@ -397,6 +414,54 @@ class LocationState extends ChangeNotifier {
       setLoading: true,
       reason: 'manualRefresh',
     );
+  }
+
+  Future<void> clearCurrentAreaCache() async {
+    final currentArea = _areaState.currentArea.trim();
+    if (currentArea.isEmpty) {
+      throw StateError('현재 지역 정보가 없습니다.');
+    }
+
+    ++_cacheLoadSeq;
+    ++_repoSyncSeq;
+    _cacheLoadInFlightByArea.remove(currentArea);
+    _repoSyncInFlightByArea.remove(currentArea);
+
+    final prefs = await SharedPreferences.getInstance();
+    final locationKey = _cacheKeyForArea(currentArea);
+    final capacityKey = _capacityKeyForArea(currentArea);
+    await prefs.remove(locationKey);
+    await prefs.remove(capacityKey);
+    await prefs.reload();
+    if (prefs.containsKey(locationKey) || prefs.containsKey(capacityKey)) {
+      throw StateError('기존 주차 구역 로컬 데이터 삭제 검증 실패');
+    }
+
+    _locations = [];
+    _selectedLocationId = null;
+    _previousArea = currentArea;
+    _isLoading = false;
+    _safeNotify();
+  }
+
+  Future<void> manualLocationRefreshStrict() async {
+    final currentArea = _areaState.currentArea.trim();
+    if (currentArea.isEmpty) {
+      throw StateError('현재 지역 정보가 없습니다.');
+    }
+
+    await _syncFromRepository(
+      area: currentArea,
+      setLoading: true,
+      reason: 'operationalDataSync',
+      rethrowErrors: true,
+    );
+
+    final prefs = await SharedPreferences.getInstance();
+    if (!prefs.containsKey(_cacheKeyForArea(currentArea)) ||
+        !prefs.containsKey(_capacityKeyForArea(currentArea))) {
+      throw StateError('주차 구역 로컬 데이터 저장 결과가 없습니다.');
+    }
   }
 
   void toggleLocationSelection(String id) {

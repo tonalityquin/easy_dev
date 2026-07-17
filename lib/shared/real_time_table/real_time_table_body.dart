@@ -1165,7 +1165,7 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
                         controller: searchCtrl,
                         textInputAction: TextInputAction.search,
                         decoration: InputDecoration(
-                          hintText: '부모/자식 검색',
+
                           prefixIcon: Icon(
                             Icons.search,
                             color: cs.onSurfaceVariant,
@@ -1384,16 +1384,11 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
   }
 
   Widget _buildSearchField(ColorScheme cs) {
-    final hint =
-    (_viewMode == RealTimeViewMode.zone && widget.spec.zoneSupported)
-        ? '부모 또는 자식 주차구역 검색'
-        : '번호판 또는 주차 구역으로 검색';
-
     return TextField(
       controller: _searchCtrl,
       textInputAction: TextInputAction.search,
       decoration: InputDecoration(
-        hintText: hint,
+
         prefixIcon: Icon(Icons.search, color: cs.onSurfaceVariant),
         suffixIcon: _searchCtrl.text.isEmpty
             ? null

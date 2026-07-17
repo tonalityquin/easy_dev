@@ -1371,7 +1371,7 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
                 decoration: InputDecoration(
                   counterText: '',
                   labelText: '번호판 4자리',
-                  hintText: '예) 4444',
+
                   border: const OutlineInputBorder(),
                   focusedBorder: OutlineInputBorder(
                     borderSide: BorderSide(color: cs.primary, width: 1.4),

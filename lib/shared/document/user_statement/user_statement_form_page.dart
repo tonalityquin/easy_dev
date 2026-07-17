@@ -1138,13 +1138,12 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
 
   InputDecoration _inputDec({
     required String labelText,
-    String? hintText,
   }) {
     final cs = Theme.of(context).colorScheme;
 
     return InputDecoration(
       labelText: labelText,
-      hintText: hintText,
+
       filled: true,
       fillColor: cs.surfaceContainerLow,
       border: OutlineInputBorder(
@@ -1453,7 +1452,7 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
                                               focusNode: _deptNode,
                                               decoration: _inputDec(
                                                 labelText: '소속 (필수)',
-                                                hintText: '예: 본사 IT본부',
+
                                               ),
                                               textInputAction:
                                               TextInputAction.next,
@@ -1472,7 +1471,7 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
                                               focusNode: _nameNode,
                                               decoration: _inputDec(
                                                 labelText: '성명 (필수)',
-                                                hintText: '예: 홍길동',
+
                                               ),
                                               textInputAction:
                                               TextInputAction.next,
@@ -1492,7 +1491,7 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
                                         focusNode: _positionNode,
                                         decoration: _inputDec(
                                           labelText: '직책 (필수)',
-                                          hintText: '예: 매니저 / 대리 / 주임 등',
+
                                         ),
                                         textInputAction: TextInputAction.next,
                                         onFieldSubmitted: (_) =>
@@ -1550,8 +1549,7 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
                                     focusNode: _contentNode,
                                     decoration: _inputDec(
                                       labelText: '내용',
-                                      hintText:
-                                      '누가/언제/어디서/무엇을/왜/어떻게 순으로 구체적으로 작성해 주세요.',
+
                                     ),
                                     keyboardType: TextInputType.multiline,
                                     minLines: 8,
@@ -1571,8 +1569,7 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
                                         controller: _mailSubjectCtrl,
                                         decoration: _inputDec(
                                           labelText: '메일 제목(필수)',
-                                          hintText:
-                                          '예: 경위서 – ${DateTime.now().month}월 ${DateTime.now().day}일 건',
+
                                         ),
                                         textInputAction: TextInputAction.next,
                                         validator: (v) =>
@@ -1585,7 +1582,7 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
                                         controller: _mailBodyCtrl,
                                         decoration: _inputDec(
                                           labelText: '메일 본문',
-                                          hintText: '메일 본문을 입력하세요. (선택)',
+
                                         ),
                                         minLines: 3,
                                         maxLines: 8,

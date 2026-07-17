@@ -122,7 +122,6 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
         decoration: opsInputDecoration(
           context,
           label: '변동 정산 유형',
-          hintText: '예: 기본 요금, 야간 요금, 방문 정산',
           prefixIcon: const Icon(Icons.label_rounded),
           errorText: _errorMessage == '정산 유형명을 입력하세요.' ? _errorMessage : null,
         ),
@@ -155,7 +154,6 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
     required BuildContext context,
     required String label,
     required TextEditingController controller,
-    required String hintText,
     required String? errorText,
   }) {
     return TextField(
@@ -166,7 +164,6 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
       decoration: opsInputDecoration(
         context,
         label: label,
-        hintText: hintText,
         prefixIcon: const Icon(Icons.payments_rounded),
         suffixText: '원',
         errorText: errorText,
@@ -195,7 +192,6 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
             context: context,
             label: '기본 요금',
             controller: _basicAmountController,
-            hintText: '예: 3000',
             errorText: _errorMessage == '기본 요금을 0 이상 숫자로 입력하세요.' ? _errorMessage : null,
           ),
           const SizedBox(height: 12),
@@ -213,7 +209,6 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
             context: context,
             label: '추가 요금',
             controller: _addAmountController,
-            hintText: '예: 1000',
             errorText: _errorMessage == '추가 요금을 0 이상 숫자로 입력하세요.' ? _errorMessage : null,
           ),
         ],

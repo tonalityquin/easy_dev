@@ -104,7 +104,7 @@ Future<int?> showTabletGrid3DViewPickerDialog({
                 onChanged: (v) => setLocal(() => query = v),
                 textInputAction: TextInputAction.search,
                 decoration: InputDecoration(
-                  hintText: '검색',
+
                   hintStyle: (tt.bodyMedium ?? const TextStyle()).copyWith(
                     color: cs.onSurfaceVariant.withOpacity(0.75),
                     fontWeight: FontWeight.w600,

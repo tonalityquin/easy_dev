@@ -1886,7 +1886,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
                   ),
                   decoration: InputDecoration(
                     isDense: true,
-                    hintText: '메모 이름',
+
                     border: InputBorder.none,
                     contentPadding: EdgeInsets.zero,
                     hintStyle: TextStyle(color: cs.outline),
@@ -2018,7 +2018,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
                       onPressed: _searchCtrl.clear,
                       icon: const Icon(Icons.close_rounded),
                     ),
-              hintText: '페이지 헤더, 본문, 투두 검색',
+
               filled: true,
               fillColor: cs.surfaceContainerHighest.withOpacity(.55),
               border: _inputBorder(),
@@ -2274,7 +2274,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
               ),
               decoration: InputDecoration(
                 labelText: '페이지 헤더',
-                hintText: '목차에 들어갈 헤더를 입력하세요',
+
                 filled: true,
                 fillColor: cs.surfaceContainerHighest.withOpacity(.5),
                 border: _inputBorder(radius: 18),
@@ -2299,7 +2299,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
               decoration: InputDecoration(
                 labelText: '본문',
                 alignLabelWithHint: true,
-                hintText: '책을 집필하듯이 본문을 작성하세요',
+
                 filled: true,
                 fillColor: cs.surfaceContainerHighest.withOpacity(.42),
                 border: _inputBorder(radius: 18),
@@ -2338,7 +2338,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
                     controller: _todoCtrl,
                     textInputAction: TextInputAction.done,
                     decoration: InputDecoration(
-                      hintText: '투두 추가',
+
                       prefixIcon: const Icon(Icons.add_task_rounded),
                       filled: true,
                       fillColor: cs.surfaceContainerHighest.withOpacity(.5),
@@ -2710,7 +2710,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
                                     textInputAction: TextInputAction.search,
                                     decoration: InputDecoration(
                                       prefixIcon: const Icon(Icons.search_rounded),
-                                      hintText: '메모북 이름, 헤더, 본문, 투두 검색',
+
                                       filled: true,
                                       fillColor: cs.surfaceContainerHighest.withOpacity(.55),
                                       border: _inputBorder(),
@@ -2869,7 +2869,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
               textInputAction: TextInputAction.done,
               decoration: const InputDecoration(
                 labelText: '메모북 이름',
-                hintText: '예: 본사 운영 개선안',
+
               ),
               onSubmitted: (value) {
                 final name = value.trim();
@@ -3079,7 +3079,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
                                     keyboardType: TextInputType.emailAddress,
                                     textInputAction: TextInputAction.done,
                                     decoration: InputDecoration(
-                                      hintText: 'email@example.com',
+
                                       prefixIcon: const Icon(Icons.mail_outline_rounded),
                                       filled: true,
                                       fillColor: Theme.of(ctx).colorScheme.surfaceContainerHighest.withOpacity(.55),
@@ -4354,7 +4354,7 @@ class _TodoTile extends StatelessWidget {
               ),
               decoration: const InputDecoration(
                 border: InputBorder.none,
-                hintText: '투두 내용',
+
                 isDense: true,
               ),
               onChanged: onText,

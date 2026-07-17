@@ -528,7 +528,7 @@ class _AreaChatPanelState extends State<AreaChatPanel> {
             onChanged: _controller.setSearchQuery,
             decoration: InputDecoration(
               prefixIcon: const Icon(Icons.search_rounded),
-              hintText: '이름, 직급, 메시지 검색',
+
               suffixIcon: _searchController.text.isEmpty
                   ? null
                   : IconButton(
@@ -779,7 +779,7 @@ class _AreaChatPanelState extends State<AreaChatPanel> {
                   ],
                   onChanged: (_) => setState(() {}),
                   decoration: InputDecoration(
-                    hintText: enabled ? '메시지를 입력하세요.' : '채팅 접근 권한이 없습니다.',
+
                     filled: true,
                     fillColor: cs.surface,
                     border: OutlineInputBorder(

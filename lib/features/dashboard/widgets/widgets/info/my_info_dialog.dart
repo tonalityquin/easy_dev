@@ -1,17 +1,13 @@
 import 'dart:convert';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../../app/init/logout_helper.dart';
 import '../../../../../app/init/work_schedule_prefs.dart';
-import '../../../../../app/utils/ops_delayed_refresh_gate.dart';
+import '../../../../../app/utils/operational_data_sync_workflow.dart';
 import '../../../../account/applications/user_state.dart';
-import '../../../../dev/application/area_state.dart';
-import '../../../../location/applications/location_state.dart';
-import '../../../../payment/applications/bill_state.dart';
 
 Future<void> showMyInfoDialog({required BuildContext context}) {
   return showDialog<void>(
@@ -32,7 +28,6 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
   static const List<String> _days = WorkSchedulePrefs.days;
   static const String _kStartMapKey = WorkSchedulePrefs.startMapKey;
   static const String _kEndMapKey = WorkSchedulePrefs.endMapKey;
-  static const String _prefsHasMonthlyKey = 'has_monthly_parking';
 
   bool _loading = true;
   String? _savingDay;
@@ -144,62 +139,12 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
     return '${d.year}-${two(d.month)}-${two(d.day)} ${two(d.hour)}:${two(d.minute)}';
   }
 
-  Future<bool?> _syncHasMonthlyParkingFlag() async {
-    final area = context.read<AreaState>().currentArea.trim();
-
-    if (area.isEmpty) {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_prefsHasMonthlyKey, false);
-      return false;
-    }
-
-    try {
-      final qs = await FirebaseFirestore.instance
-          .collection('monthly_plate_status')
-          .where('area', isEqualTo: area)
-          .limit(1)
-          .get();
-
-      final exists = qs.docs.isNotEmpty;
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_prefsHasMonthlyKey, exists);
-      return exists;
-    } catch (e) {
-      debugPrint('월주차 존재 여부 확인 실패: $e');
-      return null;
-    }
-  }
-
   Future<void> _manualRefreshAll() async {
     if (_refreshing) return;
 
     setState(() => _refreshing = true);
     try {
-      final shouldRefresh = await OpsDelayedRefreshGate.waitIfNeeded(
-        context: context,
-        title: '운영 데이터 동기화',
-        message: '주차 구역, 정산 타입, 월정기 사용 여부를 새로고침하기 전 요청을 준비하고 있습니다.',
-      );
-      if (!shouldRefresh || !mounted) return;
-
-      final locationState = context.read<LocationState>();
-      final billState = context.read<BillState>();
-
-      await locationState.manualLocationRefresh();
-      await billState.manualBillRefresh();
-      final monthlyFlag = await _syncHasMonthlyParkingFlag();
-
-      if (mounted) {
-        setState(() {
-          _lastRefreshAt = DateTime.now();
-          _hasMonthlyParking = monthlyFlag;
-        });
-        _showSnack('운영 데이터를 새로고침했습니다.');
-      }
-    } catch (e) {
-      debugPrint('수동 새로고침 실패: $e');
-      if (!mounted) return;
-      _showSnack('운영 데이터 새로고침에 실패했습니다.');
+      await OperationalDataSyncWorkflow.run(context: context);
     } finally {
       if (!mounted) return;
       setState(() => _refreshing = false);
@@ -226,7 +171,12 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
     final prefsDivision = (prefs.getString('division') ?? '').trim();
     final prefsRole = (prefs.getString('role') ?? '').trim();
     final prefsPosition = (prefs.getString('position') ?? '').trim();
-    final hasMonthlyParking = prefs.getBool(_prefsHasMonthlyKey);
+    final hasMonthlyParking = prefs.getBool(
+      OperationalDataSyncWorkflow.monthlyParkingKey,
+    );
+    final lastRefreshAt = DateTime.tryParse(
+      prefs.getString(OperationalDataSyncWorkflow.lastSyncAtKey) ?? '',
+    );
 
     final name = ((cached['name'] as String?) ?? '').trim();
     final phoneFromCached = ((cached['phone'] as String?) ?? '').trim();
@@ -274,6 +224,7 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
       _endByDay = endMap;
       _breakDays = normalizedBreakDays;
       _hasMonthlyParking = hasMonthlyParking;
+      _lastRefreshAt = lastRefreshAt;
       _loading = false;
     });
   }

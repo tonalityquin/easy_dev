@@ -474,7 +474,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
                             controller: _controller.customStatusController,
                             maxLength: 20,
                             decoration: InputDecoration(
-                              hintText: '예: 뒷범퍼 손상',
+
                               filled: true,
                               fillColor: cs.surfaceContainerLow,
                               border: OutlineInputBorder(

@@ -167,7 +167,7 @@ class _MailRecipientSettingsState extends State<MailRecipientSettings> {
                     onSubmitted: (_) => _save(),
                     decoration: InputDecoration(
                       labelText: '메일 수신자(To)',
-                      hintText: '예) hr@company.com, manager@company.com',
+
                       helperText: '여러 명은 쉼표(,)로 구분합니다.',
                       isDense: true,
                       filled: true,
