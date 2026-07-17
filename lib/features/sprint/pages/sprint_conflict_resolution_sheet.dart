@@ -72,17 +72,23 @@ class _SprintConflictResolutionSheetState
   Future<void> _adjust() async {
     final block = widget.store.blockById(widget.item.blockId);
     if (block == null) return;
+    final task = widget.store.taskById(block.taskId);
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
+    final lowerBound = widget.store.projectScheduleLowerBound(task?.projectId);
+    final boundary = lowerBound != null && lowerBound.isAfter(today)
+        ? DateTime(lowerBound.year, lowerBound.month, lowerBound.day)
+        : today;
     final initialDay = DateTime(
       block.start.year,
       block.start.month,
       block.start.day,
     );
+    final initial = initialDay.isBefore(boundary) ? boundary : initialDay;
     final date = await showDatePicker(
       context: context,
-      initialDate: initialDay,
-      firstDate: initialDay.isBefore(today) ? initialDay : today,
+      initialDate: initial,
+      firstDate: boundary,
       lastDate: today.add(const Duration(days: 3650)),
     );
     if (date == null || !mounted) return;
@@ -168,14 +174,17 @@ class _SprintConflictResolutionSheetState
             icon: const Icon(Icons.auto_fix_high_rounded),
             label: const Text('추천 위치로 이동'),
           ),
-          const SizedBox(height: 8),
-          OutlinedButton.icon(
-            onPressed: _saving
-                ? null
-                : () => _resolve(SprintConflictResolutionType.kept),
-            icon: const Icon(Icons.lock_outline_rounded),
-            label: const Text('현재 위치 유지'),
-          ),
+          if (widget.item.conflictType !=
+              SprintConflictType.beforeProjectStart) ...[
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: _saving
+                  ? null
+                  : () => _resolve(SprintConflictResolutionType.kept),
+              icon: const Icon(Icons.lock_outline_rounded),
+              label: const Text('현재 위치 유지'),
+            ),
+          ],
           const SizedBox(height: 8),
           TextButton.icon(
             onPressed: _saving ? null : _adjust,

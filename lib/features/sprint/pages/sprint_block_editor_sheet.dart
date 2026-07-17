@@ -55,7 +55,14 @@ class _SprintBlockEditorSheetState extends State<_SprintBlockEditorSheet> {
     super.initState();
     final now = DateTime.now();
     final block = widget.block;
-    _start = block?.start ?? DateTime(now.year, now.month, now.day + 1, 9);
+    final suggested = widget.store.suggestedTaskStart(
+      projectId: widget.task.projectId!,
+      date: DateTime(now.year, now.month, now.day + 1),
+      durationMinutes: widget.task.remainingMinutes > 0
+          ? widget.task.remainingMinutes
+          : widget.task.estimatedMinutes,
+    );
+    _start = block?.start ?? suggested;
     _durationMinutes = block?.durationMinutes ?? widget.task.remainingMinutes;
     if (_durationMinutes < 20) _durationMinutes = widget.task.estimatedMinutes;
     if (_durationMinutes < 20) _durationMinutes = 30;
@@ -66,11 +73,18 @@ class _SprintBlockEditorSheetState extends State<_SprintBlockEditorSheet> {
   Future<void> _pickDate() async {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
+    final lowerBound = widget.store.projectScheduleLowerBound(
+      widget.task.projectId,
+    );
+    final boundary = lowerBound != null && lowerBound.isAfter(today)
+        ? DateTime(lowerBound.year, lowerBound.month, lowerBound.day)
+        : today;
     final initialDay = DateTime(_start.year, _start.month, _start.day);
+    final initial = initialDay.isBefore(boundary) ? boundary : initialDay;
     final selected = await showDatePicker(
       context: context,
-      initialDate: initialDay,
-      firstDate: initialDay.isBefore(today) ? initialDay : today,
+      initialDate: initial,
+      firstDate: boundary,
       lastDate: today.add(const Duration(days: 3650)),
     );
     if (selected == null || !mounted) return;
@@ -258,9 +272,13 @@ class _SprintBlockEditorSheetState extends State<_SprintBlockEditorSheet> {
     final duration =
         reduceMotion ? Duration.zero : const Duration(milliseconds: 220);
     final canOverrideConflicts = _conflicts.every(
-      (conflict) => conflict.type != SprintConflictType.pastTime,
+      (conflict) =>
+          conflict.type != SprintConflictType.pastTime &&
+          conflict.type != SprintConflictType.beforeProjectStart,
     );
-    return Padding(
+    return AnimatedPadding(
+      duration: duration,
+      curve: Curves.easeOutCubic,
       padding: EdgeInsets.fromLTRB(
         20,
         4,

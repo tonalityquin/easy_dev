@@ -457,6 +457,22 @@ class SprintProjectReportPage extends StatelessWidget {
                   ],
                 ),
               ),
+              if (project?.targetStartDate != null ||
+                  project?.targetDate != null) ...[
+                const SizedBox(height: 10),
+                SprintSurface(
+                  backgroundColor: colors.surfaceContainerLow,
+                  child: Text(
+                    project?.targetStartDate != null &&
+                            project?.targetDate != null
+                        ? '목표 기간 ${sprintFormatShortDate(project!.targetStartDate!)}–${sprintFormatShortDate(project!.targetDate!)}'
+                        : project?.targetStartDate != null
+                            ? '목표 시작일 ${sprintFormatDate(project!.targetStartDate!)}'
+                            : '목표 완료일 ${sprintFormatDate(project!.targetDate!)}',
+                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                ),
+              ],
               const SizedBox(height: 10),
               SprintSurface(
                 backgroundColor: report.targetDeltaDays > 0
@@ -464,12 +480,12 @@ class SprintProjectReportPage extends StatelessWidget {
                     : colors.secondaryContainer,
                 child: Text(
                   project?.targetDate == null
-                      ? '설정된 목표일 없이 완료했습니다.'
+                      ? '설정된 목표 완료일 없이 완료했습니다.'
                       : report.targetDeltaDays == 0
-                          ? '목표일 기준 일정대로 완료했습니다.'
+                          ? '목표 완료일 기준 일정대로 완료했습니다.'
                           : report.targetDeltaDays > 0
-                          ? '목표일보다 ${report.targetDeltaDays}일 늦게 완료했습니다.'
-                          : '목표일보다 ${report.targetDeltaDays.abs()}일 빠르게 완료했습니다.',
+                          ? '목표 완료일보다 ${report.targetDeltaDays}일 늦게 완료했습니다.'
+                          : '목표 완료일보다 ${report.targetDeltaDays.abs()}일 빠르게 완료했습니다.',
                   style: TextStyle(
                     color: report.targetDeltaDays > 0
                         ? colors.onErrorContainer

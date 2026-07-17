@@ -114,9 +114,15 @@ Future<SprintTask?> sprintCreateTaskFromComposer({
   SprintComposerPlacementChoice? choice;
   if (preview.hasConflicts) {
     if (preview.hasHardConflict) {
+      final beforeProjectStart = preview.conflicts.any(
+        (conflict) =>
+            conflict.type == SprintConflictType.beforeProjectStart,
+      );
       sprintShowMessage(
         context: context,
-        message: '과거 시간에는 업무를 배치할 수 없습니다.',
+        message: beforeProjectStart
+            ? '프로젝트 목표 시작일 이전에는 업무를 배치할 수 없습니다.'
+            : '과거 시간에는 업무를 배치할 수 없습니다.',
       );
       return null;
     }

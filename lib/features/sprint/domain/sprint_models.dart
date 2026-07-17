@@ -51,6 +51,7 @@ enum SprintConflictType {
   outsideWorkingHours,
   lunchBreak,
   pastTime,
+  beforeProjectStart,
   targetDateRisk,
 }
 
@@ -146,6 +147,7 @@ class SprintProject {
     required this.id,
     required this.name,
     required this.iconKey,
+    this.targetStartDate,
     required this.targetDate,
     this.custom = true,
     this.status = SprintProjectStatus.active,
@@ -158,6 +160,7 @@ class SprintProject {
   final String id;
   String name;
   String iconKey;
+  DateTime? targetStartDate;
   DateTime? targetDate;
   final bool custom;
   SprintProjectStatus status;
@@ -170,6 +173,24 @@ class SprintProject {
   bool get isActive => status == SprintProjectStatus.active;
   bool get isCompleted => status == SprintProjectStatus.completed;
   bool get isArchived => status == SprintProjectStatus.archived;
+
+  bool get hasNotStarted {
+    final start = targetStartDate;
+    if (start == null) return false;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final startDay = DateTime(start.year, start.month, start.day);
+    return startDay.isAfter(today);
+  }
+
+  int get daysUntilStart {
+    final start = targetStartDate;
+    if (start == null) return 0;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final startDay = DateTime(start.year, start.month, start.day);
+    return startDay.isAfter(today) ? startDay.difference(today).inDays : 0;
+  }
 }
 
 class SprintTask {
@@ -392,7 +413,9 @@ class SprintTaskCreationPreview {
 
   bool get hasConflicts => conflicts.isNotEmpty;
   bool get hasHardConflict => conflicts.any(
-        (conflict) => conflict.type == SprintConflictType.pastTime,
+        (conflict) =>
+            conflict.type == SprintConflictType.pastTime ||
+            conflict.type == SprintConflictType.beforeProjectStart,
       );
 }
 

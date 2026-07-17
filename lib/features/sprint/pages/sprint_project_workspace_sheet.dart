@@ -684,6 +684,9 @@ class _WorkspaceMenuPanel extends StatelessWidget {
 
   String _projectSubtitle(String projectId) {
     final summary = store.summaryFor(projectId);
+    if (summary.project.hasNotStarted) {
+      return '${sprintFormatShortDate(summary.project.targetStartDate!)} 시작 예정 · 확인 ${summary.attentionCount}';
+    }
     return '진행 ${(summary.progressRatio * 100).round()}% · 오늘 ${summary.todayTaskCount} · 확인 ${summary.attentionCount}';
   }
 
@@ -875,6 +878,7 @@ class _SprintCreateProjectSheetState
   final TextEditingController _nameController = TextEditingController();
   final FocusNode _nameFocusNode = FocusNode();
   String _iconKey = 'folder';
+  DateTime? _targetStartDate;
   DateTime? _targetDate;
   bool _saving = false;
 
@@ -893,12 +897,29 @@ class _SprintCreateProjectSheetState
     super.dispose();
   }
 
-  Future<void> _selectTargetDate() async {
+  Future<void> _selectTargetStartDate() async {
     final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
     final selected = await showDatePicker(
       context: context,
-      initialDate: _targetDate ?? now.add(const Duration(days: 7)),
-      firstDate: DateTime(now.year, now.month, now.day),
+      initialDate: _targetStartDate ?? today,
+      firstDate: today,
+      lastDate: DateTime(now.year + 10, 12, 31),
+    );
+    if (selected == null || !mounted) return;
+    setState(() => _targetStartDate = selected);
+  }
+
+  Future<void> _selectTargetDate() async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final minimum = _targetStartDate ?? today;
+    var initial = _targetDate ?? minimum.add(const Duration(days: 7));
+    if (initial.isBefore(minimum)) initial = minimum;
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: minimum,
       lastDate: DateTime(now.year + 10, 12, 31),
     );
     if (selected == null || !mounted) return;
@@ -909,21 +930,36 @@ class _SprintCreateProjectSheetState
     if (_saving) return;
     final name = _nameController.text.trim();
     if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('프로젝트 이름을 입력하세요.')),
+      sprintShowMessage(
+        context: context,
+        message: '프로젝트 이름을 입력하세요.',
       );
       _nameFocusNode.requestFocus();
+      return;
+    }
+    if (_targetStartDate != null &&
+        _targetDate != null &&
+        _targetStartDate!.isAfter(_targetDate!)) {
+      sprintShowMessage(
+        context: context,
+        message: '목표 시작일은 목표 완료일보다 늦을 수 없습니다.',
+      );
       return;
     }
     setState(() => _saving = true);
     final project = await widget.store.createProject(
       name: name,
       iconKey: _iconKey,
+      targetStartDate: _targetStartDate,
       targetDate: _targetDate,
     );
     if (!mounted) return;
     if (project == null) {
       setState(() => _saving = false);
+      sprintShowMessage(
+        context: context,
+        message: '프로젝트 정보를 확인하세요.',
+      );
       return;
     }
     sprintShowMessage(
@@ -936,10 +972,14 @@ class _SprintCreateProjectSheetState
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final duration =
         reduceMotion ? Duration.zero : const Duration(milliseconds: 180);
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+    final invalidRange = _targetStartDate != null &&
+        _targetDate != null &&
+        _targetStartDate!.isAfter(_targetDate!);
     return Material(
       color: colors.surface,
       child: SafeArea(
@@ -947,6 +987,7 @@ class _SprintCreateProjectSheetState
         minimum: const EdgeInsets.only(bottom: 10),
         child: AnimatedPadding(
           duration: duration,
+          curve: Curves.easeOutCubic,
           padding: EdgeInsets.only(bottom: keyboardInset),
           child: SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
@@ -992,13 +1033,16 @@ class _SprintCreateProjectSheetState
                     final selected = _iconKey == entry.key;
                     return AnimatedContainer(
                       duration: duration,
+                      curve: Curves.easeOutCubic,
                       decoration: BoxDecoration(
                         color: selected
                             ? colors.primaryContainer
                             : colors.surfaceContainerHigh,
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
-                          color: selected ? colors.primary : colors.outlineVariant,
+                          color: selected
+                              ? colors.primary
+                              : colors.outlineVariant,
                         ),
                       ),
                       child: IconButton(
@@ -1013,42 +1057,50 @@ class _SprintCreateProjectSheetState
                 ),
                 const SizedBox(height: 20),
                 const Text(
-                  '목표일',
+                  '목표 기간',
                   style: TextStyle(fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 8),
-                SprintSurface(
-                  padding: EdgeInsets.zero,
-                  backgroundColor: colors.surfaceContainerHigh,
-                  child: ListTile(
-                    minTileHeight: 56,
-                    leading: const Icon(Icons.flag_outlined),
-                    title: Text(
-                      _targetDate == null
-                          ? '설정하지 않음'
-                          : sprintFormatShortDate(_targetDate!),
-                      style: const TextStyle(fontWeight: FontWeight.w800),
-                    ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (_targetDate != null)
-                          IconButton(
-                            tooltip: '목표일 제거',
-                            onPressed: _saving
-                                ? null
-                                : () => setState(() => _targetDate = null),
-                            icon: const Icon(Icons.close_rounded),
+                _CreateProjectDateTile(
+                  title: '목표 시작일',
+                  icon: Icons.play_circle_outline_rounded,
+                  value: _targetStartDate,
+                  duration: duration,
+                  onTap: _saving ? null : _selectTargetStartDate,
+                  onClear: _saving || _targetStartDate == null
+                      ? null
+                      : () => setState(() => _targetStartDate = null),
+                ),
+                const SizedBox(height: 10),
+                _CreateProjectDateTile(
+                  title: '목표 완료일',
+                  icon: Icons.flag_outlined,
+                  value: _targetDate,
+                  duration: duration,
+                  onTap: _saving ? null : _selectTargetDate,
+                  onClear: _saving || _targetDate == null
+                      ? null
+                      : () => setState(() => _targetDate = null),
+                ),
+                AnimatedSize(
+                  duration: duration,
+                  curve: Curves.easeOutCubic,
+                  child: invalidRange
+                      ? Padding(
+                          padding: const EdgeInsets.only(top: 10),
+                          child: Text(
+                            '목표 시작일은 목표 완료일보다 늦을 수 없습니다.',
+                            style: TextStyle(
+                              color: colors.error,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
-                        const Icon(Icons.chevron_right_rounded),
-                      ],
-                    ),
-                    onTap: _saving ? null : _selectTargetDate,
-                  ),
+                        )
+                      : const SizedBox.shrink(),
                 ),
                 const SizedBox(height: 24),
                 FilledButton(
-                  onPressed: _saving ? null : _create,
+                  onPressed: _saving || invalidRange ? null : _create,
                   style: FilledButton.styleFrom(
                     minimumSize: const Size.fromHeight(56),
                   ),
@@ -1071,6 +1123,67 @@ class _SprintCreateProjectSheetState
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _CreateProjectDateTile extends StatelessWidget {
+  const _CreateProjectDateTile({
+    required this.title,
+    required this.icon,
+    required this.value,
+    required this.duration,
+    required this.onTap,
+    required this.onClear,
+  });
+
+  final String title;
+  final IconData icon;
+  final DateTime? value;
+  final Duration duration;
+  final VoidCallback? onTap;
+  final VoidCallback? onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return SprintSurface(
+      padding: EdgeInsets.zero,
+      backgroundColor: colors.surfaceContainerHigh,
+      child: ListTile(
+        minTileHeight: 58,
+        leading: Icon(icon),
+        title: Text(
+          title,
+          style: TextStyle(
+            color: colors.onSurfaceVariant,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        subtitle: AnimatedSwitcher(
+          duration: duration,
+          child: Text(
+            value == null ? '설정하지 않음' : sprintFormatShortDate(value!),
+            key: ValueKey<String>(
+              '$title-${value?.toIso8601String() ?? 'none'}',
+            ),
+            style: const TextStyle(fontWeight: FontWeight.w900),
+          ),
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (value != null)
+              IconButton(
+                tooltip: '$title 제거',
+                onPressed: onClear,
+                icon: const Icon(Icons.close_rounded),
+              ),
+            const Icon(Icons.chevron_right_rounded),
+          ],
+        ),
+        onTap: onTap,
       ),
     );
   }

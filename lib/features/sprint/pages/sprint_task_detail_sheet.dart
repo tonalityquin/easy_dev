@@ -71,19 +71,41 @@ class _SprintTaskDetailSheetState extends State<_SprintTaskDetailSheet> {
     if (mounted) setState(() {});
   }
 
+  void _selectProject(String? value) {
+    if (value == null) return;
+    final lowerBound = widget.store.projectScheduleLowerBound(value);
+    final shouldClearDeadline = _deadline != null &&
+        lowerBound != null &&
+        _deadline!.isBefore(DateTime(
+          lowerBound.year,
+          lowerBound.month,
+          lowerBound.day,
+        ));
+    setState(() {
+      _projectId = value;
+      if (shouldClearDeadline) _deadline = null;
+    });
+    if (shouldClearDeadline) {
+      sprintShowMessage(
+        context: context,
+        message: '새 프로젝트의 목표 시작일보다 빠른 마감일을 제거했습니다.',
+      );
+    }
+  }
+
   Future<void> _pickDeadline() async {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final initialDate = _deadline ?? today.add(const Duration(days: 1));
-    final initialDay = DateTime(
-      initialDate.year,
-      initialDate.month,
-      initialDate.day,
-    );
+    final lowerBound = widget.store.projectScheduleLowerBound(_projectId);
+    final firstDate = lowerBound != null && lowerBound.isAfter(today)
+        ? DateTime(lowerBound.year, lowerBound.month, lowerBound.day)
+        : today;
+    var initialDate = _deadline ?? firstDate.add(const Duration(days: 1));
+    if (initialDate.isBefore(firstDate)) initialDate = firstDate;
     final selected = await showDatePicker(
       context: context,
-      initialDate: initialDay,
-      firstDate: initialDay.isBefore(today) ? initialDay : today,
+      initialDate: initialDate,
+      firstDate: firstDate,
       lastDate: DateTime(now.year + 10, 12, 31),
     );
     if (selected == null || !mounted) return;
@@ -113,6 +135,34 @@ class _SprintTaskDetailSheetState extends State<_SprintTaskDetailSheet> {
       );
       return;
     }
+    final lowerBound = widget.store.projectScheduleLowerBound(_projectId);
+    if (_deadline != null &&
+        lowerBound != null &&
+        _deadline!.isBefore(DateTime(
+          lowerBound.year,
+          lowerBound.month,
+          lowerBound.day,
+        ))) {
+      sprintShowMessage(
+        context: context,
+        message: '업무 마감일은 프로젝트 목표 시작일보다 빠를 수 없습니다.',
+      );
+      return;
+    }
+    final hasLockedBeforeStart = lowerBound != null &&
+        widget.store.blocksForTask(task.id).any(
+              (block) =>
+                  block.status == SprintScheduleBlockStatus.planned &&
+                  block.locked &&
+                  block.start.isBefore(lowerBound),
+            );
+    if (hasLockedBeforeStart) {
+      sprintShowMessage(
+        context: context,
+        message: '새 프로젝트의 목표 시작일 이전에 고정된 일정이 있습니다.',
+      );
+      return;
+    }
     setState(() => _saving = true);
     final saved = await widget.store.updateTask(
       taskId: task.id,
@@ -127,6 +177,11 @@ class _SprintTaskDetailSheetState extends State<_SprintTaskDetailSheet> {
       sprintShowMessage(
         context: context,
         message: '업무를 수정했습니다.',
+      );
+    } else {
+      sprintShowMessage(
+        context: context,
+        message: '프로젝트 목표 시작일과 일정 상태를 확인하세요.',
       );
     }
   }
@@ -225,6 +280,13 @@ class _SprintTaskDetailSheetState extends State<_SprintTaskDetailSheet> {
         reduceMotion ? Duration.zero : const Duration(milliseconds: 220);
     final blocks = widget.store.blocksForTask(task.id);
     final canEdit = _canEditTask(task);
+    final selectedProject = widget.store.projectById(_projectId);
+    final targetDate = selectedProject?.targetDate;
+    final deadlineAfterTarget = _deadline != null &&
+        targetDate != null &&
+        DateTime(_deadline!.year, _deadline!.month, _deadline!.day).isAfter(
+          DateTime(targetDate.year, targetDate.month, targetDate.day),
+        );
     final projectItems = widget.store.allProjects
         .where((project) =>
             project.status == SprintProjectStatus.active ||
@@ -303,9 +365,7 @@ class _SprintTaskDetailSheetState extends State<_SprintTaskDetailSheet> {
                     ),
                   )
                   .toList(growable: false),
-              onChanged: !canEdit || _saving
-                  ? null
-                  : (value) => setState(() => _projectId = value),
+              onChanged: !canEdit || _saving ? null : _selectProject,
             ),
             const SizedBox(height: 12),
             SprintSurface(
@@ -343,6 +403,22 @@ class _SprintTaskDetailSheetState extends State<_SprintTaskDetailSheet> {
                     ),
                 ],
               ),
+            ),
+            AnimatedSize(
+              duration: duration,
+              curve: Curves.easeOutCubic,
+              child: deadlineAfterTarget
+                  ? Padding(
+                      padding: const EdgeInsets.only(top: 10),
+                      child: Text(
+                        '업무 마감일이 프로젝트 목표 완료일보다 늦습니다.',
+                        style: TextStyle(
+                          color: colors.tertiary,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    )
+                  : const SizedBox.shrink(),
             ),
             const SizedBox(height: 16),
             FilledButton(

@@ -27,6 +27,7 @@ class SprintSchedulingEngine {
     String? ignoringBlockId,
     String? projectId,
     String? taskId,
+    DateTime? notBefore,
   }) {
     final conflicts = <SprintScheduleConflict>[];
     final now = DateTime.now();
@@ -45,6 +46,27 @@ class SprintSchedulingEngine {
           projectId: projectId,
           taskId: taskId,
           blockId: ignoringBlockId,
+        ),
+      );
+    }
+    if (notBefore != null && start.isBefore(notBefore)) {
+      conflicts.add(
+        SprintScheduleConflict(
+          id: _conflictId(
+            'project-start',
+            ignoringBlockId,
+            start,
+            end,
+            otherStart: notBefore,
+          ),
+          type: SprintConflictType.beforeProjectStart,
+          title: '프로젝트 시작일 이전',
+          description:
+              '이 프로젝트는 ${_formatDate(notBefore)}부터 일정을 배치할 수 있습니다.',
+          projectId: projectId,
+          taskId: taskId,
+          blockId: ignoringBlockId,
+          suggestedStart: notBefore,
         ),
       );
     }
@@ -164,11 +186,19 @@ class SprintSchedulingEngine {
     required List<SprintScheduleBlock> blocks,
     required List<SprintExternalEvent> externalEvents,
     Set<String> ignoredBlockIds = const <String>{},
+    DateTime? notBefore,
   }) {
     final safeDuration = math.max(minimumBlockMinutes, durationMinutes);
-    var cursor = ceilToSlot(anchor);
+    var effectiveAnchor = anchor;
+    if (notBefore != null && effectiveAnchor.isBefore(notBefore)) {
+      effectiveAnchor = notBefore;
+    }
+    var cursor = ceilToSlot(effectiveAnchor);
     if (!cursor.isAfter(DateTime.now())) {
       cursor = ceilToSlot(DateTime.now().add(const Duration(minutes: 1)));
+      if (notBefore != null && cursor.isBefore(notBefore)) {
+        cursor = ceilToSlot(notBefore);
+      }
     }
     for (var dayOffset = 0; dayOffset < 370; dayOffset++) {
       if (cursor.weekday > DateTime.friday) {
@@ -232,6 +262,7 @@ class SprintSchedulingEngine {
     required List<SprintScheduleBlock> blocks,
     required List<SprintTask> tasks,
     required List<SprintExternalEvent> externalEvents,
+    Map<String, DateTime> projectStartBounds = const <String, DateTime>{},
   }) {
     final conflicts = <SprintScheduleConflict>[];
     for (final block in blocks) {
@@ -248,6 +279,9 @@ class SprintSchedulingEngine {
           task.state == SprintTaskState.cancelled) {
         continue;
       }
+      final notBefore = task.projectId == null
+          ? null
+          : projectStartBounds[task.projectId!];
       final validation = validatePlacement(
         start: block.start,
         end: block.end,
@@ -256,6 +290,7 @@ class SprintSchedulingEngine {
         ignoringBlockId: block.id,
         projectId: task.projectId,
         taskId: task.id,
+        notBefore: notBefore,
       );
       for (final conflict in validation.conflicts) {
         final suggestion = findNextAvailableStart(
@@ -264,6 +299,7 @@ class SprintSchedulingEngine {
           blocks: blocks,
           externalEvents: externalEvents,
           ignoredBlockIds: <String>{block.id},
+          notBefore: notBefore,
         );
         conflicts.add(
           SprintScheduleConflict(
@@ -324,6 +360,10 @@ class SprintSchedulingEngine {
     DateTime secondEnd,
   ) {
     return firstStart.isBefore(secondEnd) && secondStart.isBefore(firstEnd);
+  }
+
+  String _formatDate(DateTime value) {
+    return '${value.year}년 ${value.month}월 ${value.day}일';
   }
 
   String _conflictId(

@@ -250,6 +250,15 @@ class _SprintModeHomePageState extends State<SprintModeHomePage>
       );
       return;
     }
+    final projectId = _store.selectedProjectId;
+    if (projectId != null && !_store.canScheduleProjectOn(projectId, selected)) {
+      final lowerBound = _store.projectScheduleLowerBound(projectId)!;
+      sprintShowMessage(
+        context: context,
+        message: '이 프로젝트는 ${sprintFormatDate(lowerBound)}부터 업무를 추가할 수 있습니다.',
+      );
+      return;
+    }
     await showSprintTaskCreateSheet(
       context: context,
       store: _store,
@@ -587,12 +596,17 @@ class _DateTaskAddButton extends StatelessWidget {
     final today = DateTime(now.year, now.month, now.day);
     final isPast = selected.isBefore(today);
     final hasProjects = store.projects.isNotEmpty;
-    final enabled = !isPast && hasProjects;
+    final selectedProjectId = store.selectedProjectId;
+    final beforeProjectStart = selectedProjectId != null &&
+        !store.canScheduleProjectOn(selectedProjectId, selected);
+    final enabled = !isPast && hasProjects && !beforeProjectStart;
     final label = isPast
         ? '과거 날짜에는 업무를 추가할 수 없습니다'
-        : hasProjects
-            ? '${sprintFormatDate(store.selectedDate)}에 업무 추가'
-            : '프로젝트를 만든 뒤 업무를 추가하세요';
+        : !hasProjects
+            ? '프로젝트를 만든 뒤 업무를 추가하세요'
+            : beforeProjectStart
+                ? '이 프로젝트는 ${sprintFormatDate(store.projectScheduleLowerBound(selectedProjectId)!)}부터 시작합니다'
+                : '${sprintFormatDate(store.selectedDate)}에 업무 추가';
     return AnimatedContainer(
       duration: duration,
       curve: Curves.easeOutCubic,
@@ -926,13 +940,20 @@ class _TaskDismissibleCardState extends State<_TaskDismissibleCard> {
     if (validation.conflicts.isEmpty) {
       return _DirectPlacementChoice.requested;
     }
-    final hard = validation.conflicts.any(
-      (conflict) => conflict.type == SprintConflictType.pastTime,
+    final beforeProjectStart = validation.conflicts.any(
+      (conflict) => conflict.type == SprintConflictType.beforeProjectStart,
     );
+    final hard = beforeProjectStart ||
+        validation.conflicts.any(
+          (conflict) => conflict.type == SprintConflictType.pastTime,
+        );
     if (hard) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('과거 시간에는 일정을 배치할 수 없습니다.')),
+        sprintShowMessage(
+          context: context,
+          message: beforeProjectStart
+              ? '프로젝트 목표 시작일 이전에는 일정을 배치할 수 없습니다.'
+              : '과거 시간에는 일정을 배치할 수 없습니다.',
         );
       }
       return null;

@@ -572,8 +572,20 @@ class _DeliveryForecastCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final start = summary.project.targetStartDate;
     final target = summary.project.targetDate;
     final colors = Theme.of(context).colorScheme;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final duration =
+        reduceMotion ? Duration.zero : const Duration(milliseconds: 220);
+    final periodLabel = start != null && target != null
+        ? '${sprintFormatShortDate(start)}–${sprintFormatShortDate(target)}'
+        : start != null
+            ? '${sprintFormatShortDate(start)} 시작'
+            : target != null
+                ? '${sprintFormatShortDate(target)} 완료 목표'
+                : '목표 기간 없음';
 
     return SprintSurface(
       child: Column(
@@ -585,6 +597,42 @@ class _DeliveryForecastCard extends StatelessWidget {
                   fontWeight: FontWeight.w900,
                 ),
           ),
+          const SizedBox(height: 10),
+          AnimatedSwitcher(
+            duration: duration,
+            child: Text(
+              periodLabel,
+              key: ValueKey<String>(periodLabel),
+              style: TextStyle(
+                color: colors.onSurfaceVariant,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          AnimatedSize(
+            duration: duration,
+            curve: Curves.easeOutCubic,
+            child: summary.project.hasNotStarted
+                ? Padding(
+                    padding: const EdgeInsets.only(top: 10),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: colors.primaryContainer,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Text(
+                        '${sprintFormatDate(start!)} 시작 예정 · 시작까지 ${summary.project.daysUntilStart}일',
+                        style: TextStyle(
+                          color: colors.onPrimaryContainer,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  )
+                : const SizedBox.shrink(),
+          ),
           const SizedBox(height: 18),
           _ForecastTimeline(
             today: DateTime.now(),
@@ -594,7 +642,7 @@ class _DeliveryForecastCard extends StatelessWidget {
           const SizedBox(height: 14),
           if (target == null)
             Text(
-              '목표일이 설정되지 않았습니다.',
+              '목표 완료일이 설정되지 않았습니다.',
               style: TextStyle(
                 color: colors.onSurfaceVariant,
                 fontWeight: FontWeight.w700,
@@ -612,7 +660,7 @@ class _DeliveryForecastCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '예상 완료가 목표일보다 ${summary.delayDays}일 늦습니다.',
+                    '예상 완료가 목표 완료일보다 ${summary.delayDays}일 늦습니다.',
                     style: TextStyle(
                       color: colors.onErrorContainer,
                       fontWeight: FontWeight.w900,
@@ -628,7 +676,7 @@ class _DeliveryForecastCard extends StatelessWidget {
             )
           else
             Text(
-              '목표일 안에 완료할 수 있는 일정입니다.',
+              '목표 완료일 안에 완료할 수 있는 일정입니다.',
               style: TextStyle(
                 color: colors.primary,
                 fontWeight: FontWeight.w800,

@@ -44,7 +44,7 @@ class SprintDatabase {
   static final SprintDatabase instance = SprintDatabase._();
 
   static const String _databaseName = 'sprint_mode.db';
-  static const int _databaseVersion = 4;
+  static const int _databaseVersion = 5;
   static const String _legacyMigrationKey = 'legacy_preferences_migrated';
 
   Database? _database;
@@ -84,6 +84,19 @@ class SprintDatabase {
     if (oldVersion < 4) {
       await _removeFocusStorage(db);
     }
+    if (oldVersion < 5) {
+      await _ensureProjectStartColumn(db);
+    }
+  }
+
+
+  Future<void> _ensureProjectStartColumn(Database db) async {
+    await _ensureColumn(
+      db,
+      table: 'sprint_projects',
+      column: 'target_start_at_ms',
+      definition: 'INTEGER',
+    );
   }
 
   Future<void> _removeFocusStorage(Database db) async {
@@ -250,6 +263,7 @@ class SprintDatabase {
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         icon_key TEXT NOT NULL,
+        target_start_at_ms INTEGER,
         target_at_ms INTEGER,
         status TEXT NOT NULL DEFAULT 'active',
         completed_at_ms INTEGER,
@@ -398,6 +412,7 @@ class SprintDatabase {
       CREATE INDEX IF NOT EXISTS idx_sprint_activity_project_occurred
       ON sprint_activity_events(project_id, occurred_at_ms)
     ''');
+    await _ensureProjectStartColumn(db);
     await db.execute('''
       CREATE INDEX IF NOT EXISTS idx_sprint_conflict_block_key
       ON sprint_conflict_resolutions(block_id, conflict_key)
@@ -424,6 +439,9 @@ class SprintDatabase {
               final id = item['id']?.toString().trim() ?? '';
               final name = item['name']?.toString().trim() ?? '';
               final iconKey = item['iconKey']?.toString().trim() ?? 'folder';
+              final targetStartDate = DateTime.tryParse(
+                item['targetStartDate']?.toString() ?? '',
+              );
               final targetDate = DateTime.tryParse(
                 item['targetDate']?.toString() ?? '',
               );
@@ -436,6 +454,8 @@ class SprintDatabase {
                   'icon_key': sprintProjectIcons.containsKey(iconKey)
                       ? iconKey
                       : 'folder',
+                  'target_start_at_ms':
+                      targetStartDate?.millisecondsSinceEpoch,
                   'target_at_ms': targetDate?.millisecondsSinceEpoch,
                   'created_at_ms': now,
                   'updated_at_ms': now,
@@ -607,6 +627,8 @@ class SprintDatabase {
             'id': project.id,
             'name': project.name,
             'icon_key': project.iconKey,
+            'target_start_at_ms':
+                project.targetStartDate?.millisecondsSinceEpoch,
             'target_at_ms': project.targetDate?.millisecondsSinceEpoch,
             'status': project.status.name,
             'completed_at_ms': project.completedAt?.millisecondsSinceEpoch,
@@ -619,6 +641,8 @@ class SprintDatabase {
           updateValues: <String, Object?>{
             'name': project.name,
             'icon_key': project.iconKey,
+            'target_start_at_ms':
+                project.targetStartDate?.millisecondsSinceEpoch,
             'target_at_ms': project.targetDate?.millisecondsSinceEpoch,
             'status': project.status.name,
             'completed_at_ms': project.completedAt?.millisecondsSinceEpoch,
@@ -948,6 +972,7 @@ class SprintDatabase {
       id: row['id'].toString(),
       name: row['name'].toString(),
       iconKey: row['icon_key'].toString(),
+      targetStartDate: _date(row['target_start_at_ms']),
       targetDate: _date(row['target_at_ms']),
       custom: true,
       status: SprintProjectStatus.values.firstWhere(

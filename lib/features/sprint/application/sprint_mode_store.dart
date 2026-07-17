@@ -90,6 +90,21 @@ class SprintModeStore extends ChangeNotifier {
   SprintProject? get selectedProject => projectById(selectedProjectId);
 
 
+  DateTime? projectScheduleLowerBound(String? projectId) {
+    final project = projectById(projectId);
+    final start = project?.targetStartDate;
+    if (start == null) return null;
+    return DateTime(start.year, start.month, start.day, 9);
+  }
+
+  bool canScheduleProjectOn(String? projectId, DateTime date) {
+    final lowerBound = projectScheduleLowerBound(projectId);
+    if (lowerBound == null) return true;
+    final day = _day(date);
+    return !day.isBefore(_day(lowerBound));
+  }
+
+
   String get scopeLabel {
     switch (_workspaceScope.type) {
       case SprintWorkspaceScopeType.all:
@@ -173,15 +188,21 @@ class SprintModeStore extends ChangeNotifier {
   Future<SprintProject?> createProject({
     required String name,
     required String iconKey,
+    DateTime? targetStartDate,
     DateTime? targetDate,
   }) async {
     final normalizedName = name.trim();
-    if (normalizedName.isEmpty) return null;
+    final start = targetStartDate == null ? null : _day(targetStartDate);
+    final target = targetDate == null ? null : _day(targetDate);
+    if (normalizedName.isEmpty || !_validProjectDateRange(start, target)) {
+      return null;
+    }
     final project = SprintProject(
       id: _newId('project'),
       name: normalizedName,
       iconKey: sprintProjectIcons.containsKey(iconKey) ? iconKey : 'folder',
-      targetDate: targetDate == null ? null : _day(targetDate),
+      targetStartDate: start,
+      targetDate: target,
       custom: true,
       status: SprintProjectStatus.active,
       createdAt: DateTime.now(),
@@ -198,32 +219,92 @@ class SprintModeStore extends ChangeNotifier {
     return project;
   }
 
-  Future<bool> updateProject({
+  Future<SprintOperationResult> updateProject({
     required String projectId,
     required String name,
     required String iconKey,
+    DateTime? targetStartDate,
     DateTime? targetDate,
   }) async {
     final project = projectById(projectId);
     final normalizedName = name.trim();
+    final start = targetStartDate == null ? null : _day(targetStartDate);
+    final target = targetDate == null ? null : _day(targetDate);
     if (project == null ||
         !project.custom ||
         project.status != SprintProjectStatus.active ||
         normalizedName.isEmpty) {
-      return false;
+      return const SprintOperationResult(
+        success: false,
+        message: '프로젝트 정보를 확인하세요.',
+      );
+    }
+    if (!_validProjectDateRange(start, target)) {
+      return const SprintOperationResult(
+        success: false,
+        message: '목표 시작일은 목표 완료일보다 늦을 수 없습니다.',
+      );
+    }
+    final newLowerBound = start == null
+        ? null
+        : DateTime(start.year, start.month, start.day, 9);
+    final affected = <SprintScheduleBlock>[];
+    if (newLowerBound != null) {
+      affected.addAll(
+        _blocks.where((block) {
+          final task = taskById(block.taskId);
+          return task?.projectId == projectId &&
+              block.status == SprintScheduleBlockStatus.planned &&
+              block.start.isBefore(newLowerBound);
+        }),
+      );
+      affected.sort((a, b) => a.start.compareTo(b.start));
+    }
+    final fixedCount = affected.where((block) => block.locked).length;
+    if (fixedCount > 0) {
+      return SprintOperationResult(
+        success: false,
+        message: '새 목표 시작일 이전에 고정된 일정이 $fixedCount개 있습니다. 일정을 이동하거나 삭제한 뒤 다시 시도하세요.',
+      );
     }
     project
       ..name = normalizedName
       ..iconKey = sprintProjectIcons.containsKey(iconKey) ? iconKey : 'folder'
-      ..targetDate = targetDate == null ? null : _day(targetDate);
+      ..targetStartDate = start
+      ..targetDate = target;
+    var movedCount = 0;
+    if (newLowerBound != null) {
+      for (final block in affected) {
+        final duration = block.durationMinutes;
+        final next = _schedulingEngine.findNextAvailableStart(
+          anchor: newLowerBound,
+          durationMinutes: duration,
+          blocks: _blocks,
+          externalEvents: _externalEvents,
+          ignoredBlockIds: <String>{block.id},
+          notBefore: newLowerBound,
+        );
+        block
+          ..start = next
+          ..end = next.add(Duration(minutes: duration));
+        movedCount += 1;
+      }
+    }
     _recordActivity(
       type: SprintActivityEventType.projectUpdated,
       projectId: projectId,
+      payload: <String, String>{'rescheduledBlocks': '$movedCount'},
     );
+    _pruneConflictResolutions();
     _refreshAttention();
     notifyListeners();
     await _persistNow();
-    return true;
+    return SprintOperationResult(
+      success: true,
+      message: movedCount == 0
+          ? '프로젝트를 수정했습니다.'
+          : '프로젝트를 수정하고 일정 $movedCount개를 목표 시작일 이후로 이동했습니다.',
+    );
   }
 
   Future<SprintProjectReport?> completeProject({
@@ -680,6 +761,7 @@ class SprintModeStore extends ChangeNotifier {
       ignoringBlockId: blockId,
       projectId: task?.projectId,
       taskId: task?.id,
+      notBefore: projectScheduleLowerBound(task?.projectId),
     );
   }
 
@@ -690,12 +772,14 @@ class SprintModeStore extends ChangeNotifier {
   }) {
     final block = blockById(blockId);
     if (block == null) return _schedulingEngine.ceilToSlot(anchor);
+    final task = taskById(block.taskId);
     return _schedulingEngine.findNextAvailableStart(
       anchor: anchor,
       durationMinutes: durationMinutes ?? block.durationMinutes,
       blocks: _blocks,
       externalEvents: _externalEvents,
       ignoredBlockIds: <String>{block.id},
+      notBefore: projectScheduleLowerBound(task?.projectId),
     );
   }
 
@@ -716,31 +800,26 @@ class SprintModeStore extends ChangeNotifier {
   }
 
   DateTime suggestedTaskStart({
+    required String projectId,
     required DateTime date,
     required int durationMinutes,
   }) {
-    final day = _day(date);
+    final requestedDay = _day(date);
+    final lowerBound = projectScheduleLowerBound(projectId);
+    final effectiveDay = lowerBound != null && requestedDay.isBefore(_day(lowerBound))
+        ? _day(lowerBound)
+        : requestedDay;
     final now = DateTime.now();
-    final anchor = _sameDay(day, now)
+    final anchor = _sameDay(effectiveDay, now)
         ? now.add(const Duration(minutes: 10))
-        : DateTime(day.year, day.month, day.day, 9);
-    final suggested = _schedulingEngine.findNextAvailableStart(
+        : DateTime(effectiveDay.year, effectiveDay.month, effectiveDay.day, 9);
+    return _schedulingEngine.findNextAvailableStart(
       anchor: anchor,
       durationMinutes: durationMinutes,
       blocks: _blocks,
       externalEvents: _externalEvents,
+      notBefore: lowerBound,
     );
-    if (_sameDay(suggested, day)) {
-      return suggested;
-    }
-    if (_sameDay(day, now)) {
-      final fallback = _schedulingEngine.ceilToSlot(
-        now.add(const Duration(minutes: 10)),
-      );
-      if (_sameDay(fallback, day)) return fallback;
-      return DateTime(day.year, day.month, day.day, 23, 30);
-    }
-    return DateTime(day.year, day.month, day.day, 9);
   }
 
   SprintTaskCreationPreview? previewTaskFromText(
@@ -764,12 +843,34 @@ class SprintModeStore extends ChangeNotifier {
       notifyListeners();
       return null;
     }
+    final project = projectById(resolvedProjectId);
+    if (parsed.deadline != null &&
+        project?.targetStartDate != null &&
+        _day(parsed.deadline!).isBefore(_day(project!.targetStartDate!))) {
+      _taskInputError = '업무 마감일은 프로젝트 목표 시작일보다 빠를 수 없습니다.';
+      notifyListeners();
+      return null;
+    }
+    final lowerBound = projectScheduleLowerBound(resolvedProjectId);
+    var requestedStart = parsed.start;
+    if (requestedStart != null &&
+        lowerBound != null &&
+        requestedStart.isBefore(lowerBound) &&
+        !parsed.explicitStart) {
+      requestedStart = _schedulingEngine.findNextAvailableStart(
+        anchor: lowerBound,
+        durationMinutes: parsed.minutes,
+        blocks: _blocks,
+        externalEvents: _externalEvents,
+        notBefore: lowerBound,
+      );
+    }
     return _buildTaskCreationPreview(
       title: parsed.title,
       projectId: resolvedProjectId,
       estimatedMinutes: parsed.minutes,
       deadline: parsed.deadline,
-      requestedStart: parsed.start,
+      requestedStart: requestedStart,
       explicitStart: parsed.explicitStart,
     );
   }
@@ -783,6 +884,8 @@ class SprintModeStore extends ChangeNotifier {
   }) {
     _taskInputError = null;
     final project = projectById(projectId);
+    final normalizedDeadline = deadline == null ? null : _day(deadline);
+    final projectStart = project?.targetStartDate;
     if (title.trim().isEmpty ||
         estimatedMinutes < 20 ||
         project == null ||
@@ -791,11 +894,18 @@ class SprintModeStore extends ChangeNotifier {
       notifyListeners();
       return null;
     }
+    if (normalizedDeadline != null &&
+        projectStart != null &&
+        normalizedDeadline.isBefore(_day(projectStart))) {
+      _taskInputError = '업무 마감일은 프로젝트 목표 시작일보다 빠를 수 없습니다.';
+      notifyListeners();
+      return null;
+    }
     return _buildTaskCreationPreview(
       title: title.trim(),
       projectId: projectId,
       estimatedMinutes: estimatedMinutes,
-      deadline: deadline == null ? null : _day(deadline),
+      deadline: normalizedDeadline,
       requestedStart: normalizeScheduleStart(requestedStart),
       explicitStart: true,
     );
@@ -811,6 +921,7 @@ class SprintModeStore extends ChangeNotifier {
   }) {
     var conflicts = const <SprintScheduleConflict>[];
     DateTime? recommendedStart;
+    final lowerBound = projectScheduleLowerBound(projectId);
     if (requestedStart != null) {
       final end = requestedStart.add(Duration(minutes: estimatedMinutes));
       final validation = _schedulingEngine.validatePlacement(
@@ -819,6 +930,7 @@ class SprintModeStore extends ChangeNotifier {
         blocks: _blocks,
         externalEvents: _externalEvents,
         projectId: projectId,
+        notBefore: lowerBound,
       );
       conflicts = validation.conflicts;
       if (conflicts.isNotEmpty &&
@@ -830,6 +942,7 @@ class SprintModeStore extends ChangeNotifier {
           durationMinutes: estimatedMinutes,
           blocks: _blocks,
           externalEvents: _externalEvents,
+          notBefore: lowerBound,
         );
       }
     }
@@ -859,6 +972,13 @@ class SprintModeStore extends ChangeNotifier {
       notifyListeners();
       return null;
     }
+    if (preview.deadline != null &&
+        project.targetStartDate != null &&
+        _day(preview.deadline!).isBefore(_day(project.targetStartDate!))) {
+      _taskInputError = '업무 마감일은 프로젝트 목표 시작일보다 빠를 수 없습니다.';
+      notifyListeners();
+      return null;
+    }
     final selectedStart = useRecommendedStart
         ? preview.recommendedStart
         : preview.requestedStart;
@@ -876,6 +996,7 @@ class SprintModeStore extends ChangeNotifier {
         blocks: _blocks,
         externalEvents: _externalEvents,
         projectId: preview.projectId,
+        notBefore: projectScheduleLowerBound(preview.projectId),
       );
       if (validation.conflicts.isNotEmpty &&
           (!allowConflicts || _hasHardPlacementConflict(validation))) {
@@ -924,9 +1045,13 @@ class SprintModeStore extends ChangeNotifier {
     final preview = previewTaskFromText(rawText);
     if (preview == null) return null;
     if (preview.hasConflicts) {
-      _taskInputError = preview.hasHardConflict
-          ? '과거 시간에는 업무를 배치할 수 없습니다.'
-          : '선택한 시간에 일정 충돌이 있습니다.';
+      _taskInputError = preview.conflicts.any(
+        (conflict) => conflict.type == SprintConflictType.beforeProjectStart,
+      )
+          ? '프로젝트 목표 시작일 이전에는 업무를 배치할 수 없습니다.'
+          : preview.hasHardConflict
+              ? '과거 시간에는 업무를 배치할 수 없습니다.'
+              : '선택한 시간에 일정 충돌이 있습니다.';
       notifyListeners();
       return null;
     }
@@ -955,6 +1080,7 @@ class SprintModeStore extends ChangeNotifier {
       }).toList(growable: false),
       tasks: tasksForProject(projectId),
       externalEvents: _externalEvents,
+      projectStartBounds: _projectStartBounds(),
     ).where((conflict) => !_isConflictResolved(conflict.id)).toList(growable: false);
   }
 
@@ -968,6 +1094,7 @@ class SprintModeStore extends ChangeNotifier {
     final task = taskById(taskId);
     final normalizedTitle = title.trim();
     final targetProject = projectById(projectId);
+    final normalizedDeadline = deadline == null ? null : _day(deadline);
     if (task == null ||
         task.state == SprintTaskState.completed ||
         task.state == SprintTaskState.cancelled ||
@@ -978,11 +1105,26 @@ class SprintModeStore extends ChangeNotifier {
         targetProject.status != SprintProjectStatus.active) {
       return false;
     }
+    if (normalizedDeadline != null &&
+        targetProject.targetStartDate != null &&
+        normalizedDeadline.isBefore(_day(targetProject.targetStartDate!))) {
+      return false;
+    }
+    final newLowerBound = projectScheduleLowerBound(projectId);
+    final plannedBlocks = blocksForTask(taskId)
+        .where((block) => block.status == SprintScheduleBlockStatus.planned)
+        .toList(growable: false);
+    if (newLowerBound != null &&
+        plannedBlocks.any(
+          (block) => block.locked && block.start.isBefore(newLowerBound),
+        )) {
+      return false;
+    }
     final previousProjectId = task.projectId;
     task
       ..title = normalizedTitle
       ..estimatedMinutes = estimatedMinutes
-      ..deadline = deadline == null ? null : _day(deadline);
+      ..deadline = normalizedDeadline;
     if (previousProjectId != projectId) {
       task
         ..projectId = projectId
@@ -993,8 +1135,10 @@ class SprintModeStore extends ChangeNotifier {
       final futureBlocks = blocksForTask(taskId)
           .where((block) =>
               block.status == SprintScheduleBlockStatus.planned &&
-              block.start.isAfter(now) &&
-              !block.locked)
+              !block.locked &&
+              (block.start.isAfter(now) ||
+                  (newLowerBound != null &&
+                      block.start.isBefore(newLowerBound))))
           .toList(growable: false);
       if (futureBlocks.isNotEmpty) {
         final first = futureBlocks.first;
@@ -1006,6 +1150,7 @@ class SprintModeStore extends ChangeNotifier {
             durationMinutes: minutesToSchedule,
             blocks: _blocks,
             externalEvents: _externalEvents,
+            notBefore: newLowerBound,
           );
           _blocks.add(
             SprintScheduleBlock(
@@ -1120,6 +1265,7 @@ class SprintModeStore extends ChangeNotifier {
       externalEvents: _externalEvents,
       projectId: task.projectId,
       taskId: task.id,
+      notBefore: projectScheduleLowerBound(task.projectId),
     );
     if (validation.conflicts.isNotEmpty &&
         (!allowConflicts || _hasHardPlacementConflict(validation))) {
@@ -1194,6 +1340,7 @@ class SprintModeStore extends ChangeNotifier {
       ignoringBlockId: block.id,
       projectId: task.projectId,
       taskId: task.id,
+      notBefore: projectScheduleLowerBound(task.projectId),
     );
     if (validation.conflicts.isNotEmpty &&
         (!allowConflicts || _hasHardPlacementConflict(validation))) {
@@ -1271,6 +1418,7 @@ class SprintModeStore extends ChangeNotifier {
       ignoringBlockId: block.id,
       projectId: task.projectId,
       taskId: task.id,
+      notBefore: projectScheduleLowerBound(task.projectId),
     );
     if (validation.conflicts.isNotEmpty &&
         (!allowConflicts || _hasHardPlacementConflict(validation))) {
@@ -1328,6 +1476,7 @@ class SprintModeStore extends ChangeNotifier {
       ignoringBlockId: block.id,
       projectId: task.projectId,
       taskId: task.id,
+      notBefore: projectScheduleLowerBound(task.projectId),
     );
     if (validation.conflicts.isNotEmpty &&
         (!allowConflicts || _hasHardPlacementConflict(validation))) {
@@ -1424,6 +1573,7 @@ class SprintModeStore extends ChangeNotifier {
       blocks: _blocks,
       externalEvents: _externalEvents,
       ignoredBlockIds: <String>{block.id},
+      notBefore: projectScheduleLowerBound(task.projectId),
     );
     block.end = block.start.add(Duration(minutes: firstMinutes));
     final second = SprintScheduleBlock(
@@ -1457,6 +1607,11 @@ class SprintModeStore extends ChangeNotifier {
   }) async {
     final block = blockById(item.blockId);
     if (block == null) return false;
+    final task = taskById(block.taskId);
+    if (resolutionType == SprintConflictResolutionType.kept &&
+        item.conflictType == SprintConflictType.beforeProjectStart) {
+      return false;
+    }
     if (resolutionType == SprintConflictResolutionType.moved) {
       final target = item.suggestedStart ??
           _schedulingEngine.findNextAvailableStart(
@@ -1465,6 +1620,7 @@ class SprintModeStore extends ChangeNotifier {
             blocks: _blocks,
             externalEvents: _externalEvents,
             ignoredBlockIds: <String>{block.id},
+            notBefore: projectScheduleLowerBound(task?.projectId),
           );
       final result = await updateBlock(
         blockId: block.id,
@@ -1496,7 +1652,6 @@ class SprintModeStore extends ChangeNotifier {
         ),
       );
     }
-    final task = taskById(block.taskId);
     _recordActivity(
       type: SprintActivityEventType.conflictResolved,
       projectId: task?.projectId,
@@ -1531,25 +1686,21 @@ class SprintModeStore extends ChangeNotifier {
     final anchor = _sameDay(_selectedDate, DateTime.now())
         ? DateTime.now()
         : _selectedDate;
+    final duration = task.remainingMinutes == 0
+        ? task.estimatedMinutes
+        : task.remainingMinutes;
     final start = _schedulingEngine.findNextAvailableStart(
       anchor: anchor,
-      durationMinutes: task.remainingMinutes == 0
-          ? task.estimatedMinutes
-          : task.remainingMinutes,
+      durationMinutes: duration,
       blocks: _blocks,
       externalEvents: _externalEvents,
+      notBefore: projectScheduleLowerBound(task.projectId),
     );
     final block = SprintScheduleBlock(
       id: _newId('block'),
       taskId: task.id,
       start: start,
-      end: start.add(
-        Duration(
-          minutes: task.remainingMinutes == 0
-              ? task.estimatedMinutes
-              : task.remainingMinutes,
-        ),
-      ),
+      end: start.add(Duration(minutes: duration)),
     );
     _blocks.add(block);
     task.state = SprintTaskState.scheduled;
@@ -1681,6 +1832,7 @@ class SprintModeStore extends ChangeNotifier {
       blocks: _blocks,
       externalEvents: _externalEvents,
       ignoredBlockIds: <String>{block.id},
+      notBefore: projectScheduleLowerBound(task.projectId),
     );
     final duration = block.end.difference(block.start);
     block
@@ -1859,37 +2011,43 @@ class SprintModeStore extends ChangeNotifier {
   }
 
   DateTime _estimateCompletion(String projectId, int remainingMinutes) {
-    if (remainingMinutes <= 0) return _day(DateTime.now());
+    final today = _day(DateTime.now());
+    final start = projectById(projectId)?.targetStartDate;
+    var cursor = start != null && _day(start).isAfter(today) ? _day(start) : today;
+    if (remainingMinutes <= 0) return cursor;
     var minutes = remainingMinutes;
-    var cursor = _day(DateTime.now());
     var safety = 0;
     while (minutes > 0 && safety < 365) {
       safety += 1;
-      cursor = cursor.add(const Duration(days: 1));
-      if (cursor.weekday == DateTime.saturday ||
-          cursor.weekday == DateTime.sunday) {
-        continue;
+      if (cursor.weekday != DateTime.saturday &&
+          cursor.weekday != DateTime.sunday) {
+        final externalBusy = _externalEvents.where((event) {
+          return event.blocksTime && _sameDay(event.start, cursor);
+        }).fold<int>(
+          0,
+          (sum, event) => sum + event.end.difference(event.start).inMinutes,
+        );
+        final otherWork = _blocks.where((block) {
+          final task = taskById(block.taskId);
+          return task?.projectId != projectId && _sameDay(block.start, cursor);
+        }).fold<int>(0, (sum, block) => sum + block.durationMinutes);
+        final available = math.max(60, 384 - externalBusy - otherWork).toInt();
+        minutes -= available;
+        if (minutes <= 0) return cursor;
       }
-      final externalBusy = _externalEvents.where((event) {
-        return event.blocksTime && _sameDay(event.start, cursor);
-      }).fold<int>(
-        0,
-        (sum, event) => sum + event.end.difference(event.start).inMinutes,
-      );
-      final otherWork = _blocks.where((block) {
-        final task = taskById(block.taskId);
-        return task?.projectId != projectId && _sameDay(block.start, cursor);
-      }).fold<int>(0, (sum, block) => sum + block.durationMinutes);
-      final available = math.max(60, 384 - externalBusy - otherWork).toInt();
-      minutes -= available;
+      cursor = cursor.add(const Duration(days: 1));
     }
     return cursor;
   }
 
   List<SprintDayLoad> _workloadFor(String projectId) {
     final today = _day(DateTime.now());
+    final projectStart = projectById(projectId)?.targetStartDate;
+    final firstDay = projectStart != null && _day(projectStart).isAfter(today)
+        ? _day(projectStart)
+        : today;
     return List<SprintDayLoad>.generate(7, (index) {
-      final date = today.add(Duration(days: index));
+      final date = firstDay.add(Duration(days: index));
       final planned = plannedMinutesFor(date, projectId);
       final externalBusy = _externalEvents.where((event) {
         return event.blocksTime && _sameDay(event.start, date);
@@ -1909,12 +2067,17 @@ class SprintModeStore extends ChangeNotifier {
     }, growable: false);
   }
 
-  DateTime _nextAvailableStart(DateTime anchor, int durationMinutes) {
+  DateTime _nextAvailableStart(
+    DateTime anchor,
+    int durationMinutes, {
+    String? projectId,
+  }) {
     return _schedulingEngine.findNextAvailableStart(
       anchor: anchor,
       durationMinutes: durationMinutes,
       blocks: _blocks,
       externalEvents: _externalEvents,
+      notBefore: projectScheduleLowerBound(projectId),
     );
   }
 
@@ -2059,8 +2222,8 @@ class SprintModeStore extends ChangeNotifier {
         _attentionItems.add(
           SprintAttentionItem(
             id: 'deadline-${project.id}',
-            title: '목표일 위험',
-            description: '${project.name}의 예상 완료일이 목표일보다 늦습니다.',
+            title: '목표 완료일 위험',
+            description: '${project.name}의 예상 완료일이 목표 완료일보다 늦습니다.',
             projectId: project.id,
             conflictType: SprintConflictType.targetDateRisk,
           ),
@@ -2095,6 +2258,7 @@ class SprintModeStore extends ChangeNotifier {
       blocks: _blocks,
       tasks: _tasks,
       externalEvents: _externalEvents,
+      projectStartBounds: _projectStartBounds(),
     );
     for (final conflict in conflicts) {
       if (_isConflictResolved(conflict.id)) continue;
@@ -2120,6 +2284,7 @@ class SprintModeStore extends ChangeNotifier {
           blocks: _blocks,
           tasks: _tasks,
           externalEvents: _externalEvents,
+          projectStartBounds: _projectStartBounds(),
         )
         .map((conflict) => conflict.id)
         .toSet();
@@ -2136,15 +2301,41 @@ class SprintModeStore extends ChangeNotifier {
 
   bool _hasHardPlacementConflict(SprintPlacementValidation validation) {
     return validation.conflicts.any(
-      (conflict) => conflict.type == SprintConflictType.pastTime,
+      (conflict) =>
+          conflict.type == SprintConflictType.pastTime ||
+          conflict.type == SprintConflictType.beforeProjectStart,
     );
   }
 
   String _placementFailureMessage(SprintPlacementValidation validation) {
-    if (_hasHardPlacementConflict(validation)) {
+    if (validation.conflicts.any(
+      (conflict) => conflict.type == SprintConflictType.beforeProjectStart,
+    )) {
+      return '프로젝트 목표 시작일 이전에는 일정을 배치할 수 없습니다.';
+    }
+    if (validation.conflicts.any(
+      (conflict) => conflict.type == SprintConflictType.pastTime,
+    )) {
       return '과거 시간에는 일정을 배치할 수 없습니다.';
     }
     return '선택한 시간에 일정 충돌이 있습니다.';
+  }
+
+  Map<String, DateTime> _projectStartBounds() {
+    return <String, DateTime>{
+      for (final project in _projects)
+        if (project.targetStartDate != null)
+          project.id: DateTime(
+            project.targetStartDate!.year,
+            project.targetStartDate!.month,
+            project.targetStartDate!.day,
+            9,
+          ),
+    };
+  }
+
+  bool _validProjectDateRange(DateTime? start, DateTime? target) {
+    return start == null || target == null || !start.isAfter(target);
   }
 
   bool _hasPlannedBlock(String taskId) {
