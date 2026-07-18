@@ -1,19 +1,21 @@
 import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../../design_system/prompt_ui/prompt_ui_theme.dart';
 import '../../features/dashboard/applications/common/firebase_google_auth_bridge.dart';
 import '../auth/google_auth_session.dart';
 
 @immutable
 class DbConnectionSnapshot {
-  final bool storageDbOn;
-  final bool liveDbOn;
-
   const DbConnectionSnapshot({
     required this.storageDbOn,
     required this.liveDbOn,
   });
+
+  final bool storageDbOn;
+  final bool liveDbOn;
 
   factory DbConnectionSnapshot.read() {
     final googleUser = GoogleAuthSession.instance.currentUser;
@@ -46,11 +48,13 @@ class DbConnectionStatusSection extends StatelessWidget {
     this.storageLabel = '스토리지 DB',
     this.liveLabel = 'live DB',
     this.spacing = 8,
+    this.usePromptUi = false,
   });
 
   final String storageLabel;
   final String liveLabel;
   final double spacing;
+  final bool usePromptUi;
 
   @override
   Widget build(BuildContext context) {
@@ -64,10 +68,12 @@ class DbConnectionStatusSection extends StatelessWidget {
             _StatusChip(
               label: storageLabel,
               value: snapshot.storageDbOn,
+              usePromptUi: usePromptUi,
             ),
             _StatusChip(
               label: liveLabel,
               value: snapshot.liveDbOn,
+              usePromptUi: usePromptUi,
             ),
           ],
         );
@@ -82,11 +88,13 @@ class DbConnectionStatusAppBarSection extends StatelessWidget {
     this.storageLabel = '스토리지 DB',
     this.liveLabel = 'live DB',
     this.spacing = 4,
+    this.usePromptUi = false,
   });
 
   final String storageLabel;
   final String liveLabel;
   final double spacing;
+  final bool usePromptUi;
 
   @override
   Widget build(BuildContext context) {
@@ -99,11 +107,13 @@ class DbConnectionStatusAppBarSection extends StatelessWidget {
             _AppBarStatusChip(
               label: liveLabel,
               value: snapshot.liveDbOn,
+              usePromptUi: usePromptUi,
             ),
             SizedBox(height: spacing),
             _AppBarStatusChip(
               label: storageLabel,
               value: snapshot.storageDbOn,
+              usePromptUi: usePromptUi,
             ),
           ],
         );
@@ -113,9 +123,7 @@ class DbConnectionStatusAppBarSection extends StatelessWidget {
 }
 
 class _DbConnectionStatusObserver extends StatefulWidget {
-  const _DbConnectionStatusObserver({
-    required this.builder,
-  });
+  const _DbConnectionStatusObserver({required this.builder});
 
   final Widget Function(BuildContext context, DbConnectionSnapshot snapshot)
       builder;
@@ -171,38 +179,88 @@ class _DbConnectionStatusObserverState
   }
 }
 
+class _StatusColors {
+  const _StatusColors({
+    required this.background,
+    required this.foreground,
+    required this.accent,
+    required this.border,
+  });
+
+  final Color background;
+  final Color foreground;
+  final Color accent;
+  final Color border;
+}
+
+_StatusColors _resolveStatusColors(
+  BuildContext context, {
+  required bool value,
+  required bool usePromptUi,
+}) {
+  if (usePromptUi) {
+    final tokens = PromptUiTheme.of(context);
+    final accent = value ? tokens.success : tokens.danger;
+    return _StatusColors(
+      background: value ? tokens.successContainer : tokens.dangerContainer,
+      foreground:
+          value ? tokens.onSuccessContainer : tokens.onDangerContainer,
+      accent: accent,
+      border: accent.withOpacity(tokens.isDark ? 0.58 : 0.34),
+    );
+  }
+
+  const onColor = Color(0xFF1FAA59);
+  const offColor = Color(0xFFD64545);
+  final accent = value ? onColor : offColor;
+  return _StatusColors(
+    background: accent.withOpacity(0.10),
+    foreground: Theme.of(context).colorScheme.onSurface,
+    accent: accent,
+    border: accent.withOpacity(0.20),
+  );
+}
+
 class _StatusChip extends StatelessWidget {
   const _StatusChip({
     required this.label,
     required this.value,
+    required this.usePromptUi,
   });
 
   final String label;
   final bool value;
+  final bool usePromptUi;
 
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    final colorScheme = Theme.of(context).colorScheme;
-    const onColor = Color(0xFF1FAA59);
-    const offColor = Color(0xFFD64545);
-    final activeColor = value ? onColor : offColor;
+    final colors = _resolveStatusColors(
+      context,
+      value: value,
+      usePromptUi: usePromptUi,
+    );
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+    return AnimatedContainer(
+      duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
+      curve: PromptUiMotion.standard,
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
       decoration: BoxDecoration(
-        color: activeColor.withOpacity(0.10),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: activeColor.withOpacity(0.20)),
+        color: colors.background,
+        borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+        border: Border.all(color: colors.border),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
+          AnimatedContainer(
+            duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
             width: 7,
             height: 7,
             decoration: BoxDecoration(
-              color: activeColor,
+              color: colors.accent,
               shape: BoxShape.circle,
             ),
           ),
@@ -211,16 +269,28 @@ class _StatusChip extends StatelessWidget {
             label,
             style: text.labelMedium?.copyWith(
               fontWeight: FontWeight.w700,
-              color: colorScheme.onSurface,
+              color: colors.foreground,
             ),
           ),
           const SizedBox(width: 6),
-          Text(
-            value ? 'ON' : 'OFF',
-            style: text.labelSmall?.copyWith(
-              fontWeight: FontWeight.w800,
-              color: activeColor,
-              letterSpacing: 0.2,
+          AnimatedSwitcher(
+            duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
+            switchInCurve: PromptUiMotion.enter,
+            switchOutCurve: PromptUiMotion.exit,
+            transitionBuilder: (child, animation) {
+              return FadeTransition(
+                opacity: animation,
+                child: ScaleTransition(scale: animation, child: child),
+              );
+            },
+            child: Text(
+              value ? 'ON' : 'OFF',
+              key: ValueKey<bool>(value),
+              style: text.labelSmall?.copyWith(
+                fontWeight: FontWeight.w800,
+                color: colors.accent,
+                letterSpacing: 0.2,
+              ),
             ),
           ),
         ],
@@ -233,25 +303,32 @@ class _AppBarStatusChip extends StatelessWidget {
   const _AppBarStatusChip({
     required this.label,
     required this.value,
+    required this.usePromptUi,
   });
 
   final String label;
   final bool value;
+  final bool usePromptUi;
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
-    const onColor = Color(0xFF1FAA59);
-    const offColor = Color(0xFFD64545);
-    final activeColor = value ? onColor : offColor;
+    final colors = _resolveStatusColors(
+      context,
+      value: value,
+      usePromptUi: usePromptUi,
+    );
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
-    return Container(
+    return AnimatedContainer(
+      duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
+      curve: PromptUiMotion.standard,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: activeColor.withOpacity(0.10),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: activeColor.withOpacity(0.18)),
+        color: colors.background,
+        borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+        border: Border.all(color: colors.border),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -260,7 +337,7 @@ class _AppBarStatusChip extends StatelessWidget {
             width: 6,
             height: 6,
             decoration: BoxDecoration(
-              color: activeColor,
+              color: colors.accent,
               shape: BoxShape.circle,
             ),
           ),
@@ -271,17 +348,22 @@ class _AppBarStatusChip extends StatelessWidget {
               fontSize: 10,
               fontWeight: FontWeight.w700,
               height: 1,
-              color: cs.onSurface,
+              color: colors.foreground,
             ),
           ),
           const SizedBox(width: 5),
-          Text(
-            value ? 'ON' : 'OFF',
-            style: (text.labelSmall ?? const TextStyle(fontSize: 11)).copyWith(
-              fontSize: 10,
-              fontWeight: FontWeight.w800,
-              height: 1,
-              color: activeColor,
+          AnimatedSwitcher(
+            duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
+            child: Text(
+              value ? 'ON' : 'OFF',
+              key: ValueKey<bool>(value),
+              style:
+                  (text.labelSmall ?? const TextStyle(fontSize: 11)).copyWith(
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                height: 1,
+                color: colors.accent,
+              ),
             ),
           ),
         ],

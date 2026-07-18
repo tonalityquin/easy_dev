@@ -1,5 +1,8 @@
 import 'dart:ui' show FontFeature;
 import 'package:flutter/material.dart';
+
+import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
 import 'package:provider/provider.dart';
 import 'package:table_calendar/table_calendar.dart';
 import '../../../../app/config/email_config.dart';
@@ -13,27 +16,49 @@ import 'mail_recipient_settings.dart';
 import 'widgets/time_edit_sheet.dart';
 
 class BreakCalendar extends StatefulWidget {
-  const BreakCalendar({super.key, this.asBottomSheet = false});
+  const BreakCalendar({
+    super.key,
+    this.asBottomSheet = false,
+    this.usePromptUi = false,
+  });
 
   final bool asBottomSheet;
+  final bool usePromptUi;
 
-  static Future<T?> showAsBottomSheet<T>(BuildContext context) {
+  static Future<T?> showAsBottomSheet<T>(
+    BuildContext context, {
+    bool usePromptUi = false,
+  }) {
+    Widget buildSheet(BuildContext sheetContext) {
+      final insets = MediaQuery.of(sheetContext).viewInsets;
+      return Padding(
+        padding: EdgeInsets.only(bottom: insets.bottom),
+        child: _BottomSheetFrame(
+          heightFactor: 1,
+          child: BreakCalendar(
+            asBottomSheet: true,
+            usePromptUi: usePromptUi,
+          ),
+        ),
+      );
+    }
+
+    if (usePromptUi) {
+      return showPromptOverlayBottomSheet<T>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        builder: buildSheet,
+      );
+    }
+
     return showModalBottomSheet<T>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: Colors.transparent,
       barrierColor: Colors.black54,
-      builder: (sheetCtx) {
-        final insets = MediaQuery.of(sheetCtx).viewInsets;
-        return Padding(
-          padding: EdgeInsets.only(bottom: insets.bottom),
-          child: const _BottomSheetFrame(
-            heightFactor: 1,
-            child: BreakCalendar(asBottomSheet: true),
-          ),
-        );
-      },
+      builder: buildSheet,
     );
   }
 
@@ -42,10 +67,11 @@ class BreakCalendar extends StatefulWidget {
 }
 
 class _BreakCalendarState extends State<BreakCalendar> {
-  static const _base = Color(0xFF0D47A1);
-  static const _dark = Color(0xFF09367D);
-  static const _light = Color(0xFF5472D3);
-  static const _fg = Color(0xFFFFFFFF);
+  PromptUiTokens get _tokens => PromptUiTheme.of(context);
+  Color get _base => _tokens.accent;
+  Color get _dark => _tokens.accentPressed;
+  Color get _light => _tokens.accentContainer;
+  Color get _fg => _tokens.onAccent;
 
   static const int _yearRangePadding = 5;
 
@@ -155,39 +181,54 @@ class _BreakCalendarState extends State<BreakCalendar> {
       }
 
       if (!mounted) return null;
-      final picked = await showModalBottomSheet<UserModel>(
-        context: context,
-        isScrollControlled: true,
-        builder: (sheetCtx) {
-          return SafeArea(
-            child: Material(
-              color: Colors.white,
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(16)),
-              child: ListView.separated(
-                shrinkWrap: true,
-                padding: const EdgeInsets.all(16),
-                itemBuilder: (_, i) {
-                  final u = users[i];
-                  final a = u.selectedArea ?? '-';
-                  return ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: _light,
-                      foregroundColor: _fg,
-                      child: const Icon(Icons.person),
-                    ),
-                    title: Text('${u.name}  •  $a'),
-                    subtitle: Text(u.phone),
-                    onTap: () => Navigator.pop(sheetCtx, u),
-                  );
-                },
-                separatorBuilder: (_, __) => const Divider(height: 1),
-                itemCount: users.length,
-              ),
+
+      Widget buildUserPicker(BuildContext sheetContext) {
+        final tokens = PromptUiTheme.of(sheetContext);
+        return SafeArea(
+          child: Material(
+            color: tokens.surfaceRaised,
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(PromptUiShapes.sheet),
             ),
-          );
-        },
-      );
+            child: ListView.separated(
+              shrinkWrap: true,
+              padding: const EdgeInsets.all(16),
+              itemBuilder: (_, i) {
+                final u = users[i];
+                final a = u.selectedArea ?? '-';
+                return ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: tokens.accentContainer,
+                    foregroundColor: tokens.onAccentContainer,
+                    child: const Icon(Icons.person),
+                  ),
+                  title: Text('${u.name}  •  $a'),
+                  subtitle: Text(u.phone),
+                  onTap: () => Navigator.pop(sheetContext, u),
+                );
+              },
+              separatorBuilder: (_, __) => Divider(
+                height: 1,
+                color: tokens.borderSubtle,
+              ),
+              itemCount: users.length,
+            ),
+          ),
+        );
+      }
+
+      final picked = widget.usePromptUi
+          ? await showPromptOverlayBottomSheet<UserModel>(
+              context: context,
+              useSafeArea: true,
+              builder: buildUserPicker,
+            )
+          : await showModalBottomSheet<UserModel>(
+              context: context,
+              isScrollControlled: true,
+              useSafeArea: true,
+              builder: buildUserPicker,
+            );
       return picked;
     } catch (_) {
       return null;
@@ -337,7 +378,10 @@ class _BreakCalendarState extends State<BreakCalendar> {
   }
 
   Future<void> _openMailRecipientSettings() async {
-    await MailRecipientSettings.showAsBottomSheet(context);
+    await MailRecipientSettings.showAsBottomSheet(
+      context,
+      usePromptUi: widget.usePromptUi,
+    );
   }
 
   Future<bool> _ensureRecipientConfigured() async {
@@ -509,16 +553,16 @@ class _BreakCalendarState extends State<BreakCalendar> {
                     cellMargin: const EdgeInsets.all(4),
                     defaultDecoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.black12),
+                      border: Border.all(color: _tokens.borderSubtle),
                     ),
                     outsideDecoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.black12),
-                      color: Colors.black.withOpacity(.02),
+                      border: Border.all(color: _tokens.borderSubtle),
+                      color: _tokens.surfaceOverlay,
                     ),
                     weekendDecoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.black12),
+                      border: Border.all(color: _tokens.borderSubtle),
                       color: _light.withOpacity(.05),
                     ),
                     selectedDecoration: BoxDecoration(
@@ -527,7 +571,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
                       border: Border.all(color: _base, width: 1.6),
                     ),
                     todayDecoration: BoxDecoration(
-                      color: Colors.transparent,
+                      color: _tokens.transparent,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: _light, width: 1.2),
                     ),
@@ -563,12 +607,12 @@ class _BreakCalendarState extends State<BreakCalendar> {
 
     if (!widget.asBottomSheet) {
       return Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: _tokens.canvas,
         appBar: AppBar(
-          backgroundColor: Colors.white,
-          surfaceTintColor: Colors.transparent,
+          backgroundColor: _tokens.canvas,
+          surfaceTintColor: _tokens.transparent,
           elevation: 0,
-          foregroundColor: Colors.black87,
+          foregroundColor: _tokens.textPrimary,
           centerTitle: true,
           title: const Text(
             '휴식 캘린더',
@@ -586,7 +630,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
           ],
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(1),
-            child: Container(height: 1, color: Colors.black.withOpacity(.06)),
+            child: Container(height: 1, color: _tokens.borderSubtle),
           ),
         ),
         floatingActionButton: fab,
@@ -626,7 +670,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
     final hasBreak = breakTime.isNotEmpty;
 
     final borderColor =
-        isSelected ? _base : (isToday ? _light : Colors.black12);
+        isSelected ? _base : (isToday ? _light : _tokens.borderSubtle);
 
     return LayoutBuilder(
       builder: (context, c) {
@@ -641,7 +685,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
         return Container(
           margin: const EdgeInsets.all(4),
           decoration: BoxDecoration(
-            color: isSelected ? _base.withOpacity(.06) : Colors.white,
+            color: isSelected ? _tokens.surfaceSelected : _tokens.surfaceRaised,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: borderColor,
@@ -669,7 +713,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
                     height: dot,
                     margin: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: hasBreak ? _base : Colors.black38,
+                      color: hasBreak ? _base : _tokens.textDisabled,
                       shape: BoxShape.circle,
                     ),
                   ),
@@ -687,7 +731,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
                           softWrap: false,
                           style: TextStyle(
                             fontWeight: FontWeight.w900,
-                            color: isSelected ? _dark : Colors.black87,
+                            color: isSelected ? _dark : _tokens.textPrimary,
                             fontSize: dayFs,
                             fontFeatures: const [FontFeature.tabularFigures()],
                           ),
@@ -702,7 +746,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
                                 style: TextStyle(
                                   fontSize: timeFs,
                                   fontWeight: FontWeight.w800,
-                                  color: Colors.black87,
+                                  color: _tokens.textPrimary,
                                   fontFeatures: const [
                                     FontFeature.tabularFigures()
                                   ],
@@ -713,7 +757,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
                                 '—',
                                 style: TextStyle(
                                   fontSize: smallFs,
-                                  color: Colors.black38,
+                                  color: _tokens.textDisabled,
                                 ),
                               ),
                       ],
@@ -765,6 +809,7 @@ class _BottomSheetFrame extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = PromptUiTheme.of(context);
     return FractionallySizedBox(
       heightFactor: heightFactor,
       widthFactor: 1.0,
@@ -774,20 +819,20 @@ class _BottomSheetFrame extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
           child: DecoratedBox(
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               boxShadow: [
                 BoxShadow(
                   blurRadius: 24,
                   spreadRadius: 8,
-                  color: Color(0x33000000),
-                  offset: Offset(0, 8),
+                  color: tokens.shadow,
+                  offset: const Offset(0, 8),
                 ),
               ],
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(16),
               child: Material(
-                color: Colors.white,
+                color: tokens.surfaceRaised,
                 child: child,
               ),
             ),
@@ -830,7 +875,7 @@ class _SheetScaffold extends StatelessWidget {
               width: 36,
               height: 4,
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.12),
+                color: PromptUiTheme.of(context).handle,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -901,7 +946,10 @@ class _LegendRowBreak extends StatelessWidget {
             const SizedBox(width: 6),
             Text(
               t,
-              style: const TextStyle(fontSize: 12, color: Colors.black87),
+              style: TextStyle(
+                fontSize: 12,
+                color: PromptUiTheme.of(context).textPrimary,
+              ),
             ),
           ],
         );
@@ -920,7 +968,10 @@ class _LegendRowBreak extends StatelessWidget {
             const SizedBox(width: 6),
             Text(
               t,
-              style: const TextStyle(fontSize: 12, color: Colors.black87),
+              style: TextStyle(
+                fontSize: 12,
+                color: PromptUiTheme.of(context).textPrimary,
+              ),
             ),
           ],
         );
@@ -938,7 +989,7 @@ class _LegendRowBreak extends StatelessWidget {
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           itemDot(base, '휴게 기록 있음'),
-          itemDot(Colors.black38, '기록 없음'),
+          itemDot(PromptUiTheme.of(context).textDisabled, '기록 없음'),
           itemSquare('선택/오늘 강조'),
         ],
       ),
@@ -1091,7 +1142,7 @@ class _SelectedUserRow extends StatelessWidget {
         children: [
           CircleAvatar(
             backgroundColor: base,
-            foregroundColor: Colors.white,
+            foregroundColor: PromptUiTheme.of(context).onAccent,
             child: const Icon(Icons.person),
           ),
           const SizedBox(width: 12),
@@ -1101,19 +1152,19 @@ class _SelectedUserRow extends StatelessWidget {
               physics: const BouncingScrollPhysics(),
               child: Row(
                 children: [
-                  _chip(Icons.badge, user.name,
-                      bg: Colors.white, fg: Colors.black87),
+                  _chip(context, Icons.badge, user.name,
+                      bg: PromptUiTheme.of(context).surfaceRaised, fg: PromptUiTheme.of(context).textPrimary),
                   const SizedBox(width: 8),
-                  _chip(Icons.phone, user.phone,
-                      bg: Colors.white, fg: Colors.black87),
+                  _chip(context, Icons.phone, user.phone,
+                      bg: PromptUiTheme.of(context).surfaceRaised, fg: PromptUiTheme.of(context).textPrimary),
                   if (area.isNotEmpty) ...[
                     const SizedBox(width: 8),
-                    _chip(Icons.place, area,
+                    _chip(context, Icons.place, area,
                         bg: light.withOpacity(.18), fg: dark),
                   ],
                   if (division.isNotEmpty) ...[
                     const SizedBox(width: 8),
-                    _chip(Icons.apartment, division,
+                    _chip(context, Icons.apartment, division,
                         bg: light.withOpacity(.18), fg: dark),
                   ],
                 ],
@@ -1137,14 +1188,14 @@ class _SelectedUserRow extends StatelessWidget {
     );
   }
 
-  Widget _chip(IconData icon, String label,
+  Widget _chip(BuildContext context, IconData icon, String label,
       {required Color bg, required Color fg}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(30),
-        border: Border.all(color: Colors.black12),
+        border: Border.all(color: PromptUiTheme.of(context).borderSubtle),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

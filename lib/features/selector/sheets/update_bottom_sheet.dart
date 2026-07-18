@@ -1,58 +1,19 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
-@immutable
-class _UpdateSheetTokens {
-  const _UpdateSheetTokens({
-    required this.sheetBg,
-    required this.handle,
-    required this.divider,
-    required this.headerIcon,
-    required this.tileBg,
-    required this.tileBorder,
-    required this.badgeBg,
-    required this.badgeFg,
-    required this.bulletFg,
-  });
-
-  final Color sheetBg;
-  final Color handle;
-  final Color divider;
-
-  final Color headerIcon;
-
-  final Color tileBg;
-  final Color tileBorder;
-
-  final Color badgeBg;
-  final Color badgeFg;
-
-  final Color bulletFg;
-
-  factory _UpdateSheetTokens.of(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return _UpdateSheetTokens(
-      sheetBg: cs.surface,
-      handle: cs.onSurface.withOpacity(0.20),
-      divider: cs.outlineVariant.withOpacity(0.50),
-      headerIcon: cs.primary,
-      tileBg: cs.surfaceContainerHighest.withOpacity(.60),
-      tileBorder: cs.outlineVariant.withOpacity(.40),
-      badgeBg: cs.primary.withOpacity(.12),
-      badgeFg: cs.primary,
-      bulletFg: cs.onSurface,
-    );
-  }
-}
+import '../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
 
 class UpdateBottomSheet extends StatelessWidget {
   const UpdateBottomSheet({super.key, this.entries});
 
   final List<UpdateEntry>? entries;
 
-  static final List<UpdateEntry> defaultEntries = [
-    UpdateEntry(
+  static final List<UpdateEntry> defaultEntries = <UpdateEntry>[
+    const UpdateEntry(
       version: 'v0.1.3',
-      highlights: [
+      highlights: <String>[
         '휴무, 휴게 상세 옵션 설정 기능 추가',
         '정기(월) 주차 관리 기능의 접근성 개선',
         '정기(월) 주차 관리의 상태 메모 시 한글로 작성이 되지 않던 버그 수정',
@@ -62,21 +23,21 @@ class UpdateBottomSheet extends StatelessWidget {
         '차량 번호판 검색 시, 일부 기기에서 버튼과 핸드폰 홈 영역이 겹치던 이슈 수정',
       ],
     ),
-    UpdateEntry(
+    const UpdateEntry(
       version: 'v0.1.2',
-      highlights: [
+      highlights: <String>[
         '업무 별 통계 시각화 기능 개선',
         '차량 현황 출력 화면 개선',
         '주차 도면으로 자동 전환 분기점 개선',
         '로그 저장 확장값을 json에서 csv로 변경',
         '본사 메모장 기능을 문서로 확대 개편',
         '출*퇴근 알림 등 로직 개선',
-        '앱 첫 설치 후, 권한 설정 화면 다음 순서에 약관 관련 동의 화면 추가'
+        '앱 첫 설치 후, 권한 설정 화면 다음 순서에 약관 관련 동의 화면 추가',
       ],
     ),
-    UpdateEntry(
+    const UpdateEntry(
       version: 'v0.1.1',
-      highlights: [
+      highlights: <String>[
         '개인정보 보안용 스키마 추가',
         '과거 업무 차량 별 조회 기능 추가',
         '차종 및 제조사 데이터 삽입 기능 추가',
@@ -84,9 +45,9 @@ class UpdateBottomSheet extends StatelessWidget {
         '무전기 기능 추가',
       ],
     ),
-    UpdateEntry(
+    const UpdateEntry(
       version: 'v0.1.0',
-      highlights: [
+      highlights: <String>[
         '어플리케이션 릴리즈',
       ],
     ),
@@ -94,76 +55,38 @@ class UpdateBottomSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = _UpdateSheetTokens.of(context);
-    final text = Theme.of(context).textTheme;
-
     final list = entries ?? defaultEntries;
 
-    return Material(
-      color: Colors.transparent,
-      child: Container(
-        decoration: BoxDecoration(
-          color: t.sheetBg,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-        ),
-        child: Column(
-          children: [
-            const SizedBox(height: 12),
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: t.handle,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  Icon(Icons.new_releases_rounded, color: t.headerIcon),
-                  const SizedBox(width: 8),
-                  Text(
-                    '업데이트',
-                    style:
-                        text.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    tooltip: '닫기',
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close_rounded),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-            Divider(height: 1, color: t.divider),
-            Expanded(
-              child: ListView.separated(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                itemCount: list.length,
-                separatorBuilder: (_, __) =>
-                    Divider(height: 24, color: t.divider.withOpacity(.6)),
-                itemBuilder: (context, i) => _UpdateTile(entry: list[i]),
-              ),
-            ),
-          ],
-        ),
+    return PromptSheetScaffold(
+      title: '업데이트',
+      icon: Icons.new_releases_rounded,
+      onClose: () => Navigator.of(context).pop(),
+      body: ListView.separated(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+        itemCount: list.length,
+        separatorBuilder: (context, index) => const SizedBox(height: 12),
+        itemBuilder: (context, index) {
+          final delay = Duration(
+            milliseconds: math.min(index * 45, 140),
+          );
+          return PromptAnimatedReveal(
+            delay: delay,
+            child: _UpdateTile(entry: list[index]),
+          );
+        },
       ),
     );
   }
 }
 
 class UpdateEntry {
-  final String version;
-  final List<String> highlights;
-
   const UpdateEntry({
     required this.version,
     required this.highlights,
   });
+
+  final String version;
+  final List<String> highlights;
 }
 
 class _UpdateTile extends StatelessWidget {
@@ -173,55 +96,61 @@ class _UpdateTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = _UpdateSheetTokens.of(context);
+    final tokens = PromptUiTheme.of(context);
     final text = Theme.of(context).textTheme;
 
     return Container(
       decoration: BoxDecoration(
-        color: t.tileBg,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: t.tileBorder),
+        color: tokens.surface,
+        borderRadius: BorderRadius.circular(PromptUiShapes.card),
+        border: Border.all(color: tokens.borderStrong.withOpacity(0.58)),
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: t.badgeBg,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    entry.version,
-                    style: text.labelMedium?.copyWith(
-                      color: t.badgeFg,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: .2,
-                    ),
-                  ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: tokens.accentContainer,
+                borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+                border: Border.all(color: tokens.accent.withOpacity(0.30)),
+              ),
+              child: Text(
+                entry.version,
+                style: text.labelMedium?.copyWith(
+                  color: tokens.onAccentContainer,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.2,
                 ),
-              ],
+              ),
             ),
             const SizedBox(height: 10),
             ...entry.highlights.map(
-              (h) => Padding(
-                padding: const EdgeInsets.only(bottom: 6),
+              (highlight) => Padding(
+                padding: const EdgeInsets.only(bottom: 7),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('•  ',
-                        style: text.bodyMedium?.copyWith(color: t.bulletFg)),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 7),
+                      child: Container(
+                        width: 5,
+                        height: 5,
+                        decoration: BoxDecoration(
+                          color: tokens.accent,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 9),
                     Expanded(
                       child: Text(
-                        h,
+                        highlight,
                         style: text.bodyMedium?.copyWith(
-                          color: t.bulletFg,
-                          height: 1.3,
+                          color: tokens.textPrimary,
+                          height: 1.4,
                         ),
                       ),
                     ),

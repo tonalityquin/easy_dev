@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
+import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+
 import 'statistics_deep_model.dart';
 import 'statistics_report_design.dart';
 
@@ -159,10 +161,12 @@ class _StatisticsChartBPageState extends State<StatisticsChartBPage> {
       _selectedId = id;
       _tocOpen = false;
     });
+    final reduceMotion =
+        MediaQuery.maybeOf(this.context)?.disableAnimations ?? false;
     await Scrollable.ensureVisible(
       context,
-      duration: const Duration(milliseconds: 420),
-      curve: Curves.easeOutCubic,
+      duration: reduceMotion ? Duration.zero : PromptUiMotion.layout,
+      curve: PromptUiMotion.enter,
       alignment: 0.02,
     );
   }
@@ -191,7 +195,7 @@ class _ReportTocOverlay extends StatelessWidget {
           GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: onClose,
-            child: Container(color: Colors.black.withOpacity(0.26)),
+            child: Container(color: PromptUiTheme.of(context).scrim),
           ),
           Align(
             alignment: Alignment.centerRight,
@@ -400,7 +404,9 @@ class _ReportTocPanel extends StatelessWidget {
                 return Padding(
                   padding: EdgeInsets.only(left: item.level * 12.0, bottom: 6),
                   child: Material(
-                    color: selected ? cs.primaryContainer : Colors.transparent,
+                    color: selected
+                            ? cs.primaryContainer
+                            : PromptUiTheme.of(context).transparent,
                     borderRadius: BorderRadius.circular(16),
                     child: InkWell(
                       borderRadius: BorderRadius.circular(16),
@@ -653,14 +659,20 @@ class _HourlyChartCard extends StatelessWidget {
         show: true,
         drawHorizontalLine: true,
         drawVerticalLine: true,
-        getDrawingHorizontalLine: (value) => FlLine(color: Colors.grey.withOpacity(0.2), strokeWidth: 1),
-        getDrawingVerticalLine: (value) => FlLine(color: Colors.grey.withOpacity(0.2), strokeWidth: 1),
+        getDrawingHorizontalLine: (value) => FlLine(
+          color: cs.outlineVariant.withOpacity(0.45),
+          strokeWidth: 1,
+        ),
+        getDrawingVerticalLine: (value) => FlLine(
+          color: cs.outlineVariant.withOpacity(0.45),
+          strokeWidth: 1,
+        ),
       ),
       borderData: FlBorderData(
         show: true,
-        border: const Border(
-          left: BorderSide(color: Colors.black54),
-          bottom: BorderSide(color: Colors.black54),
+        border: Border(
+          left: BorderSide(color: cs.outline),
+          bottom: BorderSide(color: cs.outline),
         ),
       ),
       titlesData: FlTitlesData(
@@ -706,13 +718,13 @@ class _HourlyChartCard extends StatelessWidget {
       lineTouchData: LineTouchData(
         enabled: true,
         touchTooltipData: LineTouchTooltipData(
-          tooltipBgColor: Colors.black87,
+          tooltipBgColor: cs.inverseSurface,
           getTooltipItems: (spots) => spots.map((spot) {
             final hour = spot.x.toInt().clamp(0, 23);
             final value = decimal ? spot.y.toStringAsFixed(1) : spot.y.toInt().toString();
             return LineTooltipItem(
               '${hour.toString().padLeft(2, '0')}시\n$value$valueSuffix',
-              const TextStyle(color: Colors.white),
+              TextStyle(color: cs.onInverseSurface),
             );
           }).toList(),
         ),

@@ -5,6 +5,7 @@ import 'package:googleapis/sheets/v4.dart' as sheets;
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../app/auth/google_auth_session.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
 import '../../../dev/debug/debug_api_logger.dart';
 
 const String _kSheetIdKey = 'gsheet_spreadsheet_id';
@@ -98,12 +99,39 @@ int _extractProgress(String? description) {
   return v == 100 ? 100 : 0;
 }
 
+Future<T?> _showCompletedBottomSheet<T>({
+  required BuildContext context,
+  required bool usePromptUi,
+  required WidgetBuilder builder,
+  bool isScrollControlled = true,
+  bool useSafeArea = true,
+}) {
+  if (usePromptUi) {
+    return showPromptOverlayBottomSheet<T>(
+      context: context,
+      isScrollControlled: isScrollControlled,
+      useSafeArea: useSafeArea,
+      builder: builder,
+    );
+  }
+
+  final tokens = _CompletedTokens.of(context);
+  return showModalBottomSheet<T>(
+    context: context,
+    isScrollControlled: isScrollControlled,
+    useSafeArea: useSafeArea,
+    backgroundColor: Colors.transparent,
+    barrierColor: tokens.scrim.withOpacity(0.60),
+    builder: builder,
+  );
+}
+
 Future<void> openCompletedEventsSheet({
   required BuildContext context,
   required List<gcal.Event> allEvents,
   void Function(BuildContext, gcal.Event)? onEdit,
+  bool usePromptUi = false,
 }) async {
-  final tokens = _CompletedTokens.of(context);
   final completed =
       allEvents.where((e) => _extractProgress(e.description) == 100).toList();
 
@@ -118,12 +146,11 @@ Future<void> openCompletedEventsSheet({
   final fmtTime = DateFormat('HH:mm');
 
   try {
-    await showModalBottomSheet<void>(
+    await _showCompletedBottomSheet<void>(
       context: context,
+      usePromptUi: usePromptUi,
       useSafeArea: true,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      barrierColor: tokens.scrim.withOpacity(0.60),
       builder: (sheetCtx) {
         return _FullSheetFrame(
           child: DraggableScrollableSheet(
@@ -174,6 +201,7 @@ Future<void> openCompletedEventsSheet({
                                 await _deleteCompletedEventsFromGoogleCalendar(
                                   ctx,
                                   completed,
+                                  usePromptUi: usePromptUi,
                                 );
                               } catch (e) {
                                 await _logApiError(
@@ -200,7 +228,10 @@ Future<void> openCompletedEventsSheet({
                             onPressed: () async {
                               try {
                                 await _saveCompletedEventsToGoogleSheet(
-                                    ctx, completed);
+                                  ctx,
+                                  completed,
+                                  usePromptUi: usePromptUi,
+                                );
                               } catch (e) {
                                 await _logApiError(
                                   tag: 'openCompletedEventsSheet.saveTap',
@@ -225,7 +256,10 @@ Future<void> openCompletedEventsSheet({
                                 color: t.onSurface),
                             onPressed: () async {
                               try {
-                                await _openSpreadsheetConfigSheet(ctx);
+                                await _openSpreadsheetConfigSheet(
+                                  ctx,
+                                  usePromptUi: usePromptUi,
+                                );
                               } catch (e) {
                                 await _logApiError(
                                   tag: 'openCompletedEventsSheet.configTap',
@@ -371,8 +405,10 @@ class _FullSheetFrame extends StatelessWidget {
   }
 }
 
-Future<void> _openSpreadsheetConfigSheet(BuildContext context) async {
-  final tokens = _CompletedTokens.of(context);
+Future<void> _openSpreadsheetConfigSheet(
+  BuildContext context, {
+  bool usePromptUi = false,
+}) async {
 
   SharedPreferences prefs;
   try {
@@ -419,17 +455,15 @@ Future<void> _openSpreadsheetConfigSheet(BuildContext context) async {
   }
 
   try {
-    await showModalBottomSheet<void>(
+    await _showCompletedBottomSheet<void>(
       context: context,
+      usePromptUi: usePromptUi,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      barrierColor: tokens.scrim.withOpacity(0.60),
       builder: (ctx) {
         final t = _CompletedTokens.of(ctx);
 
         InputDecoration deco({
           required String label,
-          required String hint,
           required TextEditingController controller,
           required FocusNode focusNode,
           FocusNode? nextFocus,
@@ -525,7 +559,6 @@ Future<void> _openSpreadsheetConfigSheet(BuildContext context) async {
                               onSubmitted: (_) => rangeFocus.requestFocus(),
                               decoration: deco(
                                 label: 'Spreadsheet ID',
-                                hint: '예: 1fjN8k...(URL 중간의 ID)',
                                 controller: idCtrl,
                                 focusNode: idFocus,
                                 nextFocus: rangeFocus,
@@ -540,7 +573,6 @@ Future<void> _openSpreadsheetConfigSheet(BuildContext context) async {
                               onSubmitted: (_) => save(),
                               decoration: deco(
                                 label: 'Range',
-                                hint: '예: 완료!A2',
                                 controller: rangeCtrl,
                                 focusNode: rangeFocus,
                                 onClear: () => rangeCtrl.clear(),
@@ -611,8 +643,9 @@ Future<void> _openSpreadsheetConfigSheet(BuildContext context) async {
 
 Future<void> _saveCompletedEventsToGoogleSheet(
   BuildContext context,
-  List<gcal.Event> completed,
-) async {
+  List<gcal.Event> completed, {
+  bool usePromptUi = false,
+}) async {
   if (completed.isEmpty) {
     return;
   }
@@ -634,7 +667,10 @@ Future<void> _saveCompletedEventsToGoogleSheet(
   String range = prefs.getString(_kSheetRangeKey) ?? '완료!A2';
 
   if (spreadsheetId.trim().isEmpty) {
-    await _openSpreadsheetConfigSheet(context);
+    await _openSpreadsheetConfigSheet(
+      context,
+      usePromptUi: usePromptUi,
+    );
     spreadsheetId = prefs.getString(_kSheetIdKey) ?? '';
     range = prefs.getString(_kSheetRangeKey) ?? '완료!A2';
     if (spreadsheetId.trim().isEmpty) {
@@ -642,10 +678,10 @@ Future<void> _saveCompletedEventsToGoogleSheet(
     }
   }
 
-  final ok = await showModalBottomSheet<bool>(
+  final ok = await _showCompletedBottomSheet<bool>(
         context: context,
-        backgroundColor: Colors.transparent,
-        barrierColor: _CompletedTokens.of(context).scrim.withOpacity(0.60),
+        usePromptUi: usePromptUi,
+        isScrollControlled: false,
         builder: (ctx) {
           final t = _CompletedTokens.of(ctx);
           return _ConfirmSheetFrame(
@@ -705,6 +741,7 @@ Future<void> _deleteCompletedEventsFromGoogleCalendar(
   BuildContext context,
   List<gcal.Event> completed, {
   String? calendarId,
+  bool usePromptUi = false,
 }) async {
   if (completed.isEmpty) {
     return;
@@ -727,10 +764,10 @@ Future<void> _deleteCompletedEventsFromGoogleCalendar(
 
   final calId = (calendarId ?? _guessCalendarId(completed)) ?? 'primary';
 
-  final ok = await showModalBottomSheet<bool>(
+  final ok = await _showCompletedBottomSheet<bool>(
         context: context,
-        backgroundColor: Colors.transparent,
-        barrierColor: _CompletedTokens.of(context).scrim.withOpacity(0.60),
+        usePromptUi: usePromptUi,
+        isScrollControlled: false,
         builder: (ctx) {
           final t = _CompletedTokens.of(ctx);
           return _ConfirmSheetFrame(

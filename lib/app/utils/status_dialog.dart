@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../design_system/prompt_ui/prompt_ui_theme.dart';
+
 enum StatusDialogTone {
   success,
   failure,
@@ -50,6 +53,7 @@ class StatusDialog {
     String? description,
     String? copyText,
     String copyButtonLabel = '전문 복사',
+    bool usePromptUi = false,
   }) async {
     if (!context.mounted) return;
 
@@ -57,91 +61,39 @@ class StatusDialog {
     final pageNavigator = Navigator.of(context);
     final trimmedDescription = description?.trim() ?? '';
     final trimmedCopyText = copyText?.trim() ?? '';
-    final hasDescription = trimmedDescription.isNotEmpty;
-    final hasCopyText = trimmedCopyText.isNotEmpty;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final tokens = usePromptUi ? PromptUiTheme.of(context) : null;
+    final effectiveTransition =
+        reduceMotion ? Duration.zero : transitionDuration;
 
     final route = RawDialogRoute<void>(
       barrierDismissible: false,
       barrierLabel: barrierLabel ?? title,
-      barrierColor: Colors.black54,
-      transitionDuration: transitionDuration,
+      barrierColor: usePromptUi ? tokens!.scrim : Colors.black54,
+      transitionDuration: effectiveTransition,
       pageBuilder: (dialogContext, _, __) {
-        final theme = Theme.of(dialogContext);
-        final colorScheme = theme.colorScheme;
-        final textTheme = theme.textTheme;
-        final accentColor = _accentColor(colorScheme, tone);
-        final screenHeight = MediaQuery.of(dialogContext).size.height;
-
-        return SafeArea(
-          child: Center(
-            child: Material(
-              color: Colors.transparent,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: 340,
-                  maxHeight: screenHeight * 0.84,
-                ),
-                child: Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 24),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 24, vertical: 22),
-                  decoration: BoxDecoration(
-                    color: colorScheme.surface,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: const [
-                      BoxShadow(
-                        blurRadius: 24,
-                        offset: Offset(0, 12),
-                        color: Color(0x33000000),
-                      ),
-                    ],
-                  ),
-                  child: Builder(
-                    builder: (context) {
-                      bool copied = false;
-
-                      return StatefulBuilder(
-                        builder: (context, setModalState) {
-                          return _StatusDialogContent(
-                            title: title,
-                            tone: tone,
-                            accentColor: accentColor,
-                            colorScheme: colorScheme,
-                            textTheme: textTheme,
-                            description: trimmedDescription,
-                            hasDescription: hasDescription,
-                            hasCopyText: hasCopyText,
-                            copyButtonLabel:
-                                copied ? '복사 완료' : copyButtonLabel,
-                            onCopy: hasCopyText
-                                ? () async {
-                                    await Clipboard.setData(
-                                      ClipboardData(text: trimmedCopyText),
-                                    );
-                                    setModalState(() {
-                                      copied = true;
-                                    });
-                                  }
-                                : null,
-                            onClose: () {
-                              final navigator = Navigator.of(
-                                dialogContext,
-                                rootNavigator: true,
-                              );
-                              if (navigator.canPop()) {
-                                navigator.pop();
-                              }
-                            },
-                          );
-                        },
-                      );
-                    },
-                  ),
-                ),
-              ),
-            ),
-          ),
+        final content = _StatusDialogSurface(
+          title: title,
+          tone: tone,
+          description: trimmedDescription,
+          copyText: trimmedCopyText,
+          copyButtonLabel: copyButtonLabel,
+          usePromptUi: usePromptUi,
+          onClose: () {
+            final navigator = Navigator.of(
+              dialogContext,
+              rootNavigator: true,
+            );
+            if (navigator.canPop()) {
+              navigator.pop();
+            }
+          },
         );
+
+        return usePromptUi
+            ? PromptUiScope(child: content)
+            : content;
       },
       transitionBuilder: (_, animation, __, child) {
         return FadeTransition(
@@ -150,7 +102,8 @@ class StatusDialog {
             scale: Tween<double>(begin: 0.96, end: 1).animate(
               CurvedAnimation(
                 parent: animation,
-                curve: Curves.easeOut,
+                curve: PromptUiMotion.enter,
+                reverseCurve: PromptUiMotion.exit,
               ),
             ),
             child: child,
@@ -165,7 +118,11 @@ class StatusDialog {
       await Future<void>.delayed(visibleDuration);
 
       if (rootNavigator.mounted && route.isActive) {
-        rootNavigator.removeRoute(route);
+        if (route.isCurrent && rootNavigator.canPop()) {
+          rootNavigator.pop();
+        } else {
+          rootNavigator.removeRoute(route);
+        }
       }
     }
 
@@ -188,6 +145,7 @@ class StatusDialog {
     String? copyText,
     String copyButtonLabel = '전문 복사',
     Duration? visibleDuration,
+    bool usePromptUi = false,
   }) {
     final hasCopyText = copyText != null && copyText.trim().isNotEmpty;
 
@@ -205,6 +163,7 @@ class StatusDialog {
               : description == null || description.trim().isEmpty
                   ? const Duration(milliseconds: 1200)
                   : const Duration(milliseconds: 2600)),
+      usePromptUi: usePromptUi,
     );
   }
 
@@ -216,6 +175,7 @@ class StatusDialog {
     String? copyText,
     String copyButtonLabel = '전문 복사',
     Duration? visibleDuration,
+    bool usePromptUi = false,
   }) {
     final hasCopyText = copyText != null && copyText.trim().isNotEmpty;
 
@@ -233,10 +193,11 @@ class StatusDialog {
               : description == null || description.trim().isEmpty
                   ? const Duration(milliseconds: 1200)
                   : const Duration(milliseconds: 3200)),
+      usePromptUi: usePromptUi,
     );
   }
 
-  static IconData _iconFor(StatusDialogTone tone) {
+  static IconData iconFor(StatusDialogTone tone) {
     switch (tone) {
       case StatusDialogTone.success:
         return Icons.check_circle_rounded;
@@ -244,61 +205,187 @@ class StatusDialog {
         return Icons.error_outline_rounded;
     }
   }
+}
 
-  static Color _accentColor(ColorScheme colorScheme, StatusDialogTone tone) {
-    switch (tone) {
-      case StatusDialogTone.success:
-        return colorScheme.tertiary;
-      case StatusDialogTone.failure:
-        return colorScheme.error;
-    }
+class _StatusDialogSurface extends StatefulWidget {
+  const _StatusDialogSurface({
+    required this.title,
+    required this.tone,
+    required this.description,
+    required this.copyText,
+    required this.copyButtonLabel,
+    required this.usePromptUi,
+    required this.onClose,
+  });
+
+  final String title;
+  final StatusDialogTone tone;
+  final String description;
+  final String copyText;
+  final String copyButtonLabel;
+  final bool usePromptUi;
+  final VoidCallback onClose;
+
+  @override
+  State<_StatusDialogSurface> createState() => _StatusDialogSurfaceState();
+}
+
+class _StatusDialogSurfaceState extends State<_StatusDialogSurface> {
+  bool _copied = false;
+
+  Future<void> _copy() async {
+    if (widget.copyText.isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: widget.copyText));
+    if (!mounted) return;
+    setState(() => _copied = true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final tokens = widget.usePromptUi ? PromptUiTheme.of(context) : null;
+    final screenHeight = MediaQuery.of(context).size.height;
+    final surface = widget.usePromptUi
+        ? tokens!.surfaceRaised
+        : colorScheme.surface;
+    final border = widget.usePromptUi
+        ? tokens!.borderSubtle
+        : Colors.transparent;
+    final shadow = widget.usePromptUi
+        ? tokens!.shadow
+        : const Color(0x33000000);
+
+    return SafeArea(
+      child: Center(
+        child: Material(
+          color: Colors.transparent,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: 380,
+              maxHeight: screenHeight * 0.84,
+            ),
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 24),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 24,
+                vertical: 22,
+              ),
+              decoration: BoxDecoration(
+                color: surface,
+                borderRadius: BorderRadius.circular(
+                  widget.usePromptUi
+                      ? PromptUiShapes.dialog
+                      : 20,
+                ),
+                border: Border.all(color: border),
+                boxShadow: [
+                  BoxShadow(
+                    blurRadius: 24,
+                    offset: const Offset(0, 12),
+                    color: shadow,
+                  ),
+                ],
+              ),
+              child: _StatusDialogContent(
+                title: widget.title,
+                tone: widget.tone,
+                description: widget.description,
+                hasDescription: widget.description.isNotEmpty,
+                hasCopyText: widget.copyText.isNotEmpty,
+                copyButtonLabel:
+                    _copied ? '복사 완료' : widget.copyButtonLabel,
+                onCopy: widget.copyText.isNotEmpty ? _copy : null,
+                onClose: widget.onClose,
+                usePromptUi: widget.usePromptUi,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
 class _StatusDialogContent extends StatelessWidget {
-  final String title;
-  final StatusDialogTone tone;
-  final Color accentColor;
-  final ColorScheme colorScheme;
-  final TextTheme textTheme;
-  final String description;
-  final bool hasDescription;
-  final bool hasCopyText;
-  final String copyButtonLabel;
-  final VoidCallback? onCopy;
-  final VoidCallback onClose;
-
   const _StatusDialogContent({
     required this.title,
     required this.tone,
-    required this.accentColor,
-    required this.colorScheme,
-    required this.textTheme,
     required this.description,
     required this.hasDescription,
     required this.hasCopyText,
     required this.copyButtonLabel,
     required this.onCopy,
     required this.onClose,
+    required this.usePromptUi,
   });
+
+  final String title;
+  final StatusDialogTone tone;
+  final String description;
+  final bool hasDescription;
+  final bool hasCopyText;
+  final String copyButtonLabel;
+  final VoidCallback? onCopy;
+  final VoidCallback onClose;
+  final bool usePromptUi;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final textTheme = theme.textTheme;
+    final tokens = usePromptUi ? PromptUiTheme.of(context) : null;
+    final success = tone == StatusDialogTone.success;
+    final accent = usePromptUi
+        ? success
+            ? tokens!.success
+            : tokens!.danger
+        : success
+            ? colorScheme.tertiary
+            : colorScheme.error;
+    final accentContainer = usePromptUi
+        ? success
+            ? tokens!.successContainer
+            : tokens!.dangerContainer
+        : accent.withAlpha(31);
+    final titleColor = usePromptUi ? tokens!.textPrimary : colorScheme.onSurface;
+    final descriptionColor = usePromptUi
+        ? tokens!.textSecondary
+        : colorScheme.onSurfaceVariant;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-          width: 56,
-          height: 56,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: accentColor.withAlpha(31),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(
-            StatusDialog._iconFor(tone),
-            size: 32,
-            color: accentColor,
+        TweenAnimationBuilder<double>(
+          tween: Tween<double>(begin: 0.88, end: 1),
+          duration: reduceMotion ? Duration.zero : PromptUiMotion.component,
+          curve: PromptUiMotion.enter,
+          builder: (context, value, child) {
+            return Transform.scale(scale: value, child: child);
+          },
+          child: Container(
+            width: 60,
+            height: 60,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: accentContainer,
+              shape: BoxShape.circle,
+              border: usePromptUi
+                  ? Border.all(
+                      color: accent.withOpacity(
+                        tokens!.isDark ? 0.58 : 0.34,
+                      ),
+                    )
+                  : null,
+            ),
+            child: Icon(
+              StatusDialog.iconFor(tone),
+              size: 34,
+              color: accent,
+            ),
           ),
         ),
         const SizedBox(height: 16),
@@ -307,7 +394,7 @@ class _StatusDialogContent extends StatelessWidget {
           textAlign: TextAlign.center,
           style: textTheme.titleLarge?.copyWith(
             fontWeight: FontWeight.w800,
-            color: colorScheme.onSurface,
+            color: titleColor,
           ),
         ),
         if (hasDescription) ...[
@@ -318,31 +405,52 @@ class _StatusDialogContent extends StatelessWidget {
                 description,
                 textAlign: TextAlign.center,
                 style: textTheme.bodyMedium?.copyWith(
-                  height: 1.35,
-                  color: colorScheme.onSurfaceVariant,
+                  color: descriptionColor,
                 ),
               ),
             ),
           ),
         ],
         if (hasCopyText) ...[
-          const SizedBox(height: 16),
-          Wrap(
-            alignment: WrapAlignment.center,
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              ElevatedButton.icon(
-                onPressed: onCopy,
-                icon: const Icon(Icons.copy_rounded, size: 18),
-                label: Text(copyButtonLabel),
-              ),
-              TextButton(
-                onPressed: onClose,
-                child: const Text('닫기'),
-              ),
-            ],
-          ),
+          const SizedBox(height: 18),
+          if (usePromptUi)
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                PromptButton(
+                  label: copyButtonLabel,
+                  icon: Icons.copy_rounded,
+                  onPressed: onCopy,
+                  haptic: PromptHaptic.selection,
+                ),
+                PromptButton(
+                  label: '닫기',
+                  icon: Icons.close_rounded,
+                  variant: PromptButtonVariant.tertiary,
+                  onPressed: onClose,
+                  haptic: PromptHaptic.selection,
+                ),
+              ],
+            )
+          else
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: onCopy,
+                  icon: const Icon(Icons.copy_rounded, size: 18),
+                  label: Text(copyButtonLabel),
+                ),
+                TextButton(
+                  onPressed: onClose,
+                  child: const Text('닫기'),
+                ),
+              ],
+            ),
         ],
       ],
     );

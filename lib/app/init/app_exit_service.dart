@@ -4,14 +4,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
-import '../../features/dashboard/widgets/utils/productivity_tools.dart';
+
+import '../../design_system/prompt_ui/prompt_ui_theme.dart';
 import '../../features/community/application/game/game_quick_actions.dart';
+import '../../features/dashboard/widgets/utils/productivity_tools.dart';
 import 'app_exit_flag.dart';
 
 class AppExitService {
   AppExitService._();
 
-  static Future<void> exitApp(BuildContext context) async {
+  static Future<void> exitApp(
+    BuildContext context, {
+    bool usePromptUi = false,
+  }) async {
     AppExitFlag.beginExit();
 
     try {
@@ -35,15 +40,17 @@ class AppExitService {
           try {
             final stopped = await FlutterForegroundTask.stopService();
             if (stopped != true) {
-              ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                const SnackBar(
-                  content: Text('포그라운드 중지 실패(플러그인 반환값 false)'),
-                ),
+              _showFailure(
+                context,
+                '포그라운드 중지 실패(플러그인 반환값 false)',
+                usePromptUi: usePromptUi,
               );
             }
           } catch (e) {
-            ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-              SnackBar(content: Text('포그라운드 중지 실패: $e')),
+            _showFailure(
+              context,
+              '포그라운드 중지 실패: $e',
+              usePromptUi: usePromptUi,
             );
           }
           await Future.delayed(const Duration(milliseconds: 150));
@@ -54,9 +61,62 @@ class AppExitService {
       await SystemNavigator.pop();
     } catch (e) {
       AppExitFlag.reset();
-      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-        SnackBar(content: Text('앱 종료 실패: $e')),
+      _showFailure(
+        context,
+        '앱 종료 실패: $e',
+        usePromptUi: usePromptUi,
       );
     }
+  }
+
+  static void _showFailure(
+    BuildContext context,
+    String message, {
+    required bool usePromptUi,
+  }) {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger == null) return;
+
+    if (!usePromptUi) {
+      messenger.showSnackBar(SnackBar(content: Text(message)));
+      return;
+    }
+
+    final tokens = PromptUiTheme.of(context);
+    final text = Theme.of(context).textTheme;
+
+    messenger.showSnackBar(
+      SnackBar(
+        backgroundColor: tokens.dangerContainer,
+        elevation: 0,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(PromptUiShapes.control),
+          side: BorderSide(
+            color: tokens.danger.withOpacity(tokens.isDark ? 0.58 : 0.36),
+          ),
+        ),
+        content: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              Icons.error_outline_rounded,
+              color: tokens.danger,
+              size: 20,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                message,
+                style: text.bodyMedium?.copyWith(
+                  color: tokens.onDangerContainer,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

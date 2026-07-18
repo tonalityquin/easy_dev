@@ -2,6 +2,9 @@ import 'dart:convert';
 import 'dart:developer' as dev;
 
 import 'package:flutter/material.dart';
+
+import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -14,26 +17,45 @@ class Statistics extends StatefulWidget {
   const Statistics({
     super.key,
     this.asBottomSheet = false,
+    this.usePromptUi = false,
   });
 
   final bool asBottomSheet;
+  final bool usePromptUi;
 
-  static Future<T?> showAsBottomSheet<T>(BuildContext context) {
+  static Future<T?> showAsBottomSheet<T>(
+    BuildContext context, {
+    bool usePromptUi = false,
+  }) {
+    Widget buildSheet(BuildContext sheetContext) {
+      final insets = MediaQuery.of(sheetContext).viewInsets;
+      return Padding(
+        padding: EdgeInsets.only(bottom: insets.bottom),
+        child: _NinetyTwoPercentBottomSheetFrame(
+          child: Statistics(
+            asBottomSheet: true,
+            usePromptUi: usePromptUi,
+          ),
+        ),
+      );
+    }
+
+    if (usePromptUi) {
+      return showPromptOverlayBottomSheet<T>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        builder: buildSheet,
+      );
+    }
+
     return showModalBottomSheet<T>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: Colors.transparent,
       barrierColor: Colors.black54,
-      builder: (sheetCtx) {
-        final insets = MediaQuery.of(sheetCtx).viewInsets;
-        return Padding(
-          padding: EdgeInsets.only(bottom: insets.bottom),
-          child: const _NinetyTwoPercentBottomSheetFrame(
-            child: Statistics(asBottomSheet: true),
-          ),
-        );
-      },
+      builder: buildSheet,
     );
   }
 
@@ -50,6 +72,24 @@ class _StatisticsState extends State<Statistics> {
   static const String _kLastRangeKey = 'statistics_last_range_v1';
 
   final EndWorkReportRepository _reportRepo = EndWorkReportRepository();
+
+  Future<T?> _showStatisticsDialog<T>({
+    required WidgetBuilder builder,
+    bool barrierDismissible = true,
+  }) {
+    if (widget.usePromptUi) {
+      return showPromptOverlayDialog<T>(
+        context: context,
+        barrierDismissible: barrierDismissible,
+        builder: builder,
+      );
+    }
+    return showDialog<T>(
+      context: context,
+      barrierDismissible: barrierDismissible,
+      builder: builder,
+    );
+  }
 
   String? _division;
   Object? _loadError;
@@ -450,8 +490,7 @@ class _StatisticsState extends State<Statistics> {
         : <DateTime>[_nowLocal()];
     final initialMonth = _normalizeDate(initMonth.first);
 
-    final picked = await showDialog<Set<DateTime>>(
-      context: context,
+    final picked = await _showStatisticsDialog<Set<DateTime>>(
       barrierDismissible: false,
       builder: (ctx) {
         return _MultiDatePickerDialog(
@@ -494,8 +533,7 @@ class _StatisticsState extends State<Statistics> {
 
     final initialMonth = _normalizeDate(initialRange.start);
 
-    final picked = await showDialog<DateTimeRange>(
-      context: context,
+    final picked = await _showStatisticsDialog<DateTimeRange>(
       barrierDismissible: false,
       builder: (ctx) {
         return _RangePickerDialog(
@@ -571,20 +609,51 @@ class _StatisticsState extends State<Statistics> {
       };
     }
 
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => StatisticsChartPage(
-          reportDataMap: parsedData,
-          division: (_division ?? '').trim(),
-          area: (_selectedArea ?? '').trim(),
-        ),
+    final page = StatisticsChartPage(
+      reportDataMap: parsedData,
+      division: (_division ?? '').trim(),
+      area: (_selectedArea ?? '').trim(),
+      usePromptUi: widget.usePromptUi,
+    );
+    if (!widget.usePromptUi) {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => page),
+      );
+      return;
+    }
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final duration = reduceMotion ? Duration.zero : PromptUiMotion.overlay;
+    Navigator.of(context).push(
+      PageRouteBuilder<void>(
+        transitionDuration: duration,
+        reverseTransitionDuration: duration,
+        pageBuilder: (_, __, ___) => PromptUiScope(child: page),
+        transitionsBuilder: (_, animation, __, child) {
+          if (reduceMotion) return child;
+          final curved = CurvedAnimation(
+            parent: animation,
+            curve: PromptUiMotion.enter,
+            reverseCurve: PromptUiMotion.exit,
+          );
+          return FadeTransition(
+            opacity: curved,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0.025, 0),
+                end: Offset.zero,
+              ).animate(curved),
+              child: child,
+            ),
+          );
+        },
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final tokens = PromptUiTheme.of(context);
     final division = _division;
 
     final body = Padding(
@@ -616,13 +685,13 @@ class _StatisticsState extends State<Statistics> {
         appBar: AppBar(
           title: const Text('출차 통계'),
           centerTitle: true,
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.black87,
+          backgroundColor: tokens.surface,
+          foregroundColor: tokens.textPrimary,
           elevation: 0,
-          surfaceTintColor: Colors.white,
+          surfaceTintColor: tokens.transparent,
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(1),
-            child: Container(height: 1, color: Colors.black.withOpacity(0.06)),
+            child: Container(height: 1, color: tokens.borderSubtle),
           ),
         ),
         body: body,
@@ -637,6 +706,7 @@ class _StatisticsState extends State<Statistics> {
   }
 
   Widget _buildControls(BuildContext context) {
+    final tokens = PromptUiTheme.of(context);
     final canPickArea = _areaOptions.isNotEmpty;
     final visibleCards = _buildVisibleCards();
 
@@ -655,15 +725,12 @@ class _StatisticsState extends State<Statistics> {
     final dropdown = DropdownButtonFormField<String>(
       isExpanded: true,
       value: (_selectedArea != null && canPickArea && _areaOptions.contains(_selectedArea)) ? _selectedArea : null,
-      hint: Text(
-        canPickArea ? '지역을 선택하세요' : '캐시된 지역이 없습니다 (새로고침 필요)',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-      decoration: const InputDecoration(
-        border: OutlineInputBorder(),
+      decoration: InputDecoration(
+        labelText: canPickArea ? '지역 선택' : '캐시된 지역 없음',
+        border: const OutlineInputBorder(),
         isDense: true,
-        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       ),
       selectedItemBuilder: (ctx) {
         return _areaOptions
@@ -734,11 +801,11 @@ class _StatisticsState extends State<Statistics> {
       borderRadius: BorderRadius.circular(10),
       constraints: const BoxConstraints(minHeight: 40, minWidth: 66),
       textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900),
-      color: Colors.black.withOpacity(0.65),
-      selectedColor: Colors.white,
-      fillColor: Colors.black87,
-      borderColor: Colors.black.withOpacity(0.18),
-      selectedBorderColor: Colors.black87,
+      color: tokens.textSecondary,
+      selectedColor: tokens.onAccent,
+      fillColor: tokens.accent,
+      borderColor: tokens.borderSubtle,
+      selectedBorderColor: tokens.accent,
       renderBorder: true,
       children: const [
         Padding(
@@ -850,7 +917,7 @@ class _StatisticsState extends State<Statistics> {
           child: Text(
             '선택: $selectedDateLabel',
             style: TextStyle(
-              color: Colors.black.withOpacity(0.65),
+              color: tokens.textSecondary,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -862,7 +929,7 @@ class _StatisticsState extends State<Statistics> {
             child: Text(
               '표시 카드: ${visibleCards.length}개',
               style: TextStyle(
-                color: Colors.black.withOpacity(0.45),
+                color: tokens.textDisabled,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -873,6 +940,7 @@ class _StatisticsState extends State<Statistics> {
   }
 
   Widget _buildCardsArea(BuildContext context, String? division) {
+    final tokens = PromptUiTheme.of(context);
     if (division == null) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -976,12 +1044,12 @@ class _StatisticsState extends State<Statistics> {
             margin: const EdgeInsets.only(top: 6, right: 6),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.92),
+              color: tokens.surfaceRaised,
               borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: Colors.black.withOpacity(0.08)),
+              border: Border.all(color: tokens.borderSubtle),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.06),
+                  color: tokens.shadow,
                   blurRadius: 14,
                   offset: const Offset(0, 6),
                 ),
@@ -991,7 +1059,7 @@ class _StatisticsState extends State<Statistics> {
               '${_pageIndex + 1} / ${visible.length}',
               style: TextStyle(
                 fontWeight: FontWeight.w900,
-                color: Colors.black.withOpacity(0.75),
+                color: tokens.textSecondary,
               ),
             ),
           ),
@@ -1001,6 +1069,7 @@ class _StatisticsState extends State<Statistics> {
   }
 
   Widget _buildReportCard(Map<String, dynamic> day) {
+    final tokens = PromptUiTheme.of(context);
     final vc = _asMap(day['vehicleCount']);
     final metrics = _asMap(day['metrics']);
 
@@ -1017,12 +1086,12 @@ class _StatisticsState extends State<Statistics> {
     final alreadySaved = _savedReports.any((r) => r['date']?.toString() == dateStr);
 
     return Card(
-      elevation: 1,
-      color: Colors.white,
-      surfaceTintColor: Colors.white,
+      elevation: 0,
+      color: tokens.surfaceRaised,
+      surfaceTintColor: tokens.transparent,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.black.withOpacity(0.08)),
+        side: BorderSide(color: tokens.borderSubtle),
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -1047,15 +1116,15 @@ class _StatisticsState extends State<Statistics> {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                               decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(0.04),
+                                color: tokens.surfaceOverlay,
                                 borderRadius: BorderRadius.circular(999),
-                                border: Border.all(color: Colors.black.withOpacity(0.08)),
+                                border: Border.all(color: tokens.borderSubtle),
                               ),
                               child: Text(
                                 '보관됨',
                                 style: TextStyle(
                                   fontWeight: FontWeight.w900,
-                                  color: Colors.black.withOpacity(0.6),
+                                  color: tokens.textSecondary,
                                   fontSize: 12,
                                 ),
                               ),
@@ -1067,14 +1136,14 @@ class _StatisticsState extends State<Statistics> {
                         '📅 날짜: ${dateStr.isEmpty ? "-" : dateStr}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(color: Colors.black.withOpacity(0.55)),
+                        style: TextStyle(color: tokens.textSecondary),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         '🕒 업로드: ${createdAt ?? "-"} / 👤 ${uploadedBy ?? "-"}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(color: Colors.black.withOpacity(0.55)),
+                        style: TextStyle(color: tokens.textSecondary),
                       ),
                       const Divider(height: 18),
                       Row(
@@ -1180,6 +1249,7 @@ class _MultiDatePickerDialogState extends State<_MultiDatePickerDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = PromptUiTheme.of(context);
     final first = _normalize(widget.firstDate);
     final last = _normalize(widget.lastDate);
 
@@ -1256,7 +1326,7 @@ class _MultiDatePickerDialogState extends State<_MultiDatePickerDialog> {
                         _wk[i],
                         style: TextStyle(
                           fontWeight: FontWeight.w900,
-                          color: Colors.black.withOpacity(0.55),
+                          color: tokens.textSecondary,
                         ),
                       ),
                     ),
@@ -1312,7 +1382,7 @@ class _MultiDatePickerDialogState extends State<_MultiDatePickerDialog> {
                   '선택 ${_selected.length}개',
                   style: TextStyle(
                     fontWeight: FontWeight.w900,
-                    color: Colors.black.withOpacity(0.7),
+                    color: tokens.textPrimary,
                   ),
                 ),
               ),
@@ -1325,7 +1395,7 @@ class _MultiDatePickerDialogState extends State<_MultiDatePickerDialog> {
                   child: Text(
                     '날짜를 탭해서 선택하세요.',
                     style: TextStyle(
-                      color: Colors.black.withOpacity(0.45),
+                      color: tokens.textDisabled,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -1470,6 +1540,7 @@ class _RangePickerDialogState extends State<_RangePickerDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = PromptUiTheme.of(context);
     final first = _normalize(widget.firstDate);
     final last = _normalize(widget.lastDate);
 
@@ -1551,7 +1622,7 @@ class _RangePickerDialogState extends State<_RangePickerDialog> {
                         _wk[i],
                         style: TextStyle(
                           fontWeight: FontWeight.w900,
-                          color: Colors.black.withOpacity(0.55),
+                          color: tokens.textSecondary,
                         ),
                       ),
                     ),
@@ -1614,7 +1685,7 @@ class _RangePickerDialogState extends State<_RangePickerDialog> {
                   chipLine,
                   style: TextStyle(
                     fontWeight: FontWeight.w900,
-                    color: Colors.black.withOpacity(0.7),
+                    color: tokens.textPrimary,
                   ),
                 ),
               ),
@@ -1627,7 +1698,7 @@ class _RangePickerDialogState extends State<_RangePickerDialog> {
                   child: Text(
                     '시작일과 종료일을 탭해서 선택하세요.',
                     style: TextStyle(
-                      color: Colors.black.withOpacity(0.45),
+                      color: tokens.textDisabled,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -1713,23 +1784,32 @@ class _CalendarDayCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = PromptUiTheme.of(context);
     final bool isStrong = !disabled && (selected || rangeStart || rangeEnd);
     final bool isSoftRange = !disabled && !isStrong && inRange;
 
     final fg = disabled
-        ? Colors.black.withOpacity(0.25)
-        : (isStrong ? Colors.white : Colors.black.withOpacity(0.75));
+        ? tokens.textDisabled
+        : isStrong
+            ? tokens.onAccent
+            : tokens.textPrimary;
 
     final bg = disabled
-        ? Colors.black.withOpacity(0.02)
-        : (isStrong ? Colors.black87 : (isSoftRange ? Colors.black.withOpacity(0.08) : Colors.white));
+        ? tokens.surfaceDisabled
+        : isStrong
+            ? tokens.accent
+            : isSoftRange
+                ? tokens.surfaceSelected
+                : tokens.surface;
 
     final border = disabled
-        ? Colors.black.withOpacity(0.06)
-        : (isStrong ? Colors.black87 : Colors.black.withOpacity(0.10));
+        ? tokens.borderSubtle
+        : isStrong
+            ? tokens.accentPressed
+            : tokens.borderSubtle;
 
     return Material(
-      color: Colors.transparent,
+      color: tokens.transparent,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
@@ -1758,23 +1838,29 @@ class _InfoBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = PromptUiTheme.of(context);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.03),
+        color: tokens.infoContainer,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.black.withOpacity(0.06)),
+        border: Border.all(color: tokens.info.withOpacity(.42)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: const [
-          Icon(Icons.info_outline_rounded, size: 22),
-          SizedBox(width: 10),
+        children: [
+          Icon(
+            Icons.info_outline_rounded,
+            size: 22,
+            color: tokens.onInfoContainer,
+          ),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
               '업무 통계 확인 시트입니다.',
               style: TextStyle(
+                color: tokens.onInfoContainer,
                 fontWeight: FontWeight.w700,
                 height: 1.25,
               ),
@@ -1809,19 +1895,20 @@ class _TopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = PromptUiTheme.of(context);
     String subLine = '$today입니다.';
     if (refreshLoading) subLine = '데이터 갱신 중...';
     if (refreshError != null) subLine = '갱신 오류';
 
-    final hintLine = (lastUpdated != null) ? '마지막 갱신: $lastUpdated' : null;
+    final updateLine = (lastUpdated != null) ? '마지막 갱신: $lastUpdated' : null;
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: tokens.surfaceRaised,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.black.withOpacity(0.08)),
+        border: Border.all(color: tokens.borderSubtle),
       ),
       child: Row(
         children: [
@@ -1834,17 +1921,20 @@ class _TopBar extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: Colors.black.withOpacity(0.72),
+                    color: tokens.textPrimary,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
-                if (hintLine != null) ...[
+                if (updateLine != null) ...[
                   const SizedBox(height: 2),
                   Text(
-                    hintLine,
+                    updateLine,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.w700),
+                    style: TextStyle(
+                      color: tokens.textSecondary,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ],
               ],
@@ -1869,8 +1959,8 @@ class _TopBar extends StatelessWidget {
             child: FilledButton(
               onPressed: canBulkSave ? onBulkSave : null,
               style: FilledButton.styleFrom(
-                backgroundColor: Colors.black87,
-                foregroundColor: Colors.white,
+                backgroundColor: tokens.accent,
+                foregroundColor: tokens.onAccent,
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                 minimumSize: const Size(44, 44),
               ),
@@ -1890,6 +1980,7 @@ class _NinetyTwoPercentBottomSheetFrame extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = PromptUiTheme.of(context);
     return FractionallySizedBox(
       heightFactor: 0.92,
       widthFactor: 1.0,
@@ -1899,20 +1990,20 @@ class _NinetyTwoPercentBottomSheetFrame extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
           child: DecoratedBox(
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               boxShadow: [
                 BoxShadow(
                   blurRadius: 24,
                   spreadRadius: 8,
-                  color: Color(0x33000000),
-                  offset: Offset(0, 8),
+                  color: tokens.shadow,
+                  offset: const Offset(0, 8),
                 ),
               ],
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(16),
               child: Material(
-                color: Colors.white,
+                color: tokens.surfaceRaised,
                 child: child,
               ),
             ),
@@ -1936,6 +2027,7 @@ class _SheetScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = PromptUiTheme.of(context);
     return Column(
       children: [
         const SizedBox(height: 8),
@@ -1943,7 +2035,7 @@ class _SheetScaffold extends StatelessWidget {
           width: 36,
           height: 4,
           decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.12),
+            color: tokens.handle,
             borderRadius: BorderRadius.circular(2),
           ),
         ),

@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
 import '../application/sprint_mode_store.dart';
@@ -63,6 +61,10 @@ class _SprintModeHomePageState extends State<SprintModeHomePage>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _store.handleAppResumed();
+      return;
+    }
     if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
@@ -83,6 +85,11 @@ class _SprintModeHomePageState extends State<SprintModeHomePage>
   }
 
   Future<void> _submitTask() async {
+    final validationMessage = _selectedDateAddError();
+    if (validationMessage != null) {
+      sprintShowMessage(context: context, message: validationMessage);
+      return;
+    }
     final task = await sprintCreateTaskFromComposer(
       context: context,
       store: _store,
@@ -93,7 +100,8 @@ class _SprintModeHomePageState extends State<SprintModeHomePage>
     _composerFocusNode.unfocus();
     sprintShowMessage(
       context: context,
-      message: '${task.title} 업무를 추가했습니다.',
+      message:
+          '${task.title} 업무를 ${sprintFormatDate(task.startDate)}에 추가했습니다.',
     );
   }
 
@@ -235,28 +243,35 @@ class _SprintModeHomePageState extends State<SprintModeHomePage>
     showSprintAttentionSheet(context: context, store: _store);
   }
 
-  Future<void> _openTaskCreate() async {
+  String? _selectedDateAddError([DateTime? date]) {
+    final value = date ?? _store.selectedDate;
+    final selected = DateTime(value.year, value.month, value.day);
     final now = DateTime.now();
-    final selected = DateTime(
-      _store.selectedDate.year,
-      _store.selectedDate.month,
-      _store.selectedDate.day,
-    );
     final today = DateTime(now.year, now.month, now.day);
     if (selected.isBefore(today)) {
-      sprintShowMessage(
-        context: context,
-        message: '과거 날짜에는 업무를 추가할 수 없습니다.',
-      );
-      return;
+      return '과거 날짜에는 업무를 추가할 수 없습니다.';
+    }
+    if (_store.projects.isEmpty) {
+      return '업무를 추가하려면 먼저 프로젝트를 생성하세요.';
     }
     final projectId = _store.selectedProjectId;
     if (projectId != null && !_store.canScheduleProjectOn(projectId, selected)) {
       final lowerBound = _store.projectScheduleLowerBound(projectId)!;
-      sprintShowMessage(
-        context: context,
-        message: '이 프로젝트는 ${sprintFormatDate(lowerBound)}부터 업무를 추가할 수 있습니다.',
-      );
+      return '이 프로젝트는 ${sprintFormatDate(lowerBound)}부터 업무를 추가할 수 있습니다.';
+    }
+    return null;
+  }
+
+  Future<void> _openTaskCreate() {
+    return _openTaskCreateForDate(_store.selectedDate);
+  }
+
+  Future<void> _openTaskCreateForDate(DateTime date) async {
+    final selected = DateTime(date.year, date.month, date.day);
+    _store.selectDate(selected);
+    final validationMessage = _selectedDateAddError(selected);
+    if (validationMessage != null) {
+      sprintShowMessage(context: context, message: validationMessage);
       return;
     }
     await showSprintTaskCreateSheet(
@@ -265,6 +280,23 @@ class _SprintModeHomePageState extends State<SprintModeHomePage>
       initialDate: selected,
       initialProjectId: _store.selectedProjectId,
     );
+  }
+
+  Future<void> _openDateJumpSheet() async {
+    final selected = await showModalBottomSheet<DateTime>(
+      context: context,
+      useSafeArea: true,
+      showDragHandle: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      barrierColor: Theme.of(context).colorScheme.scrim,
+      builder: (_) => _DateJumpSheet(
+        selectedDate: _store.selectedDate,
+        project: _store.selectedProject,
+      ),
+    );
+    if (selected != null) {
+      _store.selectDate(selected);
+    }
   }
 
   void _showCompletionMessage(String title) {
@@ -322,18 +354,37 @@ class _SprintModeHomePageState extends State<SprintModeHomePage>
               onPressed: _openWorkspacePanel,
               icon: const Icon(Icons.menu_rounded),
             ),
-            title: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(sprintFormatDate(_store.selectedDate)),
-                Text(
-                  _store.scopeLabel,
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w700,
+            title: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: _openDateJumpSheet,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    AnimatedSwitcher(
+                      duration: (MediaQuery.maybeOf(context)?.disableAnimations ??
+                              false)
+                          ? Duration.zero
+                          : const Duration(milliseconds: 180),
+                      child: Text(
+                        sprintFormatDate(_store.selectedDate),
+                        key: ValueKey<int>(
+                          _store.selectedDate.millisecondsSinceEpoch,
+                        ),
                       ),
+                    ),
+                    Text(
+                      _store.scopeLabel,
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
             actions: [
               TextButton.icon(
@@ -358,8 +409,8 @@ class _SprintModeHomePageState extends State<SprintModeHomePage>
                     segments: const <ButtonSegment<bool>>[
                       ButtonSegment<bool>(
                         value: false,
-                        label: Text('오늘'),
-                        icon: Icon(Icons.today_outlined),
+                        label: Text('일간'),
+                        icon: Icon(Icons.view_day_outlined),
                       ),
                       ButtonSegment<bool>(
                         value: true,
@@ -373,8 +424,15 @@ class _SprintModeHomePageState extends State<SprintModeHomePage>
                     },
                   ),
                 ),
+                _DateNavigationBar(
+                  store: _store,
+                  onTitleTap: _openDateJumpSheet,
+                ),
                 if (_store.weekMode)
-                  _WeekDensityStrip(store: _store),
+                  _WeekDensityPager(
+                    store: _store,
+                    onDateLongPress: _openTaskCreateForDate,
+                  ),
                 Expanded(
                   child: _ScheduleTimeline(
                     store: _store,
@@ -392,6 +450,10 @@ class _SprintModeHomePageState extends State<SprintModeHomePage>
             attentionCount: attentionCount,
             onProjectTap: _openProject,
             onProjectSwitchTap: _openWorkspacePanel,
+            onPreviousProject: _store.selectPreviousScope,
+            onNextProject: _store.selectNextScope,
+            onDateTap: _openDateJumpSheet,
+            onTodayTap: _store.selectToday,
             onAddTask: _openTaskCreate,
             onAttentionTap: _openAttention,
             onSubmit: _submitTask,
@@ -404,88 +466,432 @@ class _SprintModeHomePageState extends State<SprintModeHomePage>
   }
 }
 
-class _WeekDensityStrip extends StatelessWidget {
-  const _WeekDensityStrip({required this.store});
+class _DateJumpSheet extends StatelessWidget {
+  const _DateJumpSheet({
+    required this.selectedDate,
+    required this.project,
+  });
 
-  final SprintModeStore store;
+  final DateTime selectedDate;
+  final SprintProject? project;
+
+  Future<void> _pickDate(BuildContext context) async {
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: selectedDate,
+      firstDate: DateTime(1970),
+      lastDate: DateTime(2200),
+      cancelText: '취소',
+      confirmText: '이동',
+    );
+    if (selected != null && context.mounted) {
+      Navigator.of(context).pop(selected);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final dates = store.weekDates(store.selectedDate);
-    final colors = Theme.of(context).colorScheme;
-
-    return SizedBox(
-      height: 102,
-      child: ListView.separated(
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
-        scrollDirection: Axis.horizontal,
-        itemCount: dates.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (context, index) {
-          final date = dates[index];
-          final selected = sprintSameDay(date, store.selectedDate);
-          final today = sprintSameDay(date, DateTime.now());
-          final minutes = store.plannedMinutesForCurrentScope(date);
-          final ratio = (minutes / 360).clamp(0.08, 1).toDouble();
-          final overloaded = minutes > 360;
-
-          return Material(
-            color: selected
-                ? colors.primaryContainer
-                : colors.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(16),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(16),
-              onTap: () => store.selectDate(date),
-              child: Container(
-                width: 52,
-                padding: const EdgeInsets.symmetric(vertical: 7),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: overloaded
-                        ? colors.error
-                        : today
-                            ? colors.primary
-                            : colors.outlineVariant,
-                    width: overloaded || today ? 1.5 : 1,
-                  ),
+    final start = project?.targetStartDate;
+    final end = project?.targetDate;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            '날짜로 이동',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w900,
                 ),
-                child: Column(
-                  children: [
-                    Text(
-                      sprintWeekday(date.weekday),
-                      style: const TextStyle(fontWeight: FontWeight.w800),
-                    ),
-                    Text(
-                      '${date.day}',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w900,
-                          ),
-                    ),
-                    const Spacer(),
-                    SizedBox(
-                      width: 22,
-                      height: 24,
-                      child: Align(
-                        alignment: Alignment.bottomCenter,
-                        child: FractionallySizedBox(
-                          heightFactor: ratio,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: colors.primary,
-                              borderRadius: BorderRadius.circular(999),
-                            ),
+          ),
+          const SizedBox(height: 10),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.today_rounded),
+            title: const Text(
+              '오늘',
+              style: TextStyle(fontWeight: FontWeight.w900),
+            ),
+            subtitle: Text(sprintFormatDate(DateTime.now())),
+            onTap: () => Navigator.of(context).pop(DateTime.now()),
+          ),
+          if (start != null)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.flag_outlined),
+              title: const Text(
+                '프로젝트 목표 시작일',
+                style: TextStyle(fontWeight: FontWeight.w900),
+              ),
+              subtitle: Text(sprintFormatDate(start)),
+              onTap: () => Navigator.of(context).pop(start),
+            ),
+          if (end != null)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.outlined_flag_rounded),
+              title: const Text(
+                '프로젝트 목표 완료일',
+                style: TextStyle(fontWeight: FontWeight.w900),
+              ),
+              subtitle: Text(sprintFormatDate(end)),
+              onTap: () => Navigator.of(context).pop(end),
+            ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.calendar_month_rounded),
+            title: const Text(
+              '날짜 선택',
+              style: TextStyle(fontWeight: FontWeight.w900),
+            ),
+            subtitle: Text('현재 선택 · ${sprintFormatDate(selectedDate)}'),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => _pickDate(context),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DateNavigationBar extends StatelessWidget {
+  const _DateNavigationBar({
+    required this.store,
+    required this.onTitleTap,
+  });
+
+  final SprintModeStore store;
+  final VoidCallback onTitleTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final duration =
+        reduceMotion ? Duration.zero : const Duration(milliseconds: 220);
+    final title = store.weekMode
+        ? sprintFormatDateRange(
+            store.weekStart(store.selectedDate),
+            store.weekEnd(store.selectedDate),
+          )
+        : sprintFormatDate(store.selectedDate);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
+      child: Row(
+        children: [
+          IconButton(
+            tooltip: store.weekMode ? '이전 주' : '이전 날짜',
+            onPressed: store.weekMode
+                ? store.selectPreviousWeek
+                : store.selectPreviousDay,
+            icon: const Icon(Icons.chevron_left_rounded),
+          ),
+          Expanded(
+            child: Material(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(14),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: onTitleTap,
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                  child: AnimatedSwitcher(
+                    duration: duration,
+                    transitionBuilder: (child, animation) {
+                      if (reduceMotion) return child;
+                      return FadeTransition(
+                        opacity: animation,
+                        child: SlideTransition(
+                          position: Tween<Offset>(
+                            begin: const Offset(0.04, 0),
+                            end: Offset.zero,
+                          ).animate(animation),
+                          child: child,
+                        ),
+                      );
+                    },
+                    child: Row(
+                      key: ValueKey<String>(
+                        '${store.weekMode}-$title',
+                      ),
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style:
+                                Theme.of(context).textTheme.titleSmall?.copyWith(
+                                      fontWeight: FontWeight.w900,
+                                    ),
                           ),
                         ),
-                      ),
+                        const SizedBox(width: 4),
+                        const Icon(
+                          Icons.keyboard_arrow_down_rounded,
+                          size: 18,
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),
+          ),
+          IconButton(
+            tooltip: store.weekMode ? '다음 주' : '다음 날짜',
+            onPressed:
+                store.weekMode ? store.selectNextWeek : store.selectNextDay,
+            icon: const Icon(Icons.chevron_right_rounded),
+          ),
+          AnimatedSize(
+            duration: duration,
+            curve: Curves.easeOutCubic,
+            child: store.isTodaySelected
+                ? const SizedBox.shrink()
+                : Padding(
+                    padding: const EdgeInsets.only(left: 4),
+                    child: FilledButton.tonalIcon(
+                      onPressed: store.selectToday,
+                      icon: const Icon(Icons.today_rounded, size: 18),
+                      label: const Text('오늘'),
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WeekDensityPager extends StatefulWidget {
+  const _WeekDensityPager({
+    required this.store,
+    required this.onDateLongPress,
+  });
+
+  final SprintModeStore store;
+  final ValueChanged<DateTime> onDateLongPress;
+
+  @override
+  State<_WeekDensityPager> createState() => _WeekDensityPagerState();
+}
+
+class _WeekDensityPagerState extends State<_WeekDensityPager> {
+  static const int _centerPage = 10000;
+  late final PageController _controller;
+  late final DateTime _anchorWeekStart;
+  int _currentPage = _centerPage;
+  bool _programmaticMove = false;
+  int _moveGeneration = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _anchorWeekStart = widget.store.weekStart(widget.store.selectedDate);
+    _controller = PageController(initialPage: _centerPage);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  int _pageFor(DateTime date) {
+    final target = widget.store.weekStart(date);
+    return _centerPage + target.difference(_anchorWeekStart).inDays ~/ 7;
+  }
+
+  DateTime _weekStartForPage(int page) {
+    return _anchorWeekStart.add(
+      Duration(days: (page - _centerPage) * 7),
+    );
+  }
+
+  void _syncController(BuildContext context) {
+    final targetPage = _pageFor(widget.store.selectedDate);
+    if (targetPage == _currentPage || !_controller.hasClients) return;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final generation = ++_moveGeneration;
+    _programmaticMove = true;
+    if (reduceMotion || (targetPage - _currentPage).abs() > 4) {
+      _controller.jumpToPage(targetPage);
+      _currentPage = targetPage;
+      if (generation == _moveGeneration) {
+        _programmaticMove = false;
+      }
+      return;
+    }
+    _controller
+        .animateToPage(
+          targetPage,
+          duration: const Duration(milliseconds: 260),
+          curve: Curves.easeOutCubic,
+        )
+        .whenComplete(() {
+      if (generation != _moveGeneration) return;
+      _currentPage = targetPage;
+      _programmaticMove = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _syncController(context);
+    });
+    return SizedBox(
+      height: 102,
+      child: PageView.builder(
+        controller: _controller,
+        onPageChanged: (page) {
+          _currentPage = page;
+          if (_programmaticMove) return;
+          final selectedWeekday = widget.store.selectedDate.weekday;
+          final nextDate = _weekStartForPage(page).add(
+            Duration(days: selectedWeekday - 1),
+          );
+          widget.store.selectDate(nextDate);
+        },
+        itemBuilder: (context, page) {
+          final weekStart = _weekStartForPage(page);
+          final dates = List<DateTime>.generate(
+            7,
+            (index) => weekStart.add(Duration(days: index)),
+            growable: false,
+          );
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 10),
+            child: Row(
+              children: [
+                for (var index = 0; index < dates.length; index++) ...[
+                  Expanded(
+                    child: _WeekDayCard(
+                      store: widget.store,
+                      date: dates[index],
+                      onLongPress: () =>
+                          widget.onDateLongPress(dates[index]),
+                    ),
+                  ),
+                  if (index < dates.length - 1) const SizedBox(width: 5),
+                ],
+              ],
+            ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _WeekDayCard extends StatelessWidget {
+  const _WeekDayCard({
+    required this.store,
+    required this.date,
+    required this.onLongPress,
+  });
+
+  final SprintModeStore store;
+  final DateTime date;
+  final VoidCallback onLongPress;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final selected = sprintSameDay(date, store.selectedDate);
+    final today = sprintSameDay(date, DateTime.now());
+    final load = store.dayLoadFor(date);
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final duration =
+        reduceMotion ? Duration.zero : const Duration(milliseconds: 220);
+    return Semantics(
+      button: true,
+      selected: selected,
+      label:
+          '${sprintFormatDate(date)}, 업무 ${load.taskCount}개, 높은 우선순위 ${load.highPriorityCount}개',
+      child: Material(
+        color: selected
+            ? colors.primaryContainer
+            : colors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(15),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(15),
+          onTap: () => store.selectDate(date),
+          onLongPress: onLongPress,
+          child: AnimatedContainer(
+            duration: duration,
+            curve: Curves.easeOutCubic,
+            padding: const EdgeInsets.symmetric(vertical: 7),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(
+                color: load.overloaded
+                    ? colors.error
+                    : today
+                        ? colors.primary
+                        : colors.outlineVariant,
+                width: load.overloaded || today ? 1.5 : 1,
+              ),
+            ),
+            child: Column(
+              children: [
+                Text(
+                  sprintWeekday(date.weekday),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                AnimatedSwitcher(
+                  duration: duration,
+                  child: Text(
+                    '${date.day}',
+                    key: ValueKey<int>(date.millisecondsSinceEpoch),
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                  ),
+                ),
+                const Spacer(),
+                SizedBox(
+                  height: 24,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      AnimatedContainer(
+                        duration: duration,
+                        curve: Curves.easeOutCubic,
+                        width: 8,
+                        height: 4 + load.ratio * 20,
+                        decoration: BoxDecoration(
+                          color: load.overloaded
+                              ? colors.error
+                              : colors.primary,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
+                      if (load.highPriorityCount > 0) ...[
+                        const SizedBox(width: 1),
+                        Icon(
+                          Icons.keyboard_double_arrow_up_rounded,
+                          size: 12,
+                          color: colors.error,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -533,7 +939,10 @@ class _ScheduleTimeline extends StatelessWidget {
             );
           }
           if (entries.isEmpty) {
-            return const _ScheduleEmptyState();
+            return _ScheduleEmptyState(
+              store: store,
+              onAddTask: onAddTask,
+            );
           }
           final entry = entries[index - 2];
           if (entry.isExternal) {
@@ -704,7 +1113,7 @@ class _TimelineStatusHeader extends StatelessWidget {
       children: [
         Expanded(
           child: Text(
-            today ? '현재 ${sprintFormatTime(now)}' : sprintFormatDate(store.selectedDate),
+            today ? '오늘 · 종일 업무' : sprintFormatDate(store.selectedDate),
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
                   color: colors.primary,
                   fontWeight: FontWeight.w900,
@@ -725,12 +1134,7 @@ class _TimelineStatusHeader extends StatelessWidget {
   }
 }
 
-enum _DirectPlacementChoice {
-  recommended,
-  requested,
-}
-
-class _TaskDismissibleCard extends StatefulWidget {
+class _TaskDismissibleCard extends StatelessWidget {
   const _TaskDismissibleCard({
     required this.store,
     required this.task,
@@ -747,401 +1151,34 @@ class _TaskDismissibleCard extends StatefulWidget {
   final VoidCallback onOpenBlock;
   final VoidCallback onCompletion;
 
-  @override
-  State<_TaskDismissibleCard> createState() =>
-      _TaskDismissibleCardState();
-}
-
-class _TaskDismissibleCardState extends State<_TaskDismissibleCard> {
-  static const double _pixelsPerSlot = 36;
-  double _movePixels = 0;
-  double _resizePixels = 0;
-  DateTime? _previewStart;
-  DateTime? _previewEnd;
-  SprintPlacementValidation? _previewValidation;
-  bool _moving = false;
-  bool _resizing = false;
-  bool _saving = false;
-  int _timeAnimationRevision = 0;
-  late int _lastBlockStartMilliseconds;
-  late int _lastBlockEndMilliseconds;
-
-  @override
-  void initState() {
-    super.initState();
-    _lastBlockStartMilliseconds =
-        widget.block.start.millisecondsSinceEpoch;
-    _lastBlockEndMilliseconds = widget.block.end.millisecondsSinceEpoch;
-  }
-
-  @override
-  void didUpdateWidget(covariant _TaskDismissibleCard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    final startMilliseconds = widget.block.start.millisecondsSinceEpoch;
-    final endMilliseconds = widget.block.end.millisecondsSinceEpoch;
-    if (startMilliseconds != _lastBlockStartMilliseconds ||
-        endMilliseconds != _lastBlockEndMilliseconds) {
-      _lastBlockStartMilliseconds = startMilliseconds;
-      _lastBlockEndMilliseconds = endMilliseconds;
-      _timeAnimationRevision += 1;
-    }
-  }
-
-  bool get _editable {
-    return widget.task.state != SprintTaskState.completed &&
-        widget.task.state != SprintTaskState.cancelled &&
-        widget.block.status == SprintScheduleBlockStatus.planned;
-  }
-
-  DateTime _moveCandidate(double pixels) {
-    final slots = (pixels / _pixelsPerSlot).round();
-    final duration = widget.block.durationMinutes;
-    final dayStart = DateTime(
-      widget.block.start.year,
-      widget.block.start.month,
-      widget.block.start.day,
-    );
-    final dayEnd = dayStart.add(const Duration(days: 1));
-    var candidate = widget.block.start.add(
-      Duration(minutes: slots * 30),
-    );
-    if (candidate.isBefore(dayStart)) candidate = dayStart;
-    candidate = widget.store.normalizeScheduleStart(candidate);
-    if (candidate.add(Duration(minutes: duration)).isAfter(dayEnd)) {
-      final availableMinutes = dayEnd.difference(dayStart).inMinutes - duration;
-      final latestSlotMinutes =
-          math.max(0, availableMinutes ~/ 30 * 30).toInt();
-      candidate = dayStart.add(Duration(minutes: latestSlotMinutes));
-    }
-    return candidate;
-  }
-
-  DateTime _resizeCandidate(double pixels) {
-    final slots = (pixels / _pixelsPerSlot).round();
-    final duration = math.max(
-      20,
-      widget.block.durationMinutes + slots * 30,
-    ).toInt();
-    final dayEnd = DateTime(
-      widget.block.start.year,
-      widget.block.start.month,
-      widget.block.start.day + 1,
-    );
-    final candidate = widget.block.start.add(Duration(minutes: duration));
-    return candidate.isAfter(dayEnd) ? dayEnd : candidate;
-  }
-
-  void _startMove(DragStartDetails _) {
-    if (!_editable || widget.block.locked || _saving) return;
-    setState(() {
-      _timeAnimationRevision += 1;
-      _moving = true;
-      _resizing = false;
-      _movePixels = 0;
-      _previewStart = widget.block.start;
-      _previewEnd = widget.block.end;
-      _previewValidation = null;
-    });
-  }
-
-  void _updateMove(DragUpdateDetails details) {
-    if (!_moving) return;
-    _movePixels += details.delta.dy;
-    final start = _moveCandidate(_movePixels);
-    final end = start.add(
-      Duration(minutes: widget.block.durationMinutes),
-    );
-    final validation = widget.store.validateBlockPlacement(
-      start: start,
-      end: end,
-      blockId: widget.block.id,
-      taskId: widget.task.id,
-    );
-    setState(() {
-      _timeAnimationRevision += 1;
-      _previewStart = start;
-      _previewEnd = end;
-      _previewValidation = validation;
-    });
-  }
-
-  Future<void> _endMove(DragEndDetails _) async {
-    if (!_moving) return;
-    final start = _previewStart ?? widget.block.start;
-    final validation = _previewValidation ??
-        widget.store.validateBlockPlacement(
-          start: start,
-          end: start.add(
-            Duration(minutes: widget.block.durationMinutes),
-          ),
-          blockId: widget.block.id,
-          taskId: widget.task.id,
-        );
-    if (start == widget.block.start) {
-      _resetManipulation();
-      return;
-    }
-    await _commitMove(start, validation);
-  }
-
-  void _startResize(DragStartDetails _) {
-    if (!_editable || widget.block.locked || _saving) return;
-    setState(() {
-      _timeAnimationRevision += 1;
-      _resizing = true;
-      _moving = false;
-      _resizePixels = 0;
-      _previewStart = widget.block.start;
-      _previewEnd = widget.block.end;
-      _previewValidation = null;
-    });
-  }
-
-  void _updateResize(DragUpdateDetails details) {
-    if (!_resizing) return;
-    _resizePixels += details.delta.dy;
-    final end = _resizeCandidate(_resizePixels);
-    final validation = widget.store.validateBlockPlacement(
-      start: widget.block.start,
-      end: end,
-      blockId: widget.block.id,
-      taskId: widget.task.id,
-    );
-    setState(() {
-      _timeAnimationRevision += 1;
-      _previewStart = widget.block.start;
-      _previewEnd = end;
-      _previewValidation = validation;
-    });
-  }
-
-  Future<void> _endResize(DragEndDetails _) async {
-    if (!_resizing) return;
-    final end = _previewEnd ?? widget.block.end;
-    final validation = _previewValidation ??
-        widget.store.validateBlockPlacement(
-          start: widget.block.start,
-          end: end,
-          blockId: widget.block.id,
-          taskId: widget.task.id,
-        );
-    if (end == widget.block.end) {
-      _resetManipulation();
-      return;
-    }
-    await _commitResize(end, validation);
-  }
-
-  Future<_DirectPlacementChoice?> _requestPlacementChoice({
-    required SprintPlacementValidation validation,
-    required DateTime start,
-    required int durationMinutes,
-  }) async {
-    if (validation.conflicts.isEmpty) {
-      return _DirectPlacementChoice.requested;
-    }
-    final beforeProjectStart = validation.conflicts.any(
-      (conflict) => conflict.type == SprintConflictType.beforeProjectStart,
-    );
-    final hard = beforeProjectStart ||
-        validation.conflicts.any(
-          (conflict) => conflict.type == SprintConflictType.pastTime,
-        );
-    if (hard) {
-      if (mounted) {
-        sprintShowMessage(
-          context: context,
-          message: beforeProjectStart
-              ? '프로젝트 목표 시작일 이전에는 일정을 배치할 수 없습니다.'
-              : '과거 시간에는 일정을 배치할 수 없습니다.',
-        );
-      }
-      return null;
-    }
-    final recommended = widget.store.nextAvailableStartForBlock(
-      blockId: widget.block.id,
-      anchor: start,
-      durationMinutes: durationMinutes,
-    );
-    return showModalBottomSheet<_DirectPlacementChoice>(
+  Future<void> _showActions(BuildContext context) async {
+    await showModalBottomSheet<void>(
       context: context,
       useSafeArea: true,
       showDragHandle: true,
       backgroundColor: Theme.of(context).colorScheme.surface,
       barrierColor: Theme.of(context).colorScheme.scrim,
-      builder: (sheetContext) {
-        final reduceMotion =
-            MediaQuery.maybeOf(sheetContext)?.disableAnimations ?? false;
-        final duration =
-            reduceMotion ? Duration.zero : const Duration(milliseconds: 220);
-        final titles = validation.conflicts
-            .map((conflict) => conflict.title)
-            .toSet()
-            .join(' · ');
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-          child: AnimatedSize(
-            duration: duration,
-            curve: Curves.easeOutCubic,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  '배치 위치 확인',
-                  style: Theme.of(sheetContext).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  titles,
-                  style: TextStyle(
-                    color: Theme.of(sheetContext).colorScheme.error,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                FilledButton.icon(
-                  onPressed: () => Navigator.of(sheetContext).pop(
-                    _DirectPlacementChoice.recommended,
-                  ),
-                  icon: const Icon(Icons.auto_fix_high_rounded),
-                  label: Text(
-                    '${sprintFormatDate(recommended)} ${sprintFormatTime(recommended)}에 배치',
-                  ),
-                ),
-                const SizedBox(height: 8),
-                FilledButton.tonalIcon(
-                  onPressed: () => Navigator.of(sheetContext).pop(
-                    _DirectPlacementChoice.requested,
-                  ),
-                  icon: const Icon(Icons.warning_amber_rounded),
-                  label: Text(
-                    '${sprintFormatTime(start)}에 그대로 배치',
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextButton(
-                  onPressed: () => Navigator.of(sheetContext).pop(),
-                  child: const Text('취소'),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+      builder: (_) => _TaskQuickActionSheet(
+        store: store,
+        task: task,
+        onComplete: () {
+          Navigator.of(context).pop();
+          onCompletion();
+        },
+        onManageTask: () async {
+          Navigator.of(context).pop();
+          await showSprintTaskDetailSheet(
+            context: context,
+            store: store,
+            taskId: task.id,
+          );
+        },
+        onManageBlock: () {
+          Navigator.of(context).pop();
+          onOpenBlock();
+        },
+      ),
     );
-  }
-
-  Future<void> _commitMove(
-    DateTime start,
-    SprintPlacementValidation validation,
-  ) async {
-    final choice = await _requestPlacementChoice(
-      validation: validation,
-      start: start,
-      durationMinutes: widget.block.durationMinutes,
-    );
-    if (choice == null || !mounted) {
-      _resetManipulation();
-      return;
-    }
-    setState(() {
-      _timeAnimationRevision += 1;
-      _saving = true;
-    });
-    final target = choice == _DirectPlacementChoice.recommended
-        ? widget.store.nextAvailableStartForBlock(
-            blockId: widget.block.id,
-            anchor: start,
-          )
-        : start;
-    final result = await widget.store.moveBlock(
-      blockId: widget.block.id,
-      newStart: target,
-      allowConflicts: validation.conflicts.isNotEmpty &&
-          choice == _DirectPlacementChoice.requested,
-    );
-    if (!mounted) return;
-    _resetManipulation();
-    if (result.success) {
-      sprintShowMessage(
-        context: context,
-        message: result.message,
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.message)),
-      );
-    }
-  }
-
-  Future<void> _commitResize(
-    DateTime end,
-    SprintPlacementValidation validation,
-  ) async {
-    final durationMinutes = end.difference(widget.block.start).inMinutes;
-    final choice = await _requestPlacementChoice(
-      validation: validation,
-      start: widget.block.start,
-      durationMinutes: durationMinutes,
-    );
-    if (choice == null || !mounted) {
-      _resetManipulation();
-      return;
-    }
-    setState(() {
-      _timeAnimationRevision += 1;
-      _saving = true;
-    });
-    SprintOperationResult result;
-    if (choice == _DirectPlacementChoice.recommended) {
-      final target = widget.store.nextAvailableStartForBlock(
-        blockId: widget.block.id,
-        anchor: widget.block.start,
-        durationMinutes: durationMinutes,
-      );
-      result = await widget.store.updateBlock(
-        blockId: widget.block.id,
-        start: target,
-        end: target.add(Duration(minutes: durationMinutes)),
-        locked: widget.block.locked,
-      );
-    } else {
-      result = await widget.store.resizeBlock(
-        blockId: widget.block.id,
-        newEnd: end,
-        allowConflicts: validation.conflicts.isNotEmpty,
-      );
-    }
-    if (!mounted) return;
-    _resetManipulation();
-    if (result.success) {
-      sprintShowMessage(
-        context: context,
-        message: result.message,
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.message)),
-      );
-    }
-  }
-
-  void _resetManipulation() {
-    if (!mounted) return;
-    setState(() {
-      _timeAnimationRevision += 1;
-      _moving = false;
-      _resizing = false;
-      _saving = false;
-      _movePixels = 0;
-      _resizePixels = 0;
-      _previewStart = null;
-      _previewEnd = null;
-      _previewValidation = null;
-    });
   }
 
   Future<bool> _confirmDismiss(
@@ -1149,471 +1186,199 @@ class _TaskDismissibleCardState extends State<_TaskDismissibleCard> {
     DismissDirection direction,
   ) async {
     if (direction == DismissDirection.startToEnd) {
-      widget.onCompletion();
+      onCompletion();
       return false;
     }
-
     final type = await showModalBottomSheet<SprintPostponeType>(
       context: context,
-      showDragHandle: true,
       useSafeArea: true,
+      showDragHandle: true,
       backgroundColor: Theme.of(context).colorScheme.surface,
       barrierColor: Theme.of(context).colorScheme.scrim,
-      builder: (sheetContext) {
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                '언제 다시 할까요?',
-                style: Theme.of(sheetContext).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
-              ),
-              const SizedBox(height: 12),
-              _PostponeTile(
-                title: '오늘 나중',
-                subtitle: '가까운 빈 시간',
-                value: SprintPostponeType.laterToday,
-              ),
-              _PostponeTile(
-                title: '내일',
-                subtitle: '09:30',
-                value: SprintPostponeType.tomorrow,
-              ),
-              _PostponeTile(
-                title: '다음 주',
-                subtitle: '월요일 10:00',
-                value: SprintPostponeType.nextWeek,
-              ),
-              _PostponeTile(
-                title: '자동 재배치',
-                subtitle: '빈 시간을 다시 계산',
-                value: SprintPostponeType.automatic,
-              ),
-            ],
-          ),
-        );
-      },
+      builder: (_) => const Padding(
+        padding: EdgeInsets.fromLTRB(16, 0, 16, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _PostponeTile(
+              title: '내일로 이동',
+              subtitle: '현재 기간을 하루 뒤로 이동합니다.',
+              value: SprintPostponeType.tomorrow,
+            ),
+            _PostponeTile(
+              title: '다음 주로 이동',
+              subtitle: '현재 기간을 7일 뒤로 이동합니다.',
+              value: SprintPostponeType.nextWeek,
+            ),
+          ],
+        ),
+      ),
     );
-
-    if (type != null) {
-      widget.store.postponeTask(widget.task.id, type);
-      if (mounted) {
-        sprintShowMessage(
-          context: context,
-          message: '${widget.task.title} 업무를 연기했습니다.',
-        );
-      }
-    }
+    if (type != null) store.postponeTask(task.id, type);
     return false;
-  }
-
-  void _openQuickActions(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      useSafeArea: true,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      barrierColor: Theme.of(context).colorScheme.scrim,
-      builder: (sheetContext) {
-        return _TaskQuickActionSheet(
-          store: widget.store,
-          task: widget.task,
-          onComplete: () {
-            Navigator.of(sheetContext).pop();
-            widget.onCompletion();
-          },
-          onManageTask: () {
-            Navigator.of(sheetContext).pop();
-            Future<void>.delayed(Duration.zero, () {
-              if (!context.mounted) return;
-              showSprintTaskDetailSheet(
-                context: context,
-                store: widget.store,
-                task: widget.task,
-              );
-            });
-          },
-          onManageBlock: () {
-            Navigator.of(sheetContext).pop();
-            Future<void>.delayed(Duration.zero, () {
-              if (!context.mounted) return;
-              showSprintBlockEditorSheet(
-                context: context,
-                store: widget.store,
-                task: widget.task,
-                block: widget.block,
-              );
-            });
-          },
-        );
-      },
-    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final duration =
-        reduceMotion ? Duration.zero : const Duration(milliseconds: 180);
-    final previewStart = _previewStart ?? widget.block.start;
-    final previewEnd = _previewEnd ?? widget.block.end;
-    final conflict = _previewValidation?.conflicts.isNotEmpty ?? false;
-    final visualOffset = _moving ? _movePixels.clamp(-120, 120).toDouble() : 0.0;
-    final interactionEnabled = !_moving && !_resizing && !_saving;
+        reduceMotion ? Duration.zero : const Duration(milliseconds: 220);
+    final completed = task.state == SprintTaskState.completed;
+    final today = DateTime.now();
+    final todayDay = DateTime(today.year, today.month, today.day);
+    final overdue = !completed && task.endDate.isBefore(todayDay);
+    final projectLabel = project?.name ?? '프로젝트 없음';
+
     return Dismissible(
-      key: ValueKey<String>('task-${widget.task.id}-${widget.block.id}'),
-      direction: !_editable || !interactionEnabled
+      key: ValueKey<String>('task-${task.id}'),
+      direction: completed
           ? DismissDirection.none
           : DismissDirection.horizontal,
       confirmDismiss: (direction) => _confirmDismiss(context, direction),
       background: Container(
         alignment: Alignment.centerLeft,
-        padding: const EdgeInsets.symmetric(horizontal: 22),
+        padding: const EdgeInsets.symmetric(horizontal: 24),
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.primaryContainer,
+          color: colors.primaryContainer,
           borderRadius: BorderRadius.circular(20),
         ),
-        child: const Row(
-          children: [
-            Icon(Icons.check_rounded),
-            SizedBox(width: 8),
-            Text('완료'),
-          ],
-        ),
+        child: const Icon(Icons.check_rounded),
       ),
       secondaryBackground: Container(
         alignment: Alignment.centerRight,
-        padding: const EdgeInsets.symmetric(horizontal: 22),
+        padding: const EdgeInsets.symmetric(horizontal: 24),
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.tertiaryContainer,
+          color: colors.tertiaryContainer,
           borderRadius: BorderRadius.circular(20),
         ),
-        child: const Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            Text('연기'),
-            SizedBox(width: 8),
-            Icon(Icons.schedule_rounded),
-          ],
-        ),
+        child: const Icon(Icons.arrow_forward_rounded),
       ),
-      child: AnimatedContainer(
-        duration: _moving ? Duration.zero : duration,
-        curve: Curves.easeOutCubic,
-        transform: Matrix4.translationValues(0, visualOffset, 0),
-        child: _TaskScheduleCard(
-          task: widget.task,
-          block: widget.block,
-          project: widget.project,
-          displayStart: previewStart,
-          displayEnd: previewEnd,
-          timeAnimationRevision: _timeAnimationRevision,
-          manipulating: _moving || _resizing || _saving,
-          conflict: conflict,
-          onTap: widget.onOpenBlock,
-          onLongPress: () => _openQuickActions(context),
-          onMoveStart: _startMove,
-          onMoveUpdate: _updateMove,
-          onMoveEnd: _endMove,
-          onResizeStart: _startResize,
-          onResizeUpdate: _updateResize,
-          onResizeEnd: _endResize,
-        ),
-      ),
-    );
-  }
-}
-
-class _TaskScheduleCard extends StatelessWidget {
-  const _TaskScheduleCard({
-    required this.task,
-    required this.block,
-    required this.project,
-    required this.displayStart,
-    required this.displayEnd,
-    required this.timeAnimationRevision,
-    required this.manipulating,
-    required this.conflict,
-    required this.onTap,
-    required this.onLongPress,
-    required this.onMoveStart,
-    required this.onMoveUpdate,
-    required this.onMoveEnd,
-    required this.onResizeStart,
-    required this.onResizeUpdate,
-    required this.onResizeEnd,
-  });
-
-  final SprintTask task;
-  final SprintScheduleBlock block;
-  final SprintProject? project;
-  final DateTime displayStart;
-  final DateTime displayEnd;
-  final int timeAnimationRevision;
-  final bool manipulating;
-  final bool conflict;
-  final VoidCallback onTap;
-  final VoidCallback onLongPress;
-  final GestureDragStartCallback onMoveStart;
-  final GestureDragUpdateCallback onMoveUpdate;
-  final GestureDragEndCallback onMoveEnd;
-  final GestureDragStartCallback onResizeStart;
-  final GestureDragUpdateCallback onResizeUpdate;
-  final GestureDragEndCallback onResizeEnd;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final completed = task.state == SprintTaskState.completed || block.completed;
-    final manual = task.placementMode == SprintPlacementMode.manual;
-    final editable = !completed &&
-        task.state != SprintTaskState.cancelled &&
-        block.status == SprintScheduleBlockStatus.planned;
-    final reduceMotion =
-        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    final duration =
-        reduceMotion ? Duration.zero : const Duration(milliseconds: 180);
-    final previewDuration = displayEnd.difference(displayStart).inMinutes;
-    final extraHeight =
-        (((previewDuration - 30) / 30).clamp(0, 4) * 6).toDouble();
-    final cardColor =
-        completed ? colors.surfaceContainerLow : colors.surface;
-    return AnimatedSize(
-      duration: duration,
-      curve: Curves.easeOutCubic,
-      child: AnimatedContainer(
-        duration: duration,
-        curve: Curves.easeOutCubic,
-        constraints: BoxConstraints(
-          minHeight: (completed ? 58.0 : 86.0) + extraHeight,
-        ),
-        decoration: BoxDecoration(
-          color: cardColor,
+      child: Material(
+        color: completed
+            ? colors.surfaceContainerLow
+            : colors.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
           borderRadius: BorderRadius.circular(20),
-          boxShadow: manipulating
-              ? <BoxShadow>[
-                  BoxShadow(
-                    color: colors.shadow.withOpacity(0.16),
-                    blurRadius: 18,
-                    offset: const Offset(0, 8),
+          onTap: onOpenBlock,
+          onLongPress: () => _showActions(context),
+          child: AnimatedContainer(
+            duration: duration,
+            curve: Curves.easeOutCubic,
+            constraints: const BoxConstraints(minHeight: 104),
+            padding: const EdgeInsets.all(15),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: overdue ? colors.error : colors.outlineVariant,
+                width: overdue ? 1.5 : 1,
+              ),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                AnimatedContainer(
+                  duration: duration,
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: task.priority == SprintTaskPriority.high
+                        ? colors.errorContainer
+                        : colors.primaryContainer,
+                    borderRadius: BorderRadius.circular(14),
                   ),
-                ]
-              : const <BoxShadow>[],
-        ),
-        child: Material(
-          color: cardColor,
-          borderRadius: BorderRadius.circular(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              InkWell(
-                  borderRadius: BorderRadius.circular(20),
-                  onTap: completed ? null : onTap,
-                  onLongPress: completed ? null : onLongPress,
-                  child: Container(
-                    padding: const EdgeInsets.fromLTRB(15, 15, 15, 10),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: conflict
-                            ? colors.error
-                            : manipulating
-                                ? colors.primary
-                                : manual
-                                    ? colors.primary
-                                    : colors.outlineVariant,
-                        width: conflict || manipulating || manual ? 1.8 : 1,
+                  child: Icon(
+                    completed
+                        ? Icons.check_rounded
+                        : sprintPriorityIcon(task.priority),
+                    color: task.priority == SprintTaskPriority.high
+                        ? colors.onErrorContainer
+                        : colors.onPrimaryContainer,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              projectLabel,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .labelLarge
+                                  ?.copyWith(
+                                    color: colors.primary,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                            ),
+                          ),
+                          AnimatedSwitcher(
+                            duration: duration,
+                            child: Text(
+                              sprintPriorityLabel(task.priority),
+                              key: ValueKey<SprintTaskPriority>(task.priority),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .labelMedium
+                                  ?.copyWith(
+                                    color: overdue
+                                        ? colors.error
+                                        : colors.onSurfaceVariant,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Semantics(
-                          button: editable && !block.locked,
-                          label: block.locked ? '고정된 일정' : '일정 이동 핸들',
-                          child: GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onVerticalDragStart:
-                                editable && !block.locked ? onMoveStart : null,
-                            onVerticalDragUpdate:
-                                editable && !block.locked ? onMoveUpdate : null,
-                            onVerticalDragEnd:
-                                editable && !block.locked ? onMoveEnd : null,
-                            child: Container(
-                              width: 44,
-                              height: 44,
-                              decoration: BoxDecoration(
-                                color: colors.surfaceContainerHighest,
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              child: Icon(
-                                completed
-                                    ? Icons.check_rounded
-                                    : manipulating
-                                        ? Icons.open_with_rounded
-                                        : editable && !block.locked
-                                            ? Icons.drag_indicator_rounded
-                                            : Icons.circle_outlined,
-                                color: completed || manipulating
-                                    ? colors.primary
+                      const SizedBox(height: 5),
+                      Text(
+                        task.title,
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleMedium
+                            ?.copyWith(
+                              decoration: completed
+                                  ? TextDecoration.lineThrough
+                                  : null,
+                              fontWeight: FontWeight.w900,
+                            ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '종일 · ${sprintFormatDateRange(task.startDate, task.endDate)}',
+                              style: TextStyle(
+                                color: overdue
+                                    ? colors.error
                                     : colors.onSurfaceVariant,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      project?.name ?? '알 수 없는 프로젝트',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .labelMedium
-                                          ?.copyWith(
-                                            color: colors.primary,
-                                            fontWeight: FontWeight.w800,
-                                          ),
-                                    ),
-                                  ),
-                                  if (manual)
-                                    const Icon(
-                                      Icons.lock_outline_rounded,
-                                      size: 18,
-                                      semanticLabel: '수동 고정',
-                                    ),
-                                ],
-                              ),
-                              const SizedBox(height: 3),
-                              Text(
-                                task.title,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w900,
-                                  decoration: completed
-                                      ? TextDecoration.lineThrough
-                                      : null,
-                                ),
-                              ),
-                              const SizedBox(height: 5),
-                              AnimatedSwitcher(
-                                duration:
-                                    manipulating ? Duration.zero : duration,
-                                switchInCurve: Curves.easeOutCubic,
-                                switchOutCurve: Curves.easeInCubic,
-                                transitionBuilder: (child, animation) {
-                                  if (reduceMotion || manipulating) return child;
-                                  return FadeTransition(
-                                    opacity: animation,
-                                    child: SlideTransition(
-                                      position: Tween<Offset>(
-                                        begin: const Offset(0, 0.12),
-                                        end: Offset.zero,
-                                      ).animate(animation),
-                                      child: child,
-                                    ),
-                                  );
-                                },
-                                child: Text(
-                                  '${sprintFormatTime(displayStart)}–${sprintFormatTime(displayEnd)} · ${sprintFormatDuration(previewDuration)}${manual ? ' · 수동 고정' : ' · 자동 배치'}',
-                                  key: ValueKey<String>(
-                                    'time-${block.id}-$timeAnimationRevision',
-                                  ),
-                                  style: TextStyle(
-                                    color: conflict
-                                        ? colors.error
-                                        : colors.onSurfaceVariant,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                              AnimatedSwitcher(
-                                duration:
-                                    manipulating ? Duration.zero : duration,
-                                switchInCurve: Curves.easeOutCubic,
-                                switchOutCurve: Curves.easeInCubic,
-                                child: conflict
-                                    ? Padding(
-                                        key: ValueKey<String>(
-                                          'conflict-${block.id}-$timeAnimationRevision',
-                                        ),
-                                        padding: const EdgeInsets.only(top: 6),
-                                        child: Text(
-                                          '충돌 위치 · 놓으면 해결 방법을 선택합니다.',
-                                          style: TextStyle(
-                                            color: colors.error,
-                                            fontWeight: FontWeight.w800,
-                                          ),
-                                        ),
-                                      )
-                                    : manipulating
-                                        ? Padding(
-                                            key: ValueKey<String>(
-                                              'move-${block.id}-$timeAnimationRevision',
-                                            ),
-                                            padding:
-                                                const EdgeInsets.only(top: 6),
-                                            child: Text(
-                                              '30분 단위로 직접 조정 중',
-                                              style: TextStyle(
-                                                color: colors.primary,
-                                                fontWeight: FontWeight.w800,
-                                              ),
-                                            ),
-                                          )
-                                        : SizedBox(
-                                            key: ValueKey<String>(
-                                              'idle-${block.id}-$timeAnimationRevision',
-                                            ),
-                                          ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              if (editable)
-                Semantics(
-                  button: !block.locked,
-                  label: block.locked ? '고정된 일정' : '일정 길이 조절 핸들',
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onVerticalDragStart: block.locked ? null : onResizeStart,
-                    onVerticalDragUpdate: block.locked ? null : onResizeUpdate,
-                    onVerticalDragEnd: block.locked ? null : onResizeEnd,
-                    child: SizedBox(
-                      height: 44,
-                      child: Center(
-                        child: AnimatedContainer(
-                          duration: duration,
-                          width: manipulating ? 54 : 42,
-                          height: 5,
-                          decoration: BoxDecoration(
-                            color: block.locked
-                                ? colors.outlineVariant
-                                : conflict
-                                    ? colors.error
-                                    : colors.primary,
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                        ),
+                          if (block.locked)
+                            Icon(
+                              Icons.lock_rounded,
+                              size: 17,
+                              color: colors.onSurfaceVariant,
+                            ),
+                        ],
                       ),
-                    ),
+                    ],
                   ),
                 ),
-            ],
+                const SizedBox(width: 8),
+                const Icon(Icons.chevron_right_rounded),
+              ],
+            ),
           ),
         ),
       ),
@@ -1671,8 +1436,8 @@ class _ExternalEventCard extends StatelessWidget {
               const SizedBox(height: 14),
               Text(
                 event.blocksTime
-                    ? 'Google 캘린더 · 읽기 전용 · 자동 배치 시간을 차단함'
-                    : 'Google 캘린더 · 읽기 전용 · 자동 배치 시간을 차단하지 않음',
+                    ? 'Google 캘린더 · 읽기 전용'
+                    : 'Google 캘린더 · 읽기 전용',
               ),
               const SizedBox(height: 20),
               FilledButton.tonal(
@@ -1763,36 +1528,93 @@ class _ExternalEventCard extends StatelessWidget {
 }
 
 class _ScheduleEmptyState extends StatelessWidget {
-  const _ScheduleEmptyState();
+  const _ScheduleEmptyState({
+    required this.store,
+    required this.onAddTask,
+  });
+
+  final SprintModeStore store;
+  final VoidCallback onAddTask;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 34, 24, 24),
-      child: Column(
-        children: [
-          Icon(
-            Icons.event_available_outlined,
-            size: 52,
-            color: Theme.of(context).colorScheme.outline,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            '이 날짜에 배치된 프로젝트 업무가 없습니다.',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w900,
-                ),
-          ),
-          const SizedBox(height: 7),
-          Text(
-            '위의 업무 추가 버튼에서 프로젝트와 시간을 지정할 수 있습니다.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
+    final previous = store.previousScheduledDate(store.selectedDate);
+    final next = store.nextScheduledDate(store.selectedDate);
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final duration =
+        reduceMotion ? Duration.zero : const Duration(milliseconds: 220);
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onHorizontalDragEnd: (details) {
+        final velocity = details.primaryVelocity ?? 0;
+        if (velocity > 260) {
+          store.selectPreviousDay();
+        } else if (velocity < -260) {
+          store.selectNextDay();
+        }
+      },
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 34, 24, 24),
+        child: Column(
+          children: [
+            AnimatedContainer(
+              duration: duration,
+              width: 74,
+              height: 74,
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHigh,
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Icon(
+                Icons.event_available_outlined,
+                size: 42,
+                color: Theme.of(context).colorScheme.outline,
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 16),
+            Text(
+              '이 날짜에 배치된 프로젝트 업무가 없습니다.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
+            ),
+            const SizedBox(height: 7),
+            Text(
+              '좌우로 넘겨 날짜를 이동하거나 가까운 일정으로 바로 이동할 수 있습니다.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 18),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (previous != null)
+                  OutlinedButton.icon(
+                    onPressed: () => store.selectDate(previous),
+                    icon: const Icon(Icons.chevron_left_rounded),
+                    label: const Text('이전 일정'),
+                  ),
+                if (next != null)
+                  OutlinedButton.icon(
+                    onPressed: () => store.selectDate(next),
+                    icon: const Icon(Icons.chevron_right_rounded),
+                    label: const Text('다음 일정'),
+                  ),
+                FilledButton.tonalIcon(
+                  onPressed: onAddTask,
+                  icon: const Icon(Icons.add_task_rounded),
+                  label: const Text('이 날짜에 추가'),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1806,6 +1628,10 @@ class _SprintBottomDock extends StatelessWidget {
     required this.attentionCount,
     required this.onProjectTap,
     required this.onProjectSwitchTap,
+    required this.onPreviousProject,
+    required this.onNextProject,
+    required this.onDateTap,
+    required this.onTodayTap,
     required this.onAddTask,
     required this.onAttentionTap,
     required this.onSubmit,
@@ -1817,6 +1643,10 @@ class _SprintBottomDock extends StatelessWidget {
   final int attentionCount;
   final VoidCallback onProjectTap;
   final VoidCallback onProjectSwitchTap;
+  final VoidCallback onPreviousProject;
+  final VoidCallback onNextProject;
+  final VoidCallback onDateTap;
+  final VoidCallback onTodayTap;
   final VoidCallback onAddTask;
   final VoidCallback onAttentionTap;
   final VoidCallback onSubmit;
@@ -1829,6 +1659,19 @@ class _SprintBottomDock extends StatelessWidget {
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final duration =
         reduceMotion ? Duration.zero : const Duration(milliseconds: 180);
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final selected = DateTime(
+      store.selectedDate.year,
+      store.selectedDate.month,
+      store.selectedDate.day,
+    );
+    final selectedProjectId = store.selectedProjectId;
+    final beforeProjectStart = selectedProjectId != null &&
+        !store.canScheduleProjectOn(selectedProjectId, selected);
+    final inputEnabled = !selected.isBefore(today) &&
+        store.projects.isNotEmpty &&
+        !beforeProjectStart;
 
     return Material(
       color: colors.surfaceContainer,
@@ -1861,6 +1704,8 @@ class _SprintBottomDock extends StatelessWidget {
                               label: store.scopeLabel,
                               onSummaryTap: onProjectTap,
                               onSwitchTap: onProjectSwitchTap,
+                              onPrevious: onPreviousProject,
+                              onNext: onNextProject,
                             ),
                           ),
                           const SizedBox(width: 6),
@@ -1872,36 +1717,72 @@ class _SprintBottomDock extends StatelessWidget {
                       ),
               ),
               if (!keyboardVisible) const SizedBox(height: 8),
-              const Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  '업무 입력',
-                  style: TextStyle(fontWeight: FontWeight.w800),
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton.icon(
+                      onPressed: onDateTap,
+                      icon: const Icon(Icons.event_available_rounded, size: 18),
+                      label: AnimatedSwitcher(
+                        duration: duration,
+                        child: Text(
+                          '${sprintFormatDate(store.selectedDate)}에 업무 입력',
+                          key: ValueKey<int>(
+                            store.selectedDate.millisecondsSinceEpoch,
+                          ),
+                          style: const TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                      ),
+                    ),
+                  ),
+                  AnimatedSize(
+                    duration: duration,
+                    child: store.isTodaySelected
+                        ? const SizedBox.shrink()
+                        : TextButton(
+                            onPressed: onTodayTap,
+                            child: const Text('오늘로 이동'),
+                          ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 6),
-              Material(
-                color: colors.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(22),
+              const SizedBox(height: 4),
+              AnimatedContainer(
+                duration: duration,
+                curve: Curves.easeOutCubic,
+                decoration: BoxDecoration(
+                  color: inputEnabled
+                      ? colors.surfaceContainerHighest
+                      : colors.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(
+                    color: inputEnabled
+                        ? colors.outlineVariant
+                        : colors.error.withAlpha(115),
+                  ),
+                ),
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(6, 4, 6, 4),
                   child: Row(
                     children: [
                       IconButton(
                         tooltip: '상세 업무 추가',
-                        onPressed: onAddTask,
+                        onPressed: inputEnabled ? onAddTask : null,
                         icon: const Icon(Icons.add_task_rounded),
                       ),
                       Expanded(
                         child: TextField(
                           controller: controller,
                           focusNode: focusNode,
+                          enabled: inputEnabled,
                           textInputAction: TextInputAction.send,
-                          onSubmitted: (_) => onSubmit(),
+                          onSubmitted: inputEnabled ? (_) => onSubmit() : null,
                           decoration: InputDecoration(
                             border: InputBorder.none,
                             filled: true,
-                            fillColor: colors.surfaceContainerHighest,
+                            fillColor: inputEnabled
+                                ? colors.surfaceContainerHighest
+                                : colors.surfaceContainerLow,
                             contentPadding: const EdgeInsets.symmetric(
                               horizontal: 8,
                               vertical: 12,
@@ -1911,12 +1792,35 @@ class _SprintBottomDock extends StatelessWidget {
                       ),
                       IconButton.filled(
                         tooltip: '업무 추가',
-                        onPressed: onSubmit,
+                        onPressed: inputEnabled ? onSubmit : null,
                         icon: const Icon(Icons.arrow_upward_rounded),
                       ),
                     ],
                   ),
                 ),
+              ),
+              AnimatedSize(
+                duration: duration,
+                curve: Curves.easeOutCubic,
+                child: inputEnabled
+                    ? const SizedBox.shrink()
+                    : Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Text(
+                          selected.isBefore(today)
+                              ? '과거 날짜에는 업무를 추가할 수 없습니다.'
+                              : store.projects.isEmpty
+                                  ? '프로젝트를 만든 뒤 업무를 추가할 수 있습니다.'
+                                  : '프로젝트 목표 시작일 이후 날짜를 선택하세요.',
+                          style: Theme.of(context)
+                              .textTheme
+                              .labelMedium
+                              ?.copyWith(
+                                color: colors.error,
+                                fontWeight: FontWeight.w800,
+                              ),
+                        ),
+                      ),
               ),
             ],
           ),
@@ -1932,58 +1836,102 @@ class _ProjectContextControl extends StatelessWidget {
     required this.label,
     required this.onSummaryTap,
     required this.onSwitchTap,
+    required this.onPrevious,
+    required this.onNext,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback onSummaryTap;
   final VoidCallback onSwitchTap;
+  final VoidCallback onPrevious;
+  final VoidCallback onNext;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return Material(
-      color: colors.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(14),
-      clipBehavior: Clip.antiAlias,
-      child: Row(
-        children: [
-          Expanded(
-            child: InkWell(
-              onTap: onSummaryTap,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(10, 10, 6, 10),
-                child: Row(
-                  children: [
-                    Icon(icon, size: 19),
-                    const SizedBox(width: 7),
-                    Expanded(
-                      child: Text(
-                        label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.w800),
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final duration =
+        reduceMotion ? Duration.zero : const Duration(milliseconds: 180);
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onHorizontalDragEnd: (details) {
+        final velocity = details.primaryVelocity ?? 0;
+        if (velocity > 260) {
+          onPrevious();
+        } else if (velocity < -260) {
+          onNext();
+        }
+      },
+      child: Material(
+        color: colors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(14),
+        clipBehavior: Clip.antiAlias,
+        child: Row(
+          children: [
+            Expanded(
+              child: InkWell(
+                onTap: onSummaryTap,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 10, 6, 10),
+                  child: Row(
+                    children: [
+                      AnimatedSwitcher(
+                        duration: duration,
+                        child: Icon(
+                          icon,
+                          key: ValueKey<IconData>(icon),
+                          size: 19,
+                        ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 7),
+                      Expanded(
+                        child: AnimatedSwitcher(
+                          duration: duration,
+                          transitionBuilder: (child, animation) {
+                            if (reduceMotion) return child;
+                            return FadeTransition(
+                              opacity: animation,
+                              child: SlideTransition(
+                                position: Tween<Offset>(
+                                  begin: const Offset(0.04, 0),
+                                  end: Offset.zero,
+                                ).animate(animation),
+                                child: child,
+                              ),
+                            );
+                          },
+                          child: Text(
+                            label,
+                            key: ValueKey<String>(label),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-          Container(
-            width: 1,
-            height: 28,
-            color: colors.outlineVariant,
-          ),
-          SizedBox(
-            width: 44,
-            height: 44,
-            child: InkWell(
-              onTap: onSwitchTap,
-              child: const Icon(Icons.keyboard_arrow_down_rounded),
+            Container(
+              width: 1,
+              height: 28,
+              color: colors.outlineVariant,
             ),
-          ),
-        ],
+            SizedBox(
+              width: 44,
+              height: 44,
+              child: InkWell(
+                onTap: onSwitchTap,
+                child: const Icon(Icons.keyboard_arrow_down_rounded),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -2042,7 +1990,6 @@ class _TaskQuickActionSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final manual = task.placementMode == SprintPlacementMode.manual;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
       child: Column(
@@ -2056,55 +2003,64 @@ class _TaskQuickActionSheet extends StatelessWidget {
                 ),
           ),
           const SizedBox(height: 4),
-          Text(store.projectName(task.projectId)),
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: onComplete,
-            icon: const Icon(Icons.check_rounded),
-            label: const Text('완료'),
+          Text(
+            '${sprintPriorityLabel(task.priority)} · 종일 · ${sprintFormatDateRange(task.startDate, task.endDate)}',
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w700,
+            ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 14),
           ListTile(
             contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.edit_outlined),
-            title: const Text('업무 관리'),
+            leading: const Icon(Icons.check_circle_outline_rounded),
+            title: const Text(
+              '완료',
+              style: TextStyle(fontWeight: FontWeight.w900),
+            ),
+            onTap: onComplete,
+          ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.arrow_forward_rounded),
+            title: const Text(
+              '내일로 이동',
+              style: TextStyle(fontWeight: FontWeight.w900),
+            ),
+            onTap: () {
+              store.postponeTask(task.id, SprintPostponeType.tomorrow);
+              Navigator.of(context).pop();
+            },
+          ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.date_range_rounded),
+            title: const Text(
+              '다음 주로 이동',
+              style: TextStyle(fontWeight: FontWeight.w900),
+            ),
+            onTap: () {
+              store.postponeTask(task.id, SprintPostponeType.nextWeek);
+              Navigator.of(context).pop();
+            },
+          ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.edit_note_rounded),
+            title: const Text(
+              '업무 관리',
+              style: TextStyle(fontWeight: FontWeight.w900),
+            ),
             onTap: onManageTask,
           ),
           ListTile(
             contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.event_note_rounded),
-            title: const Text('일정 블록 관리'),
-            onTap: onManageBlock,
-          ),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: Icon(
-              manual
-                  ? Icons.lock_open_rounded
-                  : Icons.lock_outline_rounded,
+            leading: const Icon(Icons.edit_calendar_rounded),
+            title: const Text(
+              '기간 관리',
+              style: TextStyle(fontWeight: FontWeight.w900),
             ),
-            title: Text(manual ? '자동 이동 다시 허용' : '시간 고정'),
-            onTap: () {
-              store.setTaskManual(task.id, !manual);
-              sprintShowMessage(
-                context: context,
-                message: manual ? '자동 이동을 다시 허용했습니다.' : '업무 시간을 고정했습니다.',
-              );
-              Navigator.of(context).pop();
-            },
-          ),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.schedule_rounded),
-            title: const Text('내일로 연기'),
-            onTap: () {
-              store.postponeTask(task.id, SprintPostponeType.tomorrow);
-              sprintShowMessage(
-                context: context,
-                message: '업무를 내일로 연기했습니다.',
-              );
-              Navigator.of(context).pop();
-            },
+            onTap: onManageBlock,
           ),
         ],
       ),
@@ -2169,9 +2125,7 @@ class _UnplacedTasksSheet extends StatelessWidget {
                   const SizedBox(height: 12),
                   Expanded(
                     child: tasks.isEmpty
-                        ? const Center(
-                            child: Text('미배치 업무가 없습니다.'),
-                          )
+                        ? const Center(child: Text('미배치 업무가 없습니다.'))
                         : ListView.separated(
                             controller: scrollController,
                             itemCount: tasks.length,
@@ -2183,15 +2137,29 @@ class _UnplacedTasksSheet extends StatelessWidget {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      task.title,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w900,
-                                      ),
+                                    Row(
+                                      children: [
+                                        Icon(sprintPriorityIcon(task.priority)),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            task.title,
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w900,
+                                            ),
+                                          ),
+                                        ),
+                                        Text(
+                                          sprintPriorityLabel(task.priority),
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                    const SizedBox(height: 5),
+                                    const SizedBox(height: 6),
                                     Text(
-                                      '예상 ${sprintFormatDuration(task.estimatedMinutes)}',
+                                      '종일 · ${sprintFormatDateRange(task.startDate, task.endDate)}',
                                     ),
                                     const SizedBox(height: 12),
                                     FilledButton.tonal(
@@ -2200,10 +2168,11 @@ class _UnplacedTasksSheet extends StatelessWidget {
                                         if (!context.mounted) return;
                                         sprintShowMessage(
                                           context: context,
-                                          message: '빈 시간에 업무를 배치했습니다.',
+                                          message:
+                                              '${sprintFormatDate(store.selectedDate)}에 업무를 배치했습니다.',
                                         );
                                       },
-                                      child: const Text('빈 시간에 배치'),
+                                      child: const Text('선택 날짜에 배치'),
                                     ),
                                   ],
                                 ),
@@ -2292,7 +2261,13 @@ class _AttentionSheet extends StatelessWidget {
                                       spacing: 8,
                                       runSpacing: 8,
                                       children: [
-                                        if (item.blockId != null)
+                                        if (item.blockId != null &&
+                                            (item.conflictType ==
+                                                    SprintConflictType
+                                                        .beforeProjectStart ||
+                                                item.conflictType ==
+                                                    SprintConflictType
+                                                        .afterProjectTargetDate))
                                           FilledButton.tonal(
                                             onPressed: () async {
                                               await showSprintConflictResolutionSheet(
@@ -2302,6 +2277,17 @@ class _AttentionSheet extends StatelessWidget {
                                               );
                                             },
                                             child: const Text('해결 방법 선택'),
+                                          )
+                                        else if (item.taskId != null)
+                                          FilledButton.tonal(
+                                            onPressed: () async {
+                                              await showSprintTaskDetailSheet(
+                                                context: context,
+                                                store: store,
+                                                taskId: item.taskId!,
+                                              );
+                                            },
+                                            child: const Text('업무 관리'),
                                           ),
                                       ],
                                     ),
@@ -2333,41 +2319,54 @@ class _SprintReviewSettingsPage extends StatelessWidget {
       builder: (context, child) {
         final project = store.selectedProject;
         final summary = project == null ? null : store.summaryFor(project.id);
-        final planned = store.blocks.fold<int>(
-          0,
-          (sum, block) => sum + block.durationMinutes,
-        );
-        final actual = store.tasks.fold<int>(
-          0,
-          (sum, task) => sum + task.actualMinutes,
-        );
+        final activeTasks = store.tasks.where((task) {
+          return task.state != SprintTaskState.cancelled;
+        }).toList(growable: false);
+        final completed = activeTasks
+            .where((task) => task.state == SprintTaskState.completed)
+            .length;
+        final highRemaining = activeTasks.where((task) {
+          return task.priority == SprintTaskPriority.high &&
+              task.state != SprintTaskState.completed;
+        }).length;
+        final overdue = activeTasks.where((task) {
+          final now = DateTime.now();
+          final today = DateTime(now.year, now.month, now.day);
+          return task.state != SprintTaskState.completed &&
+              task.endDate.isBefore(today);
+        }).length;
 
         return Scaffold(
           appBar: AppBar(title: const Text('리뷰 및 설정')),
           body: ListView(
             padding: const EdgeInsets.fromLTRB(16, 18, 16, 32),
             children: [
-              const SprintSectionHeader(title: '이번 주'),
+              const SprintSectionHeader(title: '업무 현황'),
               const SizedBox(height: 10),
               SprintSurface(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
                   children: [
-                    _ReviewBar(
-                      label: '계획',
-                      minutes: planned,
-                      maximum: math.max(planned, actual).toInt(),
+                    _ReviewCount(
+                      label: '전체',
+                      value: activeTasks.length,
+                      icon: Icons.view_list_rounded,
                     ),
-                    const SizedBox(height: 14),
-                    _ReviewBar(
-                      label: '실제',
-                      minutes: actual,
-                      maximum: math.max(planned, actual).toInt(),
+                    _ReviewCount(
+                      label: '완료',
+                      value: completed,
+                      icon: Icons.check_circle_outline_rounded,
                     ),
-                    const SizedBox(height: 16),
-                    Text(
-                      '평균 예상시간 오차 ${sprintFormatDuration((planned - actual).abs())}',
-                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    _ReviewCount(
+                      label: '높음 남음',
+                      value: highRemaining,
+                      icon: Icons.keyboard_double_arrow_up_rounded,
+                    ),
+                    _ReviewCount(
+                      label: '기한 초과',
+                      value: overdue,
+                      icon: Icons.warning_amber_rounded,
                     ),
                   ],
                 ),
@@ -2393,7 +2392,11 @@ class _SprintReviewSettingsPage extends StatelessWidget {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              '진행 ${(summary.progressRatio * 100).round()}% · 남은 ${sprintFormatDuration(summary.remainingMinutes)}',
+                              '진행 ${(summary.progressRatio * 100).round()}% · 완료 ${summary.completedTaskCount}/${summary.totalTaskCount}',
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '남은 높은 우선순위 ${summary.highPriorityRemainingCount}개',
                             ),
                           ],
                         ),
@@ -2412,24 +2415,21 @@ class _SprintReviewSettingsPage extends StatelessWidget {
                     _GoogleCalendarSettingTile(store: store),
                     const Divider(height: 1),
                     const ListTile(
-                      leading: Icon(Icons.schedule_outlined),
-                      title: Text('업무 가능 시간'),
-                      subtitle: Text('평일 09:00–18:00 · 점심 12:00–13:00'),
-                      trailing: Icon(Icons.chevron_right_rounded),
+                      leading: Icon(Icons.today_outlined),
+                      title: Text('업무 일정 형식'),
+                      subtitle: Text('모든 내부 업무는 종일 날짜 범위로 관리'),
                     ),
                     const Divider(height: 1),
                     const ListTile(
                       leading: Icon(Icons.notifications_outlined),
                       title: Text('알림 설정'),
-                      subtitle: Text('판단이 필요한 항목만 표시'),
-                      trailing: Icon(Icons.chevron_right_rounded),
+                      subtitle: Text('기한과 확인 필요 항목 중심'),
                     ),
                     const Divider(height: 1),
                     const ListTile(
                       leading: Icon(Icons.accessibility_new_rounded),
                       title: Text('화면 및 접근성'),
                       subtitle: Text('시스템 글자 크기와 애니메이션 설정 사용'),
-                      trailing: Icon(Icons.chevron_right_rounded),
                     ),
                   ],
                 ),
@@ -2437,10 +2437,12 @@ class _SprintReviewSettingsPage extends StatelessWidget {
               const SizedBox(height: 22),
               const SprintSectionHeader(title: '이번 주 인사이트'),
               const SizedBox(height: 10),
-              const SprintSurface(
+              SprintSurface(
                 child: Text(
-                  '오후 4시 이후 업무가 다음 날로 이동되는 빈도가 높습니다. 이 시간대의 자동 배치량을 줄이는 것이 적합합니다.',
-                  style: TextStyle(fontWeight: FontWeight.w700),
+                  highRemaining > 0
+                      ? '높은 우선순위 업무 $highRemaining개가 남아 있습니다. 종료일이 가까운 업무부터 확인하세요.'
+                      : '높은 우선순위 업무가 모두 정리됐습니다. 보통 우선순위 업무의 종료일을 확인하세요.',
+                  style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
               ),
             ],
@@ -2451,43 +2453,47 @@ class _SprintReviewSettingsPage extends StatelessWidget {
   }
 }
 
-class _ReviewBar extends StatelessWidget {
-  const _ReviewBar({
+class _ReviewCount extends StatelessWidget {
+  const _ReviewCount({
     required this.label,
-    required this.minutes,
-    required this.maximum,
+    required this.value,
+    required this.icon,
   });
 
   final String label;
-  final int minutes;
-  final int maximum;
+  final int value;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
-    final ratio = maximum <= 0 ? 0.0 : minutes / maximum;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                label,
-                style: const TextStyle(fontWeight: FontWeight.w800),
-              ),
-            ),
-            Text(sprintFormatDuration(minutes)),
-          ],
-        ),
-        const SizedBox(height: 7),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(999),
-          child: LinearProgressIndicator(
-            value: ratio.clamp(0, 1).toDouble(),
-            minHeight: 10,
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      width: 132,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon),
+          const SizedBox(height: 10),
+          Text(
+            '$value',
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w900,
+                ),
           ),
-        ),
-      ],
+          Text(
+            label,
+            style: TextStyle(
+              color: colors.onSurfaceVariant,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

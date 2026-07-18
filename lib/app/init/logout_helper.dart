@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../app/di/routes.dart';
@@ -15,6 +15,7 @@ class LogoutHelper {
     String? route,
     bool checkWorking = false,
     Duration delay = const Duration(milliseconds: 500),
+    bool usePromptUi = false,
   }) async {
     final target = route ?? AppRoutes.selector;
 
@@ -22,6 +23,7 @@ class LogoutHelper {
       await runWithBlockingDialog(
         context: context,
         message: '로그아웃 중입니다...',
+        usePromptUi: usePromptUi,
         task: () async {
           final userState = Provider.of<UserState>(context, listen: false);
           await FlutterForegroundTask.stopService();
@@ -33,25 +35,36 @@ class LogoutHelper {
           await Future.delayed(delay);
           await userState.clearUserToPhone();
           debugPrint(
-              '[LOGOUT][${DateTime.now().toIso8601String()}] userState.clearUserToPhone complete');
+            '[LOGOUT][${DateTime.now().toIso8601String()}] userState.clearUserToPhone complete',
+          );
 
           await FirebaseGoogleAuthBridge.instance.signOutAll();
           debugPrint(
-              '[LOGOUT][${DateTime.now().toIso8601String()}] FirebaseGoogleAuthBridge.signOutAll complete');
+            '[LOGOUT][${DateTime.now().toIso8601String()}] FirebaseGoogleAuthBridge.signOutAll complete',
+          );
 
           final prefs = await SharedPreferences.getInstance();
           await prefs.remove('mode');
           debugPrint(
-              '[LOGOUT][${DateTime.now().toIso8601String()}] prefs.remove(mode) complete');
+            '[LOGOUT][${DateTime.now().toIso8601String()}] prefs.remove(mode) complete',
+          );
         },
       );
 
       if (!context.mounted) return;
       Navigator.of(context).pushNamedAndRemoveUntil(target, (route) => false);
-      showSuccessSnackbar(context, '로그아웃 되었습니다.');
+      showSuccessSnackbar(
+        context,
+        '로그아웃 되었습니다.',
+        usePromptUi: usePromptUi,
+      );
     } catch (e) {
       if (context.mounted) {
-        showFailedSnackbar(context, '로그아웃 실패: $e');
+        showFailedSnackbar(
+          context,
+          '로그아웃 실패: $e',
+          usePromptUi: usePromptUi,
+        );
       }
     }
   }

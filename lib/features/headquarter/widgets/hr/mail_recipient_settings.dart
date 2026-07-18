@@ -1,13 +1,48 @@
 import 'package:flutter/material.dart';
 
+import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+
 import '../../../../app/config/email_config.dart';
 
 class MailRecipientSettings extends StatefulWidget {
-  const MailRecipientSettings({super.key, this.asBottomSheet = false});
+  const MailRecipientSettings({
+    super.key,
+    this.asBottomSheet = false,
+    this.usePromptUi = false,
+  });
 
   final bool asBottomSheet;
+  final bool usePromptUi;
 
-  static Future<T?> showAsBottomSheet<T>(BuildContext context) {
+  static Future<T?> showAsBottomSheet<T>(
+    BuildContext context, {
+    bool usePromptUi = false,
+  }) {
+    Widget buildSheet(BuildContext sheetContext) {
+      final insets = MediaQuery.of(sheetContext).viewInsets;
+      return Padding(
+        padding: EdgeInsets.only(bottom: insets.bottom),
+        child: _BottomSheetFrame(
+          heightFactor: 1,
+          child: MailRecipientSettings(
+            asBottomSheet: true,
+            usePromptUi: usePromptUi,
+          ),
+        ),
+      );
+    }
+
+    if (usePromptUi) {
+      return showPromptOverlayBottomSheet<T>(
+        context: context,
+        useRootNavigator: true,
+        isScrollControlled: true,
+        useSafeArea: true,
+        builder: buildSheet,
+      );
+    }
+
     return showModalBottomSheet<T>(
       context: context,
       useRootNavigator: true,
@@ -15,16 +50,7 @@ class MailRecipientSettings extends StatefulWidget {
       useSafeArea: true,
       backgroundColor: Colors.transparent,
       barrierColor: Colors.black54,
-      builder: (sheetCtx) {
-        final insets = MediaQuery.of(sheetCtx).viewInsets;
-        return Padding(
-          padding: EdgeInsets.only(bottom: insets.bottom),
-          child: const _BottomSheetFrame(
-            heightFactor: 1,
-            child: MailRecipientSettings(asBottomSheet: true),
-          ),
-        );
-      },
+      builder: buildSheet,
     );
   }
 
@@ -39,9 +65,10 @@ class MailRecipientSettings extends StatefulWidget {
 }
 
 class _MailRecipientSettingsState extends State<MailRecipientSettings> {
-  static const _base = Color(0xFF0D47A1);
-  static const _dark = Color(0xFF09367D);
-  static const _light = Color(0xFF5472D3);
+  PromptUiTokens get _tokens => PromptUiTheme.of(context);
+  Color get _base => _tokens.accent;
+  Color get _dark => _tokens.accentPressed;
+  Color get _light => _tokens.accentContainer;
 
   final TextEditingController _ctrl = TextEditingController();
   final FocusNode _focus = FocusNode();
@@ -168,7 +195,6 @@ class _MailRecipientSettingsState extends State<MailRecipientSettings> {
                     decoration: InputDecoration(
                       labelText: '메일 수신자(To)',
 
-                      helperText: '여러 명은 쉼표(,)로 구분합니다.',
                       isDense: true,
                       filled: true,
                       fillColor: _light.withOpacity(.06),
@@ -187,7 +213,7 @@ class _MailRecipientSettingsState extends State<MailRecipientSettings> {
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide:
-                        const BorderSide(color: _base, width: 1.6),
+                        BorderSide(color: _base, width: 1.6),
                       ),
                     ),
                   ),
@@ -217,7 +243,7 @@ class _MailRecipientSettingsState extends State<MailRecipientSettings> {
                     Text(
                       '현재 입력된 수신자가 없습니다.',
                       style:
-                      TextStyle(color: Colors.black.withOpacity(.55)),
+                      TextStyle(color: _tokens.textSecondary),
                     ),
                   const SizedBox(height: 16),
                   Row(
@@ -273,12 +299,12 @@ class _MailRecipientSettingsState extends State<MailRecipientSettings> {
 
     if (!widget.asBottomSheet) {
       return Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: _tokens.canvas,
         appBar: AppBar(
-          backgroundColor: Colors.white,
-          surfaceTintColor: Colors.transparent,
+          backgroundColor: _tokens.canvas,
+          surfaceTintColor: _tokens.transparent,
           elevation: 0,
-          foregroundColor: Colors.black87,
+          foregroundColor: _tokens.textPrimary,
           centerTitle: true,
           title: const Text(
             '메일 수신자 설정',
@@ -339,7 +365,7 @@ class _InfoCard extends StatelessWidget {
         children: [
           CircleAvatar(
             backgroundColor: base,
-            foregroundColor: Colors.white,
+            foregroundColor: PromptUiTheme.of(context).onAccent,
             child: const Icon(Icons.mail_outline_rounded),
           ),
           const SizedBox(width: 10),
@@ -366,7 +392,7 @@ class _GuideCard extends StatelessWidget {
   Widget build(BuildContext context) {
     Text t(String s) => Text(
       s,
-      style: TextStyle(color: Colors.black.withOpacity(.75)),
+      style: TextStyle(color: PromptUiTheme.of(context).textSecondary),
     );
 
     return Container(
@@ -412,20 +438,20 @@ class _BottomSheetFrame extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
           child: DecoratedBox(
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               boxShadow: [
                 BoxShadow(
                   blurRadius: 24,
                   spreadRadius: 8,
-                  color: Color(0x33000000),
-                  offset: Offset(0, 8),
+                  color: PromptUiTheme.of(context).shadow,
+                  offset: const Offset(0, 8),
                 ),
               ],
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(16),
               child: Material(
-                color: Colors.white,
+                color: PromptUiTheme.of(context).surfaceRaised,
                 child: child,
               ),
             ),
@@ -458,7 +484,7 @@ class _SheetScaffold extends StatelessWidget {
           width: 36,
           height: 4,
           decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.12),
+            color: PromptUiTheme.of(context).handle,
             borderRadius: BorderRadius.circular(2),
           ),
         ),

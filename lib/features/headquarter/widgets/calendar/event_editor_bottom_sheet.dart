@@ -2,6 +2,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+
 @immutable
 class _EditorTokens {
   const _EditorTokens({
@@ -66,27 +69,21 @@ const double _kEditorBottomActionBarReserve = 96.0;
 
 
 Future<EditResult?> showEventEditorBottomSheet(
-    BuildContext context, {
-      required String title,
-      required String initialSummary,
-      required DateTime initialStart,
-      required DateTime initialEnd,
-      String initialDescription = '',
-      bool initialAllDay = true, 
-      String? initialColorId,
-      int initialProgress = 0, 
-      bool isEditMode = false, 
-      List<EventTemplate>? templates, 
-    }) {
-  final t = _EditorTokens.of(context);
-
-  return showModalBottomSheet<EditResult>(
-    context: context,
-    useSafeArea: true,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    barrierColor: t.scrim.withOpacity(0.60),
-    builder: (_) => EventEditorBottomSheet(
+  BuildContext context, {
+  required String title,
+  required String initialSummary,
+  required DateTime initialStart,
+  required DateTime initialEnd,
+  String initialDescription = '',
+  bool initialAllDay = true,
+  String? initialColorId,
+  int initialProgress = 0,
+  bool isEditMode = false,
+  List<EventTemplate>? templates,
+  bool usePromptUi = false,
+}) {
+  Widget buildEditor(BuildContext sheetContext) {
+    return EventEditorBottomSheet(
       title: title,
       initialSummary: initialSummary,
       initialStart: initialStart,
@@ -97,10 +94,29 @@ Future<EditResult?> showEventEditorBottomSheet(
       initialProgress: initialProgress,
       isEditMode: isEditMode,
       templates: templates,
-    ),
+      usePromptUi: usePromptUi,
+    );
+  }
+
+  if (usePromptUi) {
+    return showPromptOverlayBottomSheet<EditResult>(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      builder: buildEditor,
+    );
+  }
+
+  final tokens = _EditorTokens.of(context);
+  return showModalBottomSheet<EditResult>(
+    context: context,
+    useSafeArea: true,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    barrierColor: tokens.scrim.withOpacity(0.60),
+    builder: buildEditor,
   );
 }
-
 
 class EventEditorBottomSheet extends StatefulWidget {
   const EventEditorBottomSheet({
@@ -115,6 +131,7 @@ class EventEditorBottomSheet extends StatefulWidget {
     this.initialProgress = 0,
     this.isEditMode = false,
     this.templates,
+    this.usePromptUi = false,
   });
 
   final String title;
@@ -127,6 +144,7 @@ class EventEditorBottomSheet extends StatefulWidget {
   final int initialProgress;
   final bool isEditMode;
   final List<EventTemplate>? templates;
+  final bool usePromptUi;
 
   @override
   State<EventEditorBottomSheet> createState() => _EventEditorBottomSheetState();
@@ -284,8 +302,10 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: AnimatedPadding(
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOut,
+        duration: MediaQuery.maybeOf(context)?.disableAnimations == true
+            ? Duration.zero
+            : PromptUiMotion.component,
+        curve: PromptUiMotion.enter,
         padding: EdgeInsets.only(bottom: viewInsets.bottom),
         child: DraggableScrollableSheet(
           expand: false,
@@ -298,7 +318,9 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
             return Container(
               decoration: BoxDecoration(
                 color: tt.surface,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(PromptUiShapes.sheet),
+                ),
               ),
               child: Column(
                 children: [
@@ -403,24 +425,33 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
                                 label: '시작 날짜',
                                 valueText: fmtDate.format(_start),
                                 onPick: () async {
-                                  final picked = await showDatePicker(
-                                    context: context,
-                                    initialDate: _start,
-                                    firstDate: DateTime(2000),
-                                    lastDate: DateTime(2100),
-                                    builder: (ctx, child) {
-                                      final th = Theme.of(ctx);
-                                      return Theme(
-                                        data: th.copyWith(
-                                          colorScheme: th.colorScheme.copyWith(
-                                            primary: t.accent,
-                                            onPrimary: t.onAccent,
-                                          ),
-                                        ),
-                                        child: child!,
-                                      );
-                                    },
-                                  );
+                                  final picked = widget.usePromptUi
+                                      ? await showPromptDatePicker(
+                                          context: context,
+                                          initialDate: _start,
+                                          firstDate: DateTime(2000),
+                                          lastDate: DateTime(2100),
+                                        )
+                                      : await showDatePicker(
+                                          context: context,
+                                          initialDate: _start,
+                                          firstDate: DateTime(2000),
+                                          lastDate: DateTime(2100),
+                                          builder: (ctx, child) {
+                                            final theme = Theme.of(ctx);
+                                            return Theme(
+                                              data: theme.copyWith(
+                                                colorScheme:
+                                                    theme.colorScheme.copyWith(
+                                                  primary: t.accent,
+                                                  onPrimary: t.onAccent,
+                                                ),
+                                              ),
+                                              child: child ??
+                                                  const SizedBox.shrink(),
+                                            );
+                                          },
+                                        );
                                   if (picked == null) return;
                                   _start = DateTime(picked.year, picked.month, picked.day);
                                   if (!_end.isAfter(_start)) _end = _start.add(const Duration(days: 1));
@@ -434,24 +465,33 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
                                 label: '종료 날짜(포함 안 됨)',
                                 valueText: fmtDate.format(_end),
                                 onPick: () async {
-                                  final picked = await showDatePicker(
-                                    context: context,
-                                    initialDate: _end,
-                                    firstDate: DateTime(2000),
-                                    lastDate: DateTime(2100),
-                                    builder: (ctx, child) {
-                                      final th = Theme.of(ctx);
-                                      return Theme(
-                                        data: th.copyWith(
-                                          colorScheme: th.colorScheme.copyWith(
-                                            primary: t.accent,
-                                            onPrimary: t.onAccent,
-                                          ),
-                                        ),
-                                        child: child!,
-                                      );
-                                    },
-                                  );
+                                  final picked = widget.usePromptUi
+                                      ? await showPromptDatePicker(
+                                          context: context,
+                                          initialDate: _end,
+                                          firstDate: DateTime(2000),
+                                          lastDate: DateTime(2100),
+                                        )
+                                      : await showDatePicker(
+                                          context: context,
+                                          initialDate: _end,
+                                          firstDate: DateTime(2000),
+                                          lastDate: DateTime(2100),
+                                          builder: (ctx, child) {
+                                            final theme = Theme.of(ctx);
+                                            return Theme(
+                                              data: theme.copyWith(
+                                                colorScheme:
+                                                    theme.colorScheme.copyWith(
+                                                  primary: t.accent,
+                                                  onPrimary: t.onAccent,
+                                                ),
+                                              ),
+                                              child: child ??
+                                                  const SizedBox.shrink(),
+                                            );
+                                          },
+                                        );
                                   if (picked == null) return;
                                   _end = DateTime(picked.year, picked.month, picked.day);
                                   if (!_end.isAfter(_start)) _end = _start.add(const Duration(days: 1));
@@ -689,7 +729,6 @@ class ApplyTemplate implements EventTemplate {
       _LabeledField(
         label: '시간',
         controller: time,
-        hint: '예: 10:00~12:00',
         onChanged: (_) => onChanged(),
       ),
     ]);
@@ -774,10 +813,9 @@ class HireTemplate implements EventTemplate {
         label: '지메일',
         controller: gmail,
         keyboardType: TextInputType.emailAddress,
-        hint: '예: name@gmail.com',
         onChanged: (_) => onChanged(),
       ),
-      _LabeledField(label: '은행계좌', controller: bank, hint: '예: 우리은행', onChanged: (_) => onChanged()),
+      _LabeledField(label: '은행계좌', controller: bank, onChanged: (_) => onChanged()),
       _LabeledField(
         label: '계좌번호',
         controller: accountNo,
@@ -787,20 +825,17 @@ class HireTemplate implements EventTemplate {
       _LabeledField(
         label: '총 급여',
         controller: salary,
-        hint: '예: 3,000,000원',
         keyboardType: TextInputType.number,
         onChanged: (_) => onChanged(),
       ),
       _LabeledField(
         label: '계약 형태',
         controller: contractType,
-        hint: '예: 정규직/계약직',
         onChanged: (_) => onChanged(),
       ),
       _LabeledField(
         label: '근무 시작일',
         controller: workStartDateText,
-        hint: '예: 2025-03-15 또는 20250315',
         keyboardType: TextInputType.number,
         onChanged: (_) {
           workStartDate = _tryParseDate(workStartDateText.text);
@@ -810,7 +845,6 @@ class HireTemplate implements EventTemplate {
       _LabeledField(
         label: '첫 계약 종료일',
         controller: firstEndDateText,
-        hint: '예: 2025-09-14 또는 20250914',
         keyboardType: TextInputType.number,
         onChanged: (_) {
           firstEndDate = _tryParseDate(firstEndDateText.text);
@@ -900,7 +934,6 @@ class CheckInTemplate implements EventTemplate {
       _LabeledField(
         label: '출근일',
         controller: workDateText,
-        hint: '예: 2025-03-15 또는 20250315',
         keyboardType: TextInputType.number,
         onChanged: (_) {
           workDate = _tryParseDate(workDateText.text);
@@ -910,14 +943,12 @@ class CheckInTemplate implements EventTemplate {
       _LabeledField(
         label: '계약액',
         controller: contractAmount,
-        hint: '예: 3,000,000원',
         keyboardType: TextInputType.number,
         onChanged: (_) => onChanged(),
       ),
       _LabeledField(
         label: '계약 형태',
         controller: contractType,
-        hint: '예: 정규직/계약직',
         onChanged: (_) => onChanged(),
       ),
       Padding(
@@ -1001,7 +1032,6 @@ class FreeTemplate implements EventTemplate {
       _LabeledField(
         label: '제목',
         controller: title,
-        hint: '자유롭게 제목을 입력하세요',
         onChanged: (_) => onChanged(),
       ),
       Padding(
@@ -1119,14 +1149,12 @@ class _LabeledField extends StatelessWidget {
   const _LabeledField({
     required this.label,
     required this.controller,
-    this.hint,
     this.keyboardType,
     this.onChanged,
   });
 
   final String label;
   final TextEditingController controller;
-  final String? hint;
   final TextInputType? keyboardType;
   final ValueChanged<String>? onChanged;
 

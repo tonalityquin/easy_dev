@@ -6,6 +6,7 @@ import '../../../../app/di/routes.dart';
 import '../../../../features/account/applications/user_state.dart';
 import '../../../../features/dev/application/area_state.dart';
 import '../../../../features/headquarter/application/area/area_master_cache.dart';
+import 'prompt_area_picker_sheet.dart';
 import '../../../plate/application/double/double_plate_state.dart';
 
 const String _modeKey = 'double';
@@ -14,6 +15,7 @@ void doubleAreaPickerBottomSheet({
   required BuildContext context,
   required AreaState areaState,
   required DoublePlateState litePlateState,
+  bool usePromptUi = false,
 }) {
   final userState = context.read<UserState>();
   final userAreas = userState.session?.areas ?? const <String>[];
@@ -36,6 +38,39 @@ void doubleAreaPickerBottomSheet({
     userAreas: userAreas,
     modeKey: _modeKey,
   );
+
+  if (usePromptUi) {
+    showPromptAreaPickerSheet(
+      context: context,
+      future: future,
+      currentArea: areaState.currentArea,
+      onConfirm: (selected, data) async {
+        Navigator.of(context).pop();
+        final beforeArea = areaState.currentArea;
+        areaState.updateAreaPicker(selected);
+        await userState.areaPickerCurrentArea(selected);
+        final isHeadquarter = data.isHeadquarterByName[selected] == true;
+        if (!rootContext.mounted) return;
+        if (isHeadquarter) {
+          litePlateState.doubleDisableAll();
+          Navigator.pushReplacementNamed(
+            rootContext,
+            AppRoutes.doubleHeadquarterPage,
+          );
+        } else {
+          litePlateState.doubleEnableForTypePages();
+          if (beforeArea != areaState.currentArea) {
+            litePlateState.doubleSyncWithAreaState();
+          }
+          Navigator.pushReplacementNamed(
+            rootContext,
+            AppRoutes.doubleTypePage,
+          );
+        }
+      },
+    );
+    return;
+  }
 
   showModalBottomSheet(
     context: context,

@@ -2,65 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../app/di/routes.dart';
-import '../../../../app/utils/status_dialog.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
 import '../../../dev/debug/debug_action_recorder.dart';
 import '../../controllers/personal/personal_login_controller.dart';
+import '../common/prompt_login_ui.dart';
 import 'personal_sign_up_dialog.dart';
-
-double _contrastRatio(Color a, Color b) {
-  final la = a.computeLuminance();
-  final lb = b.computeLuminance();
-  final l1 = la >= lb ? la : lb;
-  final l2 = la >= lb ? lb : la;
-  return (l1 + 0.05) / (l2 + 0.05);
-}
-
-Color _resolveLogoTint({
-  required Color background,
-  required Color preferred,
-  required Color fallback,
-  double minContrast = 3.0,
-}) {
-  if (_contrastRatio(preferred, background) >= minContrast) return preferred;
-  return fallback;
-}
-
-class _BrandTintedLogo extends StatelessWidget {
-  const _BrandTintedLogo({
-    required this.assetPath,
-    required this.height,
-    required this.preferredColor,
-    required this.fallbackColor,
-    this.minContrast = 3.0,
-  });
-
-  final String assetPath;
-  final double height;
-  final Color preferredColor;
-  final Color fallbackColor;
-  final double minContrast;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final bg = theme.scaffoldBackgroundColor;
-
-    final tint = _resolveLogoTint(
-      background: bg,
-      preferred: preferredColor,
-      fallback: fallbackColor,
-      minContrast: minContrast,
-    );
-
-    return Image.asset(
-      assetPath,
-      fit: BoxFit.contain,
-      height: height,
-      color: tint,
-      colorBlendMode: BlendMode.srcIn,
-    );
-  }
-}
 
 class PersonalLoginForm extends StatefulWidget {
   const PersonalLoginForm({super.key, required this.controller});
@@ -73,9 +20,6 @@ class PersonalLoginForm extends StatefulWidget {
 
 class _PersonalLoginFormState extends State<PersonalLoginForm> {
   late final PersonalLoginController _controller;
-
-  static const String _kPelicanTagAsset = 'assets/images/pelican_text.png';
-  static const double _kTagExtraHeight = 70.0;
 
   @override
   void initState() {
@@ -91,44 +35,32 @@ class _PersonalLoginFormState extends State<PersonalLoginForm> {
     );
   }
 
-  void _showSnack(String message, {required bool success}) {
-    final messenger = ScaffoldMessenger.maybeOf(context);
-    if (messenger == null) return;
-    messenger.clearSnackBars();
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(message),
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: success
-            ? Theme.of(context).colorScheme.primary
-            : Theme.of(context).colorScheme.error,
-      ),
-    );
-  }
-
   Future<void> _handleLogin() async {
     final result = await _controller.login(setState);
     if (!mounted) return;
     setState(() {});
 
     if (result.success) {
-      _showSnack(result.message, success: true);
+      showPromptLoginSnack(
+        context,
+        message: result.message,
+        success: true,
+      );
       Navigator.of(context).pushReplacementNamed(AppRoutes.personal);
       return;
     }
 
-    await StatusDialog.showFailure(
+    await showPromptLoginFailure(
       context,
-      title: StatusDialog.loginFailed,
+      title: '로그인 실패',
       description: result.message,
       copyText: result.copyText ?? result.message,
       copyButtonLabel: '실패 내용 복사',
     );
   }
 
-  void _onLoginButtonPressed() {
+  Future<void> _onLoginButtonPressed() async {
     if (_controller.isLoading) return;
-
     _trace(
       '로그인 버튼',
       meta: <String, dynamic>{
@@ -137,13 +69,11 @@ class _PersonalLoginFormState extends State<PersonalLoginForm> {
         'collection': 'personal_accounts',
       },
     );
-
-    _handleLogin();
+    await _handleLogin();
   }
 
   Future<void> _onSignUpButtonPressed() async {
     if (_controller.isLoading) return;
-
     _trace(
       '회원가입 버튼',
       meta: <String, dynamic>{
@@ -154,29 +84,34 @@ class _PersonalLoginFormState extends State<PersonalLoginForm> {
     );
 
     HapticFeedback.selectionClick();
-
-    final devMode = await _controller.isDeveloperModeEnabled();
+    final developerMode = await _controller.isDeveloperModeEnabled();
     if (!mounted) return;
 
-    if (devMode) {
-      final created = await showDialog<bool>(
+    if (developerMode) {
+      final created = await showPromptDialog<bool>(
         context: context,
         barrierDismissible: !_controller.isLoading,
-        builder: (dialogContext) => PersonalSignUpDialog(
-          controller: _controller,
-        ),
+        builder: (_) => PersonalSignUpDialog(controller: _controller),
       );
       if (!mounted) return;
       if (created == true) {
         setState(() {});
-        _showSnack('개인형 계정을 생성했습니다.', success: true);
+        showPromptLoginSnack(
+          context,
+          message: '개인형 계정을 생성했습니다.',
+          success: true,
+        );
       }
       return;
     }
 
     await _controller.openExternalSignUpForm();
     if (!mounted) return;
-    _showSnack('개발자 모드가 아니어서 회원가입 Google Form을 열었습니다.', success: true);
+    showPromptLoginSnack(
+      context,
+      message: '개발자 모드가 아니어서 회원가입 Google Form을 열었습니다.',
+      success: true,
+    );
   }
 
   Future<void> _onLogoutPressed() async {
@@ -189,16 +124,23 @@ class _PersonalLoginFormState extends State<PersonalLoginForm> {
     );
 
     HapticFeedback.selectionClick();
-
     if (!_controller.isLoggedIn) {
-      _showSnack('로그인된 개인형 계정이 없습니다.', success: false);
+      showPromptLoginSnack(
+        context,
+        message: '로그인된 개인형 계정이 없습니다.',
+        success: false,
+      );
       return;
     }
 
     final result = await _controller.logout(setState);
     if (!mounted) return;
     setState(() {});
-    _showSnack(result.message, success: result.success);
+    showPromptLoginSnack(
+      context,
+      message: result.message,
+      success: result.success,
+    );
   }
 
   void _onTopCompanyLogoTapped() {
@@ -210,11 +152,9 @@ class _PersonalLoginFormState extends State<PersonalLoginForm> {
         'action': 'tap',
       },
     );
-
-    HapticFeedback.selectionClick();
   }
 
-  void _onPelicanLogoTapped() {
+  void _onFooterLogoTapped() {
     _trace(
       '회사 로고(펠리컨)',
       meta: <String, dynamic>{
@@ -224,145 +164,47 @@ class _PersonalLoginFormState extends State<PersonalLoginForm> {
         'to': AppRoutes.selector,
       },
     );
-
-    HapticFeedback.selectionClick();
-
     Navigator.of(context).pushNamedAndRemoveUntil(
       AppRoutes.selector,
       (route) => false,
     );
   }
 
-  ThemeData _buildBrandLocalTheme(ThemeData baseTheme) {
-    final cs = baseTheme.colorScheme;
-
-    return baseTheme.copyWith(
-      elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: cs.primary,
-          foregroundColor: cs.onPrimary,
-          minimumSize: const Size.fromHeight(55),
-          padding: EdgeInsets.zero,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          elevation: 0,
-        ),
-      ),
-      outlinedButtonTheme: OutlinedButtonThemeData(
-        style: OutlinedButton.styleFrom(
-          minimumSize: const Size.fromHeight(55),
-          padding: EdgeInsets.zero,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          side: BorderSide(color: cs.outlineVariant),
-          foregroundColor: cs.primary,
-        ),
-      ),
-      iconTheme: baseTheme.iconTheme.copyWith(color: cs.primary),
-      iconButtonTheme: IconButtonThemeData(
-        style: IconButton.styleFrom(
-          foregroundColor: cs.primary,
-          splashFactory: InkRipple.splashFactory,
-        ),
-      ),
-      textSelectionTheme: TextSelectionThemeData(
-        cursorColor: cs.primary,
-        selectionColor: cs.primaryContainer.withOpacity(.35),
-        selectionHandleColor: cs.primary,
-      ),
-    );
-  }
-
-  Widget _buildScreenTag(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-
-    final base = theme.textTheme.labelSmall ??
-        const TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-        );
-
-    final fontSize = (base.fontSize ?? 11).toDouble();
-    final tagImageHeight = fontSize + _kTagExtraHeight;
-
-    final tagPreferredTint = cs.onSurfaceVariant.withOpacity(0.80);
-
-    return Positioned(
-      top: 12,
-      left: 12,
-      child: IgnorePointer(
-        child: Semantics(
-          label: 'screen_tag: personal login (image)',
-          child: ExcludeSemantics(
-            child: _BrandTintedLogo(
-              assetPath: _kPelicanTagAsset,
-              height: tagImageHeight,
-              preferredColor: tagPreferredTint,
-              fallbackColor: cs.onBackground,
-              minContrast: 3.0,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildMoreMenu(BuildContext context) {
-    return Positioned(
-      top: 4,
-      right: 4,
-      child: SafeArea(
-        child: PopupMenuButton<String>(
-          tooltip: '더보기',
-          icon: const Icon(Icons.more_vert_rounded),
-          onSelected: (value) {
-            if (value == 'logout') {
-              _onLogoutPressed();
-            }
-          },
-          itemBuilder: (context) => <PopupMenuEntry<String>>[
-            PopupMenuItem<String>(
-              value: 'logout',
-              enabled: !_controller.isLoading,
-              child: Row(
-                children: const <Widget>[
-                  Icon(Icons.logout_rounded),
-                  SizedBox(width: 10),
-                  Text('로그아웃'),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLoginStatus(BuildContext context) {
-    if (!_controller.isLoggedIn) {
-      return const SizedBox.shrink();
-    }
-
-    final cs = Theme.of(context).colorScheme;
-    final name = _controller.loggedInName ?? '개인형 계정';
+    final tokens = PromptUiTheme.of(context);
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      width: 44,
+      height: 44,
       decoration: BoxDecoration(
-        color: cs.primaryContainer.withOpacity(.55),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: cs.primary.withOpacity(.24)),
+        color: tokens.surface,
+        borderRadius: BorderRadius.circular(PromptUiShapes.control),
+        border: Border.all(color: tokens.borderSubtle),
       ),
-      child: Row(
-        children: <Widget>[
-          Icon(Icons.check_circle_rounded, color: cs.primary),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              '$name 로그인 상태',
-              style: TextStyle(
-                color: cs.onPrimaryContainer,
-                fontWeight: FontWeight.w800,
-              ),
+      child: PopupMenuButton<String>(
+        tooltip: '더보기',
+        color: tokens.surfaceRaised,
+        icon: Icon(Icons.more_vert_rounded, color: tokens.iconPrimary),
+        onSelected: (value) {
+          if (value == 'logout') {
+            _onLogoutPressed();
+          }
+        },
+        itemBuilder: (context) => <PopupMenuEntry<String>>[
+          PopupMenuItem<String>(
+            value: 'logout',
+            enabled: !_controller.isLoading,
+            child: Row(
+              children: <Widget>[
+                Icon(Icons.logout_rounded, color: tokens.iconSecondary),
+                const SizedBox(width: 10),
+                Text(
+                  '로그아웃',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: tokens.textPrimary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ],
             ),
           ),
         ],
@@ -372,159 +214,82 @@ class _PersonalLoginFormState extends State<PersonalLoginForm> {
 
   @override
   Widget build(BuildContext context) {
-    final baseTheme = Theme.of(context);
-    final themed = _buildBrandLocalTheme(baseTheme);
-    final cs = baseTheme.colorScheme;
+    final statusName = _controller.loggedInName ?? '개인형 계정';
+    return PromptLoginScaffold(
+      spec: PromptLoginModeSpec.personal,
+      onTopLogoPressed: _onTopCompanyLogoTapped,
+      onFooterLogoPressed: _onFooterLogoTapped,
+      topTrailing: _buildMoreMenu(context),
+      status: _controller.isLoggedIn
+          ? PromptLoginStatusBanner(
+              visible: true,
+              message: '$statusName 로그인 상태',
+            )
+          : null,
+      fields: PromptLoginFields(
+        nameController: _controller.nameController,
+        nameFocus: _controller.nameFocus,
+        accountController: _controller.phoneController,
+        accountFocus: _controller.phoneFocus,
+        passwordController: _controller.passwordController,
+        passwordFocus: _controller.passwordFocus,
+        accountLabel: '전화번호',
+        accountIcon: Icons.phone_rounded,
+        accountKeyboardType: TextInputType.phone,
+        onAccountChanged: (value) =>
+            _controller.formatPhoneNumber(value, setState),
+        obscurePassword: _controller.obscurePassword,
+        onTogglePassword: () =>
+            setState(() => _controller.togglePassword()),
+        onSubmit: _onLoginButtonPressed,
+        passwordLabel: '비밀번호(5자리)',
+        passwordKeyboardType: TextInputType.number,
+        passwordInputFormatters: <TextInputFormatter>[
+          FilteringTextInputFormatter.digitsOnly,
+          LengthLimitingTextInputFormatter(5),
+        ],
+        enabled: !_controller.isLoading,
+      ),
+      actions: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 390;
+          final loginButton = PromptButton(
+            label: _controller.isLoading ? '로그인 중' : '로그인',
+            icon: Icons.login_rounded,
+            expand: true,
+            loading: _controller.isLoading,
+            onPressed: _controller.isLoading ? null : _onLoginButtonPressed,
+            haptic: PromptHaptic.light,
+          );
+          final signUpButton = PromptButton(
+            label: '회원가입',
+            icon: Icons.person_add_alt_1_rounded,
+            variant: PromptButtonVariant.secondary,
+            expand: true,
+            onPressed: _controller.isLoading ? null : _onSignUpButtonPressed,
+            haptic: PromptHaptic.selection,
+          );
 
-    final media = MediaQuery.of(context);
-    final bool isShort = media.size.height < 640;
-    final bool keyboardOpen = media.viewInsets.bottom > 0;
-    final double footerHeight = (isShort || keyboardOpen) ? 72 : 120;
-    final double topLogoHeight = isShort ? 280 : 360;
-
-    return Theme(
-      data: themed,
-      child: Material(
-        color: Colors.transparent,
-        child: SafeArea(
-          child: Stack(
-            children: [
-              SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Column(
-                  children: [
-                    const SizedBox(height: 12),
-                    GestureDetector(
-                      onTap: _onTopCompanyLogoTapped,
-                      child: SizedBox(
-                        height: topLogoHeight,
-                        child: Center(
-                          child: _BrandTintedLogo(
-                            assetPath: 'assets/images/ParkinWorkin_logo.png',
-                            height: topLogoHeight,
-                            preferredColor: cs.primary,
-                            fallbackColor: cs.onBackground,
-                            minContrast: 3.0,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    _buildLoginStatus(context),
-                    if (_controller.isLoggedIn) const SizedBox(height: 16),
-                    TextField(
-                      controller: _controller.nameController,
-                      focusNode: _controller.nameFocus,
-                      textInputAction: TextInputAction.next,
-                      onSubmitted: (_) => FocusScope.of(context).requestFocus(_controller.phoneFocus),
-                      decoration: _controller.inputDecoration(
-                        label: '이름',
-                        icon: Icons.person,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: _controller.phoneController,
-                      focusNode: _controller.phoneFocus,
-                      keyboardType: TextInputType.phone,
-                      textInputAction: TextInputAction.next,
-                      onChanged: (value) => _controller.formatPhoneNumber(value, setState),
-                      onSubmitted: (_) => FocusScope.of(context).requestFocus(_controller.passwordFocus),
-                      decoration: _controller.inputDecoration(
-                        label: '전화번호',
-                        icon: Icons.phone,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: _controller.passwordController,
-                      focusNode: _controller.passwordFocus,
-                      obscureText: _controller.obscurePassword,
-                      keyboardType: TextInputType.number,
-                      inputFormatters: <TextInputFormatter>[
-                        FilteringTextInputFormatter.digitsOnly,
-                        LengthLimitingTextInputFormatter(5),
-                      ],
-                      textInputAction: TextInputAction.done,
-                      onSubmitted: (_) => _onLoginButtonPressed(),
-                      decoration: _controller.inputDecoration(
-                        label: '비밀번호(5자리)',
-                        icon: Icons.lock,
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _controller.obscurePassword
-                                ? Icons.visibility_off
-                                : Icons.visibility,
-                          ),
-                          onPressed: () => setState(() => _controller.togglePassword()),
-                          tooltip: _controller.obscurePassword ? '표시' : '숨기기',
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 32),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            icon: const Icon(Icons.login),
-                            label: Text(
-                              _controller.isLoading ? '로딩 중...' : '로그인',
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 1.1,
-                              ),
-                            ),
-                            onPressed: _controller.isLoading ? null : _onLoginButtonPressed,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            icon: const Icon(Icons.person_add_alt_1_rounded),
-                            label: const Text(
-                              '회원가입',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 1.1,
-                              ),
-                            ),
-                            onPressed: _controller.isLoading ? null : _onSignUpButtonPressed,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    AnimatedOpacity(
-                      opacity: keyboardOpen ? 0.0 : 1.0,
-                      duration: const Duration(milliseconds: 160),
-                      child: Center(
-                        child: InkWell(
-                          onTap: _onPelicanLogoTapped,
-                          borderRadius: BorderRadius.circular(8),
-                          child: SizedBox(
-                            height: footerHeight,
-                            child: _BrandTintedLogo(
-                              assetPath: 'assets/images/ParkinWorkin_text.png',
-                              height: footerHeight,
-                              preferredColor: cs.primary,
-                              fallbackColor: cs.onBackground,
-                              minContrast: 3.0,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-                ),
-              ),
-              _buildScreenTag(context),
-              _buildMoreMenu(context),
-            ],
-          ),
-        ),
+          return PromptAnimatedReveal(
+            delay: const Duration(milliseconds: 240),
+            child: compact
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      loginButton,
+                      const SizedBox(height: 10),
+                      signUpButton,
+                    ],
+                  )
+                : Row(
+                    children: <Widget>[
+                      Expanded(child: loginButton),
+                      const SizedBox(width: 10),
+                      Expanded(child: signUpButton),
+                    ],
+                  ),
+          );
+        },
       ),
     );
   }

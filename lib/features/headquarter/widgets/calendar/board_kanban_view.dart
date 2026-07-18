@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
 import 'package:googleapis/calendar/v3.dart' as gcal;
 
 import '../../../dev/debug/debug_api_logger.dart';
@@ -361,9 +363,13 @@ class _TopTabs extends StatelessWidget {
           final sel = i == index;
           final p = pages[i];
 
-          final tabBg = sel ? tokens.accentContainer : Colors.transparent;
+          final tabBg = sel
+              ? tokens.accentContainer
+              : PromptUiTheme.of(context).transparent;
           final tabBorder =
-              sel ? tokens.accent.withOpacity(0.30) : Colors.transparent;
+              sel
+              ? tokens.accent.withOpacity(0.30)
+              : PromptUiTheme.of(context).transparent;
 
           final titleColor = sel ? tokens.accent : tokens.text;
           final badgeBg = sel ? tokens.badgeBgSelected : tokens.badgeBg;

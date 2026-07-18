@@ -3,6 +3,9 @@ import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
+
 import '../../account/applications/user_state.dart';
 import '../../account/domain/models/session_account.dart';
 import '../application/chat_account_scope.dart';
@@ -18,21 +21,66 @@ class AreaChatPanel extends StatefulWidget {
     this.areaName,
     this.showCloseButton = false,
     this.onClose,
+    this.usePromptUi = false,
   });
 
   final String? areaName;
   final bool showCloseButton;
   final VoidCallback? onClose;
+  final bool usePromptUi;
 
   static Future<void> showSheet({
     required BuildContext context,
     required String areaName,
+    bool usePromptUi = false,
   }) async {
     final area = areaName.trim();
     if (area.isEmpty) return;
 
     final media = MediaQuery.of(context);
     final heightFactor = media.size.height < 700 ? 0.94 : 0.90;
+
+    Widget buildSheet(BuildContext sheetContext) {
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final maxWidth =
+              constraints.maxWidth > 720 ? 720.0 : constraints.maxWidth;
+          return Align(
+            alignment: Alignment.bottomCenter,
+            child: SizedBox(
+              width: maxWidth,
+              child: FractionallySizedBox(
+                widthFactor: 1,
+                heightFactor: heightFactor,
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(24),
+                  ),
+                  child: AreaChatPanel(
+                    areaName: area,
+                    showCloseButton: true,
+                    usePromptUi: usePromptUi,
+                    onClose: () => Navigator.of(sheetContext).pop(),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      );
+    }
+
+    if (usePromptUi) {
+      await showPromptOverlayBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        isDismissible: false,
+        enableDrag: false,
+        builder: buildSheet,
+      );
+      return;
+    }
 
     await showModalBottomSheet<void>(
       context: context,
@@ -42,35 +90,7 @@ class AreaChatPanel extends StatefulWidget {
       enableDrag: false,
       backgroundColor: Colors.transparent,
       barrierColor: Colors.black.withOpacity(.48),
-      builder: (sheetContext) {
-        return LayoutBuilder(
-          builder: (context, constraints) {
-            final maxWidth = constraints.maxWidth > 720
-                ? 720.0
-                : constraints.maxWidth;
-            return Align(
-              alignment: Alignment.bottomCenter,
-              child: SizedBox(
-                width: maxWidth,
-                child: FractionallySizedBox(
-                  widthFactor: 1,
-                  heightFactor: heightFactor,
-                  child: ClipRRect(
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(24),
-                    ),
-                    child: AreaChatPanel(
-                      areaName: area,
-                      showCloseButton: true,
-                      onClose: () => Navigator.of(sheetContext).pop(),
-                    ),
-                  ),
-                ),
-              ),
-            );
-          },
-        );
-      },
+      builder: buildSheet,
     );
   }
 
@@ -173,11 +193,17 @@ class _AreaChatPanelState extends State<AreaChatPanel> {
   void _scrollToBottomSoon() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_scrollController.hasClients) return;
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOutCubic,
-      );
+      final reduceMotion =
+          MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+      if (reduceMotion) {
+        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+      } else {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+        );
+      }
     });
   }
 
@@ -208,14 +234,49 @@ class _AreaChatPanelState extends State<AreaChatPanel> {
     _scrollToBottomSoon();
   }
 
+  Future<T?> _showPanelDialog<T>({
+    required WidgetBuilder builder,
+    bool barrierDismissible = true,
+  }) {
+    if (widget.usePromptUi) {
+      return showPromptOverlayDialog<T>(
+        context: context,
+        barrierDismissible: barrierDismissible,
+        builder: builder,
+      );
+    }
+    return showDialog<T>(
+      context: context,
+      barrierDismissible: barrierDismissible,
+      builder: builder,
+    );
+  }
+
+  Future<T?> _showPanelBottomSheet<T>({
+    required WidgetBuilder builder,
+    bool showDragHandle = false,
+  }) {
+    if (widget.usePromptUi) {
+      return showPromptOverlayBottomSheet<T>(
+        context: context,
+        showDragHandle: showDragHandle,
+        builder: builder,
+      );
+    }
+    return showModalBottomSheet<T>(
+      context: context,
+      showDragHandle: showDragHandle,
+      builder: builder,
+    );
+  }
+
   Future<void> _requestClose() async {
     if (_textController.text.trim().isEmpty) {
       _closePanel();
       return;
     }
 
-    final close = await showDialog<bool>(
-      context: context,
+    final close = await _showPanelDialog<bool>(
       builder: (dialogContext) {
         return AlertDialog(
           title: const Text('작성 중인 메시지 삭제'),
@@ -250,8 +311,7 @@ class _AreaChatPanelState extends State<AreaChatPanel> {
 
   Future<void> _showMessageActions(ChatMessage message) async {
     final pinned = _controller.pinnedNotice?.messageId == message.id;
-    final action = await showModalBottomSheet<_MessageAction>(
-      context: context,
+    final action = await _showPanelBottomSheet<_MessageAction>(
       showDragHandle: true,
       builder: (sheetContext) {
         return SafeArea(
@@ -298,8 +358,7 @@ class _AreaChatPanelState extends State<AreaChatPanel> {
   }
 
   Future<void> _showPinnedNotice(ChatPinnedNotice notice) async {
-    await showDialog<void>(
-      context: context,
+    await _showPanelDialog<void>(
       builder: (dialogContext) {
         final sender = notice.senderName.trim().isEmpty
             ? '사용자'
@@ -368,8 +427,11 @@ class _AreaChatPanelState extends State<AreaChatPanel> {
         ? headquarterChatAreaName
         : requestedArea.trim();
 
+    final tokens = PromptUiTheme.of(context);
     return Material(
-      color: Theme.of(context).colorScheme.surface,
+      color: widget.usePromptUi
+          ? tokens.surfaceRaised
+          : Theme.of(context).colorScheme.surface,
       child: SafeArea(
         top: false,
         child: Column(

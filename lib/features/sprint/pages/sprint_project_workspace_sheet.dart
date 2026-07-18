@@ -668,7 +668,7 @@ class _WorkspaceMenuPanel extends StatelessWidget {
                     backgroundColor: colors.surfaceContainerHigh,
                     child: Text(
                       project == null
-                          ? '전체 일정의 날짜별 업무 추가 버튼에서 프로젝트와 시간을 선택합니다.'
+                          ? '전체 일정의 업무 추가 버튼에서 프로젝트, 우선순위, 날짜 범위를 선택합니다.'
                           : '${project.name} 일정의 날짜별 업무 추가 버튼에서 업무를 생성합니다.',
                       style: TextStyle(color: colors.onSurfaceVariant),
                     ),

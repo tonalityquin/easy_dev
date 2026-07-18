@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/di/routes.dart';
+import '../../../app/utils/snackbar_helper.dart';
+import '../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
 import '../../dev/debug/debug_action_recorder.dart';
 
 @immutable
@@ -21,19 +24,19 @@ class HeadquarterModeSwitchButton extends StatelessWidget {
     _HeadquarterModeTarget(
       title: '더블 헤드쿼터로 이동',
       routeName: AppRoutes.doubleHeadquarterPage,
-      icon: Icons.view_week,
+      icon: Icons.view_week_rounded,
       modeKey: 'double',
     ),
     _HeadquarterModeTarget(
       title: '트리플 헤드쿼터로 이동',
       routeName: AppRoutes.tripleHeadquarterPage,
-      icon: Icons.apartment,
+      icon: Icons.apartment_rounded,
       modeKey: 'triple',
     ),
     _HeadquarterModeTarget(
       title: '마이너 헤드쿼터로 이동',
       routeName: AppRoutes.minorHeadquarterPage,
-      icon: Icons.tune,
+      icon: Icons.tune_rounded,
       modeKey: 'minor',
     ),
     _HeadquarterModeTarget(
@@ -51,10 +54,7 @@ class HeadquarterModeSwitchButton extends StatelessWidget {
         .toList(growable: false);
   }
 
-  void _trace(
-    BuildContext context,
-    _HeadquarterModeTarget target,
-  ) {
+  void _trace(BuildContext context, _HeadquarterModeTarget target) {
     DebugActionRecorder.instance.recordAction(
       '헤드쿼터 모드 전환',
       route: ModalRoute.of(context)?.settings.name,
@@ -69,57 +69,75 @@ class HeadquarterModeSwitchButton extends StatelessWidget {
   }
 
   Future<_HeadquarterModeTarget?> _pickTarget(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return showDialog<_HeadquarterModeTarget>(
+    return showPromptDialog<_HeadquarterModeTarget>(
       context: context,
-      barrierDismissible: true,
       builder: (dialogContext) {
-        return Dialog(
-          backgroundColor: colorScheme.surface,
-          surfaceTintColor: Colors.transparent,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        '헤드쿼터 모드 전환',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          color: colorScheme.onSurface,
+        final tokens = PromptUiTheme.of(dialogContext);
+        return ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: tokens.accentContainer,
+                      borderRadius:
+                          BorderRadius.circular(PromptUiShapes.control),
+                      border: Border.all(color: tokens.borderSubtle),
+                    ),
+                    child: Icon(
+                      Icons.swap_horiz_rounded,
+                      color: tokens.onAccentContainer,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      '헤드쿼터 모드 전환',
+                      style: Theme.of(dialogContext)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(
+                            color: tokens.textPrimary,
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                  ),
+                  PromptIconButton(
+                    icon: Icons.close_rounded,
+                    tooltip: '닫기',
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    haptic: PromptHaptic.selection,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              ..._targets.asMap().entries.map(
+                    (entry) => Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: PromptAnimatedReveal(
+                        delay: Duration(milliseconds: 45 * entry.key),
+                        offset: const Offset(0, 0.025),
+                        child: PromptButton(
+                          label: entry.value.title,
+                          icon: entry.value.icon,
+                          onPressed: () => Navigator.of(dialogContext)
+                              .pop(entry.value),
+                          expand: true,
+                          variant: entry.value.isSprint
+                              ? PromptButtonVariant.primary
+                              : PromptButtonVariant.secondary,
+                          haptic: PromptHaptic.selection,
                         ),
                       ),
                     ),
-                    IconButton(
-                      tooltip: '닫기',
-                      onPressed: () => Navigator.of(dialogContext).pop(),
-                      icon: Icon(
-                        Icons.close,
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                ..._targets.map(
-                  (target) => Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: _ModeSwitchDialogOption(
-                      target: target,
-                      onTap: () => Navigator.of(dialogContext).pop(target),
-                    ),
                   ),
-                ),
-              ],
-            ),
+            ],
           ),
         );
       },
@@ -132,19 +150,19 @@ class HeadquarterModeSwitchButton extends StatelessWidget {
 
     final builder = appRoutes[target.routeName];
     if (builder == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('이동할 화면을 찾을 수 없습니다.')),
+      showFailedSnackbar(
+        context,
+        '이동할 화면을 찾을 수 없습니다.',
+        usePromptUi: true,
       );
       return;
     }
 
     _trace(context, target);
     onBeforeSwitch();
-
     if (!context.mounted) return;
 
     final returnRouteName = target.isSprint ? _currentHeadquarterRoute() : null;
-
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
@@ -183,39 +201,34 @@ class HeadquarterModeSwitchButton extends StatelessWidget {
   }) {
     final duration = reduceMotion
         ? Duration.zero
-        : Duration(milliseconds: isSprint ? 420 : 220);
+        : Duration(milliseconds: isSprint ? 420 : 240);
 
     return PageRouteBuilder<void>(
       settings: RouteSettings(name: routeName, arguments: arguments),
       transitionDuration: duration,
       reverseTransitionDuration: duration,
-      pageBuilder: (context, animation, secondaryAnimation) {
-        return builder(context);
-      },
+      pageBuilder: (context, animation, secondaryAnimation) => builder(context),
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
         if (reduceMotion) return child;
         final curved = CurvedAnimation(
           parent: animation,
-          curve: Curves.easeOutCubic,
+          curve: PromptUiMotion.enter,
+          reverseCurve: PromptUiMotion.exit,
         );
-        final slide = Tween<Offset>(
-          begin: isSprint
-              ? const Offset(0, 0.06)
-              : const Offset(-1.0, 0),
-          end: Offset.zero,
-        ).animate(curved);
-        final fade = Tween<double>(begin: 0, end: 1).animate(curved);
-        final scale = Tween<double>(
-          begin: isSprint ? 0.985 : 1,
-          end: 1,
-        ).animate(curved);
-
         return FadeTransition(
-          opacity: fade,
+          opacity: curved,
           child: SlideTransition(
-            position: slide,
+            position: Tween<Offset>(
+              begin: isSprint
+                  ? const Offset(0, 0.045)
+                  : const Offset(0.035, 0),
+              end: Offset.zero,
+            ).animate(curved),
             child: ScaleTransition(
-              scale: scale,
+              scale: Tween<double>(
+                begin: isSprint ? 0.985 : 1,
+                end: 1,
+              ).animate(curved),
               child: child,
             ),
           ),
@@ -227,15 +240,14 @@ class HeadquarterModeSwitchButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-      child: SizedBox(
-        width: double.infinity,
-        child: ElevatedButton.icon(
-          icon: const Icon(Icons.swap_horiz),
-          label: const Text('헤드쿼터 모드 전환'),
-          style: _switchButtonStyle(context),
-          onPressed: () => _switchMode(context),
-        ),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+      child: PromptButton(
+        label: '헤드쿼터 모드 전환',
+        icon: Icons.swap_horiz_rounded,
+        onPressed: () => _switchMode(context),
+        expand: true,
+        variant: PromptButtonVariant.secondary,
+        haptic: PromptHaptic.selection,
       ),
     );
   }
@@ -256,99 +268,4 @@ class _HeadquarterModeTarget {
   final IconData icon;
   final String modeKey;
   final bool isSprint;
-}
-
-class _ModeSwitchDialogOption extends StatelessWidget {
-  const _ModeSwitchDialogOption({
-    required this.target,
-    required this.onTap,
-  });
-
-  final _HeadquarterModeTarget target;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          decoration: BoxDecoration(
-            color: colorScheme.surface,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: colorScheme.outlineVariant.withOpacity(0.85),
-            ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: target.isSprint
-                      ? colorScheme.primaryContainer
-                      : colorScheme.primary.withOpacity(0.09),
-                  borderRadius: BorderRadius.circular(11),
-                ),
-                child: Icon(
-                  target.icon,
-                  color: target.isSprint
-                      ? colorScheme.onPrimaryContainer
-                      : colorScheme.primary,
-                  size: 22,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  target.title,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: colorScheme.onSurface,
-                  ),
-                ),
-              ),
-              Icon(
-                Icons.chevron_right,
-                color: colorScheme.onSurfaceVariant,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-ButtonStyle _switchButtonStyle(BuildContext context) {
-  final colorScheme = Theme.of(context).colorScheme;
-
-  return ElevatedButton.styleFrom(
-    backgroundColor: colorScheme.surface,
-    foregroundColor: colorScheme.onSurface,
-    minimumSize: const Size.fromHeight(48),
-    padding: EdgeInsets.zero,
-    elevation: 0,
-    side: BorderSide(
-      color: colorScheme.outlineVariant.withOpacity(0.85),
-      width: 1,
-    ),
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(8),
-    ),
-  ).copyWith(
-    overlayColor: MaterialStateProperty.resolveWith<Color?>(
-      (states) => states.contains(MaterialState.pressed)
-          ? colorScheme.outlineVariant.withOpacity(0.12)
-          : null,
-    ),
-  );
 }

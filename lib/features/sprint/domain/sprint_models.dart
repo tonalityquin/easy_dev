@@ -8,6 +8,12 @@ enum SprintTaskState {
   cancelled,
 }
 
+enum SprintTaskPriority {
+  high,
+  normal,
+  low,
+}
+
 enum SprintPlacementMode {
   automatic,
   manual,
@@ -21,10 +27,8 @@ enum SprintCalendarConnectionState {
 }
 
 enum SprintPostponeType {
-  laterToday,
   tomorrow,
   nextWeek,
-  automatic,
 }
 
 enum SprintWorkspaceScopeType {
@@ -46,12 +50,10 @@ enum SprintScheduleBlockStatus {
 }
 
 enum SprintConflictType {
-  internalOverlap,
-  externalCalendar,
-  outsideWorkingHours,
-  lunchBreak,
-  pastTime,
+  pastDate,
+  invalidDateRange,
   beforeProjectStart,
+  afterProjectTargetDate,
   targetDateRisk,
 }
 
@@ -77,7 +79,6 @@ enum SprintActivityEventType {
   blockMoved,
   blockResized,
   blockUnscheduled,
-  blockSplit,
   conflictResolved,
 }
 
@@ -198,26 +199,33 @@ class SprintTask {
     required this.id,
     required this.title,
     required this.projectId,
-    required this.estimatedMinutes,
+    required this.priority,
+    required this.startDate,
+    required this.endDate,
     required this.order,
     required this.state,
-    required this.placementMode,
-    this.deadline,
-    this.actualMinutes = 0,
+    this.placementMode = SprintPlacementMode.automatic,
   });
 
   final String id;
   String title;
   String? projectId;
-  int estimatedMinutes;
-  int actualMinutes;
+  SprintTaskPriority priority;
+  DateTime startDate;
+  DateTime endDate;
   int order;
   SprintTaskState state;
   SprintPlacementMode placementMode;
-  DateTime? deadline;
 
-  int get remainingMinutes =>
-      (estimatedMinutes - actualMinutes).clamp(0, estimatedMinutes).toInt();
+  bool get allDay => true;
+  int get durationDays => endDate.difference(startDate).inDays + 1;
+
+  bool spans(DateTime date) {
+    final day = DateTime(date.year, date.month, date.day);
+    final start = DateTime(startDate.year, startDate.month, startDate.day);
+    final end = DateTime(endDate.year, endDate.month, endDate.day);
+    return !day.isBefore(start) && !day.isAfter(end);
+  }
 }
 
 class SprintScheduleBlock {
@@ -226,9 +234,9 @@ class SprintScheduleBlock {
     required this.taskId,
     required this.start,
     required this.end,
+    this.allDay = true,
     this.completed = false,
     this.status = SprintScheduleBlockStatus.planned,
-    this.executedMinutes = 0,
     this.locked = false,
   });
 
@@ -236,14 +244,22 @@ class SprintScheduleBlock {
   final String taskId;
   DateTime start;
   DateTime end;
+  bool allDay;
   bool completed;
   SprintScheduleBlockStatus status;
-  int executedMinutes;
   bool locked;
 
-  int get durationMinutes => end.difference(start).inMinutes;
-  int get remainingMinutes =>
-      (durationMinutes - executedMinutes).clamp(0, durationMinutes).toInt();
+  DateTime get startDate => DateTime(start.year, start.month, start.day);
+  DateTime get endDate => DateTime(
+        end.subtract(const Duration(days: 1)).year,
+        end.subtract(const Duration(days: 1)).month,
+        end.subtract(const Duration(days: 1)).day,
+      );
+
+  bool spans(DateTime date) {
+    final day = DateTime(date.year, date.month, date.day);
+    return !day.isBefore(startDate) && !day.isAfter(endDate);
+  }
 }
 
 class SprintExternalEvent {
@@ -353,26 +369,28 @@ class SprintProjectReport {
     required this.id,
     required this.projectId,
     required this.completedAt,
-    required this.plannedMinutes,
-    required this.actualMinutes,
-    required this.scheduledMinutes,
     required this.completedTaskCount,
     required this.cancelledTaskCount,
     required this.postponeCount,
     required this.conflictCount,
     required this.resolvedConflictCount,
     required this.targetDeltaDays,
+    this.totalTaskCount = 0,
+    this.highPriorityCompletedCount = 0,
+    this.onTimeCompletedCount = 0,
+    this.overdueCompletedCount = 0,
     this.reviewNote,
   });
 
   final String id;
   final String projectId;
   final DateTime completedAt;
-  final int plannedMinutes;
-  final int actualMinutes;
-  final int scheduledMinutes;
+  final int totalTaskCount;
   final int completedTaskCount;
   final int cancelledTaskCount;
+  final int highPriorityCompletedCount;
+  final int onTimeCompletedCount;
+  final int overdueCompletedCount;
   final int postponeCount;
   final int conflictCount;
   final int resolvedConflictCount;
@@ -394,27 +412,24 @@ class SprintTaskCreationPreview {
   const SprintTaskCreationPreview({
     required this.title,
     required this.projectId,
-    required this.estimatedMinutes,
-    required this.deadline,
-    required this.requestedStart,
-    required this.explicitStart,
+    required this.priority,
+    required this.startDate,
+    required this.endDate,
     required this.conflicts,
-    required this.recommendedStart,
   });
 
   final String title;
   final String projectId;
-  final int estimatedMinutes;
-  final DateTime? deadline;
-  final DateTime? requestedStart;
-  final bool explicitStart;
+  final SprintTaskPriority priority;
+  final DateTime startDate;
+  final DateTime endDate;
   final List<SprintScheduleConflict> conflicts;
-  final DateTime? recommendedStart;
 
   bool get hasConflicts => conflicts.isNotEmpty;
   bool get hasHardConflict => conflicts.any(
         (conflict) =>
-            conflict.type == SprintConflictType.pastTime ||
+            conflict.type == SprintConflictType.pastDate ||
+            conflict.type == SprintConflictType.invalidDateRange ||
             conflict.type == SprintConflictType.beforeProjectStart,
       );
 }
@@ -434,20 +449,18 @@ class SprintOperationResult {
 class SprintDayLoad {
   SprintDayLoad({
     required this.date,
-    required this.plannedMinutes,
-    required this.availableMinutes,
+    required this.taskCount,
+    required this.highPriorityCount,
+    required this.priorityScore,
   });
 
   final DateTime date;
-  final int plannedMinutes;
-  final int availableMinutes;
+  final int taskCount;
+  final int highPriorityCount;
+  final int priorityScore;
 
-  double get ratio {
-    if (availableMinutes <= 0) return 1;
-    return plannedMinutes / availableMinutes;
-  }
-
-  bool get overloaded => plannedMinutes > availableMinutes;
+  double get ratio => (priorityScore / 12).clamp(0, 1).toDouble();
+  bool get overloaded => taskCount >= 7 || priorityScore >= 12;
 }
 
 class SprintProjectSummary {
@@ -457,10 +470,8 @@ class SprintProjectSummary {
     required this.completedTaskCount,
     required this.todayTaskCount,
     required this.attentionCount,
-    required this.totalEstimatedMinutes,
-    required this.completedEstimatedMinutes,
-    required this.remainingMinutes,
-    required this.estimatedCompletion,
+    required this.highPriorityRemainingCount,
+    required this.plannedCompletion,
     required this.workload,
     required this.todayTasks,
     required this.pathTasks,
@@ -471,28 +482,24 @@ class SprintProjectSummary {
   final int completedTaskCount;
   final int todayTaskCount;
   final int attentionCount;
-  final int totalEstimatedMinutes;
-  final int completedEstimatedMinutes;
-  final int remainingMinutes;
-  final DateTime estimatedCompletion;
+  final int highPriorityRemainingCount;
+  final DateTime plannedCompletion;
   final List<SprintDayLoad> workload;
   final List<SprintTask> todayTasks;
   final List<SprintTask> pathTasks;
 
   double get progressRatio {
-    if (totalEstimatedMinutes <= 0) return 0;
-    return (completedEstimatedMinutes / totalEstimatedMinutes)
-        .clamp(0, 1)
-        .toDouble();
+    if (totalTaskCount <= 0) return 0;
+    return (completedTaskCount / totalTaskCount).clamp(0, 1).toDouble();
   }
 
   bool get isLate {
     final target = project.targetDate;
     if (target == null) return false;
     final estimateDay = DateTime(
-      estimatedCompletion.year,
-      estimatedCompletion.month,
-      estimatedCompletion.day,
+      plannedCompletion.year,
+      plannedCompletion.month,
+      plannedCompletion.day,
     );
     final targetDay = DateTime(target.year, target.month, target.day);
     return estimateDay.isAfter(targetDay);
@@ -502,9 +509,9 @@ class SprintProjectSummary {
     final target = project.targetDate;
     if (target == null || !isLate) return 0;
     final estimateDay = DateTime(
-      estimatedCompletion.year,
-      estimatedCompletion.month,
-      estimatedCompletion.day,
+      plannedCompletion.year,
+      plannedCompletion.month,
+      plannedCompletion.day,
     );
     final targetDay = DateTime(target.year, target.month, target.day);
     return estimateDay.difference(targetDay).inDays;

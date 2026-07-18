@@ -14,6 +14,8 @@ import '../../../../app/auth/google_auth_session.dart';
 import '../../../../app/config/email_config.dart';
 import '../../../../app/init/app_navigator.dart';
 import '../../../../app/utils/status_dialog.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
 import '../../../dev/debug/debug_api_logger.dart';
 import '../../../selector/application/dev_auth.dart';
 
@@ -1646,11 +1648,22 @@ class HeadMemo {
         .toList();
   }
 
-  static Future<void> openPanel() => togglePanel();
+  static Future<void> openPanel({
+    BuildContext? context,
+    bool usePromptUi = false,
+  }) {
+    return togglePanel(
+      context: context,
+      usePromptUi: usePromptUi,
+    );
+  }
 
-  static Future<void> togglePanel() async {
+  static Future<void> togglePanel({
+    BuildContext? context,
+    bool usePromptUi = false,
+  }) async {
     await _ensureInited();
-    final ctx = _bestContext();
+    final ctx = context ?? _bestContext();
     if (ctx == null) {
       await _logApiError(
         tag: 'HeadMemo.togglePanel',
@@ -1658,7 +1671,12 @@ class HeadMemo {
         error: Exception('no_context'),
         tags: const <String>[_tMemo, _tMemoUi],
       );
-      WidgetsBinding.instance.addPostFrameCallback((_) => togglePanel());
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => togglePanel(
+          context: context,
+          usePromptUi: usePromptUi,
+        ),
+      );
       return;
     }
     if (_isPanelOpen) {
@@ -1667,13 +1685,21 @@ class HeadMemo {
     }
     if (_panelFuture != null) return;
     _isPanelOpen = true;
-    _panelFuture = showModalBottomSheet<void>(
-      context: ctx,
-      useSafeArea: true,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => const _HeadMemoSheet(),
-    ).whenComplete(() {
+    final future = usePromptUi
+        ? showPromptOverlayBottomSheet<void>(
+            context: ctx,
+            useSafeArea: true,
+            isScrollControlled: true,
+            builder: (_) => const _HeadMemoSheet(usePromptUi: true),
+          )
+        : showModalBottomSheet<void>(
+            context: ctx,
+            useSafeArea: true,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            builder: (_) => const _HeadMemoSheet(),
+          );
+    _panelFuture = future.whenComplete(() {
       _isPanelOpen = false;
       _panelFuture = null;
     });
@@ -1716,7 +1742,9 @@ class HeadMemo {
 }
 
 class _HeadMemoSheet extends StatefulWidget {
-  const _HeadMemoSheet();
+  const _HeadMemoSheet({this.usePromptUi = false});
+
+  final bool usePromptUi;
 
   @override
   State<_HeadMemoSheet> createState() => _HeadMemoSheetState();
@@ -1740,6 +1768,50 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
   String? _activeBookRenderId;
 
   static const int _mimeB64LineLength = 76;
+
+  Future<T?> _showMemoDialog<T>({
+    BuildContext? anchorContext,
+    required WidgetBuilder builder,
+    bool barrierDismissible = true,
+  }) {
+    final targetContext = anchorContext ?? context;
+    if (widget.usePromptUi) {
+      return showPromptOverlayDialog<T>(
+        context: targetContext,
+        barrierDismissible: barrierDismissible,
+        builder: builder,
+      );
+    }
+    return showDialog<T>(
+      context: targetContext,
+      barrierDismissible: barrierDismissible,
+      builder: builder,
+    );
+  }
+
+  Future<T?> _showMemoBottomSheet<T>({
+    BuildContext? anchorContext,
+    required WidgetBuilder builder,
+    bool isScrollControlled = true,
+    bool useSafeArea = true,
+  }) {
+    final targetContext = anchorContext ?? context;
+    if (widget.usePromptUi) {
+      return showPromptOverlayBottomSheet<T>(
+        context: targetContext,
+        isScrollControlled: isScrollControlled,
+        useSafeArea: useSafeArea,
+        builder: builder,
+      );
+    }
+    return showModalBottomSheet<T>(
+      context: targetContext,
+      isScrollControlled: isScrollControlled,
+      useSafeArea: useSafeArea,
+      backgroundColor: Colors.transparent,
+      builder: builder,
+    );
+  }
 
   @override
   void initState() {
@@ -1926,8 +1998,8 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
                 : Icons.radio_button_checked_rounded,
             label: _pushingOnAir ? 'UP' : 'ON AIR',
             tooltip: '현재 메모북만 Firebase에 업로드',
-            background: Colors.red.shade600,
-            foreground: Colors.white,
+            background: PromptUiTheme.of(context).danger,
+            foreground: PromptUiTheme.of(context).onDanger,
             onTap: disabled ? null : _pushOnAir,
           ),
           const SizedBox(width: 6),
@@ -2512,7 +2584,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
       border: Border.all(color: cs.outlineVariant.withOpacity(.8)),
       boxShadow: [
         BoxShadow(
-          color: Colors.black.withOpacity(.05),
+          color: PromptUiTheme.of(context).shadow,
           blurRadius: 24,
           offset: const Offset(0, 12),
         ),
@@ -2623,11 +2695,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
     final shelfSearchCtrl = TextEditingController();
     String shelfQuery = '';
     try {
-      await showModalBottomSheet<void>(
-        context: context,
-        isScrollControlled: true,
-        useSafeArea: true,
-        backgroundColor: Colors.transparent,
+      await _showMemoBottomSheet<void>(
         builder: (ctx) {
           return AnimatedPadding(
             duration: const Duration(milliseconds: 180),
@@ -2667,7 +2735,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
                                           borderRadius: BorderRadius.circular(16),
                                           boxShadow: [
                                             BoxShadow(
-                                              color: Colors.black.withOpacity(.08),
+                                              color: PromptUiTheme.of(context).shadow,
                                               blurRadius: 14,
                                               offset: const Offset(0, 8),
                                             ),
@@ -2858,8 +2926,8 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
   Future<String?> _openCreateBookDialog(BuildContext sheetContext) async {
     final ctrl = TextEditingController();
     try {
-      return await showDialog<String>(
-        context: sheetContext,
+      return await _showMemoDialog<String>(
+        anchorContext: sheetContext,
         builder: (dialogContext) {
           return AlertDialog(
             title: const Text('새 메모북 만들기'),
@@ -2963,8 +3031,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
   Future<void> _openFontDialog(HeadMemoBook book) async {
     double header = book.headerFontSize;
     double body = book.bodyFontSize;
-    await showDialog<void>(
-      context: context,
+    await _showMemoDialog<void>(
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
@@ -3030,11 +3097,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
   }
 
   Future<void> _openRecipientsSheet() async {
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.transparent,
+    await _showMemoBottomSheet<void>(
       builder: (ctx) {
         return AnimatedPadding(
           duration: const Duration(milliseconds: 180),
@@ -3170,6 +3233,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
       HapticFeedback.mediumImpact();
       await StatusDialog.showSuccess(
         context,
+        usePromptUi: widget.usePromptUi,
         title: 'ON AIR 저장 완료',
         description:
             '${result.bookCount}권 · ${result.pageCount}쪽 · 투두 ${result.todoCount}개를 Firebase에 저장했습니다.\n${result.documentPath}',
@@ -3178,6 +3242,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
       if (!mounted) return;
       await StatusDialog.showFailure(
         context,
+        usePromptUi: widget.usePromptUi,
         title: 'ON AIR 저장 실패',
         description: 'Firebase 저장에 실패했습니다. 로그인, 네트워크, Firestore 권한을 확인하세요.',
       );
@@ -3209,6 +3274,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
       HapticFeedback.mediumImpact();
       await StatusDialog.showSuccess(
         context,
+        usePromptUi: widget.usePromptUi,
         title: 'Firebase 내려받기 완료',
         description:
             '현재 메모북 ${result.activeBookName} · ${result.pageCount}쪽 · 투두 ${result.todoCount}개를 로컬에 반영했습니다.',
@@ -3217,6 +3283,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
       if (!mounted) return;
       await StatusDialog.showFailure(
         context,
+        usePromptUi: widget.usePromptUi,
         title: 'Firebase 내려받기 실패',
         description: '원격 본사 메모를 가져오지 못했습니다. 문서 존재 여부, 네트워크, Firestore 권한을 확인하세요.',
       );
@@ -3226,8 +3293,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
   }
 
   Future<bool?> _confirmPullFromFirestore() {
-    return showDialog<bool>(
-      context: context,
+    return _showMemoDialog<bool>(
       builder: (dialogContext) {
         return AlertDialog(
           title: const Text('Firebase에서 내려받기'),
@@ -3251,11 +3317,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
   Future<void> _openRemoteBooksSheet() async {
     if (!_developerMode || _pushingOnAir || _pullingOnAir) return;
     final future = HeadMemo.fetchRemoteBookIndex();
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.transparent,
+    await _showMemoBottomSheet<void>(
       builder: (ctx) {
         final cs = Theme.of(ctx).colorScheme;
         final theme = Theme.of(ctx);
@@ -3382,8 +3444,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
   Future<void> _pullRemoteBook(HeadMemoRemoteBookSummary summary) async {
     if (_pushingOnAir || _pullingOnAir) return;
     final exists = HeadMemo.books.value.any((item) => item.id == summary.id);
-    final confirmed = await showDialog<bool>(
-      context: context,
+    final confirmed = await _showMemoDialog<bool>(
       builder: (dialogContext) {
         return AlertDialog(
           title: Text(exists ? '원격 책으로 교체' : '원격 책 가져오기'),
@@ -3413,6 +3474,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
       HapticFeedback.mediumImpact();
       await StatusDialog.showSuccess(
         context,
+        usePromptUi: widget.usePromptUi,
         title: '원격 책 가져오기 완료',
         description: '${result.activeBookName} · ${result.pageCount}쪽 · 투두 ${result.todoCount}개를 로컬에 반영했습니다.',
       );
@@ -3420,6 +3482,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
       if (!mounted) return;
       await StatusDialog.showFailure(
         context,
+        usePromptUi: widget.usePromptUi,
         title: '원격 책 가져오기 실패',
         description: '선택한 원격 책을 가져오지 못했습니다. 네트워크, Firestore 문서, 권한을 확인하세요.',
       );
@@ -3448,6 +3511,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
     if (selected.isEmpty) {
       await StatusDialog.showFailure(
         context,
+        usePromptUi: widget.usePromptUi,
         title: '수신자 선택 필요',
         description: '수신자 보관함에서 전송할 이메일을 선택하세요.',
       );
@@ -3466,6 +3530,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
       if (!mounted) return;
       await StatusDialog.showFailure(
         context,
+        usePromptUi: widget.usePromptUi,
         title: '메일 전송 실패',
         description: '구글 세션이 차단되어 전송할 수 없습니다.',
       );
@@ -3505,6 +3570,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
       HapticFeedback.mediumImpact();
       await StatusDialog.showSuccess(
         context,
+        usePromptUi: widget.usePromptUi,
         title: '메일 전송 완료',
         description: '${book.name} 메모북을 ${selected.length}명에게 전송했습니다.\n첨부: PDF, Markdown',
       );
@@ -3522,6 +3588,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
       if (!mounted) return;
       await StatusDialog.showFailure(
         context,
+        usePromptUi: widget.usePromptUi,
         title: '메일 전송 실패',
         description: 'PDF와 Markdown 전송에 실패했습니다. 수신자, 구글 세션, 네트워크 상태를 확인하세요.',
       );
@@ -3881,7 +3948,7 @@ class _BookshelfBookSpine extends StatelessWidget {
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(active ? .18 : .08),
+                  color: PromptUiTheme.of(context).shadow,
                   blurRadius: active ? 20 : 10,
                   offset: Offset(0, active ? 10 : 5),
                 ),
@@ -3981,7 +4048,7 @@ class _BookshelfBookCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(14),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(.08),
+                      color: PromptUiTheme.of(context).shadow,
                       blurRadius: 12,
                       offset: const Offset(0, 6),
                     ),

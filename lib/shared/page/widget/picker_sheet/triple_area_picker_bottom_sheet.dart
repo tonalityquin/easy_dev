@@ -6,6 +6,7 @@ import '../../../../app/di/routes.dart';
 import '../../../../features/account/applications/user_state.dart';
 import '../../../../features/dev/application/area_state.dart';
 import '../../../../features/headquarter/application/area/area_master_cache.dart';
+import 'prompt_area_picker_sheet.dart';
 import '../../../plate/application/triple/triple_plate_state.dart';
 
 const String _modeKey = 'triple';
@@ -14,6 +15,7 @@ void tripleAreaPickerBottomSheet({
   required BuildContext context,
   required AreaState areaState,
   required TriplePlateState plateState,
+  bool usePromptUi = false,
 }) {
   final userState = context.read<UserState>();
   final userAreas = userState.session?.areas ?? const <String>[];
@@ -36,6 +38,39 @@ void tripleAreaPickerBottomSheet({
     userAreas: userAreas,
     modeKey: _modeKey,
   );
+
+  if (usePromptUi) {
+    showPromptAreaPickerSheet(
+      context: context,
+      future: future,
+      currentArea: areaState.currentArea,
+      onConfirm: (selected, data) async {
+        Navigator.of(context).pop();
+        final beforeArea = areaState.currentArea;
+        areaState.updateAreaPicker(selected);
+        await userState.areaPickerCurrentArea(selected);
+        final isHeadquarter = data.isHeadquarterByName[selected] == true;
+        if (!rootContext.mounted) return;
+        if (isHeadquarter) {
+          plateState.tripleDisableAll();
+          Navigator.pushReplacementNamed(
+            rootContext,
+            AppRoutes.tripleHeadquarterPage,
+          );
+        } else {
+          plateState.tripleEnableForTypePages();
+          if (beforeArea != areaState.currentArea) {
+            plateState.tripleSyncWithAreaState();
+          }
+          Navigator.pushReplacementNamed(
+            rootContext,
+            AppRoutes.tripleTypePage,
+          );
+        }
+      },
+    );
+    return;
+  }
 
   showModalBottomSheet(
     context: context,

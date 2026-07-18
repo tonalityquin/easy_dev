@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
 
 @immutable
 class CardsPagerPage {
@@ -24,9 +28,7 @@ class CardsPagerPage {
     );
   }
 
-  factory CardsPagerPage.fullSpan({
-    required Widget child,
-  }) {
+  factory CardsPagerPage.fullSpan({required Widget child}) {
     return CardsPagerPage._(
       primary: child,
       fullSpan: true,
@@ -35,40 +37,41 @@ class CardsPagerPage {
 }
 
 class CardsPager extends StatefulWidget {
-  final List<CardsPagerPage> pages;
-
   const CardsPager({super.key, required this.pages});
+
+  final List<CardsPagerPage> pages;
 
   @override
   State<CardsPager> createState() => _CardsPagerState();
 }
 
 class _CardsPagerState extends State<CardsPager> {
-  static const double _gap = 16.0;
-  static const double _baseCardHeight = 240.0;
+  static const double _gap = 16;
+  static const double _baseCardHeight = 240;
   static const String _prefsKey = 'login_selector_last_page';
 
-  late final PageController _pageCtrl;
+  late final PageController _pageController;
   int _current = 0;
 
   @override
   void initState() {
     super.initState();
-    _pageCtrl = PageController(initialPage: 0, viewportFraction: 1.0);
+    _pageController = PageController(initialPage: 0, viewportFraction: 1);
     _restoreLastPage();
   }
 
   Future<void> _restoreLastPage() async {
     final prefs = await SharedPreferences.getInstance();
     final saved = prefs.getInt(_prefsKey) ?? 0;
-
-    final maxIndex = (widget.pages.length - 1).clamp(0, 999);
+    final maxIndex = (widget.pages.length - 1).clamp(0, 999).toInt();
     final initial = saved.clamp(0, maxIndex).toInt();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       setState(() => _current = initial);
-      _pageCtrl.jumpToPage(initial);
+      if (_pageController.hasClients) {
+        _pageController.jumpToPage(initial);
+      }
     });
   }
 
@@ -77,44 +80,50 @@ class _CardsPagerState extends State<CardsPager> {
     await prefs.setInt(_prefsKey, index);
   }
 
-  void _goPrev() {
-    if (!_pageCtrl.hasClients) return;
-    final target =
-    (_current - 1).clamp(0, (widget.pages.length - 1).clamp(0, 999));
-    _pageCtrl.animateToPage(
+  Future<void> _goTo(int target) async {
+    if (!_pageController.hasClients || target == _current) return;
+    await HapticFeedback.selectionClick();
+    if (!mounted) return;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (reduceMotion) {
+      _pageController.jumpToPage(target);
+      return;
+    }
+    await _pageController.animateToPage(
       target,
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOut,
+      duration: PromptUiMotion.component,
+      curve: PromptUiMotion.enter,
     );
   }
 
+  void _goPrev() {
+    final max = (widget.pages.length - 1).clamp(0, 999).toInt();
+    _goTo((_current - 1).clamp(0, max).toInt());
+  }
+
   void _goNext() {
-    if (!_pageCtrl.hasClients) return;
-    final target =
-    (_current + 1).clamp(0, (widget.pages.length - 1).clamp(0, 999));
-    _pageCtrl.animateToPage(
-      target,
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOut,
-    );
+    final max = (widget.pages.length - 1).clamp(0, 999).toInt();
+    _goTo((_current + 1).clamp(0, max).toInt());
   }
 
   @override
   void didUpdateWidget(covariant CardsPager oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    if (widget.pages.length != oldWidget.pages.length && _pageCtrl.hasClients) {
-      final max = (widget.pages.length - 1).clamp(0, 999);
+    if (widget.pages.length != oldWidget.pages.length &&
+        _pageController.hasClients) {
+      final max = (widget.pages.length - 1).clamp(0, 999).toInt();
       if (_current > max) {
         setState(() => _current = max);
-        _pageCtrl.jumpToPage(max);
+        _pageController.jumpToPage(max);
       }
     }
   }
 
   @override
   void dispose() {
-    _pageCtrl.dispose();
+    _pageController.dispose();
     super.dispose();
   }
 
@@ -122,33 +131,35 @@ class _CardsPagerState extends State<CardsPager> {
     final total = widget.pages.length;
     if (total <= 1) return const SizedBox.shrink();
 
-    final cs = Theme.of(context).colorScheme;
-    final activeColor = cs.primary;
-    final inactiveColor = cs.outlineVariant;
+    final tokens = PromptUiTheme.of(context);
+    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
-    return Wrap(
-      spacing: 6,
-      children: List<Widget>.generate(total, (i) {
-        final bool active = i == _current;
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          width: active ? 18 : 6,
-          height: 6,
-          decoration: BoxDecoration(
-            color: active ? activeColor : inactiveColor,
-            borderRadius: BorderRadius.circular(999),
-          ),
-        );
-      }),
+    return Semantics(
+      label: '${_current + 1} / $total 페이지',
+      child: Wrap(
+        spacing: 6,
+        children: List<Widget>.generate(total, (index) {
+          final active = index == _current;
+          return AnimatedContainer(
+            duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
+            curve: PromptUiMotion.standard,
+            width: active ? 20 : 7,
+            height: 7,
+            decoration: BoxDecoration(
+              color: active ? tokens.accent : tokens.borderStrong.withOpacity(0.42),
+              borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+            ),
+          );
+        }),
+      ),
     );
   }
 
   Widget _buildPage(
-      BuildContext context,
-      CardsPagerPage page,
-      double usable,
-      double cardHeight,
-      ) {
+    CardsPagerPage page,
+    double usable,
+    double cardHeight,
+  ) {
     if (page.fullSpan) {
       return SizedBox(
         width: usable,
@@ -157,8 +168,9 @@ class _CardsPagerState extends State<CardsPager> {
       );
     }
 
-    final double half =
-    (((usable - _gap) / 2).clamp(0.0, double.infinity)).floorToDouble();
+    final half = ((usable - _gap) / 2)
+        .clamp(0.0, double.infinity)
+        .floorToDouble();
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -183,15 +195,13 @@ class _CardsPagerState extends State<CardsPager> {
     if (widget.pages.isEmpty) return const SizedBox.shrink();
 
     final media = MediaQuery.of(context);
-    final double cardHeight = media.size.height < 640 ? 200.0 : _baseCardHeight;
+    final cardHeight = media.size.height < 640 ? 200.0 : _baseCardHeight;
 
     return LayoutBuilder(
-      builder: (context, cons) {
-        final usable = cons.maxWidth;
-
+      builder: (context, constraints) {
         final total = widget.pages.length;
-        final bool canPrev = _current > 0;
-        final bool canNext = _current < total - 1;
+        final canPrev = _current > 0;
+        final canNext = _current < total - 1;
 
         return Column(
           mainAxisSize: MainAxisSize.min,
@@ -199,17 +209,35 @@ class _CardsPagerState extends State<CardsPager> {
             SizedBox(
               height: cardHeight,
               child: PageView.builder(
-                controller: _pageCtrl,
+                controller: _pageController,
                 itemCount: total,
                 physics: const PageScrollPhysics(),
-                onPageChanged: (i) async {
+                onPageChanged: (index) async {
                   if (!mounted) return;
-                  setState(() => _current = i);
-                  await _saveLastPage(i);
+                  setState(() => _current = index);
+                  await _saveLastPage(index);
                 },
                 itemBuilder: (context, index) {
-                  final page = widget.pages[index];
-                  return _buildPage(context, page, usable, cardHeight);
+                  return AnimatedBuilder(
+                    animation: _pageController,
+                    builder: (context, child) {
+                      var page = _current.toDouble();
+                      if (_pageController.hasClients &&
+                          _pageController.position.haveDimensions) {
+                        page = _pageController.page ?? _current.toDouble();
+                      }
+                      final distance = (page - index).abs().clamp(0.0, 1.0);
+                      final opacity = media.disableAnimations
+                          ? 1.0
+                          : 1.0 - distance * 0.10;
+                      return Opacity(opacity: opacity, child: child);
+                    },
+                    child: _buildPage(
+                      widget.pages[index],
+                      constraints.maxWidth,
+                      cardHeight,
+                    ),
+                  );
                 },
               ),
             ),
@@ -217,18 +245,18 @@ class _CardsPagerState extends State<CardsPager> {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                IconButton(
-                  onPressed: canPrev ? _goPrev : null,
+                PromptIconButton(
+                  icon: Icons.chevron_left_rounded,
                   tooltip: '이전',
-                  icon: const Icon(Icons.chevron_left_rounded),
+                  onPressed: canPrev ? _goPrev : null,
                 ),
-                const SizedBox(width: 6),
+                const SizedBox(width: 8),
                 _buildDots(),
-                const SizedBox(width: 6),
-                IconButton(
-                  onPressed: canNext ? _goNext : null,
+                const SizedBox(width: 8),
+                PromptIconButton(
+                  icon: Icons.chevron_right_rounded,
                   tooltip: '다음',
-                  icon: const Icon(Icons.chevron_right_rounded),
+                  onPressed: canNext ? _goNext : null,
                 ),
               ],
             ),

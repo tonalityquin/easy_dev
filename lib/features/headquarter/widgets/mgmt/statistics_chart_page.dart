@@ -7,6 +7,9 @@ import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:googleapis/gmail/v1.dart' as gmail;
+
+import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
 import '../../../../app/auth/google_auth_v7.dart';
 import '../../../../app/config/email_config.dart';
 import 'statistics_chart_b_page.dart';
@@ -15,16 +18,18 @@ import 'statistics_deep_model.dart';
 import 'statistics_report_design.dart';
 
 class StatisticsChartPage extends StatefulWidget {
-  final Map<DateTime, Map<String, int>> reportDataMap;
-  final String division;
-  final String area;
-
   const StatisticsChartPage({
     super.key,
     required this.reportDataMap,
     this.division = '',
     this.area = '',
+    this.usePromptUi = false,
   });
+
+  final Map<DateTime, Map<String, int>> reportDataMap;
+  final String division;
+  final String area;
+  final bool usePromptUi;
 
   @override
   State<StatisticsChartPage> createState() => _StatisticsChartPageState();
@@ -42,6 +47,50 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
   StatisticsDeepReport? _deepReport;
   String? _deepLabel;
   late Map<String, GlobalKey> _sectionKeys;
+
+  Future<T?> _showChartDialog<T>({
+    required WidgetBuilder builder,
+    bool barrierDismissible = true,
+  }) {
+    if (widget.usePromptUi) {
+      return showPromptOverlayDialog<T>(
+        context: context,
+        barrierDismissible: barrierDismissible,
+        builder: builder,
+      );
+    }
+    return showDialog<T>(
+      context: context,
+      barrierDismissible: barrierDismissible,
+      builder: builder,
+    );
+  }
+
+  Future<DateTimeRange?> _showChartRangePicker({
+    required BuildContext anchorContext,
+    required DateTime firstDate,
+    required DateTime lastDate,
+    required DateTimeRange initialDateRange,
+  }) {
+    if (widget.usePromptUi) {
+      return showPromptDateRangePicker(
+        context: anchorContext,
+        firstDate: firstDate,
+        lastDate: lastDate,
+        initialDateRange: initialDateRange,
+        cancelText: '취소',
+        confirmText: '적용',
+      );
+    }
+    return showDateRangePicker(
+      context: anchorContext,
+      firstDate: firstDate,
+      lastDate: lastDate,
+      initialDateRange: initialDateRange,
+      cancelText: '취소',
+      confirmText: '적용',
+    );
+  }
 
   @override
   void initState() {
@@ -74,10 +123,12 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
       _selectedId = id;
       _tocOpen = false;
     });
+    final reduceMotion =
+        MediaQuery.maybeOf(this.context)?.disableAnimations ?? false;
     await Scrollable.ensureVisible(
       context,
-      duration: const Duration(milliseconds: 420),
-      curve: Curves.easeOutCubic,
+      duration: reduceMotion ? Duration.zero : PromptUiMotion.layout,
+      curve: PromptUiMotion.enter,
       alignment: 0.02,
     );
   }
@@ -86,8 +137,7 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
     HapticFeedback.selectionClick();
     if (report.rows.isEmpty) return;
 
-    final draft = await showDialog<_MailDraft>(
-      context: context,
+    final draft = await _showChartDialog<_MailDraft>(
       barrierDismissible: true,
       builder: (ctx) => _MailComposeDialog(
         initialSubject: _mailSubjectCtrl.text.trim().isEmpty
@@ -740,8 +790,7 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
       return _DeepLoadRequest.dates(dates: <DateTime>[only], label: _dateOnly(only));
     }
 
-    return showDialog<_DeepLoadRequest>(
-      context: context,
+    return _showChartDialog<_DeepLoadRequest>(
       barrierDismissible: true,
       builder: (ctx) {
         final cs = Theme.of(ctx).colorScheme;
@@ -770,14 +819,14 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
                   title: const Text('기간 지정'),
                   subtitle: const Text('시작일과 종료일을 선택합니다.'),
                   onTap: () async {
-                    final picked = await showDateRangePicker(
-                      context: ctx,
+                    final picked = await _showChartRangePicker(
+                      anchorContext: ctx,
                       firstDate: first,
                       lastDate: last,
-                      initialDateRange: DateTimeRange(start: first, end: last),
-                      helpText: '심화 통계 기간 선택',
-                      cancelText: '취소',
-                      confirmText: '적용',
+                      initialDateRange: DateTimeRange(
+                        start: first,
+                        end: last,
+                      ),
                     );
                     if (picked == null) return;
                     final a = DateTime(picked.start.year, picked.start.month, picked.start.day);
@@ -857,11 +906,40 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
         _deepLabel = deep.scopeLabel;
       });
 
-      final visible = await Navigator.of(context).push<StatisticsDeepReport>(
-        MaterialPageRoute(
-          builder: (_) => StatisticsChartBPage(report: deep),
-        ),
-      );
+      final chartPage = StatisticsChartBPage(report: deep);
+      final reduceMotion =
+          MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+      final route = widget.usePromptUi
+          ? PageRouteBuilder<StatisticsDeepReport>(
+              transitionDuration:
+                  reduceMotion ? Duration.zero : PromptUiMotion.overlay,
+              reverseTransitionDuration:
+                  reduceMotion ? Duration.zero : PromptUiMotion.overlay,
+              pageBuilder: (_, __, ___) => PromptUiScope(child: chartPage),
+              transitionsBuilder: (_, animation, __, child) {
+                if (reduceMotion) return child;
+                final curved = CurvedAnimation(
+                  parent: animation,
+                  curve: PromptUiMotion.enter,
+                  reverseCurve: PromptUiMotion.exit,
+                );
+                return FadeTransition(
+                  opacity: curved,
+                  child: SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(0.025, 0),
+                      end: Offset.zero,
+                    ).animate(curved),
+                    child: child,
+                  ),
+                );
+              },
+            )
+          : MaterialPageRoute<StatisticsDeepReport>(
+              builder: (_) => chartPage,
+            );
+      final visible =
+          await Navigator.of(context).push<StatisticsDeepReport>(route);
 
       if (!mounted) return;
       final nextModel = visible ?? deep;
@@ -1618,7 +1696,7 @@ class _AReportTocOverlay extends StatelessWidget {
           GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: onClose,
-            child: Container(color: Colors.black.withOpacity(0.26)),
+            child: Container(color: PromptUiTheme.of(context).scrim),
           ),
           Align(
             alignment: Alignment.centerRight,
@@ -1700,7 +1778,7 @@ class _AReportTocPanel extends StatelessWidget {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
                       decoration: BoxDecoration(
-                        color: selected ? cs.primaryContainer : item.isGroup ? cs.surfaceContainerHighest : Colors.transparent,
+                        color: selected ? cs.primaryContainer : item.isGroup ? cs.surfaceContainerHighest : PromptUiTheme.of(context).transparent,
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
                           color: selected ? cs.primary.withOpacity(0.45) : cs.outlineVariant.withOpacity(0.45),

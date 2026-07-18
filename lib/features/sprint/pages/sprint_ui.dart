@@ -3,11 +3,6 @@ import 'package:flutter/material.dart';
 import '../application/sprint_mode_store.dart';
 import '../domain/sprint_models.dart';
 
-enum SprintComposerPlacementChoice {
-  recommended,
-  requested,
-}
-
 void sprintShowMessage({
   required BuildContext context,
   required String message,
@@ -111,121 +106,21 @@ Future<SprintTask?> sprintCreateTaskFromComposer({
     }
     return null;
   }
-  SprintComposerPlacementChoice? choice;
-  if (preview.hasConflicts) {
-    if (preview.hasHardConflict) {
-      final beforeProjectStart = preview.conflicts.any(
-        (conflict) =>
-            conflict.type == SprintConflictType.beforeProjectStart,
-      );
+  if (preview.hasHardConflict) {
+    if (context.mounted) {
       sprintShowMessage(
         context: context,
-        message: beforeProjectStart
-            ? '프로젝트 목표 시작일 이전에는 업무를 배치할 수 없습니다.'
-            : '과거 시간에는 업무를 배치할 수 없습니다.',
+        message: store.taskInputError ?? '업무 날짜를 확인하세요.',
       );
-      return null;
     }
-    choice = await showModalBottomSheet<SprintComposerPlacementChoice>(
-      context: context,
-      useSafeArea: true,
-      showDragHandle: true,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      barrierColor: Theme.of(context).colorScheme.scrim,
-      builder: (sheetContext) {
-        final colors = Theme.of(sheetContext).colorScheme;
-        final reduceMotion =
-            MediaQuery.maybeOf(sheetContext)?.disableAnimations ?? false;
-        final duration =
-            reduceMotion ? Duration.zero : const Duration(milliseconds: 220);
-        final conflictTitles = preview.conflicts
-            .map((conflict) => conflict.title)
-            .toSet()
-            .join(' · ');
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-          child: AnimatedSize(
-            duration: duration,
-            curve: Curves.easeOutCubic,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  '일정 충돌 확인',
-                  style: Theme.of(sheetContext).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  conflictTitles,
-                  style: TextStyle(
-                    color: colors.error,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                if (preview.requestedStart != null)
-                  SprintSurface(
-                    backgroundColor: colors.surfaceContainerLow,
-                    child: Row(
-                      children: [
-                        const Icon(Icons.schedule_rounded),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            '${sprintFormatDate(preview.requestedStart!)} ${sprintFormatTime(preview.requestedStart!)}',
-                            style: const TextStyle(fontWeight: FontWeight.w800),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                if (preview.recommendedStart != null) ...[
-                  const SizedBox(height: 10),
-                  FilledButton.icon(
-                    onPressed: () => Navigator.of(sheetContext).pop(
-                      SprintComposerPlacementChoice.recommended,
-                    ),
-                    icon: const Icon(Icons.auto_fix_high_rounded),
-                    label: Text(
-                      '${sprintFormatDate(preview.recommendedStart!)} ${sprintFormatTime(preview.recommendedStart!)}에 배치',
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 8),
-                FilledButton.tonalIcon(
-                  onPressed: () => Navigator.of(sheetContext).pop(
-                    SprintComposerPlacementChoice.requested,
-                  ),
-                  icon: const Icon(Icons.warning_amber_rounded),
-                  label: const Text('현재 시간에 배치'),
-                ),
-                const SizedBox(height: 8),
-                TextButton(
-                  onPressed: () => Navigator.of(sheetContext).pop(),
-                  child: const Text('취소'),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-    if (choice == null || !context.mounted) return null;
+    return null;
   }
-  final task = await store.createTaskFromPreview(
-    preview,
-    useRecommendedStart:
-        choice == SprintComposerPlacementChoice.recommended,
-    allowConflicts: choice == SprintComposerPlacementChoice.requested,
-  );
+  final task = await store.createTaskFromPreview(preview);
   if (task == null && context.mounted) {
-    final error = store.taskInputError;
-    if (error != null) {
-      sprintShowMessage(context: context, message: error);
-    }
+    sprintShowMessage(
+      context: context,
+      message: store.taskInputError ?? '업무를 추가하지 못했습니다.',
+    );
   }
   return task;
 }
@@ -244,18 +139,37 @@ String sprintFormatShortDate(DateTime value) {
   return '${value.month}/${value.day}';
 }
 
+
+String sprintFormatDateRange(DateTime start, DateTime end) {
+  if (sprintSameDay(start, end)) return sprintFormatDate(start);
+  return '${sprintFormatShortDate(start)}–${sprintFormatShortDate(end)}';
+}
+
+String sprintPriorityLabel(SprintTaskPriority priority) {
+  switch (priority) {
+    case SprintTaskPriority.high:
+      return '높음';
+    case SprintTaskPriority.normal:
+      return '보통';
+    case SprintTaskPriority.low:
+      return '낮음';
+  }
+}
+
+IconData sprintPriorityIcon(SprintTaskPriority priority) {
+  switch (priority) {
+    case SprintTaskPriority.high:
+      return Icons.keyboard_double_arrow_up_rounded;
+    case SprintTaskPriority.normal:
+      return Icons.remove_rounded;
+    case SprintTaskPriority.low:
+      return Icons.keyboard_arrow_down_rounded;
+  }
+}
+
 String sprintWeekday(int weekday) {
   const labels = <String>['월', '화', '수', '목', '금', '토', '일'];
   return labels[(weekday - 1).clamp(0, 6).toInt()];
-}
-
-String sprintFormatDuration(int minutes) {
-  final safe = minutes < 0 ? 0 : minutes;
-  final hours = safe ~/ 60;
-  final remaining = safe % 60;
-  if (hours == 0) return '$remaining분';
-  if (remaining == 0) return '$hours시간';
-  return '$hours시간 $remaining분';
 }
 
 bool sprintSameDay(DateTime a, DateTime b) {

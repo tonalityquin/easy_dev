@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+
 import '../../../../app/init/app_exit_service.dart';
 import '../../../../app/init/logout_helper.dart';
 import '../../../../app/models/capability.dart';
@@ -88,7 +91,7 @@ class _CommonHqDashBoardPageState extends State<CommonHqDashBoardPage> {
         'action': 'logout',
       },
     );
-    await LogoutHelper.logoutAndGoToLogin(context);
+    await LogoutHelper.logoutAndGoToLogin(context, usePromptUi: true);
   }
 
   Future<void> _openServiceSettings(BuildContext context) async {
@@ -115,7 +118,7 @@ class _CommonHqDashBoardPageState extends State<CommonHqDashBoardPage> {
       }
     } catch (_) {}
 
-    await AppExitService.exitApp(context);
+    await AppExitService.exitApp(context, usePromptUi: true);
   }
 
   Future<void> _handleClockOutFlow(
@@ -224,61 +227,51 @@ class _CommonHqDashBoardPageState extends State<CommonHqDashBoardPage> {
     required IconData icon,
     required Widget child,
   }) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
+    final tokens = PromptUiTheme.of(context);
+    final textTheme = Theme.of(context).textTheme;
 
-    return Dialog(
-      insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
-      backgroundColor: cs.surface,
-      surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(24),
-        side: BorderSide(color: cs.outlineVariant.withOpacity(0.55)),
-      ),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 420),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 420),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
             children: [
-              Row(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: cs.primaryContainer,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Icon(icon, color: cs.onPrimaryContainer),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: tt.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w900,
-                        color: cs.onSurface,
-                        letterSpacing: -.2,
-                      ),
-                    ),
-                  ),
-                  IconButton.filledTonal(
-                    tooltip: '닫기',
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close_rounded),
-                  ),
-                ],
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: tokens.accentContainer,
+                  borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                  border: Border.all(color: tokens.borderSubtle),
+                ),
+                child: Icon(icon, color: tokens.onAccentContainer),
               ),
-              const SizedBox(height: 14),
-              child,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: tokens.textPrimary,
+                    letterSpacing: -.2,
+                  ),
+                ),
+              ),
+              PromptIconButton(
+                icon: Icons.close_rounded,
+                tooltip: '닫기',
+                onPressed: () => Navigator.of(context).pop(),
+                haptic: PromptHaptic.selection,
+              ),
             ],
           ),
-        ),
+          const SizedBox(height: 14),
+          child,
+        ],
       ),
     );
   }
@@ -287,9 +280,9 @@ class _CommonHqDashBoardPageState extends State<CommonHqDashBoardPage> {
     BuildContext context,
     UserState userState,
   ) async {
-    final cs = Theme.of(context).colorScheme;
+    final tokens = PromptUiTheme.of(context);
 
-    await showDialog<void>(
+    await showPromptDialog<void>(
       context: context,
       barrierDismissible: true,
       builder: (dialogContext) {
@@ -305,7 +298,7 @@ class _CommonHqDashBoardPageState extends State<CommonHqDashBoardPage> {
               _OpsHqActionTile(
                 label: '퇴근하기',
                 icon: Icons.exit_to_app_rounded,
-                color: cs.error,
+                color: tokens.danger,
                 danger: true,
                 onTap: () {
                   Navigator.of(dialogContext).pop();
@@ -382,7 +375,7 @@ class _CommonHqDashBoardPageState extends State<CommonHqDashBoardPage> {
     UserState userState,
     int page,
   ) {
-    final cs = Theme.of(context).colorScheme;
+    final tokens = PromptUiTheme.of(context);
 
     switch (page) {
       case 0:
@@ -392,7 +385,7 @@ class _CommonHqDashBoardPageState extends State<CommonHqDashBoardPage> {
               child: _OpsHqCarouselButton(
                 label: '환경설정',
                 icon: Icons.settings_rounded,
-                color: cs.primary,
+                color: tokens.accent,
                 onTap: () => _openServiceSettings(context),
               ),
             ),
@@ -401,7 +394,7 @@ class _CommonHqDashBoardPageState extends State<CommonHqDashBoardPage> {
               child: _OpsHqCarouselButton(
                 label: '근무액션',
                 icon: Icons.work_history_rounded,
-                color: cs.secondary,
+                color: tokens.info,
                 onTap: () => _openWorkActionsDialog(context, userState),
               ),
             ),
@@ -417,9 +410,7 @@ class _CommonHqDashBoardPageState extends State<CommonHqDashBoardPage> {
                   return _OpsHqCarouselButton(
                     label: '퀵버튼',
                     icon: Icons.lightbulb_rounded,
-                    color: enabled
-                        ? Colors.amber.shade400
-                        : cs.onInverseSurface.withOpacity(.52),
+                    color: enabled ? tokens.warning : tokens.iconDisabled,
                     leading: _OpsHqQuickButtonIndicator(enabled: enabled),
                     onTap: _toggleHeadHubQuickButton,
                   );
@@ -431,7 +422,7 @@ class _CommonHqDashBoardPageState extends State<CommonHqDashBoardPage> {
               child: _OpsHqCarouselButton(
                 label: '다운받기',
                 icon: Icons.download_rounded,
-                color: cs.tertiary,
+                color: tokens.info,
                 onTap: () => HeadHubActions.refreshAreaMaster(context),
               ),
             ),
@@ -445,7 +436,7 @@ class _CommonHqDashBoardPageState extends State<CommonHqDashBoardPage> {
               child: _OpsHqCarouselButton(
                 label: '로그아웃',
                 icon: Icons.logout_rounded,
-                color: cs.error,
+                color: tokens.danger,
                 onTap: widget.showLogout ? () => _handleLogout(context) : null,
               ),
             ),
@@ -454,7 +445,7 @@ class _CommonHqDashBoardPageState extends State<CommonHqDashBoardPage> {
               child: _OpsHqCarouselButton(
                 label: '가이드북',
                 icon: Icons.menu_book_rounded,
-                color: cs.secondary,
+                color: tokens.info,
               ),
             ),
           ],
@@ -496,7 +487,7 @@ class _CommonHqDashBoardPageState extends State<CommonHqDashBoardPage> {
     BuildContext context,
     UserState userState,
   ) {
-    final cs = Theme.of(context).colorScheme;
+    final tokens = PromptUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final name = _safe(userState.name);
     final position = _safe(userState.position);
@@ -504,12 +495,12 @@ class _CommonHqDashBoardPageState extends State<CommonHqDashBoardPage> {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
       decoration: BoxDecoration(
-        color: cs.inverseSurface,
+        color: tokens.surfaceRaised,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: cs.outlineVariant.withOpacity(.42)),
+        border: Border.all(color: tokens.borderSubtle),
         boxShadow: [
           BoxShadow(
-            color: cs.shadow.withOpacity(.08),
+            color: tokens.shadow,
             blurRadius: 18,
             offset: const Offset(0, 8),
           ),
@@ -524,10 +515,10 @@ class _CommonHqDashBoardPageState extends State<CommonHqDashBoardPage> {
                 width: 42,
                 height: 42,
                 decoration: BoxDecoration(
-                  color: cs.primary,
+                  color: tokens.accentContainer,
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: Icon(Icons.apartment_rounded, color: cs.onPrimary),
+                child: Icon(Icons.apartment_rounded, color: tokens.onAccentContainer),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -544,7 +535,7 @@ class _CommonHqDashBoardPageState extends State<CommonHqDashBoardPage> {
                             style: (textTheme.titleLarge ??
                                     const TextStyle(fontSize: 22))
                                 .copyWith(
-                              color: cs.onInverseSurface,
+                              color: tokens.textPrimary,
                               fontWeight: FontWeight.w900,
                               letterSpacing: -.3,
                             ),
@@ -553,8 +544,8 @@ class _CommonHqDashBoardPageState extends State<CommonHqDashBoardPage> {
                         const SizedBox(width: 8),
                         _OpsHqBadge(
                           label: _modeLabel(),
-                          color: cs.primary,
-                          foreground: cs.onPrimary,
+                          color: tokens.accentContainer,
+                          foreground: tokens.onAccentContainer,
                         ),
                       ],
                     ),
@@ -594,23 +585,31 @@ class _CommonHqDashBoardPageState extends State<CommonHqDashBoardPage> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final tokens = PromptUiTheme.of(context);
+    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
 
     return Scaffold(
-      backgroundColor: cs.surfaceVariant.withOpacity(.20),
+      backgroundColor: tokens.canvas,
       body: SafeArea(
+        bottom: false,
         child: Consumer<UserState>(
           builder: (context, userState, _) {
             return CustomScrollView(
+              physics: const BouncingScrollPhysics(),
               slivers: [
                 SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
+                  padding: EdgeInsets.fromLTRB(16, 16, 16, 18 + bottomInset),
                   sliver: SliverList(
                     delegate: SliverChildListDelegate(
                       [
-                        _buildOpsHeader(context, userState),
+                        PromptAnimatedReveal(
+                          child: _buildOpsHeader(context, userState),
+                        ),
                         const SizedBox(height: 12),
-                        _buildMenuPanel(context, userState),
+                        PromptAnimatedReveal(
+                          delay: const Duration(milliseconds: 70),
+                          child: _buildMenuPanel(context, userState),
+                        ),
                         const SizedBox(height: 18),
                       ],
                     ),
@@ -634,6 +633,7 @@ class _HeadquarterChatFloatingButton extends StatelessWidget {
     await _AreaChatReadOpenHelper.open(
       context: context,
       areaName: headquarterChatAreaName,
+      usePromptUi: true,
     );
   }
 
@@ -666,9 +666,9 @@ class _HeadquarterChatFabVisual extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final tokens = PromptUiTheme.of(context);
     final active = unreadCount > 0;
-    final color = cs.primary;
+    final color = tokens.accent;
 
     return Tooltip(
       message: '본사 채팅 열기',
@@ -695,8 +695,8 @@ class _HeadquarterChatFabVisual extends StatelessWidget {
               child: FloatingActionButton(
                 heroTag: 'headquarter_chat_fab',
                 tooltip: '본사 채팅',
-                backgroundColor: cs.primaryContainer,
-                foregroundColor: cs.onPrimaryContainer,
+                backgroundColor: tokens.accentContainer,
+                foregroundColor: tokens.onAccentContainer,
                 elevation: active ? 8 : 5,
                 onPressed: onPressed,
                 child: AnimatedSwitcher(
@@ -731,15 +731,15 @@ class _HeadquarterChatFabVisual extends StatelessWidget {
                     height: 22,
                     padding: const EdgeInsets.symmetric(horizontal: 6),
                     decoration: BoxDecoration(
-                      color: cs.error,
+                      color: tokens.danger,
                       borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: cs.surface, width: 2),
+                      border: Border.all(color: tokens.surface, width: 2),
                     ),
                     alignment: Alignment.center,
                     child: Text(
                       unreadCount > 99 ? '99+' : '$unreadCount',
                       style: TextStyle(
-                        color: cs.onError,
+                        color: tokens.onDanger,
                         fontSize: 11,
                         fontWeight: FontWeight.w900,
                         height: 1,
@@ -797,19 +797,19 @@ class _OpsHqHeaderPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final tokens = PromptUiTheme.of(context);
     return Container(
       constraints: const BoxConstraints(maxWidth: 170),
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
-        color: cs.onInverseSurface.withOpacity(.10),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: cs.onInverseSurface.withOpacity(.14)),
+        color: tokens.surfaceOverlay,
+        borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+        border: Border.all(color: tokens.borderSubtle),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 13, color: cs.onInverseSurface.withOpacity(.82)),
+          Icon(icon, size: 13, color: tokens.iconSecondary),
           const SizedBox(width: 5),
           Flexible(
             child: Text(
@@ -817,7 +817,7 @@ class _OpsHqHeaderPill extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                color: cs.onInverseSurface.withOpacity(.88),
+                color: tokens.textSecondary,
                 fontSize: 11.5,
                 fontWeight: FontWeight.w800,
               ),
@@ -830,9 +830,7 @@ class _OpsHqHeaderPill extends StatelessWidget {
 }
 
 class _OpsHqQuickButtonIndicator extends StatefulWidget {
-  const _OpsHqQuickButtonIndicator({
-    required this.enabled,
-  });
+  const _OpsHqQuickButtonIndicator({required this.enabled});
 
   final bool enabled;
 
@@ -857,7 +855,9 @@ class _OpsHqQuickButtonIndicatorState extends State<_OpsHqQuickButtonIndicator>
       parent: _controller,
       curve: Curves.easeInOut,
     );
-    _syncAnimation();
+    if (widget.enabled) {
+      _controller.repeat(reverse: true);
+    }
   }
 
   @override
@@ -868,9 +868,19 @@ class _OpsHqQuickButtonIndicatorState extends State<_OpsHqQuickButtonIndicator>
     }
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncAnimation();
+  }
+
   void _syncAnimation() {
-    if (widget.enabled) {
-      _controller.repeat(reverse: true);
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (widget.enabled && !reduceMotion) {
+      if (!_controller.isAnimating) {
+        _controller.repeat(reverse: true);
+      }
     } else {
       _controller.stop();
       _controller.value = 0;
@@ -885,54 +895,64 @@ class _OpsHqQuickButtonIndicatorState extends State<_OpsHqQuickButtonIndicator>
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final tokens = PromptUiTheme.of(context);
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
     return AnimatedBuilder(
       animation: _pulse,
       builder: (context, _) {
-        final value = widget.enabled ? _pulse.value : 0.0;
-        final activeColor = Colors.amber.shade400;
-        final inactiveColor = cs.onInverseSurface.withOpacity(.52);
-        final color = widget.enabled ? activeColor : inactiveColor;
+        final value = widget.enabled && !reduceMotion ? _pulse.value : 0.0;
+        final color = widget.enabled ? tokens.warning : tokens.iconDisabled;
 
-        return Transform.scale(
-          scale: widget.enabled ? 1 + (value * .07) : 1,
-          child: Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: color.withOpacity(
-                widget.enabled ? .20 + (value * .08) : .12,
-              ),
-              borderRadius: BorderRadius.circular(11),
-              border: Border.all(
-                color: color.withOpacity(widget.enabled ? .70 : .28),
-              ),
-              boxShadow: widget.enabled
-                  ? [
-                      BoxShadow(
-                        color: activeColor.withOpacity(.16 + (value * .18)),
-                        blurRadius: 7 + (value * 7),
-                        spreadRadius: value * 1.5,
-                      ),
-                    ]
-                  : const [],
+        return AnimatedContainer(
+          duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
+          curve: PromptUiMotion.standard,
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: widget.enabled
+                ? tokens.warningContainer
+                : tokens.surfaceDisabled,
+            borderRadius: BorderRadius.circular(11),
+            border: Border.all(
+              color: widget.enabled
+                  ? tokens.warning.withOpacity(.62)
+                  : tokens.borderSubtle,
             ),
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 220),
-              transitionBuilder: (child, animation) {
-                return ScaleTransition(
-                  scale: animation,
-                  child: FadeTransition(opacity: animation, child: child),
-                );
-              },
-              child: Icon(
-                widget.enabled
-                    ? Icons.lightbulb_rounded
-                    : Icons.lightbulb_outline_rounded,
-                key: ValueKey<bool>(widget.enabled),
-                color: color,
-                size: 19,
+            boxShadow: widget.enabled
+                ? [
+                    BoxShadow(
+                      color: tokens.warning.withOpacity(.12 + (value * .12)),
+                      blurRadius: 6 + (value * 6),
+                      spreadRadius: value,
+                    ),
+                  ]
+                : const [],
+          ),
+          child: Center(
+            child: AnimatedScale(
+              scale: widget.enabled ? 1 + (value * .08) : 1,
+              duration:
+                  reduceMotion ? Duration.zero : PromptUiMotion.selection,
+              curve: PromptUiMotion.enter,
+              child: AnimatedSwitcher(
+                duration:
+                    reduceMotion ? Duration.zero : PromptUiMotion.selection,
+                transitionBuilder: (child, animation) {
+                  return ScaleTransition(
+                    scale: animation,
+                    child: FadeTransition(opacity: animation, child: child),
+                  );
+                },
+                child: Icon(
+                  widget.enabled
+                      ? Icons.lightbulb_rounded
+                      : Icons.lightbulb_outline_rounded,
+                  key: ValueKey<bool>(widget.enabled),
+                  color: color,
+                  size: 19,
+                ),
               ),
             ),
           ),
@@ -942,7 +962,7 @@ class _OpsHqQuickButtonIndicatorState extends State<_OpsHqQuickButtonIndicator>
   }
 }
 
-class _OpsHqCarouselButton extends StatelessWidget {
+class _OpsHqCarouselButton extends StatefulWidget {
   const _OpsHqCarouselButton({
     required this.label,
     required this.icon,
@@ -958,68 +978,128 @@ class _OpsHqCarouselButton extends StatelessWidget {
   final VoidCallback? onTap;
 
   @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final content = Container(
-      height: 60,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: cs.onInverseSurface.withOpacity(onTap == null ? .08 : .12),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: cs.onInverseSurface.withOpacity(onTap == null ? .12 : .22),
-        ),
-      ),
-      child: Row(
-        children: [
-          leading ??
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: color.withOpacity(.18),
-                  borderRadius: BorderRadius.circular(11),
-                ),
-                child: Icon(icon, color: color, size: 19),
-              ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              label,
-              maxLines: 1,
-              softWrap: false,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: cs.onInverseSurface,
-                fontSize: 12.5,
-                fontWeight: FontWeight.w900,
-                letterSpacing: -.15,
-              ),
-            ),
-          ),
-          if (onTap != null) ...[
-            const SizedBox(width: 2),
-            Icon(
-              Icons.chevron_right_rounded,
-              color: cs.onInverseSurface.withOpacity(.66),
-              size: 17,
-            ),
-          ],
-        ],
-      ),
-    );
+  State<_OpsHqCarouselButton> createState() => _OpsHqCarouselButtonState();
+}
 
-    if (onTap == null) return content;
+class _OpsHqCarouselButtonState extends State<_OpsHqCarouselButton> {
+  bool _pressed = false;
+  bool _hovered = false;
+  bool _focused = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PromptUiTheme.of(context);
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final enabled = widget.onTap != null;
+    final background = !enabled
+        ? tokens.surfaceDisabled
+        : _pressed || _hovered
+            ? tokens.surfaceSelected
+            : tokens.surfaceOverlay;
+    final foreground = enabled ? tokens.textPrimary : tokens.textDisabled;
+    final iconColor = enabled ? widget.color : tokens.iconDisabled;
 
     return Semantics(
       button: true,
-      label: label,
-      child: Material(
-        type: MaterialType.transparency,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: onTap,
-          child: content,
+      enabled: enabled,
+      label: widget.label,
+      child: AnimatedContainer(
+        duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
+        curve: PromptUiMotion.standard,
+        height: 60,
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(PromptUiShapes.button),
+          border: Border.all(
+            color: _focused ? tokens.focusRing : tokens.borderSubtle,
+            width: _focused ? 2 : 1,
+          ),
+          boxShadow: _hovered && enabled
+              ? [
+                  BoxShadow(
+                    color: tokens.shadow,
+                    blurRadius: 12,
+                    offset: const Offset(0, 5),
+                  ),
+                ]
+              : const [],
+        ),
+        child: Material(
+          color: tokens.transparent,
+          borderRadius: BorderRadius.circular(PromptUiShapes.button),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: widget.onTap,
+            onHighlightChanged: (value) {
+              if (_pressed == value) return;
+              setState(() => _pressed = value);
+            },
+            onHover: (value) {
+              if (_hovered == value) return;
+              setState(() => _hovered = value);
+            },
+            onFocusChange: (value) {
+              if (_focused == value) return;
+              setState(() => _focused = value);
+            },
+            borderRadius: BorderRadius.circular(PromptUiShapes.button),
+            overlayColor: WidgetStatePropertyAll(
+              tokens.accent.withOpacity(_pressed ? .12 : .06),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              child: AnimatedScale(
+                scale: _pressed && enabled ? .98 : 1,
+                duration: reduceMotion ? Duration.zero : PromptUiMotion.press,
+                curve: PromptUiMotion.enter,
+                child: Row(
+                  children: [
+                    widget.leading ??
+                        Container(
+                          width: 34,
+                          height: 34,
+                          decoration: BoxDecoration(
+                            color: enabled
+                                ? widget.color.withOpacity(.14)
+                                : tokens.surfaceDisabled,
+                            borderRadius: BorderRadius.circular(11),
+                            border: Border.all(
+                              color: enabled
+                                  ? widget.color.withOpacity(.34)
+                                  : tokens.borderSubtle,
+                            ),
+                          ),
+                          child: Icon(widget.icon, color: iconColor, size: 19),
+                        ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        widget.label,
+                        maxLines: 1,
+                        softWrap: false,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: foreground,
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -.15,
+                        ),
+                      ),
+                    ),
+                    if (enabled) ...[
+                      const SizedBox(width: 2),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        color: tokens.iconSecondary,
+                        size: 17,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -1037,21 +1117,23 @@ class _OpsHqPageDots extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final tokens = PromptUiTheme.of(context);
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: List.generate(count, (index) {
         final active = index == currentIndex;
         return AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOut,
+          duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
+          curve: PromptUiMotion.enter,
           width: active ? 8 : 6,
           height: active ? 8 : 6,
           margin: const EdgeInsets.symmetric(horizontal: 4),
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: active ? cs.primary : cs.onInverseSurface.withOpacity(.34),
+            color: active ? tokens.accent : tokens.borderStrong,
           ),
         );
       }),
@@ -1072,16 +1154,16 @@ class _OpsHqPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final tokens = PromptUiTheme.of(context);
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: cs.surface,
+        color: tokens.surfaceRaised,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: cs.outlineVariant.withOpacity(.70)),
+        border: Border.all(color: tokens.borderSubtle),
         boxShadow: [
           BoxShadow(
-            color: cs.shadow.withOpacity(.04),
+            color: tokens.shadow.withOpacity(tokens.isDark ? .22 : .08),
             blurRadius: 12,
             offset: const Offset(0, 5),
           ),
@@ -1096,10 +1178,10 @@ class _OpsHqPanel extends StatelessWidget {
                 width: 30,
                 height: 30,
                 decoration: BoxDecoration(
-                  color: cs.primaryContainer,
+                  color: tokens.accentContainer,
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(icon, color: cs.onPrimaryContainer, size: 17),
+                child: Icon(icon, color: tokens.onAccentContainer, size: 17),
               ),
               const SizedBox(width: 9),
               Expanded(
@@ -1108,7 +1190,7 @@ class _OpsHqPanel extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: cs.onSurface,
+                    color: tokens.textPrimary,
                     fontSize: 15,
                     fontWeight: FontWeight.w900,
                     letterSpacing: -.15,
@@ -1125,7 +1207,7 @@ class _OpsHqPanel extends StatelessWidget {
   }
 }
 
-class _OpsHqActionTile extends StatelessWidget {
+class _OpsHqActionTile extends StatefulWidget {
   const _OpsHqActionTile({
     required this.label,
     required this.icon,
@@ -1141,75 +1223,144 @@ class _OpsHqActionTile extends StatelessWidget {
   final bool danger;
 
   @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final enabled = onTap != null;
-    final effectiveColor =
-        enabled ? color : cs.onSurfaceVariant.withOpacity(.45);
+  State<_OpsHqActionTile> createState() => _OpsHqActionTileState();
+}
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(15),
-        child: Ink(
-          height: 58,
-          decoration: BoxDecoration(
-            color: enabled ? cs.surface : cs.surfaceVariant.withOpacity(.28),
-            borderRadius: BorderRadius.circular(15),
-            border: Border.all(
-              color: danger
-                  ? cs.error.withOpacity(enabled ? .45 : .20)
-                  : cs.outlineVariant.withOpacity(.70),
-            ),
+class _OpsHqActionTileState extends State<_OpsHqActionTile> {
+  bool _pressed = false;
+  bool _hovered = false;
+  bool _focused = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PromptUiTheme.of(context);
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final enabled = widget.onTap != null;
+    final effectiveColor = enabled ? widget.color : tokens.iconDisabled;
+    final background = !enabled
+        ? tokens.surfaceDisabled
+        : _pressed || _hovered
+            ? tokens.surfaceSelected
+            : tokens.surface;
+    final foreground = !enabled
+        ? tokens.textDisabled
+        : widget.danger
+            ? tokens.danger
+            : tokens.textPrimary;
+
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      label: widget.label,
+      child: AnimatedContainer(
+        duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
+        curve: PromptUiMotion.standard,
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(PromptUiShapes.button),
+          border: Border.all(
+            color: _focused
+                ? tokens.focusRing
+                : widget.danger
+                    ? tokens.danger.withOpacity(enabled ? .52 : .22)
+                    : tokens.borderSubtle,
+            width: _focused ? 2 : 1,
           ),
-          child: Row(
-            children: [
-              Container(
-                width: 5,
-                decoration: BoxDecoration(
-                  color: effectiveColor,
-                  borderRadius:
-                      const BorderRadius.horizontal(left: Radius.circular(15)),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: effectiveColor.withOpacity(.12),
-                  borderRadius: BorderRadius.circular(11),
-                  border: Border.all(color: effectiveColor.withOpacity(.20)),
-                ),
-                child: Icon(icon, color: effectiveColor, size: 18),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: enabled
-                        ? (danger ? cs.error : cs.onSurface)
-                        : cs.onSurfaceVariant.withOpacity(.55),
-                    fontSize: 14,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -.1,
+          boxShadow: _hovered && enabled
+              ? [
+                  BoxShadow(
+                    color: tokens.shadow,
+                    blurRadius: 12,
+                    offset: const Offset(0, 5),
                   ),
+                ]
+              : const [],
+        ),
+        child: Material(
+          color: tokens.transparent,
+          borderRadius: BorderRadius.circular(PromptUiShapes.button),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: widget.onTap,
+            onHighlightChanged: (value) {
+              if (_pressed == value) return;
+              setState(() => _pressed = value);
+            },
+            onHover: (value) {
+              if (_hovered == value) return;
+              setState(() => _hovered = value);
+            },
+            onFocusChange: (value) {
+              if (_focused == value) return;
+              setState(() => _focused = value);
+            },
+            overlayColor: WidgetStatePropertyAll(
+              effectiveColor.withOpacity(_pressed ? .12 : .06),
+            ),
+            borderRadius: BorderRadius.circular(PromptUiShapes.button),
+            child: SizedBox(
+              height: 58,
+              child: AnimatedScale(
+                scale: _pressed && enabled ? .98 : 1,
+                duration: reduceMotion ? Duration.zero : PromptUiMotion.press,
+                curve: PromptUiMotion.enter,
+                child: Row(
+                  children: [
+                    Container(
+                      width: 5,
+                      decoration: BoxDecoration(
+                        color: effectiveColor,
+                        borderRadius: const BorderRadius.horizontal(
+                          left: Radius.circular(PromptUiShapes.button),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: effectiveColor.withOpacity(.12),
+                        borderRadius: BorderRadius.circular(11),
+                        border: Border.all(
+                          color: effectiveColor.withOpacity(.30),
+                        ),
+                      ),
+                      child: Icon(
+                        widget.icon,
+                        color: effectiveColor,
+                        size: 18,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        widget.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: foreground,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -.1,
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 10),
+                      child: Icon(
+                        Icons.chevron_right_rounded,
+                        size: 18,
+                        color: enabled
+                            ? tokens.iconSecondary
+                            : tokens.iconDisabled,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.only(right: 10),
-                child: Icon(
-                  Icons.chevron_right_rounded,
-                  color: enabled
-                      ? cs.onSurfaceVariant.withOpacity(.75)
-                      : cs.onSurfaceVariant.withOpacity(.35),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -1668,8 +1819,10 @@ class _BranchWorkStatusInlinePanelState
   }
 
   Widget _buildTopBar(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
+    final tokens = PromptUiTheme.of(context);
+    final textTheme = Theme.of(context).textTheme;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final statusLabel = _expanded ? '접기' : '펼치기';
     final statusIcon = _expanded
         ? Icons.keyboard_arrow_up_rounded
@@ -1678,97 +1831,117 @@ class _BranchWorkStatusInlinePanelState
     return Semantics(
       button: true,
       label: '지사 별 업무 현황 $statusLabel',
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: _toggleExpanded,
-          borderRadius: BorderRadius.circular(18),
-          child: Ink(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-            decoration: BoxDecoration(
-              color: cs.inverseSurface,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(
-                color: cs.outlineVariant.withOpacity(.5),
-              ),
+      child: AnimatedContainer(
+        duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
+        curve: PromptUiMotion.standard,
+        decoration: BoxDecoration(
+          color: _expanded ? tokens.surfaceSelected : tokens.surfaceOverlay,
+          borderRadius: BorderRadius.circular(PromptUiShapes.card),
+          border: Border.all(
+            color: _expanded ? tokens.accent : tokens.borderSubtle,
+          ),
+        ),
+        child: Material(
+          color: tokens.transparent,
+          borderRadius: BorderRadius.circular(PromptUiShapes.card),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: _toggleExpanded,
+            borderRadius: BorderRadius.circular(PromptUiShapes.card),
+            overlayColor: WidgetStatePropertyAll(
+              tokens.accent.withOpacity(.08),
             ),
-            child: Row(
-              children: [
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    color: _expanded ? cs.primaryContainer : cs.primary,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Icon(
-                    Icons.domain_rounded,
-                    color: _expanded ? cs.onPrimaryContainer : cs.onPrimary,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '지사 별 업무 현황',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: (tt.titleMedium ?? const TextStyle(fontSize: 16))
-                            .copyWith(
-                          fontWeight: FontWeight.w900,
-                          color: cs.onInverseSurface,
-                          letterSpacing: -.2,
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        '마스터 ${_formatAreaMasterRefreshAt(_areaMasterRefreshedAtIso)}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: tt.bodySmall?.copyWith(
-                          color: cs.onInverseSurface.withOpacity(.72),
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                _BranchHeaderPill(
-                  icon: Icons.sd_storage_rounded,
-                  label: '$_cachedAreaCount',
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  width: 34,
-                  height: 34,
-                  decoration: BoxDecoration(
-                    color: cs.onInverseSurface.withOpacity(.12),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(
-                      color: cs.onInverseSurface.withOpacity(.22),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  AnimatedContainer(
+                    duration: reduceMotion
+                        ? Duration.zero
+                        : PromptUiMotion.selection,
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: _expanded
+                          ? tokens.accent
+                          : tokens.accentContainer,
+                      borderRadius: BorderRadius.circular(14),
                     ),
-                  ),
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 160),
-                    transitionBuilder: (child, animation) {
-                      return ScaleTransition(
-                        scale: animation,
-                        child: child,
-                      );
-                    },
                     child: Icon(
-                      statusIcon,
-                      key: ValueKey<bool>(_expanded),
-                      size: 22,
-                      color: cs.onInverseSurface,
+                      Icons.domain_rounded,
+                      color: _expanded
+                          ? tokens.onAccent
+                          : tokens.onAccentContainer,
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '지사 별 업무 현황',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: (textTheme.titleMedium ??
+                                  const TextStyle(fontSize: 16))
+                              .copyWith(
+                            fontWeight: FontWeight.w900,
+                            color: tokens.textPrimary,
+                            letterSpacing: -.2,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          '마스터 ${_formatAreaMasterRefreshAt(_areaMasterRefreshedAtIso)}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: textTheme.bodySmall?.copyWith(
+                            color: tokens.textSecondary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  _BranchHeaderPill(
+                    icon: Icons.sd_storage_rounded,
+                    label: '$_cachedAreaCount',
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: tokens.surface,
+                      borderRadius:
+                          BorderRadius.circular(PromptUiShapes.pill),
+                      border: Border.all(color: tokens.borderSubtle),
+                    ),
+                    child: AnimatedSwitcher(
+                      duration: reduceMotion
+                          ? Duration.zero
+                          : PromptUiMotion.selection,
+                      transitionBuilder: (child, animation) {
+                        return ScaleTransition(
+                          scale: animation,
+                          child: FadeTransition(
+                            opacity: animation,
+                            child: child,
+                          ),
+                        );
+                      },
+                      child: Icon(
+                        statusIcon,
+                        key: ValueKey<bool>(_expanded),
+                        size: 22,
+                        color: tokens.iconSecondary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -1983,7 +2156,7 @@ class _BranchWorkStatusInlinePanelState
         _buildTopBar(context),
         _buildExpandedContent(context),
         const SizedBox(height: 12),
-        const HeadquarterCalendarCard(),
+        const HeadquarterCalendarCard(usePromptUi: true),
       ],
     );
   }
@@ -1997,26 +2170,27 @@ class _BranchHeaderPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final tokens = PromptUiTheme.of(context);
     return Container(
       height: 34,
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
-        color: cs.onInverseSurface.withOpacity(.12),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: cs.onInverseSurface.withOpacity(.22)),
+        color: tokens.surface,
+        borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+        border: Border.all(color: tokens.borderSubtle),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 15, color: cs.onInverseSurface),
+          Icon(icon, size: 15, color: tokens.iconSecondary),
           const SizedBox(width: 6),
           Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
+              color: tokens.textSecondary,
               fontSize: 12,
               fontWeight: FontWeight.w900,
-            ).copyWith(color: cs.onInverseSurface),
+            ),
           ),
         ],
       ),
@@ -2182,7 +2356,10 @@ class _BranchCapabilityStateLegend extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = allowed ? Colors.green.shade700 : Colors.red.shade700;
+    final tokens = PromptUiTheme.of(context);
+    final color = allowed ? tokens.success : tokens.danger;
+    final background =
+        allowed ? tokens.successContainer : tokens.dangerContainer;
 
     return Semantics(
       label: label,
@@ -2190,7 +2367,7 @@ class _BranchCapabilityStateLegend extends StatelessWidget {
         height: 34,
         padding: const EdgeInsets.symmetric(horizontal: 9),
         decoration: BoxDecoration(
-          color: color.withOpacity(.10),
+          color: background,
           borderRadius: BorderRadius.circular(11),
           border: Border.all(color: color.withOpacity(.50)),
         ),
@@ -2365,12 +2542,14 @@ class _AreaChatReadOpenHelper {
   static Future<void> open({
     required BuildContext context,
     required String areaName,
+    bool usePromptUi = true,
   }) async {
     final area = areaName.trim();
     if (area.isEmpty) return;
     await AreaChatPanel.showSheet(
       context: context,
       areaName: area,
+      usePromptUi: usePromptUi,
     );
   }
 }
@@ -2442,6 +2621,7 @@ class _BranchAreaMiniCard extends StatelessWidget {
     await _AreaChatReadOpenHelper.open(
       context: context,
       areaName: area,
+      usePromptUi: true,
     );
   }
 
@@ -2616,12 +2796,10 @@ class _CapabilityStatusIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final color = allowed ? Colors.green.shade700 : Colors.red.shade700;
-    final background = Color.alphaBlend(
-      color.withOpacity(allowed ? .12 : .10),
-      cs.surface,
-    );
+    final tokens = PromptUiTheme.of(context);
+    final color = allowed ? tokens.success : tokens.danger;
+    final background =
+        allowed ? tokens.successContainer : tokens.dangerContainer;
     final status = allowed ? '허용' : '비허용';
 
     return Semantics(

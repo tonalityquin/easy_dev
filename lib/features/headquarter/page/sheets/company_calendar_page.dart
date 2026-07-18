@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
@@ -100,26 +102,45 @@ class CompanyCalendarPage extends StatefulWidget {
   const CompanyCalendarPage({
     super.key,
     this.asBottomSheet = false,
+    this.usePromptUi = false,
   });
 
   final bool asBottomSheet;
+  final bool usePromptUi;
 
-  static Future<T?> showAsBottomSheet<T>(BuildContext context) {
+  static Future<T?> showAsBottomSheet<T>(
+    BuildContext context, {
+    bool usePromptUi = false,
+  }) {
+    Widget buildSheet(BuildContext sheetContext) {
+      final insets = MediaQuery.of(sheetContext).viewInsets;
+      return Padding(
+        padding: EdgeInsets.only(bottom: insets.bottom),
+        child: _FullHeightBottomSheetFrame(
+          child: CompanyCalendarPage(
+            asBottomSheet: true,
+            usePromptUi: usePromptUi,
+          ),
+        ),
+      );
+    }
+
+    if (usePromptUi) {
+      return showPromptOverlayBottomSheet<T>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        builder: buildSheet,
+      );
+    }
+
     return showModalBottomSheet<T>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: Colors.transparent,
       barrierColor: Theme.of(context).colorScheme.scrim.withOpacity(0.60),
-      builder: (sheetCtx) {
-        final insets = MediaQuery.of(sheetCtx).viewInsets;
-        return Padding(
-          padding: EdgeInsets.only(bottom: insets.bottom),
-          child: const _FullHeightBottomSheetFrame(
-            child: CompanyCalendarPage(asBottomSheet: true),
-          ),
-        );
-      },
+      builder: buildSheet,
     );
   }
 
@@ -249,6 +270,7 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
                 MonthCalendarView(
                   allEvents: model.events,
                   progressOf: (e) => _extractProgress(e.description),
+                  usePromptUi: widget.usePromptUi,
                   onEdit: _openEditSheet,
                   onDelete: _confirmDelete,
                   onToggleProgress: _toggleProgress,
@@ -262,6 +284,7 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
                 EventList(
                   events: model.events,
                   onEdit: _openEditSheet,
+                  usePromptUi: widget.usePromptUi,
                   onDelete: _confirmDelete,
                   onToggleProgress: _toggleProgress,
                   progressOf: (e) => _extractProgress(e.description),
@@ -307,6 +330,7 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
                 context: context,
                 allEvents: model.events,
                 onEdit: _openEditSheet,
+                usePromptUi: widget.usePromptUi,
               ),
             ),
           ],
@@ -328,6 +352,7 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
             context: context,
             allEvents: model.events,
             onEdit: _openEditSheet,
+            usePromptUi: widget.usePromptUi,
           ),
         ),
       ],
@@ -393,25 +418,37 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
       return;
     }
 
+    Widget buildBoard(BuildContext sheetContext) {
+      return FractionallySizedBox(
+        heightFactor: 1,
+        child: _BoardSheetScaffold(
+          child: BoardKanbanView(
+            allEvents: model.events,
+            progressOf: (e) => _extractProgress(e.description),
+            onToggleProgress: (c, e, done) =>
+                _toggleProgress(pageContext, e, done),
+          ),
+        ),
+      );
+    }
+
+    if (widget.usePromptUi) {
+      await showPromptOverlayBottomSheet<void>(
+        context: pageContext,
+        isScrollControlled: true,
+        useSafeArea: true,
+        builder: buildBoard,
+      );
+      return;
+    }
+
     await showModalBottomSheet<void>(
       context: pageContext,
       isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: Colors.transparent,
       barrierColor: tokens.scrim.withOpacity(0.60),
-      builder: (sheetCtx) {
-        return FractionallySizedBox(
-          heightFactor: 1,
-          child: _BoardSheetScaffold(
-            child: BoardKanbanView(
-              allEvents: model.events,
-              progressOf: (e) => _extractProgress(e.description),
-              onToggleProgress: (c, e, done) =>
-                  _toggleProgress(pageContext, e, done),
-            ),
-          ),
-        );
-      },
+      builder: buildBoard,
     );
   }
 
@@ -433,6 +470,7 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
       initialStart: now,
       initialEnd: now.add(const Duration(hours: 1)),
       initialProgress: 0,
+      usePromptUi: widget.usePromptUi,
     );
     if (created == null) return;
 
@@ -473,6 +511,7 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
       initialColorId: e.colorId,
       initialProgress: initialProgress,
       isEditMode: true,
+      usePromptUi: widget.usePromptUi,
     );
     if (edited == null) return;
 
@@ -491,25 +530,33 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
   }
 
   Future<void> _confirmDelete(BuildContext context, gcal.Event e) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
+    Widget buildDialog(BuildContext dialogContext) {
+      return AlertDialog(
         title: const Text('삭제'),
         content: Text('이벤트를 삭제할까요?\n"${e.summary ?? '(제목 없음)'}"'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () => Navigator.pop(dialogContext, false),
             child: const Text('취소'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () => Navigator.pop(dialogContext, true),
             child: const Text('삭제'),
           ),
         ],
-      ),
-    ) ??
-        false;
-    if (ok) {
+      );
+    }
+
+    final ok = widget.usePromptUi
+        ? await showPromptOverlayDialog<bool>(
+            context: context,
+            builder: buildDialog,
+          )
+        : await showDialog<bool>(
+            context: context,
+            builder: buildDialog,
+          );
+    if (ok == true) {
       await context.read<CalendarModel>().delete(eventId: e.id!);
     }
   }

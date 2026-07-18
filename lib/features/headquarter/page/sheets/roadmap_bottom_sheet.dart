@@ -1,16 +1,13 @@
 import 'package:flutter/material.dart';
 
+import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+
 enum RoadmapStatus { planned, inProgress, done }
 
 enum RoadmapLoad { light, medium, heavy }
 
 class RoadmapItem {
-  final String? date;
-  final RoadmapLoad? load;
-  final String title;
-  final List<String> notes;
-  final RoadmapStatus status;
-
   const RoadmapItem({
     this.date,
     this.load,
@@ -18,13 +15,19 @@ class RoadmapItem {
     required this.notes,
     required this.status,
   });
+
+  final String? date;
+  final RoadmapLoad? load;
+  final String title;
+  final List<String> notes;
+  final RoadmapStatus status;
 }
 
-const List<RoadmapItem> _roadmapData = [
+const List<RoadmapItem> _roadmapData = <RoadmapItem>[
   RoadmapItem(
     load: RoadmapLoad.heavy,
     title: '차량 차종 인식 모델 기능 추가',
-    notes: [
+    notes: <String>[
       '차량 전면부를 촬영하여 제조사와 차종 명을 삽입할 수 있도록 하는 기능',
     ],
     status: RoadmapStatus.inProgress,
@@ -32,7 +35,7 @@ const List<RoadmapItem> _roadmapData = [
   RoadmapItem(
     load: RoadmapLoad.heavy,
     title: '홈페이지 모드 지원',
-    notes: [
+    notes: <String>[
       '홈페이지로 출차 요청 및 업무 보조 지원',
     ],
     status: RoadmapStatus.planned,
@@ -40,7 +43,7 @@ const List<RoadmapItem> _roadmapData = [
   RoadmapItem(
     load: RoadmapLoad.medium,
     title: '특정 고객용 모드 지원',
-    notes: [
+    notes: <String>[
       '고객 개인에게 설치되는 앱 내에서 본인 차량만 출차 요청 할 수 있도록 하는 모드 지원',
     ],
     status: RoadmapStatus.planned,
@@ -48,7 +51,7 @@ const List<RoadmapItem> _roadmapData = [
   RoadmapItem(
     load: RoadmapLoad.heavy,
     title: 'QR 코드 지원',
-    notes: [
+    notes: <String>[
       'Case A.사용자가 QR코드를 촬영하여 받은 일회성 페이지에서 특정 번호판을 입차 완료에서 출차 요청으로 변경',
       'Case B.사용자가 출차 요청한 후, 발급받은 QR코드를 촬영하여 출차 완료가 되면 알림 수신',
     ],
@@ -59,20 +62,41 @@ const List<RoadmapItem> _roadmapData = [
 class RoadmapBottomSheet extends StatelessWidget {
   const RoadmapBottomSheet({super.key});
 
-  Color _statusColor(BuildContext context, RoadmapStatus s) {
-    final cs = Theme.of(context).colorScheme;
-    switch (s) {
+  Color _statusColor(PromptUiTokens tokens, RoadmapStatus status) {
+    switch (status) {
       case RoadmapStatus.planned:
-        return cs.secondary;
+        return tokens.info;
       case RoadmapStatus.inProgress:
-        return cs.primary;
+        return tokens.accent;
       case RoadmapStatus.done:
-        return cs.tertiary;
+        return tokens.success;
     }
   }
 
-  String _statusLabel(RoadmapStatus s) {
-    switch (s) {
+  Color _statusContainer(PromptUiTokens tokens, RoadmapStatus status) {
+    switch (status) {
+      case RoadmapStatus.planned:
+        return tokens.infoContainer;
+      case RoadmapStatus.inProgress:
+        return tokens.accentContainer;
+      case RoadmapStatus.done:
+        return tokens.successContainer;
+    }
+  }
+
+  Color _statusForeground(PromptUiTokens tokens, RoadmapStatus status) {
+    switch (status) {
+      case RoadmapStatus.planned:
+        return tokens.onInfoContainer;
+      case RoadmapStatus.inProgress:
+        return tokens.onAccentContainer;
+      case RoadmapStatus.done:
+        return tokens.onSuccessContainer;
+    }
+  }
+
+  String _statusLabel(RoadmapStatus status) {
+    switch (status) {
       case RoadmapStatus.planned:
         return '계획';
       case RoadmapStatus.inProgress:
@@ -82,20 +106,41 @@ class RoadmapBottomSheet extends StatelessWidget {
     }
   }
 
-  Color _loadColor(BuildContext context, RoadmapLoad l) {
-    final cs = Theme.of(context).colorScheme;
-    switch (l) {
+  Color _loadColor(PromptUiTokens tokens, RoadmapLoad load) {
+    switch (load) {
       case RoadmapLoad.light:
-        return cs.tertiary;
+        return tokens.success;
       case RoadmapLoad.medium:
-        return cs.secondary;
+        return tokens.warning;
       case RoadmapLoad.heavy:
-        return cs.error;
+        return tokens.danger;
     }
   }
 
-  String _loadLabel(RoadmapLoad l) {
-    switch (l) {
+  Color _loadContainer(PromptUiTokens tokens, RoadmapLoad load) {
+    switch (load) {
+      case RoadmapLoad.light:
+        return tokens.successContainer;
+      case RoadmapLoad.medium:
+        return tokens.warningContainer;
+      case RoadmapLoad.heavy:
+        return tokens.dangerContainer;
+    }
+  }
+
+  Color _loadForeground(PromptUiTokens tokens, RoadmapLoad load) {
+    switch (load) {
+      case RoadmapLoad.light:
+        return tokens.onSuccessContainer;
+      case RoadmapLoad.medium:
+        return tokens.onWarningContainer;
+      case RoadmapLoad.heavy:
+        return tokens.onDangerContainer;
+    }
+  }
+
+  String _loadLabel(RoadmapLoad load) {
+    switch (load) {
       case RoadmapLoad.light:
         return '여유';
       case RoadmapLoad.medium:
@@ -107,95 +152,141 @@ class RoadmapBottomSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final text = Theme.of(context).textTheme;
+    final tokens = PromptUiTheme.of(context);
+    final textTheme = Theme.of(context).textTheme;
 
     return DraggableScrollableSheet(
-      initialChildSize: 1.0,
+      initialChildSize: 1,
       minChildSize: 0.4,
-      maxChildSize: 1.0,
+      maxChildSize: 1,
       expand: false,
-      builder: (_, controller) {
+      builder: (context, controller) {
         return Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+          decoration: BoxDecoration(
+            color: tokens.surfaceRaised,
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(PromptUiShapes.sheet),
+            ),
+            border: Border.all(color: tokens.borderSubtle),
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                color: tokens.shadow,
+                blurRadius: 22,
+                offset: const Offset(0, -6),
+              ),
+            ],
           ),
           child: SafeArea(
-            top: true,
-            bottom: false,
+            top: false,
             child: Column(
-              children: [
-                const SizedBox(height: 8),
+              children: <Widget>[
+                const SizedBox(height: 10),
                 Container(
-                  width: 48,
-                  height: 5,
+                  width: 44,
+                  height: 4,
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(999),
+                    color: tokens.handle,
+                    borderRadius: BorderRadius.circular(PromptUiShapes.pill),
                   ),
                 ),
-                const SizedBox(height: 12),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.fromLTRB(16, 14, 8, 12),
                   child: Row(
-                    children: [
-                      Icon(Icons.timeline_rounded, color: cs.primary),
-                      const SizedBox(width: 8),
-                      Text(
-                        '프로세스 로드맵',
-                        style: text.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w800),
+                    children: <Widget>[
+                      Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: tokens.accentContainer,
+                          borderRadius:
+                              BorderRadius.circular(PromptUiShapes.control),
+                          border: Border.all(color: tokens.borderSubtle),
+                        ),
+                        child: Icon(
+                          Icons.timeline_rounded,
+                          color: tokens.onAccentContainer,
+                        ),
                       ),
-                      const Spacer(),
-                      Text(
-                        '로드맵은 상시 변경 혹은 취소될 수 있습니다.',
-                        style:
-                            text.labelMedium?.copyWith(color: Colors.grey[600]),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              '프로세스 로드맵',
+                              style: textTheme.titleMedium?.copyWith(
+                                color: tokens.textPrimary,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '로드맵은 상시 변경 혹은 취소될 수 있습니다.',
+                              style: textTheme.bodySmall?.copyWith(
+                                color: tokens.textSecondary,
+                                height: 1.35,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      PromptIconButton(
+                        icon: Icons.close_rounded,
+                        tooltip: '닫기',
+                        onPressed: () => Navigator.of(context).maybePop(),
+                        haptic: PromptHaptic.selection,
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 8),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                   child: Wrap(
-                    spacing: 10,
-                    runSpacing: 6,
-                    children: [
-                      _legendChip(context,
-                          label: _statusLabel(RoadmapStatus.inProgress),
-                          color:
-                              _statusColor(context, RoadmapStatus.inProgress)),
-                      _legendChip(context,
-                          label: _statusLabel(RoadmapStatus.planned),
-                          color: _statusColor(context, RoadmapStatus.planned)),
-                      _legendChip(context,
-                          label: _statusLabel(RoadmapStatus.done),
-                          color: _statusColor(context, RoadmapStatus.done)),
-                    ],
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: RoadmapStatus.values.map((status) {
+                      return _LegendChip(
+                        label: _statusLabel(status),
+                        color: _statusColor(tokens, status),
+                        background: _statusContainer(tokens, status),
+                        foreground: _statusForeground(tokens, status),
+                      );
+                    }).toList(growable: false),
                   ),
                 ),
-                const SizedBox(height: 8),
-                const Divider(height: 1),
+                Divider(height: 1, color: tokens.borderSubtle),
                 Expanded(
                   child: ListView.builder(
                     controller: controller,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
                     itemCount: _roadmapData.length,
-                    itemBuilder: (context, i) => _TimelineTile(
-                      item: _roadmapData[i],
-                      statusColor:
-                          _statusColor(context, _roadmapData[i].status),
-                      statusLabel: _statusLabel(_roadmapData[i].status),
-                      loadColor: _roadmapData[i].load == null
-                          ? null
-                          : _loadColor(context, _roadmapData[i].load!),
-                      loadLabel: _roadmapData[i].load == null
-                          ? null
-                          : _loadLabel(_roadmapData[i].load!),
-                    ),
+                    itemBuilder: (context, index) {
+                      final item = _roadmapData[index];
+                      return PromptAnimatedReveal(
+                        delay: Duration(milliseconds: index * 45),
+                        offset: const Offset(0, 0.035),
+                        child: _TimelineTile(
+                          item: item,
+                          statusColor: _statusColor(tokens, item.status),
+                          statusContainer:
+                              _statusContainer(tokens, item.status),
+                          statusForeground:
+                              _statusForeground(tokens, item.status),
+                          statusLabel: _statusLabel(item.status),
+                          loadColor: item.load == null
+                              ? null
+                              : _loadColor(tokens, item.load!),
+                          loadContainer: item.load == null
+                              ? null
+                              : _loadContainer(tokens, item.load!),
+                          loadForeground: item.load == null
+                              ? null
+                              : _loadForeground(tokens, item.load!),
+                          loadLabel:
+                              item.load == null ? null : _loadLabel(item.load!),
+                        ),
+                      );
+                    },
                   ),
                 ),
               ],
@@ -205,73 +296,110 @@ class RoadmapBottomSheet extends StatelessWidget {
       },
     );
   }
+}
 
-  Widget _legendChip(BuildContext context,
-      {required String label, required Color color}) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-        const SizedBox(width: 6),
-        Text(label, style: Theme.of(context).textTheme.labelMedium),
-      ],
+class _LegendChip extends StatelessWidget {
+  const _LegendChip({
+    required this.label,
+    required this.color,
+    required this.background,
+    required this.foreground,
+  });
+
+  final String label;
+  final Color color;
+  final Color background;
+  final Color foreground;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+        border: Border.all(color: color.withOpacity(0.4)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 7),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: foreground,
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+        ],
+      ),
     );
   }
 }
 
 class _TimelineTile extends StatelessWidget {
-  final RoadmapItem item;
-  final Color statusColor;
-  final String statusLabel;
-  final Color? loadColor;
-  final String? loadLabel;
-
   const _TimelineTile({
     required this.item,
     required this.statusColor,
+    required this.statusContainer,
+    required this.statusForeground,
     required this.statusLabel,
     this.loadColor,
+    this.loadContainer,
+    this.loadForeground,
     this.loadLabel,
   });
 
+  final RoadmapItem item;
+  final Color statusColor;
+  final Color statusContainer;
+  final Color statusForeground;
+  final String statusLabel;
+  final Color? loadColor;
+  final Color? loadContainer;
+  final Color? loadForeground;
+  final String? loadLabel;
+
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final text = Theme.of(context).textTheme;
+    final tokens = PromptUiTheme.of(context);
+    final textTheme = Theme.of(context).textTheme;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+        children: <Widget>[
           SizedBox(
-            width: 28,
+            width: 24,
             child: Column(
-              children: [
-                Container(width: 4, height: 6, color: Colors.transparent),
+              children: <Widget>[
+                const SizedBox(height: 18),
                 Container(
                   width: 12,
                   height: 12,
                   decoration: BoxDecoration(
                     color: statusColor,
                     shape: BoxShape.circle,
-                    boxShadow: [
+                    boxShadow: <BoxShadow>[
                       BoxShadow(
-                        color: statusColor.withOpacity(.4),
-                        blurRadius: 6,
+                        color: statusColor.withOpacity(0.32),
+                        blurRadius: 7,
                         offset: const Offset(0, 2),
-                      )
+                      ),
                     ],
                   ),
                 ),
                 Container(
                   width: 2,
-                  height: 90,
+                  height: 98,
                   margin: const EdgeInsets.only(top: 6),
-                  color: cs.outlineVariant,
+                  color: tokens.borderSubtle,
                 ),
               ],
             ),
@@ -279,43 +407,80 @@ class _TimelineTile extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: cs.surfaceVariant.withOpacity(.35),
-                borderRadius: BorderRadius.circular(12),
+                color: tokens.surface,
+                borderRadius: BorderRadius.circular(PromptUiShapes.card),
+                border: Border.all(color: tokens.borderSubtle),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+                children: <Widget>[
                   Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      if ((item.date ?? '').isNotEmpty)
-                        _chip(
-                            text: item.date!,
-                            bg: Colors.black.withOpacity(.06)),
-                      if (loadLabel != null && loadColor != null)
-                        _chip(
-                            text: loadLabel!, bg: loadColor!.withOpacity(.16)),
-                      _chip(
-                          text: statusLabel, bg: statusColor.withOpacity(.16)),
+                    spacing: 7,
+                    runSpacing: 7,
+                    children: <Widget>[
+                      if ((item.date ?? '').trim().isNotEmpty)
+                        _MetaChip(
+                          text: item.date!,
+                          background: tokens.surfaceOverlay,
+                          foreground: tokens.textSecondary,
+                          border: tokens.borderSubtle,
+                        ),
+                      if (loadLabel != null &&
+                          loadContainer != null &&
+                          loadForeground != null &&
+                          loadColor != null)
+                        _MetaChip(
+                          text: loadLabel!,
+                          background: loadContainer!,
+                          foreground: loadForeground!,
+                          border: loadColor!.withOpacity(0.4),
+                        ),
+                      _MetaChip(
+                        text: statusLabel,
+                        background: statusContainer,
+                        foreground: statusForeground,
+                        border: statusColor.withOpacity(0.4),
+                      ),
                     ],
                   ),
+                  const SizedBox(height: 10),
+                  Text(
+                    item.title,
+                    style: textTheme.titleMedium?.copyWith(
+                      color: tokens.textPrimary,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                   const SizedBox(height: 8),
-                  Text(item.title,
-                      style: text.titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 6),
                   ...item.notes.map(
-                    (n) => Padding(
-                      padding: const EdgeInsets.only(bottom: 4),
+                    (note) => Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('•  '),
-                          Expanded(child: Text(n, style: text.bodyMedium)),
+                        children: <Widget>[
+                          Padding(
+                            padding: const EdgeInsets.only(top: 7),
+                            child: Container(
+                              width: 5,
+                              height: 5,
+                              decoration: BoxDecoration(
+                                color: tokens.accent,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              note,
+                              style: textTheme.bodyMedium?.copyWith(
+                                color: tokens.textSecondary,
+                                height: 1.5,
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -328,16 +493,37 @@ class _TimelineTile extends StatelessWidget {
       ),
     );
   }
+}
 
-  Widget _chip({required String text, required Color bg}) {
+class _MetaChip extends StatelessWidget {
+  const _MetaChip({
+    required this.text,
+    required this.background,
+    required this.foreground,
+    required this.border,
+  });
+
+  final String text;
+  final Color background;
+  final Color foreground;
+  final Color border;
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(999),
+        color: background,
+        borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+        border: Border.all(color: border),
       ),
-      child: Text(text,
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+      child: Text(
+        text,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: foreground,
+              fontWeight: FontWeight.w800,
+            ),
+      ),
     );
   }
 }

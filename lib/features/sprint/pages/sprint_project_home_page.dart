@@ -173,7 +173,7 @@ class _SprintProjectHomePageState extends State<SprintProjectHomePage> {
     await showSprintTaskDetailSheet(
       context: context,
       store: widget.store,
-      task: task,
+      taskId: task.id,
     );
   }
 
@@ -356,7 +356,7 @@ class _SprintProjectHomePageState extends State<SprintProjectHomePage> {
                       const SizedBox(height: 10),
                       if (summary.todayTasks.isEmpty)
                         const SprintSurface(
-                          child: Text('오늘 배치된 프로젝트 업무가 없습니다.'),
+                          child: Text('오늘 진행 중인 프로젝트 업무가 없습니다.'),
                         )
                       else
                         ...summary.todayTasks.take(3).map(
@@ -512,7 +512,7 @@ class _ProjectSummaryCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      '남은 예상 작업 ${sprintFormatDuration(summary.remainingMinutes)}',
+                      '남은 업무 ${summary.totalTaskCount - summary.completedTaskCount}개 · 높은 우선순위 ${summary.highPriorityRemainingCount}개',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                             color: colors.onPrimaryContainer,
                             fontWeight: FontWeight.w800,
@@ -636,7 +636,7 @@ class _DeliveryForecastCard extends StatelessWidget {
           const SizedBox(height: 18),
           _ForecastTimeline(
             today: DateTime.now(),
-            estimate: summary.estimatedCompletion,
+            estimate: summary.plannedCompletion,
             target: target,
           ),
           const SizedBox(height: 14),
@@ -660,7 +660,7 @@ class _DeliveryForecastCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '예상 완료가 목표 완료일보다 ${summary.delayDays}일 늦습니다.',
+                    '계획 완료일이 목표 완료일보다 ${summary.delayDays}일 늦습니다.',
                     style: TextStyle(
                       color: colors.onErrorContainer,
                       fontWeight: FontWeight.w900,
@@ -747,7 +747,7 @@ class _ForecastTimeline extends StatelessWidget {
               _ForecastPoint(
                 x: estimateX,
                 width: width,
-                topLabel: '예상',
+                topLabel: '계획',
                 bottomLabel: sprintFormatShortDate(estimate),
                 color: colors.tertiary,
                 icon: Icons.adjust_rounded,
@@ -866,7 +866,7 @@ class _ProjectWorkloadCard extends StatelessWidget {
                 return const Text('향후 7일 동안 과부하가 없습니다.');
               }
               return Text(
-                '${sprintWeekday(overloaded.first.date.weekday)}요일은 배치 가능시간을 초과했습니다.',
+                '${sprintWeekday(overloaded.first.date.weekday)}요일은 업무 밀도가 높습니다.',
                 style: TextStyle(
                   color: Theme.of(context).colorScheme.error,
                   fontWeight: FontWeight.w800,
@@ -892,14 +892,14 @@ class _LoadBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final ratio = load.availableMinutes <= 0 && load.plannedMinutes == 0
+    final ratio = load.taskCount == 0
         ? 0.06
         : load.ratio.clamp(0.08, 1).toDouble();
 
     return Semantics(
       button: true,
       label:
-          '${sprintWeekday(load.date.weekday)}요일, 프로젝트 업무 ${load.plannedMinutes}분${load.overloaded ? ', 과부하' : ''}',
+          '${sprintWeekday(load.date.weekday)}요일, 프로젝트 업무 ${load.taskCount}개, 높은 우선순위 ${load.highPriorityCount}개${load.overloaded ? ', 밀도 높음' : ''}',
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: onTap,
@@ -1001,9 +1001,7 @@ class _ProjectTodayTaskCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  block == null
-                      ? sprintFormatDuration(task.estimatedMinutes)
-                      : '${sprintFormatTime(block.start)}–${sprintFormatTime(block.end)} · ${sprintFormatDuration(block.durationMinutes)}',
+                  '${sprintPriorityLabel(task.priority)} · 종일 · ${sprintFormatDateRange(task.startDate, task.endDate)}',
                   style: TextStyle(
                     color: colors.onSurfaceVariant,
                     fontWeight: FontWeight.w600,
@@ -1100,7 +1098,7 @@ class _ProjectPathItem extends StatelessWidget {
   String _taskStateLabel(SprintTask task) {
     switch (task.state) {
       case SprintTaskState.completed:
-        return '실제 ${sprintFormatDuration(task.actualMinutes)}';
+        return '완료 · ${sprintPriorityLabel(task.priority)}';
       case SprintTaskState.scheduled:
         return '일정에 배치됨';
       case SprintTaskState.ready:

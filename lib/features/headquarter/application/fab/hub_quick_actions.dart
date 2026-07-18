@@ -11,6 +11,10 @@ import '../../../../app/di/routes.dart';
 import '../../../../app/init/app_exit_service.dart';
 import '../../../../app/init/app_navigator.dart';
 import '../../../../app/utils/ops_delayed_refresh_gate.dart';
+import '../../../../app/utils/snackbar_helper.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
 import '../../../account/applications/user_state.dart';
 import '../../../chat/application/chat_area_key.dart';
 import '../../../chat/presentation/area_chat_panel.dart';
@@ -83,13 +87,14 @@ class HeadHubActions {
   }
 
   static Future<T?> openSheetExclusively<T>(
-    Future<T?> Function(BuildContext ctx) openFn,
-  ) async {
+    Future<T?> Function(BuildContext ctx) openFn, {
+    BuildContext? context,
+  }) async {
     if (_opening) return null;
     _opening = true;
     try {
       await closeAnySheet();
-      final ctx = _bestContext();
+      final ctx = context ?? _bestContext();
       if (ctx == null) return null;
 
       final Future<T?> fut = openFn(ctx);
@@ -158,14 +163,13 @@ class HeadHubActions {
 
     if (!opened) {
       final ctx = context ?? _bestContext();
-      final messenger = ctx == null ? null : ScaffoldMessenger.maybeOf(ctx);
-      messenger?.showSnackBar(
-        const SnackBar(
-          content: Text('문의하기 화면을 열 수 없습니다.'),
-          behavior: SnackBarBehavior.floating,
-          duration: Duration(milliseconds: 1200),
-        ),
-      );
+      if (ctx != null && ctx.mounted) {
+        showFailedSnackbar(
+          ctx,
+          '문의하기 화면을 열 수 없습니다.',
+          usePromptUi: true,
+        );
+      }
     }
 
     return opened;
@@ -176,12 +180,16 @@ class HeadHubActions {
     final ctx = context ?? _bestContext();
     if (ctx == null) return;
 
-    await openSheetExclusively<void>((sheetContext) {
-      return AreaChatPanel.showSheet(
-        context: sheetContext,
-        areaName: headquarterChatAreaName,
-      );
-    });
+    await openSheetExclusively<void>(
+      (sheetContext) {
+        return AreaChatPanel.showSheet(
+          context: sheetContext,
+          areaName: headquarterChatAreaName,
+          usePromptUi: true,
+        );
+      },
+      context: ctx,
+    );
   }
 
   static Future<void> refreshAreaMaster([
@@ -197,6 +205,7 @@ class HeadHubActions {
       context: ctx,
       title: '지역 마스터 갱신',
       message: '지역 마스터를 갱신하기 전 요청을 준비하고 있습니다.',
+      usePromptUi: true,
     );
     if (!shouldRefresh) return;
 
@@ -204,41 +213,88 @@ class HeadHubActions {
       final snapshot = await AreaMasterCache.refreshDivision(division);
       if (!ctx.mounted) return;
 
-      await showDialog<void>(
+      await showPromptDialog<void>(
         context: ctx,
         barrierDismissible: false,
         builder: (dialogContext) {
-          return AlertDialog(
-            title: const Text('지역 마스터 갱신 완료'),
-            content: Text(
-              '기존 지역 마스터를 삭제하고 '
-              '${snapshot.items.length}개 지역 정보를 새로 저장했습니다.\n\n'
-              '변경 사항 적용을 위해 앱을 종료합니다. '
-              '앱을 다시 실행해 주세요.',
+          final tokens = PromptUiTheme.of(dialogContext);
+          final text = Theme.of(dialogContext).textTheme;
+          return ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: tokens.successContainer,
+                        borderRadius:
+                            BorderRadius.circular(PromptUiShapes.control),
+                      ),
+                      child: Icon(
+                        Icons.cloud_done_rounded,
+                        color: tokens.onSuccessContainer,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        '지역 마스터 갱신 완료',
+                        style: text.titleMedium?.copyWith(
+                          color: tokens.textPrimary,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: tokens.surfaceOverlay,
+                    borderRadius:
+                        BorderRadius.circular(PromptUiShapes.control),
+                    border: Border.all(color: tokens.borderSubtle),
+                  ),
+                  child: Text(
+                    '기존 지역 마스터를 삭제하고 '
+                    '${snapshot.items.length}개 지역 정보를 새로 저장했습니다.\n\n'
+                    '변경 사항 적용을 위해 앱을 종료합니다. '
+                    '앱을 다시 실행해 주세요.',
+                    style: text.bodyMedium?.copyWith(
+                      color: tokens.textSecondary,
+                      height: 1.5,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                PromptButton(
+                  label: '확인 및 종료',
+                  icon: Icons.power_settings_new_rounded,
+                  expand: true,
+                  haptic: PromptHaptic.selection,
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                ),
+              ],
             ),
-            actions: [
-              FilledButton.icon(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                icon: const Icon(Icons.power_settings_new_rounded),
-                label: const Text('확인 및 종료'),
-              ),
-            ],
           );
         },
       );
 
       final exitContext = _bestContext();
       if (exitContext == null || !exitContext.mounted) return;
-      await AppExitService.exitApp(exitContext);
+      await AppExitService.exitApp(exitContext, usePromptUi: true);
     } catch (_) {
       if (!ctx.mounted) return;
-      final messenger = ScaffoldMessenger.maybeOf(ctx);
-      messenger?.showSnackBar(
-        const SnackBar(
-          content: Text('지역 마스터 갱신에 실패했습니다.'),
-          behavior: SnackBarBehavior.floating,
-          duration: Duration(milliseconds: 1600),
-        ),
+      showFailedSnackbar(
+        ctx,
+        '지역 마스터 갱신에 실패했습니다.',
+        usePromptUi: true,
       );
     }
   }
@@ -263,11 +319,13 @@ class HeadHubActions {
       return;
     }
     _entry = OverlayEntry(
-      builder: (context) => Material(
-        type: MaterialType.transparency,
-        child: _HubBubble(
-          initialPos: _restorePos(),
-          onPosSave: _savePos,
+      builder: (context) => PromptUiScope(
+        child: Material(
+          type: MaterialType.transparency,
+          child: _HubBubble(
+            initialPos: _restorePos(),
+            onPosSave: _savePos,
+          ),
         ),
       ),
     );
@@ -348,13 +406,23 @@ class _HubBubbleState extends State<_HubBubble>
   }
 
   void _toggleMenu() {
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     if (_expanded) {
       _searchFocus.unfocus();
-      _ctrl.reverse();
+      if (reduceMotion) {
+        _ctrl.value = 0;
+      } else {
+        _ctrl.reverse();
+      }
     } else {
       _refreshDeveloperMode();
       _searchCtrl.clear();
-      _ctrl.forward();
+      if (reduceMotion) {
+        _ctrl.value = 1;
+      } else {
+        _ctrl.forward();
+      }
     }
     HapticFeedback.lightImpact();
   }
@@ -364,12 +432,29 @@ class _HubBubbleState extends State<_HubBubble>
     await action.onTap();
   }
 
-  List<_DockAction> _buildActions(ColorScheme cs) {
+  List<_DockAction> _buildActions(
+    BuildContext actionContext,
+    PromptUiTokens tokens,
+  ) {
     Future<void> closeMenu() async {
-      if (_expanded) {
-        _searchFocus.unfocus();
+      if (!_expanded) return;
+      _searchFocus.unfocus();
+      final reduceMotion =
+          MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+      if (reduceMotion) {
+        _ctrl.value = 0;
+      } else {
         await _ctrl.reverse();
       }
+    }
+
+    Future<T?> openPromptSheet<T>(
+      Future<T?> Function(BuildContext context) open,
+    ) {
+      return HeadHubActions.openSheetExclusively<T>(
+        open,
+        context: actionContext,
+      );
     }
 
     return <_DockAction>[
@@ -377,84 +462,106 @@ class _HubBubbleState extends State<_HubBubble>
         id: 'headquarter_chat',
         icon: Icons.forum_rounded,
         label: '본사 채팅',
-        hint: '본사 전용 텍스트 채팅',
-        color: const Color(0xFF5E35B1),
+        description: '본사 전용 텍스트 채팅',
+        color: tokens.accentContainer,
+        foreground: tokens.onAccentContainer,
         onTap: () async {
           await closeMenu();
-          await HeadHubActions.openHeadquarterChat();
+          await HeadHubActions.openHeadquarterChat(actionContext);
         },
       ),
       _DockAction(
         id: 'memo',
         icon: Icons.sticky_note_2_rounded,
         label: '메모',
-        hint: '플로팅 버블 · 어디서나 기록',
-        color: cs.secondaryContainer,
+        description: '플로팅 버블에서 기록을 관리합니다.',
+        color: tokens.infoContainer,
+        foreground: tokens.onInfoContainer,
         onTap: () async {
           await closeMenu();
-          await HeadHubActions.openSheetExclusively<dynamic>((ctx) {
-            return HeadMemo.openPanel();
-          });
+          await openPromptSheet<void>(
+            (sheetContext) => HeadMemo.openPanel(
+              context: sheetContext,
+              usePromptUi: true,
+            ),
+          );
         },
       ),
       _DockAction(
         id: 'company_calendar',
         icon: Icons.calendar_month_rounded,
         label: '본사 달력',
-        hint: '본사 직원 간 일정 공유',
-        color: const Color(0xFF43A047),
+        description: '본사 직원 간 일정을 공유합니다.',
+        color: tokens.successContainer,
+        foreground: tokens.onSuccessContainer,
         onTap: () async {
           await closeMenu();
-          await HeadHubActions.openSheetExclusively<dynamic>((ctx) {
-            return CompanyCalendarPage.showAsBottomSheet(ctx);
-          });
+          await openPromptSheet<dynamic>(
+            (sheetContext) => CompanyCalendarPage.showAsBottomSheet(
+              sheetContext,
+              usePromptUi: true,
+            ),
+          );
         },
       ),
       _DockAction(
         id: 'attendance',
         icon: Icons.how_to_reg_rounded,
         label: '출·퇴근',
-        hint: '각 직원 별 출퇴근 관리',
-        color: const Color(0xFF1565C0),
+        description: '직원별 출퇴근 기록을 관리합니다.',
+        color: tokens.infoContainer,
+        foreground: tokens.onInfoContainer,
         onTap: () async {
           await closeMenu();
-          await HeadHubActions.openSheetExclusively<dynamic>((ctx) {
-            return hr_att.AttendanceCalendar.showAsBottomSheet(ctx);
-          });
+          await openPromptSheet<dynamic>(
+            (sheetContext) => hr_att.AttendanceCalendar.showAsBottomSheet(
+              sheetContext,
+              usePromptUi: true,
+            ),
+          );
         },
       ),
       _DockAction(
         id: 'break',
         icon: Icons.free_breakfast_rounded,
         label: '휴게 관리',
-        hint: '각 직원 별 휴게시간 관리',
-        color: const Color(0xFF3949AB),
+        description: '직원별 휴게시간을 관리합니다.',
+        color: tokens.warningContainer,
+        foreground: tokens.onWarningContainer,
         onTap: () async {
           await closeMenu();
-          await HeadHubActions.openSheetExclusively<dynamic>((ctx) {
-            return hr_break.BreakCalendar.showAsBottomSheet(ctx);
-          });
+          await openPromptSheet<dynamic>(
+            (sheetContext) => hr_break.BreakCalendar.showAsBottomSheet(
+              sheetContext,
+              usePromptUi: true,
+            ),
+          );
         },
       ),
       _DockAction(
         id: 'field',
         icon: Icons.map_rounded,
         label: '근무지 현황',
-        hint: 'Division별 지역 · 인원',
-        color: const Color(0xFF00897B),
+        description: '사업부별 지역과 근무 인원을 확인합니다.',
+        color: tokens.accentContainer,
+        foreground: tokens.onAccentContainer,
         onTap: () async {
           await closeMenu();
-          await HeadHubActions.openSheetExclusively<dynamic>((ctx) {
-            return mgmt.Field.showAsBottomSheet(ctx);
-          });
+          await openPromptSheet<dynamic>(
+            (sheetContext) => mgmt.Field.showAsBottomSheet(
+              sheetContext,
+              usePromptUi: true,
+            ),
+          );
         },
       ),
       _DockAction(
         id: 'community',
         icon: Icons.groups_rounded,
         label: 'Community',
-        hint: '커뮤니티 화면 열기',
-        color: const Color(0xFF00838F),
+        description: '커뮤니티 화면을 엽니다.',
+        color: tokens.infoContainer,
+        foreground: tokens.onInfoContainer,
         onTap: () async {
           await closeMenu();
           await HeadHubActions.closeAnySheet();
@@ -466,62 +573,74 @@ class _HubBubbleState extends State<_HubBubble>
         id: 'faq',
         icon: Icons.help_center_rounded,
         label: 'FAQ',
-        hint: '자주 묻는 질문',
-        color: const Color(0xFF546E7A),
+        description: '자주 묻는 질문을 확인합니다.',
+        color: tokens.surfaceSelected,
+        foreground: tokens.textPrimary,
         onTap: () async {
           await closeMenu();
           await HeadHubActions.closeAnySheet();
-          await HeadHubActions.navigatorKey.currentState?.pushNamed(AppRoutes.faq);
+          await HeadHubActions.navigatorKey.currentState
+              ?.pushNamed(AppRoutes.faq);
         },
       ),
       _DockAction(
         id: 'statistics',
         icon: Icons.stacked_line_chart_rounded,
         label: '통계 비교',
-        hint: '입·출차/정산 추이',
-        color: const Color(0xFF6A1B9A),
+        description: '입·출차와 정산 추이를 비교합니다.',
+        color: tokens.accentContainer,
+        foreground: tokens.onAccentContainer,
         onTap: () async {
           await closeMenu();
-          await HeadHubActions.openSheetExclusively<dynamic>((ctx) {
-            return mgmt_stats.Statistics.showAsBottomSheet(ctx);
-          });
+          await openPromptSheet<dynamic>(
+            (sheetContext) => mgmt_stats.Statistics.showAsBottomSheet(
+              sheetContext,
+              usePromptUi: true,
+            ),
+          );
         },
       ),
       _DockAction(
         id: 'roadmap',
         icon: Icons.edit_note_rounded,
         label: '향후 로드맵',
-        hint: 'After Release',
-        color: const Color(0xFF7E57C2),
+        description: '출시 이후 계획을 확인합니다.',
+        color: tokens.warningContainer,
+        foreground: tokens.onWarningContainer,
         onTap: () async {
           await closeMenu();
-          await HeadHubActions.openSheetExclusively<dynamic>((ctx) {
-            return showModalBottomSheet<dynamic>(
-              context: ctx,
+          await openPromptSheet<dynamic>(
+            (sheetContext) => showPromptOverlayBottomSheet<dynamic>(
+              context: sheetContext,
               isScrollControlled: true,
               useSafeArea: true,
-              backgroundColor: Colors.transparent,
               builder: (_) => const RoadmapBottomSheet(),
-            );
-          });
+            ),
+          );
         },
       ),
       _DockAction(
         id: 'tutorials',
         icon: Icons.menu_book_rounded,
         label: '튜토리얼',
-        hint: 'PDF 가이드 모음',
-        color: const Color(0xFF00695C),
+        description: 'PDF 가이드를 선택합니다.',
+        color: tokens.successContainer,
+        foreground: tokens.onSuccessContainer,
         onTap: () async {
           await closeMenu();
-          final TutorialItem? selected =
-              await HeadHubActions.openSheetExclusively<TutorialItem>((ctx) {
-            return HeadTutorials.showPickerBottomSheet(ctx);
-          });
-
-          final ctx2 = HeadHubActions.currentContext();
-          if (selected != null && ctx2 != null) {
-            await TutorialPdfViewer.open(ctx2, selected);
+          final selected = await openPromptSheet<TutorialItem>(
+            (sheetContext) => HeadTutorials.showPickerBottomSheet(
+              sheetContext,
+              usePromptUi: true,
+            ),
+          );
+          final viewerContext = HeadHubActions.currentContext();
+          if (selected != null && viewerContext != null) {
+            await TutorialPdfViewer.open(
+              viewerContext,
+              selected,
+              usePromptUi: true,
+            );
           }
         },
       ),
@@ -530,8 +649,9 @@ class _HubBubbleState extends State<_HubBubble>
           id: 'notensystem',
           icon: Icons.auto_stories_rounded,
           label: 'notensystem',
-          hint: '소설 설계 및 집필 스튜디오',
-          color: const Color(0xFF5B5BD6),
+          description: '소설 설계 및 집필 스튜디오',
+          color: tokens.infoContainer,
+          foreground: tokens.onInfoContainer,
           hiddenUntilExactQuery: true,
           onTap: () async {
             await closeMenu();
@@ -543,12 +663,13 @@ class _HubBubbleState extends State<_HubBubble>
         id: 'contact',
         icon: Icons.contact_support_rounded,
         label: '문의하기',
-        hint: '이슈 · 오류 · 궁금증',
-        color: const Color(0xFFD84315),
+        description: '이슈와 오류를 문의합니다.',
+        color: tokens.dangerContainer,
+        foreground: tokens.onDangerContainer,
         onTap: () async {
           await closeMenu();
           await HeadHubActions.closeAnySheet();
-          await HeadHubActions.openContactForm();
+          await HeadHubActions.openContactForm(actionContext);
         },
       ),
     ];
@@ -560,7 +681,8 @@ class _HubBubbleState extends State<_HubBubble>
     final screen = media?.size ?? Size.zero;
     final bottomInset = media?.padding.bottom ?? 0;
     final keyboardInset = media?.viewInsets.bottom ?? 0;
-    final cs = Theme.of(context).colorScheme;
+    final tokens = PromptUiTheme.of(context);
+    final reduceMotion = media?.disableAnimations ?? false;
 
     if (!_clampedOnce && screen != Size.zero) {
       _clampedOnce = true;
@@ -571,7 +693,7 @@ class _HubBubbleState extends State<_HubBubble>
         ? true
         : (_pos.dx + _handleTouchWidth / 2) >= screen.width / 2;
 
-    final actions = _buildActions(cs);
+    final actions = _buildActions(context, tokens);
 
     final maxDockWidth = (screen.width * 0.92).clamp(240.0, double.infinity);
     final dockWidth = math.min(360.0, maxDockWidth);
@@ -603,9 +725,10 @@ class _HubBubbleState extends State<_HubBubble>
               onTap: _toggleMenu,
               behavior: HitTestBehavior.opaque,
               child: AnimatedOpacity(
-                opacity: 0.04 * _t.value,
-                duration: const Duration(milliseconds: 120),
-                child: const ColoredBox(color: Colors.black),
+                opacity: 0.22 * _t.value,
+                duration:
+                    reduceMotion ? Duration.zero : PromptUiMotion.instant,
+                child: ColoredBox(color: tokens.scrim),
               ),
             ),
           ),
@@ -827,13 +950,9 @@ class _SearchField extends StatelessWidget {
               focusNode: focusNode,
               textInputAction: TextInputAction.search,
               onSubmitted: (_) => onSubmit(),
-              decoration: InputDecoration(
+              decoration: const InputDecoration(
                 isDense: true,
-
                 border: InputBorder.none,
-                hintStyle: TextStyle(
-                  color: cs.onSurfaceVariant.withOpacity(0.8),
-                ),
               ),
             ),
           ),
@@ -903,17 +1022,17 @@ class _PaletteTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final tokens = PromptUiTheme.of(context);
     final text = Theme.of(context).textTheme;
 
-    final border = cs.outlineVariant.withOpacity(0.65);
-    final bg = cs.surface.withOpacity(0.50);
+    final border = tokens.borderSubtle;
+    final bg = tokens.surface;
 
     return Semantics(
       button: true,
       label: action.label,
       child: Material(
-        color: Colors.transparent,
+        color: tokens.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(14),
           onTap: () => onSelect(action),
@@ -934,14 +1053,14 @@ class _PaletteTile extends StatelessWidget {
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: cs.shadow.withOpacity(0.10),
+                        color: tokens.shadow,
                         blurRadius: 8,
                         offset: const Offset(0, 3),
                       ),
                     ],
                   ),
                   alignment: Alignment.center,
-                  child: Icon(action.icon, color: Colors.white, size: 22),
+                  child: Icon(action.icon, color: action.foreground, size: 22),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -953,19 +1072,19 @@ class _PaletteTile extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: text.titleSmall?.copyWith(
-                          color: cs.onSurface,
+                          color: tokens.textPrimary,
                           fontWeight: FontWeight.w800,
                           letterSpacing: 0.2,
                         ),
                       ),
-                      if ((action.hint ?? '').trim().isNotEmpty) ...[
+                      if ((action.description ?? '').trim().isNotEmpty) ...[
                         const SizedBox(height: 4),
                         Text(
-                          action.hint!,
+                          action.description!,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: text.bodySmall?.copyWith(
-                            color: cs.onSurfaceVariant,
+                            color: tokens.textSecondary,
                             height: 1.15,
                           ),
                         ),
@@ -974,7 +1093,7 @@ class _PaletteTile extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                Icon(Icons.chevron_right_rounded, color: cs.onSurfaceVariant),
+                Icon(Icons.chevron_right_rounded, color: tokens.iconSecondary),
               ],
             ),
           ),
@@ -988,8 +1107,9 @@ class _DockAction {
   final String id;
   final IconData icon;
   final String label;
-  final String? hint;
+  final String? description;
   final Color color;
+  final Color foreground;
   final bool hiddenUntilExactQuery;
   final Future<void> Function() onTap;
 
@@ -997,13 +1117,15 @@ class _DockAction {
     required this.id,
     required this.icon,
     required this.label,
-    required this.hint,
+    required this.description,
     required this.color,
+    required this.foreground,
     this.hiddenUntilExactQuery = false,
     required this.onTap,
   });
 
-  String get searchText => [id, label, hint].whereType<String>().join(' ');
+  String get searchText =>
+      [id, label, description].whereType<String>().join(' ');
 }
 
 class _EdgeHandle extends StatelessWidget {
@@ -1129,7 +1251,7 @@ class _GlassDock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final tokens = PromptUiTheme.of(context);
 
     return ClipRRect(
       borderRadius: borderRadius,
@@ -1141,13 +1263,13 @@ class _GlassDock extends StatelessWidget {
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             borderRadius: borderRadius,
-            color: cs.surface.withOpacity(0.60),
-            border: Border.all(color: Colors.white.withOpacity(0.35), width: 1),
-            boxShadow: const [
+            color: tokens.surface.withOpacity(tokens.isDark ? 0.86 : 0.90),
+            border: Border.all(color: tokens.borderSubtle, width: 1),
+            boxShadow: [
               BoxShadow(
                 blurRadius: 16,
-                color: Colors.black26,
-                offset: Offset(0, 8),
+                color: tokens.shadow,
+                offset: const Offset(0, 8),
               ),
             ],
           ),

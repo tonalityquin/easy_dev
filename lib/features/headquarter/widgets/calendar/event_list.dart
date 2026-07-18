@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:googleapis/calendar/v3.dart' as gcal;
 
+import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+
 import '../../../dev/debug/debug_api_logger.dart';
 
 class EventList extends StatelessWidget {
@@ -12,6 +15,7 @@ class EventList extends StatelessWidget {
     required this.onDelete,
     required this.onToggleProgress,
     required this.progressOf,
+    this.usePromptUi = false,
   });
 
   final List<gcal.Event> events;
@@ -19,6 +23,7 @@ class EventList extends StatelessWidget {
   final void Function(BuildContext, gcal.Event) onDelete;
   final Future<void> Function(BuildContext, gcal.Event, bool) onToggleProgress;
   final int Function(gcal.Event) progressOf;
+  final bool usePromptUi;
 
   @override
   Widget build(BuildContext context) {
@@ -111,6 +116,7 @@ class EventList extends StatelessWidget {
             onDelete: onDelete,
             onToggleProgress: onToggleProgress,
             progressOf: progressOf,
+            usePromptUi: usePromptUi,
           ),
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
@@ -237,6 +243,7 @@ Future<void> _showEventViewSheet(
   required Future<void> Function(BuildContext, gcal.Event, bool)
       onToggleProgress,
   required int Function(gcal.Event) progressOf,
+  bool usePromptUi = false,
 }) async {
   final isAllDay = e.start?.date != null && e.start?.dateTime == null;
   final localStart = e.start?.dateTime?.toLocal();
@@ -274,16 +281,7 @@ Future<void> _showEventViewSheet(
     final rootTheme = Theme.of(context);
     final cs = rootTheme.colorScheme;
 
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      useSafeArea: true,
-      backgroundColor: cs.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (sheetContext) {
+    Widget buildEventSheet(BuildContext sheetContext) {
         final theme = Theme.of(sheetContext);
         final cs = theme.colorScheme;
 
@@ -291,7 +289,11 @@ Future<void> _showEventViewSheet(
           heightFactor: 0.9,
           child: Material(
             color: cs.surface,
-            surfaceTintColor: Colors.transparent,
+            surfaceTintColor: PromptUiTheme.of(sheetContext).transparent,
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(PromptUiShapes.sheet),
+            ),
+            clipBehavior: Clip.antiAlias,
             child: SafeArea(
               child: Padding(
                 padding: EdgeInsets.only(
@@ -426,8 +428,29 @@ Future<void> _showEventViewSheet(
             ),
           ),
         );
-      },
-    );
+      }
+
+    if (usePromptUi) {
+      await showPromptOverlayBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        showDragHandle: true,
+        builder: buildEventSheet,
+      );
+    } else {
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        showDragHandle: true,
+        useSafeArea: true,
+        backgroundColor: cs.surface,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        ),
+        builder: buildEventSheet,
+      );
+    }
   } catch (err) {
     await _logApiError(
       tag: 'EventList._showEventViewSheet',

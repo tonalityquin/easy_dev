@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:googleapis/calendar/v3.dart' as gcal;
 
+import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+
 import '../../../dev/debug/debug_api_logger.dart';
 
 class MonthCalendarView extends StatefulWidget {
@@ -12,7 +15,8 @@ class MonthCalendarView extends StatefulWidget {
     required this.onEdit,
     required this.onDelete,
     required this.onToggleProgress,
-    this.onMonthRequested, 
+    this.onMonthRequested,
+    this.usePromptUi = false,
   });
 
   final List<gcal.Event> allEvents;
@@ -23,7 +27,9 @@ class MonthCalendarView extends StatefulWidget {
   final void Function(BuildContext, gcal.Event) onDelete;
   final Future<void> Function(BuildContext, gcal.Event, bool) onToggleProgress;
 
-  final Future<void> Function(DateTime monthStart, DateTime monthEnd)? onMonthRequested;
+  final Future<void> Function(DateTime monthStart, DateTime monthEnd)?
+      onMonthRequested;
+  final bool usePromptUi;
 
   @override
   State<MonthCalendarView> createState() => _MonthCalendarViewState();
@@ -164,15 +170,7 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
     final cs = theme.colorScheme;
 
     try {
-      await showModalBottomSheet<void>(
-        context: context,
-        useSafeArea: true,
-        isScrollControlled: true,
-        backgroundColor: cs.surface, 
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-        ),
-        builder: (_) {
+      Widget buildDaySheet(BuildContext sheetContext) {
           return DraggableScrollableSheet(
             expand: false,
             initialChildSize: 0.6,
@@ -184,8 +182,10 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
 
               return Material(
                 color: cs.surface,
-                surfaceTintColor: Colors.transparent,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                surfaceTintColor: PromptUiTheme.of(context).transparent,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(PromptUiShapes.sheet),
+                ),
                 child: Column(
                   children: [
                     const SizedBox(height: 8),
@@ -289,8 +289,27 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
               );
             },
           );
-        },
-      );
+        }
+
+      if (widget.usePromptUi) {
+        await showPromptOverlayBottomSheet<void>(
+          context: context,
+          useSafeArea: true,
+          isScrollControlled: true,
+          builder: buildDaySheet,
+        );
+      } else {
+        await showModalBottomSheet<void>(
+          context: context,
+          useSafeArea: true,
+          isScrollControlled: true,
+          backgroundColor: cs.surface,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+          ),
+          builder: buildDaySheet,
+        );
+      }
     } catch (e) {
       await _logApiError(
         tag: 'MonthCalendarView._openDaySheet',
@@ -393,7 +412,7 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
 
               final bg = isSelected
                   ? cs.primary.withOpacity(isLight ? .12 : .22)
-                  : Colors.transparent;
+                  : PromptUiTheme.of(context).transparent;
 
               final fg = inMonth
                   ? (isSelected ? cs.primary : cs.onSurface)
@@ -411,7 +430,7 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
                     color: bg,
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
-                      color: isSelected ? cs.primary.withOpacity(0.35) : Colors.transparent,
+                      color: isSelected ? cs.primary.withOpacity(0.35) : PromptUiTheme.of(context).transparent,
                       width: 1,
                     ),
                   ),

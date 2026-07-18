@@ -1,6 +1,8 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+
+import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -10,11 +12,38 @@ class Field extends StatefulWidget {
   const Field({
     super.key,
     this.asBottomSheet = false,
+    this.usePromptUi = false,
   });
 
   final bool asBottomSheet;
+  final bool usePromptUi;
 
-  static Future<T?> showAsBottomSheet<T>(BuildContext context) {
+  static Future<T?> showAsBottomSheet<T>(
+    BuildContext context, {
+    bool usePromptUi = false,
+  }) {
+    Widget buildSheet(BuildContext sheetContext) {
+      final insets = MediaQuery.of(sheetContext).viewInsets;
+      return Padding(
+        padding: EdgeInsets.only(bottom: insets.bottom),
+        child: _NinetyTwoPercentBottomSheetFrame(
+          child: Field(
+            asBottomSheet: true,
+            usePromptUi: usePromptUi,
+          ),
+        ),
+      );
+    }
+
+    if (usePromptUi) {
+      return showPromptOverlayBottomSheet<T>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        builder: buildSheet,
+      );
+    }
+
     final cs = Theme.of(context).colorScheme;
     return showModalBottomSheet<T>(
       context: context,
@@ -22,15 +51,7 @@ class Field extends StatefulWidget {
       useSafeArea: true,
       backgroundColor: Colors.transparent,
       barrierColor: cs.scrim.withOpacity(0.45),
-      builder: (sheetCtx) {
-        final insets = MediaQuery.of(sheetCtx).viewInsets;
-        return Padding(
-          padding: EdgeInsets.only(bottom: insets.bottom),
-          child: const _NinetyTwoPercentBottomSheetFrame(
-            child: Field(asBottomSheet: true),
-          ),
-        );
-      },
+      builder: buildSheet,
     );
   }
 
@@ -59,6 +80,46 @@ class _FieldState extends State<Field> {
   DateTime? _cachedAt;
 
   final CommuteTrueFalseRepository _commuteRepo = CommuteTrueFalseRepository();
+
+  Future<T?> _showFieldDialog<T>({
+    required WidgetBuilder builder,
+    bool barrierDismissible = true,
+  }) {
+    if (widget.usePromptUi) {
+      return showPromptOverlayDialog<T>(
+        context: context,
+        barrierDismissible: barrierDismissible,
+        builder: builder,
+      );
+    }
+    return showDialog<T>(
+      context: context,
+      barrierDismissible: barrierDismissible,
+      builder: builder,
+    );
+  }
+
+  Future<T?> _showFieldBottomSheet<T>({
+    required WidgetBuilder builder,
+  }) {
+    if (widget.usePromptUi) {
+      return showPromptOverlayBottomSheet<T>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        builder: builder,
+      );
+    }
+    final cs = Theme.of(context).colorScheme;
+    return showModalBottomSheet<T>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: cs.scrim.withOpacity(0.45),
+      builder: builder,
+    );
+  }
 
   static final DateFormat _fmtClockInBase = DateFormat('yyyy.MM.dd HH:mm:ss');
   static final DateFormat _fmtTodayBase = DateFormat('yyyy년 MM월 dd일');
@@ -354,12 +415,7 @@ class _FieldState extends State<Field> {
 
     final initial = _selectedAreas.toSet();
 
-    final result = await showModalBottomSheet<Set<String>>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      barrierColor: Theme.of(context).colorScheme.scrim.withOpacity(0.45),
+    final result = await _showFieldBottomSheet<Set<String>>(
       builder: (_) {
         return _AreaPickerSheet(
           allAreas: _allAreas,
@@ -387,8 +443,7 @@ class _FieldState extends State<Field> {
       return;
     }
 
-    final ok = await showDialog<bool>(
-          context: context,
+    final ok = await _showFieldDialog<bool>(
           builder: (ctx) {
             final theme = Theme.of(ctx);
             final cs = theme.colorScheme;

@@ -85,7 +85,7 @@ class _SprintProjectManagementPageState
     await showSprintTaskDetailSheet(
       context: context,
       store: widget.store,
-      task: task,
+      taskId: task.id,
     );
   }
 
@@ -217,6 +217,12 @@ class _SprintProjectManagementPageState
                       key: const ValueKey<String>('conflicts'),
                       items: attention,
                       onResolve: _resolve,
+                      onTask: (item) {
+                        final taskId = item.taskId;
+                        if (taskId == null) return;
+                        final task = widget.store.taskById(taskId);
+                        if (task != null) _openTask(task);
+                      },
                     ),
                   _ => _LifecycleSection(
                       key: const ValueKey<String>('lifecycle'),
@@ -390,7 +396,7 @@ class _TaskManagementCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '예상 ${sprintFormatDuration(task.estimatedMinutes)} · 실제 ${sprintFormatDuration(task.actualMinutes)} · 남음 ${sprintFormatDuration(task.remainingMinutes)}',
+                      '${sprintPriorityLabel(task.priority)} · 종일 · ${sprintFormatDateRange(task.startDate, task.endDate)}',
                       style: TextStyle(color: colors.onSurfaceVariant),
                     ),
                   ],
@@ -410,10 +416,12 @@ class _ConflictSection extends StatelessWidget {
     super.key,
     required this.items,
     required this.onResolve,
+    required this.onTask,
   });
 
   final List<SprintAttentionItem> items;
   final ValueChanged<SprintAttentionItem> onResolve;
+  final ValueChanged<SprintAttentionItem> onTask;
 
   @override
   Widget build(BuildContext context) {
@@ -460,11 +468,21 @@ class _ConflictSection extends StatelessWidget {
                   item.description,
                   style: TextStyle(color: colors.onErrorContainer),
                 ),
-                if (item.blockId != null) ...[
+                if (item.blockId != null &&
+                    (item.conflictType ==
+                            SprintConflictType.beforeProjectStart ||
+                        item.conflictType ==
+                            SprintConflictType.afterProjectTargetDate)) ...[
                   const SizedBox(height: 10),
                   FilledButton.tonal(
                     onPressed: () => onResolve(item),
                     child: const Text('해결 방법 선택'),
+                  ),
+                ] else if (item.taskId != null) ...[
+                  const SizedBox(height: 10),
+                  FilledButton.tonal(
+                    onPressed: () => onTask(item),
+                    child: const Text('업무 관리'),
                   ),
                 ],
               ],
@@ -550,14 +568,14 @@ class _LifecycleSection extends StatelessWidget {
                   children: [
                     Expanded(
                       child: SprintMetric(
-                        label: '계획',
-                        value: sprintFormatDuration(currentReport.plannedMinutes),
+                        label: '전체 업무',
+                        value: '${currentReport.totalTaskCount}개',
                       ),
                     ),
                     Expanded(
                       child: SprintMetric(
-                        label: '실제',
-                        value: sprintFormatDuration(currentReport.actualMinutes),
+                        label: '완료 업무',
+                        value: '${currentReport.completedTaskCount}개',
                       ),
                     ),
                   ],

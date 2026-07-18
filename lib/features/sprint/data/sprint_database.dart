@@ -18,6 +18,7 @@ class SprintDatabaseSnapshot {
     required this.conflictResolutions,
     required this.workspaceScope,
     required this.selectedDate,
+    required this.lastObservedToday,
     required this.weekMode,
     required this.googleCalendarId,
     required this.googleCalendarIdLocked,
@@ -33,6 +34,7 @@ class SprintDatabaseSnapshot {
   final List<SprintConflictResolution> conflictResolutions;
   final SprintWorkspaceScope workspaceScope;
   final DateTime selectedDate;
+  final DateTime lastObservedToday;
   final bool weekMode;
   final String googleCalendarId;
   final bool googleCalendarIdLocked;
@@ -44,7 +46,7 @@ class SprintDatabase {
   static final SprintDatabase instance = SprintDatabase._();
 
   static const String _databaseName = 'sprint_mode.db';
-  static const int _databaseVersion = 5;
+  static const int _databaseVersion = 6;
   static const String _legacyMigrationKey = 'legacy_preferences_migrated';
 
   Database? _database;
@@ -87,8 +89,62 @@ class SprintDatabase {
     if (oldVersion < 5) {
       await _ensureProjectStartColumn(db);
     }
+    if (oldVersion < 6) {
+      await _ensureAllDayTaskColumns(db);
+    }
+    await _ensureSchema(db);
   }
 
+  Future<void> _ensureAllDayTaskColumns(Database db) async {
+    await _ensureColumn(
+      db,
+      table: 'sprint_tasks',
+      column: 'priority',
+      definition: "TEXT NOT NULL DEFAULT 'normal'",
+    );
+    await _ensureColumn(
+      db,
+      table: 'sprint_tasks',
+      column: 'start_date_ms',
+      definition: 'INTEGER',
+    );
+    await _ensureColumn(
+      db,
+      table: 'sprint_tasks',
+      column: 'end_date_ms',
+      definition: 'INTEGER',
+    );
+    await _ensureColumn(
+      db,
+      table: 'sprint_schedule_blocks',
+      column: 'all_day',
+      definition: 'INTEGER NOT NULL DEFAULT 1',
+    );
+    await _ensureColumn(
+      db,
+      table: 'sprint_project_reports',
+      column: 'total_task_count',
+      definition: 'INTEGER NOT NULL DEFAULT 0',
+    );
+    await _ensureColumn(
+      db,
+      table: 'sprint_project_reports',
+      column: 'high_priority_completed_count',
+      definition: 'INTEGER NOT NULL DEFAULT 0',
+    );
+    await _ensureColumn(
+      db,
+      table: 'sprint_project_reports',
+      column: 'on_time_completed_count',
+      definition: 'INTEGER NOT NULL DEFAULT 0',
+    );
+    await _ensureColumn(
+      db,
+      table: 'sprint_project_reports',
+      column: 'overdue_completed_count',
+      definition: 'INTEGER NOT NULL DEFAULT 0',
+    );
+  }
 
   Future<void> _ensureProjectStartColumn(Database db) async {
     await _ensureColumn(
@@ -116,6 +172,10 @@ class SprintDatabase {
         id TEXT PRIMARY KEY,
         project_id TEXT NOT NULL,
         completed_at_ms INTEGER NOT NULL,
+        total_task_count INTEGER NOT NULL DEFAULT 0,
+        high_priority_completed_count INTEGER NOT NULL DEFAULT 0,
+        on_time_completed_count INTEGER NOT NULL DEFAULT 0,
+        overdue_completed_count INTEGER NOT NULL DEFAULT 0,
         planned_minutes INTEGER NOT NULL,
         actual_minutes INTEGER NOT NULL,
         scheduled_minutes INTEGER NOT NULL,
@@ -279,6 +339,9 @@ class SprintDatabase {
         id TEXT PRIMARY KEY,
         project_id TEXT,
         title TEXT NOT NULL,
+        priority TEXT NOT NULL DEFAULT 'normal',
+        start_date_ms INTEGER,
+        end_date_ms INTEGER,
         estimated_minutes INTEGER NOT NULL,
         actual_minutes INTEGER NOT NULL,
         order_index INTEGER NOT NULL,
@@ -297,6 +360,7 @@ class SprintDatabase {
         task_id TEXT NOT NULL,
         start_at_ms INTEGER NOT NULL,
         end_at_ms INTEGER NOT NULL,
+        all_day INTEGER NOT NULL DEFAULT 1,
         completed INTEGER NOT NULL DEFAULT 0,
         status TEXT NOT NULL DEFAULT 'planned',
         executed_minutes INTEGER NOT NULL DEFAULT 0,
@@ -340,6 +404,10 @@ class SprintDatabase {
         id TEXT PRIMARY KEY,
         project_id TEXT NOT NULL,
         completed_at_ms INTEGER NOT NULL,
+        total_task_count INTEGER NOT NULL DEFAULT 0,
+        high_priority_completed_count INTEGER NOT NULL DEFAULT 0,
+        on_time_completed_count INTEGER NOT NULL DEFAULT 0,
+        overdue_completed_count INTEGER NOT NULL DEFAULT 0,
         planned_minutes INTEGER NOT NULL,
         actual_minutes INTEGER NOT NULL,
         scheduled_minutes INTEGER NOT NULL,
@@ -413,6 +481,7 @@ class SprintDatabase {
       ON sprint_activity_events(project_id, occurred_at_ms)
     ''');
     await _ensureProjectStartColumn(db);
+    await _ensureAllDayTaskColumns(db);
     await db.execute('''
       CREATE INDEX IF NOT EXISTS idx_sprint_conflict_block_key
       ON sprint_conflict_resolutions(block_id, conflict_key)
@@ -605,6 +674,10 @@ class SprintDatabase {
         int.tryParse(settings['selected_date_ms'] ?? '') ??
             DateTime.now().millisecondsSinceEpoch,
       ),
+      lastObservedToday: DateTime.fromMillisecondsSinceEpoch(
+        int.tryParse(settings['last_observed_today_ms'] ?? '') ??
+            DateTime.now().millisecondsSinceEpoch,
+      ),
       weekMode: settings['week_mode'] == '1',
       googleCalendarId: settings['google_calendar_id']?.trim().isNotEmpty == true
           ? settings['google_calendar_id']!.trim()
@@ -669,12 +742,15 @@ class SprintDatabase {
             'id': task.id,
             'project_id': task.projectId,
             'title': task.title,
-            'estimated_minutes': task.estimatedMinutes,
-            'actual_minutes': task.actualMinutes,
+            'priority': task.priority.name,
+            'start_date_ms': task.startDate.millisecondsSinceEpoch,
+            'end_date_ms': task.endDate.millisecondsSinceEpoch,
+            'estimated_minutes': 0,
+            'actual_minutes': 0,
             'order_index': task.order,
             'state': task.state.name,
             'placement_mode': task.placementMode.name,
-            'deadline_at_ms': task.deadline?.millisecondsSinceEpoch,
+            'deadline_at_ms': task.endDate.millisecondsSinceEpoch,
             'created_at_ms': now,
             'updated_at_ms': now,
             'deleted_at_ms': null,
@@ -682,12 +758,15 @@ class SprintDatabase {
           updateValues: <String, Object?>{
             'project_id': task.projectId,
             'title': task.title,
-            'estimated_minutes': task.estimatedMinutes,
-            'actual_minutes': task.actualMinutes,
+            'priority': task.priority.name,
+            'start_date_ms': task.startDate.millisecondsSinceEpoch,
+            'end_date_ms': task.endDate.millisecondsSinceEpoch,
+            'estimated_minutes': 0,
+            'actual_minutes': 0,
             'order_index': task.order,
             'state': task.state.name,
             'placement_mode': task.placementMode.name,
-            'deadline_at_ms': task.deadline?.millisecondsSinceEpoch,
+            'deadline_at_ms': task.endDate.millisecondsSinceEpoch,
             'updated_at_ms': now,
             'deleted_at_ms': null,
           },
@@ -710,9 +789,10 @@ class SprintDatabase {
             'task_id': block.taskId,
             'start_at_ms': block.start.millisecondsSinceEpoch,
             'end_at_ms': block.end.millisecondsSinceEpoch,
+            'all_day': block.allDay ? 1 : 0,
             'completed': block.completed ? 1 : 0,
             'status': block.status.name,
-            'executed_minutes': block.executedMinutes,
+            'executed_minutes': 0,
             'locked': block.locked ? 1 : 0,
             'created_at_ms': now,
             'updated_at_ms': now,
@@ -722,9 +802,10 @@ class SprintDatabase {
             'task_id': block.taskId,
             'start_at_ms': block.start.millisecondsSinceEpoch,
             'end_at_ms': block.end.millisecondsSinceEpoch,
+            'all_day': block.allDay ? 1 : 0,
             'completed': block.completed ? 1 : 0,
             'status': block.status.name,
-            'executed_minutes': block.executedMinutes,
+            'executed_minutes': 0,
             'locked': block.locked ? 1 : 0,
             'updated_at_ms': now,
             'deleted_at_ms': null,
@@ -785,9 +866,13 @@ class SprintDatabase {
             'id': report.id,
             'project_id': report.projectId,
             'completed_at_ms': report.completedAt.millisecondsSinceEpoch,
-            'planned_minutes': report.plannedMinutes,
-            'actual_minutes': report.actualMinutes,
-            'scheduled_minutes': report.scheduledMinutes,
+            'total_task_count': report.totalTaskCount,
+            'high_priority_completed_count': report.highPriorityCompletedCount,
+            'on_time_completed_count': report.onTimeCompletedCount,
+            'overdue_completed_count': report.overdueCompletedCount,
+            'planned_minutes': 0,
+            'actual_minutes': 0,
+            'scheduled_minutes': 0,
             'completed_task_count': report.completedTaskCount,
             'cancelled_task_count': report.cancelledTaskCount,
             'postpone_count': report.postponeCount,
@@ -802,9 +887,13 @@ class SprintDatabase {
           updateValues: <String, Object?>{
             'project_id': report.projectId,
             'completed_at_ms': report.completedAt.millisecondsSinceEpoch,
-            'planned_minutes': report.plannedMinutes,
-            'actual_minutes': report.actualMinutes,
-            'scheduled_minutes': report.scheduledMinutes,
+            'total_task_count': report.totalTaskCount,
+            'high_priority_completed_count': report.highPriorityCompletedCount,
+            'on_time_completed_count': report.onTimeCompletedCount,
+            'overdue_completed_count': report.overdueCompletedCount,
+            'planned_minutes': 0,
+            'actual_minutes': 0,
+            'scheduled_minutes': 0,
             'completed_task_count': report.completedTaskCount,
             'cancelled_task_count': report.cancelledTaskCount,
             'postpone_count': report.postponeCount,
@@ -902,6 +991,12 @@ class SprintDatabase {
       );
       await _setSetting(
         transaction,
+        'last_observed_today_ms',
+        snapshot.lastObservedToday.millisecondsSinceEpoch.toString(),
+        now,
+      );
+      await _setSetting(
+        transaction,
         'week_mode',
         snapshot.weekMode ? '1' : '0',
         now,
@@ -994,19 +1089,25 @@ class SprintDatabase {
             (value) => value.name == storedState,
             orElse: () => SprintTaskState.ready,
           );
+    final legacyDeadline = _date(row['deadline_at_ms']);
+    final startDate = _date(row['start_date_ms']) ?? legacyDeadline ?? DateTime.now();
+    final endDate = _date(row['end_date_ms']) ?? legacyDeadline ?? startDate;
     return SprintTask(
       id: row['id'].toString(),
       title: row['title'].toString(),
       projectId: row['project_id']?.toString(),
-      estimatedMinutes: _int(row['estimated_minutes']),
-      actualMinutes: _int(row['actual_minutes']),
+      priority: SprintTaskPriority.values.firstWhere(
+        (value) => value.name == row['priority']?.toString(),
+        orElse: () => SprintTaskPriority.normal,
+      ),
+      startDate: DateTime(startDate.year, startDate.month, startDate.day),
+      endDate: DateTime(endDate.year, endDate.month, endDate.day),
       order: _int(row['order_index']),
       state: state,
       placementMode: SprintPlacementMode.values.firstWhere(
         (value) => value.name == row['placement_mode']?.toString(),
         orElse: () => SprintPlacementMode.automatic,
       ),
-      deadline: _date(row['deadline_at_ms']),
     );
   }
 
@@ -1016,6 +1117,7 @@ class SprintDatabase {
       taskId: row['task_id'].toString(),
       start: _date(row['start_at_ms'])!,
       end: _date(row['end_at_ms'])!,
+      allDay: _int(row['all_day']) != 0,
       completed: _int(row['completed']) == 1,
       status: SprintScheduleBlockStatus.values.firstWhere(
         (value) => value.name == row['status']?.toString(),
@@ -1023,7 +1125,6 @@ class SprintDatabase {
             ? SprintScheduleBlockStatus.executed
             : SprintScheduleBlockStatus.planned,
       ),
-      executedMinutes: _int(row['executed_minutes']),
       locked: _int(row['locked']) == 1,
     );
   }
@@ -1054,15 +1155,19 @@ class SprintDatabase {
   }
 
   SprintProjectReport _projectReportFromRow(Map<String, Object?> row) {
+    final completed = _int(row['completed_task_count']);
+    final cancelled = _int(row['cancelled_task_count']);
+    final storedTotal = _int(row['total_task_count']);
     return SprintProjectReport(
       id: row['id'].toString(),
       projectId: row['project_id'].toString(),
       completedAt: _date(row['completed_at_ms'])!,
-      plannedMinutes: _int(row['planned_minutes']),
-      actualMinutes: _int(row['actual_minutes']),
-      scheduledMinutes: _int(row['scheduled_minutes']),
-      completedTaskCount: _int(row['completed_task_count']),
-      cancelledTaskCount: _int(row['cancelled_task_count']),
+      totalTaskCount: storedTotal > 0 ? storedTotal : completed + cancelled,
+      highPriorityCompletedCount: _int(row['high_priority_completed_count']),
+      onTimeCompletedCount: _int(row['on_time_completed_count']),
+      overdueCompletedCount: _int(row['overdue_completed_count']),
+      completedTaskCount: completed,
+      cancelledTaskCount: cancelled,
       postponeCount: _int(row['postpone_count']),
       conflictCount: _int(row['conflict_count']),
       resolvedConflictCount: _int(row['resolved_conflict_count']),

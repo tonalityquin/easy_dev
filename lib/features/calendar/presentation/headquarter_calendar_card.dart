@@ -5,6 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
+
 import '../../account/applications/user_state.dart';
 import '../domain/models/headquarter_calendar_event.dart';
 import '../domain/models/headquarter_calendar_event_page.dart';
@@ -14,7 +17,12 @@ import '../domain/repositories/headquarter_calendar_repository.dart';
 import 'headquarter_calendar_status_dialog.dart';
 
 class HeadquarterCalendarCard extends StatefulWidget {
-  const HeadquarterCalendarCard({super.key});
+  const HeadquarterCalendarCard({
+    super.key,
+    this.usePromptUi = false,
+  });
+
+  final bool usePromptUi;
 
   @override
   State<HeadquarterCalendarCard> createState() =>
@@ -348,6 +356,69 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard> {
     );
   }
 
+  Future<T?> _showCalendarDialog<T>({
+    BuildContext? anchorContext,
+    required WidgetBuilder builder,
+    bool barrierDismissible = true,
+  }) {
+    final targetContext = anchorContext ?? context;
+    if (widget.usePromptUi) {
+      return showPromptOverlayDialog<T>(
+        context: targetContext,
+        barrierDismissible: barrierDismissible,
+        builder: builder,
+      );
+    }
+    return showDialog<T>(
+      context: targetContext,
+      barrierDismissible: barrierDismissible,
+      builder: builder,
+    );
+  }
+
+  Future<T?> _showCalendarBottomSheet<T>({
+    BuildContext? anchorContext,
+    required WidgetBuilder builder,
+  }) {
+    final targetContext = anchorContext ?? context;
+    if (widget.usePromptUi) {
+      return showPromptOverlayBottomSheet<T>(
+        context: targetContext,
+        isScrollControlled: true,
+        useSafeArea: true,
+        builder: builder,
+      );
+    }
+    return showModalBottomSheet<T>(
+      context: targetContext,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: builder,
+    );
+  }
+
+  Future<DateTime?> _showCalendarDatePicker({
+    required BuildContext anchorContext,
+    required DateTime initialDate,
+    required DateTime firstDate,
+    required DateTime lastDate,
+  }) {
+    if (widget.usePromptUi) {
+      return showPromptDatePicker(
+        context: anchorContext,
+        initialDate: initialDate,
+        firstDate: firstDate,
+        lastDate: lastDate,
+      );
+    }
+    return showDatePicker(
+      context: anchorContext,
+      initialDate: initialDate,
+      firstDate: firstDate,
+      lastDate: lastDate,
+    );
+  }
+
   Future<void> _openEditor({HeadquarterCalendarEvent? event}) async {
     final repository = _repository;
     if (repository == null) return;
@@ -374,16 +445,14 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard> {
     var saving = false;
     String validation = '';
 
-    await showDialog<void>(
-      context: context,
+    await _showCalendarDialog<void>(
       barrierDismissible: false,
-      barrierColor: Colors.black54,
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             Future<void> pickStart() async {
-              final value = await showDatePicker(
-                context: context,
+              final value = await _showCalendarDatePicker(
+                anchorContext: context,
                 initialDate: startDate,
                 firstDate: DateTime(2020),
                 lastDate: DateTime(2040),
@@ -399,8 +468,8 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard> {
             }
 
             Future<void> pickEnd() async {
-              final value = await showDatePicker(
-                context: context,
+              final value = await _showCalendarDatePicker(
+                anchorContext: context,
                 initialDate: endDate,
                 firstDate: startDate,
                 lastDate: startDate.add(const Duration(days: 365)),
@@ -420,8 +489,8 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard> {
               final initial = recurrenceUntil.isAfter(maxDate)
                   ? maxDate
                   : recurrenceUntil;
-              final value = await showDatePicker(
-                context: context,
+              final value = await _showCalendarDatePicker(
+                anchorContext: context,
                 initialDate: initial.isBefore(startDate)
                     ? startDate
                     : initial,
@@ -791,10 +860,8 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard> {
     final actor = _actor(userState);
     var acknowledged = _acknowledgedIds.contains(event.id);
     var working = false;
-    await showDialog<void>(
-      context: context,
+    await _showCalendarDialog<void>(
       barrierDismissible: false,
-      barrierColor: Colors.black54,
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
@@ -834,8 +901,8 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard> {
 
             Future<void> delete() async {
               var applyToSeries = false;
-              final confirmed = await showDialog<bool>(
-                context: context,
+              final confirmed = await _showCalendarDialog<bool>(
+                anchorContext: context,
                 builder: (confirmContext) {
                   return StatefulBuilder(
                     builder: (context, setConfirmState) {
@@ -1066,10 +1133,7 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard> {
     var hasMore = false;
     Object? failure;
 
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
+    await _showCalendarBottomSheet<void>(
       builder: (_) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
@@ -1145,8 +1209,8 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard> {
               final initial = from
                   ? fromDate ?? DateTime.now()
                   : toDate ?? DateTime.now();
-              final value = await showDatePicker(
-                context: context,
+              final value = await _showCalendarDatePicker(
+                anchorContext: context,
                 initialDate: initial,
                 firstDate: DateTime(2015),
                 lastDate: DateTime(2040),
@@ -1366,12 +1430,14 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard> {
       error: error,
       stackTrace: stackTrace,
       details: details,
+      usePromptUi: widget.usePromptUi,
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final tokens = PromptUiTheme.of(context);
     final events = _events;
     final dayTotal =
         _monthSummary?.day(_selectedDateKey).count ?? events.length;
@@ -1383,7 +1449,7 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard> {
         border: Border.all(color: cs.outlineVariant.withOpacity(.65)),
         boxShadow: <BoxShadow>[
           BoxShadow(
-            color: Colors.black.withOpacity(.04),
+            color: tokens.shadow,
             blurRadius: 18,
             offset: const Offset(0, 7),
           ),
@@ -1760,6 +1826,7 @@ class _DayCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final tokens = PromptUiTheme.of(context);
     final foreground = selected
         ? cs.onPrimary
         : inMonth
@@ -1769,7 +1836,7 @@ class _DayCell extends StatelessWidget {
         ? cs.primary
         : today
             ? cs.primaryContainer.withOpacity(.45)
-            : Colors.transparent;
+            : tokens.transparent;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
@@ -1850,6 +1917,7 @@ class _EventTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final tokens = PromptUiTheme.of(context);
     final color = event.priority == 'urgent'
         ? cs.error
         : event.priority == 'high'
@@ -1858,7 +1926,7 @@ class _EventTile extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 7),
       child: Material(
-        color: Colors.transparent,
+        color: tokens.transparent,
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(14),

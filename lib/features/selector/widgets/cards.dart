@@ -2,115 +2,92 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../app/di/routes.dart';
+import '../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
 import '../../dev/debug/debug_action_recorder.dart';
 
-@immutable
-class _SelectorCardTokens {
-  const _SelectorCardTokens({
-    required this.cardSurface,
-    required this.cardBorder,
-    required this.iconBg,
-    required this.iconFg,
-    required this.titleFg,
-    required this.featureFg,
-    required this.ctaBg,
-    required this.ctaFg,
-    required this.disabledOpacity,
-  });
-
-  final Color cardSurface;
-  final Color cardBorder;
-  final Color iconBg;
-  final Color iconFg;
-  final Color titleFg;
-  final Color featureFg;
-  final Color ctaBg;
-  final Color ctaFg;
-  final double disabledOpacity;
-
-  factory _SelectorCardTokens.of(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return _SelectorCardTokens(
-      cardSurface: cs.surfaceContainerLow,
-      cardBorder: cs.outlineVariant.withOpacity(0.55),
-      iconBg: cs.primaryContainer,
-      iconFg: cs.onPrimaryContainer,
-      titleFg: cs.onSurface,
-      featureFg: cs.onSurfaceVariant,
-      ctaBg: cs.primary,
-      ctaFg: cs.onPrimary,
-      disabledOpacity: 0.48,
-    );
+Future<void> _invokeCardAction(PromptAction? action) async {
+  if (action == null) return;
+  final result = action();
+  if (result is Future) {
+    await result;
   }
 }
 
-Text _selectorCardTitle(BuildContext context, String text) {
-  final t = _SelectorCardTokens.of(context);
+Text _selectorCardTitle(BuildContext context, String text, {bool enabled = true}) {
+  final tokens = PromptUiTheme.of(context);
   return Text(
     text,
+    textAlign: TextAlign.center,
+    maxLines: 2,
+    overflow: TextOverflow.ellipsis,
     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-      fontWeight: FontWeight.w700,
-      color: t.titleFg,
-    ),
+          color: enabled ? tokens.textPrimary : tokens.textDisabled,
+          fontWeight: FontWeight.w700,
+        ),
   );
 }
 
 Widget _selectorCardFeatureText(
-    BuildContext context,
-    String text, {
-      TextAlign textAlign = TextAlign.center,
-      int maxLines = 2,
-    }) {
-  final t = _SelectorCardTokens.of(context);
+  BuildContext context,
+  String text, {
+  TextAlign textAlign = TextAlign.center,
+  int maxLines = 2,
+  bool enabled = true,
+}) {
+  final tokens = PromptUiTheme.of(context);
   return Text(
     text,
     textAlign: textAlign,
     maxLines: maxLines,
     overflow: TextOverflow.ellipsis,
     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-      fontWeight: FontWeight.w600,
-      color: t.featureFg,
-    ),
+          color: enabled ? tokens.textSecondary : tokens.textDisabled,
+          fontWeight: FontWeight.w500,
+        ),
   );
 }
 
-Widget _selectorCardStaticCta(BuildContext context) {
-  final t = _SelectorCardTokens.of(context);
-  return Container(
-    width: 40,
-    height: 40,
-    decoration: BoxDecoration(
-      color: t.ctaBg,
-      shape: BoxShape.circle,
-    ),
-    child: Icon(
-      Icons.arrow_forward_rounded,
-      color: t.ctaFg,
-      size: 22,
-    ),
-  );
+List<BoxShadow> _cardShadows(
+  PromptUiTokens tokens, {
+  required bool focused,
+  required bool hovered,
+}) {
+  return <BoxShadow>[
+    if (focused)
+      BoxShadow(
+        color: tokens.focusRing,
+        blurRadius: 0,
+        spreadRadius: 2,
+      )
+    else if (hovered)
+      BoxShadow(
+        color: tokens.shadow,
+        blurRadius: 18,
+        offset: const Offset(0, 8),
+      ),
+  ];
 }
 
 class CardBody extends StatefulWidget {
   const CardBody({
     super.key,
     required this.icon,
-    required this.titleWidget,
+    required this.title,
     required this.onPressed,
-    this.enabled = true,
-    this.disabledHint,
-    this.featureText,
     required this.traceName,
+    this.enabled = true,
+    this.disabledTooltip,
+    this.featureText,
     this.traceMeta,
   });
 
   final IconData icon;
-  final Widget titleWidget;
+  final String title;
   final String? featureText;
-  final VoidCallback? onPressed;
+  final PromptAction? onPressed;
   final bool enabled;
-  final String? disabledHint;
+  final String? disabledTooltip;
   final String traceName;
   final Map<String, dynamic>? traceMeta;
 
@@ -119,24 +96,19 @@ class CardBody extends StatefulWidget {
 }
 
 class _CardBodyState extends State<CardBody> {
-  static const _pressScale = 0.96;
-  static const _duration = Duration(milliseconds: 160);
-  static const _frame = Duration(milliseconds: 16);
-
   bool _pressed = false;
-  bool _animating = false;
+  bool _hovered = false;
+  bool _focused = false;
+  bool _invoking = false;
 
-  Future<void> _animateThenNavigate({required String source}) async {
-    if (!widget.enabled || widget.onPressed == null || _animating) return;
-    _animating = true;
+  bool get _enabled => widget.enabled && widget.onPressed != null && !_invoking;
 
+  Future<void> _activate(String source) async {
+    if (!_enabled) return;
+    setState(() => _invoking = true);
     try {
-      if (mounted) setState(() => _pressed = true);
-
-      await Future<void>.delayed(_frame);
-      await Future<void>.delayed(_duration);
-
-      HapticFeedback.selectionClick();
+      await HapticFeedback.selectionClick();
+      if (!mounted) return;
 
       DebugActionRecorder.instance.recordAction(
         widget.traceName,
@@ -149,68 +121,146 @@ class _CardBodyState extends State<CardBody> {
         },
       );
 
-      widget.onPressed!.call();
+      await _invokeCardAction(widget.onPressed);
     } finally {
-      _animating = false;
-      if (mounted) setState(() => _pressed = false);
+      if (mounted) {
+        setState(() {
+          _invoking = false;
+          _pressed = false;
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final t = _SelectorCardTokens.of(context);
+    final tokens = PromptUiTheme.of(context);
+    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final hasFeature =
         widget.featureText != null && widget.featureText!.trim().isNotEmpty;
+    final surface = !_enabled
+        ? tokens.surfaceDisabled
+        : _hovered || _pressed
+            ? tokens.surfaceOverlay
+            : tokens.surfaceRaised;
+    final border = _hovered && _enabled
+        ? tokens.borderStrong
+        : tokens.borderSubtle;
+    final iconBackground =
+        _enabled ? tokens.accentContainer : tokens.surfaceOverlay;
+    final iconForeground =
+        _enabled ? tokens.onAccentContainer : tokens.iconDisabled;
 
-    final content = Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          LeadingIcon(
-            bg: t.iconBg,
-            icon: widget.icon,
-            iconColor: t.iconFg,
+    return Semantics(
+      button: true,
+      enabled: _enabled,
+      label: widget.title,
+      value: _invoking ? '처리 중' : null,
+      child: AnimatedContainer(
+        duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
+        curve: PromptUiMotion.standard,
+        decoration: BoxDecoration(
+          color: surface,
+          borderRadius: BorderRadius.circular(PromptUiShapes.card),
+          border: Border.all(color: border, width: 1),
+          boxShadow: _cardShadows(
+            tokens,
+            focused: _focused,
+            hovered: _hovered && _enabled,
           ),
-          const SizedBox(height: 12),
-          widget.titleWidget,
-          if (hasFeature) ...[
-            const SizedBox(height: 6),
-            _selectorCardFeatureText(context, widget.featureText!.trim()),
-            const SizedBox(height: 10),
-          ] else ...[
-            const SizedBox(height: 12),
-          ],
-          Tooltip(
-            message: widget.enabled
-                ? '이동'
-                : (widget.disabledHint ?? '현재 저장된 모드에서만 선택할 수 있어요'),
-            child: IconButton.filled(
-              onPressed: widget.enabled
-                  ? () => _animateThenNavigate(source: 'arrow')
-                  : null,
-              style: IconButton.styleFrom(
-                backgroundColor: t.ctaBg,
-                foregroundColor: t.ctaFg,
+        ),
+        child: Material(
+          color: tokens.transparent,
+          borderRadius: BorderRadius.circular(PromptUiShapes.card),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: _enabled ? () => _activate('card') : null,
+            onHighlightChanged: (value) {
+              if (_pressed == value) return;
+              setState(() => _pressed = value);
+            },
+            onHover: (value) {
+              if (_hovered == value) return;
+              setState(() => _hovered = value);
+            },
+            onFocusChange: (value) {
+              if (_focused == value) return;
+              setState(() => _focused = value);
+            },
+            mouseCursor:
+                _enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+            borderRadius: BorderRadius.circular(PromptUiShapes.card),
+            child: AnimatedScale(
+              scale: _pressed && _enabled ? 0.985 : 1,
+              duration: reduceMotion ? Duration.zero : PromptUiMotion.press,
+              curve: PromptUiMotion.enter,
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    AnimatedContainer(
+                      duration:
+                          reduceMotion ? Duration.zero : PromptUiMotion.selection,
+                      width: 52,
+                      height: 52,
+                      decoration: BoxDecoration(
+                        color: iconBackground,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: _enabled
+                              ? tokens.accent.withOpacity(
+                                  tokens.isDark ? 0.48 : 0.30,
+                                )
+                              : tokens.borderSubtle,
+                        ),
+                      ),
+                      child: _invoking
+                          ? Center(
+                              child: SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.2,
+                                  color: iconForeground,
+                                ),
+                              ),
+                            )
+                          : Icon(
+                              widget.icon,
+                              color: iconForeground,
+                              size: 28,
+                            ),
+                    ),
+                    const SizedBox(height: 12),
+                    _selectorCardTitle(
+                      context,
+                      widget.title,
+                      enabled: _enabled,
+                    ),
+                    if (hasFeature) ...[
+                      const SizedBox(height: 6),
+                      _selectorCardFeatureText(
+                        context,
+                        widget.featureText!.trim(),
+                        enabled: _enabled,
+                      ),
+                      const SizedBox(height: 10),
+                    ] else
+                      const SizedBox(height: 12),
+                    PromptIconButton(
+                      icon: Icons.arrow_forward_rounded,
+                      tooltip: _enabled
+                          ? '이동'
+                          : widget.disabledTooltip ?? '선택할 수 없음',
+                      onPressed: _enabled ? () => _activate('arrow') : null,
+                      haptic: PromptHaptic.none,
+                    ),
+                  ],
+                ),
               ),
-              icon: const Icon(Icons.arrow_forward_rounded),
             ),
           ),
-        ],
-      ),
-    );
-
-    return Opacity(
-      opacity: widget.enabled ? 1.0 : t.disabledOpacity,
-      child: AnimatedScale(
-        scale: _pressed ? _pressScale : 1.0,
-        duration: _duration,
-        curve: Curves.easeOut,
-        child: InkWell(
-          onTap: widget.enabled
-              ? () => _animateThenNavigate(source: 'card')
-              : null,
-          child: content,
         ),
       ),
     );
@@ -221,65 +271,74 @@ class StaticCardBody extends StatelessWidget {
   const StaticCardBody({
     super.key,
     required this.icon,
-    required this.titleWidget,
+    required this.title,
     this.featureText,
   });
 
   final IconData icon;
-  final Widget titleWidget;
+  final String title;
   final String? featureText;
 
   @override
   Widget build(BuildContext context) {
-    final t = _SelectorCardTokens.of(context);
+    final tokens = PromptUiTheme.of(context);
     final hasFeature =
         featureText != null && featureText!.trim().isNotEmpty;
 
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          LeadingIcon(
-            bg: t.iconBg,
-            icon: icon,
-            iconColor: t.iconFg,
-          ),
-          const SizedBox(height: 12),
-          titleWidget,
-          if (hasFeature) ...[
-            const SizedBox(height: 6),
-            _selectorCardFeatureText(context, featureText!.trim()),
-            const SizedBox(height: 10),
-          ] else ...[
-            const SizedBox(height: 12),
-          ],
-          _selectorCardStaticCta(context),
-        ],
-      ),
-    );
-  }
-}
-
-class LeadingIcon extends StatelessWidget {
-  const LeadingIcon({
-    super.key,
-    required this.bg,
-    required this.icon,
-    required this.iconColor,
-  });
-
-  final Color bg;
-  final IconData icon;
-  final Color iconColor;
-
-  @override
-  Widget build(BuildContext context) {
     return Container(
-      width: 52,
-      height: 52,
-      decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
-      child: Icon(icon, color: iconColor, size: 28),
+      decoration: BoxDecoration(
+        color: tokens.surfaceRaised,
+        borderRadius: BorderRadius.circular(PromptUiShapes.card),
+        border: Border.all(color: tokens.borderSubtle),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: tokens.accentContainer,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: tokens.accent.withOpacity(
+                    tokens.isDark ? 0.48 : 0.30,
+                  ),
+                ),
+              ),
+              child: Icon(
+                icon,
+                color: tokens.onAccentContainer,
+                size: 28,
+              ),
+            ),
+            const SizedBox(height: 12),
+            _selectorCardTitle(context, title),
+            if (hasFeature) ...[
+              const SizedBox(height: 6),
+              _selectorCardFeatureText(context, featureText!.trim()),
+              const SizedBox(height: 10),
+            ] else
+              const SizedBox(height: 12),
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: tokens.accentContainer,
+                borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                border: Border.all(color: tokens.borderSubtle),
+              ),
+              child: Icon(
+                Icons.arrow_forward_rounded,
+                color: tokens.onAccentContainer,
+                size: 22,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -288,122 +347,203 @@ Widget _selectorCardShell({
   required BuildContext context,
   required Widget child,
 }) {
-  final t = _SelectorCardTokens.of(context);
-
-  return Card(
-    color: t.cardSurface,
-    elevation: 1,
-    clipBehavior: Clip.antiAlias,
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(16),
-      side: BorderSide(color: t.cardBorder),
-    ),
-    child: child,
-  );
+  return PromptAnimatedReveal(child: child);
 }
 
-class ExperienceCard extends StatelessWidget {
+class ExperienceCard extends StatefulWidget {
   const ExperienceCard({super.key});
 
-  Future<void> _openDescription(
-    BuildContext context, {
-    required String source,
-  }) async {
-    HapticFeedback.selectionClick();
-    DebugActionRecorder.instance.recordAction(
-      '앱에 대해 알아보기',
-      route: ModalRoute.of(context)?.settings.name,
-      meta: {
-        'source': source,
-        'to': AppRoutes.descriptionIntro,
-      },
-    );
-    await Navigator.of(context).pushNamed(AppRoutes.descriptionIntro);
+  @override
+  State<ExperienceCard> createState() => _ExperienceCardState();
+}
+
+class _ExperienceCardState extends State<ExperienceCard> {
+  bool _pressed = false;
+  bool _hovered = false;
+  bool _focused = false;
+  bool _invoking = false;
+
+  Future<void> _openDescription(String source) async {
+    if (_invoking) return;
+    setState(() => _invoking = true);
+    try {
+      await HapticFeedback.selectionClick();
+      if (!mounted) return;
+
+      DebugActionRecorder.instance.recordAction(
+        '앱에 대해 알아보기',
+        route: ModalRoute.of(context)?.settings.name,
+        meta: <String, dynamic>{
+          'source': source,
+          'to': AppRoutes.descriptionIntro,
+        },
+      );
+
+      await Navigator.of(context).pushNamed(AppRoutes.descriptionIntro);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _invoking = false;
+          _pressed = false;
+        });
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final t = _SelectorCardTokens.of(context);
-    final title = _selectorCardTitle(context, '앱에 대해 알아보기');
-    final textTheme = Theme.of(context).textTheme;
+    final tokens = PromptUiTheme.of(context);
+    final text = Theme.of(context).textTheme;
+    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final surface = _pressed || _hovered
+        ? tokens.surfaceOverlay
+        : tokens.surfaceRaised;
+    final border = _hovered ? tokens.borderStrong : tokens.borderSubtle;
 
     return _selectorCardShell(
       context: context,
-      child: InkWell(
-        onTap: () => _openDescription(context, source: 'card'),
-        child: Row(
-          children: [
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+      child: Semantics(
+        button: true,
+        enabled: !_invoking,
+        label: '앱에 대해 알아보기',
+        value: _invoking ? '처리 중' : null,
+        child: AnimatedContainer(
+          duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
+          decoration: BoxDecoration(
+            color: surface,
+            borderRadius: BorderRadius.circular(PromptUiShapes.card),
+            border: Border.all(color: border, width: 1),
+            boxShadow: _cardShadows(
+              tokens,
+              focused: _focused,
+              hovered: _hovered,
+            ),
+          ),
+          child: Material(
+            color: tokens.transparent,
+            borderRadius: BorderRadius.circular(PromptUiShapes.card),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: _invoking ? null : () => _openDescription('card'),
+              onHighlightChanged: (value) {
+                if (_pressed == value) return;
+                setState(() => _pressed = value);
+              },
+              onHover: (value) {
+                if (_hovered == value) return;
+                setState(() => _hovered = value);
+              },
+              onFocusChange: (value) {
+                if (_focused == value) return;
+                setState(() => _focused = value);
+              },
+              mouseCursor: _invoking
+                  ? SystemMouseCursors.basic
+                  : SystemMouseCursors.click,
+              child: AnimatedScale(
+                scale: _pressed && !_invoking ? 0.99 : 1,
+                duration: reduceMotion ? Duration.zero : PromptUiMotion.press,
+                curve: PromptUiMotion.enter,
+                child: Row(
                   children: [
-                    LeadingIcon(
-                      bg: t.iconBg,
-                      icon: Icons.explore_rounded,
-                      iconColor: t.iconFg,
-                    ),
-                    const SizedBox(height: 12),
-                    title,
-                    const SizedBox(height: 6),
-                    _selectorCardFeatureText(
-                      context,
-                      '대표 흐름과 화면 구성을 먼저 둘러보세요',
-                    ),
-                    const SizedBox(height: 10),
-                    Tooltip(
-                      message: '앱에 대해 알아보기 열기',
-                      child: IconButton.filled(
-                        onPressed: () => _openDescription(context, source: 'arrow'),
-                        style: IconButton.styleFrom(
-                          backgroundColor: t.ctaBg,
-                          foregroundColor: t.ctaFg,
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              width: 52,
+                              height: 52,
+                              decoration: BoxDecoration(
+                                color: tokens.accentContainer,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: tokens.accent.withOpacity(
+                                    tokens.isDark ? 0.48 : 0.30,
+                                  ),
+                                ),
+                              ),
+                              child: _invoking
+                                  ? Center(
+                                      child: SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2.2,
+                                          color: tokens.onAccentContainer,
+                                        ),
+                                      ),
+                                    )
+                                  : Icon(
+                                      Icons.explore_rounded,
+                                      color: tokens.onAccentContainer,
+                                      size: 28,
+                                    ),
+                            ),
+                            const SizedBox(height: 12),
+                            _selectorCardTitle(
+                              context,
+                              '앱에 대해 알아보기',
+                            ),
+                            const SizedBox(height: 6),
+                            _selectorCardFeatureText(
+                              context,
+                              '대표 흐름과 화면 구성을 먼저 둘러보세요',
+                            ),
+                            const SizedBox(height: 10),
+                            PromptIconButton(
+                              icon: Icons.arrow_forward_rounded,
+                              tooltip: '앱에 대해 알아보기 열기',
+                              onPressed: _invoking
+                                  ? null
+                                  : () => _openDescription('arrow'),
+                            ),
+                          ],
                         ),
-                        icon: const Icon(Icons.arrow_forward_rounded),
+                      ),
+                    ),
+                    Container(width: 1, color: tokens.borderSubtle),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 20,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              '체험 안내',
+                              style: text.titleMedium?.copyWith(
+                                color: tokens.textPrimary,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            _selectorCardFeatureText(
+                              context,
+                              '해당 앱에서 제공하는 업무 프로세스와 편의 기능 등에 대해',
+                              textAlign: TextAlign.start,
+                              maxLines: 3,
+                            ),
+                            const SizedBox(height: 10),
+                            _selectorCardFeatureText(
+                              context,
+                              '약식으로 화면과 함께 안내받아볼 수 있습니다.',
+                              textAlign: TextAlign.start,
+                              maxLines: 4,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
             ),
-            Container(
-              width: 1,
-              color: t.cardBorder,
-            ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      '체험 안내',
-                      style: textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: t.titleFg,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    _selectorCardFeatureText(
-                      context,
-                      '해당 앱에서 제공하는 업무 프로세스와 편의 기능 등에 대해',
-                      textAlign: TextAlign.start,
-                      maxLines: 3,
-                    ),
-                    const SizedBox(height: 10),
-                    _selectorCardFeatureText(
-                      context,
-                      '약식으로 화면과 함께 안내받아볼 수 있습니다.',
-                      textAlign: TextAlign.start,
-                      maxLines: 4,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -412,33 +552,32 @@ class ExperienceCard extends StatelessWidget {
 
 class SingleLoginCard extends StatelessWidget {
   const SingleLoginCard({super.key, this.enabled = true});
+
   final bool enabled;
 
   @override
   Widget build(BuildContext context) {
-    final title = _selectorCardTitle(context, '출퇴근 기록형');
-
     return _selectorCardShell(
       context: context,
       child: CardBody(
         icon: Icons.access_time_filled_rounded,
-        titleWidget: title,
+        title: '출퇴근 기록형',
         featureText: '출/퇴근 · 휴게시간',
         traceName: '출퇴근 기록형',
-        traceMeta: {
+        traceMeta: <String, dynamic>{
           'to': AppRoutes.singleLogin,
           'redirectAfterLogin': AppRoutes.singleCommute,
           'requiredMode': 'single',
         },
         onPressed: () => Navigator.of(context).pushReplacementNamed(
           AppRoutes.singleLogin,
-          arguments: {
+          arguments: <String, dynamic>{
             'redirectAfterLogin': AppRoutes.singleCommute,
             'requiredMode': 'single',
           },
         ),
         enabled: enabled,
-        disabledHint: '저장된 모드가 single일 때만 선택할 수 있어요',
+        disabledTooltip: '저장된 모드가 single일 때만 선택할 수 있어요',
       ),
     );
   }
@@ -446,26 +585,28 @@ class SingleLoginCard extends StatelessWidget {
 
 class DoubleLoginCard extends StatelessWidget {
   const DoubleLoginCard({super.key, this.enabled = true});
+
   final bool enabled;
 
   @override
   Widget build(BuildContext context) {
-    final title = _selectorCardTitle(context, '경량형');
-
     return _selectorCardShell(
       context: context,
       child: CardBody(
         icon: Icons.bolt_rounded,
-        titleWidget: title,
+        title: '경량형',
         featureText: '입차 완료 · 출차 완료',
         traceName: '경량형',
-        traceMeta: {'to': AppRoutes.doubleLogin, 'requiredMode': 'double'},
+        traceMeta: <String, dynamic>{
+          'to': AppRoutes.doubleLogin,
+          'requiredMode': 'double',
+        },
         onPressed: () => Navigator.of(context).pushReplacementNamed(
           AppRoutes.doubleLogin,
-          arguments: {'requiredMode': 'double'},
+          arguments: <String, dynamic>{'requiredMode': 'double'},
         ),
         enabled: enabled,
-        disabledHint: '저장된 모드가 double일 때만 선택할 수 있어요',
+        disabledTooltip: '저장된 모드가 double일 때만 선택할 수 있어요',
       ),
     );
   }
@@ -473,64 +614,61 @@ class DoubleLoginCard extends StatelessWidget {
 
 class MinorLoginCard extends StatelessWidget {
   const MinorLoginCard({super.key, this.enabled = true});
+
   final bool enabled;
 
   @override
   Widget build(BuildContext context) {
-    final title = _selectorCardTitle(context, '확장형');
-
     return _selectorCardShell(
       context: context,
       child: CardBody(
         icon: Icons.tune_rounded,
-        titleWidget: title,
+        title: '확장형',
         featureText: '입차 요청 · 입차 완료 · 출차 요청 · 출차 완료',
         traceName: '확장형',
-        traceMeta: {
+        traceMeta: <String, dynamic>{
           'to': AppRoutes.minorLogin,
           'redirectAfterLogin': AppRoutes.minorCommute,
           'requiredMode': 'minor',
         },
         onPressed: () => Navigator.of(context).pushReplacementNamed(
           AppRoutes.minorLogin,
-          arguments: {
+          arguments: <String, dynamic>{
             'redirectAfterLogin': AppRoutes.minorCommute,
             'requiredMode': 'minor',
           },
         ),
         enabled: enabled,
-        disabledHint: '저장된 모드가 minor일 때만 선택할 수 있어요',
+        disabledTooltip: '저장된 모드가 minor일 때만 선택할 수 있어요',
       ),
     );
   }
 }
 
-
 class PersonalLoginCard extends StatelessWidget {
   const PersonalLoginCard({super.key, this.enabled = true});
+
   final bool enabled;
 
   @override
   Widget build(BuildContext context) {
-    final title = _selectorCardTitle(context, '개인형');
-
     return _selectorCardShell(
       context: context,
       child: CardBody(
         icon: Icons.phone_iphone_rounded,
-        titleWidget: title,
+        title: '개인형',
         featureText: '모바일 직접 출차 요청',
         traceName: '개인형',
-        traceMeta: {
+        traceMeta: <String, dynamic>{
           'to': AppRoutes.personalLogin,
           'requiredMode': 'personal',
         },
         onPressed: () => Navigator.of(context).pushReplacementNamed(
           AppRoutes.personalLogin,
-          arguments: {'requiredMode': 'personal'},
+          arguments: <String, dynamic>{'requiredMode': 'personal'},
         ),
         enabled: enabled,
-        disabledHint: '저장된 모드가 personal일 때만 선택할 수 있어요',
+        disabledTooltip: '저장된 모드가 personal일 때만 선택할 수 있어요',
       ),
     );
   }
@@ -538,25 +676,27 @@ class PersonalLoginCard extends StatelessWidget {
 
 class TabletCard extends StatelessWidget {
   const TabletCard({super.key, this.enabled = true});
+
   final bool enabled;
 
   @override
   Widget build(BuildContext context) {
-    final title = _selectorCardTitle(context, '태블릿형');
-
     return _selectorCardShell(
       context: context,
       child: CardBody(
         icon: Icons.tablet_mac_rounded,
-        titleWidget: title,
+        title: '태블릿형',
         traceName: '태블릿 로그인',
-        traceMeta: {'to': AppRoutes.tabletLogin, 'requiredMode': 'tablet'},
+        traceMeta: <String, dynamic>{
+          'to': AppRoutes.tabletLogin,
+          'requiredMode': 'tablet',
+        },
         onPressed: () => Navigator.of(context).pushReplacementNamed(
           AppRoutes.tabletLogin,
-          arguments: {'requiredMode': 'tablet'},
+          arguments: <String, dynamic>{'requiredMode': 'tablet'},
         ),
         enabled: enabled,
-        disabledHint: '저장된 모드가 tablet일 때만 선택할 수 있어요',
+        disabledTooltip: '저장된 모드가 tablet일 때만 선택할 수 있어요',
       ),
     );
   }
@@ -564,19 +704,18 @@ class TabletCard extends StatelessWidget {
 
 class DevCard extends StatelessWidget {
   const DevCard({super.key, required this.onTap});
+
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final title = _selectorCardTitle(context, '개발');
-
     return _selectorCardShell(
       context: context,
       child: CardBody(
         icon: Icons.developer_mode_rounded,
-        titleWidget: title,
+        title: '개발',
         traceName: '개발',
-        traceMeta: {'to': 'dev'},
+        traceMeta: const <String, dynamic>{'to': 'dev'},
         onPressed: onTap,
       ),
     );
@@ -585,33 +724,32 @@ class DevCard extends StatelessWidget {
 
 class TripleLoginCard extends StatelessWidget {
   const TripleLoginCard({super.key, this.enabled = true});
+
   final bool enabled;
 
   @override
   Widget build(BuildContext context) {
-    final title = _selectorCardTitle(context, '기본형');
-
     return _selectorCardShell(
       context: context,
       child: CardBody(
         icon: Icons.apps_rounded,
-        titleWidget: title,
+        title: '기본형',
         featureText: '입차 완료 · 출차 요청 · 출차 완료',
         traceName: '기본형',
-        traceMeta: {
+        traceMeta: <String, dynamic>{
           'to': AppRoutes.tripleLogin,
           'redirectAfterLogin': AppRoutes.tripleCommute,
           'requiredMode': 'triple',
         },
         onPressed: () => Navigator.of(context).pushReplacementNamed(
           AppRoutes.tripleLogin,
-          arguments: {
+          arguments: <String, dynamic>{
             'redirectAfterLogin': AppRoutes.tripleCommute,
             'requiredMode': 'triple',
           },
         ),
         enabled: enabled,
-        disabledHint: '저장된 모드가 triple일 때만 선택할 수 있어요',
+        disabledTooltip: '저장된 모드가 triple일 때만 선택할 수 있어요',
       ),
     );
   }
@@ -622,15 +760,13 @@ class ParkingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final title = _selectorCardTitle(context, 'Practice Space');
-
     return _selectorCardShell(
       context: context,
       child: CardBody(
         icon: Icons.location_city,
-        titleWidget: title,
+        title: 'Practice Space',
         traceName: 'Practice Space',
-        traceMeta: {'to': AppRoutes.practiceSpaceLab},
+        traceMeta: <String, dynamic>{'to': AppRoutes.practiceSpaceLab},
         onPressed: () => Navigator.of(context).pushNamed(
           AppRoutes.practiceSpaceLab,
         ),

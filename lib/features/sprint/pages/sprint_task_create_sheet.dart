@@ -4,11 +4,6 @@ import '../application/sprint_mode_store.dart';
 import '../domain/sprint_models.dart';
 import 'sprint_ui.dart';
 
-enum _TaskCreationPlacementChoice {
-  recommended,
-  requested,
-}
-
 Future<SprintTask?> showSprintTaskCreateSheet({
   required BuildContext context,
   required SprintModeStore store,
@@ -50,11 +45,10 @@ class _SprintTaskCreateSheet extends StatefulWidget {
 class _SprintTaskCreateSheetState extends State<_SprintTaskCreateSheet> {
   final TextEditingController _titleController = TextEditingController();
   final FocusNode _titleFocusNode = FocusNode();
-  late DateTime _date;
-  late TimeOfDay _time;
+  late DateTime _startDate;
+  late DateTime _endDate;
   String? _projectId;
-  DateTime? _deadline;
-  int _estimatedMinutes = 60;
+  SprintTaskPriority _priority = SprintTaskPriority.normal;
   bool _saving = false;
 
   @override
@@ -67,18 +61,16 @@ class _SprintTaskCreateSheetState extends State<_SprintTaskCreateSheet> {
       widget.initialDate.month,
       widget.initialDate.day,
     );
-    _date = requested.isBefore(today) ? today : requested;
     _projectId = widget.store.preferredTaskProjectId(widget.initialProjectId);
+    final base = requested.isBefore(today) ? today : requested;
     final projectId = _projectId;
-    final suggested = projectId == null
-        ? DateTime(_date.year, _date.month, _date.day, 9)
+    _startDate = projectId == null
+        ? base
         : widget.store.suggestedTaskStart(
             projectId: projectId,
-            date: _date,
-            durationMinutes: _estimatedMinutes,
+            date: base,
           );
-    _date = DateTime(suggested.year, suggested.month, suggested.day);
-    _time = TimeOfDay(hour: suggested.hour, minute: suggested.minute);
+    _endDate = _startDate;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _titleFocusNode.requestFocus();
     });
@@ -91,54 +83,36 @@ class _SprintTaskCreateSheetState extends State<_SprintTaskCreateSheet> {
     super.dispose();
   }
 
-
   void _selectProject(String? value) {
     if (value == null) {
       setState(() => _projectId = null);
       return;
     }
-    final lowerBound = widget.store.projectScheduleLowerBound(value);
-    final currentStart = _start;
-    final beforeStart = lowerBound != null && currentStart.isBefore(lowerBound);
-    final adjusted = beforeStart
-        ? widget.store.suggestedTaskStart(
-            projectId: value,
-            date: lowerBound!,
-            durationMinutes: _estimatedMinutes,
-          )
-        : currentStart;
+    final adjusted = widget.store.suggestedTaskStart(
+      projectId: value,
+      date: _startDate,
+    );
+    final changed = adjusted != _startDate;
+    final duration = _endDate.difference(_startDate).inDays;
     setState(() {
       _projectId = value;
-      _date = DateTime(adjusted.year, adjusted.month, adjusted.day);
-      _time = TimeOfDay(hour: adjusted.hour, minute: adjusted.minute);
-      if (_deadline != null && _deadline!.isBefore(_date)) {
-        _deadline = null;
-      }
+      _startDate = adjusted;
+      _endDate = adjusted.add(Duration(days: duration));
     });
-    if (beforeStart) {
+    if (changed) {
       sprintShowMessage(
         context: context,
-        message: '프로젝트 목표 시작일에 맞춰 일정 날짜를 ${sprintFormatDate(_date)}로 변경했습니다.',
+        message: '프로젝트 목표 시작일에 맞춰 시작일을 ${sprintFormatDate(adjusted)}로 변경했습니다.',
       );
     }
   }
 
-  DateTime get _start => DateTime(
-        _date.year,
-        _date.month,
-        _date.day,
-        _time.hour,
-        _time.minute,
-      );
-
-  Future<void> _pickDate() async {
+  Future<void> _pickStartDate() async {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final projectStart = widget.store.projectScheduleLowerBound(_projectId);
-    final firstDate = projectStart != null && projectStart.isAfter(today)
-        ? DateTime(projectStart.year, projectStart.month, projectStart.day)
-        : today;
-    var initial = _date;
+    final lower = widget.store.projectScheduleLowerBound(_projectId);
+    final firstDate = lower != null && lower.isAfter(today) ? lower : today;
+    var initial = _startDate;
     if (initial.isBefore(firstDate)) initial = firstDate;
     final selected = await showDatePicker(
       context: context,
@@ -147,118 +121,31 @@ class _SprintTaskCreateSheetState extends State<_SprintTaskCreateSheet> {
       lastDate: DateTime(now.year + 10, 12, 31),
     );
     if (selected == null || !mounted) return;
-    setState(() => _date = selected);
+    final duration = _endDate.difference(_startDate).inDays;
+    setState(() {
+      _startDate = selected;
+      _endDate = selected.add(Duration(days: duration));
+    });
   }
 
-  Future<void> _pickTime() async {
-    final selected = await showTimePicker(
-      context: context,
-      initialTime: _time,
-    );
-    if (selected == null || !mounted) return;
-    setState(() => _time = selected);
-  }
-
-  Future<void> _pickDeadline() async {
+  Future<void> _pickEndDate() async {
     final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final projectStart = widget.store.projectScheduleLowerBound(_projectId);
-    final firstDate = projectStart != null && projectStart.isAfter(today)
-        ? DateTime(projectStart.year, projectStart.month, projectStart.day)
-        : today;
-    var initial = _deadline ?? _date;
-    if (initial.isBefore(firstDate)) initial = firstDate;
+    var initial = _endDate;
+    if (initial.isBefore(_startDate)) initial = _startDate;
     final selected = await showDatePicker(
       context: context,
       initialDate: initial,
-      firstDate: firstDate,
+      firstDate: _startDate,
       lastDate: DateTime(now.year + 10, 12, 31),
     );
     if (selected == null || !mounted) return;
-    setState(() => _deadline = selected);
-  }
-
-  Future<_TaskCreationPlacementChoice?> _resolveConflicts(
-    SprintTaskCreationPreview preview,
-  ) {
-    final titles = preview.conflicts
-        .map((conflict) => conflict.title)
-        .toSet()
-        .join(' · ');
-    return showModalBottomSheet<_TaskCreationPlacementChoice>(
-      context: context,
-      useSafeArea: true,
-      showDragHandle: true,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      barrierColor: Theme.of(context).colorScheme.scrim,
-      builder: (sheetContext) {
-        final colors = Theme.of(sheetContext).colorScheme;
-        final reduceMotion =
-            MediaQuery.maybeOf(sheetContext)?.disableAnimations ?? false;
-        final duration =
-            reduceMotion ? Duration.zero : const Duration(milliseconds: 220);
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-          child: AnimatedSize(
-            duration: duration,
-            curve: Curves.easeOutCubic,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  '일정 충돌 확인',
-                  style: Theme.of(sheetContext).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  titles,
-                  style: TextStyle(
-                    color: colors.error,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                if (preview.recommendedStart != null) ...[
-                  const SizedBox(height: 14),
-                  FilledButton.icon(
-                    onPressed: () => Navigator.of(sheetContext).pop(
-                      _TaskCreationPlacementChoice.recommended,
-                    ),
-                    icon: const Icon(Icons.auto_fix_high_rounded),
-                    label: Text(
-                      '${sprintFormatDate(preview.recommendedStart!)} ${sprintFormatTime(preview.recommendedStart!)}에 배치',
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 8),
-                FilledButton.tonalIcon(
-                  onPressed: () => Navigator.of(sheetContext).pop(
-                    _TaskCreationPlacementChoice.requested,
-                  ),
-                  icon: const Icon(Icons.warning_amber_rounded),
-                  label: Text(
-                    '${sprintFormatTime(preview.requestedStart!)}에 그대로 배치',
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextButton(
-                  onPressed: () => Navigator.of(sheetContext).pop(),
-                  child: const Text('취소'),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
+    setState(() => _endDate = selected);
   }
 
   Future<void> _save() async {
     if (_saving) return;
     final projectId = _projectId;
-    if (_titleController.text.trim().isEmpty || projectId == null) {
+    if (projectId == null || _titleController.text.trim().isEmpty) {
       sprintShowMessage(
         context: context,
         message: projectId == null
@@ -270,48 +157,41 @@ class _SprintTaskCreateSheetState extends State<_SprintTaskCreateSheet> {
     final preview = widget.store.previewTaskDetails(
       title: _titleController.text,
       projectId: projectId,
-      estimatedMinutes: _estimatedMinutes,
-      requestedStart: _start,
-      deadline: _deadline,
+      priority: _priority,
+      startDate: _startDate,
+      endDate: _endDate,
     );
     if (preview == null) {
-      final error = widget.store.taskInputError;
-      if (error != null && mounted) {
-        sprintShowMessage(context: context, message: error);
-      }
+      sprintShowMessage(
+        context: context,
+        message: widget.store.taskInputError ?? '업무 정보를 확인하세요.',
+      );
       return;
     }
     if (preview.hasHardConflict) {
       sprintShowMessage(
         context: context,
         message: preview.conflicts.any(
-          (conflict) =>
-              conflict.type == SprintConflictType.beforeProjectStart,
+          (conflict) => conflict.type == SprintConflictType.beforeProjectStart,
         )
             ? '프로젝트 목표 시작일 이전에는 업무를 배치할 수 없습니다.'
-            : '과거 시간에는 업무를 배치할 수 없습니다.',
+            : preview.conflicts.any(
+                (conflict) => conflict.type == SprintConflictType.pastDate,
+              )
+                ? '과거 날짜에는 새 업무를 배치할 수 없습니다.'
+                : '종료일은 시작일보다 빠를 수 없습니다.',
       );
       return;
     }
-    _TaskCreationPlacementChoice? choice;
-    if (preview.hasConflicts) {
-      choice = await _resolveConflicts(preview);
-      if (choice == null || !mounted) return;
-    }
     setState(() => _saving = true);
-    final task = await widget.store.createTaskFromPreview(
-      preview,
-      useRecommendedStart:
-          choice == _TaskCreationPlacementChoice.recommended,
-      allowConflicts: choice == _TaskCreationPlacementChoice.requested,
-    );
+    final task = await widget.store.createTaskFromPreview(preview);
     if (!mounted) return;
     if (task == null) {
       setState(() => _saving = false);
-      final error = widget.store.taskInputError;
-      if (error != null) {
-        sprintShowMessage(context: context, message: error);
-      }
+      sprintShowMessage(
+        context: context,
+        message: widget.store.taskInputError ?? '업무를 추가하지 못했습니다.',
+      );
       return;
     }
     sprintShowMessage(
@@ -329,14 +209,14 @@ class _SprintTaskCreateSheetState extends State<_SprintTaskCreateSheet> {
     final duration =
         reduceMotion ? Duration.zero : const Duration(milliseconds: 220);
     final projects = widget.store.projects;
-    final selectedProject = widget.store.projectById(_projectId);
-    final targetDate = selectedProject?.targetDate;
-    final deadlineAfterTarget = _deadline != null &&
-        targetDate != null &&
-        DateTime(_deadline!.year, _deadline!.month, _deadline!.day).isAfter(
-          DateTime(targetDate.year, targetDate.month, targetDate.day),
-        );
-    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+    final project = widget.store.projectById(_projectId);
+    final targetDate = project?.targetDate;
+    final afterTarget = targetDate != null &&
+        _endDate.isAfter(DateTime(
+          targetDate.year,
+          targetDate.month,
+          targetDate.day,
+        ));
     return Material(
       color: colors.surface,
       child: SafeArea(
@@ -345,7 +225,9 @@ class _SprintTaskCreateSheetState extends State<_SprintTaskCreateSheet> {
         child: AnimatedPadding(
           duration: duration,
           curve: Curves.easeOutCubic,
-          padding: EdgeInsets.only(bottom: keyboardInset),
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.viewInsetsOf(context).bottom,
+          ),
           child: SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
             child: Column(
@@ -411,47 +293,37 @@ class _SprintTaskCreateSheetState extends State<_SprintTaskCreateSheet> {
                   controller: _titleController,
                   focusNode: _titleFocusNode,
                   enabled: !_saving,
-                  textInputAction: TextInputAction.next,
+                  textInputAction: TextInputAction.done,
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
                   ),
                 ),
                 const SizedBox(height: 16),
                 const Text(
-                  '예상시간',
+                  '우선순위',
                   style: TextStyle(fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: <int>[30, 60, 90, 120].map((minutes) {
-                    final selected = _estimatedMinutes == minutes;
-                    return AnimatedContainer(
-                      duration: duration,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: selected
-                              ? colors.primary
-                              : colors.outlineVariant,
+                SegmentedButton<SprintTaskPriority>(
+                  segments: SprintTaskPriority.values
+                      .map(
+                        (priority) => ButtonSegment<SprintTaskPriority>(
+                          value: priority,
+                          icon: Icon(sprintPriorityIcon(priority)),
+                          label: Text(sprintPriorityLabel(priority)),
                         ),
-                      ),
-                      child: ChoiceChip(
-                        label: Text(sprintFormatDuration(minutes)),
-                        selected: selected,
-                        onSelected: _saving
-                            ? null
-                            : (_) => setState(() {
-                                  _estimatedMinutes = minutes;
-                                }),
-                      ),
-                    );
-                  }).toList(growable: false),
+                      )
+                      .toList(growable: false),
+                  selected: <SprintTaskPriority>{_priority},
+                  onSelectionChanged: _saving
+                      ? null
+                      : (selection) => setState(() {
+                            _priority = selection.first;
+                          }),
                 ),
                 const SizedBox(height: 16),
                 const Text(
-                  '일정 날짜와 시작 시각',
+                  '기간',
                   style: TextStyle(fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 8),
@@ -459,76 +331,67 @@ class _SprintTaskCreateSheetState extends State<_SprintTaskCreateSheet> {
                   children: [
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: _saving ? null : _pickDate,
-                        icon: const Icon(Icons.calendar_today_outlined),
-                        label: Text(sprintFormatDate(_date)),
+                        onPressed: _saving ? null : _pickStartDate,
+                        icon: const Icon(Icons.play_circle_outline_rounded),
+                        label: AnimatedSwitcher(
+                          duration: duration,
+                          child: Text(
+                            sprintFormatDate(_startDate),
+                            key: ValueKey<int>(
+                              _startDate.millisecondsSinceEpoch,
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: _saving ? null : _pickTime,
-                        icon: const Icon(Icons.schedule_rounded),
-                        label: Text(sprintFormatTime(_start)),
+                        onPressed: _saving ? null : _pickEndDate,
+                        icon: const Icon(Icons.flag_outlined),
+                        label: AnimatedSwitcher(
+                          duration: duration,
+                          child: Text(
+                            sprintFormatDate(_endDate),
+                            key: ValueKey<int>(
+                              _endDate.millisecondsSinceEpoch,
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
-                const Text(
-                  '마감일',
-                  style: TextStyle(fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 10),
                 AnimatedContainer(
                   duration: duration,
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  curve: Curves.easeOutCubic,
+                  padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
                     color: colors.surfaceContainerLow,
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Row(
                     children: [
-                      const SizedBox(width: 8),
-                      const Icon(Icons.flag_outlined),
+                      const Icon(Icons.today_rounded),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: AnimatedSwitcher(
-                          duration: duration,
-                          child: Text(
-                            _deadline == null
-                                ? '설정하지 않음'
-                                : sprintFormatDate(_deadline!),
-                            key: ValueKey<String>(
-                              _deadline?.toIso8601String() ?? 'none',
-                            ),
-                            style: const TextStyle(fontWeight: FontWeight.w800),
-                          ),
+                        child: Text(
+                          '종일 · ${sprintFormatDateRange(_startDate, _endDate)}',
+                          style: const TextStyle(fontWeight: FontWeight.w800),
                         ),
                       ),
-                      TextButton(
-                        onPressed: _saving ? null : _pickDeadline,
-                        child: const Text('선택'),
-                      ),
-                      if (_deadline != null)
-                        IconButton(
-                          tooltip: '마감일 제거',
-                          onPressed: _saving
-                              ? null
-                              : () => setState(() => _deadline = null),
-                          icon: const Icon(Icons.close_rounded),
-                        ),
                     ],
                   ),
                 ),
                 AnimatedSize(
                   duration: duration,
                   curve: Curves.easeOutCubic,
-                  child: deadlineAfterTarget
+                  child: afterTarget
                       ? Padding(
                           padding: const EdgeInsets.only(top: 10),
                           child: Text(
-                            '업무 마감일이 프로젝트 목표 완료일보다 늦습니다.',
+                            '종료일이 프로젝트 목표 완료일보다 늦습니다.',
                             style: TextStyle(
                               color: colors.tertiary,
                               fontWeight: FontWeight.w800,

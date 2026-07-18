@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../app/di/routes.dart';
 import '../../../../app/theme/brand_theme.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
 import '../../../account/applications/user_state.dart';
 import '../../controllers/double/double_login_controller.dart';
 import '../../controllers/minor/minor_login_controller.dart';
@@ -29,8 +32,7 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen>
-    with SingleTickerProviderStateMixin {
+class _LoginScreenState extends State<LoginScreen> {
   late final String _mode;
 
   ServiceLoginController? _serviceLoginController;
@@ -41,22 +43,16 @@ class _LoginScreenState extends State<LoginScreen>
   TripleLoginController? _tripleLoginController;
   MinorLoginController? _minorLoginController;
 
-  late final AnimationController _loginAnimationController;
-  late final Animation<Offset> _offsetAnimation;
-  late final Animation<double> _opacityAnimation;
-
   String? _redirectAfterLogin;
   String? _requiredMode;
   bool _didInitAuto = false;
-
   String _brandPresetId = 'system';
   String _themeModeId = 'system';
-
   bool _prefsLoaded = false;
 
   static String _normalizeMode(String? raw) {
-    final v = (raw ?? '').trim().toLowerCase();
-    switch (v) {
+    final value = (raw ?? '').trim().toLowerCase();
+    switch (value) {
       case 'service':
         return 'service';
       case 'personal':
@@ -84,66 +80,60 @@ class _LoginScreenState extends State<LoginScreen>
 
   static String? _normalizeModeNullable(String? raw) {
     if (raw == null) return null;
-    final t = raw.trim();
-    if (t.isEmpty) return null;
-    return _normalizeMode(t);
+    final value = raw.trim();
+    if (value.isEmpty) return null;
+    return _normalizeMode(value);
   }
+
+  bool get _usesPromptUi => _mode != 'service';
 
   void _createControllerForMode() {
     switch (_mode) {
       case 'personal':
         _personalController = PersonalLoginController(context);
-
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
           _personalController?.initState();
         });
-        break;
-
+        return;
       case 'tablet':
         _tabletController = TabletLoginController(context);
-
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
           _tabletController?.initState();
         });
-        break;
-
+        return;
       case 'single':
         _singleLoginController = SingleLoginController(
           context,
           onLoginSucceeded: _navigateAfterLogin,
         );
-        break;
-
+        return;
       case 'double':
         _doubleLoginController = DoubleLoginController(
           context,
           onLoginSucceeded: _navigateAfterLogin,
         );
-        break;
-
+        return;
       case 'triple':
         _tripleLoginController = TripleLoginController(
           context,
           onLoginSucceeded: _navigateAfterLogin,
         );
-        break;
-
+        return;
       case 'minor':
         _minorLoginController = MinorLoginController(
           context,
           onLoginSucceeded: _navigateAfterLogin,
         );
-        break;
-
+        return;
       case 'service':
       default:
         _serviceLoginController = ServiceLoginController(
           context,
           onLoginSucceeded: _navigateAfterLogin,
         );
-        break;
+        return;
     }
   }
 
@@ -157,13 +147,10 @@ class _LoginScreenState extends State<LoginScreen>
 
     final systemBrightness = MediaQuery.platformBrightnessOf(context);
     final brightness = resolveBrightness(_themeModeId, systemBrightness);
-
     final base = withBrightness(baseTheme, brightness);
-
-    final accent = (preset.id == 'system' || preset.accent == null)
+    final accent = preset.id == 'system' || preset.accent == null
         ? base.colorScheme.primary
         : preset.accent!;
-
     final scheme = buildConceptScheme(brightness: brightness, accent: accent);
 
     return base.copyWith(
@@ -173,15 +160,15 @@ class _LoginScreenState extends State<LoginScreen>
       appBarTheme: base.appBarTheme.copyWith(
         backgroundColor: scheme.surface,
         foregroundColor: scheme.onSurface,
-        surfaceTintColor: Colors.transparent,
+        surfaceTintColor: scheme.surface.withOpacity(0),
       ),
       cardTheme: base.cardTheme.copyWith(
         color: scheme.surfaceContainerLow,
-        surfaceTintColor: Colors.transparent,
+        surfaceTintColor: scheme.surface.withOpacity(0),
       ),
       bottomSheetTheme: base.bottomSheetTheme.copyWith(
-        backgroundColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
+        backgroundColor: scheme.surface.withOpacity(0),
+        surfaceTintColor: scheme.surface.withOpacity(0),
       ),
       dividerTheme: base.dividerTheme.copyWith(
         color: scheme.outlineVariant,
@@ -194,10 +181,8 @@ class _LoginScreenState extends State<LoginScreen>
   Future<void> _restoreBrandAndThemePrefs() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-
       final preset = (prefs.getString(kBrandPresetKey) ?? 'system').trim();
       final mode = (prefs.getString(kThemeModeKey) ?? 'system').trim();
-
       if (!mounted) return;
       setState(() {
         _brandPresetId = preset.isEmpty ? 'system' : preset;
@@ -206,9 +191,7 @@ class _LoginScreenState extends State<LoginScreen>
       });
     } catch (_) {
       if (!mounted) return;
-      setState(() {
-        _prefsLoaded = true;
-      });
+      setState(() => _prefsLoaded = true);
     }
   }
 
@@ -247,9 +230,7 @@ class _LoginScreenState extends State<LoginScreen>
       }
     }
 
-    final defaultRoute = _defaultRouteForMode();
-    final route = _redirectAfterLogin ?? defaultRoute;
-
+    final route = _redirectAfterLogin ?? _defaultRouteForMode();
     if (!mounted) return;
     Navigator.of(context).pushReplacementNamed(route);
   }
@@ -277,7 +258,6 @@ class _LoginScreenState extends State<LoginScreen>
   void _maybeInitControllerAuto() {
     if (_didInitAuto) return;
     if (_mode == 'personal' || _mode == 'tablet') return;
-
     _didInitAuto = true;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -285,20 +265,20 @@ class _LoginScreenState extends State<LoginScreen>
       switch (_mode) {
         case 'single':
           _singleLoginController?.initState();
-          break;
+          return;
         case 'double':
           _doubleLoginController?.initState();
-          break;
+          return;
         case 'triple':
           _tripleLoginController?.initState();
-          break;
+          return;
         case 'minor':
           _minorLoginController?.initState();
-          break;
+          return;
         case 'service':
         default:
           _serviceLoginController?.initState();
-          break;
+          return;
       }
     });
   }
@@ -306,71 +286,225 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   void initState() {
     super.initState();
-
     _mode = _normalizeMode(widget.mode);
-
     _createControllerForMode();
-
     _restoreBrandAndThemePrefs();
-
-    _loginAnimationController = AnimationController(
-      duration: const Duration(milliseconds: 700),
-      vsync: this,
-    );
-
-    _offsetAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.2),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(parent: _loginAnimationController, curve: Curves.easeOut),
-    );
-
-    _opacityAnimation = CurvedAnimation(
-      parent: _loginAnimationController,
-      curve: Curves.easeIn,
-    );
-
-    _loginAnimationController.forward();
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-
     final args = ModalRoute.of(context)?.settings.arguments;
     if (args is Map) {
-      final ra = args['redirectAfterLogin'];
-      if (ra is String && ra.isNotEmpty) {
-        _redirectAfterLogin = ra;
+      final redirect = args['redirectAfterLogin'];
+      if (redirect is String && redirect.isNotEmpty) {
+        _redirectAfterLogin = redirect;
       }
-
-      final rm = args['requiredMode'];
-      if (rm is String && rm.isNotEmpty) {
-        _requiredMode = _normalizeModeNullable(rm);
+      final requiredMode = args['requiredMode'];
+      if (requiredMode is String && requiredMode.isNotEmpty) {
+        _requiredMode = _normalizeModeNullable(requiredMode);
       }
     }
-
     _maybeInitControllerAuto();
   }
 
   Widget _buildPrefsLoadingShell(BuildContext context) {
-    final base = Theme.of(context);
-    final cs = base.colorScheme;
-
-    final sysBrightness = MediaQuery.platformBrightnessOf(context);
-    final bg = (sysBrightness == Brightness.dark)
-        ? const Color(0xFF0B0F14)
-        : cs.surface;
-
-    return Scaffold(
-      backgroundColor: bg,
-      body: const Center(
-        child: SizedBox(
-          width: 22,
-          height: 22,
-          child: CircularProgressIndicator(strokeWidth: 2),
+    final brightness = MediaQuery.platformBrightnessOf(context);
+    final base = ThemeData(brightness: brightness, useMaterial3: true);
+    return Theme(
+      data: base,
+      child: PromptUiScope(
+        child: Builder(
+          builder: (context) {
+            final tokens = PromptUiTheme.of(context);
+            return AnnotatedRegion<SystemUiOverlayStyle>(
+              value: _systemUiStyle(tokens),
+              child: Scaffold(
+                backgroundColor: tokens.canvas,
+                body: Center(
+                  child: Container(
+                    width: 54,
+                    height: 54,
+                    decoration: BoxDecoration(
+                      color: tokens.surfaceRaised,
+                      borderRadius:
+                          BorderRadius.circular(PromptUiShapes.control),
+                      border: Border.all(color: tokens.borderSubtle),
+                    ),
+                    alignment: Alignment.center,
+                    child: SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.2,
+                        color: tokens.accent,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
         ),
       ),
+    );
+  }
+
+  SystemUiOverlayStyle _systemUiStyle(PromptUiTokens tokens) {
+    final iconBrightness =
+        tokens.isDark ? Brightness.light : Brightness.dark;
+    return SystemUiOverlayStyle(
+      statusBarColor: tokens.surface,
+      statusBarIconBrightness: iconBrightness,
+      statusBarBrightness:
+          tokens.isDark ? Brightness.dark : Brightness.light,
+      systemNavigationBarColor: tokens.surface,
+      systemNavigationBarIconBrightness: iconBrightness,
+      systemNavigationBarDividerColor: tokens.borderSubtle,
+    );
+  }
+
+  Widget _buildModeMismatch() {
+    return Builder(
+      builder: (context) {
+        final tokens = PromptUiTheme.of(context);
+        return AnnotatedRegion<SystemUiOverlayStyle>(
+          value: _systemUiStyle(tokens),
+          child: PopScope(
+            canPop: false,
+            child: Scaffold(
+              backgroundColor: tokens.canvas,
+              body: SafeArea(
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 420),
+                      child: PromptAnimatedReveal(
+                        child: Container(
+                          padding: const EdgeInsets.all(22),
+                          decoration: BoxDecoration(
+                            color: tokens.surfaceRaised,
+                            borderRadius:
+                                BorderRadius.circular(PromptUiShapes.card),
+                            border: Border.all(color: tokens.borderSubtle),
+                            boxShadow: <BoxShadow>[
+                              BoxShadow(
+                                color: tokens.shadow,
+                                blurRadius: 18,
+                                offset: const Offset(0, 9),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: <Widget>[
+                              Center(
+                                child: Container(
+                                  width: 56,
+                                  height: 56,
+                                  decoration: BoxDecoration(
+                                    color: tokens.warningContainer,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    Icons.lock_outline_rounded,
+                                    color: tokens.warning,
+                                    size: 30,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                '접근 가능한 모드가 아닙니다.',
+                                textAlign: TextAlign.center,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleLarge
+                                    ?.copyWith(
+                                      color: tokens.textPrimary,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                '요청 모드: ${_requiredMode!}\n현재 모드: $_mode',
+                                textAlign: TextAlign.center,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(color: tokens.textSecondary),
+                              ),
+                              const SizedBox(height: 18),
+                              PromptButton(
+                                label: '허브로 돌아가기',
+                                icon: Icons.hub_rounded,
+                                expand: true,
+                                onPressed: () => Navigator.of(context)
+                                    .pushReplacementNamed(AppRoutes.selector),
+                                haptic: PromptHaptic.selection,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildPromptScreen(Widget loginForm) {
+    return Builder(
+      builder: (context) {
+        final tokens = PromptUiTheme.of(context);
+        return AnnotatedRegion<SystemUiOverlayStyle>(
+          value: _systemUiStyle(tokens),
+          child: PopScope(
+            canPop: false,
+            child: Scaffold(
+              backgroundColor: tokens.canvas,
+              body: AnimatedSwitcher(
+                duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false
+                    ? Duration.zero
+                    : PromptUiMotion.component,
+                switchInCurve: PromptUiMotion.enter,
+                switchOutCurve: PromptUiMotion.exit,
+                child: KeyedSubtree(
+                  key: ValueKey<String>(_mode),
+                  child: loginForm,
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildLegacyServiceScreen(Widget loginForm) {
+    return Builder(
+      builder: (context) {
+        final colorScheme = Theme.of(context).colorScheme;
+        return PopScope(
+          canPop: false,
+          child: Scaffold(
+            backgroundColor: colorScheme.surface,
+            body: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Center(
+                child: SingleChildScrollView(child: loginForm),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -381,88 +515,30 @@ class _LoginScreenState extends State<LoginScreen>
     }
 
     final themed = _buildThemedLoginTheme(context);
+    final loginForm = _buildLoginForm();
 
     if (_requiredMode != null && _requiredMode != _mode) {
       return Theme(
         data: themed,
-        child: Builder(
-          builder: (context) {
-            final cs = Theme.of(context).colorScheme;
-
-            return PopScope(
-              canPop: false,
-              child: Scaffold(
-                backgroundColor: cs.surface,
-                body: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.lock_outline, size: 40, color: cs.onSurface),
-                        const SizedBox(height: 12),
-                        Text(
-                          '접근 가능한 모드가 아닙니다. (요청: ${_requiredMode!}, 현재: $_mode)',
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodyMedium
-                              ?.copyWith(color: cs.onSurface),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 12),
-                        FilledButton(
-                          onPressed: () => Navigator.of(context)
-                              .pushReplacementNamed(AppRoutes.selector),
-                          child: const Text('허브로 돌아가기'),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
+        child: PromptUiScope(child: _buildModeMismatch()),
       );
     }
 
-    final loginForm = _buildLoginForm();
+    if (!_usesPromptUi) {
+      return Theme(
+        data: themed,
+        child: _buildLegacyServiceScreen(loginForm),
+      );
+    }
 
     return Theme(
       data: themed,
-      child: Builder(
-        builder: (context) {
-          final cs = Theme.of(context).colorScheme;
-
-          return PopScope(
-            canPop: false,
-            child: Scaffold(
-              backgroundColor: cs.surface,
-              body: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Center(
-                  child: SingleChildScrollView(
-                    child: FadeTransition(
-                      opacity: _opacityAnimation,
-                      child: SlideTransition(
-                        position: _offsetAnimation,
-                        child: loginForm,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
-      ),
+      child: PromptUiScope(child: _buildPromptScreen(loginForm)),
     );
   }
 
   @override
   void dispose() {
-    _loginAnimationController.dispose();
-
     switch (_mode) {
       case 'personal':
         _personalController?.dispose();
@@ -487,7 +563,6 @@ class _LoginScreenState extends State<LoginScreen>
         _serviceLoginController?.dispose();
         break;
     }
-
     super.dispose();
   }
 }

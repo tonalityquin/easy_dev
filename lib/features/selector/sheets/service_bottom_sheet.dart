@@ -9,6 +9,8 @@ import '../../../app/config/overlay_edge_side_config.dart';
 import '../../../app/config/overlay_mode_config.dart';
 import '../../../app/theme/brand_theme.dart';
 import '../../../app/theme/theme_prefs_controller.dart';
+import '../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
 import '../../dev/page/sheets/dev_quick_actions.dart';
 import '../application/dev_auth.dart';
 
@@ -30,86 +32,20 @@ const Set<String> _kKbThemeAllowedAreas = <String>{
   'KB라이프역삼',
 };
 
-@immutable
-class HeaderTokens {
-  const HeaderTokens({
-    required this.pageFg,
-    required this.mutedFg,
-    required this.border,
-    required this.sectionBg,
-    required this.sectionBorder,
-    required this.iconBoxBg,
-    required this.iconFg,
-    required this.badgeRing,
-    required this.badgeInnerBg,
-    required this.badgeShadow,
-    required this.badgeIcon,
-    required this.sheetBg,
-    required this.accent,
-    required this.onAccent,
-    required this.destructive,
-    required this.subtleGlow,
-  });
-
-  final Color pageFg;
-  final Color mutedFg;
-
-  final Color border;
-
-  final Color sectionBg;
-  final Color sectionBorder;
-  final Color iconBoxBg;
-  final Color iconFg;
-
-  final Color badgeRing;
-  final Color badgeInnerBg;
-  final Color badgeShadow;
-  final Color badgeIcon;
-
-  final Color sheetBg;
-
-  final Color accent;
-  final Color onAccent;
-
-  final Color destructive;
-
-  final Color subtleGlow;
-
-  factory HeaderTokens.of(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return HeaderTokens(
-      pageFg: cs.onSurface,
-      mutedFg: cs.onSurfaceVariant,
-      border: cs.outlineVariant,
-      sectionBg: cs.surfaceContainerLow,
-      sectionBorder: cs.outlineVariant.withOpacity(.6),
-      iconBoxBg: cs.surfaceContainerHighest.withOpacity(.7),
-      iconFg: cs.onSurface,
-      badgeRing: cs.primary,
-      badgeInnerBg: cs.surface,
-      badgeShadow: cs.shadow.withOpacity(0.08),
-      badgeIcon: cs.onSurface,
-      sheetBg: cs.surface,
-      accent: cs.primary,
-      onAccent: cs.onPrimary,
-      destructive: cs.error,
-      subtleGlow: cs.onSurface.withOpacity(0.06),
-    );
-  }
-}
-
 class ServiceBottomSheet {
   const ServiceBottomSheet._();
 
   static Future<void> show({
     required BuildContext context,
   }) async {
+    final tokens = PromptUiTheme.of(context);
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetCtx) {
+      backgroundColor: tokens.transparent,
+      barrierColor: tokens.scrim,
+      builder: (sheetContext) {
         return _ServiceBottomSheetView(
           parentContext: context,
         );
@@ -266,15 +202,15 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
       appBarTheme: base.appBarTheme.copyWith(
         backgroundColor: scheme.surface,
         foregroundColor: scheme.onSurface,
-        surfaceTintColor: Colors.transparent,
+        surfaceTintColor: scheme.surface.withOpacity(0),
       ),
       cardTheme: base.cardTheme.copyWith(
         color: scheme.surfaceContainerLow,
-        surfaceTintColor: Colors.transparent,
+        surfaceTintColor: scheme.surface.withOpacity(0),
       ),
       bottomSheetTheme: base.bottomSheetTheme.copyWith(
-        backgroundColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
+        backgroundColor: scheme.surface.withOpacity(0),
+        surfaceTintColor: scheme.surface.withOpacity(0),
       ),
       dividerTheme: base.dividerTheme.copyWith(
         color: scheme.outlineVariant,
@@ -322,7 +258,7 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
   }
 
   Widget _buildThemeModeChips(BuildContext context) {
-    final t = HeaderTokens.of(context);
+    final t = PromptUiTheme.of(context);
     final text = Theme.of(context).textTheme;
     final modes = themeModeSpecs();
 
@@ -333,13 +269,13 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
           '테마 모드',
           style: text.titleSmall?.copyWith(
             fontWeight: FontWeight.w800,
-            color: t.pageFg,
+            color: t.textPrimary,
           ),
         ),
         const SizedBox(height: 4),
         Text(
           '시스템/라이트/다크/독립을 선택합니다. 선택 즉시 전체 화면에 적용됩니다.',
-          style: text.bodySmall?.copyWith(color: t.mutedFg),
+          style: text.bodySmall?.copyWith(color: t.textSecondary),
         ),
         const SizedBox(height: 10),
         Wrap(
@@ -366,12 +302,12 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
   }
 
   Widget _buildPresetChips(BuildContext context) {
-    final t = HeaderTokens.of(context);
+    final t = PromptUiTheme.of(context);
     final text = Theme.of(context).textTheme;
 
     final presets = _brandPresetsForSelectedArea(_themeModeId);
 
-    final helperText = (_themeModeId == 'independent')
+    final descriptionText = (_themeModeId == 'independent')
         ? '독립 모드는 프리셋마다 배경/글자색이 고정됩니다(프리셋이 밝기까지 결정).'
         : '컨셉 컬러는 포인트로만 사용되고, 표면은 중립으로 유지됩니다.';
 
@@ -382,13 +318,13 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
           '색 패키지',
           style: text.titleSmall?.copyWith(
             fontWeight: FontWeight.w800,
-            color: t.pageFg,
+            color: t.textPrimary,
           ),
         ),
         const SizedBox(height: 4),
         Text(
-          helperText,
-          style: text.bodySmall?.copyWith(color: t.mutedFg),
+          descriptionText,
+          style: text.bodySmall?.copyWith(color: t.textSecondary),
         ),
         const SizedBox(height: 10),
         SingleChildScrollView(
@@ -470,53 +406,58 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
     required Widget child,
     Widget? trailing,
   }) {
-    final t = HeaderTokens.of(context);
+    final t = PromptUiTheme.of(context);
     final text = Theme.of(context).textTheme;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-      decoration: BoxDecoration(
-        color: t.sectionBg,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: t.sectionBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: t.iconBoxBg,
-                  borderRadius: BorderRadius.circular(10),
+    return PromptAnimatedReveal(
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+        decoration: BoxDecoration(
+          color: t.surfaceOverlay,
+          borderRadius: BorderRadius.circular(PromptUiShapes.card),
+          border: Border.all(color: t.borderSubtle),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: t.accentContainer,
+                    borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                    border: Border.all(
+                      color: t.accent.withOpacity(t.isDark ? 0.48 : 0.30),
+                    ),
+                  ),
+                  child: Icon(icon, size: 20, color: t.onAccentContainer),
                 ),
-                child: Icon(icon, size: 20, color: t.iconFg),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  title,
-                  style: text.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: t.pageFg,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: text.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: t.textPrimary,
+                    ),
                   ),
                 ),
-              ),
-              if (trailing != null) trailing,
-            ],
-          ),
-          const SizedBox(height: 10),
-          child,
-        ],
+                if (trailing != null) trailing,
+              ],
+            ),
+            const SizedBox(height: 10),
+            child,
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildOverlayEdgeSideSection(BuildContext context) {
-    final t = HeaderTokens.of(context);
+    final t = PromptUiTheme.of(context);
     final text = Theme.of(context).textTheme;
 
     String labelFor(OverlayEdgeSide side) {
@@ -545,7 +486,7 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
             '플로팅(오버레이) 버튼이 기본으로 붙을 위치를 선택합니다.\n'
                 '앱이 백그라운드로 이동해 오버레이가 실행될 때 적용됩니다.\n'
                 '이미 오버레이가 떠 있다면, 저장 시 자동으로 종료되어 다음 실행부터 반영됩니다.',
-            style: text.bodyMedium?.copyWith(fontSize: 13, color: t.pageFg),
+            style: text.bodyMedium?.copyWith(fontSize: 13, color: t.textPrimary),
           ),
           const SizedBox(height: 12),
           Wrap(
@@ -573,7 +514,7 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
           const SizedBox(height: 6),
           Text(
             '현재 선택: ${labelFor(_edgeSide)}',
-            style: text.bodySmall?.copyWith(color: t.mutedFg),
+            style: text.bodySmall?.copyWith(color: t.textSecondary),
           ),
         ],
       ),
@@ -581,7 +522,7 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
   }
 
   Widget _buildPrivateGateSection(BuildContext context) {
-    final t = HeaderTokens.of(context);
+    final t = PromptUiTheme.of(context);
     final text = Theme.of(context).textTheme;
 
     final adminStatus = _adminUnlocked ? 'ON' : 'OFF';
@@ -595,10 +536,12 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (_adminUnlocked)
-            IconButton(
+            PromptIconButton(
+              icon: Icons.lock_rounded,
               tooltip: '앱설정 잠그기',
               onPressed: _lockAdmin,
-              icon: Icon(Icons.lock_rounded, color: t.destructive),
+              destructive: true,
+              haptic: PromptHaptic.selection,
             ),
         ],
       ),
@@ -609,7 +552,7 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
             '코드 입력으로 기능을 활성화합니다.\n'
                 '• 관리자 코드 → 앱 설정(앱관리) 섹션 ON\n'
                 '• 개발자 코드 → 개발자 모드와 개발자 플로팅 버블 ON',
-            style: text.bodyMedium?.copyWith(fontSize: 13, color: t.pageFg),
+            style: text.bodyMedium?.copyWith(fontSize: 13, color: t.textPrimary),
           ),
           const SizedBox(height: 10),
           Row(
@@ -628,13 +571,14 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
               labelText: '코드 입력',
               border: const OutlineInputBorder(),
               prefixIcon: const Icon(Icons.password_rounded),
-              suffixIcon: IconButton(
+              suffixIcon: PromptIconButton(
+                icon: _privateCodeObscure
+                    ? Icons.visibility_off_rounded
+                    : Icons.visibility_rounded,
                 tooltip: _privateCodeObscure ? '표시' : '숨김',
+                size: 42,
                 onPressed: () =>
                     setState(() => _privateCodeObscure = !_privateCodeObscure),
-                icon: Icon(_privateCodeObscure
-                    ? Icons.visibility_off_rounded
-                    : Icons.visibility_rounded),
               ),
             ),
             onSubmitted: (_) => _applyPrivateCode(),
@@ -643,23 +587,24 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
           Row(
             children: [
               Expanded(
-                child: ElevatedButton.icon(
+                child: PromptButton(
+                  label: '적용',
+                  icon: Icons.check_rounded,
                   onPressed: _applyPrivateCode,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: t.accent,
-                    foregroundColor: t.onAccent,
-                  ),
-                  icon: const Icon(Icons.check_rounded),
-                  label: const Text('적용'),
+                  expand: true,
+                  haptic: PromptHaptic.medium,
                 ),
               ),
               if (_devModeEnabled) ...[
                 const SizedBox(width: 8),
                 Expanded(
-                  child: OutlinedButton.icon(
+                  child: PromptButton(
+                    label: '개발자 모드 OFF',
+                    icon: Icons.power_settings_new,
                     onPressed: _disableDevMode,
-                    icon: const Icon(Icons.power_settings_new),
-                    label: const Text('개발자 모드 OFF'),
+                    variant: PromptButtonVariant.destructive,
+                    expand: true,
+                    haptic: PromptHaptic.heavy,
                   ),
                 ),
               ],
@@ -671,7 +616,7 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
   }
 
   Widget _buildOverlayModeSection(BuildContext context) {
-    final t = HeaderTokens.of(context);
+    final t = PromptUiTheme.of(context);
     final text = Theme.of(context).textTheme;
 
     String labelFor(OverlayMode mode) {
@@ -694,7 +639,7 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
             _isSimpleAppMode
                 ? '싱글모드는 단순 출퇴근 및 휴게 기록기 용도이므로 퇴근 시간이 지나도 상단 50% 포그라운드를 사용하지 않고 플로팅 버블만 사용합니다.'
                 : '앱이 백그라운드로 이동했을 때 사용할 오버레이 형태를 선택합니다.\n하나만 선택되며, 선택된 모드만 실행/종료 조건을 공유합니다.',
-            style: text.bodyMedium?.copyWith(fontSize: 13, color: t.pageFg),
+            style: text.bodyMedium?.copyWith(fontSize: 13, color: t.textPrimary),
           ),
           const SizedBox(height: 12),
           Wrap(
@@ -745,7 +690,7 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
           const SizedBox(height: 6),
           Text(
             '현재 선택: ${labelFor(_overlayMode)}',
-            style: text.bodySmall?.copyWith(color: t.mutedFg),
+            style: text.bodySmall?.copyWith(color: t.textSecondary),
           ),
         ],
       ),
@@ -753,15 +698,18 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
   }
 
   Widget _buildGmailSection(BuildContext context) {
-    final t = HeaderTokens.of(context);
+    final t = PromptUiTheme.of(context);
     final text = Theme.of(context).textTheme;
 
     return _sectionBox(
       context: context,
       icon: Icons.mail_outline,
       title: '메일 전송 설정 (수신자만)',
-      trailing: IconButton(
+      trailing: PromptIconButton(
+        icon: Icons.restore,
         tooltip: '기본값으로 초기화',
+        destructive: true,
+        haptic: PromptHaptic.selection,
         onPressed: () async {
           await EmailConfig.clear();
           final cfg = await EmailConfig.load();
@@ -769,7 +717,6 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
           if (!mounted) return;
           setState(() {});
         },
-        icon: Icon(Icons.restore, color: t.destructive),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -782,7 +729,6 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
               labelText: '수신자(To)',
               border: OutlineInputBorder(),
               prefixIcon: Icon(Icons.person_add_alt_1_outlined),
-              helperText: '쉼표로 여러 명 입력 가능 (예: a@x.com, b@y.com)',
             ),
             onSubmitted: (_) => FocusScope.of(context).unfocus(),
           ),
@@ -790,8 +736,12 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
           Row(
             children: [
               Expanded(
-                child: OutlinedButton.icon(
-                  icon: const Icon(Icons.check_circle_outline),
+                child: PromptButton(
+                  label: '저장',
+                  icon: Icons.check_circle_outline,
+                  variant: PromptButtonVariant.secondary,
+                  expand: true,
+                  haptic: PromptHaptic.medium,
                   onPressed: () async {
                     final to = _mailToCtrl.text.trim();
                     if (!EmailConfig.isValidToList(to)) {
@@ -802,19 +752,21 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
                     if (!mounted) return;
                     setState(() {});
                   },
-                  label: const Text('저장'),
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: OutlinedButton.icon(
-                  icon: const Icon(Icons.copy_all_outlined),
+                child: PromptButton(
+                  label: '설정 복사',
+                  icon: Icons.copy_all_outlined,
+                  variant: PromptButtonVariant.tertiary,
+                  expand: true,
+                  haptic: PromptHaptic.selection,
                   onPressed: () async {
                     final raw = 'To: ${_mailToCtrl.text}';
                     await Clipboard.setData(ClipboardData(text: raw));
                     if (!mounted) return;
                   },
-                  label: const Text('설정 복사'),
                 ),
               ),
             ],
@@ -822,7 +774,7 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
           const SizedBox(height: 6),
           Text(
             '※ 저장되는 항목은 수신자(To)뿐입니다. 메일 제목·본문은 경위서 화면에서 작성합니다.',
-            style: text.bodySmall?.copyWith(fontSize: 12, color: t.mutedFg),
+            style: text.bodySmall?.copyWith(fontSize: 12, color: t.textSecondary),
           ),
         ],
       ),
@@ -842,113 +794,107 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
       themed = _buildConceptThemed(baseTheme, brightness, _presetId);
     }
 
-    return Theme(
-      data: themed,
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+
+    return AnimatedTheme(
+      data: PromptUiTheme.scoped(themed),
+      duration: reduceMotion ? Duration.zero : PromptUiMotion.component,
+      curve: PromptUiMotion.standard,
       child: Builder(
         builder: (context) {
-          final t = HeaderTokens.of(context);
-          final text = Theme.of(context).textTheme;
+          final tokens = PromptUiTheme.of(context);
+          return DraggableScrollableSheet(
+            expand: false,
+            initialChildSize: 1,
+            maxChildSize: 1,
+            minChildSize: 0.4,
+            builder: (sheetContext, scrollController) {
+              final keyboardBottom =
+                  MediaQuery.of(sheetContext).viewInsets.bottom;
 
-          return ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-            child: Material(
-              color: Colors.transparent,
-              child: DraggableScrollableSheet(
-                expand: false,
-                initialChildSize: 1.0,
-                maxChildSize: 1.0,
-                minChildSize: 0.4,
-                builder: (ctx, sc) {
-                  return Material(
-                    color: t.sheetBg,
-                    child: SafeArea(
-                      child: SingleChildScrollView(
-                        controller: sc,
-                        padding: EdgeInsets.only(
-                          left: 16,
-                          right: 16,
-                          top: 12,
-                          bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            const SizedBox(height: 8),
-                            Center(
-                              child: Container(
-                                width: 40,
-                                height: 4,
-                                margin: const EdgeInsets.only(bottom: 12),
-                                decoration: BoxDecoration(
-                                  color: t.border.withOpacity(0.9),
-                                  borderRadius: BorderRadius.circular(2),
-                                ),
+              return PromptSheetScaffold(
+                title: '서비스 설정',
+                icon: Icons.tune_rounded,
+                onClose: () => Navigator.pop(sheetContext),
+                body: AnimatedPadding(
+                  duration:
+                      reduceMotion ? Duration.zero : PromptUiMotion.component,
+                  curve: PromptUiMotion.standard,
+                  padding: EdgeInsets.only(bottom: keyboardBottom),
+                  child: SingleChildScrollView(
+                    controller: scrollController,
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _sectionBox(
+                          context: context,
+                          icon: Icons.palette_outlined,
+                          title: '공개 섹션: 브랜드 테마',
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _buildThemeModeChips(context),
+                              const SizedBox(height: 12),
+                              Divider(
+                                height: 1,
+                                color: tokens.borderSubtle,
                               ),
-                            ),
-                            Row(
-                              children: [
-                                const Icon(Icons.tune_rounded),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    '서비스 설정',
-                                    style: text.titleMedium?.copyWith(
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 16,
-                                      color: t.pageFg,
+                              const SizedBox(height: 12),
+                              _buildPresetChips(context),
+                            ],
+                          ),
+                        ),
+                        _buildOverlayEdgeSideSection(context),
+                        _buildPrivateGateSection(context),
+                        AnimatedSwitcher(
+                          duration: reduceMotion
+                              ? Duration.zero
+                              : PromptUiMotion.component,
+                          switchInCurve: PromptUiMotion.enter,
+                          switchOutCurve: PromptUiMotion.exit,
+                          transitionBuilder: (child, animation) {
+                            return FadeTransition(
+                              opacity: animation,
+                              child: SizeTransition(
+                                sizeFactor: animation,
+                                axisAlignment: -1,
+                                child: child,
+                              ),
+                            );
+                          },
+                          child: _bootLoading
+                              ? Padding(
+                                  key: const ValueKey<String>('loading'),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 18),
+                                  child: Center(
+                                    child: CircularProgressIndicator(
+                                      color: tokens.accent,
                                     ),
                                   ),
-                                ),
-                                IconButton(
-                                  tooltip: '닫기',
-                                  onPressed: () => Navigator.pop(ctx),
-                                  icon: const Icon(Icons.close_rounded),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Divider(height: 1, color: t.border.withOpacity(.7)),
-                            const SizedBox(height: 16),
-                            _sectionBox(
-                              context: context,
-                              icon: Icons.palette_outlined,
-                              title: '공개 섹션: 브랜드 테마',
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  _buildThemeModeChips(context),
-                                  const SizedBox(height: 12),
-                                  Divider(
-                                      height: 1,
-                                      color: t.border.withOpacity(.7)),
-                                  const SizedBox(height: 12),
-                                  _buildPresetChips(context),
-                                ],
-                              ),
-                            ),
-                            _buildOverlayEdgeSideSection(context),
-                            _buildPrivateGateSection(context),
-                            if (_bootLoading)
-                              Padding(
-                                padding:
-                                const EdgeInsets.symmetric(vertical: 10),
-                                child: Center(
-                                  child: CircularProgressIndicator(
-                                      color: t.accent),
-                                ),
-                              ),
-                            if (_adminUnlocked && !_bootLoading) ...[
-                              _buildOverlayModeSection(context),
-                              _buildGmailSection(context),
-                            ],
-                          ],
+                                )
+                              : _adminUnlocked
+                                  ? Column(
+                                      key: const ValueKey<String>('unlocked'),
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      children: [
+                                        _buildOverlayModeSection(context),
+                                        _buildGmailSection(context),
+                                      ],
+                                    )
+                                  : const SizedBox.shrink(
+                                      key: ValueKey<String>('locked'),
+                                    ),
                         ),
-                      ),
+                      ],
                     ),
-                  );
-                },
-              ),
-            ),
+                  ),
+                ),
+              );
+            },
           );
         },
       ),
@@ -964,6 +910,7 @@ class _PresetPreviewDots extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dots = colors.take(3).toList();
+    final tokens = PromptUiTheme.of(context);
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: List.generate(dots.length, (i) {
@@ -976,8 +923,7 @@ class _PresetPreviewDots extends StatelessWidget {
             color: c,
             shape: BoxShape.circle,
             border: Border.all(
-              color:
-              Theme.of(context).colorScheme.outlineVariant.withOpacity(0.6),
+              color: tokens.borderStrong.withOpacity(0.72),
             ),
           ),
         );
@@ -994,23 +940,27 @@ class _StatusPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final tokens = PromptUiTheme.of(context);
     final isOn = value == 'ON';
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
-    return Container(
+    return AnimatedContainer(
+      duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
+      curve: PromptUiMotion.standard,
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: isOn
-            ? cs.primaryContainer
-            : cs.surfaceContainerHighest.withOpacity(0.6),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: cs.outlineVariant.withOpacity(0.6)),
+        color: isOn ? tokens.accentContainer : tokens.surfaceOverlay,
+        borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+        border: Border.all(
+          color: isOn ? tokens.accent : tokens.borderSubtle,
+        ),
       ),
       child: Text(
         '$label: $value',
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-          fontWeight: FontWeight.w800,
-          color: isOn ? cs.onPrimaryContainer : cs.onSurface,
+          fontWeight: FontWeight.w700,
+          color: isOn ? tokens.onAccentContainer : tokens.textSecondary,
         ),
       ),
     );
