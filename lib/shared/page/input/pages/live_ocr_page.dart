@@ -8,6 +8,10 @@ import 'package:flutter/services.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+
 import '../domain/repositories/ocr_learning_repository.dart';
 
 class _KoreanPlatePolicy {
@@ -1685,7 +1689,6 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
   }
 
   void _showLearningDialog() {
-    final cs = Theme.of(context).colorScheme;
     final committed = _learningSummary?.committedCount ?? 0;
     final pending = _learningSummary?.pendingCount ?? 0;
     final dynCnt = _dynMidMap.length;
@@ -1695,82 +1698,213 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
         ? '없음'
         : DateTime.fromMillisecondsSinceEpoch(lastMs).toLocal().toString();
 
-    showDialog(
+    showPromptOverlayDialog<void>(
       context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: cs.surface,
-        title: const Text('학습 데이터 상태'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('커밋(정답 확정): $committed건'),
-            Text('대기(미커밋): $pending건'),
-            Text('동적 mid 보정맵: $dynCnt개'),
-            Text('후보 보정맵: ${_dynCandidateMap.length}개'),
-            Text('선호 앞자리 길이: ${pref ?? '-'}'),
-            Text('마지막 커밋: $lastText'),
-            const SizedBox(height: 12),
-            Text(
-              '한국 차량 번호판 형식으로 검증된 값만 학습 저장에 반영합니다.',
-              style: TextStyle(color: cs.onSurfaceVariant),
+      builder: (dialogContext) {
+        final tokens = PromptUiTheme.of(dialogContext);
+        final textTheme = Theme.of(dialogContext).textTheme;
+        Widget row(String label, String value) {
+          return Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: tokens.surfaceOverlay,
+              borderRadius: BorderRadius.circular(PromptUiShapes.control),
+              border: Border.all(color: tokens.borderSubtle),
             ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('닫기'),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    label,
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: tokens.textSecondary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                Text(
+                  value,
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: tokens.textPrimary,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return PromptDialogFrame(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 480),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: tokens.infoContainer,
+                        borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                        border: Border.all(color: tokens.info.withOpacity(.36)),
+                      ),
+                      alignment: Alignment.center,
+                      child: Icon(Icons.school_rounded, color: tokens.info),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        '학습 데이터 상태',
+                        style: textTheme.titleLarge?.copyWith(
+                          color: tokens.textPrimary,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                row('커밋', '$committed건'),
+                row('대기', '$pending건'),
+                row('동적 mid 보정맵', '$dynCnt개'),
+                row('후보 보정맵', '${_dynCandidateMap.length}개'),
+                row('선호 앞자리 길이', '${pref ?? '-'}'),
+                row('마지막 커밋', lastText),
+                const SizedBox(height: 4),
+                Text(
+                  '한국 차량 번호판 형식으로 검증된 값만 학습 저장에 반영합니다.',
+                  style: textTheme.bodySmall?.copyWith(
+                    color: tokens.textSecondary,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                PromptButton(
+                  label: '닫기',
+                  expand: true,
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                ),
+              ],
+            ),
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
   void _showLogsDialog() {
-    final cs = Theme.of(context).colorScheme;
     final logText = _sessionLogs.join('\n');
-    showDialog(
+    showPromptOverlayDialog<void>(
       context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: cs.surface,
-        title: const Text('인식 로그'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: SingleChildScrollView(
-            child: SelectableText(
-              logText.isEmpty ? '로그가 없습니다.' : logText,
-              style: TextStyle(color: cs.onSurface, fontSize: 12),
+      builder: (dialogContext) {
+        final tokens = PromptUiTheme.of(dialogContext);
+        return PromptDialogFrame(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 620, maxHeight: 720),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: tokens.infoContainer,
+                        borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                        border: Border.all(color: tokens.info.withOpacity(.36)),
+                      ),
+                      alignment: Alignment.center,
+                      child: Icon(Icons.article_outlined, color: tokens.info),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        '인식 로그',
+                        style: Theme.of(dialogContext).textTheme.titleLarge?.copyWith(
+                          color: tokens.textPrimary,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Flexible(
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: tokens.surfaceOverlay,
+                      borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                      border: Border.all(color: tokens.borderSubtle),
+                    ),
+                    child: SingleChildScrollView(
+                      child: SelectableText(
+                        logText.isEmpty ? '로그가 없습니다.' : logText,
+                        style: TextStyle(
+                          color: tokens.textPrimary,
+                          fontSize: 12,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: PromptButton(
+                        label: '복사',
+                        icon: Icons.copy_rounded,
+                        variant: PromptButtonVariant.secondary,
+                        onPressed: () async {
+                          await Clipboard.setData(ClipboardData(text: logText));
+                          if (!dialogContext.mounted) return;
+                          Navigator.of(dialogContext).pop();
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: PromptButton(
+                        label: '닫기',
+                        onPressed: () => Navigator.of(dialogContext).pop(),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () async {
-              await Clipboard.setData(ClipboardData(text: logText));
-              if (!mounted) return;
-              Navigator.pop(context);
-            },
-            child: const Text('복사'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('닫기'),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    return PromptUiScope(
+      child: Builder(builder: _buildPromptOcrPage),
+    );
+  }
+
+  Widget _buildPromptOcrPage(BuildContext context) {
+    final tokens = PromptUiTheme.of(context);
+    final cameraForeground =
+        tokens.isDark ? tokens.textPrimary : tokens.onAccent;
 
     final cam = _controller;
     final preview = (!(_initialized && cam != null && cam.value.isInitialized))
         ? Center(
             child: CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
+              valueColor: AlwaysStoppedAnimation<Color>(tokens.accent),
             ),
           )
         : LayoutBuilder(
@@ -1803,16 +1937,14 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
         await _finishAndPop(exitType: LiveOcrExitType.userAborted);
       },
       child: Scaffold(
-        backgroundColor: cs.scrim,
+        backgroundColor: tokens.scrim,
         appBar: AppBar(
           automaticallyImplyLeading: false,
-          backgroundColor: cs.scrim,
-          foregroundColor: cs.surface,
-          systemOverlayStyle: cs.brightness == Brightness.dark
-              ? SystemUiOverlayStyle.light
-              : SystemUiOverlayStyle.dark,
+          backgroundColor: tokens.scrim,
+          foregroundColor: cameraForeground,
+          systemOverlayStyle: SystemUiOverlayStyle.light,
           elevation: 0,
-          surfaceTintColor: Colors.transparent,
+          surfaceTintColor: tokens.transparent,
           actions: [
             IconButton(
               tooltip: '인식 로그',
@@ -1889,7 +2021,7 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
                 width: double.infinity,
                 padding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                color: cs.scrim,
+                color: tokens.scrim,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
@@ -1897,7 +2029,7 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
                       Text(
                         _debugText!,
                         style: TextStyle(
-                            color: cs.surface.withOpacity(0.85), fontSize: 12),
+                            color: cameraForeground.withOpacity(0.88), fontSize: 12),
                       ),
                     if (_lastText != null && _lastText!.isNotEmpty)
                       Padding(
@@ -1907,7 +2039,7 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                              color: cs.surface.withOpacity(0.70),
+                              color: cameraForeground.withOpacity(0.72),
                               fontSize: 12),
                         ),
                       ),
@@ -1920,7 +2052,6 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
                           alignment: WrapAlignment.center,
                           children: [
                             _infoPill(
-                              cs: cs,
                               icon: hasLearning
                                   ? Icons.school
                                   : Icons.school_outlined,
@@ -1928,18 +2059,15 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
                                   '학습 ${_learningSummary?.committedCount ?? 0}건',
                             ),
                             _infoPill(
-                              cs: cs,
                               icon: Icons.tune,
                               text: '보정맵 ${_dynMidMap.length}개',
                             ),
                             _infoPill(
-                              cs: cs,
                               icon: Icons.receipt_long,
                               text: '로그 ${_sessionLogs.length}줄',
                             ),
                             if (usedLearningNow)
                               _infoPill(
-                                cs: cs,
                                 icon: Icons.auto_awesome,
                                 text: '보정 적용',
                               ),
@@ -1949,17 +2077,21 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
                   ],
                 ),
               ),
-            SafeArea(
-              top: false,
-              left: false,
-              right: false,
-              bottom: true,
-              minimum: const EdgeInsets.only(bottom: 8),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-                color: cs.scrim,
-                child: _buildCandidates(),
+            PromptAnimatedReveal(
+              delay: const Duration(milliseconds: 80),
+              offset: const Offset(0, .035),
+              child: SafeArea(
+                top: false,
+                left: false,
+                right: false,
+                bottom: true,
+                minimum: const EdgeInsets.only(bottom: 8),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                  color: tokens.scrim,
+                  child: _buildCandidates(),
+                ),
               ),
             ),
           ],
@@ -1969,26 +2101,27 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
   }
 
   Widget _infoPill({
-    required ColorScheme cs,
     required IconData icon,
     required String text,
   }) {
+    final tokens = PromptUiTheme.of(context);
+    final foreground = tokens.isDark ? tokens.textPrimary : tokens.onAccent;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: cs.surface.withOpacity(0.12),
-        border: Border.all(color: cs.surface.withOpacity(0.25)),
-        borderRadius: BorderRadius.circular(999),
+        color: tokens.surfaceRaised.withOpacity(tokens.isDark ? .72 : .16),
+        border: Border.all(color: foreground.withOpacity(.28)),
+        borderRadius: BorderRadius.circular(PromptUiShapes.pill),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: cs.surface.withOpacity(0.9)),
+          Icon(icon, size: 14, color: foreground.withOpacity(.92)),
           const SizedBox(width: 6),
           Text(
             text,
             style: TextStyle(
-              color: cs.surface.withOpacity(0.9),
+              color: foreground.withOpacity(.92),
               fontSize: 12,
               fontWeight: FontWeight.w600,
             ),
@@ -1999,7 +2132,9 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
   }
 
   Widget _buildCandidates() {
-    final cs = Theme.of(context).colorScheme;
+    final tokens = PromptUiTheme.of(context);
+    final cameraForeground =
+        tokens.isDark ? tokens.textPrimary : tokens.onAccent;
 
     if (_displayChips.isEmpty) {
       return Column(
@@ -2007,7 +2142,7 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
         children: [
           Text(
             '인식 후보가 안정화되면 탭하여 삽입할 수 있습니다. 한국 차량 번호판 형식만 판독합니다.',
-            style: TextStyle(color: cs.surface.withOpacity(0.70)),
+            style: TextStyle(color: cameraForeground.withOpacity(0.72)),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: _chipBottomSpacer),
@@ -2026,14 +2161,14 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
           crossAxisAlignment: WrapCrossAlignment.center,
           children: _displayChips.map((chip) {
             final backgroundColor = switch (chip.tier) {
-              _ChipTier.stable => Theme.of(context).colorScheme.primary,
-              _ChipTier.tentative => Colors.teal,
-              _ChipTier.weak => cs.surface,
+              _ChipTier.stable => tokens.accent,
+              _ChipTier.tentative => tokens.info,
+              _ChipTier.weak => tokens.surfaceRaised,
             };
             final labelColor = switch (chip.tier) {
-              _ChipTier.stable => cs.onPrimary,
-              _ChipTier.tentative => Colors.white,
-              _ChipTier.weak => cs.onSurface,
+              _ChipTier.stable => tokens.onAccent,
+              _ChipTier.tentative => tokens.onInfo,
+              _ChipTier.weak => tokens.textPrimary,
             };
             return ActionChip(
               label: Text(chip.label),

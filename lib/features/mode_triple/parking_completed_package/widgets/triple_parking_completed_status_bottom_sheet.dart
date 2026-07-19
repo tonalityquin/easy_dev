@@ -1,21 +1,23 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import '../../../../../features/account/applications/user_state.dart';
-import '../../../../../features/dev/application/area_state.dart';
-import '../../../../../features/payment/widgets/billing_bottom_sheet.dart';
-import '../../../../../features/payment/widgets/confirm_cancel_fee_dialog.dart';
-import '../../../../../shared/page/modify/pages/modify_plate_screen.dart';
-import '../../../../../shared/plate/application/common/movement_plate.dart';
-import '../../../../../shared/plate/application/common/parking_completed_status_helpers.dart';
-import '../../../../../shared/plate/application/triple/triple_plate_state.dart';
-import '../../../../../shared/plate/domain/enums/plate_type.dart';
-import '../../../../../shared/plate/domain/models/plate_log_model.dart';
-import '../../../../../shared/plate/domain/models/plate_model.dart';
-import '../../../../../shared/plate/domain/repositories/plate_repository.dart';
-import '../../../../../shared/plate/widgets/log_viewer_bottom_sheet.dart';
-import '../../../../../shared/plate/widgets/parking_completed_status_widgets.dart';
+
+import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../account/applications/user_state.dart';
+import '../../../dev/application/area_state.dart';
+import '../../../payment/widgets/billing_bottom_sheet.dart';
+import '../../../payment/widgets/confirm_cancel_fee_dialog.dart';
+import '../../../../shared/page/modify/pages/modify_plate_screen.dart';
+import '../../../../shared/plate/application/common/movement_plate.dart';
+import '../../../../shared/plate/application/common/parking_completed_status_helpers.dart';
+import '../../../../shared/plate/application/triple/triple_plate_state.dart';
+import '../../../../shared/plate/domain/enums/plate_type.dart';
+import '../../../../shared/plate/domain/models/plate_log_model.dart';
+import '../../../../shared/plate/domain/models/plate_model.dart';
+import '../../../../shared/plate/domain/repositories/plate_repository.dart';
+import '../../../../shared/plate/widgets/log_viewer_bottom_sheet.dart';
+import '../../../../shared/plate/widgets/parking_completed_prompt_dialog.dart';
+import '../../../../shared/plate/widgets/parking_completed_status_widgets.dart';
 
 Future<bool> _showDeleteDialog(BuildContext context, PlateModel plate) async {
   return showParkingCompletedDeleteDialog(context, plate);
@@ -57,11 +59,11 @@ Future<bool?> showTripleParkingCompletedStatusBottomSheet({
   final division = context.read<UserState>().division;
   final area = context.read<AreaState>().currentArea;
 
-  return showModalBottomSheet<bool>(
+  return showPromptOverlayBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    backgroundColor: Colors.transparent,
+    transparentBackground: true,
     isDismissible: false,
     enableDrag: false,
     builder: (_) => FractionallySizedBox(
@@ -77,8 +79,6 @@ Future<bool?> showTripleParkingCompletedStatusBottomSheet({
     ),
   );
 }
-
-enum _DepartureOverrideChoice { proceed, goBilling, cancel }
 
 class _FullHeightSheet extends StatefulWidget {
   const _FullHeightSheet({
@@ -321,200 +321,11 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
     }
   }
 
-  Future<_DepartureOverrideChoice?> _showDepartureOverrideDialog() async {
-    final cs = Theme.of(context).colorScheme;
-
-    return showDialog<_DepartureOverrideChoice>(
+  Future<ParkingCompletedOverrideChoice?>
+      _showDepartureOverrideDialog() async {
+    return showParkingCompletedOverrideDialog(
       context: context,
-      barrierDismissible: true,
-      barrierColor: cs.scrim.withOpacity(0.45),
-      builder: (_) {
-        return Dialog(
-          insetPadding:
-              const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
-            decoration: BoxDecoration(
-              color: cs.surface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
-              boxShadow: [
-                BoxShadow(
-                  color: cs.shadow.withOpacity(0.12),
-                  blurRadius: 24,
-                  offset: const Offset(0, 12),
-                ),
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: cs.errorContainer.withOpacity(0.55),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: cs.error.withOpacity(0.28)),
-                      ),
-                      child: Icon(
-                        Icons.warning_amber_rounded,
-                        color: cs.error,
-                        size: 20,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        '정산 없이 출차 요청',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w900,
-                          fontSize: 16,
-                          color: cs.onSurface,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  width: double.infinity,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: cs.surfaceContainerLow,
-                    borderRadius: BorderRadius.circular(14),
-                    border:
-                        Border.all(color: cs.outlineVariant.withOpacity(0.85)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '현재 사전 정산이 되어있지 않습니다.',
-                        style: TextStyle(
-                          color: cs.onSurface,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 13,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        '그래도 출차 요청으로 이동하시겠습니까?',
-                        style: TextStyle(
-                          color: cs.onSurfaceVariant,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: cs.errorContainer.withOpacity(0.35),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: cs.error.withOpacity(0.30)),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.directions_car_filled,
-                                size: 16, color: cs.error),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                '차량: ${_plate.plateNumber}',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: cs.error,
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    OutlinedButton(
-                      onPressed: () => Navigator.pop(
-                          context, _DepartureOverrideChoice.cancel),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: cs.onSurface,
-                        side: BorderSide(
-                            color: cs.outlineVariant.withOpacity(0.85)),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 12,
-                        ),
-                      ),
-                      child: const Text(
-                        '취소',
-                        style: TextStyle(fontWeight: FontWeight.w900),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    OutlinedButton(
-                      onPressed: () => Navigator.pop(
-                          context, _DepartureOverrideChoice.goBilling),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: cs.primary,
-                        side: BorderSide(color: cs.primary.withOpacity(0.35)),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 12,
-                        ),
-                        backgroundColor: cs.primaryContainer.withOpacity(0.35),
-                      ),
-                      child: const Text(
-                        '정산하기',
-                        style: TextStyle(fontWeight: FontWeight.w900),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    FilledButton(
-                      onPressed: () => Navigator.pop(
-                          context, _DepartureOverrideChoice.proceed),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: cs.error,
-                        foregroundColor: cs.onError,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 12,
-                        ),
-                      ),
-                      child: const Text(
-                        '그래도 출차 요청',
-                        style: TextStyle(fontWeight: FontWeight.w900),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+      destinationLabel: '출차 요청',
     );
   }
 
@@ -845,7 +656,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
         return;
       }
 
-      final confirm = await showDialog<bool>(
+      final confirm = await showPromptOverlayDialog<bool>(
         context: context,
         builder: (_) => const ConfirmCancelFeeDialog(),
       );
@@ -947,12 +758,12 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
             final choice = await _showDepartureOverrideDialog();
             if (!mounted) return;
 
-            if (choice == _DepartureOverrideChoice.proceed) {
+            if (choice == ParkingCompletedOverrideChoice.proceed) {
               await _goDepartureRequested();
               return;
             }
 
-            if (choice == _DepartureOverrideChoice.goBilling) {
+            if (choice == ParkingCompletedOverrideChoice.goBilling) {
               await _triggerBillingRequiredAttention();
               return;
             }
@@ -1039,12 +850,6 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                   builder: (context, _) {
                     final attention = _attentionPulse.value;
 
-                    final shakeDx =
-                        math.sin(_attentionCtrl.value * math.pi * 10) *
-                            (1 - _attentionCtrl.value) *
-                            6;
-                    final scale = 1 + (attention * 0.012);
-
                     return ListView(
                       controller: _scrollController,
                       padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
@@ -1066,23 +871,17 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                           ),
                           const SizedBox(height: 12),
                         ],
-                        Transform.translate(
-                          offset: Offset(_needsBilling ? shakeDx : 0, 0),
-                          child: Transform.scale(
-                            scale: _needsBilling ? scale : 1,
-                            child: ParkingCompletedPlateSummaryCard(
-                              plateNumber: widget.plateNumber,
-                              area: _plate.area,
-                              location: location,
-                              billingType: billingType,
-                              isLocked: isLocked,
-                              lockedFee: lockedFee,
-                              paymentMethod: paymentMethod,
-                              statusMemo: statusMemo,
-                              attention: _needsBilling ? attention : 0,
-                            ),
-                          ),
-                        ),
+                                                ParkingCompletedPlateSummaryCard(
+                                                      plateNumber: widget.plateNumber,
+                                                      area: _plate.area,
+                                                      location: location,
+                                                      billingType: billingType,
+                                                      isLocked: isLocked,
+                                                      lockedFee: lockedFee,
+                                                      paymentMethod: paymentMethod,
+                                                      statusMemo: statusMemo,
+                                                      attention: _needsBilling ? attention : 0,
+                                                    ),
                         const SizedBox(height: 14),
                         ParkingCompletedSectionCard(
                           title: '핵심 작업',
@@ -1153,20 +952,15 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                                           label: '로그 확인',
                                           enabled: !_primaryBusy,
                                           onPressed: () async {
-                                            Navigator.pop(context);
-                                            Navigator.push(
-                                              rootContext,
-                                              MaterialPageRoute(
-                                                builder: (_) =>
-                                                    LogViewerBottomSheet(
-                                                  initialPlateNumber:
-                                                      widget.plateNumber,
-                                                  division: widget.division,
-                                                  area: widget.area,
-                                                  requestTime:
-                                                      _plate.requestTime,
-                                                ),
-                                              ),
+                                            await LogViewerBottomSheet.show(
+                                              context,
+                                              initialPlateNumber: widget.plateNumber,
+                                              division: widget.division,
+                                              area: widget.area,
+                                              requestTime: _plate.requestTime,
+                                              plateId: _plate.id.trim().isEmpty
+                                                  ? null
+                                                  : _plate.id.trim(),
                                             );
                                           },
                                         ),

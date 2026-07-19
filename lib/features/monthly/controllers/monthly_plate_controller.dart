@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -7,6 +9,7 @@ import '../../../shared/plate/domain/repositories/plate_repository.dart';
 import '../application/monthly_area_resolver.dart';
 import '../application/monthly_date_range_calculator.dart';
 import '../domain/monthly_parking_options.dart';
+import '../page/widgets/monthly_prompt_ui.dart';
 
 class MonthlyPlateController {
   final TextEditingController controllerFrontDigit = TextEditingController();
@@ -107,16 +110,12 @@ class MonthlyPlateController {
     return MonthlyAreaResolver.readCurrentArea(context);
   }
 
-  void _showMessage(BuildContext context, String message) {
-    if (!context.mounted) return;
-    ScaffoldMessenger.maybeOf(context)
-      ?..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(message),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+  void _showMessage(
+    BuildContext context,
+    String message, {
+    MonthlyPromptMessageTone tone = MonthlyPromptMessageTone.warning,
+  }) {
+    showMonthlyPromptMessage(context, message, tone: tone);
   }
 
   int _regularDurationValue() {
@@ -568,10 +567,12 @@ class MonthlyPlateController {
     isLoading = true;
     refreshUI();
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator()),
+    unawaited(
+      showMonthlyPromptProgress(
+        context: context,
+        title: '정기권 수정 중',
+        message: '변경 내용을 안전하게 저장하고 있습니다.',
+      ),
     );
 
     try {
@@ -594,14 +595,22 @@ class MonthlyPlateController {
       );
 
       if (!context.mounted) return;
-      _showMessage(context, '정기 주차 정보가 수정되었습니다.');
+      _showMessage(
+        context,
+        '정기 주차 정보가 수정되었습니다.',
+        tone: MonthlyPromptMessageTone.success,
+      );
       if (nav.canPop()) nav.pop();
       if (nav.canPop()) nav.pop();
       resetForm();
     } catch (e) {
       if (!context.mounted) return;
       if (nav.canPop()) nav.pop();
-      _showMessage(context, '수정에 실패했습니다. 다시 시도해주세요.');
+      _showMessage(
+        context,
+        '수정에 실패했습니다. 다시 시도해주세요.',
+        tone: MonthlyPromptMessageTone.danger,
+      );
       debugPrint('월주차 수정 실패: ${e.toString()}');
     } finally {
       isLoading = false;
@@ -624,10 +633,12 @@ class MonthlyPlateController {
     isLoading = true;
     refreshUI();
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator()),
+    unawaited(
+      showMonthlyPromptProgress(
+        context: context,
+        title: '정기권 등록 중',
+        message: '차량과 정기권 정보를 저장하고 있습니다.',
+      ),
     );
 
     try {
@@ -650,14 +661,22 @@ class MonthlyPlateController {
       );
 
       if (!context.mounted) return;
-      _showMessage(context, '정기 주차가 등록되었습니다.');
+      _showMessage(
+        context,
+        '정기 주차가 등록되었습니다.',
+        tone: MonthlyPromptMessageTone.success,
+      );
       if (nav.canPop()) nav.pop();
       if (nav.canPop()) nav.pop();
       resetForm();
     } catch (e) {
       if (!context.mounted) return;
       if (nav.canPop()) nav.pop();
-      _showMessage(context, '등록에 실패했습니다. 다시 시도해주세요.');
+      _showMessage(
+        context,
+        '등록에 실패했습니다. 다시 시도해주세요.',
+        tone: MonthlyPromptMessageTone.danger,
+      );
       debugPrint('월주차 등록 실패: ${e.toString()}');
     } finally {
       isLoading = false;

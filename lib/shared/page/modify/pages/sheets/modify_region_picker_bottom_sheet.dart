@@ -1,124 +1,97 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
+import '../../../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+
 Future<void> modifyRegionPickerBottomSheet({
   required BuildContext context,
   required String selectedRegion,
   required List<String> regions,
   required Function(String selected) onConfirm,
 }) async {
-  String tempSelected = selectedRegion;
+  if (regions.isEmpty) return;
+  var tempSelected = regions.contains(selectedRegion)
+      ? selectedRegion
+      : regions.first;
+  final initialIndex = regions.indexOf(tempSelected);
 
-  await showModalBottomSheet(
+  await showPromptOverlayBottomSheet<void>(
     context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    builder: (context) {
-      final cs = Theme.of(context).colorScheme;
-
-      return DraggableScrollableSheet(
-        initialChildSize: 0.5,
-        minChildSize: 0.4,
-        maxChildSize: 0.9,
-        builder: (_, scrollController) {
-          final initialIndex = regions.indexOf(selectedRegion).clamp(0, regions.isEmpty ? 0 : regions.length - 1);
-
-          return Container(
-            decoration: BoxDecoration(
-              color: cs.surface,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-              border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            child: Column(
-              children: [
-                Container(
-                  width: 40,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: cs.outlineVariant.withOpacity(0.9),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                Text(
-                  '지역 선택',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w900,
-                    color: cs.onSurface,
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                Expanded(
-                  child: CupertinoTheme(
-                    data: CupertinoThemeData(
-                      
-                      primaryColor: cs.primary,
-                      brightness: cs.brightness,
-                      textTheme: CupertinoTextThemeData(
-                        pickerTextStyle: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w900,
-                          color: cs.onSurface,
-                        ),
-                      ),
+    useSafeArea: false,
+    builder: (sheetContext) => DraggableScrollableSheet(
+      initialChildSize: .52,
+      minChildSize: .4,
+      maxChildSize: .9,
+      builder: (sheetContext, _) {
+        final tokens = PromptUiTheme.of(sheetContext);
+        return PromptSheetScaffold(
+          title: '지역 선택',
+          icon: Icons.public_rounded,
+          onClose: () => Navigator.of(sheetContext).pop(),
+          body: Column(
+            children: [
+              Expanded(
+                child: CupertinoTheme(
+                  data: CupertinoThemeData(
+                    primaryColor: tokens.accent,
+                    brightness: tokens.brightness,
+                    textTheme: CupertinoTextThemeData(
+                      pickerTextStyle: Theme.of(sheetContext)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(
+                            color: tokens.textPrimary,
+                            fontWeight: FontWeight.w800,
+                          ),
                     ),
-                    child: CupertinoPicker(
-                      scrollController: FixedExtentScrollController(
-                        initialItem: initialIndex,
-                      ),
-                      itemExtent: 48,
-                      onSelectedItemChanged: (index) {
-                        tempSelected = regions[index];
-                      },
-                      children: regions.map((region) {
-                        return Center(
-                          child: Text(
-                            region,
-                            
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w900,
-                              color: cs.onSurface,
+                  ),
+                  child: CupertinoPicker(
+                    scrollController: FixedExtentScrollController(
+                      initialItem: initialIndex,
+                    ),
+                    itemExtent: 48,
+                    onSelectedItemChanged: (index) {
+                      tempSelected = regions[index];
+                    },
+                    children: regions
+                        .map(
+                          (region) => Center(
+                            child: Text(
+                              region,
+                              style: Theme.of(sheetContext)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(
+                                    color: tokens.textPrimary,
+                                    fontWeight: FontWeight.w800,
+                                  ),
                             ),
                           ),
-                        );
-                      }).toList(),
-                    ),
+                        )
+                        .toList(),
                   ),
                 ),
-
-                Divider(height: 1, color: cs.outlineVariant.withOpacity(0.85)),
-                const SizedBox(height: 12),
-
-                
-                
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: cs.primary,
-                      foregroundColor: cs.onPrimary,
-                      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
-                    ),
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      onConfirm(tempSelected);
-                    },
-                    child: const Text('확인'),
-                  ),
+              ),
+              Divider(height: 1, color: tokens.borderSubtle),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                child: PromptButton(
+                  label: '확인',
+                  icon: Icons.check_rounded,
+                  expand: true,
+                  haptic: PromptHaptic.selection,
+                  onPressed: () {
+                    Navigator.of(sheetContext).pop();
+                    onConfirm(tempSelected);
+                  },
                 ),
-
-                const SizedBox(height: 24),
-              ],
-            ),
-          );
-        },
-      );
-    },
+              ),
+            ],
+          ),
+        );
+      },
+    ),
   );
 }

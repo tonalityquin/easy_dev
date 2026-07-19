@@ -8,8 +8,6 @@ class UserStatementSignaturePainter extends CustomPainter {
     required this.background,
     required this.overlayName,
     required this.overlayDateText,
-
-    
     required this.guideColor,
     required this.hintColor,
     required this.overlayTextColor,
@@ -21,18 +19,14 @@ class UserStatementSignaturePainter extends CustomPainter {
   final Color background;
   final String overlayName;
   final String overlayDateText;
-
   final Color guideColor;
   final Color hintColor;
   final Color overlayTextColor;
 
   @override
   void paint(Canvas canvas, Size size) {
-    
-    final bg = Paint()..color = background;
-    canvas.drawRect(Offset.zero & size, bg);
+    canvas.drawRect(Offset.zero & size, Paint()..color = background);
 
-    
     final guide = Paint()
       ..color = guideColor
       ..strokeWidth = 1;
@@ -47,47 +41,42 @@ class UserStatementSignaturePainter extends CustomPainter {
       guide,
     );
 
-    
-    final p = Paint()
+    final stroke = Paint()
       ..color = color
       ..strokeWidth = strokeWidth
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round
       ..style = PaintingStyle.stroke;
 
-    for (int i = 0; i < points.length - 1; i++) {
-      final a = points[i];
-      final b = points[i + 1];
-      if (a != null && b != null) {
-        canvas.drawLine(a, b, p);
+    for (int index = 0; index < points.length - 1; index++) {
+      final current = points[index];
+      final next = points[index + 1];
+      if (current != null && next != null) {
+        canvas.drawLine(current, next, stroke);
       }
     }
 
-    
-    final hasAny = points.any((e) => e != null);
-    if (!hasAny) {
-      final hint = TextSpan(
-        text: '화면 전체가 서명 영역입니다. 서명을 시작해 주세요.',
-        style: TextStyle(
-          color: hintColor,
-          fontSize: 14,
+    if (!points.any((point) => point != null)) {
+      final hintPainter = TextPainter(
+        text: TextSpan(
+          text: '화면 전체가 서명 영역입니다. 서명을 시작해 주세요.',
+          style: TextStyle(
+            color: hintColor,
+            fontSize: 14,
+          ),
         ),
-      );
-      final tp = TextPainter(
-        text: hint,
         textDirection: TextDirection.ltr,
       )..layout(maxWidth: size.width - 16);
-      tp.paint(
+      hintPainter.paint(
         canvas,
         Offset(
-          (size.width - tp.width) / 2,
-          (size.height - tp.height) / 2,
+          (size.width - hintPainter.width) / 2,
+          (size.height - hintPainter.height) / 2,
         ),
       );
     }
 
-    
-    final overlayTP = TextPainter(
+    final overlayPainter = TextPainter(
       text: TextSpan(
         text: '서명자: $overlayName   서명일시: $overlayDateText',
         style: TextStyle(
@@ -98,22 +87,26 @@ class UserStatementSignaturePainter extends CustomPainter {
       textDirection: TextDirection.ltr,
     )..layout(maxWidth: size.width - 16);
 
-    const pad = 8.0;
-    final dx = size.width - overlayTP.width - pad;
-    final dy = size.height - overlayTP.height - pad;
-    overlayTP.paint(canvas, Offset(dx, dy));
+    const padding = 8.0;
+    overlayPainter.paint(
+      canvas,
+      Offset(
+        size.width - overlayPainter.width - padding,
+        size.height - overlayPainter.height - padding,
+      ),
+    );
   }
 
   @override
-  bool shouldRepaint(UserStatementSignaturePainter old) {
-    return old.points != points ||
-        old.strokeWidth != strokeWidth ||
-        old.color != color ||
-        old.background != background ||
-        old.overlayName != overlayName ||
-        old.overlayDateText != overlayDateText ||
-        old.guideColor != guideColor ||
-        old.hintColor != hintColor ||
-        old.overlayTextColor != overlayTextColor;
+  bool shouldRepaint(UserStatementSignaturePainter oldDelegate) {
+    return oldDelegate.points != points ||
+        oldDelegate.strokeWidth != strokeWidth ||
+        oldDelegate.color != color ||
+        oldDelegate.background != background ||
+        oldDelegate.overlayName != overlayName ||
+        oldDelegate.overlayDateText != overlayDateText ||
+        oldDelegate.guideColor != guideColor ||
+        oldDelegate.hintColor != hintColor ||
+        oldDelegate.overlayTextColor != overlayTextColor;
   }
 }

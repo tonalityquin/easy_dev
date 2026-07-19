@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../shared/google_calendar/google_event_colors.dart';
 import '../application/sprint_mode_store.dart';
 import '../domain/sprint_models.dart';
 import 'sprint_ui.dart';
@@ -9,14 +10,11 @@ Future<bool> showSprintProjectEditSheet({
   required SprintModeStore store,
   required SprintProject project,
 }) async {
-  final colors = Theme.of(context).colorScheme;
-  final result = await showModalBottomSheet<bool>(
+  final result = await sprintShowBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
     showDragHandle: true,
-    backgroundColor: colors.surface,
-    barrierColor: colors.scrim,
     builder: (_) => _SprintProjectEditSheet(
       store: store,
       project: project,
@@ -42,8 +40,10 @@ class _SprintProjectEditSheet extends StatefulWidget {
 class _SprintProjectEditSheetState extends State<_SprintProjectEditSheet> {
   late final TextEditingController _nameController;
   late String _iconKey;
+  late String _googleColorId;
   DateTime? _targetStartDate;
   DateTime? _targetDate;
+  late bool _indefinite;
   bool _saving = false;
 
   @override
@@ -51,8 +51,10 @@ class _SprintProjectEditSheetState extends State<_SprintProjectEditSheet> {
     super.initState();
     _nameController = TextEditingController(text: widget.project.name);
     _iconKey = widget.project.iconKey;
+    _googleColorId = widget.project.googleColorId;
     _targetStartDate = widget.project.targetStartDate;
     _targetDate = widget.project.targetDate;
+    _indefinite = widget.project.isIndefinite;
   }
 
   @override
@@ -61,12 +63,22 @@ class _SprintProjectEditSheetState extends State<_SprintProjectEditSheet> {
     super.dispose();
   }
 
+  void _setIndefinite(bool value) {
+    setState(() {
+      _indefinite = value;
+      if (value) {
+        _targetStartDate = null;
+        _targetDate = null;
+      }
+    });
+  }
+
   Future<void> _pickTargetStartDate() async {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final current = _targetStartDate ?? today;
     final firstDate = current.isBefore(today) ? current : today;
-    final selected = await showDatePicker(
+    final selected = await sprintShowDatePicker(
       context: context,
       initialDate: current,
       firstDate: firstDate,
@@ -88,7 +100,7 @@ class _SprintProjectEditSheetState extends State<_SprintProjectEditSheet> {
         : existing != null && existing.isBefore(minimum)
             ? existing
             : minimum;
-    final selected = await showDatePicker(
+    final selected = await sprintShowDatePicker(
       context: context,
       initialDate: initial,
       firstDate: firstDate,
@@ -122,6 +134,7 @@ class _SprintProjectEditSheetState extends State<_SprintProjectEditSheet> {
       projectId: widget.project.id,
       name: name,
       iconKey: _iconKey,
+      googleColorId: _googleColorId,
       targetStartDate: _targetStartDate,
       targetDate: _targetDate,
     );
@@ -215,26 +228,89 @@ class _SprintProjectEditSheetState extends State<_SprintProjectEditSheet> {
               }).toList(growable: false),
             ),
             const SizedBox(height: 18),
-            _ProjectDateField(
-              title: '목표 시작일',
-              icon: Icons.play_circle_outline_rounded,
-              value: _targetStartDate,
-              duration: duration,
-              onPick: _saving ? null : _pickTargetStartDate,
-              onClear: _saving || _targetStartDate == null
-                  ? null
-                  : () => setState(() => _targetStartDate = null),
+            Text(
+              '프로젝트 색상',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
             ),
             const SizedBox(height: 10),
-            _ProjectDateField(
-              title: '목표 완료일',
-              icon: Icons.flag_outlined,
-              value: _targetDate,
+            GoogleEventColorPicker(
+              selectedId: _googleColorId,
               duration: duration,
-              onPick: _saving ? null : _pickTargetDate,
-              onClear: _saving || _targetDate == null
-                  ? null
-                  : () => setState(() => _targetDate = null),
+              disabledColorIds: widget.store
+                  .projectColorOwners(excludingProjectId: widget.project.id)
+                  .keys
+                  .toSet(),
+              disabledLabels: widget.store.projectColorOwners(
+                excludingProjectId: widget.project.id,
+              ),
+              onSelected: _saving
+                  ? (_) {}
+                  : (colorId) {
+                      setState(() => _googleColorId = colorId);
+                    },
+            ),
+            const SizedBox(height: 18),
+            AnimatedContainer(
+              duration: duration,
+              curve: Curves.easeOutCubic,
+              decoration: BoxDecoration(
+                color: _indefinite
+                    ? colors.primaryContainer
+                    : colors.surfaceContainerHigh,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: _indefinite
+                      ? colors.primary
+                      : colors.outlineVariant,
+                ),
+              ),
+              child: SwitchListTile(
+                value: _indefinite,
+                onChanged: _saving ? null : _setIndefinite,
+                title: const Text(
+                  '무기한 프로젝트',
+                  style: TextStyle(fontWeight: FontWeight.w900),
+                ),
+                secondary: const Icon(Icons.all_inclusive_rounded),
+              ),
+            ),
+            AnimatedSize(
+              duration: duration,
+              curve: Curves.easeOutCubic,
+              child: _indefinite
+                  ? const SizedBox.shrink()
+                  : Padding(
+                      padding: const EdgeInsets.only(top: 10),
+                      child: Column(
+                        children: [
+                          _ProjectDateField(
+                            title: '목표 시작일',
+                            icon: Icons.play_circle_outline_rounded,
+                            value: _targetStartDate,
+                            duration: duration,
+                            onPick: _saving ? null : _pickTargetStartDate,
+                            onClear: _saving || _targetStartDate == null
+                                ? null
+                                : () => setState(
+                                      () => _targetStartDate = null,
+                                    ),
+                          ),
+                          const SizedBox(height: 10),
+                          _ProjectDateField(
+                            title: '목표 완료일',
+                            icon: Icons.flag_outlined,
+                            value: _targetDate,
+                            duration: duration,
+                            onPick: _saving ? null : _pickTargetDate,
+                            onClear: _saving || _targetDate == null
+                                ? null
+                                : () => setState(() => _targetDate = null),
+                          ),
+                        ],
+                      ),
+                    ),
             ),
             AnimatedSize(
               duration: duration,

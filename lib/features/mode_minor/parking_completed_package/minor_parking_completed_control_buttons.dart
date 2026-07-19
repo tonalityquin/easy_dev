@@ -2,31 +2,35 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../app/models/capability.dart';
+import '../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
 import '../../account/applications/user_state.dart';
 import '../../dev/application/area_state.dart';
 import '../../dashboard/widgets/productivity_sheet.dart';
 import '../minor_departure_completed_bottom_sheet.dart';
 
 class MinorParkingCompletedControlButtons extends StatelessWidget {
-  final VoidCallback showSearchDialog;
-
   const MinorParkingCompletedControlButtons({
     super.key,
     required this.showSearchDialog,
   });
 
-  static const int idxProductivity = 0;
-  static const int idxSmartSearch = 1;
-  static const int idxDepartureCompleted = 2;
+  final VoidCallback showSearchDialog;
+
+  Future<void> _openDepartureCompleted(BuildContext context) async {
+    await showPromptOverlayBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      transparentBackground: true,
+      builder: (_) => const MinorDepartureCompletedBottomSheet(),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    final Color navBg = cs.surface;
-    final Color selectedItemColor = cs.primary;
-    final Color unselectedItemColor = cs.onSurfaceVariant.withOpacity(.65);
-
+    final tokens = PromptUiTheme.of(context);
     final hasMonthlyCapability = context.select<AreaState, bool>(
       (state) => state.capabilitiesOfCurrentArea.contains(Capability.monthly),
     );
@@ -35,53 +39,54 @@ class MinorParkingCompletedControlButtons extends StatelessWidget {
     );
     final canUseMonthly = hasMonthlyCapability && !isFieldCommon;
 
-    final Color productivityColor =
-        canUseMonthly ? cs.secondary : cs.onSurfaceVariant.withOpacity(.38);
-    final Color searchColor = cs.error;
-    final Color successColor = cs.tertiary;
-
-    return BottomNavigationBar(
-      type: BottomNavigationBarType.fixed,
-      backgroundColor: navBg,
-      elevation: 0,
-      selectedFontSize: 12,
-      unselectedFontSize: 12,
-      iconSize: 24,
-      selectedItemColor: selectedItemColor,
-      unselectedItemColor: unselectedItemColor,
-      items: [
-        BottomNavigationBarItem(
-          icon: Icon(Icons.dashboard_customize_rounded, color: productivityColor),
-          label: '정기 주차',
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: tokens.surface,
+        border: Border(top: BorderSide(color: tokens.borderSubtle)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 7, 12, 6),
+        child: Row(
+          children: [
+            Expanded(
+              child: PromptButton(
+                label: '정기 주차',
+                icon: Icons.dashboard_customize_rounded,
+                onPressed: canUseMonthly
+                    ? () => ProductivitySheet.togglePanel()
+                    : null,
+                variant: PromptButtonVariant.secondary,
+                expand: true,
+                minHeight: 50,
+                haptic: PromptHaptic.selection,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: PromptButton(
+                label: '검색',
+                icon: Icons.manage_search_rounded,
+                onPressed: showSearchDialog,
+                variant: PromptButtonVariant.secondary,
+                expand: true,
+                minHeight: 50,
+                haptic: PromptHaptic.selection,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: PromptButton(
+                label: '출차 완료',
+                icon: Icons.directions_car_filled_rounded,
+                onPressed: () => _openDepartureCompleted(context),
+                expand: true,
+                minHeight: 50,
+                haptic: PromptHaptic.selection,
+              ),
+            ),
+          ],
         ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.manage_search_rounded, color: searchColor),
-          label: '스마트 검색',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.directions_car_filled_rounded, color: successColor),
-          label: '출차 완료',
-        ),
-      ],
-      onTap: (index) async {
-        switch (index) {
-          case idxProductivity:
-            if (!canUseMonthly) return;
-            await ProductivitySheet.togglePanel();
-            break;
-          case idxSmartSearch:
-            showSearchDialog();
-            break;
-          case idxDepartureCompleted:
-            showModalBottomSheet(
-              context: context,
-              isScrollControlled: true,
-              backgroundColor: Colors.transparent,
-              builder: (_) => const MinorDepartureCompletedBottomSheet(),
-            );
-            break;
-        }
-      },
+      ),
     );
   }
 }

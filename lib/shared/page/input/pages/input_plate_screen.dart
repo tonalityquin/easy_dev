@@ -4,6 +4,10 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import '../../../../app/utils/status_dialog.dart';
+import '../../../../app/utils/snackbar_helper.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
 import '../../../../features/dev/application/area_state.dart';
 import '../../../../features/monthly/page/sheets/widgets/keypad/kor_keypad.dart';
 import '../../../../features/monthly/page/sheets/widgets/keypad/num_keypad.dart';
@@ -19,7 +23,6 @@ import 'widgets/input_bottom_action_section.dart';
 import 'widgets/input_custom_status_section.dart';
 import 'widgets/input_location_section.dart';
 import 'widgets/input_photo_section.dart';
-import 'widgets/input_plate_section.dart';
 
 double _contrastRatio(Color a, Color b) {
   final la = a.computeLuminance();
@@ -170,14 +173,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
   void _showFloatingMessage(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.maybeOf(context)
-      ?..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(message),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+    showSelectedSnackbar(context, message, usePromptUi: true);
   }
 
   Future<void> _loadHasMonthlyParkingFlag() async {
@@ -276,11 +272,17 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     }
 
     try {
-      await _sheetController.animateTo(
-        target,
-        duration: const Duration(milliseconds: 280),
-        curve: Curves.easeInOutCubic,
-      );
+      final reduceMotion =
+          MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+      if (reduceMotion) {
+        _sheetController.jumpTo(target);
+      } else {
+        await _sheetController.animateTo(
+          target,
+          duration: PromptUiMotion.component,
+          curve: PromptUiMotion.standard,
+        );
+      }
       if (mounted) setState(() => _sheetOpen = open);
     } catch (_) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -307,43 +309,23 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   }) async {
     if (!mounted) return;
 
-    final cs = Theme.of(context).colorScheme;
-
     final safeArea = _safeArea(area);
     final customStatusText =
         (customStatus ?? '').trim().isEmpty ? '-' : customStatus!.trim();
 
-    await showGeneralDialog<void>(
+    await showPromptOverlayDialog<void>(
       context: context,
-      barrierDismissible: true,
       barrierLabel: 'plate_status_loaded',
-      barrierColor: cs.scrim.withOpacity(0.55),
-      transitionDuration: const Duration(milliseconds: 220),
-      pageBuilder: (ctx, a1, a2) {
-        return Center(
-          child: _PlateStatusLoadedDialog(
-            safeArea: safeArea,
-            plateNumber: plateNumber,
-            customStatusText: customStatusText,
-            onClose: () => Navigator.of(ctx).pop(),
-            onGoMemo: () async {
-              Navigator.of(ctx).pop();
-              await _openSheetToMemoPage();
-            },
-          ),
-        );
-      },
-      transitionBuilder: (ctx, animation, secondary, child) {
-        final curved =
-            CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
-        return FadeTransition(
-          opacity: curved,
-          child: ScaleTransition(
-            scale: Tween<double>(begin: 0.96, end: 1.0).animate(curved),
-            child: child,
-          ),
-        );
-      },
+      builder: (dialogContext) => _PlateStatusLoadedDialog(
+        safeArea: safeArea,
+        plateNumber: plateNumber,
+        customStatusText: customStatusText,
+        onClose: () => Navigator.of(dialogContext).pop(),
+        onGoMemo: () async {
+          Navigator.of(dialogContext).pop();
+          await _openSheetToMemoPage();
+        },
+      ),
     );
   }
 
@@ -565,6 +547,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       await StatusDialog.showFailure(
         context,
         title: StatusDialog.invalidPlateInput,
+        usePromptUi: true,
       );
       return;
     }
@@ -585,6 +568,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
         await StatusDialog.showFailure(
           context,
           title: StatusDialog.monthlyDocNotFound,
+          usePromptUi: true,
         );
       } else if (result.failure == _MonthlyFetchFailureType.readError) {
         _showFloatingMessage('정기 주차 정보를 불러오지 못했습니다.');
@@ -623,6 +607,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       await StatusDialog.showFailure(
         context,
         title: StatusDialog.invalidPlateInput,
+        usePromptUi: true,
       );
       return;
     }
@@ -936,74 +921,113 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     final result = _lastOcrSessionResult;
     if (result == null || !mounted) return;
 
-    final cs = Theme.of(context).colorScheme;
+    final tokens = PromptUiTheme.of(context);
     final text = _buildOcrClipboardText(result);
 
-    await showDialog<void>(
+    await showPromptOverlayDialog<void>(
       context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: cs.surface,
-        title: const Text('OCR 세션 로그'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('종료 유형: ${_ocrExitTypeLabel(result.exitType)}'),
-                Text('최종 번호판: ${result.plate ?? '-'}'),
-                Text('선택 칩: ${result.selectedChipLabel ?? '-'}'),
-                Text('시도 횟수: ${result.attemptCount}'),
-                Text('마지막 실패 사유: ${result.lastFailureReason ?? '-'}'),
-                Text('weakFront: ${result.weakFront ?? '-'}'),
-                Text('weakBack: ${result.weakBack ?? '-'}'),
-                Text('weakObservedValue: ${result.weakObservedValue ?? '-'}'),
-                Text('mid 보정 필요: ${result.requiresMidCompletion}'),
-                Text(
-                  'mid 제안: ${result.weakMidSuggestions.isEmpty ? '-' : result.weakMidSuggestions.join(', ')}',
-                ),
-                Text(
-                  '최종 등록 시 보정 학습 연결: ${result.requiresMidCompletion && result.weakObservedValue != null}',
-                ),
-                const SizedBox(height: 10),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: cs.surfaceContainerLow,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: cs.outlineVariant.withOpacity(0.85),
+      builder: (dialogContext) => PromptDialogFrame(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560, maxHeight: 680),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: tokens.infoContainer,
+                      borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                      border: Border.all(color: tokens.info.withOpacity(.36)),
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(Icons.article_outlined, color: tokens.info),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'OCR 세션 로그',
+                      style: Theme.of(dialogContext).textTheme.titleLarge?.copyWith(
+                            color: tokens.textPrimary,
+                            fontWeight: FontWeight.w800,
+                          ),
                     ),
                   ),
-                  child: SelectableText(
-                    result.logText.isEmpty ? '로그가 없습니다.' : result.logText,
-                    style: TextStyle(
-                      fontSize: 12,
-                      height: 1.35,
-                      color: cs.onSurface,
-                    ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('종료 유형: ${_ocrExitTypeLabel(result.exitType)}'),
+                      Text('최종 번호판: ${result.plate ?? '-'}'),
+                      Text('선택 칩: ${result.selectedChipLabel ?? '-'}'),
+                      Text('시도 횟수: ${result.attemptCount}'),
+                      Text('마지막 실패 사유: ${result.lastFailureReason ?? '-'}'),
+                      Text('weakFront: ${result.weakFront ?? '-'}'),
+                      Text('weakBack: ${result.weakBack ?? '-'}'),
+                      Text('weakObservedValue: ${result.weakObservedValue ?? '-'}'),
+                      Text('mid 보정 필요: ${result.requiresMidCompletion}'),
+                      Text(
+                        'mid 제안: ${result.weakMidSuggestions.isEmpty ? '-' : result.weakMidSuggestions.join(', ')}',
+                      ),
+                      Text(
+                        '최종 등록 시 보정 학습 연결: ${result.requiresMidCompletion && result.weakObservedValue != null}',
+                      ),
+                      const SizedBox(height: 12),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: tokens.surfaceOverlay,
+                          borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                          border: Border.all(color: tokens.borderSubtle),
+                        ),
+                        child: SelectableText(
+                          result.logText.isEmpty ? '로그가 없습니다.' : result.logText,
+                          style: TextStyle(
+                            fontSize: 12,
+                            height: 1.4,
+                            color: tokens.textPrimary,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: PromptButton(
+                      label: '복사',
+                      icon: Icons.copy_rounded,
+                      variant: PromptButtonVariant.secondary,
+                      onPressed: () async {
+                        await Clipboard.setData(ClipboardData(text: text));
+                        if (!dialogContext.mounted) return;
+                        Navigator.of(dialogContext).pop();
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: PromptButton(
+                      label: '닫기',
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () async {
-              await Clipboard.setData(ClipboardData(text: text));
-              if (!mounted) return;
-              Navigator.pop(context);
-            },
-            child: const Text('복사'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('닫기'),
-          ),
-        ],
       ),
     );
   }
@@ -1041,6 +1065,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       context: context,
       selectedRegion: controller.dropdownValue,
       regions: controller.regions,
+      usePromptUi: true,
       onConfirm: (region) {
         setState(() {
           controller.dropdownValue = region;
@@ -1051,8 +1076,34 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
   Future<void> _openLiveScanner() async {
     final sessionId = const Uuid().v4();
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final result = await Navigator.of(context).push<LiveOcrSessionResult>(
-      MaterialPageRoute(builder: (_) => LiveOcrPage(sessionId: sessionId)),
+      PageRouteBuilder<LiveOcrSessionResult>(
+        pageBuilder: (_, animation, secondaryAnimation) =>
+            LiveOcrPage(sessionId: sessionId),
+        transitionDuration:
+            reduceMotion ? Duration.zero : PromptUiMotion.component,
+        reverseTransitionDuration:
+            reduceMotion ? Duration.zero : PromptUiMotion.selection,
+        transitionsBuilder: (_, animation, secondaryAnimation, child) {
+          final curved = CurvedAnimation(
+            parent: animation,
+            curve: PromptUiMotion.enter,
+            reverseCurve: PromptUiMotion.exit,
+          );
+          return FadeTransition(
+            opacity: curved,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, .025),
+                end: Offset.zero,
+              ).animate(curved),
+              child: child,
+            ),
+          );
+        },
+      ),
     );
     if (!mounted || result == null) return;
 
@@ -1247,8 +1298,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   }
 
   Widget _buildBottomBar() {
-    final cs = Theme.of(context).colorScheme;
-
     final actionButton = InputBottomActionSection(
       controller: controller,
       mountedContext: mounted,
@@ -1257,26 +1306,16 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
     final Widget ocrButton = Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-      child: SizedBox(
-        width: double.infinity,
-        child: OutlinedButton.icon(
+      child: PromptAnimatedReveal(
+        delay: const Duration(milliseconds: 140),
+        offset: const Offset(0, .025),
+        child: PromptButton(
+          label: '실시간 OCR 다시 스캔',
+          icon: Icons.camera_alt_outlined,
+          variant: PromptButtonVariant.secondary,
+          expand: true,
+          haptic: PromptHaptic.selection,
           onPressed: _openLiveScanner,
-          icon: const Icon(Icons.camera_alt_outlined),
-          label: const Text('실시간 OCR 다시 스캔'),
-          style: OutlinedButton.styleFrom(
-            backgroundColor: cs.surface,
-            foregroundColor: cs.onSurface,
-            side: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
-            minimumSize: const Size.fromHeight(55),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ).copyWith(
-            overlayColor: MaterialStateProperty.resolveWith<Color?>(
-              (states) => states.contains(MaterialState.pressed)
-                  ? cs.outlineVariant.withOpacity(0.12)
-                  : null,
-            ),
-          ),
         ),
       ),
     );
@@ -1300,24 +1339,24 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
           ocrButton,
         ],
       );
-    } else {
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Padding(
-            padding:
-                const EdgeInsets.only(left: 12, right: 12, top: 6, bottom: 8),
-            child: _buildDock(),
-          ),
-          InputBottomNavigation(
-            showKeypad: false,
-            keypad: const SizedBox.shrink(),
-            actionButton: actionButton,
-          ),
-          ocrButton,
-        ],
-      );
     }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          padding:
+              const EdgeInsets.only(left: 12, right: 12, top: 6, bottom: 8),
+          child: _buildDock(),
+        ),
+        InputBottomNavigation(
+          showKeypad: false,
+          keypad: const SizedBox.shrink(),
+          actionButton: actionButton,
+        ),
+        ocrButton,
+      ],
+    );
   }
 
   Widget _buildScreenTag(BuildContext context) {
@@ -1435,10 +1474,12 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
             ],
           );
 
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final content = AnimatedSwitcher(
-      duration: const Duration(milliseconds: 220),
-      switchInCurve: Curves.easeOutCubic,
-      switchOutCurve: Curves.easeInCubic,
+      duration: reduceMotion ? Duration.zero : PromptUiMotion.component,
+      switchInCurve: PromptUiMotion.enter,
+      switchOutCurve: PromptUiMotion.exit,
       transitionBuilder: (child, animation) {
         final begin = _dockSlideFromRight
             ? const Offset(0.10, 0)
@@ -1468,8 +1509,13 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    return PromptUiScope(
+      child: Builder(builder: _buildPromptScreen),
+    );
+  }
 
+  Widget _buildPromptScreen(BuildContext context) {
+    final tokens = PromptUiTheme.of(context);
     final viewInset = MediaQuery.of(context).viewInsets.bottom;
     final sysBottom = MediaQuery.of(context).padding.bottom;
     final bottomSafePadding =
@@ -1490,17 +1536,17 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
         }
       },
       child: Scaffold(
-        backgroundColor: cs.background,
+        backgroundColor: tokens.canvas,
         appBar: AppBar(
           automaticallyImplyLeading: false,
           centerTitle: true,
-          backgroundColor: cs.surface,
-          foregroundColor: cs.onSurface,
+          backgroundColor: tokens.surface,
+          foregroundColor: tokens.textPrimary,
           elevation: 0,
-          surfaceTintColor: Colors.transparent,
+          surfaceTintColor: tokens.transparent,
           shape: Border(
             bottom: BorderSide(
-              color: cs.outlineVariant.withOpacity(0.85),
+              color: tokens.borderSubtle,
               width: 1,
             ),
           ),
@@ -1520,14 +1566,14 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w700,
-                            color: cs.onSurfaceVariant,
+                            color: tokens.textSecondary,
                           ),
                         ),
                         const SizedBox(width: 8),
                         Container(
                           width: 1,
                           height: 16,
-                          color: cs.outlineVariant.withOpacity(0.85),
+                          color: tokens.borderSubtle,
                         ),
                         const SizedBox(width: 8),
                         Text(
@@ -1537,7 +1583,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w900,
-                            color: cs.onSurface,
+                            color: tokens.textPrimary,
                           ),
                         ),
                       ],
@@ -1562,12 +1608,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        InputPlateSection(
-                          selectedManufacturerName:
-                              controller.selectedManufacturerName,
-                          selectedModelName: controller.selectedModelName,
-                        ),
-                        const SizedBox(height: 16),
                         InputLocationSection(
                           locationController: controller.locationController,
                         ),
@@ -1601,11 +1641,11 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                         borderRadius: const BorderRadius.vertical(
                             top: Radius.circular(16)),
                         border: Border.all(
-                            color: cs.outlineVariant.withOpacity(0.85)),
-                        color: cs.surface,
+                            color: tokens.borderSubtle),
+                        color: tokens.surfaceRaised,
                         boxShadow: [
                           BoxShadow(
-                            color: cs.shadow.withOpacity(0.12),
+                            color: tokens.shadow,
                             blurRadius: 10,
                             offset: const Offset(0, -4),
                           ),
@@ -1704,196 +1744,166 @@ class _PlateStatusLoadedDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final theme = Theme.of(context);
-
-    return Dialog(
-      insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
-      backgroundColor: cs.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+    final tokens = PromptUiTheme.of(context);
+    final textTheme = Theme.of(context).textTheme;
+    return PromptDialogFrame(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 420),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: tokens.successContainer,
+                    borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                    border: Border.all(color: tokens.success.withOpacity(.36)),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(
+                    Icons.check_rounded,
+                    color: tokens.success,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    '불러오기 완료',
+                    style: textTheme.titleLarge?.copyWith(
+                      color: tokens.textPrimary,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                PromptIconButton(
+                  icon: Icons.close_rounded,
+                  tooltip: '닫기',
+                  onPressed: onClose,
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '저장된 메모를 화면에 반영했습니다.',
+              style: textTheme.bodyMedium?.copyWith(
+                color: tokens.textSecondary,
+                height: 1.35,
+              ),
+            ),
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+              decoration: BoxDecoration(
+                color: tokens.surfaceOverlay,
+                borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                border: Border.all(color: tokens.borderSubtle),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '지역: $safeArea',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: textTheme.bodySmall?.copyWith(
+                        color: tokens.textPrimary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Flexible(
+                    child: Text(
+                      '번호판: $plateNumber',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: textTheme.bodySmall?.copyWith(
+                        color: tokens.textSecondary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: tokens.surfaceOverlay,
+                borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                border: Border.all(color: tokens.borderSubtle),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
                     width: 36,
                     height: 36,
                     decoration: BoxDecoration(
-                      color: cs.primary.withOpacity(0.10),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: cs.primary.withOpacity(0.18)),
+                      color: tokens.accentContainer,
+                      borderRadius: BorderRadius.circular(PromptUiShapes.control),
                     ),
                     alignment: Alignment.center,
-                    child:
-                        Icon(Icons.check_rounded, color: cs.primary, size: 20),
+                    child: Icon(
+                      Icons.note_alt_rounded,
+                      size: 19,
+                      color: tokens.onAccentContainer,
+                    ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: Text(
-                      '불러오기 완료',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 0.2,
-                        color: cs.onSurface,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '메모',
+                          style: textTheme.labelMedium?.copyWith(
+                            color: tokens.textSecondary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          customStatusText,
+                          style: textTheme.bodyMedium?.copyWith(
+                            color: tokens.textPrimary,
+                            fontWeight: FontWeight.w600,
+                            height: 1.4,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  IconButton(
-                    tooltip: '닫기',
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: PromptButton(
+                    label: '닫기',
+                    variant: PromptButtonVariant.secondary,
                     onPressed: onClose,
-                    icon: Icon(Icons.close_rounded, color: cs.onSurface),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  '저장된 메모를 화면에 반영했습니다.',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: cs.onSurfaceVariant,
-                    height: 1.35,
                   ),
                 ),
-              ),
-              const SizedBox(height: 14),
-              Container(
-                width: double.infinity,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                decoration: BoxDecoration(
-                  color: cs.surfaceContainerLow,
-                  borderRadius: BorderRadius.circular(14),
-                  border:
-                      Border.all(color: cs.outlineVariant.withOpacity(0.85)),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        '지역: $safeArea',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                          color: cs.onSurface,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Flexible(
-                      child: Text(
-                        '번호판: $plateNumber',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                          color: cs.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: cs.surfaceContainerLow,
-                  borderRadius: BorderRadius.circular(14),
-                  border:
-                      Border.all(color: cs.outlineVariant.withOpacity(0.85)),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: 34,
-                      height: 34,
-                      decoration: BoxDecoration(
-                        color: cs.primary.withOpacity(0.10),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: cs.primary.withOpacity(0.18)),
-                      ),
-                      alignment: Alignment.center,
-                      child: Icon(Icons.note_alt_rounded,
-                          size: 18, color: cs.primary),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '메모',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w900,
-                              color: cs.onSurfaceVariant,
-                              letterSpacing: 0.2,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            customStatusText,
-                            style: TextStyle(
-                              fontSize: 13,
-                              height: 1.35,
-                              color: cs.onSurface,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: onClose,
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14)),
-                        side: BorderSide(
-                            color: cs.outlineVariant.withOpacity(0.85)),
-                        foregroundColor: cs.onSurface,
-                      ),
-                      child: const Text('닫기',
-                          style: TextStyle(fontWeight: FontWeight.w900)),
-                    ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: PromptButton(
+                    label: '메모 보기',
+                    icon: Icons.note_alt_rounded,
+                    onPressed: onGoMemo,
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: onGoMemo,
-                      style: FilledButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14)),
-                        backgroundColor: cs.primary,
-                        foregroundColor: cs.onPrimary,
-                      ),
-                      child: const Text('상태 메모 보기',
-                          style: TextStyle(fontWeight: FontWeight.w900)),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
@@ -1931,14 +1941,16 @@ class _SheetHeaderDelegate extends SliverPersistentHeaderDelegate {
   }) {
     final cs = Theme.of(context).colorScheme;
 
-    final bg = selected ? cs.surfaceContainerLow : Colors.transparent;
+    final bg = selected
+        ? cs.surfaceContainerLow
+        : PromptUiTheme.of(context).transparent;
     final border = selected
         ? cs.primary.withOpacity(0.55)
         : cs.outlineVariant.withOpacity(0.85);
     final fg = selected ? cs.onSurface : cs.onSurfaceVariant;
 
     return Material(
-      color: Colors.transparent,
+      color: PromptUiTheme.of(context).transparent,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(10),
@@ -2142,7 +2154,7 @@ class _PlateDock extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
 
     return Material(
-      color: Colors.transparent,
+      color: PromptUiTheme.of(context).transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(10),
         onTap: onTapRegion,

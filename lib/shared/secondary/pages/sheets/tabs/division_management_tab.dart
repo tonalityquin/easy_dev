@@ -1,6 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+
 import '../../../../../app/utils/snackbar_helper.dart';
+import '../../../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../widgets/ops_console_dialogs.dart';
+import '../../../widgets/ops_console_widgets.dart';
 
 class DivisionManagementTab extends StatefulWidget {
   final List<String> divisionList;
@@ -20,7 +24,6 @@ class DivisionManagementTab extends StatefulWidget {
 
 class _DivisionManagementTabState extends State<DivisionManagementTab> {
   final TextEditingController _controller = TextEditingController();
-
   bool _adding = false;
   String? _deletingDivisionName;
 
@@ -32,41 +35,49 @@ class _DivisionManagementTabState extends State<DivisionManagementTab> {
 
   Future<void> _handleAddDivision() async {
     if (_adding) return;
-
     final input = _controller.text.trim();
     if (input.isEmpty) {
-      showSelectedSnackbar(context, '회사 이름을 입력해주세요.');
+      showSelectedSnackbar(
+        context,
+        '회사 이름을 입력해주세요.',
+        usePromptUi: true,
+      );
       return;
     }
-
     if (input.contains('/')) {
-      showSelectedSnackbar(context, '회사 이름에 "/" 문자는 사용할 수 없습니다.');
+      showSelectedSnackbar(
+        context,
+        '회사 이름에 "/" 문자는 사용할 수 없습니다.',
+        usePromptUi: true,
+      );
       return;
     }
 
     setState(() => _adding = true);
     try {
       await widget.onDivisionAdded(input);
-
-
-      final areaId = '$input-$input';
-      await FirebaseFirestore.instance.collection('areas').doc(areaId).set({
+      await FirebaseFirestore.instance.collection('areas').doc('$input-$input').set({
         'name': input,
         'division': input,
         'isHeadquarter': true,
-        'modes': const ['service', 'lite'],
+        'modes': const <String>['service', 'lite'],
         'createdAt': FieldValue.serverTimestamp(),
       });
-
-
       if (!mounted) return;
       _controller.clear();
       FocusScope.of(context).unfocus();
-
-      showSuccessSnackbar(context, '회사 "$input" 이(가) 추가되었습니다.');
-    } catch (e) {
+      showSuccessSnackbar(
+        context,
+        '회사 "$input"이 추가되었습니다.',
+        usePromptUi: true,
+      );
+    } catch (error) {
       if (!mounted) return;
-      showFailedSnackbar(context, '회사 추가 실패: $e');
+      showFailedSnackbar(
+        context,
+        '회사 추가 실패: $error',
+        usePromptUi: true,
+      );
     } finally {
       if (mounted) {
         setState(() => _adding = false);
@@ -76,40 +87,32 @@ class _DivisionManagementTabState extends State<DivisionManagementTab> {
 
   Future<void> _handleDeleteDivision(String division) async {
     if (_deletingDivisionName != null) {
-      if (!mounted) return;
-      showSelectedSnackbar(context, '다른 삭제 작업이 진행 중입니다. 잠시만 기다려주세요.');
+      showSelectedSnackbar(
+        context,
+        '다른 삭제 작업이 진행 중입니다.',
+        usePromptUi: true,
+      );
       return;
     }
-
-    final ok = await showDialog<bool>(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: const Text('회사 삭제'),
-            content: Text('"$division" 회사와 소속 지역을 모두 삭제하시겠습니까?'),
-            actions: [
-              TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: const Text('취소')),
-              TextButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  child: const Text('삭제')),
-            ],
-          ),
-        ) ??
-        false;
-
-    if (!ok) return;
-
-    if (!mounted) return;
+    final ok = await showOpsConfirmDialog(
+      context: context,
+      title: '회사 삭제',
+      message: '"$division" 회사와 소속 지역을 모두 삭제하시겠습니까?',
+      confirmLabel: '삭제',
+      icon: Icons.delete_forever_rounded,
+      destructive: true,
+    );
+    if (!ok || !mounted) return;
     setState(() => _deletingDivisionName = division);
-
     try {
       await widget.onDivisionDeleted(division);
-
-    } catch (e) {
-      if (mounted) {
-        showFailedSnackbar(context, '삭제 실패: $e');
-      }
+    } catch (error) {
+      if (!mounted) return;
+      showFailedSnackbar(
+        context,
+        '삭제 실패: $error',
+        usePromptUi: true,
+      );
     } finally {
       if (mounted) {
         setState(() => _deletingDivisionName = null);
@@ -119,87 +122,77 @@ class _DivisionManagementTabState extends State<DivisionManagementTab> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    final busy = _adding || _deletingDivisionName != null;
+    return ListView(
       padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          TextField(
-            controller: _controller,
-            decoration: const InputDecoration(labelText: '새 회사 이름 (division)'),
-            onSubmitted: (_) => _handleAddDivision(),
-            enabled: !_adding && _deletingDivisionName == null,
-          ),
-          const SizedBox(height: 12),
-          ElevatedButton.icon(
-            icon: _adding
-                ? const SizedBox(
-                    height: 16,
-                    width: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.add_business),
-            label: Text(_adding ? '추가 중...' : '회사 추가'),
-            onPressed: _adding || _deletingDivisionName != null
-                ? null
-                : _handleAddDivision,
-          ),
-          const SizedBox(height: 20),
-          const Text('등록된 회사 목록',
-              style: TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 10),
-          Expanded(
-            child: Stack(
-              children: [
-                ListView.builder(
-                  itemCount: widget.divisionList.length,
-                  itemBuilder: (context, index) {
-                    final division = widget.divisionList[index];
-                    final deleting = _deletingDivisionName == division;
-
-                    return ListTile(
-                      title: Text(division),
-                      trailing: deleting
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : IconButton(
-                              icon: const Icon(Icons.delete,
-                                  color: Colors.redAccent),
-                              onPressed:
-                                  (_deletingDivisionName != null || _adding)
-                                      ? null
-                                      : () => _handleDeleteDivision(division),
-                            ),
-                    );
-                  },
+      children: [
+        OpsWorkSection(
+          title: '회사 등록',
+          subtitle: '새 회사를 추가하면 본사 지역 문서도 함께 생성합니다.',
+          icon: Icons.add_business_rounded,
+          child: Column(
+            children: [
+              TextField(
+                controller: _controller,
+                enabled: !busy,
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _handleAddDivision(),
+                decoration: opsInputDecoration(
+                  context,
+                  label: '회사 이름',
+                  prefixIcon: const Icon(Icons.business_rounded),
                 ),
-                if (_deletingDivisionName != null)
-                  Positioned(
-                    bottom: 8,
-                    left: 0,
-                    right: 0,
-                    child: Center(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.6),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          '삭제 중: $_deletingDivisionName',
-                          style: const TextStyle(color: Colors.white),
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 14),
+              OpsActionButton(
+                label: _adding ? '회사 추가 중' : '회사 추가',
+                icon: Icons.add_business_rounded,
+                onPressed: busy ? null : _handleAddDivision,
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+        OpsWorkSection(
+          title: '등록된 회사',
+          subtitle: '회사 삭제 시 소속 지역도 함께 제거됩니다.',
+          icon: Icons.business_center_rounded,
+          child: SizedBox(
+            height: 420,
+            child: widget.divisionList.isEmpty
+                ? const OpsEmptyState(
+                    icon: Icons.business_outlined,
+                    title: '등록된 회사가 없습니다',
+                    message: '상단 양식에서 첫 회사를 등록하세요.',
+                  )
+                : ListView.separated(
+                    itemCount: widget.divisionList.length,
+                    separatorBuilder: (_, __) => const OpsDivider(),
+                    itemBuilder: (context, index) {
+                      final division = widget.divisionList[index];
+                      final deleting = _deletingDivisionName == division;
+                      return PromptAnimatedReveal(
+                        delay: Duration(milliseconds: index * 30),
+                        offset: const Offset(.02, 0),
+                        child: ListTile(
+                          leading: const Icon(Icons.business_rounded),
+                          title: Text(division),
+                          trailing: PromptIconButton(
+                            icon: Icons.delete_outline_rounded,
+                            tooltip: '회사 삭제',
+                            destructive: true,
+                            loading: deleting,
+                            onPressed: busy
+                                ? null
+                                : () => _handleDeleteDivision(division),
+                            haptic: PromptHaptic.medium,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ),
+      ],
     );
   }
 }

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../../shared/secondary/widgets/ops_console_dialogs.dart';
 import '../../../../shared/secondary/widgets/ops_console_widgets.dart';
 import '../../../dev/application/area_state.dart';
 import '../../applications/user_state.dart';
@@ -60,12 +63,10 @@ class _TabletManagementState extends State<TabletManagement> {
     final currentArea = areaState.currentArea;
     final currentDivision = areaState.currentDivision;
 
-    showModalBottomSheet(
+    showPromptOverlayBottomSheet<void>(
       context: context,
-      isScrollControlled: true,
       useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetCtx) => FractionallySizedBox(
+      builder: (sheetContext) => FractionallySizedBox(
         heightFactor: 1,
         child: TabletSettingBottomSheet(
           onSave: onSave,
@@ -78,25 +79,15 @@ class _TabletManagementState extends State<TabletManagement> {
     );
   }
 
-  Future<bool> _confirmDelete(BuildContext context) async {
-    return await showDialog<bool>(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: const Text('태블릿 삭제 확인'),
-            content: const Text('선택한 태블릿 계정을 삭제하시겠습니까?'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('취소'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('삭제'),
-              ),
-            ],
-          ),
-        ) ??
-        false;
+  Future<bool> _confirmDelete(BuildContext context) {
+    return showOpsConfirmDialog(
+      context: context,
+      title: '태블릿 삭제 확인',
+      message: '선택한 태블릿 계정을 삭제하시겠습니까?',
+      confirmLabel: '삭제',
+      icon: Icons.delete_forever_rounded,
+      destructive: true,
+    );
   }
 
   Future<void> _handlePrimaryAction(BuildContext context) async {
@@ -311,7 +302,6 @@ class _TabletManagementState extends State<TabletManagement> {
   }
 
   Widget _buildCommandBar(BuildContext context, int visible, int total) {
-    final cs = Theme.of(context).colorScheme;
     return OpsCommandPanel(
       children: [
         OpsSearchField(
@@ -325,10 +315,11 @@ class _TabletManagementState extends State<TabletManagement> {
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             OpsFilterChip(label: '$visible/$total', selected: false, icon: Icons.filter_alt_rounded, onSelected: () {}),
-            IconButton.filledTonal(
+            PromptIconButton(
+              icon: Icons.refresh_rounded,
               tooltip: '새로고침',
               onPressed: () => _refresh(context),
-              icon: Icon(Icons.refresh_rounded, color: cs.primary),
+              haptic: PromptHaptic.selection,
             ),
           ],
         ),
@@ -413,10 +404,11 @@ class _TabletManagementState extends State<TabletManagement> {
                   icon: Icons.tablet_mac_rounded,
                   title: scopedTablets.isEmpty ? '등록된 태블릿이 없습니다' : '검색 결과가 없습니다',
                   message: scopedTablets.isEmpty ? '현장 태블릿 계정을 등록해 구역별 운영 단말을 배정하세요.' : '검색어를 조정하세요.',
-                  action: FilledButton.icon(
+                  action: PromptButton(
+                    label: '태블릿 등록',
+                    icon: Icons.add_to_queue_rounded,
                     onPressed: () => _handlePrimaryAction(context),
-                    icon: const Icon(Icons.add_to_queue_rounded),
-                    label: const Text('태블릿 등록'),
+                    haptic: PromptHaptic.selection,
                   ),
                 )
               : ListView.builder(

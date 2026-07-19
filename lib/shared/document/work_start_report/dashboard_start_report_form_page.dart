@@ -1,15 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
+
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../../../app/config/email_config.dart';
+import '../../../app/config/email_config.dart';
 import '../../utils/gmail_pdf_mailer.dart';
-import '../../../../app/utils/status_dialog.dart';
-import '../../../../features/dev/application/area_state.dart';
-import '../../../../features/dev/debug/debug_api_logger.dart';
+import '../../../app/utils/status_dialog.dart';
+import '../../../features/dev/application/area_state.dart';
+import '../../../features/dev/debug/debug_api_logger.dart';
 import 'dashboard_start_report_styles.dart';
 
 class DashboardStartReportFormPage extends StatefulWidget {
@@ -214,10 +218,16 @@ class _DashboardStartReportFormPageState
 
   Future<void> _animateToPage(int page) async {
     if (!_pageController.hasClients) return;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (reduceMotion) {
+      _pageController.jumpToPage(page);
+      return;
+    }
     await _pageController.animateToPage(
       page,
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeOut,
+      duration: PromptUiMotion.component,
+      curve: PromptUiMotion.enter,
     );
   }
 
@@ -369,6 +379,7 @@ class _DashboardStartReportFormPageState
       context,
       title: StatusDialog.workStartReportSuccess,
       closeCurrentPageAfter: true,
+      usePromptUi: true,
     );
   }
 
@@ -416,7 +427,7 @@ class _DashboardStartReportFormPageState
       );
     }
 
-    await showDialog(
+    await showPromptOverlayDialog<void>(
       context: context,
       barrierDismissible: true,
       builder: (ctx) {
@@ -464,7 +475,7 @@ class _DashboardStartReportFormPageState
         }
 
         return Dialog(
-          backgroundColor: Colors.transparent,
+          backgroundColor: PromptUiTheme.of(context).transparent,
           insetPadding:
               const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
           child: LayoutBuilder(
@@ -956,26 +967,31 @@ class _DashboardStartReportFormPageState
     BuildContext context, {
     required String labelText,
   }) {
-    final cs = Theme.of(context).colorScheme;
-
+    final tokens = PromptUiTheme.of(context);
     return InputDecoration(
       labelText: labelText,
-
       filled: true,
-      fillColor: cs.surfaceContainerLow,
+      fillColor: tokens.surfaceOverlay,
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: cs.outlineVariant),
+        borderRadius: BorderRadius.circular(PromptUiShapes.control),
+        borderSide: BorderSide(color: tokens.borderSubtle),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: cs.outlineVariant),
+        borderRadius: BorderRadius.circular(PromptUiShapes.control),
+        borderSide: BorderSide(color: tokens.borderSubtle),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: cs.primary, width: 1.6),
+        borderRadius: BorderRadius.circular(PromptUiShapes.control),
+        borderSide: BorderSide(color: tokens.focusRing, width: 2),
       ),
-      contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+      disabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(PromptUiShapes.control),
+        borderSide: BorderSide(color: tokens.borderSubtle),
+      ),
+      contentPadding: const EdgeInsets.symmetric(
+        vertical: 14,
+        horizontal: 12,
+      ),
     );
   }
 
@@ -983,30 +999,43 @@ class _DashboardStartReportFormPageState
     BuildContext context, {
     required String title,
     required Widget child,
-    EdgeInsetsGeometry padding = const EdgeInsets.all(12),
+    EdgeInsetsGeometry padding = const EdgeInsets.all(16),
     EdgeInsetsGeometry? margin,
   }) {
-    final cs = Theme.of(context).colorScheme;
-    final t = Theme.of(context).textTheme;
+    final tokens = PromptUiTheme.of(context);
+    final textTheme = Theme.of(context).textTheme;
 
-    return Card(
-      elevation: 0,
-      margin: margin ?? const EdgeInsets.only(bottom: 16),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: cs.outlineVariant.withOpacity(0.8)),
-      ),
-      color: cs.surfaceContainerLow,
-      surfaceTintColor: Colors.transparent,
-      child: Padding(
+    return PromptAnimatedReveal(
+      delay: const Duration(milliseconds: 40),
+      offset: const Offset(0, .025),
+      child: AnimatedContainer(
+        duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false
+            ? Duration.zero
+            : PromptUiMotion.selection,
+        curve: PromptUiMotion.standard,
+        margin: margin ?? const EdgeInsets.only(bottom: 16),
+        decoration: BoxDecoration(
+          color: tokens.surfaceRaised,
+          borderRadius: BorderRadius.circular(PromptUiShapes.card),
+          border: Border.all(color: tokens.borderSubtle),
+          boxShadow: [
+            BoxShadow(
+              color: tokens.shadow,
+              blurRadius: 14,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
         padding: padding,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               title,
-              style: t.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w800, color: cs.onSurface),
+              style: textTheme.titleMedium?.copyWith(
+                color: tokens.textPrimary,
+                fontWeight: FontWeight.w700,
+              ),
             ),
             const SizedBox(height: 10),
             child,
@@ -1024,21 +1053,18 @@ class _DashboardStartReportFormPageState
 
     Widget choice({required bool value, required String label}) {
       final selected = _hasSpecialNote == value;
-
       return Expanded(
-        child: selected
-            ? ElevatedButton(
-                onPressed:
-                    _sending ? null : () => _handleSpecialNoteSelection(value),
-                style: DashboardReportButtonStyles.primary(context),
-                child: Text(label),
-              )
-            : OutlinedButton(
-                onPressed:
-                    _sending ? null : () => _handleSpecialNoteSelection(value),
-                style: DashboardReportButtonStyles.outlined(context),
-                child: Text(label),
-              ),
+        child: PromptButton(
+          label: label,
+          selected: selected,
+          variant: selected
+              ? PromptButtonVariant.primary
+              : PromptButtonVariant.secondary,
+          expand: true,
+          haptic: PromptHaptic.selection,
+          onPressed:
+              _sending ? null : () => _handleSpecialNoteSelection(value),
+        ),
       );
     }
 
@@ -1277,12 +1303,15 @@ class _DashboardStartReportFormPageState
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final tokens = PromptUiTheme.of(context);
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
     return WillPopScope(
       onWillPop: () async => false,
       child: Scaffold(
         resizeToAvoidBottomInset: true,
-        backgroundColor: cs.surface,
+        backgroundColor: tokens.canvas,
         appBar: AppBar(
           automaticallyImplyLeading: false,
           leading: IconButton(
@@ -1292,13 +1321,13 @@ class _DashboardStartReportFormPageState
           ),
           title: const Text('업무 시작 보고서 작성'),
           centerTitle: true,
-          backgroundColor: cs.surface,
-          foregroundColor: cs.onSurface,
+          backgroundColor: tokens.surface,
+          foregroundColor: tokens.textPrimary,
           elevation: 0,
-          surfaceTintColor: Colors.transparent,
+          surfaceTintColor: tokens.transparent,
           shape: Border(
             bottom: BorderSide(
-              color: cs.outlineVariant.withOpacity(0.8),
+              color: tokens.borderSubtle,
               width: 1,
             ),
           ),
@@ -1318,7 +1347,7 @@ class _DashboardStartReportFormPageState
             ? SafeArea(
                 top: false,
                 child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 150),
+                  duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
                   curve: Curves.easeOut,
                   padding: EdgeInsets.only(
                     left: 16,
@@ -1327,10 +1356,10 @@ class _DashboardStartReportFormPageState
                     bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
                   ),
                   decoration: BoxDecoration(
-                    color: cs.surface,
+                    color: tokens.surface,
                     border: Border(
                       top: BorderSide(
-                        color: cs.outlineVariant.withOpacity(0.8),
+                        color: tokens.borderSubtle,
                         width: 1,
                       ),
                     ),

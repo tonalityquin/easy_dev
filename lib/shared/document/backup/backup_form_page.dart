@@ -4,14 +4,19 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../prompt_document_overlays.dart';
+
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:googleapis/gmail/v1.dart' as gmail;
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../../../app/auth/google_auth_v7.dart';
-import '../../../../app/config/email_config.dart';
-import '../../../../app/utils/status_dialog.dart';
-import '../../../../features/dev/debug/debug_api_logger.dart';
+import '../../../app/auth/google_auth_v7.dart';
+import '../../../app/config/email_config.dart';
+import '../../../app/utils/status_dialog.dart';
+import '../../../features/dev/debug/debug_api_logger.dart';
 import 'backup_styles.dart';
 import 'backup_signature_dialog.dart';
 
@@ -346,7 +351,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
       );
     }
 
-    await showDialog(
+    await showPromptOverlayDialog<void>(
       context: context,
       barrierDismissible: true,
       builder: (ctx) {
@@ -354,7 +359,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
         final cs = theme.colorScheme;
 
         return Dialog(
-          backgroundColor: Colors.transparent,
+          backgroundColor: PromptUiTheme.of(context).transparent,
           insetPadding:
               const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
           child: LayoutBuilder(
@@ -814,6 +819,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
       context,
       title: StatusDialog.leaveApplicationSubmitSuccess,
       closeCurrentPageAfter: true,
+      usePromptUi: true,
     );
   }
 
@@ -823,6 +829,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
     await StatusDialog.showFailure(
       context,
       title: StatusDialog.leaveApplicationSubmitFailed,
+      usePromptUi: true,
     );
   }
 
@@ -831,11 +838,17 @@ class _BackupFormPageState extends State<BackupFormPage> {
 
     if (_contractType == null) {
       if (!mounted) return;
-      _pageController.animateToPage(
-        0,
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOut,
-      );
+      final reduceMotion =
+          MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+      if (reduceMotion) {
+        _pageController.jumpToPage(0);
+      } else {
+        await _pageController.animateToPage(
+          0,
+          duration: PromptUiMotion.component,
+          curve: PromptUiMotion.enter,
+        );
+      }
       await _showSubmitFailureDialog();
       return;
     }
@@ -1200,26 +1213,29 @@ class _BackupFormPageState extends State<BackupFormPage> {
   InputDecoration _inputDec({
     required String labelText,
   }) {
-    final cs = Theme.of(context).colorScheme;
+    final tokens = PromptUiTheme.of(context);
     return InputDecoration(
       labelText: labelText,
-
       filled: true,
-      fillColor: cs.surfaceContainerLow,
+      fillColor: tokens.surfaceOverlay,
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: cs.outlineVariant),
+        borderRadius: BorderRadius.circular(PromptUiShapes.control),
+        borderSide: BorderSide(color: tokens.borderSubtle),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: cs.outlineVariant),
+        borderRadius: BorderRadius.circular(PromptUiShapes.control),
+        borderSide: BorderSide(color: tokens.borderSubtle),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(PromptUiShapes.control),
         borderSide: BorderSide(
-          color: cs.primary,
-          width: 1.6,
+          color: tokens.focusRing,
+          width: 2,
         ),
+      ),
+      disabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(PromptUiShapes.control),
+        borderSide: BorderSide(color: tokens.borderSubtle),
       ),
       contentPadding: const EdgeInsets.symmetric(
         vertical: 14,
@@ -1231,30 +1247,43 @@ class _BackupFormPageState extends State<BackupFormPage> {
   Widget _sectionCard({
     required String title,
     required Widget child,
-    EdgeInsetsGeometry padding = const EdgeInsets.all(12),
+    EdgeInsetsGeometry padding = const EdgeInsets.all(16),
     EdgeInsetsGeometry? margin,
   }) {
-    final cs = Theme.of(context).colorScheme;
+    final tokens = PromptUiTheme.of(context);
+    final textTheme = Theme.of(context).textTheme;
 
-    return Card(
-      elevation: 0,
-      margin: margin ?? const EdgeInsets.only(bottom: 16),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: cs.outlineVariant.withOpacity(0.9)),
-      ),
-      color: cs.surface,
-      child: Padding(
+    return PromptAnimatedReveal(
+      delay: const Duration(milliseconds: 40),
+      offset: const Offset(0, .025),
+      child: AnimatedContainer(
+        duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false
+            ? Duration.zero
+            : PromptUiMotion.selection,
+        curve: PromptUiMotion.standard,
+        margin: margin ?? const EdgeInsets.only(bottom: 16),
+        decoration: BoxDecoration(
+          color: tokens.surfaceRaised,
+          borderRadius: BorderRadius.circular(PromptUiShapes.card),
+          border: Border.all(color: tokens.borderSubtle),
+          boxShadow: [
+            BoxShadow(
+              color: tokens.shadow,
+              blurRadius: 14,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
         padding: padding,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               title,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: cs.onSurface,
-                  ),
+              style: textTheme.titleMedium?.copyWith(
+                color: tokens.textPrimary,
+                fontWeight: FontWeight.w700,
+              ),
             ),
             const SizedBox(height: 10),
             child,
@@ -1268,28 +1297,13 @@ class _BackupFormPageState extends State<BackupFormPage> {
 
   Future<void> _openSignatureDialog() async {
     try {
-      final cs = Theme.of(context).colorScheme;
-
-      final result = await showGeneralDialog<SignatureResult>(
+      final result = await showPromptFullscreenDocument<SignatureResult>(
         context: context,
-        barrierLabel: '서명',
-        barrierDismissible: false,
-        barrierColor: cs.scrim.withOpacity(0.55),
-        pageBuilder: (ctx, animation, secondaryAnimation) {
-          return SignatureFullScreenDialog(
-            name: _signerName,
-            initialDateTime: _signDateTime,
-          );
-        },
-        transitionBuilder: (ctx, animation, secondaryAnimation, child) {
-          return FadeTransition(
-            opacity: CurvedAnimation(
-              parent: animation,
-              curve: Curves.easeOut,
-            ),
-            child: child,
-          );
-        },
+        barrierLabel: '전자서명',
+        child: SignatureFullScreenDialog(
+          name: _signerName,
+          initialDateTime: _signDateTime,
+        ),
       );
 
       if (result != null) {
@@ -1314,37 +1328,30 @@ class _BackupFormPageState extends State<BackupFormPage> {
 
     Widget buildChoice(ContractType type, String label) {
       final selected = _contractType == type;
-
-      if (selected) {
-        return ElevatedButton(
-          onPressed: () {
-            setState(() {
-              _contractType = type;
-              _updateMailSubject();
-            });
-            _pageController.nextPage(
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeOut,
-            );
-          },
-          style: BackupButtonStyles.primary(context),
-          child: Text(label),
-        );
-      }
-
-      return OutlinedButton(
-        onPressed: () {
+      return PromptButton(
+        label: label,
+        selected: selected,
+        variant: selected
+            ? PromptButtonVariant.primary
+            : PromptButtonVariant.secondary,
+        expand: true,
+        haptic: PromptHaptic.selection,
+        onPressed: () async {
           setState(() {
             _contractType = type;
             _updateMailSubject();
           });
-          _pageController.nextPage(
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeOut,
-          );
+          final reduceMotion =
+              MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+          if (reduceMotion) {
+            _pageController.jumpToPage(1);
+          } else {
+            await _pageController.nextPage(
+              duration: PromptUiMotion.component,
+              curve: PromptUiMotion.enter,
+            );
+          }
         },
-        style: BackupButtonStyles.outlined(context),
-        child: Text(label, style: TextStyle(color: cs.onSurface)),
       );
     }
 
@@ -1849,20 +1856,23 @@ class _BackupFormPageState extends State<BackupFormPage> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final tokens = PromptUiTheme.of(context);
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
     return Scaffold(
       resizeToAvoidBottomInset: true,
-      backgroundColor: cs.background,
+      backgroundColor: tokens.canvas,
       appBar: AppBar(
         title: const Text('연차(결근) 지원 신청서 작성'),
         centerTitle: true,
-        backgroundColor: cs.surface,
-        foregroundColor: cs.onSurface,
+        backgroundColor: tokens.surface,
+        foregroundColor: tokens.textPrimary,
         elevation: 0,
-        surfaceTintColor: Colors.transparent,
+        surfaceTintColor: tokens.transparent,
         shape: Border(
           bottom:
-              BorderSide(color: cs.outlineVariant.withOpacity(0.9), width: 1),
+              BorderSide(color: tokens.borderSubtle, width: 1),
         ),
         actions: [
           Padding(
@@ -1880,7 +1890,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
           ? SafeArea(
               top: false,
               child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
+                duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
                 curve: Curves.easeOut,
                 padding: EdgeInsets.only(
                   left: 16,
@@ -1889,10 +1899,10 @@ class _BackupFormPageState extends State<BackupFormPage> {
                   bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
                 ),
                 decoration: BoxDecoration(
-                  color: cs.surface,
+                  color: tokens.surface,
                   border: Border(
                     top: BorderSide(
-                        color: cs.outlineVariant.withOpacity(0.9), width: 1),
+                        color: tokens.borderSubtle, width: 1),
                   ),
                 ),
                 child: SizedBox(

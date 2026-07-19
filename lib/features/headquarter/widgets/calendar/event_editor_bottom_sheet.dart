@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
 import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../shared/google_calendar/google_event_colors.dart';
 
 @immutable
 class _EditorTokens {
@@ -171,20 +172,6 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
   int get _currentTabIndex => _tabController.index;
   int get _currentPage => _currentTabIndex ~/ 2;
   int get _pageCount => (_templates.length + 1) ~/ 2;
-
-  static const Map<String, Color> _eventColors = {
-    "1": Color(0xFF7986CB),
-    "2": Color(0xFF33B679),
-    "3": Color(0xFF8E24AA),
-    "4": Color(0xFFE67C73),
-    "5": Color(0xFFF6BF26),
-    "6": Color(0xFFF4511E),
-    "7": Color(0xFF039BE5),
-    "8": Color(0xFF616161),
-    "9": Color(0xFF3F51B5),
-    "10": Color(0xFF0B8043),
-    "11": Color(0xFFD50000),
-  };
 
   DateTime _toLocalDateOnly(DateTime dt) {
     final l = dt.toLocal();
@@ -516,7 +503,7 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
                         ),
                         const SizedBox(height: 8),
                         _ColorPicker(
-                          palette: _eventColors,
+                          palette: googleEventColors,
                           selectedId: _colorId,
                           onSelected: (id) => setState(() => _colorId = id),
                         ),

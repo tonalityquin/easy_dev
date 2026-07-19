@@ -1,27 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
 import '../../../../features/voice/application/voice_appbar_ui_state.dart';
 import '../../application/common/type_view_mode_state.dart';
 
 class TypePageBottomBars extends StatelessWidget {
-  final Widget tableTop;
-  final Widget tableMiddle;
-  final Widget modeSwitch;
-  final Duration duration;
-
   const TypePageBottomBars({
     super.key,
     required this.tableTop,
     required this.tableMiddle,
     required this.modeSwitch,
-    this.duration = const Duration(milliseconds: 220),
+    this.duration = PromptUiMotion.component,
   });
+
+  final Widget tableTop;
+  final Widget tableMiddle;
+  final Widget modeSwitch;
+  final Duration duration;
 
   @override
   Widget build(BuildContext context) {
+    final tokens = PromptUiTheme.of(context);
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final mode = context.watch<TypeViewModeState>().mode;
-    bool talkUiEnabled = false;
+    var talkUiEnabled = false;
 
     try {
       talkUiEnabled = context.watch<VoiceAppbarUiState>().enabled;
@@ -30,7 +34,6 @@ class TypePageBottomBars extends StatelessWidget {
     }
 
     final showTableBars = mode == TypeViewMode.table || talkUiEnabled;
-
     final child = showTableBars
         ? Column(
             key: const ValueKey<String>('bars:table'),
@@ -44,40 +47,48 @@ class TypePageBottomBars extends StatelessWidget {
         : Column(
             key: const ValueKey<String>('bars:status'),
             mainAxisSize: MainAxisSize.min,
-            children: [
-              modeSwitch,
-            ],
+            children: [modeSwitch],
           );
 
-    return AnimatedSwitcher(
-      duration: duration,
-      switchInCurve: Curves.easeOutCubic,
-      switchOutCurve: Curves.easeInCubic,
-      transitionBuilder: (c, a) {
-        final curved = CurvedAnimation(
-          parent: a,
-          curve: Curves.easeOutCubic,
-          reverseCurve: Curves.easeInCubic,
-        );
-        final offset = Tween<Offset>(
-          begin: const Offset(0, 0.04),
-          end: Offset.zero,
-        ).animate(curved);
-        return FadeTransition(
-          opacity: curved,
-          child: SlideTransition(position: offset, child: c),
-        );
-      },
-      layoutBuilder: (currentChild, previousChildren) {
-        return Stack(
-          alignment: Alignment.bottomCenter,
-          children: <Widget>[
-            ...previousChildren,
-            if (currentChild != null) currentChild,
-          ],
-        );
-      },
-      child: child,
+    return Material(
+      color: tokens.surface,
+      surfaceTintColor: tokens.transparent,
+      elevation: 0,
+      child: AnimatedSize(
+        duration: reduceMotion ? Duration.zero : PromptUiMotion.layout,
+        curve: PromptUiMotion.standard,
+        alignment: Alignment.bottomCenter,
+        child: AnimatedSwitcher(
+          duration: reduceMotion ? Duration.zero : duration,
+          switchInCurve: PromptUiMotion.enter,
+          switchOutCurve: PromptUiMotion.exit,
+          transitionBuilder: (current, animation) {
+            final curved = CurvedAnimation(
+              parent: animation,
+              curve: PromptUiMotion.enter,
+              reverseCurve: PromptUiMotion.exit,
+            );
+            final offset = Tween<Offset>(
+              begin: const Offset(0, 0.045),
+              end: Offset.zero,
+            ).animate(curved);
+            return FadeTransition(
+              opacity: curved,
+              child: SlideTransition(position: offset, child: current),
+            );
+          },
+          layoutBuilder: (currentChild, previousChildren) {
+            return Stack(
+              alignment: Alignment.bottomCenter,
+              children: [
+                ...previousChildren,
+                if (currentChild != null) currentChild,
+              ],
+            );
+          },
+          child: child,
+        ),
+      ),
     );
   }
 }

@@ -2,16 +2,18 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../features/account/applications/user_state.dart';
-import '../../../features/dev/application/area_state.dart';
-import '../../../shared/page/application/common/type_view_mode_state.dart';
-import '../../../shared/page/pages/common/parking_completed_page/parking_completed_page_shell.dart';
-import '../../../shared/page/widget/navigation/double_top_navigation.dart';
-import '../../../shared/plate/application/double/double_plate_state.dart';
-import '../../../shared/plate/domain/enums/plate_type.dart';
-import '../../../shared/real_time_table/view_doc_rows_firestore_sync.dart';
+import '../../design_system/prompt_ui/prompt_ui_overlays.dart';
+
+import '../account/applications/user_state.dart';
+import '../dev/application/area_state.dart';
+import '../../shared/page/application/common/type_view_mode_state.dart';
+import '../../shared/page/pages/common/parking_completed_page/parking_completed_page_shell.dart';
+import '../../shared/page/widget/navigation/double_top_navigation.dart';
+import '../../shared/plate/application/double/double_plate_state.dart';
+import '../../shared/plate/domain/enums/plate_type.dart';
+import '../../shared/real_time_table/view_doc_rows_firestore_sync.dart';
 import 'parking_completed_package/double_parking_completed_real_time_table.dart';
-import '../../../shared/plate/widgets/parking_completed_plate_search_sheet.dart';
+import '../../shared/plate/widgets/parking_completed_plate_search_sheet.dart';
 
 class DoubleParkingCompletedPage extends StatefulWidget {
   const DoubleParkingCompletedPage({super.key});
@@ -38,11 +40,11 @@ class _DoubleParkingCompletedPageState
     final currentArea = context.read<AreaState>().currentArea;
     _log('open search dialog');
 
-    showModalBottomSheet<void>(
+    showPromptOverlayBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: false,
-      backgroundColor: Colors.transparent,
+      transparentBackground: true,
       builder: (sheetContext) {
         return SizedBox(
           height: MediaQuery.of(sheetContext).size.height,

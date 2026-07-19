@@ -11,6 +11,7 @@ import 'sprint_project_completion_page.dart';
 import 'sprint_project_home_page.dart';
 import 'sprint_project_management_page.dart';
 import 'sprint_project_workspace_sheet.dart';
+import 'sprint_ui.dart';
 
 class SprintWorkspaceHomePage extends StatefulWidget {
   const SprintWorkspaceHomePage({
@@ -61,7 +62,7 @@ class _SprintWorkspaceHomePageState extends State<SprintWorkspaceHomePage>
           reduceMotion ? Duration.zero : const Duration(milliseconds: 280),
       reverseTransitionDuration:
           reduceMotion ? Duration.zero : const Duration(milliseconds: 220),
-      pageBuilder: (_, __, ___) => page,
+      pageBuilder: (_, __, ___) => SprintPromptScope(child: page),
       transitionsBuilder: (_, animation, __, child) {
         if (reduceMotion) return child;
         final curved = CurvedAnimation(

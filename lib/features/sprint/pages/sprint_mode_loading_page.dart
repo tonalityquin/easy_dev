@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../application/sprint_mode_store.dart';
+import 'sprint_ui.dart';
 import 'sprint_workspace_home_page.dart';
 
 class SprintModeLoadingPage extends StatefulWidget {
@@ -47,9 +48,11 @@ class _SprintModeLoadingPageState extends State<SprintModeLoadingPage>
           reverseTransitionDuration: reduceMotion
               ? Duration.zero
               : const Duration(milliseconds: 240),
-          pageBuilder: (_, __, ___) => SprintWorkspaceHomePage(
-            store: _store,
-            returnRouteName: widget.returnRouteName,
+          pageBuilder: (_, __, ___) => SprintPromptScope(
+            child: SprintWorkspaceHomePage(
+              store: _store,
+              returnRouteName: widget.returnRouteName,
+            ),
           ),
           transitionsBuilder: (_, animation, __, child) {
             if (reduceMotion) return child;
@@ -90,8 +93,7 @@ class _SprintModeLoadingPageState extends State<SprintModeLoadingPage>
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     return PopScope(
       canPop: false,
-      child: Scaffold(
-        backgroundColor: colors.surface,
+      child: SprintScaffold(
         body: SafeArea(
           child: Center(
             child: Padding(

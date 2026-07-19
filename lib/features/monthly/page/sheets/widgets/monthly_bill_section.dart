@@ -1,25 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
 import '../../../domain/monthly_parking_options.dart';
-
-const _billInk = Color(0xFF101828);
-const _billMuted = Color(0xFF667085);
-const _billPanel = Color(0xFFFFFFFF);
-const _billLine = Color(0xFFD8DEE8);
-const _billBlue = Color(0xFF2563EB);
+import '../../widgets/monthly_prompt_ui.dart';
 
 class MonthlyBillSection extends StatelessWidget {
-  final TextEditingController nameController;
-  final TextEditingController amountController;
-  final TextEditingController durationController;
-  final String? selectedType;
-  final Function(String?) onTypeChanged;
-  final String selectedPeriodUnit;
-  final Function(String?) onPeriodUnitChanged;
-  final ValueChanged<String>? onDurationChanged;
-  final bool isEditMode;
-
   const MonthlyBillSection({
     super.key,
     required this.nameController,
@@ -33,108 +19,51 @@ class MonthlyBillSection extends StatelessWidget {
     this.isEditMode = false,
   });
 
-  InputDecoration _inputDecoration({
-    required String label,
-    String? hint,
-    String? suffixText,
-    Widget? suffixIcon,
-    bool disabledTone = false,
-  }) {
-    return InputDecoration(
-      labelText: label,
-      hintText: hint,
-      suffixText: suffixText,
-      suffixIcon: suffixIcon,
-      labelStyle: const TextStyle(color: _billMuted, fontWeight: FontWeight.w800),
-      floatingLabelStyle: const TextStyle(color: _billBlue, fontWeight: FontWeight.w900),
-      filled: true,
-      fillColor: disabledTone ? const Color(0xFFEFF2F7) : const Color(0xFFF8FAFC),
-      isDense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 13, vertical: 14),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: _billLine),
-      ),
-      disabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: _billLine),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: _billBlue, width: 1.4),
-      ),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-    );
-  }
+  final TextEditingController nameController;
+  final TextEditingController amountController;
+  final TextEditingController durationController;
+  final String? selectedType;
+  final ValueChanged<String?> onTypeChanged;
+  final String selectedPeriodUnit;
+  final ValueChanged<String?> onPeriodUnitChanged;
+  final ValueChanged<String>? onDurationChanged;
+  final bool isEditMode;
 
   @override
   Widget build(BuildContext context) {
+    final tokens = PromptUiTheme.of(context);
+    final textTheme = Theme.of(context).textTheme;
     final regularTypeOptions = MonthlyParkingOptions.regularTypes;
 
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: _billPanel,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _billLine),
-      ),
+    return MonthlyPromptSection(
+      title: '상품과 정산',
+      subtitle: '정기권 이름, 타입, 요금과 적용 기간을 설정합니다.',
+      icon: Icons.receipt_long_outlined,
+      delay: const Duration(milliseconds: 55),
+      trailing: isEditMode
+          ? const MonthlyPromptBadge(
+              label: '수정',
+              icon: Icons.edit_outlined,
+            )
+          : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEFF6FF),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(Icons.receipt_long_outlined, color: _billBlue, size: 19),
-              ),
-              const SizedBox(width: 10),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '상품과 정산',
-                      style: TextStyle(color: _billInk, fontWeight: FontWeight.w900, fontSize: 16),
-                    ),
-                    SizedBox(height: 2),
-                    Text(
-                      '정기권 이름, 타입, 요금, 기간을 입력합니다.',
-                      style: TextStyle(color: _billMuted, fontWeight: FontWeight.w700, fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-              if (isEditMode)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: _billLine),
-                  ),
-                  child: const Text(
-                    '수정',
-                    style: TextStyle(color: _billMuted, fontWeight: FontWeight.w900, fontSize: 12),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 14),
           TextField(
             controller: nameController,
             readOnly: isEditMode,
             enabled: !isEditMode,
-            style: const TextStyle(color: _billInk, fontWeight: FontWeight.w900),
-            decoration: _inputDecoration(
+            style: textTheme.bodyLarge?.copyWith(
+              color: isEditMode ? tokens.textDisabled : tokens.textPrimary,
+              fontWeight: FontWeight.w700,
+            ),
+            decoration: monthlyPromptInputDecoration(
+              context,
               label: '정기 정산 이름',
-              hint: '예: 월 정기권',
-              disabledTone: isEditMode,
-              suffixIcon: isEditMode ? const Icon(Icons.lock_outline, color: _billMuted) : null,
+              enabled: !isEditMode,
+              suffixIcon: isEditMode
+                  ? Icon(Icons.lock_outline_rounded, color: tokens.iconDisabled)
+                  : null,
             ),
           ),
           const SizedBox(height: 12),
@@ -142,31 +71,49 @@ class MonthlyBillSection extends StatelessWidget {
             children: [
               Expanded(
                 child: DropdownButtonFormField<String>(
-                  value: regularTypeOptions.contains(selectedType) ? selectedType : null,
-                  decoration: _inputDecoration(label: '주차 타입'),
-                  dropdownColor: _billPanel,
-                  iconEnabledColor: _billMuted,
-                  style: const TextStyle(color: _billInk, fontWeight: FontWeight.w900),
-                  items: regularTypeOptions.map((type) {
-                    return DropdownMenuItem<String>(
-                      value: type,
-                      child: Text(type),
-                    );
-                  }).toList(),
+                  value: regularTypeOptions.contains(selectedType)
+                      ? selectedType
+                      : null,
+                  decoration: monthlyPromptInputDecoration(
+                    context,
+                    label: '주차 타입',
+                  ),
+                  dropdownColor: tokens.surfaceRaised,
+                  iconEnabledColor: tokens.iconSecondary,
+                  style: textTheme.bodyLarge?.copyWith(
+                    color: tokens.textPrimary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  items: regularTypeOptions
+                      .map(
+                        (type) => DropdownMenuItem<String>(
+                          value: type,
+                          child: Text(type),
+                        ),
+                      )
+                      .toList(),
                   onChanged: onTypeChanged,
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: InputDecorator(
-                  decoration: _inputDecoration(
+                  decoration: monthlyPromptInputDecoration(
+                    context,
                     label: '기간 단위',
-                    suffixIcon: const Icon(Icons.lock_outline, color: _billMuted, size: 18),
-                    disabledTone: true,
+                    enabled: false,
+                    suffixIcon: Icon(
+                      Icons.lock_outline_rounded,
+                      color: tokens.iconDisabled,
+                      size: 18,
+                    ),
                   ),
                   child: Text(
                     selectedPeriodUnit,
-                    style: const TextStyle(color: _billInk, fontWeight: FontWeight.w900),
+                    style: textTheme.bodyLarge?.copyWith(
+                      color: tokens.textPrimary,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ),
@@ -181,10 +128,13 @@ class MonthlyBillSection extends StatelessWidget {
                   keyboardType: TextInputType.number,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                   onChanged: onDurationChanged,
-                  style: const TextStyle(color: _billInk, fontWeight: FontWeight.w900),
-                  decoration: _inputDecoration(
+                  style: textTheme.bodyLarge?.copyWith(
+                    color: tokens.textPrimary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  decoration: monthlyPromptInputDecoration(
+                    context,
                     label: '기간',
-                    hint: selectedType == MonthlyParkingOptions.weekend ? '1회' : selectedPeriodUnit == '월' ? '1개월' : selectedPeriodUnit == '주' ? '2주' : '3일',
                     suffixText: selectedPeriodUnit,
                   ),
                 ),
@@ -195,10 +145,14 @@ class MonthlyBillSection extends StatelessWidget {
                   controller: amountController,
                   keyboardType: TextInputType.number,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  style: const TextStyle(color: _billInk, fontWeight: FontWeight.w900),
-                  decoration: _inputDecoration(
+                  style: textTheme.bodyLarge?.copyWith(
+                    color: tokens.textPrimary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  decoration: monthlyPromptInputDecoration(
+                    context,
                     label: '정기 요금',
-                    hint: '100000',
+                    suffixText: '원',
                   ),
                 ),
               ),
@@ -206,8 +160,13 @@ class MonthlyBillSection extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Text(
-            isEditMode ? '차량번호와 정산 이름은 수정 모드에서 잠깁니다.' : '상품을 선택하면 기간 단위가 자동 고정되고 종료일이 계산됩니다.',
-            style: const TextStyle(color: _billMuted, fontWeight: FontWeight.w700, fontSize: 12),
+            isEditMode
+                ? '차량번호와 정산 이름은 수정 화면에서 변경할 수 없습니다.'
+                : '상품을 선택하면 기간 단위와 종료일이 자동 계산됩니다.',
+            style: textTheme.bodySmall?.copyWith(
+              color: tokens.textSecondary,
+              height: 1.35,
+            ),
           ),
         ],
       ),

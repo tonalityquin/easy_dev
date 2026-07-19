@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../app/utils/snackbar_helper.dart';
+import '../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+
 import '../../dev/application/area_state.dart';
 import '../applications/location_state.dart';
 import '../domain/models/grid_rect.dart';
@@ -9,6 +12,7 @@ import '../domain/models/parking_grid_model.dart';
 import 'sheets/location_setting.dart';
 import 'sheets/widgets/location_draft.dart';
 import 'sheets/widgets/parking_grid_preview.dart';
+import '../../../shared/secondary/widgets/ops_console_dialogs.dart';
 import '../../../shared/secondary/widgets/ops_console_widgets.dart';
 
 class LocationManagement extends StatefulWidget {
@@ -95,126 +99,15 @@ class _LocationManagementState extends State<LocationManagement> {
 
 
 
-  Future<bool> _confirmDelete(BuildContext context) async {
-    return await showDialog<bool>(
-          context: context,
-          barrierColor: Theme.of(context).colorScheme.scrim.withOpacity(.42),
-          builder: (ctx) {
-            final cs = Theme.of(ctx).colorScheme;
-            final tt = Theme.of(ctx).textTheme;
-            return Dialog(
-              elevation: 0,
-              backgroundColor: Colors.transparent,
-              insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 430),
-                child: OpsPanel(
-                  margin: EdgeInsets.zero,
-                  padding: EdgeInsets.zero,
-                  accentColor: cs.error,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
-                        decoration: BoxDecoration(
-                          color: cs.inverseSurface,
-                          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: cs.error,
-                                borderRadius: BorderRadius.circular(13),
-                              ),
-                              child: Icon(Icons.delete_forever_rounded, color: cs.onError, size: 21),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    '구역 삭제 확인',
-                                    style: (tt.titleMedium ?? const TextStyle(fontSize: 17)).copyWith(
-                                      color: cs.onInverseSurface,
-                                      fontWeight: FontWeight.w900,
-                                      letterSpacing: -.2,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 3),
-                                  Text(
-                                    '선택한 현장 구역을 삭제하기 전 마지막으로 확인합니다.',
-                                    style: (tt.bodySmall ?? const TextStyle(fontSize: 12)).copyWith(
-                                      color: cs.onInverseSurface.withOpacity(.72),
-                                      fontWeight: FontWeight.w800,
-                                      height: 1.25,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            IconButton.filledTonal(
-                              tooltip: '닫기',
-                              onPressed: () => Navigator.of(ctx).pop(false),
-                              icon: const Icon(Icons.close_rounded),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 6),
-                        child: OpsInlineMessage(
-                          message: '삭제하면 선택한 주차 구역이 운영 목록에서 제거됩니다. 연결된 운영 데이터와 화면 배치를 확인한 뒤 진행하세요.',
-                          icon: Icons.warning_amber_rounded,
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: FilledButton.tonalIcon(
-                                onPressed: () => Navigator.of(ctx).pop(false),
-                                icon: const Icon(Icons.close_rounded, size: 18),
-                                label: const Text('취소'),
-                                style: FilledButton.styleFrom(
-                                  minimumSize: const Size.fromHeight(46),
-                                  textStyle: const TextStyle(fontWeight: FontWeight.w900),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: FilledButton.icon(
-                                onPressed: () => Navigator.of(ctx).pop(true),
-                                icon: const Icon(Icons.delete_forever_rounded, size: 18),
-                                label: const Text('삭제'),
-                                style: FilledButton.styleFrom(
-                                  minimumSize: const Size.fromHeight(46),
-                                  backgroundColor: cs.error,
-                                  foregroundColor: cs.onError,
-                                  textStyle: const TextStyle(fontWeight: FontWeight.w900),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          },
-        ) ??
-        false;
+  Future<bool> _confirmDelete(BuildContext context) {
+    return showOpsConfirmDialog(
+      context: context,
+      title: '구역 삭제 확인',
+      message: '선택한 주차 구역이 운영 목록에서 제거됩니다. 연결된 운영 데이터와 화면 배치를 확인한 뒤 진행하세요.',
+      confirmLabel: '삭제',
+      icon: Icons.delete_forever_rounded,
+      destructive: true,
+    );
   }
 
   bool _isCompositeParent(LocationModel loc) =>
@@ -300,13 +193,19 @@ class _LocationManagementState extends State<LocationManagement> {
 
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          ok ? '기존 자식 슬롯을 최신 주차면적으로 재계산했습니다.' : (errorMessage ?? '자식 슬롯 재계산에 실패했습니다.'),
-        ),
-      ),
-    );
+    if (ok) {
+      showSuccessSnackbar(
+        context,
+        '기존 자식 슬롯을 최신 주차면적으로 재계산했습니다.',
+        usePromptUi: true,
+      );
+    } else {
+      showFailedSnackbar(
+        context,
+        errorMessage ?? '자식 슬롯 재계산에 실패했습니다.',
+        usePromptUi: true,
+      );
+    }
   }
 
   Future<void> _handleAdd(BuildContext context) async {
@@ -361,14 +260,9 @@ class _LocationManagementState extends State<LocationManagement> {
           .add(cr.normalized());
     }
 
-    await showModalBottomSheet(
+    await showPromptOverlayBottomSheet<void>(
       context: context,
-      isScrollControlled: true,
       useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
       builder: (_) {
         return FractionallySizedBox(
           heightFactor: 1,
@@ -506,14 +400,9 @@ class _LocationManagementState extends State<LocationManagement> {
           .add(cr.normalized());
     }
 
-    await showModalBottomSheet(
+    await showPromptOverlayBottomSheet<void>(
       context: context,
-      isScrollControlled: true,
       useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
       builder: (_) {
         return FractionallySizedBox(
           heightFactor: 1,
@@ -658,14 +547,9 @@ class _LocationManagementState extends State<LocationManagement> {
           .add(cr.normalized());
     }
 
-    await showModalBottomSheet(
+    await showPromptOverlayBottomSheet<void>(
       context: context,
-      isScrollControlled: true,
       useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
       builder: (_) {
         return FractionallySizedBox(
           heightFactor: 1,
@@ -812,14 +696,9 @@ class _LocationManagementState extends State<LocationManagement> {
           .add(cr.normalized());
     }
 
-    await showModalBottomSheet(
+    await showPromptOverlayBottomSheet<void>(
       context: context,
-      isScrollControlled: true,
       useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
       builder: (_) {
         return FractionallySizedBox(
           heightFactor: 1,

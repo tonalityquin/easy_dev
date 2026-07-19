@@ -1,10 +1,10 @@
-import 'dart:async';
 import 'package:googleapis/calendar/v3.dart' as gcal;
 import '../../../../app/auth/google_auth_session.dart';
 import '../../../dev/debug/debug_api_logger.dart';
 
 class GoogleCalendarService {
   gcal.CalendarApi? _api;
+  String? _apiAccountEmail;
 
   static const String _tCal = 'calendar';
   static const String _tCalService = 'calendar/service';
@@ -35,30 +35,65 @@ class GoogleCalendarService {
     } catch (_) {}
   }
 
-  Future<void> _ensureApi() async {
-    if (_api != null) return;
+  Future<void> _ensureApi({String? accountEmail}) async {
+    final expected = accountEmail?.trim().toLowerCase();
+    final current = GoogleAuthSession.instance.currentIdentity?.normalizedEmail;
+    final reusable = _api != null &&
+        current != null &&
+        current == _apiAccountEmail &&
+        (expected == null || expected == current);
+    if (reusable) return;
 
     try {
-      final client = await GoogleAuthSession.instance.safeClient();
+      final client = expected == null
+          ? await GoogleAuthSession.instance.safeClient()
+          : await GoogleAuthSession.instance.safeClientFor(
+              expectedEmail: expected,
+            );
       _api = gcal.CalendarApi(client);
+      _apiAccountEmail =
+          GoogleAuthSession.instance.currentIdentity?.normalizedEmail;
     } catch (e) {
+      resetAuthenticatedClient();
       await _logApiError(
         tag: 'GoogleCalendarService._ensureApi',
-        message: 'GoogleAuthSession.safeClient() 또는 CalendarApi 초기화 실패',
+        message: 'Google Calendar API 인증 초기화 실패',
         error: e,
+        extra: <String, dynamic>{'accountEmail': expected},
         tags: const <String>[_tCal, _tCalService, _tCalAuth],
       );
       rethrow;
     }
   }
 
+  void resetAuthenticatedClient() {
+    _api = null;
+    _apiAccountEmail = null;
+  }
+
+  Future<void> verifyCalendarAccess({
+    required String accountEmail,
+    required String calendarId,
+  }) async {
+    await _ensureApi(accountEmail: accountEmail);
+    final now = DateTime.now().toUtc();
+    await _api!.events.list(
+      calendarId,
+      timeMin: now.subtract(const Duration(days: 1)),
+      timeMax: now.add(const Duration(days: 1)),
+      singleEvents: true,
+      maxResults: 1,
+    );
+  }
+
   Future<List<gcal.Event>> listEvents({
+    String? accountEmail,
     required String calendarId,
     DateTime? timeMin,
     DateTime? timeMax,
     int maxResults = 100,
   }) async {
-    await _ensureApi();
+    await _ensureApi(accountEmail: accountEmail);
 
     final tMin =
         (timeMin ?? DateTime.now().subtract(const Duration(days: 30))).toUtc();
@@ -66,15 +101,22 @@ class GoogleCalendarService {
         (timeMax ?? DateTime.now().add(const Duration(days: 60))).toUtc();
 
     try {
-      final resp = await _api!.events.list(
-        calendarId,
-        timeMin: tMin,
-        timeMax: tMax,
-        singleEvents: true,
-        orderBy: 'startTime',
-        maxResults: maxResults,
-      );
-      return resp.items ?? <gcal.Event>[];
+      final events = <gcal.Event>[];
+      String? pageToken;
+      do {
+        final resp = await _api!.events.list(
+          calendarId,
+          timeMin: tMin,
+          timeMax: tMax,
+          singleEvents: true,
+          orderBy: 'startTime',
+          maxResults: maxResults,
+          pageToken: pageToken,
+        );
+        events.addAll(resp.items ?? <gcal.Event>[]);
+        pageToken = resp.nextPageToken;
+      } while (pageToken != null && pageToken.isNotEmpty);
+      return events;
     } catch (e) {
       await _logApiError(
         tag: 'GoogleCalendarService.listEvents',
@@ -93,6 +135,7 @@ class GoogleCalendarService {
   }
 
   Future<gcal.Event> createEvent({
+    String? accountEmail,
     required String calendarId,
     required String summary,
     String? description,
@@ -100,15 +143,24 @@ class GoogleCalendarService {
     required DateTime end,
     bool allDay = false,
     String? colorId,
+    String? eventId,
+    Map<String, String>? privateProperties,
   }) async {
-    await _ensureApi();
+    await _ensureApi(accountEmail: accountEmail);
 
     final event = gcal.Event()
       ..summary = summary
       ..description = description;
 
+    if (eventId != null && eventId.isNotEmpty) {
+      event.id = eventId;
+    }
     if (colorId != null && colorId.isNotEmpty) {
       event.colorId = colorId;
+    }
+    if (privateProperties != null && privateProperties.isNotEmpty) {
+      event.extendedProperties = (gcal.EventExtendedProperties()
+        ..private = Map<String, String>.from(privateProperties));
     }
 
     try {
@@ -141,6 +193,9 @@ class GoogleCalendarService {
               ? DateTime(end.year, end.month, end.day).toIso8601String()
               : end.toUtc().toIso8601String(),
           'colorId': colorId,
+          'hasEventId': eventId != null && eventId.isNotEmpty,
+          'hasPrivateProperties':
+              privateProperties != null && privateProperties.isNotEmpty,
         },
         tags: const <String>[_tCal, _tCalService, _tCalCreate],
       );
@@ -149,6 +204,7 @@ class GoogleCalendarService {
   }
 
   Future<gcal.Event> updateEvent({
+    String? accountEmail,
     required String calendarId,
     required String eventId,
     String? summary,
@@ -157,13 +213,18 @@ class GoogleCalendarService {
     DateTime? end,
     bool? allDay,
     String? colorId,
+    Map<String, String>? privateProperties,
   }) async {
-    await _ensureApi();
+    await _ensureApi(accountEmail: accountEmail);
 
     final patch = gcal.Event();
     if (summary != null) patch.summary = summary;
     if (description != null) patch.description = description;
     if (colorId != null) patch.colorId = colorId;
+    if (privateProperties != null && privateProperties.isNotEmpty) {
+      patch.extendedProperties = (gcal.EventExtendedProperties()
+        ..private = Map<String, String>.from(privateProperties));
+    }
 
     try {
       if (start != null && end != null) {
@@ -193,6 +254,8 @@ class GoogleCalendarService {
           'hasTimeRange': (start != null && end != null),
           'allDay': allDay,
           'colorIdProvided': colorId != null,
+          'hasPrivateProperties':
+              privateProperties != null && privateProperties.isNotEmpty,
         },
         tags: const <String>[_tCal, _tCalService, _tCalUpdate],
       );
@@ -201,10 +264,11 @@ class GoogleCalendarService {
   }
 
   Future<void> deleteEvent({
+    String? accountEmail,
     required String calendarId,
     required String eventId,
   }) async {
-    await _ensureApi();
+    await _ensureApi(accountEmail: accountEmail);
 
     try {
       await _api!.events.delete(calendarId, eventId);
@@ -226,7 +290,7 @@ class GoogleCalendarService {
   Future<void> signOut() async {
     try {
       await GoogleAuthSession.instance.signOut();
-      _api = null;
+      resetAuthenticatedClient();
     } catch (e) {
       await _logApiError(
         tag: 'GoogleCalendarService.signOut',

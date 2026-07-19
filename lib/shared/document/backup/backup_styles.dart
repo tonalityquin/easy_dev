@@ -1,65 +1,64 @@
-
-
 import 'package:flutter/material.dart';
 
-
+import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
 
 class BackupButtonStyles {
-  static const double _radius = 8.0;
+  const BackupButtonStyles._();
 
-  
   static ButtonStyle primary(
-      BuildContext context, {
-        double minHeight = 55,
-      }) {
-    final cs = Theme.of(context).colorScheme;
-
+    BuildContext context, {
+    double minHeight = 55,
+  }) {
+    final tokens = PromptUiTheme.of(context);
     return ElevatedButton.styleFrom(
-      backgroundColor: cs.primary,
-      foregroundColor: cs.onPrimary,
+      backgroundColor: tokens.accent,
+      foregroundColor: tokens.onAccent,
+      disabledBackgroundColor: tokens.surfaceDisabled,
+      disabledForegroundColor: tokens.textDisabled,
       minimumSize: Size(0, minHeight),
-      padding: EdgeInsets.zero,
-      side: BorderSide(
-        color: cs.primary,
-        width: 1.0,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      side: BorderSide(color: tokens.accentPressed.withOpacity(0.55)),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(_radius),
+        borderRadius: BorderRadius.circular(PromptUiShapes.button),
       ),
       elevation: 0,
     ).copyWith(
-      overlayColor: MaterialStateProperty.resolveWith<Color?>(
-            (states) => states.contains(MaterialState.pressed) ? cs.primary.withOpacity(.12) : null,
+      overlayColor: WidgetStateProperty.resolveWith<Color?>(
+        (states) => states.contains(WidgetState.pressed)
+            ? tokens.onAccent.withOpacity(0.10)
+            : null,
       ),
     );
   }
 
-  
   static ButtonStyle outlined(
-      BuildContext context, {
-        double minHeight = 55,
-      }) {
-    final cs = Theme.of(context).colorScheme;
-
+    BuildContext context, {
+    double minHeight = 55,
+  }) {
+    final tokens = PromptUiTheme.of(context);
     return OutlinedButton.styleFrom(
-      foregroundColor: cs.onSurface,
-      backgroundColor: cs.surface,
-      side: BorderSide(
-        color: cs.outlineVariant,
-        width: 1.0,
-      ),
+      foregroundColor: tokens.textPrimary,
+      backgroundColor: tokens.surfaceRaised,
+      disabledForegroundColor: tokens.textDisabled,
+      disabledBackgroundColor: tokens.surfaceDisabled,
+      side: BorderSide(color: tokens.borderSubtle),
       minimumSize: Size(0, minHeight),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(_radius),
+        borderRadius: BorderRadius.circular(PromptUiShapes.button),
       ),
     ).copyWith(
-      overlayColor: MaterialStateProperty.resolveWith<Color?>(
-            (states) => states.contains(MaterialState.pressed) ? cs.outlineVariant.withOpacity(.18) : null,
+      overlayColor: WidgetStateProperty.resolveWith<Color?>(
+        (states) => states.contains(WidgetState.pressed)
+            ? tokens.accent.withOpacity(0.10)
+            : null,
       ),
     );
   }
 
-  static ButtonStyle smallPrimary(BuildContext context) => primary(context, minHeight: 44);
+  static ButtonStyle smallPrimary(BuildContext context) =>
+      primary(context, minHeight: 44);
 
-  static ButtonStyle smallOutlined(BuildContext context) => outlined(context, minHeight: 44);
+  static ButtonStyle smallOutlined(BuildContext context) =>
+      outlined(context, minHeight: 44);
 }

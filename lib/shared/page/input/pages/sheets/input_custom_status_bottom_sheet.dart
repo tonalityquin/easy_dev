@@ -1,18 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+
+import '../../../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
 import '../../../../plate/domain/repositories/plate_repository.dart';
 import '../../../../plate/domain/services/plate_status_record.dart';
 
 String _formatDate(DateTime? value, String? raw) {
-  if (value != null) {
-    return DateFormat('yyyy-MM-dd HH:mm:ss').format(value);
-  }
+  if (value != null) return DateFormat('yyyy-MM-dd HH:mm:ss').format(value);
   final text = raw?.trim();
-  if (text != null && text.isNotEmpty) {
-    return text;
-  }
-  return '시간 정보 없음';
+  return text == null || text.isEmpty ? '시간 정보 없음' : text;
 }
 
 String _formatWon(int? value) {
@@ -20,7 +19,11 @@ String _formatWon(int? value) {
   return '₩${NumberFormat('#,###', 'ko_KR').format(value)}';
 }
 
-String _durationLabel(String? regularType, int? durationValue, String? periodUnit) {
+String _durationLabel(
+  String? regularType,
+  int? durationValue,
+  String? periodUnit,
+) {
   if (durationValue == null || durationValue <= 0) return '';
   final type = regularType?.trim() ?? '';
   final unit = periodUnit?.trim() ?? '';
@@ -38,29 +41,37 @@ String _paymentExtendedLabel(String? value) {
 }
 
 Widget _infoRow(BuildContext context, String label, String? value) {
-  final cs = Theme.of(context).colorScheme;
-  if (value == null || value.trim().isEmpty) return const SizedBox.shrink();
-
-  return Padding(
-    padding: const EdgeInsets.only(bottom: 8),
+  final text = value?.trim() ?? '';
+  if (text.isEmpty) return const SizedBox.shrink();
+  final tokens = PromptUiTheme.of(context);
+  return Container(
+    margin: const EdgeInsets.only(bottom: 8),
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    decoration: BoxDecoration(
+      color: tokens.surfaceOverlay,
+      borderRadius: BorderRadius.circular(PromptUiShapes.control),
+      border: Border.all(color: tokens.borderSubtle),
+    ),
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SizedBox(
-          width: 130,
+          width: 116,
           child: Text(
             label,
-            style: TextStyle(
-              fontWeight: FontWeight.w900,
-              fontSize: 16,
-              color: cs.onSurface,
-            ),
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: tokens.textSecondary,
+                  fontWeight: FontWeight.w700,
+                ),
           ),
         ),
         Expanded(
           child: Text(
-            value,
-            style: TextStyle(fontSize: 16, color: cs.onSurface),
+            text,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: tokens.textPrimary,
+                  fontWeight: FontWeight.w600,
+                ),
           ),
         ),
       ],
@@ -74,211 +85,197 @@ Future<Map<String, dynamic>?> inputCustomStatusBottomSheet(
   String area, {
   required String selectedBillType,
 }) async {
-  final bool isMonthly = selectedBillType.trim() == '정기';
-  final String collectionName =
-      isMonthly ? 'monthly_plate_status' : 'plate_status';
+  final isMonthly = selectedBillType.trim() == '정기';
+  final collectionName = isMonthly ? 'monthly_plate_status' : 'plate_status';
 
   PlateStatusRecord? data;
   try {
-    final plateRepository = context.read<PlateRepository>();
+    final repository = context.read<PlateRepository>();
     data = isMonthly
-        ? await plateRepository.fetchMonthlyPlateStatus(
+        ? await repository.fetchMonthlyPlateStatus(
             plateNumber: plateNumber,
             area: area,
           )
-        : await plateRepository.fetchLatestPlateStatus(
+        : await repository.fetchLatestPlateStatus(
             plateNumber: plateNumber,
             area: area,
           );
   } on PlateStatusRepositoryException catch (e) {
     debugPrint('[InputCustomStatusBottomSheet] repository error: $e');
-    data = null;
   } catch (e) {
     debugPrint('[InputCustomStatusBottomSheet] error: $e');
-    data = null;
-  } finally {
   }
 
-  if (data == null) return null;
+  if (data == null || !context.mounted) return null;
 
-  final String? customStatus = data.customStatus;
-  final List<String> statusList = data.statusList;
-  final String? countType = data.countType;
-  final String? type = data.type;
-  final String? periodUnit = data.periodUnit;
-  final String? regularType = data.regularType;
-  final String? startDate = data.startDate;
-  final String? endDate = data.endDate;
-  final int? regularAmount = data.regularAmount;
-  final int? regularDurationValue = data.regularDurationValue ?? data.regularDurationHours;
-  final List<PlateStatusPaymentRecord> paymentHistory = data.paymentHistory;
-
+  final customStatus = data.customStatus;
+  final statusList = data.statusList;
+  final countType = data.countType;
+  final type = data.type;
+  final periodUnit = data.periodUnit;
+  final regularType = data.regularType;
+  final startDate = data.startDate;
+  final endDate = data.endDate;
+  final regularAmount = data.regularAmount;
+  final regularDurationValue =
+      data.regularDurationValue ?? data.regularDurationHours;
+  final paymentHistory = data.paymentHistory;
   final formattedUpdatedAt = _formatDate(data.updatedAt, data.updatedAtRaw);
+  final hasWarning = customStatus != null && customStatus.trim().isNotEmpty;
 
-  await showModalBottomSheet(
+  await showPromptOverlayBottomSheet<void>(
     context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    builder: (context) {
-      final cs2 = Theme.of(context).colorScheme;
-
-      final bool hasWarning = customStatus != null && customStatus.isNotEmpty;
-
+    useSafeArea: false,
+    builder: (sheetContext) {
+      final tokens = PromptUiTheme.of(sheetContext);
       return DraggableScrollableSheet(
-        initialChildSize: 0.6,
-        minChildSize: 0.3,
-        maxChildSize: 0.95,
-        builder: (context, scrollController) {
-          return Container(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-            decoration: BoxDecoration(
-              color: cs2.surface,
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(20)),
-              border: Border.all(color: cs2.outlineVariant.withOpacity(0.85)),
-            ),
-            child: ListView(
+        initialChildSize: .68,
+        minChildSize: .42,
+        maxChildSize: .95,
+        builder: (sheetContext, scrollController) {
+          return PromptSheetScaffold(
+            title: hasWarning ? '차량 주의사항' : '차량 상세 정보',
+            icon: hasWarning
+                ? Icons.warning_amber_rounded
+                : Icons.info_outline_rounded,
+            onClose: () => Navigator.of(sheetContext).pop(),
+            body: ListView(
               controller: scrollController,
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
               children: [
-                Center(
-                  child: Container(
-                    width: 48,
-                    height: 5,
-                    margin: const EdgeInsets.only(bottom: 24),
-                    decoration: BoxDecoration(
-                      color: cs2.outlineVariant.withOpacity(0.9),
-                      borderRadius: BorderRadius.circular(2.5),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: hasWarning
+                        ? tokens.warningContainer
+                        : tokens.infoContainer,
+                    borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                    border: Border.all(
+                      color: (hasWarning ? tokens.warning : tokens.info)
+                          .withOpacity(.36),
                     ),
                   ),
-                ),
-                Row(
-                  children: [
-                    Icon(
-                      hasWarning
-                          ? Icons.warning_amber_rounded
-                          : Icons.info_outline,
-                      color: hasWarning ? cs2.error : cs2.primary,
-                      size: 28,
-                    ),
-                    const SizedBox(width: 10),
-                    Text(
-                      hasWarning ? '주의사항' : '상세 정보',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w900,
-                        color: cs2.onSurface,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        hasWarning
+                            ? customStatus.trim()
+                            : '저장된 차량 정보를 확인합니다.',
+                        style: Theme.of(sheetContext)
+                            .textTheme
+                            .bodyLarge
+                            ?.copyWith(
+                              color: hasWarning
+                                  ? tokens.onWarningContainer
+                                  : tokens.onInfoContainer,
+                              fontWeight: FontWeight.w700,
+                              height: 1.4,
+                            ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  '데이터 출처: $collectionName',
-                  style: TextStyle(fontSize: 13, color: cs2.onSurfaceVariant),
-                ),
-                const SizedBox(height: 20),
-                if (hasWarning) ...[
-                  Text(
-                    customStatus,
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: cs2.onSurface,
-                      height: 1.5,
-                    ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '데이터 출처: $collectionName · 최종 수정: $formattedUpdatedAt',
+                        style: Theme.of(sheetContext)
+                            .textTheme
+                            .bodySmall
+                            ?.copyWith(
+                              color: hasWarning
+                                  ? tokens.onWarningContainer
+                                  : tokens.onInfoContainer,
+                            ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 16),
-                ],
-                Row(
-                  children: [
-                    Icon(Icons.access_time,
-                        size: 20, color: cs2.onSurfaceVariant),
-                    const SizedBox(width: 8),
-                    Text(
-                      '최종 수정: $formattedUpdatedAt',
-                      style:
-                          TextStyle(fontSize: 14, color: cs2.onSurfaceVariant),
-                    ),
-                  ],
                 ),
                 if (statusList.isNotEmpty) ...[
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 18),
                   Text(
                     '저장된 상태',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w900,
-                      color: cs2.onSurface,
-                    ),
+                    style: Theme.of(sheetContext).textTheme.titleSmall?.copyWith(
+                          color: tokens.textPrimary,
+                          fontWeight: FontWeight.w800,
+                        ),
                   ),
                   const SizedBox(height: 10),
                   Wrap(
-                    spacing: 10,
-                    runSpacing: 6,
+                    spacing: 8,
+                    runSpacing: 8,
                     children: statusList
                         .map(
-                          (s) => Chip(
-                            label: Text(
-                              s,
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w800,
-                                color: cs2.onSurface,
+                          (value) => Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 11,
+                              vertical: 7,
+                            ),
+                            decoration: BoxDecoration(
+                              color: tokens.accentContainer,
+                              borderRadius:
+                                  BorderRadius.circular(PromptUiShapes.pill),
+                              border: Border.all(
+                                color: tokens.accent.withOpacity(.36),
                               ),
                             ),
-                            backgroundColor:
-                                cs2.tertiaryContainer.withOpacity(0.55),
-                            side: BorderSide(
-                              color: cs2.outlineVariant.withOpacity(0.85),
-                            ),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 4,
+                            child: Text(
+                              value,
+                              style: Theme.of(sheetContext)
+                                  .textTheme
+                                  .labelMedium
+                                  ?.copyWith(
+                                    color: tokens.onAccentContainer,
+                                    fontWeight: FontWeight.w700,
+                                  ),
                             ),
                           ),
                         )
                         .toList(),
                   ),
                 ],
-                const SizedBox(height: 24),
+                const SizedBox(height: 20),
                 Text(
                   '상세 정보',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w900,
-                    color: cs2.onSurface,
+                  style: Theme.of(sheetContext).textTheme.titleSmall?.copyWith(
+                        color: tokens.textPrimary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+                const SizedBox(height: 10),
+                _infoRow(sheetContext, '정산 유형', type),
+                _infoRow(sheetContext, '정산명', countType),
+                _infoRow(sheetContext, '상품', regularType),
+                _infoRow(sheetContext, '상품 금액', _formatWon(regularAmount)),
+                _infoRow(
+                  sheetContext,
+                  '기간',
+                  _durationLabel(
+                    regularType,
+                    regularDurationValue,
+                    periodUnit,
                   ),
                 ),
-                const SizedBox(height: 12),
-                _infoRow(context, '정산 유형', type),
-                _infoRow(context, '정산명', countType),
-                _infoRow(context, '상품', regularType),
-                _infoRow(context, '상품 금액', _formatWon(regularAmount)),
-                _infoRow(
-                  context,
-                  '기간',
-                  _durationLabel(regularType, regularDurationValue, periodUnit),
-                ),
-                _infoRow(context, '기간 단위', periodUnit),
-                _infoRow(context, '시작일', startDate),
-                _infoRow(context, '종료일', endDate),
+                _infoRow(sheetContext, '기간 단위', periodUnit),
+                _infoRow(sheetContext, '시작일', startDate),
+                _infoRow(sheetContext, '종료일', endDate),
                 if (paymentHistory.isNotEmpty) ...[
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 18),
                   Text(
                     '결제 내역',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w900,
-                      color: cs2.onSurface,
-                    ),
+                    style:
+                        Theme.of(sheetContext).textTheme.titleSmall?.copyWith(
+                              color: tokens.textPrimary,
+                              fontWeight: FontWeight.w800,
+                            ),
                   ),
                   const SizedBox(height: 10),
                   ...paymentHistory.map((payment) {
                     final paidAt =
                         _formatDate(payment.paidAt, payment.paidAtRaw);
-                    final paymentAmountText = payment.paymentAmountText ?? payment.amountText;
-                    final paymentAmount = int.tryParse(paymentAmountText ?? '');
-                    final paymentDuration = payment.durationValue ?? payment.regularDurationValue;
+                    final paymentAmountText =
+                        payment.paymentAmountText ?? payment.amountText;
+                    final paymentAmount =
+                        int.tryParse(paymentAmountText ?? '');
+                    final paymentDuration =
+                        payment.durationValue ?? payment.regularDurationValue;
                     final paymentDurationText = _durationLabel(
                       payment.regularType,
                       paymentDuration,
@@ -288,92 +285,75 @@ Future<Map<String, dynamic>?> inputCustomStatusBottomSheet(
                       payment.regularType,
                       paymentDurationText,
                     ].where((e) => e != null && e.trim().isNotEmpty).join(' · ');
-                    final rangeText = (payment.startDate != null &&
+                    final rangeText = payment.startDate != null &&
                             payment.startDate!.isNotEmpty &&
                             payment.endDate != null &&
-                            payment.endDate!.isNotEmpty)
+                            payment.endDate!.isNotEmpty
                         ? '${payment.startDate} ~ ${payment.endDate}'
                         : '';
-                    final extendedText = _paymentExtendedLabel(payment.extendedText);
-
+                    final extendedText =
+                        _paymentExtendedLabel(payment.extendedText);
+                    final details = <String>[
+                      if (paidAt.isNotEmpty) '결제시간: $paidAt',
+                      if (payment.paidBy != null && payment.paidBy!.isNotEmpty)
+                        '결제자: ${payment.paidBy}',
+                      if (extendedText.isNotEmpty) '연장결제: $extendedText',
+                      if (productText.isNotEmpty) '상품: $productText',
+                      if (rangeText.isNotEmpty) '적용 기간: $rangeText',
+                      if (payment.note != null && payment.note!.isNotEmpty)
+                        '비고: ${payment.note}',
+                    ];
                     return Container(
                       margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        border: Border.all(
-                          color: cs2.outlineVariant.withOpacity(0.85),
-                        ),
-                        borderRadius: BorderRadius.circular(12),
-                        color: cs2.surfaceContainerLow,
+                        color: tokens.surfaceOverlay,
+                        borderRadius:
+                            BorderRadius.circular(PromptUiShapes.control),
+                        border: Border.all(color: tokens.borderSubtle),
                       ),
-                      child: ListTile(
-                        title: Text(
-                          '결제 금액: ${paymentAmount != null ? _formatWon(paymentAmount) : paymentAmountText ?? '-'}',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w900,
-                            color: cs2.onSurface,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '결제 금액: ${paymentAmount != null ? _formatWon(paymentAmount) : paymentAmountText ?? '-'}',
+                            style: Theme.of(sheetContext)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(
+                                  color: tokens.textPrimary,
+                                  fontWeight: FontWeight.w800,
+                                ),
                           ),
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (paidAt.isNotEmpty)
-                              Text(
-                                '결제시간: $paidAt',
-                                style: TextStyle(color: cs2.onSurfaceVariant),
+                          if (details.isNotEmpty) ...[
+                            const SizedBox(height: 6),
+                            ...details.map(
+                              (line) => Padding(
+                                padding: const EdgeInsets.only(bottom: 3),
+                                child: Text(
+                                  line,
+                                  style: Theme.of(sheetContext)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(
+                                        color: tokens.textSecondary,
+                                        height: 1.35,
+                                      ),
+                                ),
                               ),
-                            if (payment.paidBy != null &&
-                                payment.paidBy!.isNotEmpty)
-                              Text(
-                                '결제자: ${payment.paidBy}',
-                                style: TextStyle(color: cs2.onSurfaceVariant),
-                              ),
-                            if (extendedText.isNotEmpty)
-                              Text(
-                                '연장결제: $extendedText',
-                                style: TextStyle(color: cs2.onSurfaceVariant),
-                              ),
-                            if (productText.isNotEmpty)
-                              Text(
-                                '상품: $productText',
-                                style: TextStyle(color: cs2.onSurfaceVariant),
-                              ),
-                            if (rangeText.isNotEmpty)
-                              Text(
-                                '적용 기간: $rangeText',
-                                style: TextStyle(color: cs2.onSurfaceVariant),
-                              ),
-                            if (payment.note != null &&
-                                payment.note!.isNotEmpty)
-                              Text(
-                                '비고: ${payment.note}',
-                                style: TextStyle(color: cs2.onSurfaceVariant),
-                              ),
+                            ),
                           ],
-                        ),
-                        dense: true,
+                        ],
                       ),
                     );
                   }),
                 ],
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: cs2.primary,
-                      foregroundColor: cs2.onPrimary,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      textStyle: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w900,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: const Text('확인'),
-                  ),
+                const SizedBox(height: 14),
+                PromptButton(
+                  label: '확인',
+                  icon: Icons.check_rounded,
+                  expand: true,
+                  onPressed: () => Navigator.of(sheetContext).pop(),
                 ),
               ],
             ),

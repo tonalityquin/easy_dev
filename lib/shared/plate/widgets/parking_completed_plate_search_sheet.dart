@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../app/utils/snackbar_helper.dart';
+import '../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
+
 import '../../../features/account/applications/user_state.dart';
 import '../../../features/mode_double/parking_completed_package/widgets/double_parking_completed_plate_search_results.dart';
 import '../../../features/mode_double/parking_completed_package/widgets/double_parking_completed_status_bottom_sheet.dart';
@@ -69,7 +73,14 @@ class _ParkingCompletedPlateSearchSheetState
     );
     _fadeAnimation =
         CurvedAnimation(parent: _keypadController, curve: Curves.easeIn);
-    _keypadController.forward();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (MediaQuery.maybeOf(context)?.disableAnimations ?? false) {
+        _keypadController.value = 1;
+      } else {
+        _keypadController.forward();
+      }
+    });
   }
 
   @override
@@ -179,8 +190,10 @@ class _ParkingCompletedPlateSearchSheetState
     } catch (_) {
       _finishLoadingAsSearched();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('검색 중 오류가 발생했습니다.')),
+      showFailedSnackbar(
+        context,
+        '검색 중 오류가 발생했습니다.',
+        usePromptUi: true,
       );
     }
   }
@@ -191,7 +204,7 @@ class _ParkingCompletedPlateSearchSheetState
       ) async {
     final deleter = rootContext.read<DeletePlate>();
 
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showPromptOverlayDialog<bool>(
       context: rootContext,
       useRootNavigator: true,
       builder: (dialogContext) => PlateRemoveDialog(
@@ -342,6 +355,7 @@ class _ParkingCompletedPlateSearchSheetState
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final tokens = PromptUiTheme.of(context);
     final rootContext = Navigator.of(context, rootNavigator: true).context;
     final mediaQuery = MediaQuery.of(context);
     final topInset = mediaQuery.padding.top;
@@ -349,9 +363,9 @@ class _ParkingCompletedPlateSearchSheetState
     final searchButtonBottomPadding = 14.0 + (_hasSearched ? bottomInset : 0.0);
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: tokens.transparent,
       body: Material(
-        color: Colors.transparent,
+        color: tokens.transparent,
         child: DraggableScrollableSheet(
           initialChildSize: 1.0,
           minChildSize: 1.0,

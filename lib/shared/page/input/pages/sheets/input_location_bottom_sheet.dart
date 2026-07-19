@@ -3,6 +3,9 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
 import '../../../../../features/dev/application/area_state.dart';
 import '../../../../../features/location/applications/location_state.dart';
 import '../../../../../features/location/domain/models/grid_rect.dart';
@@ -250,6 +253,7 @@ class InputLocationBottomSheet extends StatefulWidget {
     TextEditingController controller,
     Function(String) onSelected, {
     List<String> preferredParkingAreas = const <String>[],
+    bool usePromptUi = false,
   }) async {
     String area = '';
     try {
@@ -259,15 +263,29 @@ class InputLocationBottomSheet extends StatefulWidget {
       _ParkingViewMemCache.invalidateArea(area);
     }
 
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => InputLocationBottomSheet(
+    Widget buildSheet(BuildContext sheetContext) {
+      return InputLocationBottomSheet(
         locationController: controller,
         onLocationSelected: onSelected,
         preferredParkingAreas: preferredParkingAreas,
-      ),
+      );
+    }
+
+    if (usePromptUi) {
+      await showPromptOverlayBottomSheet<void>(
+        context: context,
+        useSafeArea: false,
+        transparentBackground: true,
+        builder: buildSheet,
+      );
+      return;
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: PromptUiTheme.of(context).transparent,
+      builder: buildSheet,
     );
   }
 
@@ -299,6 +317,7 @@ class _InputLocationBottomSheetState extends State<InputLocationBottomSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = PromptUiTheme.of(context);
     final cs = Theme.of(context).colorScheme;
     final currentArea =
         context.select<AreaState, String>((s) => s.currentArea.trim());
@@ -311,19 +330,21 @@ class _InputLocationBottomSheetState extends State<InputLocationBottomSheet> {
         }
         return true;
       },
-      child: SafeArea(
-        child: Material(
-          color: Colors.transparent,
-          child: Container(
+      child: PromptAnimatedReveal(
+        offset: const Offset(0, .03),
+        child: SafeArea(
+          child: Material(
+            color: tokens.transparent,
+            child: Container(
             height: MediaQuery.of(context).size.height * 0.92,
             decoration: BoxDecoration(
-              color: cs.surface,
+              color: tokens.surfaceRaised,
               borderRadius:
                   const BorderRadius.vertical(top: Radius.circular(22)),
-              border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
+              border: Border.all(color: tokens.borderSubtle),
               boxShadow: [
                 BoxShadow(
-                  color: cs.shadow.withOpacity(0.14),
+                  color: tokens.shadow,
                   blurRadius: 18,
                   offset: const Offset(0, -8),
                 ),
@@ -429,6 +450,7 @@ class _InputLocationBottomSheetState extends State<InputLocationBottomSheet> {
                   onClose: () => Navigator.of(context).pop(),
                 );
               },
+            ),
             ),
           ),
         ),

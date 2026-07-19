@@ -1,9 +1,13 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../app/models/capability.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
 import '../../../../features/account/applications/user_state.dart';
 import '../../../../features/dev/application/area_state.dart';
 import '../../../../features/dev/debug/debug_action_recorder.dart';
@@ -289,94 +293,104 @@ class _TypePageShellState<PState, PgState extends ChangeNotifier>
         .watch<AreaState>()
         .capabilitiesOfCurrentArea
         .contains(Capability.record);
+
     if (!canUseTalkUi && _talkUiState.enabled) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) {
-          return;
-        }
+        if (!mounted) return;
         _talkUiState.setEnabled(false);
       });
     }
+
     final shouldResync = activeSession != null &&
         normalizedArea.isNotEmpty &&
         (_boundTalkArea != normalizedArea || _boundTalkUserId != currentUserId);
     if (shouldResync && !_syncingTalkRuntime) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) {
-          return;
-        }
+        if (!mounted) return;
         _syncWorkintalkinRuntime();
       });
     }
+
     if (activeSession == null &&
         _talkController.active &&
         !_syncingTalkRuntime) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) {
-          return;
-        }
+        if (!mounted) return;
         _syncWorkintalkinRuntime(force: true);
       });
     }
 
-    return MultiProvider(
-      providers: [
-        ChangeNotifierProvider<TypeViewModeState>(
-          create: (_) => TypeViewModeState(),
-        ),
-        ChangeNotifierProvider<VoiceAppbarUiState>.value(
-          value: _talkUiState,
-        ),
-        ChangeNotifierProvider<PgState>(
-          create: (_) => widget.config.createPageState(),
-        ),
-      ],
-      child: Builder(
-        builder: (context) {
-          final plateState = context.read<PState>();
-          final pageState = context.read<PgState>();
-          final userName = context.read<UserState>().name;
+    return PromptUiScope(
+      child: MultiProvider(
+        providers: [
+          ChangeNotifierProvider<TypeViewModeState>(
+            create: (_) => TypeViewModeState(),
+          ),
+          ChangeNotifierProvider<VoiceAppbarUiState>.value(
+            value: _talkUiState,
+          ),
+          ChangeNotifierProvider<PgState>(
+            create: (_) => widget.config.createPageState(),
+          ),
+        ],
+        child: Builder(
+          builder: (context) {
+            final plateState = context.read<PState>();
+            final pageState = context.read<PgState>();
+            final userName = context.read<UserState>().name;
+            final tokens = PromptUiTheme.of(context);
+            final isDark = tokens.brightness == Brightness.dark;
 
-          final refreshableBody = TypePageRefreshableBody<PState, PgState>(
-            config: widget.config,
-          );
+            final refreshableBody = TypePageRefreshableBody<PState, PgState>(
+              config: widget.config,
+            );
 
-          final body = widget.config.recoveryMode == null
-              ? refreshableBody
-              : DrivingRecoveryGate(
-                  mode: widget.config.recoveryMode!,
-                  child: refreshableBody,
-                );
+            final body = widget.config.recoveryMode == null
+                ? refreshableBody
+                : DrivingRecoveryGate(
+                    mode: widget.config.recoveryMode!,
+                    child: refreshableBody,
+                  );
 
-          return PopScope(
-            canPop: false,
-            onPopInvoked: (didPop) async {
-              if (didPop) return;
-
-              await widget.config.clearCurrentSelection(
-                plateState,
-                pageState,
-                userName,
-                (msg) => debugPrint(msg),
-              );
-            },
-            child: Scaffold(
-              body: body,
-              bottomNavigationBar: SafeArea(
-                top: false,
-                child: TypePageBottomBars(
-                  tableTop: TypePageParkingCompletedControlBar<PgState>(
-                    builder: widget.config.buildParkingCompletedControlBar,
+            return AnnotatedRegion<SystemUiOverlayStyle>(
+              value: SystemUiOverlayStyle(
+                statusBarColor: tokens.surface,
+                statusBarIconBrightness:
+                    isDark ? Brightness.light : Brightness.dark,
+                statusBarBrightness:
+                    isDark ? Brightness.dark : Brightness.light,
+                systemNavigationBarColor: tokens.surface,
+                systemNavigationBarIconBrightness:
+                    isDark ? Brightness.light : Brightness.dark,
+              ),
+              child: PopScope(
+                canPop: false,
+                onPopInvoked: (didPop) async {
+                  if (didPop) return;
+                  await widget.config.clearCurrentSelection(
+                    plateState,
+                    pageState,
+                    userName,
+                    (msg) => debugPrint(msg),
+                  );
+                },
+                child: Scaffold(
+                  backgroundColor: tokens.canvas,
+                  body: body,
+                  bottomNavigationBar: TypePageBottomBars(
+                    tableTop: TypePageParkingCompletedControlBar<PgState>(
+                      builder: widget.config.buildParkingCompletedControlBar,
+                    ),
+                    tableMiddle: TypePageEntryDashboardBar(
+                      config: widget.config,
+                    ),
+                    modeSwitch: const TypePageModeSwitchBar(),
                   ),
-                  tableMiddle: TypePageEntryDashboardBar(
-                    config: widget.config,
-                  ),
-                  modeSwitch: const TypePageModeSwitchBar(),
                 ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
@@ -407,43 +421,36 @@ class TypePageEntryDashboardBar<PState, PgState extends ChangeNotifier>
 
   final TypePageConfig<PState, PgState> config;
 
+  Future<void> _openDashboard(BuildContext context) async {
+    await showPromptOverlayBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      transparentBackground: true,
+      builder: (_) => config.buildDashboardBottomSheet(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
+      padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
       child: Row(
         children: [
           Expanded(
             child: TypePageOpenEntryButton<PState, PgState>(config: config),
           ),
           const SizedBox(width: 8),
-          const Expanded(
-            child: TypePageToggleTalkAppBarButton(),
-          ),
+          const Expanded(child: TypePageToggleTalkAppBarButton()),
           const SizedBox(width: 8),
           Expanded(
-            child: ElevatedButton(
-              onPressed: () {
-                showModalBottomSheet(
-                  context: context,
-                  isScrollControlled: true,
-                  useSafeArea: true,
-                  backgroundColor: Colors.transparent,
-                  builder: (_) => config.buildDashboardBottomSheet(),
-                );
-              },
-              style: TypePageBrand.filledPrimaryButtonStyle(
-                context,
-                minHeight: 48,
-              ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.dashboard, size: 20),
-                  SizedBox(width: 6),
-                  Text('대시보드', style: TextStyle(fontWeight: FontWeight.w900)),
-                ],
-              ),
+            child: PromptButton(
+              label: '대시보드',
+              icon: Icons.dashboard_rounded,
+              onPressed: () => _openDashboard(context),
+              expand: true,
+              minHeight: 48,
+              haptic: PromptHaptic.selection,
             ),
           ),
         ],
@@ -460,45 +467,30 @@ class TypePageToggleTalkAppBarButton extends StatelessWidget {
     final areaCaps = context.watch<AreaState>().capabilitiesOfCurrentArea;
     final canUseRecordTalk = areaCaps.contains(Capability.record);
     final enabled = context.watch<VoiceAppbarUiState>().enabled;
-    final label =
-        canUseRecordTalk ? (enabled ? '무전기 OFF' : '무전기 ON') : '무전기 비활성';
+    final label = canUseRecordTalk
+        ? enabled
+            ? 'OFF'
+            : 'ON'
+        : '비활성';
     final icon = canUseRecordTalk
-        ? (enabled ? Icons.toggle_on_rounded : Icons.toggle_off_rounded)
+        ? enabled
+            ? Icons.toggle_on_rounded
+            : Icons.toggle_off_rounded
         : Icons.mic_off_rounded;
-    final onPressed = canUseRecordTalk
-        ? () {
-            context.read<VoiceAppbarUiState>().toggle();
-          }
-        : null;
 
-    final buttonStyle = enabled && canUseRecordTalk
-        ? TypePageBrand.filledPrimaryButtonStyle(
-            context,
-            minHeight: 48,
-          )
-        : TypePageBrand.outlinedSurfaceButtonStyle(
-            context,
-            minHeight: 48,
-          );
-
-    return ElevatedButton(
-      onPressed: onPressed,
-      style: buttonStyle,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 22),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
-            ),
-          ),
-        ],
-      ),
+    return PromptButton(
+      label: label,
+      icon: icon,
+      onPressed: canUseRecordTalk
+          ? () => context.read<VoiceAppbarUiState>().toggle()
+          : null,
+      variant: enabled && canUseRecordTalk
+          ? PromptButtonVariant.primary
+          : PromptButtonVariant.secondary,
+      selected: enabled && canUseRecordTalk,
+      expand: true,
+      minHeight: 48,
+      haptic: PromptHaptic.selection,
     );
   }
 }
@@ -521,43 +513,30 @@ class TypePageOpenEntryButton<PState, PgState extends ChangeNotifier>
   }
 
   Future<void> _openEntryScreen(BuildContext context) async {
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     await Navigator.of(context).push<dynamic>(
       buildTypePageSlideRoute<dynamic>(
-        config.buildInputScreen(),
+        PromptUiScope(child: config.buildInputScreen()),
         fromLeft: true,
+        reduceMotion: reduceMotion,
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return ElevatedButton(
+    return PromptButton(
+      label: '입차',
+      icon: Icons.add_circle_outline_rounded,
       onPressed: () async {
         _trace(context);
         await _openEntryScreen(context);
       },
-      style: TypePageBrand.outlinedSurfaceButtonStyle(
-        context,
-        minHeight: 48,
-        borderColor: cs.primary.withOpacity(0.35),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.add_circle_outline, size: 20, color: cs.primary),
-          const SizedBox(width: 8),
-          Text(
-            '입차',
-            style: TextStyle(
-              fontWeight: FontWeight.w900,
-              fontSize: 13,
-              color: cs.primary,
-            ),
-          ),
-        ],
-      ),
+      variant: PromptButtonVariant.secondary,
+      expand: true,
+      minHeight: 48,
+      haptic: PromptHaptic.selection,
     );
   }
 }
@@ -567,66 +546,29 @@ class TypePageModeSwitchBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final tokens = PromptUiTheme.of(context);
     final mode = context.watch<TypeViewModeState>().mode;
-    final label = mode == TypeViewMode.table ? '테이블' : '현황';
-    final icon = mode == TypeViewMode.table
-        ? Icons.table_rows_rounded
-        : Icons.grid_view_rounded;
+    final isTable = mode == TypeViewMode.table;
+    final label = isTable ? '테이블 보기' : '현황 보기';
+    final icon = isTable ? Icons.table_rows_rounded : Icons.grid_view_rounded;
 
-    return SizedBox(
-      height: kBottomNavigationBarHeight,
-      child: Material(
-        color: cs.surface,
-        child: InkWell(
-          onTap: () => context.read<TypeViewModeState>().toggle(),
-          child: Container(
-            decoration: BoxDecoration(
-              border: Border(
-                top: BorderSide(color: TypePageBrand.border(cs)),
-              ),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  icon,
-                  color: cs.onSurfaceVariant.withOpacity(0.7),
-                ),
-                const SizedBox(width: 10),
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Text(
-                      '모드 전환',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        color: cs.outline,
-                      ),
-                    ),
-                    const SizedBox(height: 1),
-                    Text(
-                      label,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w900,
-                        color: cs.onSurfaceVariant.withOpacity(0.75),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(width: 10),
-                Icon(
-                  Icons.swap_horiz_rounded,
-                  size: 18,
-                  color: cs.onSurfaceVariant.withOpacity(0.55),
-                ),
-              ],
-            ),
-          ),
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: tokens.surface,
+        border: Border(top: BorderSide(color: tokens.borderSubtle)),
+      ),
+      child: SafeArea(
+        top: false,
+        minimum: const EdgeInsets.fromLTRB(12, 7, 12, 8),
+        child: PromptButton(
+          label: label,
+          icon: icon,
+          onPressed: () => context.read<TypeViewModeState>().toggle(),
+          variant: PromptButtonVariant.tertiary,
+          selected: isTable,
+          expand: true,
+          minHeight: 44,
+          haptic: PromptHaptic.selection,
         ),
       ),
     );
@@ -644,27 +586,66 @@ class TypePageRefreshableBody<PState, PgState extends ChangeNotifier>
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final tokens = PromptUiTheme.of(context);
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
     return Consumer2<PgState, PState>(
       builder: (context, pageState, plateState, _) {
+        final loading = config.isLoading(plateState);
         return Stack(
           children: [
-            config.buildCurrentPage(context, pageState),
-            if (config.isLoading(plateState))
-              Container(
-                color: cs.surface.withOpacity(.35),
-                child: Center(
-                  child: SizedBox(
-                    width: 28,
-                    height: 28,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 3,
-                      valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
+            AnimatedSwitcher(
+              duration: reduceMotion ? Duration.zero : PromptUiMotion.component,
+              switchInCurve: PromptUiMotion.enter,
+              switchOutCurve: PromptUiMotion.exit,
+              child: KeyedSubtree(
+                key: ValueKey<int>(pageState.hashCode),
+                child: config.buildCurrentPage(context, pageState),
+              ),
+            ),
+            Positioned.fill(
+              child: IgnorePointer(
+                ignoring: !loading,
+                child: AnimatedOpacity(
+                  opacity: loading ? 1 : 0,
+                  duration:
+                      reduceMotion ? Duration.zero : PromptUiMotion.selection,
+                  curve: PromptUiMotion.standard,
+                  child: ColoredBox(
+                    color: tokens.scrim,
+                    child: Center(
+                      child: Container(
+                        width: 64,
+                        height: 64,
+                        decoration: BoxDecoration(
+                          color: tokens.surfaceRaised,
+                          borderRadius:
+                              BorderRadius.circular(PromptUiShapes.card),
+                          border: Border.all(color: tokens.borderSubtle),
+                          boxShadow: [
+                            BoxShadow(
+                              color: tokens.shadow,
+                              blurRadius: 18,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
+                        ),
+                        alignment: Alignment.center,
+                        child: SizedBox(
+                          width: 26,
+                          height: 26,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.8,
+                            color: tokens.accent,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
               ),
+            ),
           ],
         );
       },
@@ -672,75 +653,31 @@ class TypePageRefreshableBody<PState, PgState extends ChangeNotifier>
   }
 }
 
-class TypePageBrand {
-  static Color border(ColorScheme cs) => cs.outlineVariant.withOpacity(0.85);
-
-  static Color overlayOnSurface(ColorScheme cs) =>
-      cs.outlineVariant.withOpacity(0.12);
-
-  static ButtonStyle outlinedSurfaceButtonStyle(
-    BuildContext context, {
-    double minHeight = 48,
-    Color? borderColor,
-  }) {
-    final cs = Theme.of(context).colorScheme;
-    final bc = borderColor ?? border(cs);
-
-    return ElevatedButton.styleFrom(
-      backgroundColor: cs.surface,
-      foregroundColor: cs.onSurface,
-      minimumSize: Size.fromHeight(minHeight),
-      padding: EdgeInsets.zero,
-      elevation: 0,
-      side: BorderSide(color: bc, width: 1.0),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-    ).copyWith(
-      overlayColor: MaterialStateProperty.resolveWith<Color?>(
-        (states) => states.contains(MaterialState.pressed)
-            ? overlayOnSurface(cs)
-            : null,
-      ),
-    );
-  }
-
-  static ButtonStyle filledPrimaryButtonStyle(
-    BuildContext context, {
-    double minHeight = 48,
-  }) {
-    final cs = Theme.of(context).colorScheme;
-
-    return ElevatedButton.styleFrom(
-      backgroundColor: cs.primary,
-      foregroundColor: cs.onPrimary,
-      minimumSize: Size.fromHeight(minHeight),
-      padding: EdgeInsets.zero,
-      elevation: 2,
-      shadowColor: cs.shadow.withOpacity(0.20),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-    ).copyWith(
-      overlayColor: MaterialStateProperty.resolveWith<Color?>(
-        (states) => states.contains(MaterialState.pressed)
-            ? cs.onPrimary.withOpacity(0.12)
-            : null,
-      ),
-    );
-  }
-}
-
 PageRouteBuilder<T> buildTypePageSlideRoute<T>(
   Widget page, {
   required bool fromLeft,
+  bool reduceMotion = false,
 }) {
+  final duration = reduceMotion ? Duration.zero : PromptUiMotion.layout;
   return PageRouteBuilder<T>(
-    transitionDuration: const Duration(milliseconds: 300),
+    transitionDuration: duration,
+    reverseTransitionDuration: duration,
     pageBuilder: (_, __, ___) => page,
     transitionsBuilder: (_, animation, __, child) {
-      final begin = Offset(fromLeft ? -1.0 : 1.0, 0);
-      final end = Offset.zero;
-      final tween = Tween(begin: begin, end: end).chain(
-        CurveTween(curve: Curves.easeInOut),
+      if (reduceMotion) return child;
+      final curved = CurvedAnimation(
+        parent: animation,
+        curve: PromptUiMotion.enter,
+        reverseCurve: PromptUiMotion.exit,
       );
-      return SlideTransition(position: animation.drive(tween), child: child);
+      final position = Tween<Offset>(
+        begin: Offset(fromLeft ? -0.08 : 0.08, 0),
+        end: Offset.zero,
+      ).animate(curved);
+      return FadeTransition(
+        opacity: curved,
+        child: SlideTransition(position: position, child: child),
+      );
     },
   );
 }

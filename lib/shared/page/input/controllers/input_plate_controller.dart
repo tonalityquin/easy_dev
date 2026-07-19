@@ -332,7 +332,7 @@ class InputPlateController {
     if (!isValid) {
       trace?.add('중단: 번호판 입력 불완전');
       if (context.mounted) {
-        showFailedSnackbar(context, '번호판 입력을 확인해주세요.');
+        showFailedSnackbar(context, '번호판 입력을 확인해주세요.', usePromptUi: true);
       }
       return false;
     }
@@ -358,7 +358,7 @@ class InputPlateController {
     if (!isMinorMode && !isLocationSelected) {
       trace?.add('중단: 주차 위치 미선택');
       if (context.mounted) {
-        showFailedSnackbar(context, '주차 위치를 선택해주세요.');
+        showFailedSnackbar(context, '주차 위치를 선택해주세요.', usePromptUi: true);
       }
       return false;
     }
@@ -387,7 +387,7 @@ class InputPlateController {
         selectedBillType != '정기') {
       trace?.add('중단: selectedBill 누락');
       if (context.mounted) {
-        showFailedSnackbar(context, '정산 유형을 선택해주세요.');
+        showFailedSnackbar(context, '정산 유형을 선택해주세요.', usePromptUi: true);
       }
       return false;
     }
@@ -412,6 +412,7 @@ class InputPlateController {
         await StatusDialog.showFailure(
           context,
           title: StatusDialog.photoSaveFailed,
+          usePromptUi: true,
         );
       }
 
@@ -501,7 +502,7 @@ class InputPlateController {
         trace?.add(compactStack);
       }
       if (context.mounted) {
-        showFailedSnackbar(context, '입차 처리 실패: $e');
+        showFailedSnackbar(context, '입차 처리 실패: $e', usePromptUi: true);
       }
       return false;
     } finally {

@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../app/utils/status_dialog.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../../shared/secondary/widgets/ops_console_dialogs.dart';
 import '../../../../shared/secondary/widgets/ops_console_widgets.dart';
 import '../../../dev/application/area_state.dart';
 import '../../applications/user_state.dart';
@@ -96,6 +99,7 @@ class _UserManagementState extends State<UserManagement> {
       context,
       title: title,
       description: description,
+      usePromptUi: true,
     );
   }
 
@@ -224,12 +228,10 @@ class _UserManagementState extends State<UserManagement> {
     final currentArea = areaState.currentArea;
     final currentDivision = areaState.currentDivision;
 
-    showModalBottomSheet(
+    showPromptOverlayBottomSheet<void>(
       context: context,
-      isScrollControlled: true,
       useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetCtx) => FractionallySizedBox(
+      builder: (sheetContext) => FractionallySizedBox(
         heightFactor: 1,
         child: UserSettingBottomSheet(
           onSave: onSave,
@@ -242,50 +244,33 @@ class _UserManagementState extends State<UserManagement> {
     );
   }
 
-  Future<bool> _confirmToggleActive(BuildContext context, {required bool toActive}) async {
-    final title = toActive ? '활성화 확인' : '비활성화 확인';
-    final content = toActive ? '선택한 계정을 활성화하시겠습니까?' : '선택한 계정을 비활성화하시겠습니까?';
-    final actionLabel = toActive ? '활성화' : '비활성화';
-
-    return await showDialog<bool>(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: Text(title),
-            content: Text(content),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('취소'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: Text(actionLabel),
-              ),
-            ],
-          ),
-        ) ??
-        false;
+  Future<bool> _confirmToggleActive(
+    BuildContext context, {
+    required bool toActive,
+  }) {
+    return showOpsConfirmDialog(
+      context: context,
+      title: toActive ? '활성화 확인' : '비활성화 확인',
+      message: toActive
+          ? '선택한 계정을 활성화하시겠습니까?'
+          : '선택한 계정을 비활성화하시겠습니까?',
+      confirmLabel: toActive ? '활성화' : '비활성화',
+      icon: toActive
+          ? Icons.play_circle_fill_rounded
+          : Icons.pause_circle_filled_rounded,
+      destructive: !toActive,
+    );
   }
 
-  Future<bool> _confirmDeleteUser(BuildContext context) async {
-    return await showDialog<bool>(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: const Text('계정 삭제 확인'),
-            content: const Text('선택한 계정을 삭제하시겠습니까? 삭제 후 복구할 수 없습니다.'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('취소'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('삭제'),
-              ),
-            ],
-          ),
-        ) ??
-        false;
+  Future<bool> _confirmDeleteUser(BuildContext context) {
+    return showOpsConfirmDialog(
+      context: context,
+      title: '계정 삭제 확인',
+      message: '선택한 계정을 삭제하시겠습니까? 삭제 후 복구할 수 없습니다.',
+      confirmLabel: '삭제',
+      icon: Icons.delete_forever_rounded,
+      destructive: true,
+    );
   }
 
   Future<void> _handlePrimaryAction(BuildContext context) async {
@@ -620,7 +605,6 @@ class _UserManagementState extends State<UserManagement> {
   }
 
   Widget _buildCommandBar(BuildContext context, int visible, int total) {
-    final cs = Theme.of(context).colorScheme;
     return OpsCommandPanel(
       children: [
         OpsSearchField(
@@ -663,10 +647,11 @@ class _UserManagementState extends State<UserManagement> {
               icon: Icons.filter_alt_rounded,
               onSelected: () {},
             ),
-            IconButton.filledTonal(
+            PromptIconButton(
+              icon: Icons.refresh_rounded,
               tooltip: '새로고침',
               onPressed: () => _refreshUsersForCurrentArea(context),
-              icon: Icon(Icons.refresh_rounded, color: cs.primary),
+              haptic: PromptHaptic.selection,
             ),
           ],
         ),
@@ -770,10 +755,11 @@ class _UserManagementState extends State<UserManagement> {
                   icon: Icons.person_search_rounded,
                   title: scopedUsers.isEmpty ? '현재 범위에 계정이 없습니다' : '검색 결과가 없습니다',
                   message: scopedUsers.isEmpty ? '신규 계정을 등록하거나 지점/사업소 범위를 확인하세요.' : '검색어와 활성 상태 필터를 조정하세요.',
-                  action: FilledButton.icon(
+                  action: PromptButton(
+                    label: '신규 계정 등록',
+                    icon: Icons.person_add_alt_1_rounded,
                     onPressed: () => _handlePrimaryAction(context),
-                    icon: const Icon(Icons.person_add_alt_1_rounded),
-                    label: const Text('신규 계정 등록'),
+                    haptic: PromptHaptic.selection,
                   ),
                 )
               : ListView.builder(

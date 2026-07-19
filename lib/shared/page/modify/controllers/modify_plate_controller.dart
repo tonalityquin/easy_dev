@@ -256,7 +256,11 @@ class ModifyPlateController {
         (selectedBill == null || selectedBill!.isEmpty)) {
       trace?.add('중단: selectedBill 누락');
       if (context.mounted) {
-        showFailedSnackbar(context, '정산 유형 정보가 비어 있습니다.');
+        showFailedSnackbar(
+          context,
+          '정산 유형 정보가 비어 있습니다.',
+          usePromptUi: true,
+        );
       }
       return false;
     }
@@ -384,7 +388,11 @@ class ModifyPlateController {
         trace?.add(compactStack);
       }
       if (context.mounted) {
-        showFailedSnackbar(context, '수정 처리 실패: $e');
+        showFailedSnackbar(
+          context,
+          '수정 처리 실패: $e',
+          usePromptUi: true,
+        );
       }
       return false;
     }

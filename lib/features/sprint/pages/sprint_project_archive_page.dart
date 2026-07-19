@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../shared/google_calendar/google_event_colors.dart';
 import '../application/sprint_mode_store.dart';
 import '../domain/sprint_models.dart';
 import 'sprint_project_completion_page.dart';
@@ -63,6 +64,12 @@ class _SprintProjectArchivePageState extends State<SprintProjectArchivePage> {
         message: '프로젝트를 다시 열었습니다.',
       );
       Navigator.of(context).pop();
+    } else {
+      sprintShowMessage(
+        context: context,
+        message: '활성 프로젝트 수와 사용 가능한 색상을 확인하세요.',
+        danger: true,
+      );
     }
   }
 
@@ -86,11 +93,9 @@ class _SprintProjectArchivePageState extends State<SprintProjectArchivePage> {
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final duration =
         reduceMotion ? Duration.zero : const Duration(milliseconds: 240);
-    return Scaffold(
-      backgroundColor: colors.surface,
+    return SprintScaffold(
       appBar: AppBar(
         title: const Text('완료 및 보관함'),
-        backgroundColor: colors.surface,
       ),
       body: SafeArea(
         child: AnimatedSwitcher(
@@ -172,20 +177,31 @@ class _ArchiveProjectCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final projectColor = googleEventColor(
+      project.googleColorId,
+      colors.primary,
+    );
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final duration =
+        reduceMotion ? Duration.zero : const Duration(milliseconds: 220);
     return SprintSurface(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
-              Container(
+              AnimatedContainer(
+                duration: duration,
+                curve: Curves.easeOutCubic,
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: colors.primaryContainer,
+                  color: projectColor.withOpacity(0.18),
                   borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: projectColor),
                 ),
-                child: Icon(project.icon, color: colors.onPrimaryContainer),
+                child: Icon(project.icon, color: projectColor),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -254,7 +270,7 @@ Route<void> _route(BuildContext context, Widget page) {
         reduceMotion ? Duration.zero : const Duration(milliseconds: 260),
     reverseTransitionDuration:
         reduceMotion ? Duration.zero : const Duration(milliseconds: 210),
-    pageBuilder: (_, __, ___) => page,
+    pageBuilder: (_, __, ___) => SprintPromptScope(child: page),
     transitionsBuilder: (_, animation, __, child) {
       if (reduceMotion) return child;
       final curved = CurvedAnimation(

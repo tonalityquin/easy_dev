@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
+import '../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
+
 import '../applications/fee_calculator.dart';
 
 class BillResult {
@@ -33,11 +36,11 @@ Future<BillResult?> showOnTapBillingBottomSheet({
   int? regularDurationHours,
   int? regularDurationValue,
 }) {
-  return showModalBottomSheet<BillResult>(
+  return showPromptOverlayBottomSheet<BillResult>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    backgroundColor: Colors.transparent,
+    transparentBackground: true,
     builder: (_) => BillingBottomSheet(
       entryTimeInSeconds: entryTimeInSeconds,
       currentTimeInSeconds: currentTimeInSeconds,
@@ -205,9 +208,11 @@ class _BillingBottomSheetState extends State<BillingBottomSheet> {
 
     return SafeArea(
       child: Material(
-        color: Colors.transparent,
+        color: PromptUiTheme.of(context).transparent,
         child: AnimatedPadding(
-          duration: const Duration(milliseconds: 200),
+          duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false
+              ? Duration.zero
+              : PromptUiMotion.selection,
           curve: Curves.easeOut,
           padding: EdgeInsets.only(bottom: bottomInset),
           child: DraggableScrollableSheet(
@@ -276,7 +281,7 @@ class _BillingBottomSheetState extends State<BillingBottomSheet> {
                           Card(
                             elevation: 0,
                             color: cs.surface,
-                            surfaceTintColor: Colors.transparent,
+                            surfaceTintColor: PromptUiTheme.of(context).transparent,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                               side: BorderSide(

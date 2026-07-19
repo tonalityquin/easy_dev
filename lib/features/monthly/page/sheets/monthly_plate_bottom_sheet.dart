@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 
+import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
 import '../../controllers/monthly_plate_controller.dart';
 import '../../domain/monthly_parking_options.dart';
 import '../widgets/monthly_animated_action_button.dart';
 import '../widgets/monthly_bottom_navigation.dart';
+import '../widgets/monthly_prompt_ui.dart';
 import 'monthly_plate_payment_bottom_sheet.dart';
 import 'widgets/keypad/kor_keypad.dart';
 import 'widgets/keypad/num_keypad.dart';
@@ -13,18 +17,7 @@ import 'widgets/monthly_custom_status_section.dart';
 import 'widgets/monthly_date_range_picker_section.dart';
 import 'widgets/monthly_plate_section.dart';
 
-const _editorInk = Color(0xFF101828);
-const _editorMuted = Color(0xFF667085);
-const _editorCanvas = Color(0xFFF3F6FA);
-const _editorPanel = Color(0xFFFFFFFF);
-const _editorLine = Color(0xFFD8DEE8);
-const _editorBlue = Color(0xFF2563EB);
-
 class MonthlyPlateBottomSheet extends StatefulWidget {
-  final bool isEditMode;
-  final String? initialDocId;
-  final Map<String, dynamic>? initialData;
-
   const MonthlyPlateBottomSheet({
     super.key,
     this.isEditMode = false,
@@ -32,8 +25,13 @@ class MonthlyPlateBottomSheet extends StatefulWidget {
     this.initialData,
   });
 
+  final bool isEditMode;
+  final String? initialDocId;
+  final Map<String, dynamic>? initialData;
+
   @override
-  State<MonthlyPlateBottomSheet> createState() => _MonthlyPlateBottomSheetState();
+  State<MonthlyPlateBottomSheet> createState() =>
+      _MonthlyPlateBottomSheetState();
 }
 
 class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
@@ -41,19 +39,22 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
   Key statusSectionKey = UniqueKey();
 
   final TextEditingController _regularNameController = TextEditingController();
-  final TextEditingController _regularAmountController = TextEditingController();
-  final TextEditingController _regularDurationController = TextEditingController();
+  final TextEditingController _regularAmountController =
+      TextEditingController();
+  final TextEditingController _regularDurationController =
+      TextEditingController();
   final TextEditingController _startDateController = TextEditingController();
   final TextEditingController _endDateController = TextEditingController();
 
   String? _selectedRegularType;
-  String _selectedPeriodUnit = MonthlyParkingOptions.defaultPeriodUnit(MonthlyParkingOptions.monthly) ?? '월';
-  late VoidCallback _backListener;
+  String _selectedPeriodUnit = MonthlyParkingOptions.defaultPeriodUnit(
+        MonthlyParkingOptions.monthly,
+      ) ??
+      '월';
 
   @override
   void initState() {
     super.initState();
-
     controller = MonthlyPlateController(
       nameController: _regularNameController,
       amountController: _regularAmountController,
@@ -64,25 +65,16 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
       regularDurationController: _regularDurationController,
       selectedRegularType: _selectedRegularType,
     );
-
     controller.isEditMode = widget.isEditMode;
-    if (widget.isEditMode) {
-      controller.showKeypad = false;
-    }
-
+    if (widget.isEditMode) controller.showKeypad = false;
     if (widget.isEditMode && widget.initialData != null) {
       _populateFields(widget.initialData!);
     }
-
-    _backListener = () {
-      if (controller.controllerBackDigit.text.length == 4 && controller.isInputValid()) {}
-    };
-    controller.controllerBackDigit.addListener(_backListener);
   }
 
   void _populateFields(Map<String, dynamic> data) {
-    final plateParts = (widget.initialDocId?.split('_').first ?? '').split('-');
-
+    final plateParts =
+        (widget.initialDocId?.split('_').first ?? '').split('-');
     if (plateParts.length == 3) {
       controller.controllerFrontDigit.text = plateParts[0];
       controller.controllerMidDigit.text = plateParts[1];
@@ -93,26 +85,30 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
     controller.dropdownValue = (data['region'] ?? '전국').toString();
     _regularNameController.text = (data['countType'] ?? '').toString();
     _regularAmountController.text = (data['regularAmount'] ?? '').toString();
-    controller.paymentAmountController.text = (data['regularAmount'] ?? '').toString();
-    _regularDurationController.text = (data['regularDurationValue'] ?? data['regularDurationHours'] ?? '').toString();
+    controller.paymentAmountController.text =
+        (data['regularAmount'] ?? '').toString();
+    _regularDurationController.text =
+        (data['regularDurationValue'] ?? data['regularDurationHours'] ?? '')
+            .toString();
     _startDateController.text = (data['startDate'] ?? '').toString();
     _endDateController.text = (data['endDate'] ?? '').toString();
-
-    _selectedRegularType = MonthlyParkingOptions.normalizeRegularType(data['regularType']?.toString());
+    _selectedRegularType = MonthlyParkingOptions.normalizeRegularType(
+      data['regularType']?.toString(),
+    );
     _selectedPeriodUnit = MonthlyParkingOptions.resolvePeriodUnit(
       regularType: _selectedRegularType,
       periodUnit: data['periodUnit']?.toString(),
     );
     controller.selectedPeriodUnit = _selectedPeriodUnit;
     controller.selectedRegularType = _selectedRegularType;
-    controller.customStatusController.text = (data['customStatus'] ?? '').toString();
+    controller.customStatusController.text =
+        (data['customStatus'] ?? '').toString();
     controller.selectedStatuses = List<String>.from(data['statusList'] ?? []);
     controller.specialNote = (data['specialNote'] ?? '').toString();
   }
 
   @override
   void dispose() {
-    controller.controllerBackDigit.removeListener(_backListener);
     controller.dispose();
     _regularNameController.dispose();
     _regularAmountController.dispose();
@@ -124,11 +120,12 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
 
   Future<void> _openPaymentSheet() async {
     FocusScope.of(context).unfocus();
-    await showModalBottomSheet<void>(
+    await showPromptOverlayBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
       useSafeArea: true,
+      useRootNavigator: true,
+      transparentBackground: true,
       builder: (_) => MonthlyPaymentBottomSheet(controller: controller),
     );
     if (mounted) setState(() {});
@@ -136,34 +133,38 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
 
   Widget _buildKeypad() {
     final active = controller.activeController;
-
     if (active == controller.controllerFrontDigit) {
       return NumKeypad(
-        key: const ValueKey('frontKeypad'),
+        key: const ValueKey<String>('front-keypad'),
         controller: controller.controllerFrontDigit,
         maxLength: controller.isThreeDigit ? 3 : 2,
-        onComplete: () => setState(() => controller.setActiveController(controller.controllerMidDigit)),
-        onChangeFrontDigitMode: (defaultThree) {
-          setState(() => controller.setFrontDigitMode(defaultThree));
+        onComplete: () {
+          setState(() {
+            controller.setActiveController(controller.controllerMidDigit);
+          });
+        },
+        onChangeFrontDigitMode: (threeDigits) {
+          setState(() => controller.setFrontDigitMode(threeDigits));
         },
         enableDigitModeSwitch: true,
       );
     }
-
     if (active == controller.controllerMidDigit) {
       return KorKeypad(
-        key: const ValueKey('midKeypad'),
+        key: const ValueKey<String>('middle-keypad'),
         controller: controller.controllerMidDigit,
-        onComplete: () => setState(() => controller.setActiveController(controller.controllerBackDigit)),
+        onComplete: () {
+          setState(() {
+            controller.setActiveController(controller.controllerBackDigit);
+          });
+        },
       );
     }
-
     return NumKeypad(
-      key: const ValueKey('backKeypad'),
+      key: const ValueKey<String>('back-keypad'),
       controller: controller.controllerBackDigit,
       maxLength: 4,
       onComplete: () => setState(() => controller.showKeypad = false),
-      enableDigitModeSwitch: false,
       onReset: () {
         setState(() {
           controller.clearInput();
@@ -173,23 +174,35 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
     );
   }
 
-  Widget _buildTopBar() {
+  Widget _buildTopBar(BuildContext context) {
+    final tokens = PromptUiTheme.of(context);
+    final textTheme = Theme.of(context).textTheme;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: _editorInk,
-        borderRadius: BorderRadius.circular(22),
+        color: tokens.surfaceRaised,
+        borderRadius: BorderRadius.circular(PromptUiShapes.card),
+        border: Border.all(color: tokens.borderSubtle),
       ),
       child: Row(
         children: [
           Container(
-            width: 42,
-            height: 42,
+            width: 44,
+            height: 44,
+            alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: _editorBlue,
-              borderRadius: BorderRadius.circular(13),
+              color: tokens.accentContainer,
+              borderRadius: BorderRadius.circular(PromptUiShapes.control),
+              border: Border.all(
+                color: tokens.accent.withOpacity(
+                  tokens.isDark ? 0.56 : 0.34,
+                ),
+              ),
             ),
-            child: Icon(widget.isEditMode ? Icons.edit_note : Icons.add_road, color: Colors.white),
+            child: Icon(
+              widget.isEditMode ? Icons.edit_note_rounded : Icons.add_road,
+              color: tokens.onAccentContainer,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -198,32 +211,31 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
               children: [
                 Text(
                   widget.isEditMode ? '정기권 수정' : '정기권 신규 등록',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 18,
-                    letterSpacing: -.2,
+                  style: textTheme.titleMedium?.copyWith(
+                    color: tokens.textPrimary,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  widget.isEditMode ? '차량번호와 지점은 잠겨 있습니다.' : '차량, 상품, 기간을 순서대로 입력하세요.',
-                  style: const TextStyle(
-                    color: Color(0xFFB8C2D6),
-                    fontWeight: FontWeight.w700,
-                    fontSize: 12,
+                  widget.isEditMode
+                      ? '기존 차량의 상품, 기간과 운영 메모를 수정합니다.'
+                      : '차량, 상품과 기간을 차례대로 입력합니다.',
+                  style: textTheme.bodySmall?.copyWith(
+                    color: tokens.textSecondary,
                   ),
                 ),
               ],
             ),
           ),
-          IconButton(
+          PromptIconButton(
+            icon: Icons.close_rounded,
             tooltip: '닫기',
+            haptic: PromptHaptic.selection,
             onPressed: () {
-              final nav = Navigator.of(context, rootNavigator: true);
-              if (nav.canPop()) nav.pop();
+              final navigator = Navigator.of(context, rootNavigator: true);
+              if (navigator.canPop()) navigator.pop();
             },
-            icon: const Icon(Icons.close, color: Colors.white),
           ),
         ],
       ),
@@ -231,59 +243,24 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
   }
 
   Widget _buildSettlementType() {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: _editorPanel,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _editorLine),
+    return const MonthlyPromptSection(
+      title: '정산 유형',
+      subtitle: '정기 주차 등록에는 정기 정산 유형이 적용됩니다.',
+      icon: Icons.confirmation_number_outlined,
+      delay: Duration(milliseconds: 30),
+      trailing: MonthlyPromptBadge(
+        label: '고정',
+        icon: Icons.lock_outline_rounded,
       ),
-      child: Row(
-        children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: const Color(0xFFEFF6FF),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(Icons.confirmation_number_outlined, color: _editorBlue, size: 19),
-          ),
-          const SizedBox(width: 10),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '정산 유형',
-                  style: TextStyle(color: _editorMuted, fontWeight: FontWeight.w800, fontSize: 12),
-                ),
-                SizedBox(height: 2),
-                Text(
-                  '정기',
-                  style: TextStyle(color: _editorInk, fontWeight: FontWeight.w900, fontSize: 16),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: _editorLine),
-            ),
-            child: const Text(
-              '고정',
-              style: TextStyle(color: _editorMuted, fontWeight: FontWeight.w900, fontSize: 12),
-            ),
-          ),
-        ],
+      child: MonthlyPromptBadge(
+        label: '정기',
+        icon: Icons.verified_outlined,
+        tone: MonthlyPromptMessageTone.success,
       ),
     );
   }
 
-  Widget _buildEntryActionArea() {
+  Widget _buildActionArea() {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -299,7 +276,6 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
         ],
         MonthlyBottomActionSection(
           controller: controller,
-          mountedContext: mounted,
           onStateRefresh: () => setState(() {}),
           isEditMode: widget.isEditMode,
         ),
@@ -314,125 +290,132 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
 
     final media = MediaQuery.of(context);
     final bottomInset = media.viewInsets.bottom;
+    final reduceMotion = media.disableAnimations;
     final screenSize = media.size;
-    var dialogWidth = screenSize.width - 24;
-    if (dialogWidth > 780) dialogWidth = 780;
-    var dialogHeight = screenSize.height - bottomInset - 28;
-    if (dialogHeight > 900) dialogHeight = 900;
-    if (dialogHeight < 460) dialogHeight = screenSize.height - bottomInset - 12;
+    final dialogWidth = (screenSize.width - 24).clamp(320.0, 780.0).toDouble();
+    final availableHeight = screenSize.height - bottomInset - 24;
+    final dialogHeight = availableHeight < 460
+        ? availableHeight
+        : availableHeight.clamp(460.0, 900.0).toDouble();
+    final tokens = PromptUiTheme.of(context);
 
     return SafeArea(
       child: Padding(
-        padding: EdgeInsets.only(left: 12, right: 12, top: 12, bottom: bottomInset + 12),
+        padding: EdgeInsets.fromLTRB(12, 12, 12, bottomInset + 12),
         child: Center(
-          child: SizedBox(
+          child: AnimatedContainer(
+            duration: reduceMotion ? Duration.zero : PromptUiMotion.layout,
+            curve: PromptUiMotion.standard,
             width: dialogWidth,
             height: dialogHeight,
-            child: Material(
-              color: Colors.transparent,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: _editorCanvas,
-                  borderRadius: BorderRadius.circular(28),
-                  border: Border.all(color: _editorLine),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(.18),
-                      blurRadius: 28,
-                      offset: const Offset(0, 16),
-                    ),
-                  ],
+            decoration: BoxDecoration(
+              color: tokens.canvas,
+              borderRadius: BorderRadius.circular(PromptUiShapes.sheet),
+              border: Border.all(color: tokens.borderSubtle),
+              boxShadow: [
+                BoxShadow(
+                  color: tokens.shadow,
+                  blurRadius: 28,
+                  offset: const Offset(0, 16),
                 ),
-                child: Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
-                      child: _buildTopBar(),
-                    ),
-                    Expanded(
-                      child: SingleChildScrollView(
-                        padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            MonthlyPlateSection(
-                              dropdownValue: controller.dropdownValue,
-                              regions: MonthlyPlateController.regions,
-                              controllerFrontDigit: controller.controllerFrontDigit,
-                              controllerMidDigit: controller.controllerMidDigit,
-                              controllerBackDigit: controller.controllerBackDigit,
-                              activeController: controller.activeController,
-                              onKeypadStateChanged: (tc) {
-                                setState(() => controller.setActiveController(tc));
-                              },
-                              onRegionChanged: (region) {
-                                setState(() => controller.dropdownValue = region);
-                              },
-                              isThreeDigit: controller.isThreeDigit,
-                              isEditMode: widget.isEditMode,
-                            ),
-                            const SizedBox(height: 12),
-                            _buildSettlementType(),
-                            const SizedBox(height: 12),
-                            MonthlyBillSection(
-                              nameController: _regularNameController,
-                              amountController: _regularAmountController,
-                              durationController: _regularDurationController,
-                              selectedType: _selectedRegularType,
-                              onTypeChanged: (val) => setState(() {
-                                controller.applyRegularType(val);
-                                _selectedRegularType = controller.selectedRegularType;
-                                _selectedPeriodUnit = controller.selectedPeriodUnit;
-                              }),
-                              selectedPeriodUnit: _selectedPeriodUnit,
-                              onPeriodUnitChanged: (val) {
-                                setState(() {
-                                  _selectedPeriodUnit = controller.selectedPeriodUnit;
-                                });
-                              },
-                              onDurationChanged: (_) {
-                                setState(() {
-                                  controller.updateEndDateFromDuration();
-                                });
-                              },
-                              isEditMode: widget.isEditMode,
-                            ),
-                            const SizedBox(height: 12),
-                            MonthlyDateRangePickerSection(
-                              startDateController: _startDateController,
-                              endDateController: _endDateController,
-                              periodUnit: _selectedPeriodUnit,
-                              duration: int.tryParse(_regularDurationController.text) ?? 1,
-                              regularType: _selectedRegularType,
-                            ),
-                            const SizedBox(height: 12),
-                            MonthlyCustomStatusSection(
-                              controller: controller,
-                              fetchedCustomStatus: controller.fetchedCustomStatus,
-                              statusSectionKey: statusSectionKey,
-                              onDeleted: () {
-                                setState(() {
-                                  controller.fetchedCustomStatus = null;
-                                  controller.customStatusController.clear();
-                                });
-                              },
-                              onStatusCleared: () {
-                                setState(() => statusSectionKey = UniqueKey());
-                              },
-                            ),
-                          ],
+              ],
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+                  child: PromptAnimatedReveal(
+                    child: _buildTopBar(context),
+                  ),
+                ),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+                    keyboardDismissBehavior:
+                        ScrollViewKeyboardDismissBehavior.onDrag,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        MonthlyPlateSection(
+                          dropdownValue: controller.dropdownValue,
+                          regions: MonthlyPlateController.regions,
+                          controllerFrontDigit:
+                              controller.controllerFrontDigit,
+                          controllerMidDigit: controller.controllerMidDigit,
+                          controllerBackDigit: controller.controllerBackDigit,
+                          activeController: controller.activeController,
+                          onKeypadStateChanged: (textController) {
+                            setState(() {
+                              controller.setActiveController(textController);
+                            });
+                          },
+                          onRegionChanged: (region) {
+                            setState(() => controller.dropdownValue = region);
+                          },
+                          isThreeDigit: controller.isThreeDigit,
+                          isEditMode: widget.isEditMode,
                         ),
-                      ),
+                        const SizedBox(height: 12),
+                        _buildSettlementType(),
+                        const SizedBox(height: 12),
+                        MonthlyBillSection(
+                          nameController: _regularNameController,
+                          amountController: _regularAmountController,
+                          durationController: _regularDurationController,
+                          selectedType: _selectedRegularType,
+                          onTypeChanged: (value) {
+                            setState(() {
+                              controller.applyRegularType(value);
+                              _selectedRegularType =
+                                  controller.selectedRegularType;
+                              _selectedPeriodUnit =
+                                  controller.selectedPeriodUnit;
+                            });
+                          },
+                          selectedPeriodUnit: _selectedPeriodUnit,
+                          onPeriodUnitChanged: (_) {},
+                          onDurationChanged: (_) {
+                            setState(controller.updateEndDateFromDuration);
+                          },
+                          isEditMode: widget.isEditMode,
+                        ),
+                        const SizedBox(height: 12),
+                        MonthlyDateRangePickerSection(
+                          startDateController: _startDateController,
+                          endDateController: _endDateController,
+                          periodUnit: _selectedPeriodUnit,
+                          duration:
+                              int.tryParse(_regularDurationController.text) ?? 1,
+                          regularType: _selectedRegularType,
+                        ),
+                        const SizedBox(height: 12),
+                        MonthlyCustomStatusSection(
+                          controller: controller,
+                          fetchedCustomStatus:
+                              controller.fetchedCustomStatus,
+                          statusSectionKey: statusSectionKey,
+                          onDeleted: () {
+                            setState(() {
+                              controller.fetchedCustomStatus = null;
+                              controller.customStatusController.clear();
+                            });
+                          },
+                          onStatusCleared: () {
+                            setState(() => statusSectionKey = UniqueKey());
+                          },
+                        ),
+                      ],
                     ),
-                    MonthlyBottomNavigation(
-                      showKeypad: controller.showKeypad,
-                      keypad: _buildKeypad(),
-                      actionButton: _buildEntryActionArea(),
-                      backgroundColor: _editorPanel,
-                    ),
-                  ],
+                  ),
                 ),
-              ),
+                MonthlyBottomNavigation(
+                  showKeypad: controller.showKeypad,
+                  keypad: _buildKeypad(),
+                  actionButton: _buildActionArea(),
+                  backgroundColor: tokens.surfaceRaised,
+                ),
+              ],
             ),
           ),
         ),

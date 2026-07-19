@@ -51,7 +51,7 @@ class _SprintProjectManagementPageState
           reduceMotion ? Duration.zero : const Duration(milliseconds: 280),
       reverseTransitionDuration:
           reduceMotion ? Duration.zero : const Duration(milliseconds: 220),
-      pageBuilder: (_, __, ___) => page,
+      pageBuilder: (_, __, ___) => SprintPromptScope(child: page),
       transitionsBuilder: (_, animation, __, child) {
         if (reduceMotion) return child;
         final curved = CurvedAnimation(
@@ -123,9 +123,8 @@ class _SprintProjectManagementPageState
   Widget build(BuildContext context) {
     final project = widget.store.projectById(widget.projectId);
     if (project == null) {
-      return const Scaffold(body: Center(child: Text('프로젝트를 찾지 못했습니다.')));
+      return const SprintScaffold(body: Center(child: Text('프로젝트를 찾지 못했습니다.')));
     }
-    final colors = Theme.of(context).colorScheme;
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final duration =
@@ -136,11 +135,9 @@ class _SprintProjectManagementPageState
         .toList(growable: false);
     final report = widget.store.latestReportFor(project.id);
     final summary = widget.store.summaryFor(project.id);
-    return Scaffold(
-      backgroundColor: colors.surface,
+    return SprintScaffold(
       appBar: AppBar(
         title: const Text('프로젝트 관리'),
-        backgroundColor: colors.surface,
         actions: [
           IconButton(
             tooltip: '프로젝트 수정',

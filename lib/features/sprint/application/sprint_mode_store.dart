@@ -4,7 +4,11 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:googleapis/calendar/v3.dart' as gcal;
 
+import '../../../app/auth/google_auth_session.dart';
+
+import '../../../shared/google_calendar/google_event_colors.dart';
 import '../../headquarter/widgets/calendar/google_calendar_service.dart';
+import 'sprint_calendar_sync_coordinator.dart';
 import '../data/sprint_database.dart';
 import '../domain/sprint_models.dart';
 import '../domain/sprint_scheduling_engine.dart';
@@ -16,9 +20,18 @@ class SprintModeStore extends ChangeNotifier {
     SprintSchedulingEngine? schedulingEngine,
   })  : _calendarService = calendarService ?? GoogleCalendarService(),
         _database = database ?? SprintDatabase.instance,
-        _schedulingEngine = schedulingEngine ?? const SprintSchedulingEngine();
+        _schedulingEngine = schedulingEngine ?? const SprintSchedulingEngine() {
+    _calendarSyncCoordinator = SprintCalendarSyncCoordinator(
+      calendarService: _calendarService,
+    );
+    _identitySubscription =
+        GoogleAuthSession.instance.identityChanges.listen(_handleIdentityChange);
+  }
+
+  static const int maxActiveProjectCount = 11;
 
   final GoogleCalendarService _calendarService;
+  late final SprintCalendarSyncCoordinator _calendarSyncCoordinator;
   final SprintDatabase _database;
   final SprintSchedulingEngine _schedulingEngine;
   final List<SprintProject> _projects = <SprintProject>[];
@@ -30,6 +43,9 @@ class SprintModeStore extends ChangeNotifier {
   final List<SprintActivityEvent> _activityEvents = <SprintActivityEvent>[];
   final List<SprintConflictResolution> _conflictResolutions =
       <SprintConflictResolution>[];
+  final List<SprintGoogleAccount> _googleAccounts = <SprintGoogleAccount>[];
+  final List<SprintCalendarProfile> _calendarProfiles =
+      <SprintCalendarProfile>[];
 
   DateTime _selectedDate = _day(DateTime.now());
   SprintWorkspaceScope _workspaceScope = const SprintWorkspaceScope.all();
@@ -42,14 +58,16 @@ class SprintModeStore extends ChangeNotifier {
   bool _initialized = false;
   bool _initializing = false;
   bool _accountOperationInProgress = false;
-  String _googleCalendarId = 'primary';
-  bool _googleCalendarIdLocked = false;
+  String? _activeCalendarProfileId;
   DateTime _lastObservedToday = _day(DateTime.now());
   DateTime? _calendarLoadedStart;
   DateTime? _calendarLoadedEnd;
   Timer? _calendarRangeDebounce;
   int _calendarSyncGeneration = 0;
   Future<void> _writeQueue = Future<void>.value();
+  Future<void> _calendarWriteQueue = Future<void>.value();
+  StreamSubscription<GoogleAuthIdentity?>? _identitySubscription;
+  String? _projectInputError;
 
   List<SprintProject> get projects => List<SprintProject>.unmodifiable(
         _projects.where((project) => project.status == SprintProjectStatus.active),
@@ -62,11 +80,20 @@ class SprintModeStore extends ChangeNotifier {
   List<SprintProject> get archivedProjects => List<SprintProject>.unmodifiable(
         _projects.where((project) => project.status == SprintProjectStatus.archived),
       );
-  List<SprintTask> get tasks => List<SprintTask>.unmodifiable(_tasks);
+  List<SprintTask> get tasks => List<SprintTask>.unmodifiable(
+        _tasks.where((task) => !task.deleteAfterSync),
+      );
   List<SprintScheduleBlock> get blocks =>
       List<SprintScheduleBlock>.unmodifiable(_blocks);
-  List<SprintExternalEvent> get externalEvents =>
-      List<SprintExternalEvent>.unmodifiable(_externalEvents);
+  List<SprintExternalEvent> get externalEvents {
+    final profileId = _activeCalendarProfileId;
+    if (profileId == null) return const <SprintExternalEvent>[];
+    return List<SprintExternalEvent>.unmodifiable(
+      _externalEvents.where(
+        (event) => event.calendarProfileId == profileId,
+      ),
+    );
+  }
   List<SprintAttentionItem> get attentionItems =>
       List<SprintAttentionItem>.unmodifiable(_attentionItems);
   List<SprintProjectReport> get projectReports =>
@@ -86,16 +113,66 @@ class SprintModeStore extends ChangeNotifier {
   SprintCalendarConnectionState get calendarState => _calendarState;
   String? get calendarError => _calendarError;
   String? get taskInputError => _taskInputError;
+  String? get projectInputError => _projectInputError;
   bool get initialized => _initialized;
   bool get initializing => _initializing;
   bool get accountSaving => _accountOperationInProgress;
   bool get accountBusy => _accountOperationInProgress;
-  String get googleCalendarId => _googleCalendarId;
-  bool get googleCalendarIdLocked => _googleCalendarIdLocked;
+  List<SprintGoogleAccount> get googleAccounts =>
+      List<SprintGoogleAccount>.unmodifiable(_googleAccounts);
+  List<SprintCalendarProfile> get calendarProfiles =>
+      List<SprintCalendarProfile>.unmodifiable(
+        _calendarProfiles.where((profile) => profile.enabled),
+      );
+  String? get activeCalendarProfileId => _activeCalendarProfileId;
+  SprintCalendarProfile? get activeCalendarProfile =>
+      calendarProfileById(_activeCalendarProfileId);
+  SprintGoogleAccount? get activeGoogleAccount =>
+      googleAccountById(activeCalendarProfile?.accountId);
+  String get googleCalendarId => activeCalendarProfile?.calendarId ?? 'primary';
+  bool get googleCalendarIdLocked => activeCalendarProfile?.locked ?? false;
+  String get activeCalendarLabel =>
+      activeCalendarProfile?.label.trim().isNotEmpty == true
+          ? activeCalendarProfile!.label.trim()
+          : 'Google 캘린더';
+  String get activeGoogleEmail => activeGoogleAccount?.email.trim() ?? '';
   bool get isTodaySelected =>
       _selectedDate.isAtSameMomentAs(_day(DateTime.now()));
   bool get isCurrentWeekSelected =>
       weekStart(_selectedDate).isAtSameMomentAs(weekStart(DateTime.now()));
+
+  int get activeProjectCount => projects.length;
+  bool get canCreateProject =>
+      activeProjectCount < maxActiveProjectCount &&
+      availableProjectColorIds().isNotEmpty;
+  bool get hasLinkedGoogleEvents => _tasks.any(
+        (task) => task.hasGoogleEvent,
+      );
+
+  List<String> availableProjectColorIds({String? excludingProjectId}) {
+    final used = _projects
+        .where(
+          (project) =>
+              project.status == SprintProjectStatus.active &&
+              project.id != excludingProjectId &&
+              googleEventColorIds.contains(project.googleColorId),
+        )
+        .map((project) => project.googleColorId)
+        .toSet();
+    return googleEventColorIds
+        .where((colorId) => !used.contains(colorId))
+        .toList(growable: false);
+  }
+
+  Map<String, String> projectColorOwners({String? excludingProjectId}) {
+    return <String, String>{
+      for (final project in _projects)
+        if (project.status == SprintProjectStatus.active &&
+            project.id != excludingProjectId &&
+            googleEventColorIds.contains(project.googleColorId))
+          project.googleColorId: project.name,
+    };
+  }
 
   String get scopeLabel {
     switch (_workspaceScope.type) {
@@ -127,6 +204,162 @@ class SprintModeStore extends ChangeNotifier {
   bool canScheduleProjectOn(String? projectId, DateTime date) {
     final lower = projectScheduleLowerBound(projectId);
     return lower == null || !_day(date).isBefore(lower);
+  }
+
+  void _ensureCalendarProfileMigration(SprintDatabaseSnapshot snapshot) {
+    final hasUnassignedLegacyTasks = _tasks.any(
+      (task) =>
+          task.googleCalendarProfileId?.trim().isNotEmpty != true &&
+          (task.hasGoogleEvent ||
+              task.googleCalendarId?.trim().isNotEmpty == true),
+    );
+    final hasUnassignedLegacyEvents = _externalEvents.any(
+      (event) => event.calendarProfileId.trim().isEmpty,
+    );
+    final hasLegacyData = snapshot.legacyCalendarConfigured ||
+        hasUnassignedLegacyTasks ||
+        hasUnassignedLegacyEvents;
+    if (_calendarProfiles.isEmpty && hasLegacyData) {
+      final now = DateTime.now();
+      final account = SprintGoogleAccount(
+        id: 'legacy-google-account',
+        email: '',
+        displayName: '',
+        requiresReauthentication: true,
+        createdAt: now,
+        updatedAt: now,
+      );
+      final profile = SprintCalendarProfile(
+        id: 'legacy-calendar-profile',
+        accountId: account.id,
+        calendarId: snapshot.googleCalendarId.trim().isEmpty
+            ? 'primary'
+            : snapshot.googleCalendarId.trim(),
+        label: '기존 Google 캘린더',
+        locked: snapshot.googleCalendarIdLocked,
+        sortOrder: 0,
+        createdAt: now,
+        updatedAt: now,
+      );
+      _googleAccounts.add(account);
+      _calendarProfiles.add(profile);
+      _activeCalendarProfileId = profile.id;
+    }
+    if (_activeCalendarProfileId == null ||
+        calendarProfileById(_activeCalendarProfileId)?.enabled != true) {
+      final enabled = _calendarProfiles.where((profile) => profile.enabled);
+      _activeCalendarProfileId = enabled.isEmpty ? null : enabled.first.id;
+    }
+    final activeProfile = activeCalendarProfile;
+    if (activeProfile == null) return;
+    for (final task in _tasks) {
+      if (task.googleCalendarProfileId?.trim().isNotEmpty == true) continue;
+      if (task.hasGoogleEvent ||
+          task.googleCalendarId?.trim().isNotEmpty == true) {
+        task.googleCalendarProfileId = activeProfile.id;
+      }
+    }
+    for (var index = 0; index < _externalEvents.length; index += 1) {
+      final event = _externalEvents[index];
+      if (event.calendarProfileId.trim().isNotEmpty) continue;
+      _externalEvents[index] = SprintExternalEvent(
+        id: '${activeProfile.id}:${event.googleEventId}',
+        googleEventId: event.googleEventId,
+        calendarProfileId: activeProfile.id,
+        title: event.title,
+        start: event.start,
+        end: event.end,
+        allDay: event.allDay,
+        blocksTime: event.blocksTime,
+        sourceUrl: event.sourceUrl,
+        colorId: event.colorId,
+        managedBySprint: event.managedBySprint,
+        linkedTaskId: event.linkedTaskId,
+        linkedProjectId: event.linkedProjectId,
+      );
+    }
+  }
+
+  void _handleIdentityChange(GoogleAuthIdentity? identity) {
+    if (_accountOperationInProgress) return;
+    final profile = activeCalendarProfile;
+    final account = activeGoogleAccount;
+    if (profile == null || account == null) return;
+    if (account.normalizedEmail.isEmpty) {
+      account
+        ..requiresReauthentication = true
+        ..updatedAt = DateTime.now();
+      _calendarService.resetAuthenticatedClient();
+      _calendarState = SprintCalendarConnectionState.reauthenticationRequired;
+      _calendarError = null;
+      notifyListeners();
+      _queuePersist();
+      return;
+    }
+    final matches = identity != null &&
+        account.normalizedEmail.isNotEmpty &&
+        identity.normalizedEmail == account.normalizedEmail;
+    if (!matches) {
+      account
+        ..requiresReauthentication = true
+        ..updatedAt = DateTime.now();
+      _calendarService.resetAuthenticatedClient();
+      _calendarState = SprintCalendarConnectionState.reauthenticationRequired;
+      _calendarError = null;
+      notifyListeners();
+      _queuePersist();
+      return;
+    }
+    account
+      ..googleUserId = identity.id
+      ..email = identity.email.trim()
+      ..displayName = identity.displayName.trim()
+      ..requiresReauthentication = false
+      ..updatedAt = DateTime.now();
+    if (_calendarState ==
+        SprintCalendarConnectionState.reauthenticationRequired) {
+      _calendarState = SprintCalendarConnectionState.cached;
+      _calendarError = null;
+    }
+    notifyListeners();
+    _queuePersist();
+  }
+
+  bool _activeIdentityMatches() {
+    final account = activeGoogleAccount;
+    final identity = GoogleAuthSession.instance.currentIdentity;
+    return account != null &&
+        identity != null &&
+        account.normalizedEmail.isNotEmpty &&
+        account.normalizedEmail == identity.normalizedEmail;
+  }
+
+  void _protectActiveProfileAfterAuthenticationChange() {
+    final account = activeGoogleAccount;
+    if (account == null || _activeIdentityMatches()) return;
+    account
+      ..requiresReauthentication = true
+      ..updatedAt = DateTime.now();
+    _calendarService.resetAuthenticatedClient();
+    _calendarState = SprintCalendarConnectionState.reauthenticationRequired;
+  }
+
+  SprintCalendarConnectionState _initialCalendarState() {
+    final profile = activeCalendarProfile;
+    final account = activeGoogleAccount;
+    if (profile == null || account == null || !profile.enabled) {
+      return SprintCalendarConnectionState.notConnected;
+    }
+    final identity = GoogleAuthSession.instance.currentIdentity;
+    final matches = identity != null &&
+        account.email.trim().isNotEmpty &&
+        identity.normalizedEmail == account.normalizedEmail;
+    if (!matches) {
+      account.requiresReauthentication = true;
+      return SprintCalendarConnectionState.reauthenticationRequired;
+    }
+    account.requiresReauthentication = false;
+    return SprintCalendarConnectionState.cached;
   }
 
   Future<void> initialize() async {
@@ -165,6 +398,14 @@ class SprintModeStore extends ChangeNotifier {
       _conflictResolutions
         ..clear()
         ..addAll(snapshot.conflictResolutions);
+      _googleAccounts
+        ..clear()
+        ..addAll(snapshot.googleAccounts);
+      _calendarProfiles
+        ..clear()
+        ..addAll(snapshot.calendarProfiles);
+      _activeCalendarProfileId = snapshot.activeCalendarProfileId;
+      _ensureCalendarProfileMigration(snapshot);
       final currentToday = _day(DateTime.now());
       final restoredSelectedDate = _day(snapshot.selectedDate);
       final restoredObservedToday = _day(snapshot.lastObservedToday);
@@ -174,17 +415,18 @@ class SprintModeStore extends ChangeNotifier {
       _lastObservedToday = currentToday;
       _workspaceScope = _validatedScope(snapshot.workspaceScope);
       _weekMode = snapshot.weekMode;
-      _googleCalendarId = snapshot.googleCalendarId;
-      _googleCalendarIdLocked = snapshot.googleCalendarIdLocked;
-      _calendarState = _externalEvents.isEmpty
-          ? SprintCalendarConnectionState.notConnected
-          : SprintCalendarConnectionState.connected;
+      _calendarState = _initialCalendarState();
       _sequence = _nextSequenceValue();
+      _ensureProjectColors();
       _normalizeAllDayData();
+      _normalizeGoogleSyncState();
       _refreshAttention();
       _initialized = true;
       await _persistNow();
-      ensureCalendarRangeFor(_selectedDate);
+      if (_calendarState == SprintCalendarConnectionState.cached) {
+        ensureCalendarRangeFor(_selectedDate, immediate: true);
+      }
+      _retryPendingTaskSyncs();
     } finally {
       _initializing = false;
       notifyListeners();
@@ -193,19 +435,31 @@ class SprintModeStore extends ChangeNotifier {
 
   Future<void> flush() async {
     await _writeQueue;
+    await _calendarWriteQueue;
     if (_initialized) await _persistNow();
   }
 
   Future<SprintProject?> createProject({
     required String name,
     required String iconKey,
+    required String googleColorId,
     DateTime? targetStartDate,
     DateTime? targetDate,
   }) async {
+    _projectInputError = null;
     final normalizedName = name.trim();
     final start = targetStartDate == null ? null : _day(targetStartDate);
     final target = targetDate == null ? null : _day(targetDate);
+    if (projects.length >= maxActiveProjectCount) {
+      _projectInputError = '활성 프로젝트는 최대 11개까지 만들 수 있습니다.';
+      return null;
+    }
+    if (!availableProjectColorIds().contains(googleColorId)) {
+      _projectInputError = '다른 활성 프로젝트에서 사용하지 않는 색상을 선택하세요.';
+      return null;
+    }
     if (normalizedName.isEmpty || !_validProjectDateRange(start, target)) {
+      _projectInputError = '프로젝트 정보를 확인하세요.';
       return null;
     }
     final project = SprintProject(
@@ -214,12 +468,15 @@ class SprintModeStore extends ChangeNotifier {
       iconKey: sprintProjectIcons.containsKey(iconKey) ? iconKey : 'folder',
       targetStartDate: start,
       targetDate: target,
+      googleColorId: googleColorId,
+      calendarSyncEnabled: true,
     );
     _projects.add(project);
     _workspaceScope = SprintWorkspaceScope.project(project.id);
     _recordActivity(
       type: SprintActivityEventType.projectCreated,
       projectId: project.id,
+      payload: <String, String>{'google_color_id': googleColorId},
     );
     _refreshAttention();
     notifyListeners();
@@ -227,10 +484,12 @@ class SprintModeStore extends ChangeNotifier {
     return project;
   }
 
+
   Future<SprintOperationResult> updateProject({
     required String projectId,
     required String name,
     required String iconKey,
+    required String googleColorId,
     DateTime? targetStartDate,
     DateTime? targetDate,
   }) async {
@@ -246,53 +505,48 @@ class SprintModeStore extends ChangeNotifier {
         message: '프로젝트 날짜 범위를 확인하세요.',
       );
     }
-    final affected = _tasks.where((task) {
-      return task.projectId == projectId &&
-          task.state != SprintTaskState.completed &&
-          task.state != SprintTaskState.cancelled &&
-          start != null &&
-          task.startDate.isBefore(start);
-    }).toList(growable: false);
-    final hasLocked = affected.any(
-      (task) => blocksForTask(task.id).any((block) => block.locked),
-    );
-    if (hasLocked) {
+    if (!availableProjectColorIds(excludingProjectId: projectId)
+        .contains(googleColorId)) {
       return const SprintOperationResult(
         success: false,
-        message: '새 목표 시작일 이전에 고정된 일정이 있습니다.',
+        message: '다른 활성 프로젝트에서 사용하지 않는 색상을 선택하세요.',
       );
     }
-    var moved = 0;
-    if (start != null) {
-      for (final task in affected) {
-        final days = math.max(0, task.endDate.difference(task.startDate).inDays);
-        task
-          ..startDate = start
-          ..endDate = start.add(Duration(days: days));
-        _syncBlockFromTask(task);
-        moved += 1;
-      }
-    }
+    final colorChanged = project.googleColorId != googleColorId;
     project
       ..name = normalizedName
       ..iconKey = sprintProjectIcons.containsKey(iconKey) ? iconKey : 'folder'
       ..targetStartDate = start
-      ..targetDate = target;
+      ..targetDate = target
+      ..googleColorId = googleColorId;
     _recordActivity(
       type: SprintActivityEventType.projectUpdated,
       projectId: project.id,
-      payload: <String, String>{'moved_tasks': '$moved'},
+      payload: <String, String>{
+        'google_color_id': googleColorId,
+      },
     );
     _refreshAttention();
     notifyListeners();
     await _persistNow();
-    return SprintOperationResult(
+    final syncTargets = <SprintTask>{
+      if (colorChanged)
+        ..._tasks.where(
+          (task) =>
+              task.projectId == projectId &&
+              task.state != SprintTaskState.cancelled &&
+              _blockForTask(task.id) != null,
+        ),
+    };
+    for (final task in syncTargets) {
+      _scheduleTaskCalendarUpsert(task.id);
+    }
+    return const SprintOperationResult(
       success: true,
-      message: moved == 0
-          ? '프로젝트를 수정했습니다.'
-          : '프로젝트를 수정하고 업무 $moved개를 시작일 이후로 이동했습니다.',
+      message: '프로젝트를 수정했습니다.',
     );
   }
+
 
   Future<SprintProjectReport?> completeProject({
     required String projectId,
@@ -311,11 +565,15 @@ class SprintModeStore extends ChangeNotifier {
     final conflicts = conflictsForProject(projectId);
     if (remaining.isNotEmpty && !cancelRemaining) return null;
     if (conflicts.isNotEmpty && !acceptConflicts) return null;
+    final deleteTargets = <String>[];
     if (cancelRemaining) {
       for (final task in remaining) {
-        task.state = SprintTaskState.cancelled;
+        task
+          ..state = SprintTaskState.cancelled
+          ..deleteAfterSync = false;
         final block = _blockForTask(task.id);
         if (block != null) block.status = SprintScheduleBlockStatus.cancelled;
+        deleteTargets.add(task.id);
       }
     }
     final completedAt = DateTime.now();
@@ -339,8 +597,12 @@ class SprintModeStore extends ChangeNotifier {
     _refreshAttention();
     notifyListeners();
     await _persistNow();
+    for (final taskId in deleteTargets) {
+      _scheduleTaskCalendarDelete(taskId, deleteAfterSync: false);
+    }
     return report;
   }
+
 
   Future<bool> archiveProject(String projectId) async {
     final project = projectById(projectId);
@@ -364,8 +626,16 @@ class SprintModeStore extends ChangeNotifier {
     if (project == null || project.status == SprintProjectStatus.active) {
       return false;
     }
+    if (projects.length >= maxActiveProjectCount) return false;
+    final available = availableProjectColorIds(excludingProjectId: projectId);
+    if (available.isEmpty) return false;
+    final colorId = available.contains(project.googleColorId)
+        ? project.googleColorId
+        : available.first;
     project
       ..status = SprintProjectStatus.active
+      ..googleColorId = colorId
+      ..calendarSyncEnabled = true
       ..completedAt = null
       ..archivedAt = null
       ..reopenedAt = DateTime.now();
@@ -373,12 +643,23 @@ class SprintModeStore extends ChangeNotifier {
     _recordActivity(
       type: SprintActivityEventType.projectReopened,
       projectId: projectId,
+      payload: <String, String>{'google_color_id': colorId},
     );
     _refreshAttention();
     notifyListeners();
     await _persistNow();
+    for (final task in _tasks.where(
+      (task) =>
+          task.projectId == projectId &&
+          task.state != SprintTaskState.completed &&
+          task.state != SprintTaskState.cancelled &&
+          _blockForTask(task.id) != null,
+    )) {
+      _scheduleTaskCalendarUpsert(task.id);
+    }
     return true;
   }
+
 
   SprintProjectReport? latestReportFor(String projectId) {
     final reports = _projectReports
@@ -389,87 +670,377 @@ class SprintModeStore extends ChangeNotifier {
   }
 
   Future<bool> deleteProject(String projectId) async {
+    await _calendarWriteQueue;
     final project = projectById(projectId);
     if (project == null) return false;
-    final taskIds = _tasks
+    final projectTasks = _tasks
         .where((task) => task.projectId == projectId)
-        .map((task) => task.id)
-        .toSet();
-    _blocks.removeWhere((block) => taskIds.contains(block.taskId));
+        .toList(growable: false);
+    final pendingDeleteIds = <String>[];
+    for (final task in projectTasks) {
+      final remoteLinked = task.hasGoogleEvent || task.hasPendingGoogleSync;
+      if (!remoteLinked) {
+        _removeTaskLocally(task);
+        continue;
+      }
+      _blocks.removeWhere((block) => block.taskId == task.id);
+      _attentionItems.removeWhere((item) => item.taskId == task.id);
+      _recordActivity(
+        type: SprintActivityEventType.taskDeleted,
+        projectId: projectId,
+        taskId: task.id,
+      );
+      task
+        ..projectId = null
+        ..state = SprintTaskState.cancelled
+        ..googleSyncState = SprintGoogleSyncState.pendingDelete
+        ..googleSyncError = null
+        ..deleteAfterSync = true;
+      pendingDeleteIds.add(task.id);
+    }
     _pruneConflictResolutions();
-    _tasks.removeWhere((task) => taskIds.contains(task.id));
     _attentionItems.removeWhere((item) => item.projectId == projectId);
     _projectReports.removeWhere((report) => report.projectId == projectId);
-    _activityEvents.removeWhere((event) => event.projectId == projectId);
+    _activityEvents.removeWhere(
+      (event) => event.projectId == projectId &&
+          event.type != SprintActivityEventType.taskDeleted,
+    );
     _projects.remove(project);
     if (_workspaceScope.projectId == projectId) {
       _workspaceScope = const SprintWorkspaceScope.all();
     }
+    _refreshAttention();
     notifyListeners();
     await _persistNow();
+    for (final taskId in pendingDeleteIds) {
+      final task = taskById(taskId);
+      if (task?.googleCalendarProfileId == _activeCalendarProfileId) {
+        _scheduleTaskCalendarDelete(taskId, deleteAfterSync: true);
+      }
+    }
     return true;
+  }
+
+  Future<SprintCalendarProfile> addGoogleCalendarProfile({
+    required String label,
+    required String calendarId,
+    required bool locked,
+    bool forceAccountSelection = true,
+    bool makeActive = true,
+  }) async {
+    if (_accountOperationInProgress) {
+      throw StateError('account_operation_in_progress');
+    }
+    final normalizedCalendarId = normalizeGoogleCalendarId(calendarId);
+    final normalizedLabel = label.trim();
+    if (normalizedCalendarId.isEmpty) {
+      throw ArgumentError.value(calendarId, 'calendarId');
+    }
+    _accountOperationInProgress = true;
+    _calendarRangeDebounce?.cancel();
+    _calendarSyncGeneration += 1;
+    _calendarError = null;
+    notifyListeners();
+    try {
+      await _writeQueue;
+      await _calendarWriteQueue;
+      final identity = await GoogleAuthSession.instance.authenticateAccount(
+        forceAccountSelection: forceAccountSelection,
+      );
+      _calendarService.resetAuthenticatedClient();
+      await _calendarService.verifyCalendarAccess(
+        accountEmail: identity.email,
+        calendarId: normalizedCalendarId,
+      );
+      final now = DateTime.now();
+      SprintGoogleAccount? account;
+      for (final candidate in _googleAccounts) {
+        final sameGoogleUser = candidate.googleUserId?.trim().isNotEmpty == true &&
+            candidate.googleUserId == identity.id;
+        if (sameGoogleUser ||
+            candidate.normalizedEmail == identity.normalizedEmail) {
+          account = candidate;
+          break;
+        }
+      }
+      if (account == null) {
+        account = SprintGoogleAccount(
+          id: _newId('google-account'),
+          googleUserId: identity.id,
+          email: identity.email.trim(),
+          displayName: identity.displayName.trim(),
+          createdAt: now,
+          updatedAt: now,
+        );
+        _googleAccounts.add(account);
+      } else {
+        account
+          ..googleUserId = identity.id
+          ..email = identity.email.trim()
+          ..displayName = identity.displayName.trim()
+          ..requiresReauthentication = false
+          ..updatedAt = now;
+      }
+      SprintCalendarProfile? profile;
+      for (final candidate in _calendarProfiles) {
+        if (candidate.accountId == account.id &&
+            candidate.calendarId == normalizedCalendarId) {
+          profile = candidate;
+          break;
+        }
+      }
+      if (profile == null) {
+        profile = SprintCalendarProfile(
+          id: _newId('calendar-profile'),
+          accountId: account.id,
+          calendarId: normalizedCalendarId,
+          label: normalizedLabel.isEmpty
+              ? identity.displayName.trim().isNotEmpty
+                  ? identity.displayName.trim()
+                  : identity.email.trim()
+              : normalizedLabel,
+          locked: locked,
+          sortOrder: _calendarProfiles.length,
+          createdAt: now,
+          updatedAt: now,
+        );
+        _calendarProfiles.add(profile);
+      } else {
+        profile
+          ..label = normalizedLabel.isEmpty ? profile.label : normalizedLabel
+          ..locked = locked
+          ..enabled = true
+          ..lastSyncError = null
+          ..updatedAt = now;
+      }
+      if (makeActive || _activeCalendarProfileId == null) {
+        _activateProfileLocally(profile.id);
+      }
+      await _persistNow();
+      if (_activeCalendarProfileId == profile.id) {
+        await _syncGoogleCalendarInternal();
+      }
+      return profile;
+    } catch (error) {
+      _protectActiveProfileAfterAuthenticationChange();
+      _calendarError = _activeIdentityMatches() ? _calendarError : error.toString();
+      await _persistNow();
+      rethrow;
+    } finally {
+      _accountOperationInProgress = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> switchActiveCalendarProfile(String profileId) async {
+    if (_accountOperationInProgress) {
+      throw StateError('account_operation_in_progress');
+    }
+    final profile = calendarProfileById(profileId);
+    final account = accountForProfile(profileId);
+    if (profile == null || account == null || !profile.enabled) {
+      throw StateError('calendar_profile_not_found');
+    }
+    final previousProfileId = _activeCalendarProfileId;
+    final previousState = _calendarState;
+    final previousError = _calendarError;
+    final previousGoogleUserId = account.googleUserId;
+    final previousEmail = account.email;
+    final previousDisplayName = account.displayName;
+    final previousRequiresReauthentication =
+        account.requiresReauthentication;
+    final previousAccountUpdatedAt = account.updatedAt;
+    var bindingCommitted = false;
+    _accountOperationInProgress = true;
+    _calendarRangeDebounce?.cancel();
+    _calendarSyncGeneration += 1;
+    _calendarState = SprintCalendarConnectionState.switching;
+    _calendarError = null;
+    notifyListeners();
+    try {
+      await _writeQueue;
+      await _calendarWriteQueue;
+      final expectedEmail =
+          account.normalizedEmail.isEmpty ? null : account.email;
+      final identity = await GoogleAuthSession.instance.authenticateAccount(
+        expectedEmail: expectedEmail,
+        forceAccountSelection: expectedEmail == null ||
+            !isProfileAuthenticated(profileId),
+      );
+      _calendarService.resetAuthenticatedClient();
+      await _calendarService.verifyCalendarAccess(
+        accountEmail: identity.email,
+        calendarId: profile.calendarId,
+      );
+      final verifiedAt = DateTime.now();
+      account
+        ..googleUserId = identity.id
+        ..email = identity.email.trim()
+        ..displayName = identity.displayName.trim()
+        ..requiresReauthentication = false
+        ..updatedAt = verifiedAt;
+      profile
+        ..lastSyncError = null
+        ..updatedAt = verifiedAt;
+      _activateProfileLocally(profile.id);
+      await _persistNow();
+      bindingCommitted = true;
+      await _syncGoogleCalendarInternal();
+    } catch (error) {
+      if (!bindingCommitted) {
+        account
+          ..googleUserId = previousGoogleUserId
+          ..email = previousEmail
+          ..displayName = previousDisplayName
+          ..requiresReauthentication = previousRequiresReauthentication
+          ..updatedAt = previousAccountUpdatedAt;
+        if (_activeCalendarProfileId != previousProfileId) {
+          _activeCalendarProfileId = previousProfileId;
+          _calendarLoadedStart = null;
+          _calendarLoadedEnd = null;
+          _calendarSyncGeneration += 1;
+        }
+      }
+      profile
+        ..lastSyncError = error.toString()
+        ..updatedAt = DateTime.now();
+      _calendarService.resetAuthenticatedClient();
+      _protectActiveProfileAfterAuthenticationChange();
+      if (bindingCommitted) {
+        _calendarState = _activeIdentityMatches()
+            ? SprintCalendarConnectionState.failed
+            : SprintCalendarConnectionState.reauthenticationRequired;
+        _calendarError = error.toString();
+      } else if (_activeIdentityMatches()) {
+        if (previousProfileId == profileId) {
+          _calendarState = SprintCalendarConnectionState.failed;
+          _calendarError = error.toString();
+        } else {
+          _calendarState = previousState;
+          _calendarError = previousError;
+        }
+      } else {
+        _calendarState =
+            SprintCalendarConnectionState.reauthenticationRequired;
+        _calendarError = error.toString();
+      }
+      await _persistNow();
+      rethrow;
+    } finally {
+      _accountOperationInProgress = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> reconnectActiveCalendarProfile() async {
+    final profileId = _activeCalendarProfileId;
+    if (profileId == null) throw StateError('calendar_profile_not_found');
+    await switchActiveCalendarProfile(profileId);
+  }
+
+  Future<void> updateCalendarProfile({
+    required String profileId,
+    required String label,
+    required bool locked,
+  }) async {
+    final profile = calendarProfileById(profileId);
+    if (profile == null) throw StateError('calendar_profile_not_found');
+    profile
+      ..label = label.trim().isEmpty ? profile.label : label.trim()
+      ..locked = locked
+      ..updatedAt = DateTime.now();
+    notifyListeners();
+    await _persistNow();
+  }
+
+  Future<void> removeCalendarProfile(String profileId) async {
+    if (_accountOperationInProgress) {
+      throw StateError('account_operation_in_progress');
+    }
+    final profile = calendarProfileById(profileId);
+    if (profile == null) return;
+    final inUse = _tasks.any(
+      (task) => task.googleCalendarProfileId == profileId,
+    );
+    if (inUse) throw StateError('calendar_profile_in_use');
+    _calendarProfiles.remove(profile);
+    _externalEvents.removeWhere(
+      (event) => event.calendarProfileId == profileId,
+    );
+    final accountStillUsed = _calendarProfiles.any(
+      (candidate) => candidate.accountId == profile.accountId,
+    );
+    if (!accountStillUsed) {
+      _googleAccounts.removeWhere((account) => account.id == profile.accountId);
+    }
+    var refreshSelectedProfile = false;
+    if (_activeCalendarProfileId == profileId) {
+      final enabled = _calendarProfiles.where((candidate) => candidate.enabled);
+      _activeCalendarProfileId = enabled.isEmpty ? null : enabled.first.id;
+      _calendarLoadedStart = null;
+      _calendarLoadedEnd = null;
+      _calendarState = _initialCalendarState();
+      _calendarError = null;
+      _calendarSyncGeneration += 1;
+      refreshSelectedProfile =
+          _calendarState == SprintCalendarConnectionState.cached;
+    }
+    notifyListeners();
+    await _persistNow();
+    if (refreshSelectedProfile) {
+      ensureCalendarRangeFor(_selectedDate, immediate: true);
+    }
+  }
+
+  void _activateProfileLocally(String profileId) {
+    _calendarRangeDebounce?.cancel();
+    _calendarSyncGeneration += 1;
+    _activeCalendarProfileId = profileId;
+    _calendarLoadedStart = null;
+    _calendarLoadedEnd = null;
+    _calendarState = SprintCalendarConnectionState.cached;
+    _calendarError = null;
   }
 
   Future<void> saveGoogleCalendarAccount({
     required String calendarId,
     required bool locked,
   }) async {
-    if (_accountOperationInProgress) {
-      throw StateError('account_operation_in_progress');
-    }
-    _accountOperationInProgress = true;
-    notifyListeners();
-    try {
-      await _saveGoogleCalendarAccountInternal(
+    final profile = activeCalendarProfile;
+    if (profile == null) {
+      await addGoogleCalendarProfile(
+        label: 'Google 캘린더',
         calendarId: calendarId,
         locked: locked,
+        forceAccountSelection: false,
+        makeActive: true,
       );
-    } finally {
-      _accountOperationInProgress = false;
-      notifyListeners();
+      return;
     }
+    final normalized = normalizeGoogleCalendarId(calendarId);
+    final changed = normalized != profile.calendarId;
+    if (changed &&
+        _tasks.any(
+          (task) => task.googleCalendarProfileId == profile.id &&
+              task.hasGoogleEvent,
+        )) {
+      throw StateError('linked_calendar_change_not_allowed');
+    }
+    profile
+      ..calendarId = normalized
+      ..locked = locked
+      ..updatedAt = DateTime.now();
+    if (changed) _activateProfileLocally(profile.id);
+    notifyListeners();
+    await _persistNow();
   }
 
   Future<void> saveGoogleCalendarAccountAndSync({
     required String calendarId,
     required bool locked,
   }) async {
-    if (_accountOperationInProgress) return;
-    _accountOperationInProgress = true;
-    notifyListeners();
-    try {
-      await _saveGoogleCalendarAccountInternal(
-        calendarId: calendarId,
-        locked: locked,
-      );
-      await _syncGoogleCalendarInternal();
-    } finally {
-      _accountOperationInProgress = false;
-      notifyListeners();
-    }
-  }
-
-  Future<void> _saveGoogleCalendarAccountInternal({
-    required String calendarId,
-    required bool locked,
-  }) async {
-    final normalized = normalizeGoogleCalendarId(calendarId);
-    if (normalized.isEmpty) {
-      throw ArgumentError.value(calendarId, 'calendarId');
-    }
-    final changed = normalized != _googleCalendarId;
-    _googleCalendarId = normalized;
-    _googleCalendarIdLocked = locked;
-    if (changed) {
-      _calendarRangeDebounce?.cancel();
-      _calendarSyncGeneration += 1;
-      _externalEvents.clear();
-      _calendarLoadedStart = null;
-      _calendarLoadedEnd = null;
-      _calendarState = SprintCalendarConnectionState.notConnected;
-      _calendarError = null;
-    }
-    await _persistNow();
+    await saveGoogleCalendarAccount(calendarId: calendarId, locked: locked);
+    await reconnectActiveCalendarProfile();
   }
 
   String normalizeGoogleCalendarId(String value) {
@@ -481,6 +1052,35 @@ class SprintModeStore extends ChangeNotifier {
       return Uri.decodeComponent(source).trim();
     }
     return trimmed;
+  }
+
+  SprintGoogleAccount? googleAccountById(String? id) {
+    if (id == null) return null;
+    for (final account in _googleAccounts) {
+      if (account.id == id) return account;
+    }
+    return null;
+  }
+
+  SprintCalendarProfile? calendarProfileById(String? id) {
+    if (id == null) return null;
+    for (final profile in _calendarProfiles) {
+      if (profile.id == id) return profile;
+    }
+    return null;
+  }
+
+  SprintGoogleAccount? accountForProfile(String? profileId) {
+    return googleAccountById(calendarProfileById(profileId)?.accountId);
+  }
+
+  bool isProfileAuthenticated(String profileId) {
+    final account = accountForProfile(profileId);
+    final identity = GoogleAuthSession.instance.currentIdentity;
+    if (account == null || identity == null || account.email.trim().isEmpty) {
+      return false;
+    }
+    return identity.normalizedEmail == account.normalizedEmail;
   }
 
   SprintProject? projectById(String? id) {
@@ -634,7 +1234,7 @@ class SprintModeStore extends ChangeNotifier {
       );
     }
     taskEntries.sort((a, b) => _compareTasks(a.task!, b.task!));
-    final externalEntries = _externalEvents.where((event) {
+    final externalEntries = externalEvents.where((event) {
       final start = _day(event.start);
       final last = event.allDay
           ? _day(event.end.subtract(const Duration(days: 1)))
@@ -660,7 +1260,7 @@ class SprintModeStore extends ChangeNotifier {
         result = candidate;
       }
     }
-    for (final event in _externalEvents) {
+    for (final event in externalEvents) {
       final end = event.allDay
           ? _day(event.end.subtract(const Duration(days: 1)))
           : _day(event.end);
@@ -684,7 +1284,7 @@ class SprintModeStore extends ChangeNotifier {
         result = candidate;
       }
     }
-    for (final event in _externalEvents) {
+    for (final event in externalEvents) {
       final start = _day(event.start);
       if (start.isAfter(day) && (result == null || start.isBefore(result))) {
         result = start;
@@ -784,12 +1384,7 @@ class SprintModeStore extends ChangeNotifier {
     required String projectId,
     required DateTime date,
   }) {
-    var result = _day(date);
-    final today = _day(DateTime.now());
-    if (result.isBefore(today)) result = today;
-    final lower = projectScheduleLowerBound(projectId);
-    if (lower != null && result.isBefore(lower)) result = lower;
-    return result;
+    return _day(date);
   }
 
   SprintTaskCreationPreview? previewTaskFromText(
@@ -816,6 +1411,7 @@ class SprintModeStore extends ChangeNotifier {
     final days = math.max(0, parsed.endDate.difference(parsed.startDate).inDays);
     return previewTaskDetails(
       title: parsed.title,
+      description: '',
       projectId: resolvedProjectId,
       priority: parsed.priority,
       startDate: adjustedStart,
@@ -825,6 +1421,7 @@ class SprintModeStore extends ChangeNotifier {
 
   SprintTaskCreationPreview? previewTaskDetails({
     required String title,
+    required String description,
     required String projectId,
     required SprintTaskPriority priority,
     required DateTime startDate,
@@ -832,6 +1429,7 @@ class SprintModeStore extends ChangeNotifier {
   }) {
     _taskInputError = null;
     final normalizedTitle = title.trim();
+    final normalizedDescription = description.trim();
     final project = projectById(projectId);
     final start = _day(startDate);
     final end = _day(endDate);
@@ -850,6 +1448,7 @@ class SprintModeStore extends ChangeNotifier {
     );
     return SprintTaskCreationPreview(
       title: normalizedTitle,
+      description: normalizedDescription,
       projectId: projectId,
       priority: priority,
       startDate: start,
@@ -874,6 +1473,7 @@ class SprintModeStore extends ChangeNotifier {
     final task = SprintTask(
       id: _newId('task'),
       title: preview.title,
+      description: preview.description,
       projectId: preview.projectId,
       priority: preview.priority,
       startDate: preview.startDate,
@@ -901,6 +1501,7 @@ class SprintModeStore extends ChangeNotifier {
     _refreshAttention();
     notifyListeners();
     await _persistNow();
+    _scheduleTaskCalendarUpsert(task.id);
     return task;
   }
 
@@ -934,7 +1535,6 @@ class SprintModeStore extends ChangeNotifier {
           endDate: task.endDate,
           taskId: task.id,
           blockId: _blockForTask(task.id)?.id,
-          allowPastDate: true,
         ).conflicts,
       );
     }
@@ -944,6 +1544,7 @@ class SprintModeStore extends ChangeNotifier {
   Future<bool> updateTask({
     required String taskId,
     required String title,
+    required String description,
     required String projectId,
     required SprintTaskPriority priority,
     required DateTime startDate,
@@ -966,11 +1567,11 @@ class SprintModeStore extends ChangeNotifier {
       endDate: end,
       taskId: task.id,
       blockId: _blockForTask(task.id)?.id,
-      allowPastDate: _day(start).isAtSameMomentAs(_day(task.startDate)),
     );
     if (validation.conflicts.any(_isHardDateConflict)) return false;
     task
       ..title = normalizedTitle
+      ..description = description.trim()
       ..projectId = projectId
       ..priority = priority
       ..startDate = start
@@ -987,13 +1588,16 @@ class SprintModeStore extends ChangeNotifier {
     _refreshAttention();
     notifyListeners();
     await _persistNow();
+    _scheduleTaskCalendarUpsert(task.id);
     return true;
   }
 
   Future<bool> cancelTask(String taskId) async {
     final task = taskById(taskId);
     if (task == null) return false;
-    task.state = SprintTaskState.cancelled;
+    task
+      ..state = SprintTaskState.cancelled
+      ..deleteAfterSync = false;
     final block = _blockForTask(taskId);
     if (block != null) block.status = SprintScheduleBlockStatus.cancelled;
     _recordActivity(
@@ -1005,25 +1609,35 @@ class SprintModeStore extends ChangeNotifier {
     _refreshAttention();
     notifyListeners();
     await _persistNow();
+    _scheduleTaskCalendarDelete(task.id, deleteAfterSync: false);
     return true;
   }
 
+
   Future<bool> deleteTask(String taskId) async {
+    await _calendarWriteQueue;
     final task = taskById(taskId);
     if (task == null) return false;
-    _blocks.removeWhere((block) => block.taskId == taskId);
-    _attentionItems.removeWhere((item) => item.taskId == taskId);
-    _tasks.remove(task);
-    _recordActivity(
-      type: SprintActivityEventType.taskDeleted,
-      projectId: task.projectId,
-      taskId: task.id,
-    );
+    if (!task.hasGoogleEvent) {
+      _removeTaskLocally(task);
+      notifyListeners();
+      await _persistNow();
+      return true;
+    }
+    task
+      ..state = SprintTaskState.cancelled
+      ..googleSyncState = SprintGoogleSyncState.pendingDelete
+      ..googleSyncError = null
+      ..deleteAfterSync = true;
+    final block = _blockForTask(task.id);
+    if (block != null) block.status = SprintScheduleBlockStatus.cancelled;
     _refreshAttention();
     notifyListeners();
     await _persistNow();
+    _scheduleTaskCalendarDelete(task.id, deleteAfterSync: true);
     return true;
   }
+
 
   Future<SprintOperationResult> createBlock({
     required String taskId,
@@ -1067,6 +1681,7 @@ class SprintModeStore extends ChangeNotifier {
     _refreshAttention();
     notifyListeners();
     await _persistNow();
+    _scheduleTaskCalendarUpsert(task.id);
     return const SprintOperationResult(
       success: true,
       message: '종일 일정을 저장했습니다.',
@@ -1095,7 +1710,6 @@ class SprintModeStore extends ChangeNotifier {
       endDate: endDay,
       taskId: task.id,
       blockId: block.id,
-      allowPastDate: _day(startDay).isAtSameMomentAs(_day(task.startDate)),
     );
     if (validation.conflicts.any(_isHardDateConflict)) {
       return SprintOperationResult(
@@ -1135,6 +1749,7 @@ class SprintModeStore extends ChangeNotifier {
     _refreshAttention();
     notifyListeners();
     await _persistNow();
+    _scheduleTaskCalendarUpsert(task.id);
     return const SprintOperationResult(
       success: true,
       message: '종일 일정 기간을 수정했습니다.',
@@ -1171,6 +1786,7 @@ class SprintModeStore extends ChangeNotifier {
     _refreshAttention();
     notifyListeners();
     await _persistNow();
+    _scheduleTaskCalendarDelete(task.id, deleteAfterSync: false);
     return true;
   }
 
@@ -1230,6 +1846,7 @@ class SprintModeStore extends ChangeNotifier {
     _refreshAttention();
     notifyListeners();
     await _persistNow();
+    _scheduleTaskCalendarUpsert(task.id);
     return true;
   }
 
@@ -1251,6 +1868,7 @@ class SprintModeStore extends ChangeNotifier {
     _refreshAttention();
     notifyListeners();
     await _persistNow();
+    _scheduleTaskCalendarUpsert(task.id);
   }
 
   void completeTask(String taskId) {
@@ -1274,6 +1892,7 @@ class SprintModeStore extends ChangeNotifier {
     _refreshAttention();
     notifyListeners();
     _queuePersist();
+    _scheduleTaskCalendarUpsert(task.id);
   }
 
 
@@ -1303,9 +1922,20 @@ class SprintModeStore extends ChangeNotifier {
     _refreshAttention();
     notifyListeners();
     _queuePersist();
+    _scheduleTaskCalendarUpsert(task.id);
   }
 
   Future<void> syncGoogleCalendar() async {
+    final profileId = _activeCalendarProfileId;
+    if (profileId == null) {
+      _calendarState = SprintCalendarConnectionState.notConnected;
+      notifyListeners();
+      return;
+    }
+    if (!isProfileAuthenticated(profileId)) {
+      await switchActiveCalendarProfile(profileId);
+      return;
+    }
     if (_accountOperationInProgress) return;
     _accountOperationInProgress = true;
     notifyListeners();
@@ -1324,8 +1954,12 @@ class SprintModeStore extends ChangeNotifier {
     DateTime anchor, {
     bool immediate = false,
   }) {
-    if (_calendarState == SprintCalendarConnectionState.notConnected &&
-        _externalEvents.isEmpty) {
+    final profileId = _activeCalendarProfileId;
+    if (profileId == null || !isProfileAuthenticated(profileId)) return;
+    if (_calendarState == SprintCalendarConnectionState.notConnected ||
+        _calendarState ==
+            SprintCalendarConnectionState.reauthenticationRequired ||
+        _calendarState == SprintCalendarConnectionState.switching) {
       return;
     }
     final day = _day(anchor);
@@ -1364,7 +1998,24 @@ class SprintModeStore extends ChangeNotifier {
     DateTime? anchor,
     bool replace = true,
   }) async {
+    final profile = activeCalendarProfile;
+    final account = activeGoogleAccount;
+    if (profile == null || account == null) {
+      _calendarState = SprintCalendarConnectionState.notConnected;
+      _calendarError = null;
+      notifyListeners();
+      return;
+    }
+    if (!isProfileAuthenticated(profile.id)) {
+      account.requiresReauthentication = true;
+      _calendarState = SprintCalendarConnectionState.reauthenticationRequired;
+      _calendarError = 'Google 계정 재인증이 필요합니다.';
+      notifyListeners();
+      await _persistNow();
+      return;
+    }
     final generation = ++_calendarSyncGeneration;
+    final profileId = profile.id;
     final center = weekStart(anchor ?? _selectedDate);
     final rangeStart = center.subtract(const Duration(days: 28));
     final rangeEnd = center.add(const Duration(days: 42));
@@ -1373,24 +2024,32 @@ class SprintModeStore extends ChangeNotifier {
     notifyListeners();
     try {
       final events = await _calendarService.listEvents(
-        calendarId: _googleCalendarId,
+        accountEmail: account.email,
+        calendarId: profile.calendarId,
         timeMin: rangeStart,
         timeMax: rangeEnd.add(const Duration(days: 1)),
         maxResults: 500,
       );
-      if (generation != _calendarSyncGeneration) return;
-      final mapped = events
-          .map(_mapGoogleEvent)
-          .whereType<SprintExternalEvent>()
-          .toList(growable: false);
+      if (generation != _calendarSyncGeneration ||
+          profileId != _activeCalendarProfileId) {
+        return;
+      }
+      final mapped = _reconcileGoogleEvents(
+        events,
+        profile: profile,
+        rangeStart: rangeStart,
+        rangeEnd: rangeEnd,
+      );
       if (replace) {
-        _externalEvents
-          ..clear()
-          ..addAll(mapped);
+        _externalEvents.removeWhere(
+          (event) => event.calendarProfileId == profileId,
+        );
+        _externalEvents.addAll(mapped);
         _calendarLoadedStart = rangeStart;
         _calendarLoadedEnd = rangeEnd;
       } else {
         _externalEvents.removeWhere((event) {
+          if (event.calendarProfileId != profileId) return false;
           final eventStart = _day(event.start);
           final eventEnd = event.allDay
               ? _day(event.end.subtract(const Duration(days: 1)))
@@ -1426,34 +2085,453 @@ class SprintModeStore extends ChangeNotifier {
         }
       }
       _externalEvents.sort((a, b) => a.start.compareTo(b.start));
+      profile
+        ..lastSyncedAt = DateTime.now()
+        ..lastSyncError = null
+        ..updatedAt = DateTime.now();
+      account
+        ..requiresReauthentication = false
+        ..updatedAt = DateTime.now();
       _calendarState = SprintCalendarConnectionState.connected;
       _calendarError = null;
       _refreshAttention();
       notifyListeners();
       await _persistNow();
+      _retryPendingTaskSyncs();
     } catch (error) {
-      if (generation != _calendarSyncGeneration) return;
-      _calendarState = SprintCalendarConnectionState.failed;
+      if (generation != _calendarSyncGeneration ||
+          profileId != _activeCalendarProfileId) {
+        return;
+      }
+      final mismatch = error is GoogleAccountMismatchException;
+      account
+        ..requiresReauthentication = mismatch
+        ..updatedAt = DateTime.now();
+      profile
+        ..lastSyncError = error.toString()
+        ..updatedAt = DateTime.now();
+      _calendarState = mismatch
+          ? SprintCalendarConnectionState.reauthenticationRequired
+          : SprintCalendarConnectionState.failed;
       _calendarError = error.toString();
       notifyListeners();
+      await _persistNow();
     }
   }
 
-  void disconnectGoogleCalendar() {
-    if (_accountOperationInProgress) return;
-    _calendarRangeDebounce?.cancel();
-    _calendarSyncGeneration += 1;
-    _externalEvents.clear();
-    _calendarLoadedStart = null;
-    _calendarLoadedEnd = null;
-    _calendarState = SprintCalendarConnectionState.notConnected;
-    _calendarError = null;
+  Future<bool> retryTaskGoogleSync(String taskId) async {
+    final task = taskById(taskId);
+    if (task == null) return false;
+    if (task.googleCalendarProfileId != _activeCalendarProfileId) {
+      return false;
+    }
+    final requiresDelete =
+        task.googleSyncState == SprintGoogleSyncState.pendingDelete ||
+            task.deleteAfterSync ||
+            task.state == SprintTaskState.cancelled ||
+            _blockForTask(task.id) == null;
+    if (requiresDelete) {
+      task.googleSyncState = SprintGoogleSyncState.pendingDelete;
+      task.googleSyncError = null;
+      notifyListeners();
+      await _persistNow();
+      return _performTaskCalendarDelete(task.id);
+    }
+    task.googleSyncState = task.hasGoogleEvent
+        ? SprintGoogleSyncState.pendingUpdate
+        : SprintGoogleSyncState.pendingCreate;
+    task.googleSyncError = null;
+    notifyListeners();
+    await _persistNow();
+    return _performTaskCalendarUpsert(task.id);
+  }
+
+  void _scheduleTaskCalendarUpsert(String taskId) {
+    final task = taskById(taskId);
+    final project = projectById(task?.projectId);
+    final block = _blockForTask(taskId);
+    if (task == null ||
+        project == null ||
+        !project.calendarSyncEnabled ||
+        block == null ||
+        task.state == SprintTaskState.cancelled) {
+      return;
+    }
+    task.googleCalendarProfileId ??= _activeCalendarProfileId;
+    task
+      ..googleSyncState = task.hasGoogleEvent
+          ? SprintGoogleSyncState.pendingUpdate
+          : SprintGoogleSyncState.pendingCreate
+      ..googleSyncError = null
+      ..deleteAfterSync = false;
     notifyListeners();
     _queuePersist();
+    if (!_canRunCalendarWrites ||
+        task.googleCalendarProfileId != _activeCalendarProfileId) {
+      return;
+    }
+    _enqueueCalendarWrite(() async {
+      await _performTaskCalendarUpsert(taskId);
+    });
+  }
+
+  void _scheduleTaskCalendarDelete(
+    String taskId, {
+    required bool deleteAfterSync,
+  }) {
+    final task = taskById(taskId);
+    if (task == null) return;
+    task.googleCalendarProfileId ??= _activeCalendarProfileId;
+    final couldHaveRemoteEvent = task.hasGoogleEvent ||
+        task.googleSyncState != SprintGoogleSyncState.none;
+    if (!couldHaveRemoteEvent) {
+      if (deleteAfterSync) {
+        _removeTaskLocally(task);
+      } else {
+        task
+          ..googleSyncState = SprintGoogleSyncState.none
+          ..googleSyncError = null
+          ..deleteAfterSync = false;
+      }
+      notifyListeners();
+      _queuePersist();
+      return;
+    }
+    task
+      ..googleSyncState = SprintGoogleSyncState.pendingDelete
+      ..googleSyncError = null
+      ..deleteAfterSync = deleteAfterSync;
+    notifyListeners();
+    _queuePersist();
+    if (!_canRunCalendarWrites ||
+        task.googleCalendarProfileId != _activeCalendarProfileId) {
+      return;
+    }
+    _enqueueCalendarWrite(() async {
+      await _performTaskCalendarDelete(taskId);
+    });
+  }
+
+  bool get _canRunCalendarWrites {
+    final profileId = _activeCalendarProfileId;
+    return profileId != null &&
+        isProfileAuthenticated(profileId) &&
+        (_calendarState == SprintCalendarConnectionState.connected ||
+            _calendarState == SprintCalendarConnectionState.syncing);
+  }
+
+  void _enqueueCalendarWrite(Future<void> Function() operation) {
+    _calendarWriteQueue = _calendarWriteQueue.then((_) async {
+      try {
+        await operation();
+      } catch (_) {}
+    });
+  }
+
+  Future<bool> _performTaskCalendarUpsert(String taskId) async {
+    final task = taskById(taskId);
+    final project = projectById(task?.projectId);
+    final block = _blockForTask(taskId);
+    if (task == null || project == null || block == null) return false;
+    if (!project.calendarSyncEnabled ||
+        task.state == SprintTaskState.cancelled) {
+      return false;
+    }
+    final profile = calendarProfileById(
+      task.googleCalendarProfileId ?? _activeCalendarProfileId,
+    );
+    final account = accountForProfile(profile?.id);
+    if (profile == null || account == null) return false;
+    task.googleCalendarProfileId ??= profile.id;
+    if (!_canRunCalendarWrites || profile.id != _activeCalendarProfileId) {
+      return false;
+    }
+    final creatingRemoteEvent = !task.hasGoogleEvent;
+    final result = await _calendarSyncCoordinator.upsertTask(
+      task: task,
+      block: block,
+      project: project,
+      profile: profile,
+      account: account,
+    );
+    final current = taskById(taskId);
+    if (current == null) return result.success;
+    if (result.success) {
+      final deletionPending =
+          current.googleSyncState == SprintGoogleSyncState.pendingDelete ||
+              current.deleteAfterSync ||
+              current.state == SprintTaskState.cancelled ||
+              _blockForTask(current.id) == null;
+      current
+        ..googleEventId = result.eventId
+        ..googleCalendarId = result.calendarId ?? profile.calendarId
+        ..googleCalendarProfileId =
+            result.calendarProfileId ?? profile.id
+        ..googleSyncState = deletionPending
+            ? SprintGoogleSyncState.pendingDelete
+            : SprintGoogleSyncState.synced
+        ..googleSyncError = null;
+      if (!deletionPending) current.deleteAfterSync = false;
+    } else {
+      if (!creatingRemoteEvent) {
+        current
+          ..googleEventId = result.eventId ?? current.googleEventId
+          ..googleCalendarId = result.calendarId ?? current.googleCalendarId
+          ..googleCalendarProfileId =
+              result.calendarProfileId ?? current.googleCalendarProfileId;
+      }
+      current
+        ..googleSyncState = SprintGoogleSyncState.failed
+        ..googleSyncError = result.error;
+    }
+    notifyListeners();
+    await _persistNow();
+    return result.success;
+  }
+
+  Future<bool> _performTaskCalendarDelete(String taskId) async {
+    final task = taskById(taskId);
+    if (task == null) return false;
+    final profile = calendarProfileById(
+      task.googleCalendarProfileId ?? _activeCalendarProfileId,
+    );
+    final account = accountForProfile(profile?.id);
+    if (profile == null || account == null) return false;
+    if (profile.id != _activeCalendarProfileId ||
+        (!_canRunCalendarWrites && task.hasGoogleEvent)) {
+      return false;
+    }
+    final result = await _calendarSyncCoordinator.deleteTaskEvent(
+      task: task,
+      profile: profile,
+      account: account,
+    );
+    final current = taskById(taskId);
+    if (current == null) return result.success;
+    if (!result.success) {
+      current
+        ..googleSyncState = SprintGoogleSyncState.failed
+        ..googleSyncError = result.error;
+      notifyListeners();
+      await _persistNow();
+      return false;
+    }
+    final removeAfterSync = current.deleteAfterSync;
+    current
+      ..googleEventId = null
+      ..googleCalendarId = null
+      ..googleCalendarProfileId = null
+      ..googleSyncState = SprintGoogleSyncState.none
+      ..googleSyncError = null
+      ..deleteAfterSync = false;
+    if (removeAfterSync) {
+      _removeTaskLocally(current);
+    }
+    notifyListeners();
+    await _persistNow();
+    return true;
+  }
+
+  void _retryPendingTaskSyncs() {
+    if (!_canRunCalendarWrites) return;
+    final profileId = _activeCalendarProfileId;
+    if (profileId == null) return;
+    var localStateChanged = false;
+    for (final task in List<SprintTask>.from(_tasks)) {
+      if (!task.hasPendingGoogleSync) continue;
+      final requiresDelete =
+          task.googleSyncState == SprintGoogleSyncState.pendingDelete ||
+              task.deleteAfterSync ||
+              task.state == SprintTaskState.cancelled ||
+              _blockForTask(task.id) == null;
+      if (task.googleCalendarProfileId == null && !task.hasGoogleEvent) {
+        if (requiresDelete) {
+          if (task.deleteAfterSync) {
+            _removeTaskLocally(task);
+            localStateChanged = true;
+          } else {
+            task
+              ..googleSyncState = SprintGoogleSyncState.none
+              ..googleSyncError = null;
+            localStateChanged = true;
+          }
+          continue;
+        }
+        task.googleCalendarProfileId = profileId;
+      }
+      if (task.googleCalendarProfileId != profileId) continue;
+      if (requiresDelete) {
+        _scheduleTaskCalendarDelete(
+          task.id,
+          deleteAfterSync: task.deleteAfterSync,
+        );
+      } else {
+        _scheduleTaskCalendarUpsert(task.id);
+      }
+    }
+    if (localStateChanged) {
+      notifyListeners();
+      _queuePersist();
+    }
+  }
+
+  List<SprintExternalEvent> _reconcileGoogleEvents(
+    List<gcal.Event> events, {
+    required SprintCalendarProfile profile,
+    required DateTime rangeStart,
+    required DateTime rangeEnd,
+  }) {
+    final external = <SprintExternalEvent>[];
+    final remoteManagedIds = <String>{};
+    for (final event in events) {
+      final mapped = _mapGoogleEvent(event, profile.id);
+      if (mapped == null) continue;
+      final linkedTaskId = mapped.linkedTaskId;
+      final task = taskById(linkedTaskId);
+      if (mapped.managedBySprint && task != null) {
+        remoteManagedIds.add(mapped.googleEventId);
+        final taskProfileId = task.googleCalendarProfileId;
+        if (taskProfileId == null || taskProfileId == profile.id) {
+          task
+            ..googleEventId = mapped.googleEventId
+            ..googleCalendarId = profile.calendarId
+            ..googleCalendarProfileId = profile.id;
+          if (task.googleSyncState == SprintGoogleSyncState.none ||
+              task.googleSyncState == SprintGoogleSyncState.synced) {
+            task
+              ..googleSyncState = SprintGoogleSyncState.synced
+              ..googleSyncError = null
+              ..deleteAfterSync = false;
+          } else if (task.googleSyncState ==
+              SprintGoogleSyncState.pendingCreate) {
+            task.googleSyncState = SprintGoogleSyncState.pendingUpdate;
+          }
+        }
+        continue;
+      }
+      external.add(mapped);
+    }
+    for (final task in _tasks) {
+      if (task.googleCalendarProfileId != profile.id ||
+          !task.hasGoogleEvent ||
+          task.googleSyncState == SprintGoogleSyncState.pendingDelete) {
+        continue;
+      }
+      final block = _blockForTask(task.id);
+      if (block == null) continue;
+      final blockStart = _day(block.start);
+      final blockEnd = _inclusiveEnd(block.end);
+      final inLoadedRange = !blockEnd.isBefore(rangeStart) &&
+          !blockStart.isAfter(rangeEnd);
+      if (!inLoadedRange || remoteManagedIds.contains(task.googleEventId)) {
+        continue;
+      }
+      task
+        ..googleEventId = null
+        ..googleCalendarId = null
+        ..googleSyncState = SprintGoogleSyncState.pendingCreate
+        ..googleSyncError = null;
+    }
+    return external;
+  }
+
+  void _removeTaskLocally(SprintTask task) {
+    _blocks.removeWhere((block) => block.taskId == task.id);
+    _attentionItems.removeWhere((item) => item.taskId == task.id);
+    _tasks.remove(task);
+    _recordActivity(
+      type: SprintActivityEventType.taskDeleted,
+      projectId: task.projectId,
+      taskId: task.id,
+    );
+    _refreshAttention();
+  }
+
+  Future<void> disconnectGoogleCalendar() async {
+    if (_accountOperationInProgress) return;
+    final account = activeGoogleAccount;
+    _calendarRangeDebounce?.cancel();
+    _calendarSyncGeneration += 1;
+    _calendarLoadedStart = null;
+    _calendarLoadedEnd = null;
+    _calendarService.resetAuthenticatedClient();
+    if (account != null) {
+      account
+        ..requiresReauthentication = true
+        ..updatedAt = DateTime.now();
+    }
+    await GoogleAuthSession.instance.signOut();
+    _calendarState = activeCalendarProfile == null
+        ? SprintCalendarConnectionState.notConnected
+        : SprintCalendarConnectionState.reauthenticationRequired;
+    _calendarError = null;
+    notifyListeners();
+    await _persistNow();
   }
 
   String projectName(String? projectId) {
     return projectById(projectId)?.name ?? '프로젝트 없음';
+  }
+
+  void _ensureProjectColors() {
+    final used = <String>{};
+    var overflowIndex = 0;
+    for (final project in _projects.where((value) => value.isActive)) {
+      final current = project.googleColorId;
+      if (googleEventColorIds.contains(current) && !used.contains(current)) {
+        used.add(current);
+        project.calendarSyncEnabled = true;
+        continue;
+      }
+      final available = googleEventColorIds
+          .where((colorId) => !used.contains(colorId))
+          .toList(growable: false);
+      if (available.isNotEmpty) {
+        project
+          ..googleColorId = available.first
+          ..calendarSyncEnabled = true;
+        used.add(available.first);
+      } else {
+        project
+          ..googleColorId =
+              googleEventColorIds[overflowIndex % googleEventColorIds.length]
+          ..calendarSyncEnabled = false;
+        overflowIndex += 1;
+      }
+    }
+    var inactiveIndex = 0;
+    for (final project in _projects.where((value) => !value.isActive)) {
+      if (googleEventColorIds.contains(project.googleColorId)) continue;
+      project.googleColorId =
+          googleEventColorIds[inactiveIndex % googleEventColorIds.length];
+      inactiveIndex += 1;
+    }
+  }
+
+  void _normalizeGoogleSyncState() {
+    for (final task in _tasks) {
+      if (task.hasGoogleEvent &&
+          task.googleSyncState == SprintGoogleSyncState.none) {
+        task.googleSyncState = SprintGoogleSyncState.synced;
+      }
+      if (!task.hasGoogleEvent &&
+          task.googleSyncState == SprintGoogleSyncState.synced) {
+        task.googleSyncState = SprintGoogleSyncState.none;
+      }
+      if (task.googleCalendarId?.trim().isEmpty == true) {
+        task.googleCalendarId = null;
+      }
+      if (task.googleEventId?.trim().isEmpty == true) {
+        task.googleEventId = null;
+      }
+      if (task.googleCalendarProfileId?.trim().isEmpty == true) {
+        task.googleCalendarProfileId = null;
+      }
+      if ((task.hasGoogleEvent || task.hasPendingGoogleSync) &&
+          task.googleCalendarProfileId == null) {
+        task.googleCalendarProfileId = _activeCalendarProfileId;
+      }
+    }
   }
 
   void _normalizeAllDayData() {
@@ -1557,7 +2635,6 @@ class SprintModeStore extends ChangeNotifier {
     required DateTime endDate,
     String? taskId,
     String? blockId,
-    bool allowPastDate = false,
   }) {
     final validation = _schedulingEngine.validatePlacement(
       start: _day(startDate),
@@ -1566,7 +2643,6 @@ class SprintModeStore extends ChangeNotifier {
       projectId: projectId,
       taskId: taskId,
       notBefore: projectScheduleLowerBound(projectId),
-      allowPastDate: allowPastDate,
     );
     final conflicts = <SprintScheduleConflict>[...validation.conflicts];
     final target = projectById(projectId)?.targetDate;
@@ -1590,20 +2666,12 @@ class SprintModeStore extends ChangeNotifier {
   }
 
   bool _isHardDateConflict(SprintScheduleConflict conflict) {
-    return conflict.type == SprintConflictType.invalidDateRange ||
-        conflict.type == SprintConflictType.pastDate ||
-        conflict.type == SprintConflictType.beforeProjectStart;
+    return conflict.type == SprintConflictType.invalidDateRange;
   }
 
   String _dateConflictMessage(List<SprintScheduleConflict> conflicts) {
     if (conflicts.any((value) => value.type == SprintConflictType.invalidDateRange)) {
       return '종료일은 시작일보다 빠를 수 없습니다.';
-    }
-    if (conflicts.any((value) => value.type == SprintConflictType.beforeProjectStart)) {
-      return '프로젝트 목표 시작일 이전에는 업무를 배치할 수 없습니다.';
-    }
-    if (conflicts.any((value) => value.type == SprintConflictType.pastDate)) {
-      return '과거 날짜에는 새 업무를 배치할 수 없습니다.';
     }
     return '업무 날짜를 확인하세요.';
   }
@@ -1683,7 +2751,6 @@ class SprintModeStore extends ChangeNotifier {
         endDate: task.endDate,
         taskId: task.id,
         blockId: _blockForTask(task.id)?.id,
-        allowPastDate: true,
       );
       for (final conflict in validation.conflicts) {
         if (_isConflictResolved(conflict.id)) continue;
@@ -1835,7 +2902,10 @@ class SprintModeStore extends ChangeNotifier {
     );
   }
 
-  SprintExternalEvent? _mapGoogleEvent(gcal.Event event) {
+  SprintExternalEvent? _mapGoogleEvent(
+    gcal.Event event,
+    String calendarProfileId,
+  ) {
     if (event.status == 'cancelled') return null;
     final start = event.start?.dateTime?.toLocal() ?? event.start?.date;
     if (start == null) return null;
@@ -1844,16 +2914,30 @@ class SprintModeStore extends ChangeNotifier {
         event.end?.date ??
         start.add(allDay ? const Duration(days: 1) : const Duration(minutes: 30));
     final title = event.summary?.trim();
+    final privateProperties = event.extendedProperties?.private;
+    final managedBySprint =
+        privateProperties?['source'] == 'parkinworkin_sprint';
+    final googleEventId =
+        event.id?.trim().isNotEmpty == true
+            ? event.id!.trim()
+            : 'google-${start.microsecondsSinceEpoch}';
     return SprintExternalEvent(
-      id: event.id ?? 'google-${start.microsecondsSinceEpoch}',
+      id: '$calendarProfileId:$googleEventId',
+      googleEventId: googleEventId,
+      calendarProfileId: calendarProfileId,
       title: title == null || title.isEmpty ? '제목 없는 외부 일정' : title,
       start: start,
       end: end,
       allDay: allDay,
       blocksTime: event.transparency != 'transparent',
       sourceUrl: event.htmlLink,
+      colorId: event.colorId,
+      managedBySprint: managedBySprint,
+      linkedTaskId: privateProperties?['sprintTaskId'],
+      linkedProjectId: privateProperties?['sprintProjectId'],
     );
   }
+
 
   SprintProjectReport _buildProjectReport({
     required SprintProject project,
@@ -2009,12 +3093,17 @@ class SprintModeStore extends ChangeNotifier {
         activityEvents: List<SprintActivityEvent>.from(_activityEvents),
         conflictResolutions:
             List<SprintConflictResolution>.from(_conflictResolutions),
+        googleAccounts: List<SprintGoogleAccount>.from(_googleAccounts),
+        calendarProfiles:
+            List<SprintCalendarProfile>.from(_calendarProfiles),
+        activeCalendarProfileId: _activeCalendarProfileId,
         workspaceScope: _workspaceScope,
         selectedDate: _selectedDate,
         lastObservedToday: _lastObservedToday,
         weekMode: _weekMode,
-        googleCalendarId: _googleCalendarId,
-        googleCalendarIdLocked: _googleCalendarIdLocked,
+        googleCalendarId: googleCalendarId,
+        googleCalendarIdLocked: googleCalendarIdLocked,
+        legacyCalendarConfigured: activeCalendarProfile != null,
       ),
     );
   }
@@ -2026,6 +3115,8 @@ class SprintModeStore extends ChangeNotifier {
   @override
   void dispose() {
     _calendarRangeDebounce?.cancel();
+    _identitySubscription?.cancel();
+    _identitySubscription = null;
     super.dispose();
   }
 }

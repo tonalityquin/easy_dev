@@ -1,10 +1,38 @@
 import 'dart:io';
-
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-
+import '../../../../../app/utils/status_dialog.dart';
+import '../../../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
 import '../../application/modify_camera_helper.dart';
+
+
+Route<T> _modifyPromptPageRoute<T>(BuildContext context, Widget child) {
+  final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+  return PageRouteBuilder<T>(
+    pageBuilder: (_, __, ___) => child,
+    transitionDuration: reduceMotion ? Duration.zero : PromptUiMotion.component,
+    reverseTransitionDuration:
+        reduceMotion ? Duration.zero : PromptUiMotion.selection,
+    transitionsBuilder: (_, animation, __, routeChild) {
+      final curved = CurvedAnimation(
+        parent: animation,
+        curve: PromptUiMotion.enter,
+        reverseCurve: PromptUiMotion.exit,
+      );
+      return FadeTransition(
+        opacity: curved,
+        child: SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0, .025),
+            end: Offset.zero,
+          ).animate(curved),
+          child: routeChild,
+        ),
+      );
+    },
+  );
+}
 
 class ModifyCameraPreviewDialog extends StatefulWidget {
   final void Function(List<XFile>)? onCaptureComplete;
@@ -56,10 +84,7 @@ class _ModifyCameraPreviewDialogState extends State<ModifyCameraPreviewDialog> {
       await _initFuture;
       await _cameraHelper.lockPortrait();
       if (!mounted) return;
-      setState(() {
-        _isCameraReady = true;
-      });
-      debugPrint('✅ CameraHelper: 카메라 초기화 완료');
+      setState(() => _isCameraReady = true);
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -102,24 +127,26 @@ class _ModifyCameraPreviewDialogState extends State<ModifyCameraPreviewDialog> {
       return;
     }
 
-    try {
-      HapticFeedback.mediumImpact();
-    } catch (_) {}
-
     final image = await _cameraHelper.captureImage();
     if (!mounted) return;
 
     if (image != null) {
-      setState(() {
-        _capturedImages.add(image);
-      });
+      setState(() => _capturedImages.add(image));
       widget.onImageCaptured?.call(image);
+      return;
     }
+
+    await StatusDialog.showFailure(
+      context,
+      title: StatusDialog.photoSaveFailed,
+      usePromptUi: true,
+    );
   }
 
-  Future<void> _openGalleryView() async {
+  Future<void> _openModifyGalleryView() async {
     final ctrl = _cameraHelper.cameraController;
     final canPause = ctrl != null && ctrl.value.isInitialized;
+
     if (canPause) {
       try {
         await _cameraHelper.pausePreview();
@@ -127,14 +154,11 @@ class _ModifyCameraPreviewDialogState extends State<ModifyCameraPreviewDialog> {
     }
 
     await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => GalleryView(
+      _modifyPromptPageRoute<void>(
+        context,
+        ModifyGalleryView(
           images: List<XFile>.from(_capturedImages),
-          onDelete: (index) {
-            setState(() {
-              _capturedImages.removeAt(index);
-            });
-          },
+          onDelete: (index) => setState(() => _capturedImages.removeAt(index)),
         ),
       ),
     );
@@ -147,6 +171,9 @@ class _ModifyCameraPreviewDialogState extends State<ModifyCameraPreviewDialog> {
   }
 
   Widget _buildPreview() {
+    final tokens = PromptUiTheme.of(context);
+    final cameraForeground =
+        tokens.isDark ? tokens.textPrimary : tokens.surfaceRaised;
     final cs = Theme.of(context).colorScheme;
     final ctrl = _cameraHelper.cameraController;
 
@@ -162,16 +189,13 @@ class _ModifyCameraPreviewDialogState extends State<ModifyCameraPreviewDialog> {
               Text(
                 '카메라를 초기화할 수 없습니다.\n권한을 확인한 뒤 다시 시도해 주세요.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: cs.onSurface),
+                style: TextStyle(color: cameraForeground),
               ),
               const SizedBox(height: 12),
-              FilledButton(
+              PromptButton(
+                label: '다시 시도',
+                icon: Icons.refresh_rounded,
                 onPressed: _initializeCamera,
-                style: FilledButton.styleFrom(
-                  backgroundColor: cs.primary,
-                  foregroundColor: cs.onPrimary,
-                ),
-                child: const Text('다시 시도'),
               ),
             ],
           ),
@@ -187,22 +211,12 @@ class _ModifyCameraPreviewDialogState extends State<ModifyCameraPreviewDialog> {
       );
     }
 
-    final sizeV = ctrl.value.previewSize;
-    if (sizeV == null || sizeV.width == 0 || sizeV.height == 0) {
-      final fallbackRatio = 1 / ctrl.value.aspectRatio;
-      return Center(
-        child: AspectRatio(
-          aspectRatio: fallbackRatio,
-          child: CameraPreview(ctrl),
-        ),
-      );
-    }
-
+    final previewSize = ctrl.value.previewSize!;
     final isPortrait =
         MediaQuery.of(context).orientation == Orientation.portrait;
 
-    final previewW = isPortrait ? sizeV.height : sizeV.width;
-    final previewH = isPortrait ? sizeV.width : sizeV.height;
+    final previewW = isPortrait ? previewSize.height : previewSize.width;
+    final previewH = isPortrait ? previewSize.width : previewSize.height;
     final previewRatio = previewW / previewH;
 
     return Stack(
@@ -212,14 +226,14 @@ class _ModifyCameraPreviewDialogState extends State<ModifyCameraPreviewDialog> {
             aspectRatio: previewRatio,
             child: LayoutBuilder(
               builder: (_, constraints) {
-                final renderSize = constraints.biggest;
+                final size = constraints.biggest;
                 return GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTapDown: (d) async {
                     final local = d.localPosition;
                     final point = Offset(
-                      (local.dx / renderSize.width).clamp(0.0, 1.0),
-                      (local.dy / renderSize.height).clamp(0.0, 1.0),
+                      (local.dx / size.width).clamp(0.0, 1.0).toDouble(),
+                      (local.dy / size.height).clamp(0.0, 1.0).toDouble(),
                     );
                     try {
                       await ctrl.setFocusPoint(point);
@@ -239,7 +253,7 @@ class _ModifyCameraPreviewDialogState extends State<ModifyCameraPreviewDialog> {
             right: 0,
             height: 80,
             child: GestureDetector(
-              onTap: _openGalleryView,
+              onTap: _openModifyGalleryView,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
                 itemCount: _capturedImages.length,
@@ -274,7 +288,13 @@ class _ModifyCameraPreviewDialogState extends State<ModifyCameraPreviewDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    return PromptUiScope(
+      child: Builder(builder: _buildPromptCameraPreview),
+    );
+  }
+
+  Widget _buildPromptCameraPreview(BuildContext context) {
+    final tokens = PromptUiTheme.of(context);
     final ctrl = _cameraHelper.cameraController;
 
     return WillPopScope(
@@ -289,43 +309,44 @@ class _ModifyCameraPreviewDialogState extends State<ModifyCameraPreviewDialog> {
       },
       child: SafeArea(
         child: Scaffold(
-          backgroundColor: cs.scrim,
+          backgroundColor: tokens.scrim,
           body: _buildPreview(),
-          bottomNavigationBar: Padding(
-            padding: const EdgeInsets.only(bottom: 20, top: 12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                ElevatedButton(
-                  onPressed: (!_isCameraReady ||
-                      ctrl == null ||
-                      !(ctrl.value.isInitialized) ||
-                      ctrl.value.isTakingPicture ||
-                      _initFailed ||
-                      _closing)
-                      ? null
-                      : _onCapturePressed,
-                  style: ElevatedButton.styleFrom(
-                    shape: const CircleBorder(),
-                    padding: const EdgeInsets.all(20),
-                    backgroundColor: cs.surface,
-                    foregroundColor: cs.onSurface,
-                    elevation: 4,
+          bottomNavigationBar: PromptAnimatedReveal(
+            delay: const Duration(milliseconds: 80),
+            offset: const Offset(0, .04),
+            child: SafeArea(
+              top: false,
+              minimum: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  PromptIconButton(
+                    icon: Icons.camera_alt_rounded,
+                    tooltip: '사진 촬영',
+                    size: 68,
+                    iconSize: 30,
+                    selected: true,
+                    haptic: PromptHaptic.medium,
+                    onPressed: (!_isCameraReady ||
+                            ctrl == null ||
+                            !(ctrl.value.isInitialized) ||
+                            ctrl.value.isTakingPicture ||
+                            _initFailed ||
+                            _closing)
+                        ? null
+                        : _onCapturePressed,
                   ),
-                  child: const Icon(Icons.camera_alt, size: 30),
-                ),
-                const SizedBox(width: 16),
-                if (_capturedImages.isNotEmpty)
-                  OutlinedButton.icon(
-                    onPressed: _openGalleryView,
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: cs.surface,
-                      side: BorderSide(color: cs.surface.withOpacity(0.55)),
+                  if (_capturedImages.isNotEmpty) ...[
+                    const SizedBox(width: 12),
+                    PromptButton(
+                      label: '갤러리 ${_capturedImages.length}',
+                      icon: Icons.photo_library_rounded,
+                      variant: PromptButtonVariant.secondary,
+                      onPressed: _openModifyGalleryView,
                     ),
-                    icon: const Icon(Icons.photo_library_outlined),
-                    label: const Text('갤러리'),
-                  ),
-              ],
+                  ],
+                ],
+              ),
             ),
           ),
         ),
@@ -334,11 +355,11 @@ class _ModifyCameraPreviewDialogState extends State<ModifyCameraPreviewDialog> {
   }
 }
 
-class GalleryView extends StatelessWidget {
+class ModifyGalleryView extends StatelessWidget {
   final List<XFile> images;
   final void Function(int index) onDelete;
 
-  const GalleryView({
+  const ModifyGalleryView({
     super.key,
     required this.images,
     required this.onDelete,
@@ -346,17 +367,25 @@ class GalleryView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    return PromptUiScope(
+      child: Builder(builder: _buildPromptGallery),
+    );
+  }
+
+  Widget _buildPromptGallery(BuildContext context) {
+    final tokens = PromptUiTheme.of(context);
+    final cameraForeground =
+        tokens.isDark ? tokens.textPrimary : tokens.surfaceRaised;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('촬영된 사진'),
-        backgroundColor: cs.scrim,
-        foregroundColor: cs.surface,
+        backgroundColor: tokens.scrim,
+        foregroundColor: cameraForeground,
         elevation: 0,
-        surfaceTintColor: Colors.transparent,
+        surfaceTintColor: tokens.transparent,
       ),
-      backgroundColor: cs.scrim,
+      backgroundColor: tokens.scrim,
       body: GridView.builder(
         padding: const EdgeInsets.all(12),
         itemCount: images.length,
@@ -370,8 +399,9 @@ class GalleryView extends StatelessWidget {
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (_) => FullScreenGalleryView(
+                _modifyPromptPageRoute<void>(
+                  context,
+                  FullScreenModifyGalleryView(
                     images: images,
                     initialIndex: index,
                     onDelete: (deleteIndex) {
@@ -398,12 +428,12 @@ class GalleryView extends StatelessWidget {
   }
 }
 
-class FullScreenGalleryView extends StatefulWidget {
+class FullScreenModifyGalleryView extends StatefulWidget {
   final List<XFile> images;
   final int initialIndex;
   final void Function(int index)? onDelete;
 
-  const FullScreenGalleryView({
+  const FullScreenModifyGalleryView({
     super.key,
     required this.images,
     required this.initialIndex,
@@ -411,10 +441,10 @@ class FullScreenGalleryView extends StatefulWidget {
   });
 
   @override
-  State<FullScreenGalleryView> createState() => _FullScreenGalleryViewState();
+  State<FullScreenModifyGalleryView> createState() => _FullScreenModifyGalleryViewState();
 }
 
-class _FullScreenGalleryViewState extends State<FullScreenGalleryView> {
+class _FullScreenModifyGalleryViewState extends State<FullScreenModifyGalleryView> {
   late PageController _pageController;
   late int _currentIndex;
 
@@ -430,16 +460,30 @@ class _FullScreenGalleryViewState extends State<FullScreenGalleryView> {
   }
 
   @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    return PromptUiScope(
+      child: Builder(builder: _buildPromptFullScreenGallery),
+    );
+  }
+
+  Widget _buildPromptFullScreenGallery(BuildContext context) {
+    final tokens = PromptUiTheme.of(context);
+    final cameraForeground =
+        tokens.isDark ? tokens.textPrimary : tokens.surfaceRaised;
 
     return Scaffold(
-      backgroundColor: cs.scrim,
+      backgroundColor: tokens.scrim,
       appBar: AppBar(
-        backgroundColor: cs.scrim,
-        foregroundColor: cs.surface,
+        backgroundColor: tokens.scrim,
+        foregroundColor: cameraForeground,
         elevation: 0,
-        surfaceTintColor: Colors.transparent,
+        surfaceTintColor: tokens.transparent,
         actions: [
           if (widget.onDelete != null)
             IconButton(
@@ -451,9 +495,7 @@ class _FullScreenGalleryViewState extends State<FullScreenGalleryView> {
       body: PageView.builder(
         controller: _pageController,
         itemCount: widget.images.length,
-        onPageChanged: (index) {
-          setState(() => _currentIndex = index);
-        },
+        onPageChanged: (index) => setState(() => _currentIndex = index),
         itemBuilder: (context, index) {
           return Center(
             child: InteractiveViewer(

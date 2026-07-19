@@ -2,6 +2,8 @@ import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import '../../../../../app/utils/status_dialog.dart';
+import '../../../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
 import '../../application/input_camera_helper.dart';
 
 class InputCameraPreviewDialog extends StatefulWidget {
@@ -109,6 +111,7 @@ class _InputCameraPreviewDialogState extends State<InputCameraPreviewDialog> {
     await StatusDialog.showFailure(
       context,
       title: StatusDialog.photoSaveFailed,
+      usePromptUi: true,
     );
   }
 
@@ -139,6 +142,7 @@ class _InputCameraPreviewDialogState extends State<InputCameraPreviewDialog> {
   }
 
   Widget _buildPreview() {
+    final tokens = PromptUiTheme.of(context);
     final cs = Theme.of(context).colorScheme;
     final ctrl = _cameraHelper.cameraController;
 
@@ -154,16 +158,13 @@ class _InputCameraPreviewDialogState extends State<InputCameraPreviewDialog> {
               Text(
                 '카메라를 초기화할 수 없습니다.\n권한을 확인한 뒤 다시 시도해 주세요.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: cs.surface),
+                style: TextStyle(color: tokens.onAccent),
               ),
               const SizedBox(height: 12),
-              FilledButton(
+              PromptButton(
+                label: '다시 시도',
+                icon: Icons.refresh_rounded,
                 onPressed: _initializeCamera,
-                style: FilledButton.styleFrom(
-                  backgroundColor: cs.primary,
-                  foregroundColor: cs.onPrimary,
-                ),
-                child: const Text('다시 시도'),
               ),
             ],
           ),
@@ -256,7 +257,13 @@ class _InputCameraPreviewDialogState extends State<InputCameraPreviewDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    return PromptUiScope(
+      child: Builder(builder: _buildPromptCameraPreview),
+    );
+  }
+
+  Widget _buildPromptCameraPreview(BuildContext context) {
+    final tokens = PromptUiTheme.of(context);
     final ctrl = _cameraHelper.cameraController;
 
     return WillPopScope(
@@ -271,43 +278,44 @@ class _InputCameraPreviewDialogState extends State<InputCameraPreviewDialog> {
       },
       child: SafeArea(
         child: Scaffold(
-          backgroundColor: cs.scrim,
+          backgroundColor: tokens.scrim,
           body: _buildPreview(),
-          bottomNavigationBar: Padding(
-            padding: const EdgeInsets.only(bottom: 20, top: 12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                ElevatedButton(
-                  onPressed: (!_isCameraReady ||
-                          ctrl == null ||
-                          !(ctrl.value.isInitialized) ||
-                          ctrl.value.isTakingPicture ||
-                          _initFailed ||
-                          _closing)
-                      ? null
-                      : _onCapturePressed,
-                  style: ElevatedButton.styleFrom(
-                    shape: const CircleBorder(),
-                    padding: const EdgeInsets.all(20),
-                    backgroundColor: cs.surface,
-                    foregroundColor: cs.onSurface,
-                    elevation: 4,
+          bottomNavigationBar: PromptAnimatedReveal(
+            delay: const Duration(milliseconds: 80),
+            offset: const Offset(0, .04),
+            child: SafeArea(
+              top: false,
+              minimum: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  PromptIconButton(
+                    icon: Icons.camera_alt_rounded,
+                    tooltip: '사진 촬영',
+                    size: 68,
+                    iconSize: 30,
+                    selected: true,
+                    haptic: PromptHaptic.medium,
+                    onPressed: (!_isCameraReady ||
+                            ctrl == null ||
+                            !(ctrl.value.isInitialized) ||
+                            ctrl.value.isTakingPicture ||
+                            _initFailed ||
+                            _closing)
+                        ? null
+                        : _onCapturePressed,
                   ),
-                  child: const Icon(Icons.camera_alt, size: 30),
-                ),
-                const SizedBox(width: 16),
-                if (_capturedImages.isNotEmpty)
-                  OutlinedButton.icon(
-                    onPressed: _openGalleryView,
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: cs.surface,
-                      side: BorderSide(color: cs.surface.withOpacity(0.55)),
+                  if (_capturedImages.isNotEmpty) ...[
+                    const SizedBox(width: 12),
+                    PromptButton(
+                      label: '갤러리 ${_capturedImages.length}',
+                      icon: Icons.photo_library_rounded,
+                      variant: PromptButtonVariant.secondary,
+                      onPressed: _openGalleryView,
                     ),
-                    icon: const Icon(Icons.photo_library_outlined),
-                    label: const Text('갤러리'),
-                  ),
-              ],
+                  ],
+                ],
+              ),
             ),
           ),
         ),
@@ -328,17 +336,23 @@ class GalleryView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    return PromptUiScope(
+      child: Builder(builder: _buildPromptGallery),
+    );
+  }
+
+  Widget _buildPromptGallery(BuildContext context) {
+    final tokens = PromptUiTheme.of(context);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('촬영된 사진'),
-        backgroundColor: cs.scrim,
-        foregroundColor: cs.surface,
+        backgroundColor: tokens.scrim,
+        foregroundColor: tokens.onAccent,
         elevation: 0,
-        surfaceTintColor: Colors.transparent,
+        surfaceTintColor: tokens.transparent,
       ),
-      backgroundColor: cs.scrim,
+      backgroundColor: tokens.scrim,
       body: GridView.builder(
         padding: const EdgeInsets.all(12),
         itemCount: images.length,
@@ -413,15 +427,21 @@ class _FullScreenGalleryViewState extends State<FullScreenGalleryView> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    return PromptUiScope(
+      child: Builder(builder: _buildPromptFullScreenGallery),
+    );
+  }
+
+  Widget _buildPromptFullScreenGallery(BuildContext context) {
+    final tokens = PromptUiTheme.of(context);
 
     return Scaffold(
-      backgroundColor: cs.scrim,
+      backgroundColor: tokens.scrim,
       appBar: AppBar(
-        backgroundColor: cs.scrim,
-        foregroundColor: cs.surface,
+        backgroundColor: tokens.scrim,
+        foregroundColor: tokens.onAccent,
         elevation: 0,
-        surfaceTintColor: Colors.transparent,
+        surfaceTintColor: tokens.transparent,
         actions: [
           if (widget.onDelete != null)
             IconButton(

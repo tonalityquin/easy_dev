@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../shared/google_calendar/google_event_colors.dart';
 import '../application/sprint_mode_store.dart';
 import '../domain/sprint_models.dart';
 import 'sprint_block_editor_sheet.dart';
@@ -10,14 +11,11 @@ Future<bool> showSprintTaskDetailSheet({
   required SprintModeStore store,
   required String taskId,
 }) async {
-  final colors = Theme.of(context).colorScheme;
-  final result = await showModalBottomSheet<bool>(
+  final result = await sprintShowBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
     showDragHandle: true,
-    backgroundColor: colors.surface,
-    barrierColor: colors.scrim,
     builder: (_) => _SprintTaskDetailSheet(
       store: store,
       taskId: taskId,
@@ -42,11 +40,13 @@ class _SprintTaskDetailSheet extends StatefulWidget {
 
 class _SprintTaskDetailSheetState extends State<_SprintTaskDetailSheet> {
   late final TextEditingController _titleController;
+  late final TextEditingController _descriptionController;
   String? _projectId;
   SprintTaskPriority _priority = SprintTaskPriority.normal;
   late DateTime _startDate;
   late DateTime _endDate;
   bool _saving = false;
+  bool _syncing = false;
 
   SprintTask? get _task => widget.store.taskById(widget.taskId);
 
@@ -56,6 +56,9 @@ class _SprintTaskDetailSheetState extends State<_SprintTaskDetailSheet> {
     final task = _task;
     final today = DateTime.now();
     _titleController = TextEditingController(text: task?.title ?? '');
+    _descriptionController = TextEditingController(
+      text: task?.description ?? '',
+    );
     _projectId = task?.projectId;
     _priority = task?.priority ?? SprintTaskPriority.normal;
     _startDate = task?.startDate ??
@@ -66,6 +69,7 @@ class _SprintTaskDetailSheetState extends State<_SprintTaskDetailSheet> {
   @override
   void dispose() {
     _titleController.dispose();
+    _descriptionController.dispose();
     super.dispose();
   }
 
@@ -85,12 +89,10 @@ class _SprintTaskDetailSheetState extends State<_SprintTaskDetailSheet> {
 
   Future<void> _pickStartDate() async {
     final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final lower = widget.store.projectScheduleLowerBound(_projectId);
-    final firstDate = lower != null && lower.isAfter(today) ? lower : today;
+    final firstDate = DateTime(1900, 1, 1);
     var initial = _startDate;
     if (initial.isBefore(firstDate)) initial = firstDate;
-    final selected = await showDatePicker(
+    final selected = await sprintShowDatePicker(
       context: context,
       initialDate: initial,
       firstDate: firstDate,
@@ -105,7 +107,7 @@ class _SprintTaskDetailSheetState extends State<_SprintTaskDetailSheet> {
   }
 
   Future<void> _pickEndDate() async {
-    final selected = await showDatePicker(
+    final selected = await sprintShowDatePicker(
       context: context,
       initialDate: _endDate.isBefore(_startDate) ? _startDate : _endDate,
       firstDate: _startDate,
@@ -124,6 +126,7 @@ class _SprintTaskDetailSheetState extends State<_SprintTaskDetailSheet> {
     final saved = await widget.store.updateTask(
       taskId: task.id,
       title: _titleController.text,
+      description: _descriptionController.text,
       projectId: projectId,
       priority: _priority,
       startDate: _startDate,
@@ -150,7 +153,7 @@ class _SprintTaskDetailSheetState extends State<_SprintTaskDetailSheet> {
   Future<void> _cancel() async {
     final task = _task;
     if (task == null) return;
-    final confirmed = await showDialog<bool>(
+    final confirmed = await sprintShowDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('업무 취소'),
@@ -168,15 +171,20 @@ class _SprintTaskDetailSheetState extends State<_SprintTaskDetailSheet> {
       ),
     );
     if (confirmed != true) return;
+    setState(() => _saving = true);
     final saved = await widget.store.cancelTask(task.id);
     if (!mounted) return;
-    if (saved) Navigator.of(context).pop(true);
+    if (saved) {
+      Navigator.of(context).pop(true);
+    } else {
+      setState(() => _saving = false);
+    }
   }
 
   Future<void> _delete() async {
     final task = _task;
     if (task == null) return;
-    final confirmed = await showDialog<bool>(
+    final confirmed = await sprintShowDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('업무 삭제'),
@@ -194,9 +202,45 @@ class _SprintTaskDetailSheetState extends State<_SprintTaskDetailSheet> {
       ),
     );
     if (confirmed != true) return;
+    setState(() => _saving = true);
     final deleted = await widget.store.deleteTask(task.id);
     if (!mounted) return;
-    if (deleted) Navigator.of(context).pop(true);
+    if (deleted) {
+      Navigator.of(context).pop(true);
+    } else {
+      setState(() => _saving = false);
+      sprintShowMessage(
+        context: context,
+        message: 'Google Calendar 일정 삭제 후 다시 시도하세요.',
+        danger: true,
+      );
+    }
+  }
+
+  Future<void> _retrySync() async {
+    final task = _task;
+    if (task == null || _syncing) return;
+    final profileId = task.googleCalendarProfileId;
+    if (profileId != null &&
+        profileId != widget.store.activeCalendarProfileId) {
+      final profile = widget.store.calendarProfileById(profileId);
+      sprintShowMessage(
+        context: context,
+        message: '${profile?.label ?? '연결된 캘린더'}를 메인으로 전환한 후 다시 시도하세요.',
+      );
+      return;
+    }
+    setState(() => _syncing = true);
+    final success = await widget.store.retryTaskGoogleSync(task.id);
+    if (!mounted) return;
+    setState(() => _syncing = false);
+    sprintShowMessage(
+      context: context,
+      message: success
+          ? 'Google Calendar 동기화를 완료했습니다.'
+          : 'Google Calendar 동기화에 실패했습니다.',
+      danger: !success,
+    );
   }
 
   Future<void> _openSchedule() async {
@@ -227,6 +271,17 @@ class _SprintTaskDetailSheetState extends State<_SprintTaskDetailSheet> {
     final duration =
         reduceMotion ? Duration.zero : const Duration(milliseconds: 220);
     final projects = widget.store.projects;
+    final taskProfile = widget.store.calendarProfileById(
+          task.googleCalendarProfileId,
+        ) ??
+        widget.store.activeCalendarProfile;
+    final taskAccount = widget.store.accountForProfile(taskProfile?.id);
+    final profileIsOriginal = task.googleCalendarProfileId != null;
+    final project = widget.store.projectById(_projectId);
+    final projectColor = googleEventColor(
+      project?.googleColorId,
+      colors.primary,
+    );
     return AnimatedPadding(
       duration: duration,
       curve: Curves.easeOutCubic,
@@ -246,13 +301,78 @@ class _SprintTaskDetailSheetState extends State<_SprintTaskDetailSheet> {
                     fontWeight: FontWeight.w900,
                   ),
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 14),
+            AnimatedSwitcher(
+              duration: duration,
+              child: Container(
+                key: ValueKey<String>(taskProfile?.id ?? 'local-only'),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: colors.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      taskProfile == null
+                          ? Icons.cloud_off_outlined
+                          : Icons.event_available_outlined,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            profileIsOriginal
+                                ? '연결된 Google 일정'
+                                : '최초 동기화 대상',
+                            style: const TextStyle(fontWeight: FontWeight.w900),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            taskProfile == null
+                                ? '연결된 캘린더가 없어 로컬 변경만 저장합니다.'
+                                : '${taskProfile.label} · ${taskAccount?.email ?? ''} · ${taskProfile.calendarId}',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: colors.onSurfaceVariant),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
             TextField(
               controller: _titleController,
               enabled: !_saving,
+              textInputAction: TextInputAction.next,
               decoration: const InputDecoration(
                 labelText: '업무명',
                 border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 14),
+            AnimatedContainer(
+              duration: duration,
+              curve: Curves.easeOutCubic,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: TextField(
+                controller: _descriptionController,
+                enabled: !_saving,
+                keyboardType: TextInputType.multiline,
+                textInputAction: TextInputAction.newline,
+                minLines: 3,
+                maxLines: 8,
+                decoration: const InputDecoration(
+                  labelText: '업무 내용',
+                  border: OutlineInputBorder(),
+                ),
               ),
             ),
             const SizedBox(height: 14),
@@ -267,10 +387,28 @@ class _SprintTaskDetailSheetState extends State<_SprintTaskDetailSheet> {
                   .map(
                     (project) => DropdownMenuItem<String>(
                       value: project.id,
-                      child: Text(
-                        project.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 10,
+                            height: 10,
+                            decoration: BoxDecoration(
+                              color: googleEventColor(
+                                project.googleColorId,
+                                colors.primary,
+                              ),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              project.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   )
@@ -340,6 +478,88 @@ class _SprintTaskDetailSheetState extends State<_SprintTaskDetailSheet> {
                 ],
               ),
             ),
+            const SizedBox(height: 10),
+            AnimatedContainer(
+              duration: duration,
+              curve: Curves.easeOutCubic,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: projectColor.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: task.googleSyncState == SprintGoogleSyncState.failed
+                      ? colors.error
+                      : projectColor.withOpacity(0.6),
+                ),
+              ),
+              child: Row(
+                children: [
+                  AnimatedSwitcher(
+                    duration: duration,
+                    child: _syncing ||
+                            task.googleSyncState ==
+                                SprintGoogleSyncState.pendingCreate ||
+                            task.googleSyncState ==
+                                SprintGoogleSyncState.pendingUpdate ||
+                            task.googleSyncState ==
+                                SprintGoogleSyncState.pendingDelete
+                        ? SizedBox(
+                            key: const ValueKey<String>('syncing'),
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.4,
+                              color: projectColor,
+                            ),
+                          )
+                        : Icon(
+                            task.googleSyncState ==
+                                    SprintGoogleSyncState.synced
+                                ? Icons.cloud_done_rounded
+                                : task.googleSyncState ==
+                                        SprintGoogleSyncState.failed
+                                    ? Icons.cloud_off_rounded
+                                    : Icons.cloud_queue_rounded,
+                            key: ValueKey<SprintGoogleSyncState>(
+                              task.googleSyncState,
+                            ),
+                            color: task.googleSyncState ==
+                                    SprintGoogleSyncState.failed
+                                ? colors.error
+                                : projectColor,
+                          ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Google Calendar',
+                          style: TextStyle(fontWeight: FontWeight.w900),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _googleSyncLabel(task.googleSyncState),
+                          style: TextStyle(
+                            color: task.googleSyncState ==
+                                    SprintGoogleSyncState.failed
+                                ? colors.error
+                                : colors.onSurfaceVariant,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (task.googleSyncState == SprintGoogleSyncState.failed)
+                    TextButton(
+                      onPressed: _syncing ? null : _retrySync,
+                      child: const Text('다시 시도'),
+                    ),
+                ],
+              ),
+            ),
             const SizedBox(height: 18),
             FilledButton(
               onPressed: _saving ? null : _save,
@@ -364,13 +584,13 @@ class _SprintTaskDetailSheetState extends State<_SprintTaskDetailSheet> {
               ),
             const SizedBox(height: 10),
             OutlinedButton.icon(
-              onPressed: _cancel,
+              onPressed: _saving ? null : _cancel,
               icon: const Icon(Icons.cancel_outlined),
               label: const Text('업무 취소'),
             ),
             const SizedBox(height: 10),
             TextButton.icon(
-              onPressed: _delete,
+              onPressed: _saving ? null : _delete,
               icon: Icon(Icons.delete_outline_rounded, color: colors.error),
               label: Text('업무 삭제', style: TextStyle(color: colors.error)),
             ),
@@ -378,5 +598,23 @@ class _SprintTaskDetailSheetState extends State<_SprintTaskDetailSheet> {
         ),
       ),
     );
+  }
+}
+
+
+String _googleSyncLabel(SprintGoogleSyncState state) {
+  switch (state) {
+    case SprintGoogleSyncState.none:
+      return '연결 대기';
+    case SprintGoogleSyncState.pendingCreate:
+      return '일정 생성 대기';
+    case SprintGoogleSyncState.pendingUpdate:
+      return '변경사항 반영 대기';
+    case SprintGoogleSyncState.pendingDelete:
+      return '일정 삭제 대기';
+    case SprintGoogleSyncState.synced:
+      return '동기화 완료';
+    case SprintGoogleSyncState.failed:
+      return '동기화 실패';
   }
 }

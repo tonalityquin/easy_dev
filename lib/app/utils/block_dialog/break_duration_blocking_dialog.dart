@@ -1,12 +1,17 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 
+import '../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
+
 Future<bool> showBreakDurationBlockingDialog(
-    BuildContext context, {
-      required String message,
-      Duration duration = const Duration(seconds: 5),
-    }) async {
-  final result = await showDialog<bool>(
+  BuildContext context, {
+  required String message,
+  Duration duration = const Duration(seconds: 5),
+}) async {
+  final result = await showPromptOverlayDialog<bool>(
     context: context,
     barrierDismissible: false,
     builder: (_) => _BreakCancelableBlockingDialog(
@@ -15,52 +20,6 @@ Future<bool> showBreakDurationBlockingDialog(
     ),
   );
   return result ?? false;
-}
-
-@immutable
-class _DialogTokens {
-  const _DialogTokens({
-    required this.dialogBg,
-    required this.dialogBorder,
-    required this.accent,
-    required this.accentSoftBg,
-    required this.text,
-    required this.mutedText,
-    required this.chipBg,
-    required this.chipBorder,
-    required this.buttonBorder,
-  });
-
-  final Color dialogBg;
-  final Color dialogBorder;
-
-  final Color accent;
-  final Color accentSoftBg;
-
-  final Color text;
-  final Color mutedText;
-
-  final Color chipBg;
-  final Color chipBorder;
-
-  final Color buttonBorder;
-
-  factory _DialogTokens.of(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return _DialogTokens(
-      dialogBg: cs.surface,
-      dialogBorder: cs.outlineVariant.withOpacity(0.7),
-      
-      accent: cs.primary,
-      accentSoftBg: cs.primary.withOpacity(0.10),
-      text: cs.onSurface,
-      mutedText: cs.onSurfaceVariant,
-      chipBg: cs.primaryContainer.withOpacity(0.25),
-      chipBorder: cs.outlineVariant.withOpacity(0.7),
-      buttonBorder: cs.outlineVariant.withOpacity(0.7),
-    );
-  }
 }
 
 class _BreakCancelableBlockingDialog extends StatefulWidget {
@@ -73,10 +32,12 @@ class _BreakCancelableBlockingDialog extends StatefulWidget {
   final Duration duration;
 
   @override
-  State<_BreakCancelableBlockingDialog> createState() => _BreakCancelableBlockingDialogState();
+  State<_BreakCancelableBlockingDialog> createState() =>
+      _BreakCancelableBlockingDialogState();
 }
 
-class _BreakCancelableBlockingDialogState extends State<_BreakCancelableBlockingDialog> {
+class _BreakCancelableBlockingDialogState
+    extends State<_BreakCancelableBlockingDialog> {
   Timer? _timer;
   late int _remainingSeconds;
 
@@ -84,17 +45,15 @@ class _BreakCancelableBlockingDialogState extends State<_BreakCancelableBlocking
   void initState() {
     super.initState();
     _remainingSeconds = widget.duration.inSeconds;
-
-    _timer = Timer.periodic(const Duration(seconds: 1), (t) {
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) return;
-      setState(() => _remainingSeconds--);
-
-      if (_remainingSeconds <= 0) {
-        t.cancel();
-        if (mounted) {
-          Navigator.of(context).pop<bool>(true);
-        }
+      final next = _remainingSeconds - 1;
+      if (next <= 0) {
+        timer.cancel();
+        Navigator.of(context).pop<bool>(true);
+        return;
       }
+      setState(() => _remainingSeconds = next);
     });
   }
 
@@ -104,102 +63,102 @@ class _BreakCancelableBlockingDialogState extends State<_BreakCancelableBlocking
     super.dispose();
   }
 
-  void _handleCancel() {
+  void _cancel() {
     _timer?.cancel();
     Navigator.of(context).pop<bool>(false);
   }
 
   @override
   Widget build(BuildContext context) {
-    final t = _DialogTokens.of(context);
+    final tokens = PromptUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
+    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final totalSeconds = widget.duration.inSeconds <= 0
+        ? 1
+        : widget.duration.inSeconds;
+    final progress = (_remainingSeconds / totalSeconds).clamp(0.0, 1.0);
 
-    return Dialog(
-      insetPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
-      backgroundColor: t.dialogBg,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-        side: BorderSide(color: t.dialogBorder),
-      ),
+    return PromptDialogFrame(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(minWidth: 260, maxWidth: 360),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Stack(
+        constraints: const BoxConstraints(minWidth: 260, maxWidth: 380),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 72,
+              height: 72,
+              child: Stack(
                 alignment: Alignment.center,
                 children: [
-                  SizedBox(
-                    width: 64,
-                    height: 64,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 3,
-                      color: t.accent,
+                  TweenAnimationBuilder<double>(
+                    tween: Tween<double>(end: progress),
+                    duration:
+                        reduceMotion ? Duration.zero : PromptUiMotion.selection,
+                    curve: PromptUiMotion.standard,
+                    builder: (_, value, __) => CircularProgressIndicator(
+                      value: value,
+                      strokeWidth: 4,
+                      color: tokens.warning,
+                      backgroundColor: tokens.warningContainer,
                     ),
                   ),
                   Container(
-                    width: 40,
-                    height: 40,
+                    width: 46,
+                    height: 46,
                     decoration: BoxDecoration(
-                      color: t.accentSoftBg,
+                      color: tokens.warningContainer,
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(Icons.schedule, color: t.accent),
+                    child: Icon(
+                      Icons.schedule_rounded,
+                      color: tokens.onWarningContainer,
+                    ),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
-
-              Text(
-                widget.message,
-                textAlign: TextAlign.center,
-                style: textTheme.bodyMedium?.copyWith(
-                  color: t.text,
-                  height: 1.4,
-                ),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              widget.message,
+              textAlign: TextAlign.center,
+              style: textTheme.bodyMedium?.copyWith(
+                color: tokens.textPrimary,
+                height: 1.45,
+                fontWeight: FontWeight.w600,
               ),
-              const SizedBox(height: 12),
-
-              Container(
-                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
-                decoration: BoxDecoration(
-                  color: t.chipBg,
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: t.chipBorder),
-                ),
+            ),
+            const SizedBox(height: 14),
+            AnimatedContainer(
+              duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
+              curve: PromptUiMotion.standard,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(
+                color: tokens.surfaceOverlay,
+                borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+                border: Border.all(color: tokens.borderSubtle),
+              ),
+              child: AnimatedSwitcher(
+                duration: reduceMotion ? Duration.zero : PromptUiMotion.instant,
                 child: Text(
                   '자동 진행까지 약 $_remainingSeconds초',
-                  textAlign: TextAlign.center,
-                  style: textTheme.bodySmall?.copyWith(
-                    color: t.mutedText,
-                    fontWeight: FontWeight.w600,
+                  key: ValueKey<int>(_remainingSeconds),
+                  style: textTheme.labelMedium?.copyWith(
+                    color: tokens.textSecondary,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
-
-              const SizedBox(height: 16),
-
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  OutlinedButton(
-                    onPressed: _handleCancel,
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: t.accent,
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
-                      side: BorderSide(color: t.buttonBorder),
-                    ),
-                    child: const Text('취소'),
-                  ),
-                ],
-              ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 18),
+            PromptButton(
+              label: '취소',
+              icon: Icons.close_rounded,
+              onPressed: _cancel,
+              variant: PromptButtonVariant.tertiary,
+              expand: true,
+              haptic: PromptHaptic.selection,
+            ),
+          ],
         ),
       ),
     );

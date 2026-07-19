@@ -3,6 +3,9 @@ import 'package:provider/provider.dart';
 
 import '../../../app/init/app_navigator.dart';
 import '../../../app/models/capability.dart';
+import '../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
 import '../../account/applications/user_state.dart';
 import '../../dev/application/area_state.dart';
 import '../../monthly/application/monthly_area_resolver.dart';
@@ -33,20 +36,22 @@ class ProductivitySheet {
 
   static BuildContext? _bestContext() {
     final state = navigatorKey.currentState;
-    final overlayCtx = state?.overlay?.context;
-    return overlayCtx ?? state?.context;
+    final overlayContext = state?.overlay?.context;
+    return overlayContext ?? state?.context;
   }
 
   static Future<void> togglePanel() async {
     if (!_inited) await init();
-    final ctx = _bestContext();
-    if (ctx == null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => ProductivitySheet.togglePanel());
+    final context = _bestContext();
+    if (context == null) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => ProductivitySheet.togglePanel(),
+      );
       return;
     }
 
     if (_isPanelOpen) {
-      Navigator.of(ctx).maybePop();
+      Navigator.of(context).maybePop();
       return;
     }
 
@@ -57,19 +62,22 @@ class ProductivitySheet {
     ProductivitySheetTab tab = ProductivitySheetTab.monthly,
   }) async {
     if (!_inited) await init();
-    final ctx = _bestContext();
-    if (ctx == null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => ProductivitySheet.openPanel(tab: tab));
+    final context = _bestContext();
+    if (context == null) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => ProductivitySheet.openPanel(tab: tab),
+      );
       return;
     }
     if (_isPanelOpen || _panelFuture != null) return;
 
     _isPanelOpen = true;
-    _panelFuture = showModalBottomSheet(
-      context: ctx,
+    _panelFuture = showPromptOverlayBottomSheet<void>(
+      context: context,
       useSafeArea: true,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      useRootNavigator: true,
+      transparentBackground: true,
       builder: (_) => const _ProductivitySheetBody(),
     ).whenComplete(() {
       _isPanelOpen = false;
@@ -85,60 +93,13 @@ class _ProductivitySheetBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
     return FractionallySizedBox(
-      heightFactor: 1.0,
-      child: ClipRRect(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        child: Material(
-          color: cs.surface,
-          child: const SafeArea(
-            top: false,
-            child: Column(
-              children: [
-                SizedBox(height: 10),
-                _SheetTopStrip(),
-                SizedBox(height: 8),
-                Expanded(child: _MonthlyProductivityBody()),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SheetTopStrip extends StatelessWidget {
-  const _SheetTopStrip();
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return SizedBox(
-      height: 32,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Container(
-            width: 46,
-            height: 5,
-            decoration: BoxDecoration(
-              color: cs.outlineVariant.withOpacity(.8),
-              borderRadius: BorderRadius.circular(999),
-            ),
-          ),
-          Positioned(
-            right: 10,
-            child: IconButton(
-              tooltip: '닫기',
-              onPressed: () => Navigator.of(context).maybePop(),
-              icon: const Icon(Icons.close_rounded),
-              visualDensity: VisualDensity.compact,
-            ),
-          ),
-        ],
+      heightFactor: 1,
+      child: PromptSheetScaffold(
+        title: '정기 주차',
+        icon: Icons.dashboard_customize_rounded,
+        onClose: () => Navigator.of(context).maybePop(),
+        body: const _MonthlyProductivityBody(),
       ),
     );
   }
@@ -149,71 +110,110 @@ class _MonthlyProductivityBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final userArea = context.select<UserState, String>((s) => s.currentArea.trim());
-    final areaStateArea = context.select<AreaState, String>((s) => s.currentArea.trim());
+    final userArea =
+        context.select<UserState, String>((state) => state.currentArea.trim());
+    final selectedArea =
+        context.select<AreaState, String>((state) => state.currentArea.trim());
     final area = MonthlyAreaResolver.resolve(
       userArea: userArea,
-      areaStateArea: areaStateArea,
+      areaStateArea: selectedArea,
     );
-    final canUseMonthly = context.select<AreaState, bool>((s) {
-      final stateArea = s.currentArea.trim();
+    final canUseMonthly = context.select<AreaState, bool>((state) {
+      final stateArea = state.currentArea.trim();
       if (stateArea.isEmpty || stateArea != area) return true;
-      return s.capabilitiesOfCurrentArea.contains(Capability.monthly);
+      return state.capabilitiesOfCurrentArea.contains(Capability.monthly);
     });
 
-    if (area.isEmpty) {
-      return const _MonthlyAccessNotice(
-        icon: Icons.location_off_rounded,
-        title: '지점이 선택되지 않았습니다',
-        message: '정기 주차 관리를 사용하려면 먼저 현재 지점을 선택하세요.',
-      );
-    }
-    if (!canUseMonthly) {
-      return const _MonthlyAccessNotice(
-        icon: Icons.lock_outline_rounded,
-        title: '정기 주차 권한이 없습니다',
-        message: '현재 지점에서 정기 주차 기능이 열려 있을 때 사용할 수 있습니다.',
-      );
-    }
-    return const MonthlyParkingManagement();
+    return AnimatedSwitcher(
+      duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false
+          ? Duration.zero
+          : PromptUiMotion.component,
+      switchInCurve: PromptUiMotion.enter,
+      switchOutCurve: PromptUiMotion.exit,
+      child: area.isEmpty
+          ? const _MonthlyAccessNotice(
+              key: ValueKey<String>('area-empty'),
+              icon: Icons.location_off_rounded,
+              title: '지점이 선택되지 않았습니다',
+              message: '정기 주차 관리를 사용하려면 먼저 현재 지점을 선택하세요.',
+            )
+          : !canUseMonthly
+              ? const _MonthlyAccessNotice(
+                  key: ValueKey<String>('permission-denied'),
+                  icon: Icons.lock_outline_rounded,
+                  title: '정기 주차 권한이 없습니다',
+                  message: '현재 지점에서 정기 주차 기능이 열려 있을 때 사용할 수 있습니다.',
+                )
+              : const MonthlyParkingManagement(
+                  key: ValueKey<String>('monthly-management'),
+                ),
+    );
   }
 }
 
 class _MonthlyAccessNotice extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String message;
-
   const _MonthlyAccessNotice({
+    super.key,
     required this.icon,
     required this.title,
     required this.message,
   });
 
+  final IconData icon;
+  final String title;
+  final String message;
+
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 48, color: cs.outline),
-            const SizedBox(height: 14),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+    final tokens = PromptUiTheme.of(context);
+    final textTheme = Theme.of(context).textTheme;
+
+    return PromptAnimatedReveal(
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 460),
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: tokens.surfaceOverlay,
+              borderRadius: BorderRadius.circular(PromptUiShapes.card),
+              border: Border.all(color: tokens.borderSubtle),
             ),
-            const SizedBox(height: 8),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: tokens.warningContainer,
+                    borderRadius:
+                        BorderRadius.circular(PromptUiShapes.control),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(icon, size: 30, color: tokens.warning),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: textTheme.titleMedium?.copyWith(
+                    color: tokens.textPrimary,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  message,
+                  textAlign: TextAlign.center,
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: tokens.textSecondary,
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

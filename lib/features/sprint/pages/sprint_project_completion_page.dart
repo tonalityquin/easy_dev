@@ -62,8 +62,9 @@ class _SprintProjectCompletionPageState
       return;
     }
     await Navigator.of(context).pushReplacement(
-      MaterialPageRoute<void>(
-        builder: (_) => SprintProjectReportPage(
+      sprintPageRoute<void>(
+        context: context,
+        page: SprintProjectReportPage(
           store: widget.store,
           projectId: widget.projectId,
           report: report,
@@ -76,7 +77,7 @@ class _SprintProjectCompletionPageState
   Widget build(BuildContext context) {
     final project = widget.store.projectById(widget.projectId);
     if (project == null) {
-      return const Scaffold(
+      return const SprintScaffold(
         body: Center(child: Text('프로젝트를 찾을 수 없습니다.')),
       );
     }
@@ -91,8 +92,7 @@ class _SprintProjectCompletionPageState
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final duration =
         reduceMotion ? Duration.zero : const Duration(milliseconds: 220);
-    return Scaffold(
-      backgroundColor: colors.surface,
+    return SprintScaffold(
       appBar: AppBar(
         title: const Text(
           '프로젝트 완료',
@@ -243,7 +243,7 @@ class _SprintProjectCompletionPageState
     }
     if (start != null) return '${sprintFormatDate(start)} 시작';
     if (end != null) return '목표 완료 ${sprintFormatDate(end)}';
-    return '목표 기간 없음';
+    return '무기한 프로젝트';
   }
 }
 
@@ -264,8 +264,7 @@ class SprintProjectReportPage extends StatelessWidget {
     final resolvedProjectId = projectId ?? report.projectId;
     final project = store.projectById(resolvedProjectId);
     final colors = Theme.of(context).colorScheme;
-    return Scaffold(
-      backgroundColor: colors.surface,
+    return SprintScaffold(
       appBar: AppBar(
         title: const Text(
           '종료 보고서',

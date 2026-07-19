@@ -1,12 +1,13 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../features/account/applications/user_state.dart';
-import '../../../features/dev/application/area_state.dart';
-import '../../../features/dev/application/field_calendar_state.dart';
-import '../../../shared/plate/application/minor/minor_plate_state.dart';
-import '../../../shared/plate/domain/enums/plate_type.dart';
-import '../../../shared/plate/domain/models/plate_model.dart';
+
+import '../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../shared/plate/application/minor/minor_plate_state.dart';
+import '../../shared/plate/domain/enums/plate_type.dart';
+import '../account/applications/user_state.dart';
+import '../dev/application/area_state.dart';
+import '../dev/application/field_calendar_state.dart';
 import 'departure_completed_package/minor_departure_completed_tab_settled.dart';
 import 'departure_completed_package/minor_departure_completed_tab_unsettled.dart';
 import 'departure_completed_package/widgets/minor_departure_completed_selected_date_bar.dart';
@@ -15,59 +16,44 @@ class MinorDepartureCompletedBottomSheet extends StatefulWidget {
   const MinorDepartureCompletedBottomSheet({super.key});
 
   @override
-  State<MinorDepartureCompletedBottomSheet> createState() =>
-      _MinorDepartureCompletedBottomSheetState();
+  State<MinorDepartureCompletedBottomSheet> createState() => _MinorDepartureCompletedBottomSheetState();
 }
 
-class _MinorDepartureCompletedBottomSheetState
-    extends State<MinorDepartureCompletedBottomSheet> {
-  static const String screenTag = 'departure completed';
-
+class _MinorDepartureCompletedBottomSheetState extends State<MinorDepartureCompletedBottomSheet> {
+  static const String _screenTag = 'departure completed';
   final bool _isSorted = true;
 
-  bool _areaEquals(String a, String b) =>
-      a.trim().toLowerCase() == b.trim().toLowerCase();
+  bool _areaEquals(String a, String b) {
+    return a.trim().toLowerCase() == b.trim().toLowerCase();
+  }
 
-  Widget _buildScreenTag(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final base = Theme.of(context).textTheme.labelSmall;
-
-    final style = (base ??
-            const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-            ))
-        .copyWith(
-      color: cs.onSurfaceVariant,
-      fontWeight: FontWeight.w600,
-      letterSpacing: 0.2,
+  Future<bool> _handleWillPop(String userName) async {
+    final plateState = context.read<MinorPlateState>();
+    final selected = plateState.minorGetSelectedPlate(
+      PlateType.departureCompleted,
+      userName,
     );
-
-    return IgnorePointer(
-      child: Align(
-        alignment: Alignment.topLeft,
-        child: Padding(
-          padding: const EdgeInsets.only(left: 12, top: 6),
-          child: Semantics(
-            label: 'screen_tag: $screenTag',
-            child: Text(screenTag, style: style),
-          ),
-        ),
-      ),
+    if (selected == null || selected.id.isEmpty) return true;
+    await plateState.minorTogglePlateIsSelected(
+      collection: PlateType.departureCompleted,
+      plateNumber: selected.plateNumber,
+      userName: userName,
+      onError: (message) => debugPrint(message),
     );
+    return false;
   }
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
+    final tokens = PromptUiTheme.of(context);
+    final textTheme = Theme.of(context).textTheme;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final plateState = context.watch<MinorPlateState>();
     final userName = context.read<UserState>().name;
     final areaState = context.watch<AreaState>();
-
     final division = areaState.currentDivision;
     final area = areaState.currentArea.trim();
-
     final selectedDateRaw =
         context.watch<FieldSelectedDateState>().selectedDate ?? DateTime.now();
     final selectedDate = DateTime(
@@ -75,110 +61,146 @@ class _MinorDepartureCompletedBottomSheetState
       selectedDateRaw.month,
       selectedDateRaw.day,
     );
-
     final baseList = plateState.minorGetPlatesByCollection(
       PlateType.departureCompleted,
       selectedDate: selectedDate,
     );
-
-    final List<PlateModel> firestorePlates = baseList.where((p) {
-      final sameArea = _areaEquals(p.area, area);
-      return !p.isLockedFee && sameArea;
+    final firestorePlates = baseList.where((plate) {
+      return !plate.isLockedFee && _areaEquals(plate.area, area);
     }).toList()
-      ..sort((a, b) => _isSorted
-          ? b.requestTime.compareTo(a.requestTime)
-          : a.requestTime.compareTo(b.requestTime));
-
+      ..sort(
+        (a, b) => _isSorted
+            ? b.requestTime.compareTo(a.requestTime)
+            : a.requestTime.compareTo(b.requestTime),
+      );
     final selectedPlate = plateState.minorGetSelectedPlate(
-        PlateType.departureCompleted, userName);
+      PlateType.departureCompleted,
+      userName,
+    );
     final plateNumber = selectedPlate?.plateNumber ?? '';
 
     return WillPopScope(
-      onWillPop: () async {
-        if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
-          await plateState.minorTogglePlateIsSelected(
-            collection: PlateType.departureCompleted,
-            plateNumber: selectedPlate.plateNumber,
-            userName: userName,
-            onError: (msg) => debugPrint(msg),
-          );
-          return false;
-        }
-        return true;
-      },
-      child: SizedBox(
-        height: MediaQuery.of(context).size.height * 0.95,
-        child: Container(
-          decoration: BoxDecoration(
-            color: cs.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-            border: Border.all(color: cs.outlineVariant.withOpacity(0.70)),
-          ),
-          child: DefaultTabController(
+      onWillPop: () => _handleWillPop(userName),
+      child: FractionallySizedBox(
+        heightFactor: 0.95,
+        child: PromptSheetScaffold(
+          title: '출차 완료',
+          icon: Icons.directions_car_filled_rounded,
+          onClose: () => Navigator.of(context).maybePop(),
+          body: DefaultTabController(
             length: 2,
             child: Builder(
               builder: (context) {
                 final tabController = DefaultTabController.of(context);
-
                 return AnimatedBuilder(
                   animation: tabController,
                   builder: (context, _) {
                     final isSettled = tabController.index == 1;
-
-                    return Scaffold(
-                      backgroundColor: Colors.transparent,
-                      body: Column(
-                        children: [
-                          const SizedBox(height: 12),
-                          Center(
-                            child: Container(
-                              width: 60,
-                              height: 6,
-                              decoration: BoxDecoration(
-                                color: cs.outlineVariant.withOpacity(0.75),
-                                borderRadius: BorderRadius.circular(3),
+                    return Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                          child: Row(
+                            children: [
+                              Semantics(
+                                label: 'screen_tag: $_screenTag',
+                                child: Text(
+                                  _screenTag,
+                                  style: textTheme.labelSmall?.copyWith(
+                                    color: tokens.textSecondary,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 0.2,
+                                  ),
+                                ),
                               ),
-                            ),
+                              const Spacer(),
+                              AnimatedSwitcher(
+                                duration: reduceMotion
+                                    ? Duration.zero
+                                    : PromptUiMotion.selection,
+                                child: Container(
+                                  key: ValueKey<bool>(isSettled),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 5,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: isSettled
+                                        ? tokens.successContainer
+                                        : tokens.warningContainer,
+                                    borderRadius: BorderRadius.circular(
+                                      PromptUiShapes.pill,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    isSettled ? '정산' : '미정산',
+                                    style: textTheme.labelSmall?.copyWith(
+                                      color: isSettled
+                                          ? tokens.onSuccessContainer
+                                          : tokens.onWarningContainer,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                          _buildScreenTag(context),
-                          const SizedBox(height: 8),
-                          Padding(
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 8.0),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: tokens.surfaceOverlay,
+                              borderRadius: BorderRadius.circular(
+                                PromptUiShapes.control,
+                              ),
+                              border: Border.all(color: tokens.borderSubtle),
+                            ),
                             child: TabBar(
-                              labelColor: cs.onSurface,
-                              unselectedLabelColor: cs.onSurfaceVariant,
-                              indicatorColor: cs.primary,
-                              dividerColor: Colors.transparent,
+                              labelColor: tokens.onAccentContainer,
+                              unselectedLabelColor: tokens.textSecondary,
+                              indicator: BoxDecoration(
+                                color: tokens.accentContainer,
+                                borderRadius: BorderRadius.circular(
+                                  PromptUiShapes.control,
+                                ),
+                                border: Border.all(color: tokens.accent),
+                              ),
+                              indicatorSize: TabBarIndicatorSize.tab,
+                              dividerColor: tokens.transparent,
                               tabs: const [
                                 Tab(text: '미정산'),
                                 Tab(text: '정산'),
                               ],
                             ),
                           ),
-                          const SizedBox(height: 8),
-                          MinorDepartureCompletedSelectedDateBar(
-                            visible: !isSettled,
+                        ),
+                        const SizedBox(height: 8),
+                        AnimatedSize(
+                          duration: reduceMotion
+                              ? Duration.zero
+                              : PromptUiMotion.layout,
+                          curve: PromptUiMotion.standard,
+                          child: MinorDepartureCompletedSelectedDateBar(visible: !isSettled),
+                        ),
+                        const SizedBox(height: 8),
+                        Expanded(
+                          child: TabBarView(
+                            children: [
+                              MinorDepartureCompletedUnsettledTab(
+                                firestorePlates: firestorePlates,
+                                userName: userName,
+                              ),
+                              MinorDepartureCompletedSettledTab(
+                                area: area,
+                                division: division,
+                                selectedDate: selectedDate,
+                                plateNumber: plateNumber,
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 8),
-                          Expanded(
-                            child: TabBarView(
-                              children: [
-                                MinorDepartureCompletedUnsettledTab(
-                                  firestorePlates: firestorePlates,
-                                  userName: userName,
-                                ),
-                                MinorDepartureCompletedSettledTab(
-                                  area: area,
-                                  division: division,
-                                  selectedDate: selectedDate,
-                                  plateNumber: plateNumber,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     );
                   },
                 );

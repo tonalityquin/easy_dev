@@ -2,12 +2,9 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-const _regionInk = Color(0xFF101828);
-const _regionMuted = Color(0xFF667085);
-const _regionCanvas = Color(0xFFF3F6FA);
-const _regionPanel = Color(0xFFFFFFFF);
-const _regionLine = Color(0xFFD8DEE8);
-const _regionBlue = Color(0xFF2563EB);
+import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
 
 Future<void> monthlyRegionPickerBottomSheet({
   required BuildContext context,
@@ -16,40 +13,58 @@ Future<void> monthlyRegionPickerBottomSheet({
   required ValueChanged<String> onConfirm,
 }) async {
   if (regions.isEmpty) {
-    await showModalBottomSheet<void>(
+    await showPromptOverlayBottomSheet<void>(
       context: context,
       useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        return SafeArea(
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: const BoxDecoration(
-              color: _regionPanel,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
-              border: Border(top: BorderSide(color: _regionLine)),
+      isScrollControlled: true,
+      transparentBackground: true,
+      builder: (sheetContext) {
+        final tokens = PromptUiTheme.of(sheetContext);
+        final textTheme = Theme.of(sheetContext).textTheme;
+        return Material(
+          color: tokens.surfaceRaised,
+          surfaceTintColor: tokens.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(PromptUiShapes.sheet),
             ),
+            side: BorderSide(color: tokens.borderSubtle),
+          ),
+          child: SafeArea(
+            top: false,
+            minimum: const EdgeInsets.all(18),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.info_outline, color: _regionMuted, size: 34),
-                const SizedBox(height: 10),
-                const Text(
-                  '선택 가능한 지역이 없습니다.',
-                  style: TextStyle(color: _regionInk, fontWeight: FontWeight.w900, fontSize: 16),
+                Container(
+                  width: 52,
+                  height: 52,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: tokens.warningContainer,
+                    borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                  ),
+                  child: Icon(
+                    Icons.info_outline_rounded,
+                    color: tokens.onWarningContainer,
+                    size: 28,
+                  ),
                 ),
                 const SizedBox(height: 14),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    onPressed: () => Navigator.of(ctx).pop(),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: _regionInk,
-                      minimumSize: const Size.fromHeight(52),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    ),
-                    child: const Text('닫기'),
+                Text(
+                  '선택 가능한 지역이 없습니다.',
+                  textAlign: TextAlign.center,
+                  style: textTheme.titleMedium?.copyWith(
+                    color: tokens.textPrimary,
+                    fontWeight: FontWeight.w700,
                   ),
+                ),
+                const SizedBox(height: 16),
+                PromptButton(
+                  label: '닫기',
+                  expand: true,
+                  haptic: PromptHaptic.selection,
+                  onPressed: () => Navigator.of(sheetContext).pop(),
                 ),
               ],
             ),
@@ -60,39 +75,47 @@ Future<void> monthlyRegionPickerBottomSheet({
     return;
   }
 
-  String tempSelected = selectedRegion;
-  final idx = regions.indexOf(selectedRegion);
-  final initialIndex = idx >= 0 && idx < regions.length ? idx : 0;
+  var selected = selectedRegion;
+  final currentIndex = regions.indexOf(selectedRegion);
+  final initialIndex = currentIndex >= 0 ? currentIndex : 0;
 
-  await showModalBottomSheet<void>(
+  await showPromptOverlayBottomSheet<void>(
     context: context,
     isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    builder: (sheetCtx) {
+    useSafeArea: true,
+    transparentBackground: true,
+    builder: (sheetContext) {
       return DraggableScrollableSheet(
-        initialChildSize: 0.56,
-        minChildSize: 0.46,
+        initialChildSize: 0.58,
+        minChildSize: 0.48,
         maxChildSize: 0.88,
-        builder: (ctx, scrollController) {
-          return SafeArea(
-            top: false,
-            child: Container(
-              decoration: const BoxDecoration(
-                color: _regionCanvas,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-                border: Border(top: BorderSide(color: _regionLine)),
+        builder: (context, scrollController) {
+          final tokens = PromptUiTheme.of(context);
+          final textTheme = Theme.of(context).textTheme;
+          return Material(
+            color: tokens.surfaceRaised,
+            surfaceTintColor: tokens.transparent,
+            shape: RoundedRectangleBorder(
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(PromptUiShapes.sheet),
               ),
+              side: BorderSide(color: tokens.borderSubtle),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: SafeArea(
+              top: false,
               child: ListView(
                 controller: scrollController,
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+                padding: const EdgeInsets.fromLTRB(18, 12, 18, 20),
                 children: [
                   Center(
                     child: Container(
-                      width: 46,
-                      height: 5,
+                      width: 36,
+                      height: 4,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFCBD5E1),
-                        borderRadius: BorderRadius.circular(999),
+                        color: tokens.handle,
+                        borderRadius:
+                            BorderRadius.circular(PromptUiShapes.pill),
                       ),
                     ),
                   ),
@@ -102,33 +125,49 @@ Future<void> monthlyRegionPickerBottomSheet({
                       Container(
                         width: 44,
                         height: 44,
+                        alignment: Alignment.center,
                         decoration: BoxDecoration(
-                          color: _regionBlue,
-                          borderRadius: BorderRadius.circular(14),
+                          color: tokens.accentContainer,
+                          borderRadius:
+                              BorderRadius.circular(PromptUiShapes.control),
+                          border: Border.all(
+                            color: tokens.accent.withOpacity(
+                              tokens.isDark ? 0.56 : 0.34,
+                            ),
+                          ),
                         ),
-                        child: const Icon(Icons.place_outlined, color: Colors.white),
+                        child: Icon(
+                          Icons.place_outlined,
+                          color: tokens.onAccentContainer,
+                        ),
                       ),
                       const SizedBox(width: 12),
-                      const Expanded(
+                      Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
                               '번호판 지역 선택',
-                              style: TextStyle(color: _regionInk, fontWeight: FontWeight.w900, fontSize: 20),
+                              style: textTheme.titleMedium?.copyWith(
+                                color: tokens.textPrimary,
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
-                            SizedBox(height: 3),
+                            const SizedBox(height: 2),
                             Text(
                               '차량번호 앞 지역 표기를 선택합니다.',
-                              style: TextStyle(color: _regionMuted, fontWeight: FontWeight.w700),
+                              style: textTheme.bodySmall?.copyWith(
+                                color: tokens.textSecondary,
+                              ),
                             ),
                           ],
                         ),
                       ),
-                      IconButton(
+                      PromptIconButton(
+                        icon: Icons.close_rounded,
                         tooltip: '닫기',
-                        onPressed: () => Navigator.of(sheetCtx).pop(),
-                        icon: const Icon(Icons.close, color: _regionMuted),
+                        haptic: PromptHaptic.selection,
+                        onPressed: () => Navigator.of(sheetContext).pop(),
                       ),
                     ],
                   ),
@@ -136,43 +175,50 @@ Future<void> monthlyRegionPickerBottomSheet({
                   Container(
                     padding: const EdgeInsets.all(13),
                     decoration: BoxDecoration(
-                      color: _regionPanel,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: _regionLine),
+                      color: tokens.surfaceOverlay,
+                      borderRadius:
+                          BorderRadius.circular(PromptUiShapes.control),
+                      border: Border.all(color: tokens.borderSubtle),
                     ),
                     child: Text(
                       '현재 선택: $selectedRegion',
-                      style: const TextStyle(color: _regionInk, fontWeight: FontWeight.w900),
+                      style: textTheme.bodyMedium?.copyWith(
+                        color: tokens.textPrimary,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 14),
                   Container(
                     height: 220,
                     decoration: BoxDecoration(
-                      color: _regionPanel,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: _regionLine),
+                      color: tokens.surfaceOverlay,
+                      borderRadius: BorderRadius.circular(PromptUiShapes.card),
+                      border: Border.all(color: tokens.borderSubtle),
                     ),
                     child: CupertinoTheme(
-                      data: const CupertinoThemeData(
-                        primaryColor: _regionBlue,
+                      data: CupertinoThemeData(
+                        brightness: tokens.brightness,
+                        primaryColor: tokens.accent,
                         textTheme: CupertinoTextThemeData(
-                          pickerTextStyle: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w900,
-                            color: _regionInk,
+                          pickerTextStyle: textTheme.titleMedium!.copyWith(
+                            color: tokens.textPrimary,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ),
                       child: CupertinoPicker(
-                        scrollController: FixedExtentScrollController(initialItem: initialIndex),
+                        scrollController: FixedExtentScrollController(
+                          initialItem: initialIndex,
+                        ),
                         itemExtent: 48,
                         onSelectedItemChanged: (index) {
-                          tempSelected = regions[index];
+                          selected = regions[index];
                           HapticFeedback.selectionClick();
                         },
-                        selectionOverlay: CupertinoPickerDefaultSelectionOverlay(
-                          background: _regionBlue.withOpacity(.10),
+                        selectionOverlay:
+                            CupertinoPickerDefaultSelectionOverlay(
+                          background: tokens.surfaceSelected,
                         ),
                         children: [
                           for (final region in regions)
@@ -191,28 +237,23 @@ Future<void> monthlyRegionPickerBottomSheet({
                   Row(
                     children: [
                       Expanded(
-                        child: OutlinedButton(
-                          onPressed: () => Navigator.of(sheetCtx).pop(),
-                          style: OutlinedButton.styleFrom(
-                            minimumSize: const Size.fromHeight(52),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                          ),
-                          child: const Text('취소'),
+                        child: PromptButton(
+                          label: '취소',
+                          variant: PromptButtonVariant.tertiary,
+                          haptic: PromptHaptic.selection,
+                          onPressed: () => Navigator.of(sheetContext).pop(),
                         ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: FilledButton(
+                        child: PromptButton(
+                          label: '확인',
+                          icon: Icons.check_rounded,
+                          haptic: PromptHaptic.medium,
                           onPressed: () {
-                            Navigator.of(sheetCtx).pop();
-                            onConfirm(tempSelected);
+                            Navigator.of(sheetContext).pop();
+                            onConfirm(selected);
                           },
-                          style: FilledButton.styleFrom(
-                            backgroundColor: _regionInk,
-                            minimumSize: const Size.fromHeight(52),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                          ),
-                          child: const Text('확인'),
                         ),
                       ),
                     ],

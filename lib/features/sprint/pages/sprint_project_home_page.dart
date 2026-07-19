@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../../shared/google_calendar/google_event_colors.dart';
 import '../application/sprint_mode_store.dart';
 import '../domain/sprint_models.dart';
 import 'sprint_project_archive_page.dart';
@@ -101,7 +102,7 @@ class _SprintProjectHomePageState extends State<SprintProjectHomePage> {
           reduceMotion ? Duration.zero : const Duration(milliseconds: 260),
       reverseTransitionDuration:
           reduceMotion ? Duration.zero : const Duration(milliseconds: 210),
-      pageBuilder: (_, __, ___) => page,
+      pageBuilder: (_, __, ___) => SprintPromptScope(child: page),
       transitionsBuilder: (_, animation, __, child) {
         if (reduceMotion) return child;
         final curved = CurvedAnimation(
@@ -202,13 +203,11 @@ class _SprintProjectHomePageState extends State<SprintProjectHomePage> {
   }
 
   void _openAttention() {
-    showModalBottomSheet<void>(
+    sprintShowBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       showDragHandle: true,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      barrierColor: Theme.of(context).colorScheme.scrim,
       builder: (_) => _ProjectAttentionSheet(store: widget.store),
     );
   }
@@ -225,17 +224,16 @@ class _SprintProjectHomePageState extends State<SprintProjectHomePage> {
             ? Duration.zero
             : const Duration(milliseconds: 220);
         if (project == null) {
-          return const Scaffold(
+          return const SprintScaffold(
             body: Center(child: Text('프로젝트를 찾을 수 없습니다.')),
           );
         }
         final summary = widget.store.summaryFor(project.id);
         final previewTasks = _pathPreview(summary.pathTasks);
 
-        return Scaffold(
+        return SprintScaffold(
           extendBody: false,
           extendBodyBehindAppBar: false,
-          backgroundColor: Theme.of(context).colorScheme.surface,
           appBar: AppBar(
             titleSpacing: 4,
             title: InkWell(
@@ -426,8 +424,9 @@ class _SprintProjectHomePageState extends State<SprintProjectHomePage> {
 
   void _openFullPath(SprintProjectSummary summary) {
     Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        builder: (_) => _FullProjectPathPage(
+      sprintPageRoute<void>(
+        context: context,
+        page: _FullProjectPathPage(
           projectName: summary.project.name,
           tasks: summary.pathTasks,
         ),
@@ -446,11 +445,21 @@ class _ProjectSummaryCard extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     final progress = summary.progressRatio.clamp(0, 1).toDouble();
     final percentage = (progress * 100).round();
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final duration =
+        reduceMotion ? Duration.zero : const Duration(milliseconds: 520);
+    final projectColor = googleEventColor(
+      summary.project.googleColorId,
+      colors.primary,
+    );
 
-    return Container(
+    return AnimatedContainer(
+      duration: duration,
+      curve: Curves.easeOutCubic,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: colors.primaryContainer,
+        color: projectColor.withOpacity(0.16),
         borderRadius: BorderRadius.circular(24),
       ),
       child: Column(
@@ -466,18 +475,25 @@ class _ProjectSummaryCard extends StatelessWidget {
                     alignment: Alignment.center,
                     children: [
                       SizedBox.expand(
-                        child: CircularProgressIndicator(
-                          value: progress,
-                          strokeWidth: 9,
-                          color: colors.primary,
-                          backgroundColor:
-                              colors.surfaceContainerHighest,
+                        child: TweenAnimationBuilder<double>(
+                          tween: Tween<double>(begin: 0, end: progress),
+                          duration: duration,
+                          curve: Curves.easeOutCubic,
+                          builder: (context, value, child) {
+                            return CircularProgressIndicator(
+                              value: value,
+                              strokeWidth: 9,
+                              color: projectColor,
+                              backgroundColor:
+                                  colors.surfaceContainerHighest,
+                            );
+                          },
                         ),
                       ),
                       Text(
                         '$percentage%',
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              color: colors.onPrimaryContainer,
+                              color: colors.onSurface,
                               fontWeight: FontWeight.w900,
                             ),
                       ),
@@ -495,7 +511,7 @@ class _ProjectSummaryCard extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            color: colors.onPrimaryContainer,
+                            color: colors.onSurface,
                             fontWeight: FontWeight.w900,
                           ),
                     ),
@@ -506,7 +522,7 @@ class _ProjectSummaryCard extends StatelessWidget {
                           ? '완료'
                           : '진행 중',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: colors.onPrimaryContainer,
+                            color: colors.onSurface,
                             fontWeight: FontWeight.w700,
                           ),
                     ),
@@ -514,7 +530,7 @@ class _ProjectSummaryCard extends StatelessWidget {
                     Text(
                       '남은 업무 ${summary.totalTaskCount - summary.completedTaskCount}개 · 높은 우선순위 ${summary.highPriorityRemainingCount}개',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: colors.onPrimaryContainer,
+                            color: colors.onSurface,
                             fontWeight: FontWeight.w800,
                           ),
                     ),
@@ -585,7 +601,7 @@ class _DeliveryForecastCard extends StatelessWidget {
             ? '${sprintFormatShortDate(start)} 시작'
             : target != null
                 ? '${sprintFormatShortDate(target)} 완료 목표'
-                : '목표 기간 없음';
+                : '무기한 프로젝트';
 
     return SprintSurface(
       child: Column(
@@ -1296,7 +1312,7 @@ class _FullProjectPathPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return SprintScaffold(
       appBar: AppBar(title: Text('$projectName · 진행 경로')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 18, 16, 32),

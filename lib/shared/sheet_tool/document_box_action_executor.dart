@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import '../../../app/utils/block_dialog/break_duration_blocking_dialog.dart';
+
+import '../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../app/utils/block_dialog/break_duration_blocking_dialog.dart';
 import '../document/backup/backup_form_page.dart';
 import '../document/user_statement/user_statement_form_page.dart';
 import '../document/work_end_report/dashboard_end_report_form_page.dart';
@@ -8,6 +10,32 @@ import 'document_box_action.dart';
 import 'fielder_document_box_sheet.dart';
 import 'leader_document_box_sheet.dart';
 
+Route<void> _promptDocumentRoute(
+  BuildContext context,
+  Widget page,
+) {
+  final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+  return PageRouteBuilder<void>(
+    fullscreenDialog: true,
+    transitionDuration: reduceMotion ? Duration.zero : PromptUiMotion.overlay,
+    reverseTransitionDuration:
+        reduceMotion ? Duration.zero : PromptUiMotion.component,
+    pageBuilder: (_, __, ___) => PromptUiScope(child: page),
+    transitionsBuilder: (_, animation, __, child) {
+      if (reduceMotion) return child;
+      final curved = CurvedAnimation(
+        parent: animation,
+        curve: PromptUiMotion.enter,
+        reverseCurve: PromptUiMotion.exit,
+      );
+      return FadeTransition(
+        opacity: curved,
+        child: child,
+      );
+    },
+  );
+}
+
 Future<void> executeDocumentBoxAction(
   BuildContext context,
   DocumentBoxAction action,
@@ -15,33 +43,33 @@ Future<void> executeDocumentBoxAction(
   switch (action) {
     case DocumentBoxAction.openUserStatementForm:
       await Navigator.of(context, rootNavigator: true).push(
-        MaterialPageRoute(
-          builder: (_) => const UserStatementFormPage(),
-          fullscreenDialog: true,
+        _promptDocumentRoute(
+          context,
+          const UserStatementFormPage(),
         ),
       );
       return;
     case DocumentBoxAction.openWorkEndReportForm:
       await Navigator.of(context, rootNavigator: true).push(
-        MaterialPageRoute(
-          builder: (_) => const DashboardEndReportFormPage(),
-          fullscreenDialog: true,
+        _promptDocumentRoute(
+          context,
+          const DashboardEndReportFormPage(),
         ),
       );
       return;
     case DocumentBoxAction.openWorkStartReportForm:
       await Navigator.of(context, rootNavigator: true).push(
-        MaterialPageRoute(
-          builder: (_) => const DashboardStartReportFormPage(),
-          fullscreenDialog: true,
+        _promptDocumentRoute(
+          context,
+          const DashboardStartReportFormPage(),
         ),
       );
       return;
     case DocumentBoxAction.openBackupForm:
       await Navigator.of(context, rootNavigator: true).push(
-        MaterialPageRoute(
-          builder: (_) => const BackupFormPage(),
-          fullscreenDialog: true,
+        _promptDocumentRoute(
+          context,
+          const BackupFormPage(),
         ),
       );
       return;

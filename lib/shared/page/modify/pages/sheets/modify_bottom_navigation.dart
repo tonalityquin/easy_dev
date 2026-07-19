@@ -1,12 +1,8 @@
 import 'package:flutter/material.dart';
 
-class ModifyBottomNavigation extends StatelessWidget {
-  final bool? showKeypad;
-  final Widget? keypad;
-  final Widget actionButton;
-  final VoidCallback? onTap;
-  final Color? backgroundColor;
+import '../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
 
+class ModifyBottomNavigation extends StatelessWidget {
   const ModifyBottomNavigation({
     super.key,
     this.showKeypad,
@@ -16,31 +12,56 @@ class ModifyBottomNavigation extends StatelessWidget {
     this.backgroundColor,
   });
 
+  final bool? showKeypad;
+  final Widget? keypad;
+  final Widget actionButton;
+  final VoidCallback? onTap;
+  final Color? backgroundColor;
+
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
+    final tokens = PromptUiTheme.of(context);
+    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final showKeyboardContent = showKeypad == true && keypad != null;
     return GestureDetector(
-      onTap: onTap ?? () {},
-      child: Container(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: reduceMotion ? Duration.zero : PromptUiMotion.layout,
+        curve: PromptUiMotion.standard,
         decoration: BoxDecoration(
-          
-          color: backgroundColor ?? cs.surface,
-          border: Border(
-            top: BorderSide(color: cs.outlineVariant.withOpacity(0.85), width: 1),
+          color: backgroundColor ?? tokens.surfaceRaised,
+          border: Border(top: BorderSide(color: tokens.borderSubtle)),
+          boxShadow: [
+            BoxShadow(
+              color: tokens.shadow,
+              blurRadius: 16,
+              offset: const Offset(0, -6),
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+        child: AnimatedSwitcher(
+          duration: reduceMotion ? Duration.zero : PromptUiMotion.component,
+          switchInCurve: PromptUiMotion.enter,
+          switchOutCurve: PromptUiMotion.exit,
+          transitionBuilder: (child, animation) {
+            return FadeTransition(
+              opacity: animation,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, .035),
+                  end: Offset.zero,
+                ).animate(animation),
+                child: child,
+              ),
+            );
+          },
+          child: KeyedSubtree(
+            key: ValueKey(showKeyboardContent),
+            child: showKeyboardContent ? keypad! : actionButton,
           ),
         ),
-        padding: const EdgeInsets.all(16.0),
-        child: _buildContent(),
       ),
     );
-  }
-
-  Widget _buildContent() {
-    if (showKeypad == true && keypad != null) {
-      return keypad!;
-    } else {
-      return actionButton;
-    }
   }
 }

@@ -16,12 +16,16 @@ class SprintDatabaseSnapshot {
     required this.projectReports,
     required this.activityEvents,
     required this.conflictResolutions,
+    required this.googleAccounts,
+    required this.calendarProfiles,
+    required this.activeCalendarProfileId,
     required this.workspaceScope,
     required this.selectedDate,
     required this.lastObservedToday,
     required this.weekMode,
     required this.googleCalendarId,
     required this.googleCalendarIdLocked,
+    required this.legacyCalendarConfigured,
   });
 
   final List<SprintProject> projects;
@@ -32,12 +36,16 @@ class SprintDatabaseSnapshot {
   final List<SprintProjectReport> projectReports;
   final List<SprintActivityEvent> activityEvents;
   final List<SprintConflictResolution> conflictResolutions;
+  final List<SprintGoogleAccount> googleAccounts;
+  final List<SprintCalendarProfile> calendarProfiles;
+  final String? activeCalendarProfileId;
   final SprintWorkspaceScope workspaceScope;
   final DateTime selectedDate;
   final DateTime lastObservedToday;
   final bool weekMode;
   final String googleCalendarId;
   final bool googleCalendarIdLocked;
+  final bool legacyCalendarConfigured;
 }
 
 class SprintDatabase {
@@ -46,8 +54,10 @@ class SprintDatabase {
   static final SprintDatabase instance = SprintDatabase._();
 
   static const String _databaseName = 'sprint_mode.db';
-  static const int _databaseVersion = 6;
+  static const int _databaseVersion = 10;
   static const String _legacyMigrationKey = 'legacy_preferences_migrated';
+  static const String _calendarProfilesMigrationKey =
+      'calendar_profiles_migrated_v10';
 
   Database? _database;
 
@@ -91,6 +101,24 @@ class SprintDatabase {
     }
     if (oldVersion < 6) {
       await _ensureAllDayTaskColumns(db);
+    }
+    if (oldVersion < 7) {
+      await _ensureCalendarSyncColumns(db);
+    }
+    if (oldVersion < 8) {
+      await _ensureTaskDescriptionColumn(db);
+    }
+    if (oldVersion < 9) {
+      await _ensureCalendarProfileStorage(db);
+    }
+    if (oldVersion < 10 && oldVersion >= 9) {
+      await _resetLegacyCalendarAccountBinding(db);
+      await _setSetting(
+        db,
+        _calendarProfilesMigrationKey,
+        '1',
+        DateTime.now().millisecondsSinceEpoch,
+      );
     }
     await _ensureSchema(db);
   }
@@ -153,6 +181,169 @@ class SprintDatabase {
       column: 'target_start_at_ms',
       definition: 'INTEGER',
     );
+  }
+
+  Future<void> _ensureCalendarSyncColumns(Database db) async {
+    await _ensureColumn(
+      db,
+      table: 'sprint_projects',
+      column: 'google_color_id',
+      definition: 'TEXT',
+    );
+    await _ensureColumn(
+      db,
+      table: 'sprint_projects',
+      column: 'calendar_sync_enabled',
+      definition: 'INTEGER NOT NULL DEFAULT 1',
+    );
+    await _ensureColumn(
+      db,
+      table: 'sprint_tasks',
+      column: 'google_event_id',
+      definition: 'TEXT',
+    );
+    await _ensureColumn(
+      db,
+      table: 'sprint_tasks',
+      column: 'google_calendar_id',
+      definition: 'TEXT',
+    );
+    await _ensureColumn(
+      db,
+      table: 'sprint_tasks',
+      column: 'google_sync_state',
+      definition: "TEXT NOT NULL DEFAULT 'none'",
+    );
+    await _ensureColumn(
+      db,
+      table: 'sprint_tasks',
+      column: 'google_sync_error',
+      definition: 'TEXT',
+    );
+    await _ensureColumn(
+      db,
+      table: 'sprint_tasks',
+      column: 'google_delete_after_sync',
+      definition: 'INTEGER NOT NULL DEFAULT 0',
+    );
+    await _ensureColumn(
+      db,
+      table: 'sprint_external_events',
+      column: 'color_id',
+      definition: 'TEXT',
+    );
+    await _ensureColumn(
+      db,
+      table: 'sprint_external_events',
+      column: 'managed_by_sprint',
+      definition: 'INTEGER NOT NULL DEFAULT 0',
+    );
+    await _ensureColumn(
+      db,
+      table: 'sprint_external_events',
+      column: 'linked_task_id',
+      definition: 'TEXT',
+    );
+    await _ensureColumn(
+      db,
+      table: 'sprint_external_events',
+      column: 'linked_project_id',
+      definition: 'TEXT',
+    );
+  }
+
+  Future<void> _ensureTaskDescriptionColumn(Database db) async {
+    await _ensureColumn(
+      db,
+      table: 'sprint_tasks',
+      column: 'description',
+      definition: "TEXT NOT NULL DEFAULT ''",
+    );
+  }
+
+  Future<void> _resetLegacyCalendarAccountBinding(Database db) async {
+    final profileCount = Sqflite.firstIntValue(
+          await db.rawQuery(
+            '''
+            SELECT COUNT(*)
+            FROM sprint_calendar_profiles
+            WHERE id = ? AND account_id = ? AND deleted_at_ms IS NULL
+            ''',
+            <Object?>['legacy-calendar-profile', 'legacy-google-account'],
+          ),
+        ) ??
+        0;
+    if (profileCount == 0) return;
+    await db.update(
+      'sprint_google_accounts',
+      <String, Object?>{
+        'google_user_id': null,
+        'email': '',
+        'display_name': '',
+        'requires_reauthentication': 1,
+        'updated_at_ms': DateTime.now().millisecondsSinceEpoch,
+      },
+      where: 'id = ? AND deleted_at_ms IS NULL',
+      whereArgs: <Object?>['legacy-google-account'],
+    );
+  }
+
+  Future<void> _ensureCalendarProfileStorage(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS sprint_google_accounts (
+        id TEXT PRIMARY KEY,
+        google_user_id TEXT,
+        email TEXT NOT NULL,
+        display_name TEXT NOT NULL DEFAULT '',
+        requires_reauthentication INTEGER NOT NULL DEFAULT 0,
+        created_at_ms INTEGER NOT NULL,
+        updated_at_ms INTEGER NOT NULL,
+        deleted_at_ms INTEGER
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS sprint_calendar_profiles (
+        id TEXT PRIMARY KEY,
+        account_id TEXT NOT NULL,
+        calendar_id TEXT NOT NULL,
+        label TEXT NOT NULL,
+        locked INTEGER NOT NULL DEFAULT 0,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        last_synced_at_ms INTEGER,
+        last_sync_error TEXT,
+        created_at_ms INTEGER NOT NULL,
+        updated_at_ms INTEGER NOT NULL,
+        deleted_at_ms INTEGER,
+        FOREIGN KEY(account_id) REFERENCES sprint_google_accounts(id)
+      )
+    ''');
+    await _ensureColumn(
+      db,
+      table: 'sprint_tasks',
+      column: 'google_calendar_profile_id',
+      definition: 'TEXT',
+    );
+    await _ensureColumn(
+      db,
+      table: 'sprint_external_events',
+      column: 'calendar_profile_id',
+      definition: "TEXT NOT NULL DEFAULT ''",
+    );
+    await _ensureColumn(
+      db,
+      table: 'sprint_external_events',
+      column: 'google_event_id',
+      definition: "TEXT NOT NULL DEFAULT ''",
+    );
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_sprint_calendar_profiles_account
+      ON sprint_calendar_profiles(account_id, sort_order)
+    ''');
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_sprint_external_profile_start
+      ON sprint_external_events(calendar_profile_id, start_at_ms)
+    ''');
   }
 
   Future<void> _removeFocusStorage(Database db) async {
@@ -326,6 +517,8 @@ class SprintDatabase {
         target_start_at_ms INTEGER,
         target_at_ms INTEGER,
         status TEXT NOT NULL DEFAULT 'active',
+        google_color_id TEXT,
+        calendar_sync_enabled INTEGER NOT NULL DEFAULT 1,
         completed_at_ms INTEGER,
         archived_at_ms INTEGER,
         reopened_at_ms INTEGER,
@@ -339,6 +532,7 @@ class SprintDatabase {
         id TEXT PRIMARY KEY,
         project_id TEXT,
         title TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
         priority TEXT NOT NULL DEFAULT 'normal',
         start_date_ms INTEGER,
         end_date_ms INTEGER,
@@ -348,6 +542,12 @@ class SprintDatabase {
         state TEXT NOT NULL,
         placement_mode TEXT NOT NULL,
         deadline_at_ms INTEGER,
+        google_event_id TEXT,
+        google_calendar_id TEXT,
+        google_calendar_profile_id TEXT,
+        google_sync_state TEXT NOT NULL DEFAULT 'none',
+        google_sync_error TEXT,
+        google_delete_after_sync INTEGER NOT NULL DEFAULT 0,
         created_at_ms INTEGER NOT NULL,
         updated_at_ms INTEGER NOT NULL,
         deleted_at_ms INTEGER,
@@ -380,7 +580,13 @@ class SprintDatabase {
         all_day INTEGER NOT NULL DEFAULT 0,
         blocks_time INTEGER NOT NULL DEFAULT 1,
         source_url TEXT,
+        color_id TEXT,
+        managed_by_sprint INTEGER NOT NULL DEFAULT 0,
+        linked_task_id TEXT,
+        linked_project_id TEXT,
         calendar_id TEXT NOT NULL,
+        calendar_profile_id TEXT NOT NULL DEFAULT '',
+        google_event_id TEXT NOT NULL DEFAULT '',
         updated_at_ms INTEGER NOT NULL
       )
     ''');
@@ -449,6 +655,35 @@ class SprintDatabase {
       )
     ''');
     await db.execute('''
+      CREATE TABLE IF NOT EXISTS sprint_google_accounts (
+        id TEXT PRIMARY KEY,
+        google_user_id TEXT,
+        email TEXT NOT NULL,
+        display_name TEXT NOT NULL DEFAULT '',
+        requires_reauthentication INTEGER NOT NULL DEFAULT 0,
+        created_at_ms INTEGER NOT NULL,
+        updated_at_ms INTEGER NOT NULL,
+        deleted_at_ms INTEGER
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS sprint_calendar_profiles (
+        id TEXT PRIMARY KEY,
+        account_id TEXT NOT NULL,
+        calendar_id TEXT NOT NULL,
+        label TEXT NOT NULL,
+        locked INTEGER NOT NULL DEFAULT 0,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        last_synced_at_ms INTEGER,
+        last_sync_error TEXT,
+        created_at_ms INTEGER NOT NULL,
+        updated_at_ms INTEGER NOT NULL,
+        deleted_at_ms INTEGER,
+        FOREIGN KEY(account_id) REFERENCES sprint_google_accounts(id)
+      )
+    ''');
+    await db.execute('''
       CREATE TABLE IF NOT EXISTS sprint_settings (
         setting_key TEXT PRIMARY KEY,
         setting_value TEXT NOT NULL,
@@ -482,6 +717,9 @@ class SprintDatabase {
     ''');
     await _ensureProjectStartColumn(db);
     await _ensureAllDayTaskColumns(db);
+    await _ensureCalendarSyncColumns(db);
+    await _ensureTaskDescriptionColumn(db);
+    await _ensureCalendarProfileStorage(db);
     await db.execute('''
       CREATE INDEX IF NOT EXISTS idx_sprint_conflict_block_key
       ON sprint_conflict_resolutions(block_id, conflict_key)
@@ -646,6 +884,16 @@ class SprintDatabase {
       where: 'deleted_at_ms IS NULL',
       orderBy: 'resolved_at_ms ASC',
     );
+    final accountRows = await db.query(
+      'sprint_google_accounts',
+      where: 'deleted_at_ms IS NULL',
+      orderBy: 'created_at_ms ASC',
+    );
+    final profileRows = await db.query(
+      'sprint_calendar_profiles',
+      where: 'deleted_at_ms IS NULL',
+      orderBy: 'sort_order ASC, created_at_ms ASC',
+    );
     final settingRows = await db.query('sprint_settings');
     final settings = <String, String>{
       for (final row in settingRows)
@@ -667,6 +915,14 @@ class SprintDatabase {
           activityRows.map(_activityEventFromRow).toList(growable: false),
       conflictResolutions:
           resolutionRows.map(_conflictResolutionFromRow).toList(growable: false),
+      googleAccounts:
+          accountRows.map(_googleAccountFromRow).toList(growable: false),
+      calendarProfiles:
+          profileRows.map(_calendarProfileFromRow).toList(growable: false),
+      activeCalendarProfileId:
+          settings['active_calendar_profile_id']?.trim().isNotEmpty == true
+              ? settings['active_calendar_profile_id']!.trim()
+              : null,
       workspaceScope: SprintWorkspaceScope.fromStorageValue(
         settings['workspace_scope'],
       ),
@@ -684,6 +940,9 @@ class SprintDatabase {
           : 'primary',
       googleCalendarIdLocked:
           settings['google_calendar_id_locked'] == '1',
+      legacyCalendarConfigured:
+          settings[_calendarProfilesMigrationKey] != '1' &&
+              settings['google_calendar_id']?.trim().isNotEmpty == true,
     );
   }
 
@@ -691,6 +950,78 @@ class SprintDatabase {
     final db = await database;
     final now = DateTime.now().millisecondsSinceEpoch;
     await db.transaction((transaction) async {
+      for (final account in snapshot.googleAccounts) {
+        await _upsert(
+          transaction,
+          table: 'sprint_google_accounts',
+          id: account.id,
+          insertValues: <String, Object?>{
+            'id': account.id,
+            'google_user_id': account.googleUserId,
+            'email': account.email,
+            'display_name': account.displayName,
+            'requires_reauthentication':
+                account.requiresReauthentication ? 1 : 0,
+            'created_at_ms': account.createdAt.millisecondsSinceEpoch,
+            'updated_at_ms': account.updatedAt.millisecondsSinceEpoch,
+            'deleted_at_ms': null,
+          },
+          updateValues: <String, Object?>{
+            'google_user_id': account.googleUserId,
+            'email': account.email,
+            'display_name': account.displayName,
+            'requires_reauthentication':
+                account.requiresReauthentication ? 1 : 0,
+            'updated_at_ms': account.updatedAt.millisecondsSinceEpoch,
+            'deleted_at_ms': null,
+          },
+        );
+      }
+      await _softDeleteMissing(
+        transaction,
+        table: 'sprint_google_accounts',
+        ids: snapshot.googleAccounts.map((value) => value.id).toList(growable: false),
+        deletedAt: now,
+      );
+      for (final profile in snapshot.calendarProfiles) {
+        await _upsert(
+          transaction,
+          table: 'sprint_calendar_profiles',
+          id: profile.id,
+          insertValues: <String, Object?>{
+            'id': profile.id,
+            'account_id': profile.accountId,
+            'calendar_id': profile.calendarId,
+            'label': profile.label,
+            'locked': profile.locked ? 1 : 0,
+            'enabled': profile.enabled ? 1 : 0,
+            'sort_order': profile.sortOrder,
+            'last_synced_at_ms': profile.lastSyncedAt?.millisecondsSinceEpoch,
+            'last_sync_error': profile.lastSyncError,
+            'created_at_ms': profile.createdAt.millisecondsSinceEpoch,
+            'updated_at_ms': profile.updatedAt.millisecondsSinceEpoch,
+            'deleted_at_ms': null,
+          },
+          updateValues: <String, Object?>{
+            'account_id': profile.accountId,
+            'calendar_id': profile.calendarId,
+            'label': profile.label,
+            'locked': profile.locked ? 1 : 0,
+            'enabled': profile.enabled ? 1 : 0,
+            'sort_order': profile.sortOrder,
+            'last_synced_at_ms': profile.lastSyncedAt?.millisecondsSinceEpoch,
+            'last_sync_error': profile.lastSyncError,
+            'updated_at_ms': profile.updatedAt.millisecondsSinceEpoch,
+            'deleted_at_ms': null,
+          },
+        );
+      }
+      await _softDeleteMissing(
+        transaction,
+        table: 'sprint_calendar_profiles',
+        ids: snapshot.calendarProfiles.map((value) => value.id).toList(growable: false),
+        deletedAt: now,
+      );
       for (final project in snapshot.projects) {
         await _upsert(
           transaction,
@@ -704,6 +1035,8 @@ class SprintDatabase {
                 project.targetStartDate?.millisecondsSinceEpoch,
             'target_at_ms': project.targetDate?.millisecondsSinceEpoch,
             'status': project.status.name,
+            'google_color_id': project.googleColorId,
+            'calendar_sync_enabled': project.calendarSyncEnabled ? 1 : 0,
             'completed_at_ms': project.completedAt?.millisecondsSinceEpoch,
             'archived_at_ms': project.archivedAt?.millisecondsSinceEpoch,
             'reopened_at_ms': project.reopenedAt?.millisecondsSinceEpoch,
@@ -718,6 +1051,8 @@ class SprintDatabase {
                 project.targetStartDate?.millisecondsSinceEpoch,
             'target_at_ms': project.targetDate?.millisecondsSinceEpoch,
             'status': project.status.name,
+            'google_color_id': project.googleColorId,
+            'calendar_sync_enabled': project.calendarSyncEnabled ? 1 : 0,
             'completed_at_ms': project.completedAt?.millisecondsSinceEpoch,
             'archived_at_ms': project.archivedAt?.millisecondsSinceEpoch,
             'reopened_at_ms': project.reopenedAt?.millisecondsSinceEpoch,
@@ -742,6 +1077,7 @@ class SprintDatabase {
             'id': task.id,
             'project_id': task.projectId,
             'title': task.title,
+            'description': task.description,
             'priority': task.priority.name,
             'start_date_ms': task.startDate.millisecondsSinceEpoch,
             'end_date_ms': task.endDate.millisecondsSinceEpoch,
@@ -751,6 +1087,12 @@ class SprintDatabase {
             'state': task.state.name,
             'placement_mode': task.placementMode.name,
             'deadline_at_ms': task.endDate.millisecondsSinceEpoch,
+            'google_event_id': task.googleEventId,
+            'google_calendar_id': task.googleCalendarId,
+            'google_calendar_profile_id': task.googleCalendarProfileId,
+            'google_sync_state': task.googleSyncState.name,
+            'google_sync_error': task.googleSyncError,
+            'google_delete_after_sync': task.deleteAfterSync ? 1 : 0,
             'created_at_ms': now,
             'updated_at_ms': now,
             'deleted_at_ms': null,
@@ -758,6 +1100,7 @@ class SprintDatabase {
           updateValues: <String, Object?>{
             'project_id': task.projectId,
             'title': task.title,
+            'description': task.description,
             'priority': task.priority.name,
             'start_date_ms': task.startDate.millisecondsSinceEpoch,
             'end_date_ms': task.endDate.millisecondsSinceEpoch,
@@ -767,6 +1110,12 @@ class SprintDatabase {
             'state': task.state.name,
             'placement_mode': task.placementMode.name,
             'deadline_at_ms': task.endDate.millisecondsSinceEpoch,
+            'google_event_id': task.googleEventId,
+            'google_calendar_id': task.googleCalendarId,
+            'google_calendar_profile_id': task.googleCalendarProfileId,
+            'google_sync_state': task.googleSyncState.name,
+            'google_sync_error': task.googleSyncError,
+            'google_delete_after_sync': task.deleteAfterSync ? 1 : 0,
             'updated_at_ms': now,
             'deleted_at_ms': null,
           },
@@ -832,7 +1181,16 @@ class SprintDatabase {
             'all_day': event.allDay ? 1 : 0,
             'blocks_time': event.blocksTime ? 1 : 0,
             'source_url': event.sourceUrl,
-            'calendar_id': snapshot.googleCalendarId,
+            'color_id': event.colorId,
+            'managed_by_sprint': event.managedBySprint ? 1 : 0,
+            'linked_task_id': event.linkedTaskId,
+            'linked_project_id': event.linkedProjectId,
+            'calendar_id': _calendarIdForProfile(
+              snapshot.calendarProfiles,
+              event.calendarProfileId,
+            ),
+            'calendar_profile_id': event.calendarProfileId,
+            'google_event_id': event.googleEventId,
             'updated_at_ms': now,
           },
         );
@@ -1003,6 +1361,12 @@ class SprintDatabase {
       );
       await _setSetting(
         transaction,
+        'active_calendar_profile_id',
+        snapshot.activeCalendarProfileId ?? '',
+        now,
+      );
+      await _setSetting(
+        transaction,
         'google_calendar_id',
         snapshot.googleCalendarId,
         now,
@@ -1014,6 +1378,12 @@ class SprintDatabase {
         now,
       );
       await _setSetting(transaction, _legacyMigrationKey, '1', now);
+      await _setSetting(
+        transaction,
+        _calendarProfilesMigrationKey,
+        '1',
+        now,
+      );
     });
   }
 
@@ -1062,6 +1432,45 @@ class SprintDatabase {
   }
 
 
+  SprintGoogleAccount _googleAccountFromRow(Map<String, Object?> row) {
+    return SprintGoogleAccount(
+      id: row['id'].toString(),
+      googleUserId: row['google_user_id']?.toString(),
+      email: row['email']?.toString() ?? '',
+      displayName: row['display_name']?.toString() ?? '',
+      requiresReauthentication:
+          _int(row['requires_reauthentication']) != 0,
+      createdAt: _date(row['created_at_ms']),
+      updatedAt: _date(row['updated_at_ms']),
+    );
+  }
+
+  SprintCalendarProfile _calendarProfileFromRow(Map<String, Object?> row) {
+    return SprintCalendarProfile(
+      id: row['id'].toString(),
+      accountId: row['account_id'].toString(),
+      calendarId: row['calendar_id'].toString(),
+      label: row['label'].toString(),
+      locked: _int(row['locked']) != 0,
+      enabled: _int(row['enabled']) != 0,
+      sortOrder: _int(row['sort_order']),
+      lastSyncedAt: _date(row['last_synced_at_ms']),
+      lastSyncError: row['last_sync_error']?.toString(),
+      createdAt: _date(row['created_at_ms']),
+      updatedAt: _date(row['updated_at_ms']),
+    );
+  }
+
+  String _calendarIdForProfile(
+    List<SprintCalendarProfile> profiles,
+    String profileId,
+  ) {
+    for (final profile in profiles) {
+      if (profile.id == profileId) return profile.calendarId;
+    }
+    return '';
+  }
+
   SprintProject _projectFromRow(Map<String, Object?> row) {
     return SprintProject(
       id: row['id'].toString(),
@@ -1074,6 +1483,8 @@ class SprintDatabase {
         (value) => value.name == row['status']?.toString(),
         orElse: () => SprintProjectStatus.active,
       ),
+      googleColorId: row['google_color_id']?.toString() ?? '',
+      calendarSyncEnabled: _int(row['calendar_sync_enabled']) != 0,
       createdAt: _date(row['created_at_ms']),
       completedAt: _date(row['completed_at_ms']),
       archivedAt: _date(row['archived_at_ms']),
@@ -1095,6 +1506,7 @@ class SprintDatabase {
     return SprintTask(
       id: row['id'].toString(),
       title: row['title'].toString(),
+      description: row['description']?.toString() ?? '',
       projectId: row['project_id']?.toString(),
       priority: SprintTaskPriority.values.firstWhere(
         (value) => value.name == row['priority']?.toString(),
@@ -1108,6 +1520,16 @@ class SprintDatabase {
         (value) => value.name == row['placement_mode']?.toString(),
         orElse: () => SprintPlacementMode.automatic,
       ),
+      googleEventId: row['google_event_id']?.toString(),
+      googleCalendarId: row['google_calendar_id']?.toString(),
+      googleCalendarProfileId:
+          row['google_calendar_profile_id']?.toString(),
+      googleSyncState: SprintGoogleSyncState.values.firstWhere(
+        (value) => value.name == row['google_sync_state']?.toString(),
+        orElse: () => SprintGoogleSyncState.none,
+      ),
+      googleSyncError: row['google_sync_error']?.toString(),
+      deleteAfterSync: _int(row['google_delete_after_sync']) != 0,
     );
   }
 
@@ -1130,14 +1552,25 @@ class SprintDatabase {
   }
 
   SprintExternalEvent _externalEventFromRow(Map<String, Object?> row) {
+    final profileId = row['calendar_profile_id']?.toString() ?? '';
+    final googleEventId =
+        row['google_event_id']?.toString().trim().isNotEmpty == true
+            ? row['google_event_id']!.toString().trim()
+            : row['id'].toString();
     return SprintExternalEvent(
       id: row['id'].toString(),
+      googleEventId: googleEventId,
+      calendarProfileId: profileId,
       title: row['title'].toString(),
       start: _date(row['start_at_ms'])!,
       end: _date(row['end_at_ms'])!,
       allDay: _int(row['all_day']) == 1,
       blocksTime: _int(row['blocks_time']) == 1,
       sourceUrl: row['source_url']?.toString(),
+      colorId: row['color_id']?.toString(),
+      managedBySprint: _int(row['managed_by_sprint']) == 1,
+      linkedTaskId: row['linked_task_id']?.toString(),
+      linkedProjectId: row['linked_project_id']?.toString(),
     );
   }
 

@@ -21,8 +21,20 @@ enum SprintPlacementMode {
 
 enum SprintCalendarConnectionState {
   notConnected,
+  cached,
+  reauthenticationRequired,
+  switching,
   syncing,
   connected,
+  failed,
+}
+
+enum SprintGoogleSyncState {
+  none,
+  pendingCreate,
+  pendingUpdate,
+  pendingDelete,
+  synced,
   failed,
 }
 
@@ -80,6 +92,59 @@ enum SprintActivityEventType {
   blockResized,
   blockUnscheduled,
   conflictResolved,
+}
+
+
+class SprintGoogleAccount {
+  SprintGoogleAccount({
+    required this.id,
+    this.googleUserId,
+    required this.email,
+    required this.displayName,
+    this.requiresReauthentication = false,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  })  : createdAt = createdAt ?? DateTime.now(),
+        updatedAt = updatedAt ?? DateTime.now();
+
+  final String id;
+  String? googleUserId;
+  String email;
+  String displayName;
+  bool requiresReauthentication;
+  DateTime createdAt;
+  DateTime updatedAt;
+
+  String get normalizedEmail => email.trim().toLowerCase();
+}
+
+class SprintCalendarProfile {
+  SprintCalendarProfile({
+    required this.id,
+    required this.accountId,
+    required this.calendarId,
+    required this.label,
+    this.locked = false,
+    this.enabled = true,
+    this.sortOrder = 0,
+    this.lastSyncedAt,
+    this.lastSyncError,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  })  : createdAt = createdAt ?? DateTime.now(),
+        updatedAt = updatedAt ?? DateTime.now();
+
+  final String id;
+  final String accountId;
+  String calendarId;
+  String label;
+  bool locked;
+  bool enabled;
+  int sortOrder;
+  DateTime? lastSyncedAt;
+  String? lastSyncError;
+  DateTime createdAt;
+  DateTime updatedAt;
 }
 
 class SprintWorkspaceScope {
@@ -149,9 +214,11 @@ class SprintProject {
     required this.name,
     required this.iconKey,
     this.targetStartDate,
-    required this.targetDate,
+    this.targetDate,
     this.custom = true,
     this.status = SprintProjectStatus.active,
+    this.googleColorId = '',
+    this.calendarSyncEnabled = true,
     DateTime? createdAt,
     this.completedAt,
     this.archivedAt,
@@ -165,6 +232,8 @@ class SprintProject {
   DateTime? targetDate;
   final bool custom;
   SprintProjectStatus status;
+  String googleColorId;
+  bool calendarSyncEnabled;
   DateTime createdAt;
   DateTime? completedAt;
   DateTime? archivedAt;
@@ -174,6 +243,7 @@ class SprintProject {
   bool get isActive => status == SprintProjectStatus.active;
   bool get isCompleted => status == SprintProjectStatus.completed;
   bool get isArchived => status == SprintProjectStatus.archived;
+  bool get isIndefinite => targetStartDate == null && targetDate == null;
 
   bool get hasNotStarted {
     final start = targetStartDate;
@@ -198,6 +268,7 @@ class SprintTask {
   SprintTask({
     required this.id,
     required this.title,
+    this.description = '',
     required this.projectId,
     required this.priority,
     required this.startDate,
@@ -205,10 +276,17 @@ class SprintTask {
     required this.order,
     required this.state,
     this.placementMode = SprintPlacementMode.automatic,
+    this.googleEventId,
+    this.googleCalendarId,
+    this.googleCalendarProfileId,
+    this.googleSyncState = SprintGoogleSyncState.none,
+    this.googleSyncError,
+    this.deleteAfterSync = false,
   });
 
   final String id;
   String title;
+  String description;
   String? projectId;
   SprintTaskPriority priority;
   DateTime startDate;
@@ -216,8 +294,21 @@ class SprintTask {
   int order;
   SprintTaskState state;
   SprintPlacementMode placementMode;
+  String? googleEventId;
+  String? googleCalendarId;
+  String? googleCalendarProfileId;
+  SprintGoogleSyncState googleSyncState;
+  String? googleSyncError;
+  bool deleteAfterSync;
 
   bool get allDay => true;
+  bool get hasGoogleEvent =>
+      googleEventId != null && googleEventId!.trim().isNotEmpty;
+  bool get hasPendingGoogleSync =>
+      googleSyncState == SprintGoogleSyncState.pendingCreate ||
+      googleSyncState == SprintGoogleSyncState.pendingUpdate ||
+      googleSyncState == SprintGoogleSyncState.pendingDelete ||
+      googleSyncState == SprintGoogleSyncState.failed;
   int get durationDays => endDate.difference(startDate).inDays + 1;
 
   bool spans(DateTime date) {
@@ -265,21 +356,33 @@ class SprintScheduleBlock {
 class SprintExternalEvent {
   SprintExternalEvent({
     required this.id,
+    required this.googleEventId,
+    required this.calendarProfileId,
     required this.title,
     required this.start,
     required this.end,
     required this.allDay,
     required this.blocksTime,
     this.sourceUrl,
+    this.colorId,
+    this.managedBySprint = false,
+    this.linkedTaskId,
+    this.linkedProjectId,
   });
 
   final String id;
+  final String googleEventId;
+  final String calendarProfileId;
   final String title;
   final DateTime start;
   final DateTime end;
   final bool allDay;
   final bool blocksTime;
   final String? sourceUrl;
+  final String? colorId;
+  final bool managedBySprint;
+  final String? linkedTaskId;
+  final String? linkedProjectId;
 }
 
 class SprintAttentionItem {
@@ -411,6 +514,7 @@ class SprintPlacementValidation {
 class SprintTaskCreationPreview {
   const SprintTaskCreationPreview({
     required this.title,
+    required this.description,
     required this.projectId,
     required this.priority,
     required this.startDate,
@@ -419,6 +523,7 @@ class SprintTaskCreationPreview {
   });
 
   final String title;
+  final String description;
   final String projectId;
   final SprintTaskPriority priority;
   final DateTime startDate;
@@ -427,10 +532,7 @@ class SprintTaskCreationPreview {
 
   bool get hasConflicts => conflicts.isNotEmpty;
   bool get hasHardConflict => conflicts.any(
-        (conflict) =>
-            conflict.type == SprintConflictType.pastDate ||
-            conflict.type == SprintConflictType.invalidDateRange ||
-            conflict.type == SprintConflictType.beforeProjectStart,
+        (conflict) => conflict.type == SprintConflictType.invalidDateRange,
       );
 }
 

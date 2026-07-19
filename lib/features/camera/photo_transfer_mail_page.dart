@@ -8,10 +8,14 @@ import 'package:flutter/services.dart';
 import 'package:googleapis/gmail/v1.dart' as gmail;
 import 'package:mime/mime.dart';
 
-import '../../../app/auth/google_auth_v7.dart';
-import '../../../app/config/email_config.dart';
-import '../../../app/utils/status_dialog.dart';
-import '../../../features/dev/debug/debug_api_logger.dart';
+import '../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../design_system/prompt_ui/prompt_ui_theme.dart';
+
+import '../../app/auth/google_auth_v7.dart';
+import '../../app/config/email_config.dart';
+import '../../app/utils/status_dialog.dart';
+import '../dev/debug/debug_api_logger.dart';
 import 'photo_transfer_styles.dart';
 
 class PhotoTransferMailPage extends StatefulWidget {
@@ -80,25 +84,22 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
   InputDecoration _inputDec({
     required String labelText,
   }) {
+    final tokens = PromptUiTheme.of(context);
     return InputDecoration(
       labelText: labelText,
-
       filled: true,
-      fillColor: Colors.white,
+      fillColor: tokens.surfaceOverlay,
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Colors.grey),
+        borderRadius: BorderRadius.circular(PromptUiShapes.control),
+        borderSide: BorderSide(color: tokens.borderSubtle),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Colors.grey),
+        borderRadius: BorderRadius.circular(PromptUiShapes.control),
+        borderSide: BorderSide(color: tokens.borderSubtle),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(
-          color: PhotoTransferColors.base,
-          width: 1.6,
-        ),
+        borderRadius: BorderRadius.circular(PromptUiShapes.control),
+        borderSide: BorderSide(color: tokens.focusRing, width: 1.6),
       ),
       contentPadding: const EdgeInsets.symmetric(
         vertical: 14,
@@ -117,10 +118,10 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
       elevation: 0,
       margin: margin ?? const EdgeInsets.only(bottom: 16),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: Colors.black12),
+        borderRadius: BorderRadius.circular(PromptUiShapes.card),
+        side: BorderSide(color: PromptUiTheme.of(context).borderSubtle),
       ),
-      color: Colors.white,
+      color: PromptUiTheme.of(context).surfaceRaised,
       child: Padding(
         padding: padding,
         child: Column(
@@ -250,11 +251,10 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
   }
 
   Future<void> _openApiDebugSheet() async {
-    await showModalBottomSheet<void>(
+    await showPromptOverlayBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      backgroundColor: Colors.transparent,
       builder: (_) {
         return _ApiDebugBottomSheet(
           fmtYmdHms: _fmtYmdHms,
@@ -282,6 +282,7 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
       context,
       title: StatusDialog.photoTransferSendSuccess,
       closeCurrentPageAfter: true,
+      usePromptUi: true,
     );
   }
 
@@ -292,6 +293,7 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
       await StatusDialog.showFailure(
         context,
         title: StatusDialog.photoTransferSendFailed,
+        usePromptUi: true,
       );
       return;
     }
@@ -301,6 +303,7 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
       await StatusDialog.showFailure(
         context,
         title: StatusDialog.photoTransferSendFailed,
+        usePromptUi: true,
       );
       return;
     }
@@ -313,6 +316,7 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
       await StatusDialog.showFailure(
         context,
         title: StatusDialog.photoTransferSendFailed,
+        usePromptUi: true,
       );
       return;
     }
@@ -326,6 +330,7 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
         await StatusDialog.showFailure(
           context,
           title: StatusDialog.photoTransferSendFailed,
+        usePromptUi: true,
         );
         return;
       }
@@ -367,6 +372,7 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
       await StatusDialog.showFailure(
         context,
         title: StatusDialog.photoTransferSendFailed,
+        usePromptUi: true,
       );
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -484,18 +490,20 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
   @override
   Widget build(BuildContext context) {
     final createdAt = _fmtCompact(DateTime.now());
+    final tokens = PromptUiTheme.of(context);
+    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
     return Scaffold(
       resizeToAvoidBottomInset: true,
-      backgroundColor: const Color(0xFFEFF3F6),
+      backgroundColor: tokens.canvas,
       appBar: AppBar(
         title: const Text('사진 전송'),
         centerTitle: true,
-        backgroundColor: Colors.white,
+        backgroundColor: tokens.surface,
         elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        shape: const Border(
-          bottom: BorderSide(color: Colors.black12, width: 1),
+        surfaceTintColor: tokens.transparent,
+        shape: Border(
+          bottom: BorderSide(color: tokens.borderSubtle, width: 1),
         ),
         actions: [
           IconButton(
@@ -508,18 +516,18 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
       bottomNavigationBar: SafeArea(
         top: false,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          curve: Curves.easeOut,
+          duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
+          curve: PromptUiMotion.standard,
           padding: EdgeInsets.only(
             left: 16,
             right: 16,
             top: 10,
             bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
           ),
-          decoration: const BoxDecoration(
-            color: Colors.white,
+          decoration: BoxDecoration(
+            color: tokens.surface,
             border: Border(
-              top: BorderSide(color: Colors.black12, width: 1),
+              top: BorderSide(color: tokens.borderSubtle, width: 1),
             ),
           ),
           child: SizedBox(
@@ -527,12 +535,12 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
             child: ElevatedButton.icon(
               onPressed: _sending ? null : _send,
               icon: _sending
-                  ? const SizedBox(
+                  ? SizedBox(
                       width: 20,
                       height: 20,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+                        color: tokens.onAccent,
                       ),
                     )
                   : const Icon(Icons.send_outlined),
@@ -540,7 +548,7 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
                 _sending ? '전송 중…' : '전송',
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
-              style: PhotoTransferButtonStyles.primary(),
+              style: PhotoTransferButtonStyles.primary(context),
             ),
           ),
         ),
@@ -556,11 +564,13 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
                 alignment: Alignment.topCenter,
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 720),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text(
-                        '사진 전송',
+                  child: PromptAnimatedReveal(
+                    offset: Offset.zero,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          '사진 전송',
                         textAlign: TextAlign.center,
                         style:
                             Theme.of(context).textTheme.headlineSmall?.copyWith(
@@ -574,17 +584,17 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
                         textAlign: TextAlign.center,
                         style:
                             Theme.of(context).textTheme.labelMedium?.copyWith(
-                                  color: Colors.black54,
+                                  color: tokens.textSecondary,
                                   letterSpacing: 3,
                                 ),
                       ),
                       const SizedBox(height: 16),
                       Container(
                         decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
+                          color: tokens.surfaceRaised,
+                          borderRadius: BorderRadius.circular(PromptUiShapes.card),
                           border: Border.all(
-                            color: PhotoTransferColors.light.withOpacity(0.8),
+                            color: tokens.borderSubtle,
                             width: 1,
                           ),
                         ),
@@ -594,10 +604,10 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
                           children: [
                             Row(
                               children: [
-                                const Icon(
+                                Icon(
                                   Icons.photo_outlined,
                                   size: 22,
-                                  color: PhotoTransferColors.dark,
+                                  color: tokens.accent,
                                 ),
                                 const SizedBox(width: 8),
                                 Text(
@@ -607,7 +617,7 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
                                       .titleMedium
                                       ?.copyWith(
                                         fontWeight: FontWeight.w600,
-                                        color: PhotoTransferColors.dark,
+                                        color: tokens.accent,
                                       ),
                                 ),
                                 const Spacer(),
@@ -617,7 +627,7 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
                                       .textTheme
                                       .bodySmall
                                       ?.copyWith(
-                                        color: Colors.black54,
+                                        color: tokens.textSecondary,
                                       ),
                                 ),
                               ],
@@ -627,22 +637,20 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
                             const SizedBox(height: 4),
                             Container(
                               decoration: BoxDecoration(
-                                color:
-                                    PhotoTransferColors.light.withOpacity(0.12),
+                                color: tokens.infoContainer,
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(
-                                  color: PhotoTransferColors.light
-                                      .withOpacity(0.8),
+                                  color: tokens.info.withOpacity(0.38),
                                 ),
                               ),
                               padding: const EdgeInsets.all(12),
                               child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const Icon(
+                                  Icon(
                                     Icons.info_outline,
                                     size: 18,
-                                    color: PhotoTransferColors.dark,
+                                    color: tokens.onInfoContainer,
                                   ),
                                   const SizedBox(width: 8),
                                   Expanded(
@@ -675,7 +683,7 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
                                               Icons.photo_library_outlined),
                                           label: const Text('사진 선택/추가'),
                                           style: PhotoTransferButtonStyles
-                                              .primary(),
+                                              .primary(context),
                                         ),
                                       ),
                                       const SizedBox(width: 10),
@@ -688,6 +696,7 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
                                         label: const Text('전체 삭제'),
                                         style:
                                             PhotoTransferButtonStyles.outlined(
+                                                context,
                                                 minHeight: 55),
                                       ),
                                     ],
@@ -704,7 +713,7 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
                                               .textTheme
                                               .bodySmall
                                               ?.copyWith(
-                                                color: Colors.black54,
+                                                color: tokens.textSecondary,
                                                 fontWeight: FontWeight.w600,
                                               ),
                                         ),
@@ -724,11 +733,11 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
                                         final a = _attachments[i];
                                         return Container(
                                           decoration: BoxDecoration(
-                                            color: const Color(0xFFFAFAFA),
+                                            color: tokens.surfaceOverlay,
                                             borderRadius:
                                                 BorderRadius.circular(12),
                                             border: Border.all(
-                                                color: Colors.black12),
+                                                color: tokens.borderSubtle),
                                           ),
                                           padding: const EdgeInsets.all(10),
                                           child: Row(
@@ -766,7 +775,7 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
                                                           .bodySmall
                                                           ?.copyWith(
                                                             color:
-                                                                Colors.black54,
+                                                                tokens.textSecondary,
                                                           ),
                                                     ),
                                                   ],
@@ -821,7 +830,8 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
                         ),
                       ),
                       const SizedBox(height: 24),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -1209,11 +1219,10 @@ class _ApiDebugBottomSheetState extends State<_ApiDebugBottomSheet> {
     final pretty = _prettyJsonIfPossible(raw);
     final insight = _inferInsight(entry);
 
-    await showModalBottomSheet<void>(
+    await showPromptOverlayBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      backgroundColor: Colors.transparent,
       builder: (_) {
         return SafeArea(
           child: Align(

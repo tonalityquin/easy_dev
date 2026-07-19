@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
 import '../../../../../features/payment/applications/bill_state.dart';
+import '../prompt_input_ui.dart';
 
 class InputBillSection extends StatelessWidget {
   final String? selectedBill;
-
   final String selectedBillType;
   final ValueChanged<String?> onChanged;
   final ValueChanged<String> onTypeChanged;
-
   final TextEditingController? countTypeController;
 
   const InputBillSection({
@@ -21,229 +23,179 @@ class InputBillSection extends StatelessWidget {
     this.countTypeController,
   });
 
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    final billState = context.watch<BillState>();
-    final isLoading = billState.isLoading;
-    final generalBills = billState.generalBills;
-
-    final normalizedType = (selectedBillType == '고정') ? '변동' : selectedBillType;
-
-    final isGeneral = normalizedType == '변동';
-    final isMonthly = normalizedType == '정기';
-
-    final filteredBills = generalBills;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          '정산 유형',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w900,
-            color: cs.onSurface,
-          ),
-        ),
-        const SizedBox(height: 12.0),
-        Row(
-          children: [
-            _buildTypeButton(
-              context: context,
-              label: '변동',
-              isSelected: isGeneral,
-              onTap: () => onTypeChanged('변동'),
-            ),
-            const SizedBox(width: 8),
-            _buildTypeButton(
-              context: context,
-              label: '정기',
-              isSelected: isMonthly,
-              onTap: () => onTypeChanged('정기'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12.0),
-        if (isMonthly) ...[
-          TextField(
-            controller: countTypeController,
-            
-            readOnly: true,
-            
-            
-            enabled: true,
-            decoration: InputDecoration(
-              labelText: '정기 - 호실/구분(=countType)',
-
-              filled: true,
-              fillColor: cs.surfaceContainerLow,
-              labelStyle: TextStyle(color: cs.onSurfaceVariant),
-              hintStyle: TextStyle(color: cs.onSurfaceVariant.withOpacity(0.85)),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: cs.primary, width: 1.6),
-              ),
-            ),
-          ),
-        ] else ...[
-          if (isLoading)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 24),
-              child: Center(
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
-                ),
-              ),
-            )
-          else if (filteredBills.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Center(
-                child: Text(
-                  '$normalizedType 정산 유형이 없습니다.',
-                  style: TextStyle(color: cs.onSurfaceVariant),
-                ),
-              ),
-            )
-          else
-            OutlinedButton(
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-                side: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
-                backgroundColor: cs.surface,
-                foregroundColor: cs.onSurface,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ).copyWith(
-                overlayColor: MaterialStateProperty.resolveWith<Color?>(
-                      (states) => states.contains(MaterialState.pressed)
-                      ? cs.outlineVariant.withOpacity(0.12)
-                      : null,
-                ),
-              ),
-              onPressed: () {
-                showModalBottomSheet(
-                  context: context,
-                  isScrollControlled: true,
-                  backgroundColor: Colors.transparent,
-                  builder: (_) {
-                    return DraggableScrollableSheet(
-                      initialChildSize: 0.5,
-                      minChildSize: 0.3,
-                      maxChildSize: 0.9,
-                      builder: (context, scrollController) {
-                        final cs2 = Theme.of(context).colorScheme;
-
-                        return Container(
-                          decoration: BoxDecoration(
-                            color: cs2.surface,
-                            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                            border: Border.all(color: cs2.outlineVariant.withOpacity(0.85)),
-                          ),
-                          padding: const EdgeInsets.all(16),
-                          child: ListView(
-                            controller: scrollController,
-                            children: [
-                              Center(
-                                child: Container(
-                                  width: 40,
-                                  height: 4,
-                                  margin: const EdgeInsets.only(bottom: 16),
-                                  decoration: BoxDecoration(
-                                    color: cs2.outlineVariant.withOpacity(0.9),
-                                    borderRadius: BorderRadius.circular(2),
-                                  ),
-                                ),
-                              ),
-                              Text(
-                                '$normalizedType 정산 선택',
-                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w900,
-                                  color: cs2.onSurface,
-                                ),
-                              ),
-                              const SizedBox(height: 24),
-                              ...filteredBills.map((bill) {
-                                final countType = bill.countType;
-
-                                return ListTile(
-                                  title: Text(
-                                    countType,
-                                    style: TextStyle(color: cs2.onSurface, fontWeight: FontWeight.w700),
-                                  ),
-                                  trailing: countType == selectedBill
-                                      ? Icon(Icons.check, color: cs2.primary)
-                                      : null,
-                                  onTap: () {
-                                    Navigator.pop(context);
-                                    onChanged(countType);
-                                  },
-                                );
-                              }),
-                            ],
-                          ),
-                        );
+  Future<void> _showBillSheet(
+    BuildContext context,
+    String normalizedType,
+    List<dynamic> bills,
+  ) async {
+    await showPromptOverlayBottomSheet<void>(
+      context: context,
+      useSafeArea: false,
+      builder: (sheetContext) {
+        final tokens = PromptUiTheme.of(sheetContext);
+        return DraggableScrollableSheet(
+          initialChildSize: .55,
+          minChildSize: .36,
+          maxChildSize: .9,
+          builder: (sheetContext, scrollController) {
+            return PromptSheetScaffold(
+              title: '$normalizedType 정산 선택',
+              icon: Icons.receipt_long_rounded,
+              onClose: () => Navigator.of(sheetContext).pop(),
+              body: ListView.separated(
+                controller: scrollController,
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                itemCount: bills.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                itemBuilder: (context, index) {
+                  final bill = bills[index];
+                  final value = bill.countType as String;
+                  final selected = value == selectedBill;
+                  return AnimatedContainer(
+                    duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false
+                        ? Duration.zero
+                        : PromptUiMotion.selection,
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? tokens.surfaceSelected
+                          : tokens.surfaceOverlay,
+                      borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                      border: Border.all(
+                        color: selected ? tokens.accent : tokens.borderSubtle,
+                      ),
+                    ),
+                    child: ListTile(
+                      title: Text(
+                        value,
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                              color: tokens.textPrimary,
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                      trailing: selected
+                          ? Icon(Icons.check_rounded, color: tokens.accent)
+                          : Icon(Icons.chevron_right_rounded,
+                              color: tokens.iconSecondary),
+                      onTap: () {
+                        Navigator.of(sheetContext).pop();
+                        onChanged(value);
                       },
-                    );
-                  },
-                );
-              },
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(selectedBill ?? '정산 선택'),
-                  Icon(Icons.arrow_drop_down, color: cs.onSurfaceVariant),
-                ],
+                    ),
+                  );
+                },
               ),
-            ),
-        ],
-      ],
+            );
+          },
+        );
+      },
     );
   }
 
-  Widget _buildTypeButton({
-    required BuildContext context,
-    required String label,
-    required bool isSelected,
-    required VoidCallback onTap,
-  }) {
-    final cs = Theme.of(context).colorScheme;
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PromptUiTheme.of(context);
+    final billState = context.watch<BillState>();
+    final normalizedType = selectedBillType == '고정' ? '변동' : selectedBillType;
+    final isGeneral = normalizedType == '변동';
+    final isMonthly = normalizedType == '정기';
+    final filteredBills = billState.generalBills;
 
-    final bg = isSelected ? cs.primary : cs.surface;
-    final fg = isSelected ? cs.onPrimary : cs.onSurface;
-    final border = isSelected ? cs.primary.withOpacity(0.55) : cs.outlineVariant.withOpacity(0.85);
-
-    return Expanded(
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 160),
-            curve: Curves.easeOutCubic,
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: bg,
-              border: Border.all(color: border),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              label,
-              style: TextStyle(
-                color: fg,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
+    return PromptInputSectionCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const PromptInputSectionTitle(
+            icon: Icons.payments_rounded,
+            title: '정산 유형',
+            subtitle: '입차 차량에 적용할 정산 방식을 선택합니다.',
           ),
-        ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: PromptButton(
+                  label: '변동',
+                  selected: isGeneral,
+                  variant: PromptButtonVariant.secondary,
+                  onPressed: () => onTypeChanged('변동'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: PromptButton(
+                  label: '정기',
+                  selected: isMonthly,
+                  variant: PromptButtonVariant.secondary,
+                  onPressed: () => onTypeChanged('정기'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          AnimatedSwitcher(
+            duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false
+                ? Duration.zero
+                : PromptUiMotion.component,
+            switchInCurve: PromptUiMotion.enter,
+            switchOutCurve: PromptUiMotion.exit,
+            child: isMonthly
+                ? TextField(
+                    key: const ValueKey('monthly'),
+                    controller: countTypeController,
+                    readOnly: true,
+                    decoration: const InputDecoration(
+                      labelText: '정기 호실 또는 구분',
+                      prefixIcon: Icon(Icons.apartment_rounded),
+                    ),
+                  )
+                : billState.isLoading
+                    ? SizedBox(
+                        key: const ValueKey('loading'),
+                        height: 72,
+                        child: Center(
+                          child: CircularProgressIndicator(
+                            color: tokens.accent,
+                          ),
+                        ),
+                      )
+                    : filteredBills.isEmpty
+                        ? Container(
+                            key: const ValueKey('empty'),
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: tokens.warningContainer,
+                              borderRadius:
+                                  BorderRadius.circular(PromptUiShapes.control),
+                              border: Border.all(
+                                color: tokens.warning.withOpacity(.36),
+                              ),
+                            ),
+                            child: Text(
+                              '$normalizedType 정산 유형이 없습니다.',
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(
+                                    color: tokens.onWarningContainer,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                            ),
+                          )
+                        : PromptButton(
+                            key: const ValueKey('selector'),
+                            label: selectedBill ?? '정산 선택',
+                            icon: Icons.expand_more_rounded,
+                            variant: PromptButtonVariant.secondary,
+                            expand: true,
+                            onPressed: () => _showBillSheet(
+                              context,
+                              normalizedType,
+                              filteredBills,
+                            ),
+                          ),
+          ),
+        ],
       ),
     );
   }

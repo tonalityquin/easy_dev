@@ -4,7 +4,9 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../../app/utils/block_dialog/break_duration_blocking_dialog.dart';
+import '../../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
 import '../../../../../shared/document/backup/backup_form_page.dart';
+import '../../../../../shared/document/prompt_document_overlays.dart';
 import '../../../../../shared/document/user_statement/user_statement_form_page.dart';
 import '../../../../account/applications/user_state.dart';
 import '../../../../commute/domain/repositories/commute_log_repository.dart';
@@ -14,12 +16,13 @@ import 'widgets/single_document_inventory_repository.dart';
 import 'widgets/single_document_item.dart';
 
 Future<void> openSingleDocumentBox(BuildContext context) async {
-  await showModalBottomSheet<void>(
+  await showPromptOverlayBottomSheet<void>(
     context: context,
     useRootNavigator: false,
     isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    builder: (ctx) => const _SingleDocumentBoxSheet(),
+    useSafeArea: true,
+    transparentBackground: true,
+    builder: (_) => const _SingleDocumentBoxSheet(),
   );
 }
 
@@ -137,12 +140,10 @@ class _SingleDocumentBoxSheet extends StatelessWidget {
                                                 await _submitRestTimeRecordsFromSqlite(
                                                     context);
                                               } else {
-                                                Navigator.of(context).push(
-                                                  MaterialPageRoute(
-                                                    builder: (_) =>
-                                                        const UserStatementFormPage(),
-                                                    fullscreenDialog: true,
-                                                  ),
+                                                await showPromptFullscreenDocument<void>(
+                                                  context: context,
+                                                  barrierLabel: '경위서 작성',
+                                                  child: const UserStatementFormPage(),
                                                 );
                                               }
                                               break;
@@ -171,12 +172,10 @@ class _SingleDocumentBoxSheet extends StatelessWidget {
                                             case SingleDocumentType.generic:
                                               if (item.id ==
                                                   'template-annual-leave-application') {
-                                                Navigator.of(context).push(
-                                                  MaterialPageRoute(
-                                                    builder: (_) =>
-                                                        const BackupFormPage(),
-                                                    fullscreenDialog: true,
-                                                  ),
+                                                await showPromptFullscreenDocument<void>(
+                                                  context: context,
+                                                  barrierLabel: '연차 지원 신청서 작성',
+                                                  child: const BackupFormPage(),
                                                 );
                                               }
                                               break;

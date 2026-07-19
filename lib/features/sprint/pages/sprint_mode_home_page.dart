@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 
+import '../../../shared/google_calendar/google_event_colors.dart';
 import '../application/sprint_mode_store.dart';
 import '../domain/sprint_models.dart';
 import 'sprint_block_editor_sheet.dart';
@@ -18,14 +19,11 @@ Future<void> showSprintAttentionSheet({
   required BuildContext context,
   required SprintModeStore store,
 }) async {
-  final colors = Theme.of(context).colorScheme;
-  await showModalBottomSheet<void>(
+  await sprintShowBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
     showDragHandle: true,
-    backgroundColor: colors.surface,
-    barrierColor: colors.scrim,
     builder: (_) => _AttentionSheet(store: store),
   );
 }
@@ -118,20 +116,9 @@ class _SprintModeHomePageState extends State<SprintModeHomePage>
     SprintWorkspacePanelDestination destination =
         SprintWorkspacePanelDestination.summary,
   }) {
-    final reduceMotion =
-        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    if (reduceMotion) {
-      return PageRouteBuilder<void>(
-        transitionDuration: Duration.zero,
-        reverseTransitionDuration: Duration.zero,
-        pageBuilder: (_, __, ___) => SprintProjectHomePage(
-          store: _store,
-          initialDestination: destination,
-        ),
-      );
-    }
-    return MaterialPageRoute<void>(
-      builder: (_) => SprintProjectHomePage(
+    return sprintPageRoute<void>(
+      context: context,
+      page: SprintProjectHomePage(
         store: _store,
         initialDestination: destination,
       ),
@@ -146,7 +133,7 @@ class _SprintModeHomePageState extends State<SprintModeHomePage>
           reduceMotion ? Duration.zero : const Duration(milliseconds: 260),
       reverseTransitionDuration:
           reduceMotion ? Duration.zero : const Duration(milliseconds: 210),
-      pageBuilder: (_, __, ___) => page,
+      pageBuilder: (_, __, ___) => SprintPromptScope(child: page),
       transitionsBuilder: (_, animation, __, child) {
         if (reduceMotion) return child;
         final curved = CurvedAnimation(
@@ -221,20 +208,19 @@ class _SprintModeHomePageState extends State<SprintModeHomePage>
 
   Future<void> _openReview() async {
     await Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        builder: (_) => _SprintReviewSettingsPage(store: _store),
+      sprintPageRoute<void>(
+        context: context,
+        page: _SprintReviewSettingsPage(store: _store),
       ),
     );
   }
 
   void _openUnplaced() {
-    showModalBottomSheet<void>(
+    sprintShowBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       showDragHandle: true,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      barrierColor: Theme.of(context).colorScheme.scrim,
       builder: (_) => _UnplacedTasksSheet(store: _store),
     );
   }
@@ -243,21 +229,9 @@ class _SprintModeHomePageState extends State<SprintModeHomePage>
     showSprintAttentionSheet(context: context, store: _store);
   }
 
-  String? _selectedDateAddError([DateTime? date]) {
-    final value = date ?? _store.selectedDate;
-    final selected = DateTime(value.year, value.month, value.day);
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    if (selected.isBefore(today)) {
-      return '과거 날짜에는 업무를 추가할 수 없습니다.';
-    }
+  String? _selectedDateAddError() {
     if (_store.projects.isEmpty) {
       return '업무를 추가하려면 먼저 프로젝트를 생성하세요.';
-    }
-    final projectId = _store.selectedProjectId;
-    if (projectId != null && !_store.canScheduleProjectOn(projectId, selected)) {
-      final lowerBound = _store.projectScheduleLowerBound(projectId)!;
-      return '이 프로젝트는 ${sprintFormatDate(lowerBound)}부터 업무를 추가할 수 있습니다.';
     }
     return null;
   }
@@ -269,7 +243,7 @@ class _SprintModeHomePageState extends State<SprintModeHomePage>
   Future<void> _openTaskCreateForDate(DateTime date) async {
     final selected = DateTime(date.year, date.month, date.day);
     _store.selectDate(selected);
-    final validationMessage = _selectedDateAddError(selected);
+    final validationMessage = _selectedDateAddError();
     if (validationMessage != null) {
       sprintShowMessage(context: context, message: validationMessage);
       return;
@@ -283,12 +257,10 @@ class _SprintModeHomePageState extends State<SprintModeHomePage>
   }
 
   Future<void> _openDateJumpSheet() async {
-    final selected = await showModalBottomSheet<DateTime>(
+    final selected = await sprintShowBottomSheet<DateTime>(
       context: context,
       useSafeArea: true,
       showDragHandle: true,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      barrierColor: Theme.of(context).colorScheme.scrim,
       builder: (_) => _DateJumpSheet(
         selectedDate: _store.selectedDate,
         project: _store.selectedProject,
@@ -312,7 +284,7 @@ class _SprintModeHomePageState extends State<SprintModeHomePage>
       future: _initialization,
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          return Scaffold(
+          return SprintScaffold(
             appBar: AppBar(title: const Text('스프린트 모드')),
             body: const SafeArea(
               child: Center(
@@ -326,7 +298,7 @@ class _SprintModeHomePageState extends State<SprintModeHomePage>
         }
         if (snapshot.connectionState != ConnectionState.done ||
             !_store.initialized) {
-          return const Scaffold(
+          return const SprintScaffold(
             body: SafeArea(
               child: Center(
                 child: SizedBox(
@@ -344,10 +316,9 @@ class _SprintModeHomePageState extends State<SprintModeHomePage>
             final unplacedCount = _store.unplacedTasks().length;
             final attentionCount = _store.currentScopeAttentionItems.length;
 
-            return Scaffold(
+            return SprintScaffold(
           extendBody: false,
           extendBodyBehindAppBar: false,
-          backgroundColor: Theme.of(context).colorScheme.surface,
           appBar: AppBar(
             leading: IconButton(
               tooltip: '프로젝트 메뉴',
@@ -476,7 +447,7 @@ class _DateJumpSheet extends StatelessWidget {
   final SprintProject? project;
 
   Future<void> _pickDate(BuildContext context) async {
-    final selected = await showDatePicker(
+    final selected = await sprintShowDatePicker(
       context: context,
       initialDate: selectedDate,
       firstDate: DateTime(1970),
@@ -589,7 +560,7 @@ class _DateNavigationBar extends StatelessWidget {
           ),
           Expanded(
             child: Material(
-              color: Colors.transparent,
+              color: sprintTransparent(context),
               borderRadius: BorderRadius.circular(14),
               child: InkWell(
                 borderRadius: BorderRadius.circular(14),
@@ -913,8 +884,9 @@ class _ScheduleTimeline extends StatelessWidget {
     final entries = store.timelineFor(store.selectedDate);
     return RefreshIndicator(
       onRefresh: () async {
-        if (store.calendarState == SprintCalendarConnectionState.connected ||
-            store.calendarState == SprintCalendarConnectionState.failed) {
+        if (store.activeCalendarProfile != null &&
+            store.calendarState != SprintCalendarConnectionState.switching &&
+            store.calendarState != SprintCalendarConnectionState.syncing) {
           await store.syncGoogleCalendar();
         }
       },
@@ -996,26 +968,11 @@ class _DateTaskAddButton extends StatelessWidget {
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final duration =
         reduceMotion ? Duration.zero : const Duration(milliseconds: 200);
-    final now = DateTime.now();
-    final selected = DateTime(
-      store.selectedDate.year,
-      store.selectedDate.month,
-      store.selectedDate.day,
-    );
-    final today = DateTime(now.year, now.month, now.day);
-    final isPast = selected.isBefore(today);
     final hasProjects = store.projects.isNotEmpty;
-    final selectedProjectId = store.selectedProjectId;
-    final beforeProjectStart = selectedProjectId != null &&
-        !store.canScheduleProjectOn(selectedProjectId, selected);
-    final enabled = !isPast && hasProjects && !beforeProjectStart;
-    final label = isPast
-        ? '과거 날짜에는 업무를 추가할 수 없습니다'
-        : !hasProjects
-            ? '프로젝트를 만든 뒤 업무를 추가하세요'
-            : beforeProjectStart
-                ? '이 프로젝트는 ${sprintFormatDate(store.projectScheduleLowerBound(selectedProjectId)!)}부터 시작합니다'
-                : '${sprintFormatDate(store.selectedDate)}에 업무 추가';
+    final enabled = hasProjects;
+    final label = hasProjects
+        ? '${sprintFormatDate(store.selectedDate)}에 업무 추가'
+        : '프로젝트를 만든 뒤 업무를 추가하세요';
     return AnimatedContainer(
       duration: duration,
       curve: Curves.easeOutCubic,
@@ -1027,7 +984,7 @@ class _DateTaskAddButton extends StatelessWidget {
         ),
       ),
       child: Material(
-        color: Colors.transparent,
+        color: sprintTransparent(context),
         borderRadius: BorderRadius.circular(18),
         child: InkWell(
           borderRadius: BorderRadius.circular(18),
@@ -1098,6 +1055,15 @@ class _TimelineStatusHeader extends StatelessWidget {
       case SprintCalendarConnectionState.notConnected:
         calendarLabel = 'Google 캘린더 연결 안 됨';
         break;
+      case SprintCalendarConnectionState.cached:
+        calendarLabel = '저장된 캘린더';
+        break;
+      case SprintCalendarConnectionState.reauthenticationRequired:
+        calendarLabel = 'Google 계정 재인증 필요';
+        break;
+      case SprintCalendarConnectionState.switching:
+        calendarLabel = 'Google 계정 전환 중';
+        break;
       case SprintCalendarConnectionState.syncing:
         calendarLabel = 'Google 캘린더 동기화 중';
         break;
@@ -1123,7 +1089,10 @@ class _TimelineStatusHeader extends StatelessWidget {
         Text(
           calendarLabel,
           style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: calendarState == SprintCalendarConnectionState.failed
+                color: calendarState == SprintCalendarConnectionState.failed ||
+                        calendarState ==
+                            SprintCalendarConnectionState
+                                .reauthenticationRequired
                     ? colors.error
                     : colors.onSurfaceVariant,
                 fontWeight: FontWeight.w700,
@@ -1152,12 +1121,10 @@ class _TaskDismissibleCard extends StatelessWidget {
   final VoidCallback onCompletion;
 
   Future<void> _showActions(BuildContext context) async {
-    await showModalBottomSheet<void>(
+    await sprintShowBottomSheet<void>(
       context: context,
       useSafeArea: true,
       showDragHandle: true,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      barrierColor: Theme.of(context).colorScheme.scrim,
       builder: (_) => _TaskQuickActionSheet(
         store: store,
         task: task,
@@ -1189,12 +1156,10 @@ class _TaskDismissibleCard extends StatelessWidget {
       onCompletion();
       return false;
     }
-    final type = await showModalBottomSheet<SprintPostponeType>(
+    final type = await sprintShowBottomSheet<SprintPostponeType>(
       context: context,
       useSafeArea: true,
       showDragHandle: true,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      barrierColor: Theme.of(context).colorScheme.scrim,
       builder: (_) => const Padding(
         padding: EdgeInsets.fromLTRB(16, 0, 16, 24),
         child: Column(
@@ -1230,6 +1195,10 @@ class _TaskDismissibleCard extends StatelessWidget {
     final todayDay = DateTime(today.year, today.month, today.day);
     final overdue = !completed && task.endDate.isBefore(todayDay);
     final projectLabel = project?.name ?? '프로젝트 없음';
+    final projectColor = googleEventColor(
+      project?.googleColorId,
+      colors.primary,
+    );
 
     return Dismissible(
       key: ValueKey<String>('task-${task.id}'),
@@ -1281,6 +1250,17 @@ class _TaskDismissibleCard extends StatelessWidget {
               children: [
                 AnimatedContainer(
                   duration: duration,
+                  curve: Curves.easeOutCubic,
+                  width: 5,
+                  height: 74,
+                  decoration: BoxDecoration(
+                    color: projectColor,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                AnimatedContainer(
+                  duration: duration,
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
@@ -1314,7 +1294,7 @@ class _TaskDismissibleCard extends StatelessWidget {
                                   .textTheme
                                   .labelLarge
                                   ?.copyWith(
-                                    color: colors.primary,
+                                    color: projectColor,
                                     fontWeight: FontWeight.w900,
                                   ),
                             ),
@@ -1350,6 +1330,24 @@ class _TaskDismissibleCard extends StatelessWidget {
                               fontWeight: FontWeight.w900,
                             ),
                       ),
+                      AnimatedSize(
+                        duration: duration,
+                        curve: Curves.easeOutCubic,
+                        child: task.description.trim().isEmpty
+                            ? const SizedBox.shrink()
+                            : Padding(
+                                padding: const EdgeInsets.only(top: 5),
+                                child: Text(
+                                  task.description,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: colors.onSurfaceVariant,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                      ),
                       const SizedBox(height: 6),
                       Row(
                         children: [
@@ -1370,6 +1368,36 @@ class _TaskDismissibleCard extends StatelessWidget {
                               size: 17,
                               color: colors.onSurfaceVariant,
                             ),
+                          if (block.locked &&
+                              task.googleSyncState !=
+                                  SprintGoogleSyncState.none)
+                            const SizedBox(width: 6),
+                          AnimatedSwitcher(
+                            duration: duration,
+                            child: task.googleSyncState ==
+                                    SprintGoogleSyncState.failed
+                                ? Icon(
+                                    Icons.cloud_off_rounded,
+                                    key: const ValueKey<String>('sync-failed'),
+                                    size: 17,
+                                    color: colors.error,
+                                  )
+                                : task.hasPendingGoogleSync
+                                    ? SizedBox(
+                                        key: const ValueKey<String>(
+                                          'sync-pending',
+                                        ),
+                                        width: 15,
+                                        height: 15,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: projectColor,
+                                        ),
+                                      )
+                                    : const SizedBox.shrink(
+                                        key: ValueKey<String>('sync-idle'),
+                                      ),
+                          ),
                         ],
                       ),
                     ],
@@ -1392,12 +1420,10 @@ class _ExternalEventCard extends StatelessWidget {
   final SprintExternalEvent event;
 
   void _openDetails(BuildContext context) {
-    showModalBottomSheet<void>(
+    sprintShowBottomSheet<void>(
       context: context,
       showDragHandle: true,
       useSafeArea: true,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      barrierColor: Theme.of(context).colorScheme.scrim,
       builder: (sheetContext) {
         return Padding(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
@@ -1436,8 +1462,8 @@ class _ExternalEventCard extends StatelessWidget {
               const SizedBox(height: 14),
               Text(
                 event.blocksTime
-                    ? 'Google 캘린더 · 읽기 전용'
-                    : 'Google 캘린더 · 읽기 전용',
+                    ? 'Google 캘린더 · 시간 점유 · 읽기 전용'
+                    : 'Google 캘린더 · 시간 비점유 · 읽기 전용',
               ),
               const SizedBox(height: 20),
               FilledButton.tonal(
@@ -1454,18 +1480,25 @@ class _ExternalEventCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final duration =
+        reduceMotion ? Duration.zero : const Duration(milliseconds: 220);
+    final eventColor = googleEventColor(event.colorId, colors.outline);
     return Material(
-      color: colors.surfaceContainerLow,
+      color: eventColor.withOpacity(0.08),
       borderRadius: BorderRadius.circular(20),
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
         onTap: () => _openDetails(context),
-        child: Container(
+        child: AnimatedContainer(
+          duration: duration,
+          curve: Curves.easeOutCubic,
           constraints: const BoxConstraints(minHeight: 84),
           padding: const EdgeInsets.all(15),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: colors.outlineVariant),
+            border: Border.all(color: eventColor.withOpacity(0.7)),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1474,10 +1507,13 @@ class _ExternalEventCard extends StatelessWidget {
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: colors.surfaceContainerHighest,
+                  color: eventColor.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: const Icon(Icons.event_outlined),
+                child: Icon(
+                  Icons.event_outlined,
+                  color: eventColor,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -1659,19 +1695,7 @@ class _SprintBottomDock extends StatelessWidget {
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final duration =
         reduceMotion ? Duration.zero : const Duration(milliseconds: 180);
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final selected = DateTime(
-      store.selectedDate.year,
-      store.selectedDate.month,
-      store.selectedDate.day,
-    );
-    final selectedProjectId = store.selectedProjectId;
-    final beforeProjectStart = selectedProjectId != null &&
-        !store.canScheduleProjectOn(selectedProjectId, selected);
-    final inputEnabled = !selected.isBefore(today) &&
-        store.projects.isNotEmpty &&
-        !beforeProjectStart;
+    final inputEnabled = store.projects.isNotEmpty;
 
     return Material(
       color: colors.surfaceContainer,
@@ -1807,11 +1831,7 @@ class _SprintBottomDock extends StatelessWidget {
                     : Padding(
                         padding: const EdgeInsets.only(top: 6),
                         child: Text(
-                          selected.isBefore(today)
-                              ? '과거 날짜에는 업무를 추가할 수 없습니다.'
-                              : store.projects.isEmpty
-                                  ? '프로젝트를 만든 뒤 업무를 추가할 수 있습니다.'
-                                  : '프로젝트 목표 시작일 이후 날짜를 선택하세요.',
+                          '프로젝트를 만든 뒤 업무를 추가할 수 있습니다.',
                           style: Theme.of(context)
                               .textTheme
                               .labelMedium
@@ -2336,7 +2356,7 @@ class _SprintReviewSettingsPage extends StatelessWidget {
               task.endDate.isBefore(today);
         }).length;
 
-        return Scaffold(
+        return SprintScaffold(
           appBar: AppBar(title: const Text('리뷰 및 설정')),
           body: ListView(
             padding: const EdgeInsets.fromLTRB(16, 18, 16, 32),
@@ -2506,10 +2526,23 @@ class _GoogleCalendarSettingTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = store.calendarState;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final duration =
+        reduceMotion ? Duration.zero : const Duration(milliseconds: 180);
     String status;
     switch (state) {
       case SprintCalendarConnectionState.notConnected:
         status = '연결 안 됨';
+        break;
+      case SprintCalendarConnectionState.cached:
+        status = '저장된 일정 표시 중';
+        break;
+      case SprintCalendarConnectionState.reauthenticationRequired:
+        status = '재인증 필요';
+        break;
+      case SprintCalendarConnectionState.switching:
+        status = '계정 전환 중';
         break;
       case SprintCalendarConnectionState.syncing:
         status = '동기화 중';
@@ -2521,23 +2554,47 @@ class _GoogleCalendarSettingTile extends StatelessWidget {
         status = '동기화 실패';
         break;
     }
+    final email = store.activeGoogleEmail;
+    final calendar = store.googleCalendarId;
+    final detail = email.isEmpty
+        ? '$calendar · $status'
+        : '$email · $calendar · $status';
+    final busy = state == SprintCalendarConnectionState.syncing ||
+        state == SprintCalendarConnectionState.switching;
 
     return ListTile(
-      leading: Icon(
-        store.googleCalendarIdLocked
-            ? Icons.lock_rounded
-            : Icons.event_available_outlined,
+      leading: AnimatedSwitcher(
+        duration: duration,
+        child: Icon(
+          store.googleCalendarIdLocked
+              ? Icons.lock_rounded
+              : Icons.event_available_outlined,
+          key: ValueKey<String>(
+            '${store.activeCalendarProfileId}-${store.googleCalendarIdLocked}',
+          ),
+        ),
       ),
-      title: const Text('Google 캘린더 계정'),
-      subtitle: Text('${store.googleCalendarId} · $status'),
-      trailing: state == SprintCalendarConnectionState.syncing
-          ? const SizedBox(
-              width: 22,
-              height: 22,
-              child: CircularProgressIndicator(strokeWidth: 2.5),
-            )
-          : const Icon(Icons.chevron_right_rounded),
-      onTap: state == SprintCalendarConnectionState.syncing
+      title: Text(store.activeCalendarLabel),
+      subtitle: Text(
+        detail,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+      ),
+      trailing: AnimatedSwitcher(
+        duration: duration,
+        child: busy
+            ? const SizedBox(
+                key: ValueKey<String>('calendar-busy'),
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(strokeWidth: 2.5),
+              )
+            : const Icon(
+                Icons.chevron_right_rounded,
+                key: ValueKey<String>('calendar-ready'),
+              ),
+      ),
+      onTap: busy
           ? null
           : () => showSprintAccountSheet(
                 context: context,

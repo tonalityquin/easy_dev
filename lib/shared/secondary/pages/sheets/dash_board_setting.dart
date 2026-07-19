@@ -4,6 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../app/init/logout_helper.dart';
 import '../../../../app/utils/operational_data_sync_workflow.dart';
+import '../../../../app/utils/snackbar_helper.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
 import '../../../../features/dev/application/area_state.dart';
 import '../../../secondary/widgets/ops_console_widgets.dart';
 import '../../../tts/application/tts_sync_helper.dart';
@@ -111,14 +113,18 @@ class _DashboardSettingState extends State<DashboardSetting> {
         showSnackbar: false,
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('현재 설정을 포그라운드 서비스에 재적용했습니다.')),
+      showSuccessSnackbar(
+        context,
+        '현재 설정을 포그라운드 서비스에 재적용했습니다.',
+        usePromptUi: true,
       );
     } catch (e) {
       debugPrint('FG 재전송 실패: $e');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('포그라운드 서비스 재적용에 실패했습니다.')),
+      showFailedSnackbar(
+        context,
+        '포그라운드 서비스 재적용에 실패했습니다.',
+        usePromptUi: true,
       );
     }
   }
@@ -175,10 +181,12 @@ class _DashboardSettingState extends State<DashboardSetting> {
       icon: Icons.dashboard_customize_rounded,
       areaLabel: areaLabel,
       loading: _loading,
-      trailing: IconButton.filledTonal(
+      trailing: PromptIconButton(
+        icon: _locked ? Icons.lock_rounded : Icons.lock_open_rounded,
         tooltip: _locked ? '잠금 해제' : '잠금',
         onPressed: _loading ? null : _toggleLock,
-        icon: Icon(_locked ? Icons.lock_rounded : Icons.lock_open_rounded),
+        selected: !_locked,
+        haptic: PromptHaptic.selection,
       ),
       metrics: [
         OpsMetric(label: 'TTS ON', value: '$_enabledTtsCount/3', icon: Icons.record_voice_over_rounded, color: cs.primary),

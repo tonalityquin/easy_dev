@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/auth/google_auth_session.dart';
+import '../../../shared/google_calendar/google_event_colors.dart';
 import '../application/sprint_mode_store.dart';
 import '../domain/sprint_models.dart';
 import 'sprint_project_form_sheet.dart';
@@ -40,7 +41,9 @@ Future<SprintWorkspacePanelResult?> showSprintWorkspacePanel({
           reduceMotion ? Duration.zero : const Duration(milliseconds: 260),
       reverseTransitionDuration:
           reduceMotion ? Duration.zero : const Duration(milliseconds: 220),
-      pageBuilder: (_, __, ___) => SprintWorkspacePanelPage(store: store),
+      pageBuilder: (_, __, ___) => SprintPromptScope(
+        child: SprintWorkspacePanelPage(store: store),
+      ),
       transitionsBuilder: (_, animation, __, child) {
         if (reduceMotion) return child;
         final curved = CurvedAnimation(
@@ -67,14 +70,11 @@ Future<SprintWorkspaceScope?> showSprintCreateProjectSheet({
   required BuildContext context,
   required SprintModeStore store,
 }) async {
-  final colors = Theme.of(context).colorScheme;
-  return showModalBottomSheet<SprintWorkspaceScope>(
+  return sprintShowBottomSheet<SprintWorkspaceScope>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
     showDragHandle: true,
-    backgroundColor: colors.surface,
-    barrierColor: colors.scrim,
     builder: (_) => _SprintCreateProjectSheet(store: store),
   );
 }
@@ -83,14 +83,11 @@ Future<void> showSprintAccountSheet({
   required BuildContext context,
   required SprintModeStore store,
 }) async {
-  final colors = Theme.of(context).colorScheme;
-  await showModalBottomSheet<void>(
+  await sprintShowBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
     showDragHandle: true,
-    backgroundColor: colors.surface,
-    barrierColor: colors.scrim,
     builder: (_) => _SprintAccountSheet(store: store),
   );
 }
@@ -142,6 +139,14 @@ class _SprintWorkspacePanelPageState
   }
 
   Future<void> _createProject() async {
+    if (!widget.store.canCreateProject) {
+      sprintShowMessage(
+        context: context,
+        message: '활성 프로젝트는 최대 11개까지 만들 수 있습니다.',
+        danger: true,
+      );
+      return;
+    }
     final scope = await showSprintCreateProjectSheet(
       context: context,
       store: widget.store,
@@ -190,12 +195,11 @@ class _SprintWorkspacePanelPageState
   Future<void> _deleteProject(SprintProject project) async {
     if (_deletingProjectId != null) return;
     final colors = Theme.of(context).colorScheme;
-    final confirmed = await showDialog<bool>(
+    final confirmed = await sprintShowDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) {
         return AlertDialog(
-          backgroundColor: colors.surface,
           title: const Text('프로젝트 삭제'),
           content: Text(
             '${project.name} 프로젝트와 포함된 업무와 일정 블록을 삭제합니다.',
@@ -225,8 +229,10 @@ class _SprintWorkspacePanelPageState
     } catch (_) {
       if (!mounted) return;
       setState(() => _deletingProjectId = null);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('프로젝트를 삭제하지 못했습니다.')),
+      sprintShowMessage(
+        context: context,
+        message: '프로젝트를 삭제하지 못했습니다.',
+        danger: true,
       );
       return;
     }
@@ -235,7 +241,14 @@ class _SprintWorkspacePanelPageState
       _deletingProjectId = null;
       _selectedScope = const SprintWorkspaceScope.all();
     });
-    if (!deleted) return;
+    if (!deleted) {
+      sprintShowMessage(
+        context: context,
+        message: '연결된 Google Calendar 일정을 삭제하지 못했습니다.',
+        danger: true,
+      );
+      return;
+    }
     sprintShowMessage(
       context: context,
       message: '${project.name} 프로젝트를 삭제했습니다.',
@@ -258,10 +271,9 @@ class _SprintWorkspacePanelPageState
     final duration =
         reduceMotion ? Duration.zero : const Duration(milliseconds: 210);
 
-    return Scaffold(
+    return SprintScaffold(
       extendBody: false,
       extendBodyBehindAppBar: false,
-      backgroundColor: colors.surface,
       body: SafeArea(
         minimum: const EdgeInsets.only(bottom: 8),
         child: AnimatedBuilder(
@@ -373,6 +385,10 @@ class _WorkspaceRail extends StatelessWidget {
                         selected: selectedScope ==
                             SprintWorkspaceScope.project(project.id),
                         duration: duration,
+                        accentColor: googleEventColor(
+                          project.googleColorId,
+                          colors.primary,
+                        ),
                         onTap: () => onSelect(
                           SprintWorkspaceScope.project(project.id),
                         ),
@@ -381,7 +397,8 @@ class _WorkspaceRail extends StatelessWidget {
                   ),
                   _RailButton(
                     icon: Icons.add_rounded,
-                    label: '새 프로젝트',
+                    label:
+                        '새 프로젝트 ${store.activeProjectCount}/${SprintModeStore.maxActiveProjectCount}',
                     selected: false,
                     duration: duration,
                     onTap: store.accountBusy ? null : onCreate,
@@ -403,6 +420,7 @@ class _RailButton extends StatelessWidget {
     required this.selected,
     required this.duration,
     required this.onTap,
+    this.accentColor,
   });
 
   final IconData icon;
@@ -410,10 +428,17 @@ class _RailButton extends StatelessWidget {
   final bool selected;
   final Duration duration;
   final VoidCallback? onTap;
+  final Color? accentColor;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final accent = accentColor ?? colors.primary;
+    final foreground = accentColor == null
+        ? colors.onPrimaryContainer
+        : ThemeData.estimateBrightnessForColor(accent) == Brightness.dark
+            ? Colors.white
+            : Colors.black;
     return Semantics(
       button: true,
       selected: selected,
@@ -427,19 +452,17 @@ class _RailButton extends StatelessWidget {
           height: 56,
           decoration: BoxDecoration(
             color: selected
-                ? colors.primaryContainer
+                ? accent.withOpacity(0.22)
                 : colors.surfaceContainerHigh,
             borderRadius: BorderRadius.circular(selected ? 18 : 26),
             border: Border.all(
-              color: selected ? colors.primary : colors.outlineVariant,
+              color: selected ? accent : colors.outlineVariant,
               width: selected ? 2 : 1,
             ),
           ),
           child: Icon(
             icon,
-            color: selected
-                ? colors.onPrimaryContainer
-                : colors.onSurfaceVariant,
+            color: selected ? foreground : colors.onSurfaceVariant,
           ),
         ),
       ),
@@ -770,15 +793,20 @@ class _SprintAccountArea extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final user = GoogleAuthSession.instance.currentUser;
-    final displayName = user?.displayName?.trim();
-    final email = user?.email.trim();
-    final title = displayName == null || displayName.isEmpty
-        ? '스프린트 사용자'
-        : displayName;
-    final calendarLabel = store.googleCalendarId.isEmpty
-        ? 'Google Calendar ID 미설정'
-        : store.googleCalendarId;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final duration =
+        reduceMotion ? Duration.zero : const Duration(milliseconds: 180);
+    final profile = store.activeCalendarProfile;
+    final account = store.activeGoogleAccount;
+    final title = profile?.label.trim().isNotEmpty == true
+        ? profile!.label.trim()
+        : 'Google 캘린더 계정';
+    final email = account?.email.trim() ?? '';
+    final calendarLabel = profile?.calendarId.trim().isNotEmpty == true
+        ? profile!.calendarId.trim()
+        : '캘린더 미설정';
+    final initial = title.isEmpty ? 'G' : title.substring(0, 1).toUpperCase();
 
     return ColoredBox(
       color: colors.surfaceContainer,
@@ -788,14 +816,18 @@ class _SprintAccountArea extends StatelessWidget {
           children: [
             SizedBox(
               width: railWidth,
-              child: CircleAvatar(
-                radius: 24,
-                backgroundColor: colors.primaryContainer,
-                child: Text(
-                  title.substring(0, 1).toUpperCase(),
-                  style: TextStyle(
-                    color: colors.onPrimaryContainer,
-                    fontWeight: FontWeight.w900,
+              child: AnimatedSwitcher(
+                duration: duration,
+                child: CircleAvatar(
+                  key: ValueKey<String>(profile?.id ?? 'no-profile'),
+                  radius: 24,
+                  backgroundColor: colors.primaryContainer,
+                  child: Text(
+                    initial,
+                    style: TextStyle(
+                      color: colors.onPrimaryContainer,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                 ),
               ),
@@ -812,44 +844,67 @@ class _SprintAccountArea extends StatelessWidget {
                     child: Row(
                       children: [
                         Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w900,
-                                ),
+                          child: AnimatedSwitcher(
+                            duration: duration,
+                            transitionBuilder: (child, animation) =>
+                                FadeTransition(
+                              opacity: animation,
+                              child: SlideTransition(
+                                position: Tween<Offset>(
+                                  begin: const Offset(0.04, 0),
+                                  end: Offset.zero,
+                                ).animate(animation),
+                                child: child,
                               ),
-                              const SizedBox(height: 3),
-                              Text(
-                                email == null || email.isEmpty
-                                    ? calendarLabel
-                                    : '$email · $calendarLabel',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: colors.onSurfaceVariant,
+                            ),
+                            child: Column(
+                              key: ValueKey<String>(profile?.id ?? 'empty'),
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w900,
+                                  ),
                                 ),
-                              ),
-                            ],
+                                const SizedBox(height: 3),
+                                Text(
+                                  email.isEmpty
+                                      ? calendarLabel
+                                      : '$email · $calendarLabel',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: colors.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                         const SizedBox(width: 8),
-                        if (store.accountBusy)
-                          const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(strokeWidth: 2.4),
-                          )
-                        else
-                          Icon(
-                            store.googleCalendarIdLocked
-                                ? Icons.lock_rounded
-                                : Icons.manage_accounts_outlined,
-                          ),
+                        AnimatedSwitcher(
+                          duration: duration,
+                          child: store.accountBusy
+                              ? const SizedBox(
+                                  key: ValueKey<String>('account-busy'),
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.4,
+                                  ),
+                                )
+                              : Icon(
+                                  store.googleCalendarIdLocked
+                                      ? Icons.lock_rounded
+                                      : Icons.swap_horiz_rounded,
+                                  key: ValueKey<String>(
+                                    'account-${store.activeCalendarProfileId}',
+                                  ),
+                                ),
+                        ),
                       ],
                     ),
                   ),
@@ -878,13 +933,17 @@ class _SprintCreateProjectSheetState
   final TextEditingController _nameController = TextEditingController();
   final FocusNode _nameFocusNode = FocusNode();
   String _iconKey = 'folder';
+  String? _googleColorId;
   DateTime? _targetStartDate;
   DateTime? _targetDate;
+  bool _indefinite = true;
   bool _saving = false;
 
   @override
   void initState() {
     super.initState();
+    final available = widget.store.availableProjectColorIds();
+    _googleColorId = available.isEmpty ? null : available.first;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _nameFocusNode.requestFocus();
     });
@@ -897,10 +956,20 @@ class _SprintCreateProjectSheetState
     super.dispose();
   }
 
+  void _setIndefinite(bool value) {
+    setState(() {
+      _indefinite = value;
+      if (value) {
+        _targetStartDate = null;
+        _targetDate = null;
+      }
+    });
+  }
+
   Future<void> _selectTargetStartDate() async {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final selected = await showDatePicker(
+    final selected = await sprintShowDatePicker(
       context: context,
       initialDate: _targetStartDate ?? today,
       firstDate: today,
@@ -916,7 +985,7 @@ class _SprintCreateProjectSheetState
     final minimum = _targetStartDate ?? today;
     var initial = _targetDate ?? minimum.add(const Duration(days: 7));
     if (initial.isBefore(minimum)) initial = minimum;
-    final selected = await showDatePicker(
+    final selected = await sprintShowDatePicker(
       context: context,
       initialDate: initial,
       firstDate: minimum,
@@ -937,6 +1006,14 @@ class _SprintCreateProjectSheetState
       _nameFocusNode.requestFocus();
       return;
     }
+    if (_googleColorId == null) {
+      sprintShowMessage(
+        context: context,
+        message: '사용 가능한 프로젝트 색상이 없습니다.',
+        danger: true,
+      );
+      return;
+    }
     if (_targetStartDate != null &&
         _targetDate != null &&
         _targetStartDate!.isAfter(_targetDate!)) {
@@ -950,6 +1027,7 @@ class _SprintCreateProjectSheetState
     final project = await widget.store.createProject(
       name: name,
       iconKey: _iconKey,
+      googleColorId: _googleColorId!,
       targetStartDate: _targetStartDate,
       targetDate: _targetDate,
     );
@@ -958,7 +1036,7 @@ class _SprintCreateProjectSheetState
       setState(() => _saving = false);
       sprintShowMessage(
         context: context,
-        message: '프로젝트 정보를 확인하세요.',
+        message: widget.store.projectInputError ?? '프로젝트 정보를 확인하세요.',
       );
       return;
     }
@@ -1057,30 +1135,87 @@ class _SprintCreateProjectSheetState
                 ),
                 const SizedBox(height: 20),
                 const Text(
+                  '프로젝트 색상',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 10),
+                GoogleEventColorPicker(
+                  selectedId: _googleColorId,
+                  duration: duration,
+                  disabledColorIds:
+                      widget.store.projectColorOwners().keys.toSet(),
+                  disabledLabels: widget.store.projectColorOwners(),
+                  onSelected: _saving
+                      ? (_) {}
+                      : (colorId) {
+                          setState(() => _googleColorId = colorId);
+                        },
+                ),
+                const SizedBox(height: 20),
+                const Text(
                   '목표 기간',
                   style: TextStyle(fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 8),
-                _CreateProjectDateTile(
-                  title: '목표 시작일',
-                  icon: Icons.play_circle_outline_rounded,
-                  value: _targetStartDate,
+                AnimatedContainer(
                   duration: duration,
-                  onTap: _saving ? null : _selectTargetStartDate,
-                  onClear: _saving || _targetStartDate == null
-                      ? null
-                      : () => setState(() => _targetStartDate = null),
+                  curve: Curves.easeOutCubic,
+                  decoration: BoxDecoration(
+                    color: _indefinite
+                        ? colors.primaryContainer
+                        : colors.surfaceContainerHigh,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: _indefinite
+                          ? colors.primary
+                          : colors.outlineVariant,
+                    ),
+                  ),
+                  child: SwitchListTile(
+                    value: _indefinite,
+                    onChanged: _saving ? null : _setIndefinite,
+                    title: const Text(
+                      '무기한 프로젝트',
+                      style: TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                    secondary: const Icon(Icons.all_inclusive_rounded),
+                  ),
                 ),
-                const SizedBox(height: 10),
-                _CreateProjectDateTile(
-                  title: '목표 완료일',
-                  icon: Icons.flag_outlined,
-                  value: _targetDate,
+                AnimatedSize(
                   duration: duration,
-                  onTap: _saving ? null : _selectTargetDate,
-                  onClear: _saving || _targetDate == null
-                      ? null
-                      : () => setState(() => _targetDate = null),
+                  curve: Curves.easeOutCubic,
+                  child: _indefinite
+                      ? const SizedBox.shrink()
+                      : Padding(
+                          padding: const EdgeInsets.only(top: 10),
+                          child: Column(
+                            children: [
+                              _CreateProjectDateTile(
+                                title: '목표 시작일',
+                                icon: Icons.play_circle_outline_rounded,
+                                value: _targetStartDate,
+                                duration: duration,
+                                onTap: _saving ? null : _selectTargetStartDate,
+                                onClear: _saving || _targetStartDate == null
+                                    ? null
+                                    : () => setState(
+                                          () => _targetStartDate = null,
+                                        ),
+                              ),
+                              const SizedBox(height: 10),
+                              _CreateProjectDateTile(
+                                title: '목표 완료일',
+                                icon: Icons.flag_outlined,
+                                value: _targetDate,
+                                duration: duration,
+                                onTap: _saving ? null : _selectTargetDate,
+                                onClear: _saving || _targetDate == null
+                                    ? null
+                                    : () => setState(() => _targetDate = null),
+                              ),
+                            ],
+                          ),
+                        ),
                 ),
                 AnimatedSize(
                   duration: duration,
@@ -1100,7 +1235,10 @@ class _SprintCreateProjectSheetState
                 ),
                 const SizedBox(height: 24),
                 FilledButton(
-                  onPressed: _saving || invalidRange ? null : _create,
+                  onPressed:
+                      _saving || invalidRange || _googleColorId == null
+                          ? null
+                          : _create,
                   style: FilledButton.styleFrom(
                     minimumSize: const Size.fromHeight(56),
                   ),
@@ -1199,107 +1337,231 @@ class _SprintAccountSheet extends StatefulWidget {
 }
 
 class _SprintAccountSheetState extends State<_SprintAccountSheet> {
-  late final TextEditingController _calendarController;
-  final FocusNode _calendarFocusNode = FocusNode();
-  late bool _locked;
-  bool _localBusy = false;
+  String? _busyProfileId;
+  bool _adding = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _calendarController = TextEditingController(
-      text: widget.store.googleCalendarId,
-    );
-    _locked = widget.store.googleCalendarIdLocked;
-  }
+  bool get _busy => _adding ||
+      _busyProfileId != null ||
+      widget.store.accountBusy;
 
-  @override
-  void dispose() {
-    _calendarController.dispose();
-    _calendarFocusNode.dispose();
-    super.dispose();
-  }
-
-  Future<void> _save() async {
-    if (_localBusy || widget.store.accountBusy) return;
-    final value = _calendarController.text.trim();
-    if (value.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Google Calendar ID를 입력하세요.')),
-      );
-      return;
+  String _errorMessage(Object error) {
+    if (error is GoogleAccountMismatchException) {
+      return '선택한 Google 계정이 저장된 계정과 일치하지 않습니다.';
     }
-    setState(() => _localBusy = true);
-    try {
-      await widget.store.saveGoogleCalendarAccount(
-        calendarId: value,
-        locked: _locked,
-      );
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('계정 설정을 저장했습니다.')),
-      );
-      Navigator.of(context).pop();
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('계정 설정을 저장하지 못했습니다.')),
-      );
-      setState(() => _localBusy = false);
-    }
-  }
-
-  Future<void> _sync() async {
-    if (_localBusy || widget.store.accountBusy) return;
-    final value = _calendarController.text.trim();
-    if (value.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Google Calendar ID를 입력하세요.')),
-      );
-      return;
-    }
-    setState(() => _localBusy = true);
-    try {
-      await widget.store.saveGoogleCalendarAccountAndSync(
-        calendarId: value,
-        locked: _locked,
-      );
-      if (!mounted) return;
-      if (widget.store.calendarState ==
-          SprintCalendarConnectionState.connected) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Google 캘린더를 동기화했습니다.')),
-        );
-        Navigator.of(context).pop();
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Google 캘린더 동기화에 실패했습니다.')),
-        );
-        setState(() => _localBusy = false);
+    if (error is StateError) {
+      if (error.message == 'calendar_profile_in_use') {
+        return '연결된 스프린트 일정이 있어 이 캘린더를 삭제할 수 없습니다.';
       }
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Google 캘린더 동기화에 실패했습니다.')),
+      if (error.message == 'interactive_google_auth_not_supported') {
+        return '이 환경에서는 Google 계정 선택을 시작할 수 없습니다.';
+      }
+      if (error.message == 'calendar_profile_not_found') {
+        return '저장된 캘린더 정보를 찾지 못했습니다.';
+      }
+    }
+    return 'Google 캘린더 작업을 완료하지 못했습니다.';
+  }
+
+  Future<void> _addProfile({required bool forceAccountSelection}) async {
+    if (_busy) return;
+    final draft = await _showSprintCalendarProfileEditor(context);
+    if (draft == null || !mounted) return;
+    setState(() => _adding = true);
+    try {
+      await widget.store.addGoogleCalendarProfile(
+        label: draft.label,
+        calendarId: draft.calendarId,
+        locked: draft.locked,
+        forceAccountSelection: forceAccountSelection,
+        makeActive: true,
       );
-      setState(() => _localBusy = false);
+      if (!mounted) return;
+      sprintShowMessage(
+        context: context,
+        message: 'Google 캘린더를 저장하고 메인으로 전환했습니다.',
+      );
+    } catch (error) {
+      if (!mounted) return;
+      sprintShowMessage(
+        context: context,
+        message: _errorMessage(error),
+        danger: true,
+      );
+    } finally {
+      if (mounted) setState(() => _adding = false);
+    }
+  }
+
+  Future<void> _switchProfile(SprintCalendarProfile profile) async {
+    if (_busy || profile.id == widget.store.activeCalendarProfileId) return;
+    setState(() => _busyProfileId = profile.id);
+    try {
+      await widget.store.switchActiveCalendarProfile(profile.id);
+      if (!mounted) return;
+      sprintShowMessage(
+        context: context,
+        message: '${profile.label} 캘린더를 메인으로 전환했습니다.',
+      );
+    } catch (error) {
+      if (!mounted) return;
+      sprintShowMessage(
+        context: context,
+        message: _errorMessage(error),
+        danger: true,
+      );
+    } finally {
+      if (mounted) setState(() => _busyProfileId = null);
+    }
+  }
+
+  Future<void> _editProfile(SprintCalendarProfile profile) async {
+    if (_busy) return;
+    final draft = await _showSprintCalendarProfileEditor(
+      context,
+      profile: profile,
+      calendarIdReadOnly: true,
+    );
+    if (draft == null || !mounted) return;
+    setState(() => _busyProfileId = profile.id);
+    try {
+      await widget.store.updateCalendarProfile(
+        profileId: profile.id,
+        label: draft.label,
+        locked: draft.locked,
+      );
+      if (!mounted) return;
+      sprintShowMessage(
+        context: context,
+        message: '캘린더 표시 설정을 저장했습니다.',
+      );
+    } catch (error) {
+      if (!mounted) return;
+      sprintShowMessage(
+        context: context,
+        message: _errorMessage(error),
+        danger: true,
+      );
+    } finally {
+      if (mounted) setState(() => _busyProfileId = null);
+    }
+  }
+
+  Future<void> _removeProfile(SprintCalendarProfile profile) async {
+    if (_busy) return;
+    final colors = Theme.of(context).colorScheme;
+    final confirmed = await sprintShowDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (dialogContext) {
+            return AlertDialog(
+              title: const Text('저장된 캘린더 삭제'),
+              content: Text(
+                '${profile.label} 캘린더를 저장 목록에서 삭제할까요?',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: const Text('취소'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(true),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: colors.error,
+                    foregroundColor: colors.onError,
+                  ),
+                  child: const Text('삭제'),
+                ),
+              ],
+            );
+          },
+        ) ??
+        false;
+    if (!confirmed || !mounted) return;
+    setState(() => _busyProfileId = profile.id);
+    try {
+      await widget.store.removeCalendarProfile(profile.id);
+      if (!mounted) return;
+      sprintShowMessage(
+        context: context,
+        message: '저장된 캘린더를 삭제했습니다.',
+      );
+    } catch (error) {
+      if (!mounted) return;
+      sprintShowMessage(
+        context: context,
+        message: _errorMessage(error),
+        danger: true,
+      );
+    } finally {
+      if (mounted) setState(() => _busyProfileId = null);
+    }
+  }
+
+  Future<void> _syncActive() async {
+    if (_busy || widget.store.activeCalendarProfile == null) return;
+    setState(() => _busyProfileId = widget.store.activeCalendarProfileId);
+    try {
+      await widget.store.syncGoogleCalendar();
+      if (!mounted) return;
+      final success = widget.store.calendarState ==
+          SprintCalendarConnectionState.connected;
+      sprintShowMessage(
+        context: context,
+        message: success
+            ? '메인 캘린더를 동기화했습니다.'
+            : '메인 캘린더 동기화를 완료하지 못했습니다.',
+        danger: !success,
+      );
+    } catch (error) {
+      if (!mounted) return;
+      sprintShowMessage(
+        context: context,
+        message: _errorMessage(error),
+        danger: true,
+      );
+    } finally {
+      if (mounted) setState(() => _busyProfileId = null);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final user = GoogleAuthSession.instance.currentUser;
-    final displayName = user?.displayName?.trim() ?? '';
-    final email = user?.email.trim() ?? '';
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
-    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final duration =
-        reduceMotion ? Duration.zero : const Duration(milliseconds: 180);
+        reduceMotion ? Duration.zero : const Duration(milliseconds: 220);
     return AnimatedBuilder(
       animation: widget.store,
       builder: (context, child) {
-        final busy = _localBusy || widget.store.accountBusy;
+        final profiles = widget.store.calendarProfiles;
+        final active = widget.store.activeCalendarProfile;
+        final activeAccount = widget.store.activeGoogleAccount;
+        final activeEmail = activeAccount?.email.trim() ?? '';
+        final calendarState = widget.store.calendarState;
+        String? verificationMessage;
+        IconData? verificationIcon;
+        Color? verificationBackground;
+        Color? verificationForeground;
+        if (calendarState == SprintCalendarConnectionState.switching) {
+          verificationMessage = 'Google 계정과 캘린더 접근 권한을 확인하고 있습니다.';
+          verificationIcon = Icons.verified_user_outlined;
+          verificationBackground = colors.secondaryContainer;
+          verificationForeground = colors.onSecondaryContainer;
+        } else if (calendarState ==
+            SprintCalendarConnectionState.reauthenticationRequired) {
+          verificationMessage = 'Google 계정 연결 또는 재인증이 필요합니다.';
+          verificationIcon = Icons.lock_person_outlined;
+          verificationBackground = colors.tertiaryContainer;
+          verificationForeground = colors.onTertiaryContainer;
+        } else if (calendarState == SprintCalendarConnectionState.failed) {
+          verificationMessage =
+              '캘린더 접근을 확인하지 못했습니다. 저장된 계정 정보는 유지됩니다.';
+          verificationIcon = Icons.error_outline_rounded;
+          verificationBackground = colors.errorContainer;
+          verificationForeground = colors.onErrorContainer;
+        }
         return Material(
           color: colors.surface,
           child: SafeArea(
@@ -1309,166 +1571,272 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
               duration: duration,
               padding: EdgeInsets.only(bottom: keyboardInset),
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      '사용자 계정',
+                      'Google 캘린더 계정',
                       style: Theme.of(context)
                           .textTheme
                           .titleLarge
                           ?.copyWith(fontWeight: FontWeight.w900),
                     ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '저장된 Gmail 계정과 캘린더 중 하나를 메인으로 선택합니다.',
+                      style: TextStyle(color: colors.onSurfaceVariant),
+                    ),
                     const SizedBox(height: 16),
-                    SprintSurface(
-                      backgroundColor: colors.surfaceContainerHigh,
-                      child: Row(
-                        children: [
-                          CircleAvatar(
-                            radius: 24,
-                            child: Icon(
-                              user == null
-                                  ? Icons.person_outline_rounded
-                                  : Icons.person_rounded,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  displayName.isNotEmpty
-                                      ? displayName
-                                      : '스프린트 사용자',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                                ),
-                                if (email.isNotEmpty) ...[
-                                  const SizedBox(height: 3),
-                                  Text(
-                                    email,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Row(
-                      children: [
-                        const Expanded(
-                          child: Text(
-                            'Google Calendar ID',
-                            style: TextStyle(fontWeight: FontWeight.w800),
-                          ),
-                        ),
-                        Icon(
-                          _locked ? Icons.lock_rounded : Icons.lock_open_rounded,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: _calendarController,
-                      focusNode: _calendarFocusNode,
-                      readOnly: _locked || busy,
-                      keyboardType: TextInputType.text,
-                      autocorrect: false,
-                      enableSuggestions: false,
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: colors.surfaceContainerHigh,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        suffixIcon: Icon(
-                          _locked ? Icons.lock_rounded : Icons.edit_outlined,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    SwitchListTile.adaptive(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text(
-                        '필드 잠금',
-                        style: TextStyle(fontWeight: FontWeight.w800),
-                      ),
-                      subtitle: Text(
-                        _locked
-                            ? '잠금 상태에서는 Calendar ID를 수정할 수 없습니다.'
-                            : '잠금을 켜면 저장 후 수정이 제한됩니다.',
-                      ),
-                      value: _locked,
-                      onChanged: busy
-                          ? null
-                          : (value) {
-                              if (value &&
-                                  _calendarController.text.trim().isEmpty) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      'Calendar ID 입력 후 잠글 수 있습니다.',
+                    AnimatedSwitcher(
+                      duration: duration,
+                      child: active == null
+                          ? SprintSurface(
+                              key: const ValueKey<String>('no-active-profile'),
+                              backgroundColor: colors.surfaceContainerHigh,
+                              child: const Row(
+                                children: [
+                                  Icon(Icons.event_busy_outlined),
+                                  SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      '메인 Google 캘린더가 설정되지 않았습니다.',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w800,
+                                      ),
                                     ),
                                   ),
-                                );
-                                return;
-                              }
-                              setState(() => _locked = value);
-                              if (!value) {
-                                _calendarFocusNode.requestFocus();
-                              } else {
-                                _calendarFocusNode.unfocus();
-                              }
-                            },
+                                ],
+                              ),
+                            )
+                          : SprintSurface(
+                              key: ValueKey<String>('active-${active.id}'),
+                              backgroundColor: colors.primaryContainer,
+                              child: Row(
+                                children: [
+                                  CircleAvatar(
+                                    backgroundColor: colors.primary,
+                                    foregroundColor: colors.onPrimary,
+                                    child: const Icon(Icons.star_rounded),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          active.label,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            color: colors.onPrimaryContainer,
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 3),
+                                        AnimatedSwitcher(
+                                          duration: duration,
+                                          child: Text(
+                                            activeEmail.isNotEmpty
+                                                ? '$activeEmail · ${active.calendarId}'
+                                                : 'Google 계정 연결 필요 · ${active.calendarId}',
+                                            key: ValueKey<String>(
+                                              activeEmail.isNotEmpty
+                                                  ? activeEmail.toLowerCase()
+                                                  : 'unbound-${active.id}',
+                                            ),
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              color: colors.onPrimaryContainer,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                     ),
-                    const SizedBox(height: 16),
-                    FilledButton(
-                      onPressed: busy ? null : _save,
-                      style: FilledButton.styleFrom(
-                        minimumSize: const Size.fromHeight(54),
-                      ),
+                    AnimatedSize(
+                      duration: duration,
+                      curve: Curves.easeOutCubic,
                       child: AnimatedSwitcher(
                         duration: duration,
-                        child: busy
-                            ? const SizedBox(
-                                key: ValueKey<String>('saving'),
-                                width: 22,
-                                height: 22,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2.5,
+                        switchInCurve: Curves.easeOutCubic,
+                        switchOutCurve: Curves.easeInCubic,
+                        child: verificationMessage == null
+                            ? const SizedBox.shrink(
+                                key: ValueKey<String>(
+                                  'calendar-verification-idle',
                                 ),
                               )
-                            : const Text(
-                                '저장',
-                                key: ValueKey<String>('save'),
+                            : Padding(
+                                key: ValueKey<String>(
+                                  'calendar-verification-${calendarState.name}',
+                                ),
+                                padding: const EdgeInsets.only(top: 10),
+                                child: SprintSurface(
+                                  backgroundColor: verificationBackground,
+                                  child: Row(
+                                    children: [
+                                      AnimatedSwitcher(
+                                        duration: duration,
+                                        child: calendarState ==
+                                                SprintCalendarConnectionState
+                                                    .switching
+                                            ? SizedBox(
+                                                key: const ValueKey<String>(
+                                                  'calendar-verification-progress',
+                                                ),
+                                                width: 20,
+                                                height: 20,
+                                                child: CircularProgressIndicator(
+                                                  strokeWidth: 2.2,
+                                                  color:
+                                                      verificationForeground,
+                                                ),
+                                              )
+                                            : Icon(
+                                                verificationIcon,
+                                                key: ValueKey<String>(
+                                                  'calendar-verification-icon-${calendarState.name}',
+                                                ),
+                                                color: verificationForeground,
+                                              ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(
+                                          verificationMessage,
+                                          style: TextStyle(
+                                            color: verificationForeground,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
                       ),
+                    ),
+                    if (active != null) ...[
+                      const SizedBox(height: 10),
+                      OutlinedButton.icon(
+                        onPressed: _busy ? null : _syncActive,
+                        icon: AnimatedSwitcher(
+                          duration: duration,
+                          child: _busyProfileId == active.id
+                              ? const SizedBox(
+                                  key: ValueKey<String>('sync-busy'),
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.2,
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.sync_rounded,
+                                  key: ValueKey<String>('sync-ready'),
+                                ),
+                        ),
+                        label: Text(
+                          widget.store.calendarState ==
+                                  SprintCalendarConnectionState
+                                      .reauthenticationRequired
+                              ? '재인증하고 동기화'
+                              : '메인 캘린더 동기화',
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 22),
+                    Text(
+                      '저장된 캘린더',
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w900),
+                    ),
+                    const SizedBox(height: 10),
+                    AnimatedSize(
+                      duration: duration,
+                      curve: Curves.easeOutCubic,
+                      child: profiles.isEmpty
+                          ? SprintSurface(
+                              backgroundColor: colors.surfaceContainerHigh,
+                              child: const Text('저장된 캘린더가 없습니다.'),
+                            )
+                          : Column(
+                              children: [
+                                for (final profile in profiles)
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 10),
+                                    child: _SprintCalendarProfileCard(
+                                      profile: profile,
+                                      account: widget.store
+                                          .accountForProfile(profile.id),
+                                      active: profile.id ==
+                                          widget.store.activeCalendarProfileId,
+                                      busy: _busyProfileId == profile.id ||
+                                          widget.store.accountBusy,
+                                      duration: duration,
+                                      onActivate: _busy
+                                          ? null
+                                          : () => _switchProfile(profile),
+                                      onEdit: _busy
+                                          ? null
+                                          : () => _editProfile(profile),
+                                      onDelete: _busy
+                                          ? null
+                                          : () => _removeProfile(profile),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton.icon(
+                      onPressed: _busy
+                          ? null
+                          : () => _addProfile(
+                                forceAccountSelection: false,
+                              ),
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size.fromHeight(52),
+                      ),
+                      icon: const Icon(Icons.event_available_outlined),
+                      label: const Text('현재 Google 계정에 캘린더 추가'),
                     ),
                     const SizedBox(height: 10),
                     OutlinedButton.icon(
-                      onPressed: busy ? null : _sync,
+                      onPressed: _busy
+                          ? null
+                          : () => _addProfile(
+                                forceAccountSelection: true,
+                              ),
                       style: OutlinedButton.styleFrom(
                         minimumSize: const Size.fromHeight(52),
                       ),
-                      icon: busy
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2.2,
+                      icon: AnimatedSwitcher(
+                        duration: duration,
+                        child: _adding
+                            ? const SizedBox(
+                                key: ValueKey<String>('adding-account'),
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.2,
+                                ),
+                              )
+                            : const Icon(
+                                Icons.person_add_alt_1_rounded,
+                                key: ValueKey<String>('add-account'),
                               ),
-                            )
-                          : const Icon(Icons.sync_rounded),
-                      label: const Text('저장 후 동기화'),
+                      ),
+                      label: const Text('다른 Google 계정 추가'),
                     ),
                   ],
                 ),
@@ -1480,3 +1848,220 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
     );
   }
 }
+
+class _SprintCalendarProfileCard extends StatelessWidget {
+  const _SprintCalendarProfileCard({
+    required this.profile,
+    required this.account,
+    required this.active,
+    required this.busy,
+    required this.duration,
+    required this.onActivate,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  final SprintCalendarProfile profile;
+  final SprintGoogleAccount? account;
+  final bool active;
+  final bool busy;
+  final Duration duration;
+  final VoidCallback? onActivate;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final accountEmail = account?.email.trim() ?? '';
+    return AnimatedContainer(
+      duration: duration,
+      curve: Curves.easeOutCubic,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: active
+            ? colors.secondaryContainer
+            : colors.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: active ? colors.secondary : colors.outlineVariant,
+          width: active ? 1.6 : 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              AnimatedSwitcher(
+                duration: duration,
+                child: Icon(
+                  active ? Icons.star_rounded : Icons.calendar_month_outlined,
+                  key: ValueKey<bool>(active),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      profile.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                    const SizedBox(height: 3),
+                    AnimatedSwitcher(
+                      duration: duration,
+                      child: Text(
+                        accountEmail.isNotEmpty
+                            ? '$accountEmail · ${profile.calendarId}'
+                            : 'Google 계정 연결 필요 · ${profile.calendarId}',
+                        key: ValueKey<String>(
+                          accountEmail.isNotEmpty
+                              ? accountEmail.toLowerCase()
+                              : 'unbound-${profile.id}',
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: colors.onSurfaceVariant),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              AnimatedSwitcher(
+                duration: duration,
+                child: busy
+                    ? const SizedBox(
+                        key: ValueKey<String>('profile-busy'),
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2.2),
+                      )
+                    : IconButton(
+                        key: const ValueKey<String>('profile-edit'),
+                        tooltip: '표시 설정',
+                        onPressed: onEdit,
+                        icon: const Icon(Icons.edit_outlined),
+                      ),
+              ),
+              IconButton(
+                tooltip: '저장 목록에서 삭제',
+                onPressed: onDelete,
+                icon: const Icon(Icons.delete_outline_rounded),
+              ),
+            ],
+          ),
+          if (!active) ...[
+            const SizedBox(height: 10),
+            FilledButton.tonalIcon(
+              onPressed: onActivate,
+              icon: const Icon(Icons.swap_horiz_rounded),
+              label: const Text('메인으로 사용'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SprintCalendarProfileDraft {
+  const _SprintCalendarProfileDraft({
+    required this.label,
+    required this.calendarId,
+    required this.locked,
+  });
+
+  final String label;
+  final String calendarId;
+  final bool locked;
+}
+
+Future<_SprintCalendarProfileDraft?> _showSprintCalendarProfileEditor(
+  BuildContext context, {
+  SprintCalendarProfile? profile,
+  bool calendarIdReadOnly = false,
+}) async {
+  final labelController = TextEditingController(text: profile?.label ?? '');
+  final calendarController =
+      TextEditingController(text: profile?.calendarId ?? 'primary');
+  var locked = profile?.locked ?? false;
+  final result = await sprintShowDialog<_SprintCalendarProfileDraft>(
+    context: context,
+    builder: (dialogContext) {
+      return StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            title: Text(profile == null ? '캘린더 추가' : '캘린더 표시 설정'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: labelController,
+                    decoration: const InputDecoration(
+                      labelText: '캘린더 이름',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: calendarController,
+                    readOnly: calendarIdReadOnly || locked,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    decoration: const InputDecoration(
+                      labelText: 'Google Calendar ID',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  SwitchListTile.adaptive(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Calendar ID 잠금'),
+                    value: locked,
+                    onChanged: (value) => setState(() => locked = value),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('취소'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final calendarId = calendarController.text.trim();
+                  if (calendarId.isEmpty) {
+                    sprintShowMessage(
+                      context: context,
+                      message: 'Google Calendar ID를 입력하세요.',
+                      danger: true,
+                    );
+                    return;
+                  }
+                  Navigator.of(dialogContext).pop(
+                    _SprintCalendarProfileDraft(
+                      label: labelController.text.trim(),
+                      calendarId: calendarId,
+                      locked: locked,
+                    ),
+                  );
+                },
+                child: const Text('확인'),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+  labelController.dispose();
+  calendarController.dispose();
+  return result;
+}
+

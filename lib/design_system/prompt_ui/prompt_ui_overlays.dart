@@ -113,12 +113,16 @@ Future<DateTime?> showPromptDatePicker({
 Future<TimeOfDay?> showPromptTimePicker({
   required BuildContext context,
   required TimeOfDay initialTime,
+  TransitionBuilder? builder,
 }) {
   return showTimePicker(
     context: context,
     initialTime: initialTime,
     builder: (pickerContext, child) {
-      return PromptUiScope(child: child ?? const SizedBox.shrink());
+      final scoped = PromptUiScope(
+        child: child ?? const SizedBox.shrink(),
+      );
+      return builder == null ? scoped : builder(pickerContext, scoped);
     },
   );
 }

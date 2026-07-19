@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+
 class InputLocationField extends StatelessWidget {
   final TextEditingController controller;
   final bool readOnly;
@@ -14,36 +16,23 @@ class InputLocationField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final theme = Theme.of(context).textTheme;
-    final screenWidth = MediaQuery.of(context).size.width;
-
-    final isEmpty = controller.text.trim().isEmpty;
-
+    final tokens = PromptUiTheme.of(context);
+    final screenWidth = MediaQuery.sizeOf(context).width;
     return SizedBox(
       width: screenWidth * widthFactor,
       child: TextField(
         controller: controller,
-        readOnly: true, 
+        readOnly: true,
         textAlign: TextAlign.center,
-        style: theme.bodyLarge?.copyWith(
-          fontSize: 18,
-          fontWeight: FontWeight.w900,
-          color: isEmpty ? cs.onSurfaceVariant : cs.onSurface,
-        ),
-        decoration: InputDecoration(
-          hintText: isEmpty ? '미지정' : null,
-          hintStyle: theme.bodyLarge?.copyWith(
-            fontSize: 18,
-            fontWeight: FontWeight.w800,
-            color: cs.onSurfaceVariant,
-          ),
-          enabledBorder: UnderlineInputBorder(
-            borderSide: BorderSide(color: cs.onSurface, width: 2.0),
-          ),
-          focusedBorder: UnderlineInputBorder(
-            borderSide: BorderSide(color: cs.primary, width: 2.2),
-          ),
+        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: controller.text.trim().isEmpty
+                  ? tokens.textSecondary
+                  : tokens.textPrimary,
+              fontWeight: FontWeight.w800,
+            ),
+        decoration: const InputDecoration(
+          labelText: '선택된 주차 구역',
+          prefixIcon: Icon(Icons.local_parking_rounded),
         ),
       ),
     );

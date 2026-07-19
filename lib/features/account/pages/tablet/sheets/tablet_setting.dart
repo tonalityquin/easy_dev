@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../../../app/utils/snackbar_helper.dart';
 import '../../../../../shared/auth/five_digit_password_generator.dart';
 import '../../../../../shared/secondary/widgets/ops_console_widgets.dart';
 import '../../../domain/models/tablet/tablet_model.dart';
@@ -98,7 +99,11 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
   Future<void> _copyPassword() async {
     await Clipboard.setData(ClipboardData(text: _passwordController.text));
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('태블릿 비밀번호를 복사했습니다.')));
+    showSelectedSnackbar(
+      context,
+      '태블릿 비밀번호를 복사했습니다.',
+      usePromptUi: true,
+    );
   }
 
   void _handleSave() {
@@ -160,7 +165,6 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
             decoration: opsInputDecoration(
               context,
               label: '태블릿 아이디',
-              helperText: '계정 ID는 저장 경로에 사용됩니다.',
               prefixIcon: const Icon(Icons.alternate_email_rounded),
               errorText: _errorMessage == '아이디는 소문자 영어 3~20자로 입력하세요' ? _errorMessage : null,
             ),

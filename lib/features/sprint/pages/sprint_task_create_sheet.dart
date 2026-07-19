@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../shared/google_calendar/google_event_colors.dart';
 import '../application/sprint_mode_store.dart';
 import '../domain/sprint_models.dart';
 import 'sprint_ui.dart';
@@ -10,14 +11,11 @@ Future<SprintTask?> showSprintTaskCreateSheet({
   required DateTime initialDate,
   String? initialProjectId,
 }) {
-  final colors = Theme.of(context).colorScheme;
-  return showModalBottomSheet<SprintTask>(
+  return sprintShowBottomSheet<SprintTask>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
     showDragHandle: true,
-    backgroundColor: colors.surface,
-    barrierColor: colors.scrim,
     builder: (_) => _SprintTaskCreateSheet(
       store: store,
       initialDate: initialDate,
@@ -44,6 +42,7 @@ class _SprintTaskCreateSheet extends StatefulWidget {
 
 class _SprintTaskCreateSheetState extends State<_SprintTaskCreateSheet> {
   final TextEditingController _titleController = TextEditingController();
+  final TextEditingController _descriptionController = TextEditingController();
   final FocusNode _titleFocusNode = FocusNode();
   late DateTime _startDate;
   late DateTime _endDate;
@@ -54,21 +53,18 @@ class _SprintTaskCreateSheetState extends State<_SprintTaskCreateSheet> {
   @override
   void initState() {
     super.initState();
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
     final requested = DateTime(
       widget.initialDate.year,
       widget.initialDate.month,
       widget.initialDate.day,
     );
     _projectId = widget.store.preferredTaskProjectId(widget.initialProjectId);
-    final base = requested.isBefore(today) ? today : requested;
     final projectId = _projectId;
     _startDate = projectId == null
-        ? base
+        ? requested
         : widget.store.suggestedTaskStart(
             projectId: projectId,
-            date: base,
+            date: requested,
           );
     _endDate = _startDate;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -79,6 +75,7 @@ class _SprintTaskCreateSheetState extends State<_SprintTaskCreateSheet> {
   @override
   void dispose() {
     _titleController.dispose();
+    _descriptionController.dispose();
     _titleFocusNode.dispose();
     super.dispose();
   }
@@ -109,12 +106,10 @@ class _SprintTaskCreateSheetState extends State<_SprintTaskCreateSheet> {
 
   Future<void> _pickStartDate() async {
     final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final lower = widget.store.projectScheduleLowerBound(_projectId);
-    final firstDate = lower != null && lower.isAfter(today) ? lower : today;
+    final firstDate = DateTime(1900, 1, 1);
     var initial = _startDate;
     if (initial.isBefore(firstDate)) initial = firstDate;
-    final selected = await showDatePicker(
+    final selected = await sprintShowDatePicker(
       context: context,
       initialDate: initial,
       firstDate: firstDate,
@@ -132,7 +127,7 @@ class _SprintTaskCreateSheetState extends State<_SprintTaskCreateSheet> {
     final now = DateTime.now();
     var initial = _endDate;
     if (initial.isBefore(_startDate)) initial = _startDate;
-    final selected = await showDatePicker(
+    final selected = await sprintShowDatePicker(
       context: context,
       initialDate: initial,
       firstDate: _startDate,
@@ -156,6 +151,7 @@ class _SprintTaskCreateSheetState extends State<_SprintTaskCreateSheet> {
     }
     final preview = widget.store.previewTaskDetails(
       title: _titleController.text,
+      description: _descriptionController.text,
       projectId: projectId,
       priority: _priority,
       startDate: _startDate,
@@ -171,15 +167,7 @@ class _SprintTaskCreateSheetState extends State<_SprintTaskCreateSheet> {
     if (preview.hasHardConflict) {
       sprintShowMessage(
         context: context,
-        message: preview.conflicts.any(
-          (conflict) => conflict.type == SprintConflictType.beforeProjectStart,
-        )
-            ? '프로젝트 목표 시작일 이전에는 업무를 배치할 수 없습니다.'
-            : preview.conflicts.any(
-                (conflict) => conflict.type == SprintConflictType.pastDate,
-              )
-                ? '과거 날짜에는 새 업무를 배치할 수 없습니다.'
-                : '종료일은 시작일보다 빠를 수 없습니다.',
+        message: '종료일은 시작일보다 빠를 수 없습니다.',
       );
       return;
     }
@@ -209,6 +197,8 @@ class _SprintTaskCreateSheetState extends State<_SprintTaskCreateSheet> {
     final duration =
         reduceMotion ? Duration.zero : const Duration(milliseconds: 220);
     final projects = widget.store.projects;
+    final calendarProfile = widget.store.activeCalendarProfile;
+    final calendarAccount = widget.store.activeGoogleAccount;
     final project = widget.store.projectById(_projectId);
     final targetDate = project?.targetDate;
     final afterTarget = targetDate != null &&
@@ -239,6 +229,50 @@ class _SprintTaskCreateSheetState extends State<_SprintTaskCreateSheet> {
                         fontWeight: FontWeight.w900,
                       ),
                 ),
+                const SizedBox(height: 14),
+                AnimatedSwitcher(
+                  duration: duration,
+                  child: Container(
+                    key: ValueKey<String>(calendarProfile?.id ?? 'local-only'),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: colors.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          calendarProfile == null
+                              ? Icons.cloud_off_outlined
+                              : Icons.event_available_outlined,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Google 일정 대상',
+                                style: TextStyle(fontWeight: FontWeight.w900),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                calendarProfile == null
+                                    ? '연결된 캘린더가 없어 로컬에 저장합니다.'
+                                    : '${calendarProfile.label} · ${calendarAccount?.email ?? ''} · ${calendarProfile.calendarId}',
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: colors.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 18),
                 const Text(
                   '프로젝트',
@@ -264,6 +298,18 @@ class _SprintTaskCreateSheetState extends State<_SprintTaskCreateSheet> {
                                 width: itemWidth,
                                 child: Row(
                                   children: [
+                                    Container(
+                                      width: 12,
+                                      height: 12,
+                                      decoration: BoxDecoration(
+                                        color: googleEventColor(
+                                          project.googleColorId,
+                                          Theme.of(context).colorScheme.primary,
+                                        ),
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
                                     Icon(project.icon, size: 20),
                                     const SizedBox(width: 8),
                                     Expanded(
@@ -293,9 +339,33 @@ class _SprintTaskCreateSheetState extends State<_SprintTaskCreateSheet> {
                   controller: _titleController,
                   focusNode: _titleFocusNode,
                   enabled: !_saving,
-                  textInputAction: TextInputAction.done,
+                  textInputAction: TextInputAction.next,
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  '업무 내용',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 8),
+                AnimatedContainer(
+                  duration: duration,
+                  curve: Curves.easeOutCubic,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: TextField(
+                    controller: _descriptionController,
+                    enabled: !_saving,
+                    keyboardType: TextInputType.multiline,
+                    textInputAction: TextInputAction.newline,
+                    minLines: 3,
+                    maxLines: 8,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 16),

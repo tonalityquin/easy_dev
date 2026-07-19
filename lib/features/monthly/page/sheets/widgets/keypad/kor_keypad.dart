@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
 import 'kor_keypad/kor_0.dart';
 import 'kor_keypad/kor_1.dart';
 import 'kor_keypad/kor_2.dart';
@@ -11,12 +12,6 @@ import 'kor_keypad/kor_6.dart';
 import 'kor_keypad/kor_7.dart';
 import 'kor_keypad/kor_8.dart';
 import 'kor_keypad/kor_9.dart';
-
-const _korInk = Color(0xFF101828);
-const _korMuted = Color(0xFF667085);
-const _korLine = Color(0xFFD8DEE8);
-const _korPanel = Color(0xFFFFFFFF);
-const _korBlue = Color(0xFF2563EB);
 
 class KorKeypad extends StatefulWidget {
   final TextEditingController controller;
@@ -56,18 +51,47 @@ class _KorKeypadState extends State<KorKeypad> {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = PromptUiTheme.of(context);
+    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final layoutKey = activeSubLayout ?? 'main';
+
     return Semantics(
       container: true,
       label: '한글 키패드',
-      child: Container(
+      child: AnimatedContainer(
+        duration: reduceMotion ? Duration.zero : PromptUiMotion.component,
+        curve: PromptUiMotion.standard,
         padding: const EdgeInsets.all(12),
-        decoration: const BoxDecoration(
-          color: _korPanel,
-          border: Border(top: BorderSide(color: _korLine)),
+        decoration: BoxDecoration(
+          color: tokens.surface,
+          border: Border(top: BorderSide(color: tokens.borderSubtle)),
         ),
         child: SizedBox(
           height: widget.height,
-          child: activeSubLayout == null ? _buildMainLayout() : _buildActiveSubLayout(),
+          child: AnimatedSwitcher(
+            duration: reduceMotion ? Duration.zero : PromptUiMotion.layout,
+            reverseDuration: reduceMotion ? Duration.zero : PromptUiMotion.component,
+            switchInCurve: PromptUiMotion.enter,
+            switchOutCurve: PromptUiMotion.exit,
+            layoutBuilder: (currentChild, previousChildren) {
+              return Stack(
+                alignment: Alignment.center,
+                children: [
+                  ...previousChildren,
+                  if (currentChild != null) currentChild,
+                ],
+              );
+            },
+            transitionBuilder: (child, animation) {
+              return FadeTransition(opacity: animation, child: child);
+            },
+            child: KeyedSubtree(
+              key: ValueKey<String>(layoutKey),
+              child: activeSubLayout == null
+                  ? _buildMainLayout()
+                  : _buildActiveSubLayout(),
+            ),
+          ),
         ),
       ),
     );
@@ -81,23 +105,33 @@ class _KorKeypadState extends State<KorKeypad> {
       ['공란', 'ㅎ', '지움'],
     ];
     return Column(
-      children: rows.map((row) {
+      children: List.generate(rows.length, (rowIndex) {
+        final row = rows[rowIndex];
         return Expanded(
           child: Row(
-            children: row.map((label) {
+            children: List.generate(row.length, (columnIndex) {
+              final label = row[columnIndex];
               return Expanded(
                 child: Padding(
                   padding: const EdgeInsets.all(4),
-                  child: _KorMainButton(
+                  child: _PromptKoreanMainKey(
                     label: label,
+                    kind: label == '지움'
+                        ? _KoreanMainKeyKind.destructive
+                        : label == '공란'
+                            ? _KoreanMainKeyKind.utility
+                            : _KoreanMainKeyKind.standard,
+                    entranceDelay: Duration(
+                      milliseconds: (rowIndex * 3 + columnIndex) * 18,
+                    ),
                     onTap: () => _handleMainKeyTap(label),
                   ),
                 ),
               );
-            }).toList(),
+            }),
           ),
         );
-      }).toList(),
+      }),
     );
   }
 
@@ -151,36 +185,170 @@ class _KorKeypadState extends State<KorKeypad> {
       Future.microtask(() => widget.onComplete?.call());
       return;
     }
-    setState(() => widget.controller.text += key);
+    widget.controller.text += key;
     Future.microtask(() => widget.onComplete?.call());
   }
 }
 
-class _KorMainButton extends StatelessWidget {
-  const _KorMainButton({required this.label, required this.onTap});
+enum _KoreanMainKeyKind {
+  standard,
+  utility,
+  destructive,
+}
+
+class _PromptKoreanMainKey extends StatefulWidget {
+  const _PromptKoreanMainKey({
+    required this.label,
+    required this.kind,
+    required this.entranceDelay,
+    required this.onTap,
+  });
 
   final String label;
+  final _KoreanMainKeyKind kind;
+  final Duration entranceDelay;
   final VoidCallback onTap;
 
   @override
+  State<_PromptKoreanMainKey> createState() => _PromptKoreanMainKeyState();
+}
+
+class _PromptKoreanMainKeyState extends State<_PromptKoreanMainKey> {
+  bool _pressed = false;
+  bool _hovered = false;
+  bool _focused = false;
+  bool? _pendingPressed;
+  bool? _pendingHovered;
+  bool? _pendingFocused;
+  bool _interactionUpdateScheduled = false;
+
+  void _queueInteraction({
+    bool? pressed,
+    bool? hovered,
+    bool? focused,
+  }) {
+    if (pressed != null) _pendingPressed = pressed;
+    if (hovered != null) _pendingHovered = hovered;
+    if (focused != null) _pendingFocused = focused;
+    if (_interactionUpdateScheduled) return;
+    _interactionUpdateScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _interactionUpdateScheduled = false;
+      if (!mounted) return;
+      final nextPressed = _pendingPressed;
+      final nextHovered = _pendingHovered;
+      final nextFocused = _pendingFocused;
+      _pendingPressed = null;
+      _pendingHovered = null;
+      _pendingFocused = null;
+      if ((nextPressed == null || nextPressed == _pressed) &&
+          (nextHovered == null || nextHovered == _hovered) &&
+          (nextFocused == null || nextFocused == _focused)) {
+        return;
+      }
+      setState(() {
+        if (nextPressed != null) _pressed = nextPressed;
+        if (nextHovered != null) _hovered = nextHovered;
+        if (nextFocused != null) _focused = nextFocused;
+      });
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final utility = label == '공란' || label == '지움';
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        alignment: Alignment.center,
+    final tokens = PromptUiTheme.of(context);
+    final textTheme = Theme.of(context).textTheme;
+    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final baseBackground = switch (widget.kind) {
+      _KoreanMainKeyKind.standard => tokens.surfaceRaised,
+      _KoreanMainKeyKind.utility => tokens.accentContainer,
+      _KoreanMainKeyKind.destructive => tokens.dangerContainer,
+    };
+    final foreground = switch (widget.kind) {
+      _KoreanMainKeyKind.standard => tokens.textPrimary,
+      _KoreanMainKeyKind.utility => tokens.onAccentContainer,
+      _KoreanMainKeyKind.destructive => tokens.onDangerContainer,
+    };
+    final background = _pressed
+        ? tokens.surfaceSelected
+        : _hovered
+            ? Color.alphaBlend(
+                tokens.accent.withOpacity(tokens.isDark ? 0.16 : 0.09),
+                baseBackground,
+              )
+            : baseBackground;
+    final borderColor = _focused
+        ? tokens.focusRing
+        : widget.kind == _KoreanMainKeyKind.standard
+            ? tokens.accent.withOpacity(tokens.isDark ? 0.34 : 0.22)
+            : widget.kind == _KoreanMainKeyKind.destructive
+                ? tokens.danger.withOpacity(tokens.isDark ? 0.48 : 0.34)
+                : tokens.borderSubtle;
+
+    return Semantics(
+      button: true,
+      label: widget.label,
+      child: AnimatedContainer(
+        duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
+        curve: PromptUiMotion.standard,
         decoration: BoxDecoration(
-          color: utility ? const Color(0xFFF1F5F9) : const Color(0xFFF8FAFC),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: utility ? _korLine : _korBlue.withOpacity(.18)),
+          color: background,
+          borderRadius: BorderRadius.circular(PromptUiShapes.button),
+          border: Border.all(
+            color: borderColor,
+            width: _focused ? 2 : 1,
+          ),
+          boxShadow: [
+            if (_hovered)
+              BoxShadow(
+                color: tokens.shadow,
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+          ],
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: utility ? _korMuted : _korInk,
-            fontWeight: FontWeight.w900,
-            fontSize: utility ? 14 : 20,
+        child: Material(
+          color: tokens.transparent,
+          borderRadius: BorderRadius.circular(PromptUiShapes.button),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: widget.onTap,
+            onHighlightChanged: (value) => _queueInteraction(pressed: value),
+            onHover: (value) => _queueInteraction(hovered: value),
+            onFocusChange: (value) => _queueInteraction(focused: value),
+            child: Center(
+              child: TweenAnimationBuilder<double>(
+                tween: Tween<double>(begin: reduceMotion ? 1 : 0, end: 1),
+                duration: reduceMotion
+                    ? Duration.zero
+                    : PromptUiMotion.component + widget.entranceDelay,
+                curve: PromptUiMotion.enter,
+                builder: (context, progress, child) {
+                  return Opacity(
+                    opacity: progress,
+                    child: Transform.translate(
+                      offset: Offset(0, 5 * (1 - progress)),
+                      child: child,
+                    ),
+                  );
+                },
+                child: AnimatedScale(
+                  scale: _pressed ? 0.92 : 1,
+                  duration: reduceMotion ? Duration.zero : PromptUiMotion.press,
+                  curve: PromptUiMotion.enter,
+                  child: Text(
+                    widget.label,
+                    style: (widget.kind == _KoreanMainKeyKind.standard
+                            ? textTheme.titleLarge
+                            : textTheme.labelLarge)
+                        ?.copyWith(
+                      color: foreground,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
         ),
       ),

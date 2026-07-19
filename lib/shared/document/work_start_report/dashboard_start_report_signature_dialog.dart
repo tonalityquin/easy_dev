@@ -4,8 +4,10 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
+import '../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
+
 import 'dashboard_start_report_signature_painter.dart';
-import 'dashboard_start_report_styles.dart';
 
 class SignatureResult {
   SignatureResult({required this.pngBytes, required this.signDateTime});
@@ -41,52 +43,45 @@ class _SignatureFullScreenDialogState extends State<SignatureFullScreenDialog> {
     _signDateTime = widget.initialDateTime;
   }
 
-  bool get _hasAny => _points.any((p) => p != null);
+  bool get _hasAny => _points.any((point) => point != null);
 
   void _clear() {
-    setState(() => _points.clear());
+    if (!_hasAny) return;
+    setState(_points.clear);
   }
 
   void _undo() {
     if (_points.isEmpty) return;
-
-    int i = _points.length - 1;
-    if (_points[i] == null) {
-      _points.removeAt(i);
-      i--;
+    int index = _points.length - 1;
+    if (_points[index] == null) {
+      _points.removeAt(index);
+      index--;
     }
-    while (i >= 0 && _points[i] != null) {
-      _points.removeAt(i);
-      i--;
+    while (index >= 0 && _points[index] != null) {
+      _points.removeAt(index);
+      index--;
     }
-    if (i >= 0 && _points[i] == null) {
-      _points.removeAt(i);
+    if (index >= 0 && _points[index] == null) {
+      _points.removeAt(index);
     }
     setState(() {});
   }
 
   Future<void> _save() async {
+    if (!_hasAny) return;
     try {
-      setState(() {
-        _signDateTime = DateTime.now();
-      });
-      await Future.delayed(const Duration(milliseconds: 16));
-
-      final boundary = _boundaryKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
-      if (boundary == null) {
-        return;
-      }
-
-      final ui.Image image = await boundary.toImage(pixelRatio: 3.0);
+      setState(() => _signDateTime = DateTime.now());
+      await Future<void>.delayed(const Duration(milliseconds: 16));
+      if (!mounted) return;
+      final boundary =
+          _boundaryKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+      if (boundary == null) return;
+      final image = await boundary.toImage(pixelRatio: 3);
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      if (byteData == null) {
-        return;
-      }
-
-      final png = byteData.buffer.asUint8List();
+      if (byteData == null || !mounted) return;
       Navigator.of(context).pop(
         SignatureResult(
-          pngBytes: png,
+          pngBytes: byteData.buffer.asUint8List(),
           signDateTime: _signDateTime!,
         ),
       );
@@ -95,166 +90,171 @@ class _SignatureFullScreenDialogState extends State<SignatureFullScreenDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
-    final name = widget.name.isEmpty ? '이름 미입력' : widget.name;
-    final timeText = _signDateTime == null ? '서명 전' : _fmtCompact(_signDateTime!);
-
-    final penColor = cs.onSurface;
-    final padBg = cs.surface;
+    final tokens = PromptUiTheme.of(context);
+    final name = widget.name.trim().isEmpty ? '이름 미입력' : widget.name.trim();
+    final timeText =
+        _signDateTime == null ? '서명 전' : _fmtCompact(_signDateTime!);
 
     return Material(
-      color: cs.scrim.withOpacity(0.55),
+      color: tokens.canvas,
       child: SafeArea(
         child: Scaffold(
-          backgroundColor: cs.surface,
+          backgroundColor: tokens.canvas,
           appBar: AppBar(
-            backgroundColor: cs.surface,
-            foregroundColor: cs.onSurface,
             title: const Text('전자서명'),
             centerTitle: true,
-            elevation: 0,
-            surfaceTintColor: Colors.transparent,
-            shape: Border(
-              bottom: BorderSide(color: cs.outlineVariant.withOpacity(0.9), width: 1),
-            ),
-            leading: IconButton(
-              icon: const Icon(Icons.close),
-              onPressed: () => Navigator.of(context).pop(),
-              tooltip: '닫기',
+            leadingWidth: 58,
+            leading: Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: PromptIconButton(
+                icon: Icons.close_rounded,
+                tooltip: '닫기',
+                onPressed: () => Navigator.of(context).pop(),
+                haptic: PromptHaptic.selection,
+                size: 40,
+              ),
             ),
             actions: [
-              IconButton(
+              PromptIconButton(
+                icon: Icons.layers_clear_rounded,
                 tooltip: '지우기',
-                onPressed: _clear,
-                icon: const Icon(Icons.layers_clear),
+                onPressed: _hasAny ? _clear : null,
+                haptic: PromptHaptic.selection,
+                size: 40,
               ),
-              IconButton(
+              const SizedBox(width: 6),
+              PromptIconButton(
+                icon: Icons.undo_rounded,
                 tooltip: '되돌리기',
-                onPressed: _undo,
-                icon: const Icon(Icons.undo),
+                onPressed: _hasAny ? _undo : null,
+                haptic: PromptHaptic.selection,
+                size: 40,
               ),
-              const SizedBox(width: 4),
+              const SizedBox(width: 8),
             ],
+            shape: Border(
+              bottom: BorderSide(color: tokens.borderSubtle),
+            ),
           ),
           body: Column(
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
-                decoration: BoxDecoration(
-                  color: cs.surface,
-                  border: Border(
-                    bottom: BorderSide(color: cs.outlineVariant.withOpacity(0.6)),
+              PromptAnimatedReveal(
+                offset: const Offset(0, .02),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                  decoration: BoxDecoration(
+                    color: tokens.surface,
+                    border: Border(
+                      bottom: BorderSide(color: tokens.borderSubtle),
+                    ),
                   ),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Row(
-                        children: [
-                          Icon(Icons.person_outline, size: 18, color: cs.onSurfaceVariant),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              '서명자: $name',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              softWrap: false,
-                              style: textTheme.bodyMedium?.copyWith(color: cs.onSurface),
-                            ),
-                          ),
-                        ],
+                  child: Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      _MetadataChip(
+                        icon: Icons.person_outline_rounded,
+                        label: '서명자',
+                        value: name,
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Row(
-                        children: [
-                          Icon(Icons.access_time, size: 18, color: cs.onSurfaceVariant),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              '서명 일시: $timeText',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              softWrap: false,
-                              style: textTheme.bodyMedium?.copyWith(color: cs.onSurface),
-                            ),
-                          ),
-                        ],
+                      _MetadataChip(
+                        icon: Icons.access_time_rounded,
+                        label: '서명 일시',
+                        value: timeText,
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    TextButton.icon(
-                      onPressed: () => setState(() => _signDateTime = DateTime.now()),
-                      icon: const Icon(Icons.schedule),
-                      label: const Text('지금'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: cs.primary,
+                      PromptButton(
+                        label: '현재 시각',
+                        icon: Icons.schedule_rounded,
+                        onPressed: () =>
+                            setState(() => _signDateTime = DateTime.now()),
+                        variant: PromptButtonVariant.tertiary,
+                        haptic: PromptHaptic.selection,
+                        minHeight: 42,
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.all(12),
-                  child: RepaintBoundary(
-                    key: _boundaryKey,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
+                  child: PromptAnimatedReveal(
+                    delay: const Duration(milliseconds: 60),
+                    offset: const Offset(0, .025),
+                    child: RepaintBoundary(
+                      key: _boundaryKey,
                       child: DecoratedBox(
                         decoration: BoxDecoration(
-                          color: padBg,
-                          border: Border.all(color: cs.outlineVariant.withOpacity(0.8)),
-                          borderRadius: BorderRadius.circular(12),
+                          color: tokens.surfaceRaised,
+                          borderRadius:
+                              BorderRadius.circular(PromptUiShapes.card),
+                          border: Border.all(color: tokens.borderSubtle),
+                          boxShadow: [
+                            BoxShadow(
+                              color: tokens.shadow,
+                              blurRadius: 18,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
                         ),
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            return GestureDetector(
-                              behavior: HitTestBehavior.translucent,
-                              onPanStart: (d) => setState(() => _points.add(d.localPosition)),
-                              onPanUpdate: (d) => setState(() => _points.add(d.localPosition)),
-                              onPanEnd: (_) => setState(() => _points.add(null)),
-                              child: CustomPaint(
-                                painter: SignaturePainter(
-                                  points: _points,
-                                  strokeWidth: _strokeWidth,
-                                  color: penColor,
-                                  background: padBg,
-                                  overlayName: name,
-                                  overlayDateText: timeText,
-                                ),
-                                child: const SizedBox.expand(),
+                        child: ClipRRect(
+                          borderRadius:
+                              BorderRadius.circular(PromptUiShapes.card),
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onPanStart: (details) => setState(
+                              () => _points.add(details.localPosition),
+                            ),
+                            onPanUpdate: (details) => setState(
+                              () => _points.add(details.localPosition),
+                            ),
+                            onPanEnd: (_) => setState(() => _points.add(null)),
+                            child: CustomPaint(
+                              painter: SignaturePainter(
+                                points: _points,
+                                strokeWidth: _strokeWidth,
+                                color: tokens.textPrimary,
+                                background: tokens.surfaceRaised,
+                                overlayName: name,
+                                overlayDateText: timeText,
+                                guideColor: tokens.borderSubtle,
+                                hintColor: tokens.textSecondary,
+                                overlayTextColor: tokens.textSecondary,
                               ),
-                            );
-                          },
+                              child: const SizedBox.expand(),
+                            ),
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              SafeArea(
+                top: false,
+                minimum: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                 child: Row(
                   children: [
                     Expanded(
-                      child: OutlinedButton.icon(
+                      child: PromptButton(
+                        label: '취소',
+                        icon: Icons.cancel_outlined,
                         onPressed: () => Navigator.of(context).pop(),
-                        icon: const Icon(Icons.cancel_outlined),
-                        label: const Text('취소'),
-                        style: DashboardReportButtonStyles.outlined(context),
+                        variant: PromptButtonVariant.tertiary,
+                        expand: true,
+                        haptic: PromptHaptic.selection,
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: ElevatedButton.icon(
+                      child: PromptButton(
+                        label: '저장',
+                        icon: Icons.save_alt_rounded,
                         onPressed: _hasAny ? _save : null,
-                        icon: const Icon(Icons.save_alt),
-                        label: const Text('저장'),
-                        style: DashboardReportButtonStyles.primary(context),
+                        expand: true,
+                        haptic: PromptHaptic.medium,
                       ),
                     ),
                   ],
@@ -267,12 +267,57 @@ class _SignatureFullScreenDialogState extends State<SignatureFullScreenDialog> {
     );
   }
 
-  String _fmtCompact(DateTime dt) {
-    final y = dt.year.toString().padLeft(4, '0');
-    final m = dt.month.toString().padLeft(2, '0');
-    final d = dt.day.toString().padLeft(2, '0');
-    final hh = dt.hour.toString().padLeft(2, '0');
-    final mm = dt.minute.toString().padLeft(2, '0');
-    return '$y-$m-$d $hh:$mm';
+  String _fmtCompact(DateTime dateTime) {
+    final year = dateTime.year.toString().padLeft(4, '0');
+    final month = dateTime.month.toString().padLeft(2, '0');
+    final day = dateTime.day.toString().padLeft(2, '0');
+    final hour = dateTime.hour.toString().padLeft(2, '0');
+    final minute = dateTime.minute.toString().padLeft(2, '0');
+    return '$year-$month-$day $hour:$minute';
+  }
+}
+
+class _MetadataChip extends StatelessWidget {
+  const _MetadataChip({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PromptUiTheme.of(context);
+    final textTheme = Theme.of(context).textTheme;
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 280),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: tokens.surfaceOverlay,
+        borderRadius: BorderRadius.circular(PromptUiShapes.control),
+        border: Border.all(color: tokens.borderSubtle),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: tokens.iconSecondary),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              '$label: $value',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: textTheme.bodyMedium?.copyWith(
+                color: tokens.textPrimary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

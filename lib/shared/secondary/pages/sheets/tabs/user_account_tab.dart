@@ -4,6 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../../app/utils/status_dialog.dart';
+import '../../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../widgets/ops_console_widgets.dart';
 
 
 class _UserAccountsTabCounts {
@@ -220,6 +222,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
         title: activeTitle,
         description:
             '선택한 지역의 활성 계정 한도에 도달했습니다. 활성 계정은 최대 ${activeLimit}개까지만 사용할 수 있습니다. 기존 활성 계정을 비활성화하거나 리밋 설정에서 활성 한도를 늘린 뒤 다시 시도하세요.',
+        usePromptUi: true,
       );
       return;
     }
@@ -231,6 +234,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
         title: totalTitle,
         description:
             '선택한 지역의 전체 계정 생성 한도에 도달했습니다. 활성 계정과 비활성 계정을 합쳐 최대 ${totalLimit}개까지만 생성할 수 있습니다. 기존 계정을 삭제하거나 리밋 설정에서 전체 한도를 늘린 뒤 다시 시도하세요.',
+        usePromptUi: true,
       );
       return;
     }
@@ -239,6 +243,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
       context,
       title: fallbackTitle,
       description: '계정 정보를 저장하는 중 문제가 발생했습니다. 입력값과 네트워크 상태를 확인한 뒤 다시 시도하세요.',
+      usePromptUi: true,
     );
   }
 
@@ -533,6 +538,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
       await StatusDialog.showSuccess(
         context,
         title: StatusDialog.userAccountSaveSuccess,
+        usePromptUi: true,
       );
 
       if (!mounted) return;
@@ -557,7 +563,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
   Future<void> _openCreateDialog(List<String> divisionList) async {
     if (_creating) return;
 
-    final draft = await showDialog<_CreateUserAccountDraft>(
+    final draft = await showPromptOverlayDialog<_CreateUserAccountDraft>(
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) => _CreateUserAccountDialog(
@@ -650,6 +656,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
       await StatusDialog.showSuccess(
         context,
         title: StatusDialog.userAccountSaveSuccess,
+        usePromptUi: true,
       );
 
       if (!mounted) return;
@@ -745,7 +752,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
                                 ActionChip(
                                   label: const Text('+ 추가'),
                                   onPressed: () async {
-                                    final toAdd = await showDialog<String>(
+                                    final toAdd = await showPromptOverlayDialog<String>(
                                       context: context,
                                       builder: (_) => SimpleDialog(
                                         title: const Text('Division 추가'),
@@ -798,7 +805,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
                                       List<String>.from(updated['divisions']),
                                     );
                                     if (!mounted) return;
-                                    final toAdd = await showDialog<String>(
+                                    final toAdd = await showPromptOverlayDialog<String>(
                                       context: context,
                                       builder: (_) => SimpleDialog(
                                         title: const Text('Area 추가'),
@@ -1173,12 +1180,9 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
   Future<void> _pickTime(String day, {required bool isStart}) async {
     final current = isStart ? _startByDay[day] : _endByDay[day];
     final initial = current ?? (isStart ? const TimeOfDay(hour: 9, minute: 0) : const TimeOfDay(hour: 18, minute: 0));
-    final picked = await showTimePicker(
+    final picked = await showPromptTimePicker(
       context: context,
       initialTime: initial,
-      helpText: isStart ? '$day 출근 시간' : '$day 퇴근 시간',
-      confirmText: '확인',
-      cancelText: '취소',
       builder: (ctx, child) {
         final mq = MediaQuery.of(ctx);
         return MediaQuery(
@@ -1277,9 +1281,9 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
       keyboardType: keyboardType,
       readOnly: readOnly,
       onChanged: onChanged,
-      decoration: InputDecoration(
-        labelText: label,
-        border: const OutlineInputBorder(),
+      decoration: opsInputDecoration(
+        context,
+        label: label,
         suffixIcon: suffixIcon,
       ),
     );
@@ -1440,9 +1444,10 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
                 value: _selectedDivision,
-                decoration: const InputDecoration(
-                  labelText: '회사',
-                  border: OutlineInputBorder(),
+                decoration: opsInputDecoration(
+                  context,
+                  label: '회사',
+                  prefixIcon: const Icon(Icons.business_rounded),
                 ),
                 items: widget.divisionList
                     .map((division) => DropdownMenuItem<String>(

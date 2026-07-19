@@ -10,11 +10,9 @@ class SprintSchedulingEngine {
     String? projectId,
     String? taskId,
     DateTime? notBefore,
-    bool allowPastDate = false,
   }) {
     final startDay = _day(start);
     final endDay = _exclusiveEndToInclusiveDay(end);
-    final today = _day(DateTime.now());
     final conflicts = <SprintScheduleConflict>[];
     if (endDay.isBefore(startDay)) {
       conflicts.add(
@@ -23,19 +21,6 @@ class SprintSchedulingEngine {
           type: SprintConflictType.invalidDateRange,
           title: '날짜 범위 오류',
           description: '종료일은 시작일보다 빠를 수 없습니다.',
-          projectId: projectId,
-          taskId: taskId,
-          blockId: ignoringBlockId,
-        ),
-      );
-    }
-    if (!allowPastDate && startDay.isBefore(today)) {
-      conflicts.add(
-        SprintScheduleConflict(
-          id: _conflictId('past-date', ignoringBlockId, startDay, endDay),
-          type: SprintConflictType.pastDate,
-          title: '과거 날짜',
-          description: '오늘보다 이전 날짜에는 새 업무를 배치할 수 없습니다.',
           projectId: projectId,
           taskId: taskId,
           blockId: ignoringBlockId,

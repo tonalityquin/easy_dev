@@ -1,26 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../../../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
 import '../../../application/monthly_plate_field.dart';
+import '../../widgets/monthly_prompt_ui.dart';
 import '../monthly_region_bottom_sheet.dart';
 
-const _plateInk = Color(0xFF101828);
-const _plateMuted = Color(0xFF667085);
-const _platePanel = Color(0xFFFFFFFF);
-const _plateLine = Color(0xFFD8DEE8);
-const _plateBlue = Color(0xFF2563EB);
-
 class MonthlyPlateSection extends StatelessWidget {
-  final String dropdownValue;
-  final List<String> regions;
-  final TextEditingController controllerFrontDigit;
-  final TextEditingController controllerMidDigit;
-  final TextEditingController controllerBackDigit;
-  final TextEditingController activeController;
-  final ValueChanged<TextEditingController> onKeypadStateChanged;
-  final ValueChanged<String> onRegionChanged;
-  final bool isThreeDigit;
-  final bool isEditMode;
-
   const MonthlyPlateSection({
     super.key,
     required this.dropdownValue,
@@ -35,105 +21,55 @@ class MonthlyPlateSection extends StatelessWidget {
     this.isEditMode = false,
   });
 
+  final String dropdownValue;
+  final List<String> regions;
+  final TextEditingController controllerFrontDigit;
+  final TextEditingController controllerMidDigit;
+  final TextEditingController controllerBackDigit;
+  final TextEditingController activeController;
+  final ValueChanged<TextEditingController> onKeypadStateChanged;
+  final ValueChanged<String> onRegionChanged;
+  final bool isThreeDigit;
+  final bool isEditMode;
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: _platePanel,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _plateLine),
-      ),
+    final tokens = PromptUiTheme.of(context);
+    final textTheme = Theme.of(context).textTheme;
+
+    return MonthlyPromptSection(
+      title: '차량 식별',
+      subtitle: '번호판 지역과 차량번호를 입력합니다.',
+      icon: Icons.directions_car_filled_outlined,
+      trailing: isEditMode
+          ? const MonthlyPromptBadge(
+              label: '잠김',
+              icon: Icons.lock_outline_rounded,
+              tone: MonthlyPromptMessageTone.warning,
+            )
+          : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEFF6FF),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(Icons.directions_car_filled_outlined, color: _plateBlue, size: 19),
-              ),
-              const SizedBox(width: 10),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '차량 식별',
-                      style: TextStyle(color: _plateInk, fontWeight: FontWeight.w900, fontSize: 16),
-                    ),
-                    SizedBox(height: 2),
-                    Text(
-                      '지역과 번호판을 입력합니다.',
-                      style: TextStyle(color: _plateMuted, fontWeight: FontWeight.w700, fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-              if (isEditMode)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: _plateLine),
-                  ),
-                  child: const Text(
-                    '잠김',
-                    style: TextStyle(color: _plateMuted, fontWeight: FontWeight.w900, fontSize: 12),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Semantics(
-                button: true,
-                enabled: !isEditMode,
-                label: '번호판 지역 선택: $dropdownValue',
-                child: InkWell(
-                  onTap: isEditMode
+              SizedBox(
+                width: 116,
+                child: PromptButton(
+                  label: dropdownValue,
+                  icon: Icons.place_outlined,
+                  variant: PromptButtonVariant.secondary,
+                  haptic: PromptHaptic.selection,
+                  minHeight: 54,
+                  onPressed: isEditMode
                       ? null
-                      : () {
-                          monthlyRegionPickerBottomSheet(
+                      : () => monthlyRegionPickerBottomSheet(
                             context: context,
                             selectedRegion: dropdownValue,
                             regions: regions,
                             onConfirm: onRegionChanged,
-                          );
-                        },
-                  borderRadius: BorderRadius.circular(14),
-                  child: Container(
-                    width: 112,
-                    height: 54,
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: isEditMode ? const Color(0xFFEFF2F7) : const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: _plateLine),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.place_outlined, color: _plateMuted, size: 18),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            dropdownValue,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(color: _plateInk, fontWeight: FontWeight.w900),
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
                 ),
               ),
               const SizedBox(width: 10),
@@ -154,9 +90,25 @@ class MonthlyPlateSection extends StatelessWidget {
           ),
           if (isEditMode) ...[
             const SizedBox(height: 10),
-            const Text(
-              '번호판 변경이 필요하면 기존 정기권을 삭제한 뒤 새로 등록하세요.',
-              style: TextStyle(color: _plateMuted, fontWeight: FontWeight.w700, fontSize: 12),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.info_outline_rounded,
+                  size: 17,
+                  color: tokens.iconSecondary,
+                ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    '번호판을 바꾸려면 기존 정기권을 삭제한 뒤 새로 등록하세요.',
+                    style: textTheme.bodySmall?.copyWith(
+                      color: tokens.textSecondary,
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ],

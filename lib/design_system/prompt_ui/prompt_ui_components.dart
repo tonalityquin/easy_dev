@@ -86,8 +86,45 @@ class _PromptButtonState extends State<PromptButton> {
   bool _hovered = false;
   bool _focused = false;
   bool _invoking = false;
+  bool? _pendingPressed;
+  bool? _pendingHovered;
+  bool? _pendingFocused;
+  bool _interactionFrameScheduled = false;
 
-  bool get _enabled => widget.onPressed != null && !widget.loading && !_invoking;
+  bool get _available => widget.onPressed != null && !widget.loading;
+  bool get _enabled => _available && !_invoking;
+
+  void _queueInteractionState({
+    bool? pressed,
+    bool? hovered,
+    bool? focused,
+  }) {
+    if (pressed != null) _pendingPressed = pressed;
+    if (hovered != null) _pendingHovered = hovered;
+    if (focused != null) _pendingFocused = focused;
+    if (_interactionFrameScheduled) return;
+    _interactionFrameScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _interactionFrameScheduled = false;
+      if (!mounted) return;
+      final nextPressed = _pendingPressed;
+      final nextHovered = _pendingHovered;
+      final nextFocused = _pendingFocused;
+      _pendingPressed = null;
+      _pendingHovered = null;
+      _pendingFocused = null;
+      final changed =
+          (nextPressed != null && nextPressed != _pressed) ||
+              (nextHovered != null && nextHovered != _hovered) ||
+              (nextFocused != null && nextFocused != _focused);
+      if (!changed) return;
+      setState(() {
+        if (nextPressed != null) _pressed = nextPressed;
+        if (nextHovered != null) _hovered = nextHovered;
+        if (nextFocused != null) _focused = nextFocused;
+      });
+    });
+  }
 
   Future<void> _activate() async {
     if (!_enabled) return;
@@ -211,18 +248,18 @@ class _PromptButtonState extends State<PromptButton> {
           borderRadius: BorderRadius.circular(PromptUiShapes.button),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
-            onTap: _enabled ? _activate : null,
+            onTap: _available ? _activate : null,
             onHighlightChanged: (value) {
-              if (_pressed == value) return;
-              setState(() => _pressed = value);
+              if (_pressed == value && _pendingPressed == null) return;
+              _queueInteractionState(pressed: value);
             },
             onHover: (value) {
-              if (_hovered == value) return;
-              setState(() => _hovered = value);
+              if (_hovered == value && _pendingHovered == null) return;
+              _queueInteractionState(hovered: value);
             },
             onFocusChange: (value) {
-              if (_focused == value) return;
-              setState(() => _focused = value);
+              if (_focused == value && _pendingFocused == null) return;
+              _queueInteractionState(focused: value);
             },
             mouseCursor:
                 _enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
@@ -344,8 +381,45 @@ class _PromptIconButtonState extends State<PromptIconButton> {
   bool _hovered = false;
   bool _focused = false;
   bool _invoking = false;
+  bool? _pendingPressed;
+  bool? _pendingHovered;
+  bool? _pendingFocused;
+  bool _interactionFrameScheduled = false;
 
-  bool get _enabled => widget.onPressed != null && !widget.loading && !_invoking;
+  bool get _available => widget.onPressed != null && !widget.loading;
+  bool get _enabled => _available && !_invoking;
+
+  void _queueInteractionState({
+    bool? pressed,
+    bool? hovered,
+    bool? focused,
+  }) {
+    if (pressed != null) _pendingPressed = pressed;
+    if (hovered != null) _pendingHovered = hovered;
+    if (focused != null) _pendingFocused = focused;
+    if (_interactionFrameScheduled) return;
+    _interactionFrameScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _interactionFrameScheduled = false;
+      if (!mounted) return;
+      final nextPressed = _pendingPressed;
+      final nextHovered = _pendingHovered;
+      final nextFocused = _pendingFocused;
+      _pendingPressed = null;
+      _pendingHovered = null;
+      _pendingFocused = null;
+      final changed =
+          (nextPressed != null && nextPressed != _pressed) ||
+              (nextHovered != null && nextHovered != _hovered) ||
+              (nextFocused != null && nextFocused != _focused);
+      if (!changed) return;
+      setState(() {
+        if (nextPressed != null) _pressed = nextPressed;
+        if (nextHovered != null) _hovered = nextHovered;
+        if (nextFocused != null) _focused = nextFocused;
+      });
+    });
+  }
 
   Future<void> _activate() async {
     if (!_enabled) return;
@@ -419,18 +493,18 @@ class _PromptIconButtonState extends State<PromptIconButton> {
             borderRadius: BorderRadius.circular(PromptUiShapes.control),
             clipBehavior: Clip.antiAlias,
             child: InkWell(
-              onTap: _enabled ? _activate : null,
+              onTap: _available ? _activate : null,
               onHighlightChanged: (value) {
-                if (_pressed == value) return;
-                setState(() => _pressed = value);
+                if (_pressed == value && _pendingPressed == null) return;
+                _queueInteractionState(pressed: value);
               },
               onHover: (value) {
-                if (_hovered == value) return;
-                setState(() => _hovered = value);
+                if (_hovered == value && _pendingHovered == null) return;
+                _queueInteractionState(hovered: value);
               },
               onFocusChange: (value) {
-                if (_focused == value) return;
-                setState(() => _focused = value);
+                if (_focused == value && _pendingFocused == null) return;
+                _queueInteractionState(focused: value);
               },
               mouseCursor:
                   _enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,

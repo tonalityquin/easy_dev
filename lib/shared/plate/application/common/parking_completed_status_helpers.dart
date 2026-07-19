@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../../../features/account/applications/user_state.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../../features/account/applications/user_state.dart';
 import '../../domain/enums/plate_type.dart';
 import '../../domain/models/plate_model.dart';
 import '../../domain/repositories/plate_repository.dart';
@@ -16,7 +17,7 @@ Future<bool> showParkingCompletedDeleteDialog(
   final deleter = context.read<DeletePlate>();
   final performedBy = context.read<UserState>().name;
 
-  final confirmed = await showDialog<bool>(
+  final confirmed = await showPromptOverlayDialog<bool>(
         context: context,
         useRootNavigator: true,
         builder: (dialogContext) => PlateRemoveDialog(

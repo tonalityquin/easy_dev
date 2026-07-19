@@ -4,13 +4,18 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../prompt_document_overlays.dart';
+
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:googleapis/gmail/v1.dart' as gmail;
-import '../../../../app/auth/google_auth_v7.dart';
-import '../../../../app/config/email_config.dart';
-import '../../../../app/utils/status_dialog.dart';
-import '../../../../features/dev/debug/debug_api_logger.dart';
+import '../../../app/auth/google_auth_v7.dart';
+import '../../../app/config/email_config.dart';
+import '../../../app/utils/status_dialog.dart';
+import '../../../features/dev/debug/debug_api_logger.dart';
 import 'user_statement_styles.dart';
 import 'user_statement_signature_dialog.dart';
 
@@ -127,7 +132,7 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
   Future<void> _pickDateTime() async {
     try {
       final now = DateTime.now();
-      final date = await showDatePicker(
+      final date = await showPromptDatePicker(
         context: context,
         initialDate: _eventDateTime ?? now,
         firstDate: DateTime(now.year - 5),
@@ -135,7 +140,7 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
       );
       if (!mounted || date == null) return;
 
-      final time = await showTimePicker(
+      final time = await showPromptTimePicker(
         context: context,
         initialTime: TimeOfDay.fromDateTime(_eventDateTime ?? now),
         builder: (ctx, child) => MediaQuery(
@@ -257,7 +262,7 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
       );
     }
 
-    await showDialog(
+    await showPromptOverlayDialog<void>(
       context: context,
       barrierDismissible: true,
       builder: (ctx) {
@@ -265,7 +270,7 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
         final cs = theme.colorScheme;
 
         return Dialog(
-          backgroundColor: Colors.transparent,
+          backgroundColor: PromptUiTheme.of(context).transparent,
           insetPadding:
           const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
           child: LayoutBuilder(
@@ -763,6 +768,7 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
       context,
       title: StatusDialog.userStatementSubmitSuccess,
       closeCurrentPageAfter: true,
+      usePromptUi: true,
     );
   }
 
@@ -772,6 +778,7 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
     await StatusDialog.showFailure(
       context,
       title: StatusDialog.userStatementSubmitFailed,
+      usePromptUi: true,
     );
   }
 
@@ -1139,27 +1146,26 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
   InputDecoration _inputDec({
     required String labelText,
   }) {
-    final cs = Theme.of(context).colorScheme;
-
+    final tokens = PromptUiTheme.of(context);
     return InputDecoration(
       labelText: labelText,
-
       filled: true,
-      fillColor: cs.surfaceContainerLow,
+      fillColor: tokens.surfaceOverlay,
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: cs.outlineVariant),
+        borderRadius: BorderRadius.circular(PromptUiShapes.control),
+        borderSide: BorderSide(color: tokens.borderSubtle),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: cs.outlineVariant),
+        borderRadius: BorderRadius.circular(PromptUiShapes.control),
+        borderSide: BorderSide(color: tokens.borderSubtle),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(
-          color: cs.primary,
-          width: 1.6,
-        ),
+        borderRadius: BorderRadius.circular(PromptUiShapes.control),
+        borderSide: BorderSide(color: tokens.focusRing, width: 2),
+      ),
+      disabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(PromptUiShapes.control),
+        borderSide: BorderSide(color: tokens.borderSubtle),
       ),
       contentPadding: const EdgeInsets.symmetric(
         vertical: 14,
@@ -1171,29 +1177,42 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
   Widget _sectionCard({
     required String title,
     required Widget child,
-    EdgeInsetsGeometry padding = const EdgeInsets.all(12),
+    EdgeInsetsGeometry padding = const EdgeInsets.all(16),
     EdgeInsetsGeometry? margin,
   }) {
-    final cs = Theme.of(context).colorScheme;
+    final tokens = PromptUiTheme.of(context);
+    final textTheme = Theme.of(context).textTheme;
 
-    return Card(
-      elevation: 0,
-      margin: margin ?? const EdgeInsets.only(bottom: 16),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: cs.outlineVariant.withOpacity(0.9)),
-      ),
-      color: cs.surface,
-      child: Padding(
+    return PromptAnimatedReveal(
+      delay: const Duration(milliseconds: 40),
+      offset: const Offset(0, .025),
+      child: AnimatedContainer(
+        duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false
+            ? Duration.zero
+            : PromptUiMotion.selection,
+        curve: PromptUiMotion.standard,
+        margin: margin ?? const EdgeInsets.only(bottom: 16),
+        decoration: BoxDecoration(
+          color: tokens.surfaceRaised,
+          borderRadius: BorderRadius.circular(PromptUiShapes.card),
+          border: Border.all(color: tokens.borderSubtle),
+          boxShadow: [
+            BoxShadow(
+              color: tokens.shadow,
+              blurRadius: 14,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
         padding: padding,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               title,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              style: textTheme.titleMedium?.copyWith(
+                color: tokens.textPrimary,
                 fontWeight: FontWeight.w700,
-                color: cs.onSurface,
               ),
             ),
             const SizedBox(height: 10),
@@ -1208,28 +1227,13 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
 
   Future<void> _openSignatureDialog() async {
     try {
-      final cs = Theme.of(context).colorScheme;
-
-      final result = await showGeneralDialog<UserStatementSignatureResult>(
+      final result = await showPromptFullscreenDocument<UserStatementSignatureResult>(
         context: context,
-        barrierLabel: '서명',
-        barrierDismissible: false,
-        barrierColor: cs.scrim.withOpacity(0.55),
-        pageBuilder: (ctx, animation, secondaryAnimation) {
-          return UserStatementSignatureFullScreenDialog(
-            name: _signerName,
-            initialDateTime: _signDateTime,
-          );
-        },
-        transitionBuilder: (ctx, animation, secondaryAnimation, child) {
-          return FadeTransition(
-            opacity: CurvedAnimation(
-              parent: animation,
-              curve: Curves.easeOut,
-            ),
-            child: child,
-          );
-        },
+        barrierLabel: '전자서명',
+        child: UserStatementSignatureFullScreenDialog(
+          name: _signerName,
+          initialDateTime: _signDateTime,
+        ),
       );
 
       if (result != null) {
@@ -1252,20 +1256,23 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final tokens = PromptUiTheme.of(context);
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
     return Scaffold(
       resizeToAvoidBottomInset: true,
-      backgroundColor: cs.background,
+      backgroundColor: tokens.canvas,
       appBar: AppBar(
         title: const Text('경위서 작성'),
         centerTitle: true,
-        backgroundColor: cs.surface,
-        foregroundColor: cs.onSurface,
+        backgroundColor: tokens.surface,
+        foregroundColor: tokens.textPrimary,
         elevation: 0,
-        surfaceTintColor: Colors.transparent,
+        surfaceTintColor: tokens.transparent,
         shape: Border(
             bottom: BorderSide(
-                color: cs.outlineVariant.withOpacity(0.9), width: 1)),
+                color: tokens.borderSubtle, width: 1)),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 8),
@@ -1281,7 +1288,7 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
       bottomNavigationBar: SafeArea(
         top: false,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
+          duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
           curve: Curves.easeOut,
           padding: EdgeInsets.only(
             left: 16,
@@ -1290,10 +1297,10 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
             bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
           ),
           decoration: BoxDecoration(
-            color: cs.surface,
+            color: tokens.surface,
             border: Border(
                 top: BorderSide(
-                    color: cs.outlineVariant.withOpacity(0.9), width: 1)),
+                    color: tokens.borderSubtle, width: 1)),
           ),
           child: SizedBox(
             width: double.infinity,

@@ -51,6 +51,7 @@ extension _ParkingGridStructuredPreviewPart on _ParkingGrid3DPreviewCardState {
     required int count,
     required ColorScheme cs,
     required TextTheme tt,
+    required double previewHeight,
   }) {
     final loc = entry.location;
     final nameTrimmed = _trimOrEmpty(loc.locationName);
@@ -173,7 +174,7 @@ extension _ParkingGridStructuredPreviewPart on _ParkingGrid3DPreviewCardState {
     return Column(
       children: [
         SizedBox(
-          height: _ParkingGrid3DPreviewCardState._previewHeight,
+          height: previewHeight,
           child: ClipRRect(
             borderRadius: BorderRadius.circular(12),
             child: DecoratedBox(

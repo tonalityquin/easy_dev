@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+
 import '../../../../app/di/routes.dart';
 import '../../../account/applications/user_state.dart';
 import '../../../camera/photo_transfer_mail_page.dart';
@@ -108,8 +110,30 @@ class _OpsDashboardBottomSheetState extends State<OpsDashboardBottomSheet> {
   void _openPhotoTransfer(BuildContext context) {
     final rootNav = Navigator.of(context, rootNavigator: true);
     final nav = Navigator.of(context);
+    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     if (nav.canPop()) nav.pop();
-    rootNav.push(MaterialPageRoute(builder: (_) => const PhotoTransferMailPage()));
+    rootNav.push(
+      PageRouteBuilder<void>(
+        transitionDuration: reduceMotion ? Duration.zero : PromptUiMotion.overlay,
+        reverseTransitionDuration:
+            reduceMotion ? Duration.zero : PromptUiMotion.component,
+        pageBuilder: (_, __, ___) => const PromptUiScope(
+          child: PhotoTransferMailPage(),
+        ),
+        transitionsBuilder: (_, animation, __, child) {
+          if (reduceMotion) return child;
+          final curved = CurvedAnimation(
+            parent: animation,
+            curve: PromptUiMotion.enter,
+            reverseCurve: PromptUiMotion.exit,
+          );
+          return FadeTransition(
+            opacity: curved,
+            child: child,
+          );
+        },
+      ),
+    );
   }
 
   void _openSecondary(BuildContext context) {
@@ -392,7 +416,7 @@ class _OpsDashboardBottomSheetState extends State<OpsDashboardBottomSheet> {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     return Material(
-      color: Colors.transparent,
+      color: PromptUiTheme.of(context).transparent,
       child: InkWell(
         onTap: _openActionsMode,
         borderRadius: BorderRadius.circular(16),
@@ -603,6 +627,8 @@ class _OpsDashboardBottomSheetState extends State<OpsDashboardBottomSheet> {
     required bool isFieldCommon,
   }) {
     _sheetScrollController = scrollController;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final content = _actionsMode
         ? _actionsContent(context, isFieldCommon)
         : _dashboardContent(
@@ -615,10 +641,11 @@ class _OpsDashboardBottomSheetState extends State<OpsDashboardBottomSheet> {
       controller: scrollController,
       padding: const EdgeInsets.fromLTRB(0, 0, 0, 18),
       child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 260),
-        reverseDuration: const Duration(milliseconds: 220),
-        switchInCurve: Curves.easeOutCubic,
-        switchOutCurve: Curves.easeInCubic,
+        duration: reduceMotion ? Duration.zero : PromptUiMotion.component,
+        reverseDuration:
+            reduceMotion ? Duration.zero : PromptUiMotion.selection,
+        switchInCurve: PromptUiMotion.enter,
+        switchOutCurve: PromptUiMotion.exit,
         transitionBuilder: (child, animation) {
           final position = Tween<Offset>(
             begin: const Offset(.07, 0),
@@ -639,7 +666,7 @@ class _OpsDashboardBottomSheetState extends State<OpsDashboardBottomSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final tokens = PromptUiTheme.of(context);
     return PopScope(
       canPop: !_actionsMode,
       onPopInvoked: (didPop) {
@@ -654,9 +681,11 @@ class _OpsDashboardBottomSheetState extends State<OpsDashboardBottomSheet> {
         builder: (context, scrollController) {
           return Container(
             decoration: BoxDecoration(
-              color: cs.surfaceVariant.withOpacity(.18),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-              border: Border(top: BorderSide(color: cs.outlineVariant.withOpacity(.70))),
+              color: tokens.surfaceRaised,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(PromptUiShapes.sheet),
+              ),
+              border: Border(top: BorderSide(color: tokens.borderSubtle)),
             ),
             child: SafeArea(
               top: false,
@@ -713,7 +742,7 @@ class _DashboardActionTile extends StatelessWidget {
     final backgroundColor = action.emphasized ? action.color.withOpacity(.10) : cs.surface;
 
     return Material(
-      color: Colors.transparent,
+      color: PromptUiTheme.of(context).transparent,
       child: InkWell(
         onTap: action.onPressed,
         borderRadius: BorderRadius.circular(17),

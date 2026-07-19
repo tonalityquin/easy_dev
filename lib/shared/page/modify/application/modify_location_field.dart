@@ -1,50 +1,84 @@
 import 'package:flutter/material.dart';
 
-class ModifyLocationField extends StatelessWidget {
-  final TextEditingController controller;
-  final bool readOnly;
-  final double widthFactor;
+import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
 
+class ModifyLocationField extends StatelessWidget {
   const ModifyLocationField({
     super.key,
     required this.controller,
-    this.readOnly = false,
-    this.widthFactor = 0.7,
+    this.widthFactor = .7,
   });
+
+  final TextEditingController controller;
+  final double widthFactor;
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final theme = Theme.of(context).textTheme;
-    final screenWidth = MediaQuery.of(context).size.width;
-
-    final isEmpty = controller.text.trim().isEmpty;
+    final tokens = PromptUiTheme.of(context);
+    final textTheme = Theme.of(context).textTheme;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
     return SizedBox(
       width: screenWidth * widthFactor,
-      child: TextField(
-        controller: controller,
-        readOnly: true, 
-        textAlign: TextAlign.center,
-        style: theme.bodyLarge?.copyWith(
-          fontSize: 18,
-          fontWeight: FontWeight.w900,
-          color: isEmpty ? cs.onSurfaceVariant : cs.onSurface,
-        ),
-        decoration: InputDecoration(
-          hintText: isEmpty ? '미지정' : null,
-          hintStyle: theme.bodyLarge?.copyWith(
-            fontSize: 18,
-            fontWeight: FontWeight.w800,
-            color: cs.onSurfaceVariant,
-          ),
-          enabledBorder: UnderlineInputBorder(
-            borderSide: BorderSide(color: cs.onSurface, width: 2.0),
-          ),
-          focusedBorder: UnderlineInputBorder(
-            borderSide: BorderSide(color: cs.primary, width: 2.2),
-          ),
-        ),
+      child: ValueListenableBuilder<TextEditingValue>(
+        valueListenable: controller,
+        builder: (context, value, child) {
+          final text = value.text.trim();
+          final isEmpty = text.isEmpty;
+          return AnimatedContainer(
+            duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
+            curve: PromptUiMotion.standard,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+            decoration: BoxDecoration(
+              color: isEmpty ? tokens.surfaceOverlay : tokens.surfaceSelected,
+              borderRadius: BorderRadius.circular(PromptUiShapes.control),
+              border: Border.all(
+                color: isEmpty ? tokens.borderSubtle : tokens.accent,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.location_on_rounded,
+                  size: 20,
+                  color: isEmpty ? tokens.iconSecondary : tokens.accent,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: AnimatedSwitcher(
+                    duration: reduceMotion
+                        ? Duration.zero
+                        : PromptUiMotion.selection,
+                    switchInCurve: PromptUiMotion.enter,
+                    switchOutCurve: PromptUiMotion.exit,
+                    child: Text(
+                      isEmpty ? '선택되지 않음' : text,
+                      key: ValueKey(text),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: textTheme.bodyLarge?.copyWith(
+                        color: isEmpty
+                            ? tokens.textSecondary
+                            : tokens.textPrimary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Icon(
+                  isEmpty
+                      ? Icons.add_circle_outline_rounded
+                      : Icons.check_circle_rounded,
+                  size: 20,
+                  color: isEmpty ? tokens.iconSecondary : tokens.success,
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
+
 import '../../../shared/plate/domain/models/plate_log_model.dart';
 import '../../../shared/plate/domain/repositories/plate_repository.dart';
 
@@ -28,48 +31,26 @@ class LogViewerBottomSheet extends StatefulWidget {
     String? initialPlateNumber,
     String? plateId,
   }) async {
-    final cs = Theme.of(context).colorScheme;
-
+    final rootContext = Navigator.of(context, rootNavigator: true).context;
     if (Navigator.canPop(context)) {
       Navigator.pop(context);
-      await Future.delayed(const Duration(milliseconds: 150));
+      await Future<void>.delayed(const Duration(milliseconds: 150));
     }
-    if (!context.mounted) return;
+    if (!rootContext.mounted) return;
 
-    await showGeneralDialog(
-      context: context,
-      barrierDismissible: true,
-      barrierColor: cs.scrim.withOpacity(0.55),
-      barrierLabel: '닫기',
-      transitionDuration: const Duration(milliseconds: 300),
-      pageBuilder: (_, __, ___) {
-        return Material(
-          color: Colors.transparent,
-          child: Align(
-            alignment: Alignment.bottomCenter,
-            child: LogViewerBottomSheet(
-              division: division,
-              area: area,
-              requestTime: requestTime,
-              initialPlateNumber: initialPlateNumber,
-              plateId: plateId,
-            ),
-          ),
-        );
-      },
-      transitionBuilder: (_, animation, __, child) {
-        final curved = CurvedAnimation(
-          parent: animation,
-          curve: Curves.easeOutCubic,
-        );
-        return SlideTransition(
-          position: Tween<Offset>(
-            begin: const Offset(0, 1),
-            end: Offset.zero,
-          ).animate(curved),
-          child: FadeTransition(opacity: curved, child: child),
-        );
-      },
+    await showPromptOverlayBottomSheet<void>(
+      context: rootContext,
+      useRootNavigator: true,
+      useSafeArea: true,
+      isScrollControlled: true,
+      transparentBackground: true,
+      builder: (_) => LogViewerBottomSheet(
+        division: division,
+        area: area,
+        requestTime: requestTime,
+        initialPlateNumber: initialPlateNumber,
+        plateId: plateId,
+      ),
     );
   }
 
@@ -223,7 +204,7 @@ class _LogViewerBottomSheetState extends State<LogViewerBottomSheet> {
 
     return SafeArea(
       child: Material(
-        color: Colors.transparent,
+        color: PromptUiTheme.of(context).transparent,
         child: Align(
           alignment: Alignment.bottomCenter,
           child: SizedBox(

@@ -1,43 +1,40 @@
 import 'package:flutter/material.dart';
 
+import '../../../../../design_system/prompt_ui/prompt_ui_components.dart';
 import '../../application/modify_location_field.dart';
+import '../prompt_modify_ui.dart';
 
 class ModifyLocationSection extends StatelessWidget {
-  final TextEditingController locationController;
-
   const ModifyLocationSection({
     super.key,
     required this.locationController,
   });
 
+  final TextEditingController locationController;
+
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          '주차 구역',
-          style: TextStyle(
-            fontSize: 18.0,
-            fontWeight: FontWeight.w900,
-            color: cs.onSurface,
-          ),
-        ),
-        const SizedBox(height: 8.0),
-        Center(
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              ModifyLocationField(
+    return PromptAnimatedReveal(
+      offset: const Offset(0, .025),
+      child: PromptModifySectionCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const PromptModifySectionTitle(
+              icon: Icons.local_parking_rounded,
+              title: '주차 구역',
+              subtitle: '차량의 현재 구역과 슬롯을 확인하거나 변경합니다.',
+            ),
+            const SizedBox(height: 14),
+            Center(
+              child: ModifyLocationField(
                 controller: locationController,
-                widthFactor: 0.7,
+                widthFactor: .88,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }

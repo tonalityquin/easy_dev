@@ -5,8 +5,10 @@ import '../../../../app/utils/snackbar_helper.dart';
 import '../../../../features/dev/page/sheets/dev_quick_actions.dart';
 import '../../../../features/selector/application/dev_auth.dart';
 import '../../../../features/selector/sheets/service_bottom_sheet.dart';
-import '../../application/secondary_state.dart';
 import '../../../plate/domain/repositories/plate_repository.dart';
+import '../../application/secondary_state.dart';
+import '../../widgets/ops_console_dialogs.dart';
+import '../../widgets/ops_console_widgets.dart';
 
 class BackEndController extends StatefulWidget {
   const BackEndController({super.key});
@@ -28,7 +30,6 @@ class _BackEndControllerState extends State<BackEndController> {
 
   Future<void> _loadDevAuth() async {
     final devAuthorized = await DevAuth.isDeveloperLoggedIn();
-
     if (!mounted) return;
     setState(() {
       _devAuthorized = devAuthorized;
@@ -38,209 +39,175 @@ class _BackEndControllerState extends State<BackEndController> {
 
   Future<void> _openServiceSettings() async {
     final before = _devAuthorized;
-
-    await ServiceBottomSheet.show(
-      context: context,
-    );
-
+    await ServiceBottomSheet.show(context: context);
     if (!mounted) return;
     await _loadDevAuth();
     if (!mounted) return;
-
     final state = context.read<SecondaryState>();
     await state.refreshDeveloperLogin();
     if (!mounted) return;
-
     if (!before && _devAuthorized) {
-      showSuccessSnackbar(context, '개발자 모드가 활성화되었습니다.');
+      showSuccessSnackbar(
+        context,
+        '개발자 모드가 활성화되었습니다.',
+        usePromptUi: true,
+      );
     }
   }
 
   Future<void> _resetDevAuthInline() async {
     await DevQuickActions.disableDeveloperMode();
-
     if (!mounted) return;
     setState(() {
       _devAuthorized = false;
       _checkingDevAuth = false;
     });
-    showSelectedSnackbar(context, '개발자 모드가 비활성화되었습니다.');
-
+    showSelectedSnackbar(
+      context,
+      '개발자 모드가 비활성화되었습니다.',
+      usePromptUi: true,
+    );
     final state = context.read<SecondaryState>();
     await state.refreshDeveloperLogin();
   }
 
   Future<void> _rebuildMonthlyPlateStatusViews() async {
     if (_rebuildingMonthlyView) return;
-
-    final ok = await showDialog<bool>(
-          context: context,
-          builder: (dialogContext) => AlertDialog(
-            title: const Text('정기 주차 View 전체 재생성'),
-            content: const Text(
-              'monthly_plate_status 원본 기준으로 monthly_plate_status_view 지역별 문서를 생성하거나 덮어씁니다. 계속하시겠습니까?',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: const Text('취소'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(dialogContext).pop(true),
-                child: const Text('실행'),
-              ),
-            ],
-          ),
-        ) ??
-        false;
-
+    final ok = await showOpsConfirmDialog(
+      context: context,
+      title: '정기 주차 View 전체 재생성',
+      message:
+          'monthly_plate_status 원본 기준으로 monthly_plate_status_view 지역별 문서를 생성하거나 덮어씁니다. 계속하시겠습니까?',
+      confirmLabel: '실행',
+      icon: Icons.sync_alt_rounded,
+    );
     if (!ok || !mounted) return;
 
-    setState(() {
-      _rebuildingMonthlyView = true;
-    });
-
+    setState(() => _rebuildingMonthlyView = true);
     try {
-      final result = await context.read<PlateRepository>().rebuildAllMonthlyPlateStatusViews();
+      final result = await context
+          .read<PlateRepository>()
+          .rebuildAllMonthlyPlateStatusViews();
       if (!mounted) return;
       showSuccessSnackbar(
         context,
         '정기 주차 View 재생성 완료: 지역 ${result.areaCount}개 / 정기권 ${result.itemCount}건 / 건너뜀 ${result.skippedCount}건 / 삭제 ${result.deletedViewCount}건',
+        usePromptUi: true,
       );
-    } catch (e) {
+    } catch (error) {
       if (!mounted) return;
-      showFailedSnackbar(context, '정기 주차 View 재생성에 실패했습니다. ${e.toString()}');
+      showFailedSnackbar(
+        context,
+        '정기 주차 View 재생성에 실패했습니다. ${error.toString()}',
+        usePromptUi: true,
+      );
     } finally {
-      if (!mounted) return;
-      setState(() {
-        _rebuildingMonthlyView = false;
-      });
+      if (mounted) {
+        setState(() => _rebuildingMonthlyView = false);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-
-    return Scaffold(
-      appBar: AppBar(
-        automaticallyImplyLeading: true,
-        title: const Text(
-          '실시간 컨트롤러',
-          style: TextStyle(fontWeight: FontWeight.w700),
+    final tokens = Theme.of(context).colorScheme;
+    final statusColor = _devAuthorized ? tokens.primary : tokens.error;
+    return OpsConsoleScaffold(
+      title: '실시간 컨트롤러',
+      subtitle: '개발자 인증과 운영 데이터 유지보수 기능을 관리합니다.',
+      icon: Icons.settings_ethernet_rounded,
+      loading: _checkingDevAuth || _rebuildingMonthlyView,
+      metrics: [
+        OpsMetric(
+          label: '개발자 모드',
+          value: _checkingDevAuth
+              ? '확인 중'
+              : _devAuthorized
+                  ? '활성'
+                  : '비활성',
+          icon: _devAuthorized
+              ? Icons.verified_user_rounded
+              : Icons.lock_outline_rounded,
+          color: statusColor,
         ),
-        centerTitle: true,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black87,
-        elevation: 0,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: cs.surface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: cs.outlineVariant.withOpacity(.6)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'PlateState(스냅샷 구독) 기능 제거됨',
-                    style: (tt.titleMedium ?? const TextStyle(fontSize: 16))
-                        .copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    '요구사항에 따라 Firestore QuerySnapshot 기반 실시간 구독 로직을 완전히 제거했습니다.\n이 화면은 개발자 인증/설정 진입만 제공합니다.',
-                    style: (tt.bodyMedium ?? const TextStyle(fontSize: 14))
-                        .copyWith(
-                      color: cs.onSurfaceVariant,
-                      height: 1.35,
-                    ),
-                  ),
-                ],
-              ),
+        OpsMetric(
+          label: 'View 작업',
+          value: _rebuildingMonthlyView ? '실행 중' : '대기',
+          icon: Icons.sync_alt_rounded,
+          color: _rebuildingMonthlyView ? tokens.primary : tokens.onSurfaceVariant,
+        ),
+      ],
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+        children: [
+          OpsWorkSection(
+            title: '실시간 구독 상태',
+            subtitle: 'PlateState 스냅샷 구독 기능은 제거된 상태입니다.',
+            icon: Icons.cloud_off_rounded,
+            child: const Text(
+              'Firestore QuerySnapshot 기반 실시간 구독 로직을 사용하지 않습니다. 이 화면은 개발자 인증과 관리 작업만 제공합니다.',
             ),
-            const SizedBox(height: 14),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: cs.surface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: cs.outlineVariant.withOpacity(.6)),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    _devAuthorized ? Icons.verified_user : Icons.lock_outline,
-                    color: _devAuthorized ? cs.primary : cs.onSurfaceVariant,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      _checkingDevAuth
-                          ? '개발자 모드 확인 중...'
-                          : (_devAuthorized ? '개발자 모드: 활성' : '개발자 모드: 비활성'),
-                      style: (tt.bodyLarge ?? const TextStyle(fontSize: 15))
-                          .copyWith(
-                        fontWeight: FontWeight.w800,
+          ),
+          OpsWorkSection(
+            title: '개발자 모드',
+            subtitle: '서비스 설정 접근 권한과 개발 도구 표시 상태를 제어합니다.',
+            icon: _devAuthorized
+                ? Icons.verified_user_rounded
+                : Icons.lock_outline_rounded,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                OpsInlineMessage(
+                  message: _checkingDevAuth
+                      ? '개발자 모드를 확인하고 있습니다.'
+                      : _devAuthorized
+                          ? '개발자 모드가 활성화되어 있습니다.'
+                          : '개발자 모드가 비활성화되어 있습니다.',
+                  danger: false,
+                  icon: _devAuthorized
+                      ? Icons.check_circle_outline_rounded
+                      : Icons.info_outline_rounded,
+                ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OpsActionButton(
+                        label: '서비스 설정',
+                        icon: Icons.settings_outlined,
+                        onPressed: _checkingDevAuth ? null : _openServiceSettings,
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                Expanded(
-                  child: FilledButton.tonalIcon(
-                    onPressed: _checkingDevAuth ? null : _openServiceSettings,
-                    icon: const Icon(Icons.settings_outlined),
-                    label: const Text('서비스 설정'),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _checkingDevAuth ? null : _resetDevAuthInline,
-                    icon: const Icon(Icons.restart_alt),
-                    label: const Text('개발자 모드 초기화'),
-                  ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OpsActionButton(
+                        label: '개발자 모드 초기화',
+                        icon: Icons.restart_alt_rounded,
+                        onPressed: _checkingDevAuth ? null : _resetDevAuthInline,
+                        tonal: true,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: _checkingDevAuth || !_devAuthorized || _rebuildingMonthlyView
-                    ? null
-                    : _rebuildMonthlyPlateStatusViews,
-                icon: _rebuildingMonthlyView
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.sync_alt_rounded),
-                label: Text(
-                  _rebuildingMonthlyView ? '정기 주차 View 재생성 중...' : '정기 주차 View 전체 재생성',
-                ),
-              ),
+          ),
+          OpsWorkSection(
+            title: '정기 주차 View',
+            subtitle: '원본 컬렉션을 기준으로 지역별 View 문서를 다시 생성합니다.',
+            icon: Icons.view_carousel_rounded,
+            child: OpsActionButton(
+              label: _rebuildingMonthlyView
+                  ? '정기 주차 View 재생성 중'
+                  : '정기 주차 View 전체 재생성',
+              icon: Icons.sync_alt_rounded,
+              onPressed: _checkingDevAuth ||
+                      !_devAuthorized ||
+                      _rebuildingMonthlyView
+                  ? null
+                  : _rebuildMonthlyPlateStatusViews,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

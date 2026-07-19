@@ -1,22 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
 import '../../../controllers/monthly_plate_controller.dart';
-
-const _memoInk = Color(0xFF101828);
-const _memoMuted = Color(0xFF667085);
-const _memoPanel = Color(0xFFFFFFFF);
-const _memoLine = Color(0xFFD8DEE8);
-const _memoBlue = Color(0xFF2563EB);
-const _memoRed = Color(0xFFDC2626);
+import '../../widgets/monthly_prompt_ui.dart';
 
 class MonthlyCustomStatusSection extends StatefulWidget {
-  final MonthlyPlateController controller;
-  final String? fetchedCustomStatus;
-  final VoidCallback onDeleted;
-  final VoidCallback onStatusCleared;
-  final Key statusSectionKey;
-
   const MonthlyCustomStatusSection({
     super.key,
     required this.controller,
@@ -26,138 +16,124 @@ class MonthlyCustomStatusSection extends StatefulWidget {
     required this.statusSectionKey,
   });
 
+  final MonthlyPlateController controller;
+  final String? fetchedCustomStatus;
+  final VoidCallback onDeleted;
+  final VoidCallback onStatusCleared;
+  final Key statusSectionKey;
+
   @override
-  State<MonthlyCustomStatusSection> createState() => _MonthlyCustomStatusSectionState();
+  State<MonthlyCustomStatusSection> createState() =>
+      _MonthlyCustomStatusSectionState();
 }
 
-class _MonthlyCustomStatusSectionState extends State<MonthlyCustomStatusSection> {
+class _MonthlyCustomStatusSectionState
+    extends State<MonthlyCustomStatusSection> {
   bool _deleting = false;
 
-  InputDecoration _inputDecoration() {
-    return InputDecoration(
-      hintText: '예: 뒷범퍼 손상, 장기 미출차',
-      hintStyle: const TextStyle(color: _memoMuted, fontWeight: FontWeight.w700),
-      isDense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 13, vertical: 14),
-      filled: true,
-      fillColor: const Color(0xFFF8FAFC),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: _memoLine),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: _memoBlue, width: 1.4),
-      ),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-      counterStyle: const TextStyle(color: _memoMuted, fontWeight: FontWeight.w800, fontSize: 11),
-    );
+  Future<void> _deleteFetchedStatus() async {
+    FocusScope.of(context).unfocus();
+    setState(() => _deleting = true);
+    try {
+      await widget.controller.deleteCustomStatusFromFirestore(context);
+      if (!mounted) return;
+      widget.onDeleted();
+      widget.onStatusCleared();
+    } finally {
+      if (mounted) setState(() => _deleting = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final tokens = PromptUiTheme.of(context);
+    final textTheme = Theme.of(context).textTheme;
+    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+
     return KeyedSubtree(
       key: widget.statusSectionKey,
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: _memoPanel,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: _memoLine),
+      child: MonthlyPromptSection(
+        title: '운영 메모',
+        subtitle: '현장 인수인계에 필요한 짧은 상태 메모를 기록합니다.',
+        icon: Icons.sticky_note_2_outlined,
+        delay: const Duration(milliseconds: 165),
+        trailing: const MonthlyPromptBadge(
+          label: '20자',
+          icon: Icons.text_fields_rounded,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEFF6FF),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.sticky_note_2_outlined, color: _memoBlue, size: 19),
-                ),
-                const SizedBox(width: 10),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '운영 메모',
-                        style: TextStyle(color: _memoInk, fontWeight: FontWeight.w900, fontSize: 16),
-                      ),
-                      SizedBox(height: 2),
-                      Text(
-                        '현장 인수인계용 짧은 상태 메모입니다.',
-                        style: TextStyle(color: _memoMuted, fontWeight: FontWeight.w700, fontSize: 12),
-                      ),
-                    ],
-                  ),
-                ),
-                const Text(
-                  '20자',
-                  style: TextStyle(color: _memoMuted, fontWeight: FontWeight.w900, fontSize: 12),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
             TextField(
               controller: widget.controller.customStatusController,
               maxLength: 20,
-              maxLengthEnforcement: MaxLengthEnforcement.truncateAfterCompositionEnds,
-              style: const TextStyle(color: _memoInk, fontWeight: FontWeight.w800),
-              decoration: _inputDecoration(),
-            ),
-            if (widget.fetchedCustomStatus != null) ...[
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFFBEB),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFFFDE68A)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.info_outline, color: Color(0xFFD97706), size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        '자동 저장된 메모: ${widget.fetchedCustomStatus}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: _memoInk, fontWeight: FontWeight.w800),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    _deleting
-                        ? const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: _memoRed),
-                          )
-                        : IconButton(
-                            tooltip: '자동 메모 삭제',
-                            onPressed: () async {
-                              FocusScope.of(context).unfocus();
-                              setState(() => _deleting = true);
-                              try {
-                                await widget.controller.deleteCustomStatusFromFirestore(context);
-                                widget.onDeleted();
-                                widget.onStatusCleared();
-                              } catch (_) {
-                              } finally {
-                                if (mounted) setState(() => _deleting = false);
-                              }
-                            },
-                            icon: const Icon(Icons.delete_outline, color: _memoRed),
-                          ),
-                  ],
+              maxLengthEnforcement:
+                  MaxLengthEnforcement.truncateAfterCompositionEnds,
+              style: textTheme.bodyLarge?.copyWith(
+                color: tokens.textPrimary,
+                fontWeight: FontWeight.w600,
+              ),
+              decoration: monthlyPromptInputDecoration(
+                context,
+                label: '상태 메모',
+                prefixIcon: Icon(
+                  Icons.edit_note_rounded,
+                  color: tokens.iconSecondary,
                 ),
               ),
-            ],
+            ),
+            AnimatedSwitcher(
+              duration: reduceMotion ? Duration.zero : PromptUiMotion.component,
+              switchInCurve: PromptUiMotion.enter,
+              switchOutCurve: PromptUiMotion.exit,
+              child: widget.fetchedCustomStatus == null
+                  ? const SizedBox.shrink(
+                      key: ValueKey<String>('no-fetched-status'),
+                    )
+                  : Container(
+                      key: const ValueKey<String>('fetched-status'),
+                      margin: const EdgeInsets.only(top: 12),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: tokens.warningContainer,
+                        borderRadius:
+                            BorderRadius.circular(PromptUiShapes.control),
+                        border: Border.all(
+                          color: tokens.warning.withOpacity(0.28),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.info_outline_rounded,
+                            color: tokens.onWarningContainer,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '자동 저장된 메모: ${widget.fetchedCustomStatus}',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: textTheme.bodyMedium?.copyWith(
+                                color: tokens.onWarningContainer,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          PromptIconButton(
+                            icon: Icons.delete_outline_rounded,
+                            tooltip: '자동 메모 삭제',
+                            destructive: true,
+                            loading: _deleting,
+                            haptic: PromptHaptic.heavy,
+                            onPressed: _deleting ? null : _deleteFetchedStatus,
+                          ),
+                        ],
+                      ),
+                    ),
+            ),
           ],
         ),
       ),

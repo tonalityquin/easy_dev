@@ -10,14 +10,11 @@ Future<bool> showSprintBlockEditorSheet({
   required SprintTask task,
   SprintScheduleBlock? block,
 }) async {
-  final colors = Theme.of(context).colorScheme;
-  final result = await showModalBottomSheet<bool>(
+  final result = await sprintShowBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
     showDragHandle: true,
-    backgroundColor: colors.surface,
-    barrierColor: colors.scrim,
     builder: (_) => _SprintBlockEditorSheet(
       store: store,
       task: task,
@@ -59,12 +56,10 @@ class _SprintBlockEditorSheetState extends State<_SprintBlockEditorSheet> {
 
   Future<void> _pickStartDate() async {
     final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final lower = widget.store.projectScheduleLowerBound(widget.task.projectId);
-    final firstDate = lower != null && lower.isAfter(today) ? lower : today;
+    final firstDate = DateTime(1900, 1, 1);
     var initial = _startDate;
     if (initial.isBefore(firstDate)) initial = firstDate;
-    final selected = await showDatePicker(
+    final selected = await sprintShowDatePicker(
       context: context,
       initialDate: initial,
       firstDate: firstDate,
@@ -79,7 +74,7 @@ class _SprintBlockEditorSheetState extends State<_SprintBlockEditorSheet> {
   }
 
   Future<void> _pickEndDate() async {
-    final selected = await showDatePicker(
+    final selected = await sprintShowDatePicker(
       context: context,
       initialDate: _endDate.isBefore(_startDate) ? _startDate : _endDate,
       firstDate: _startDate,
@@ -119,7 +114,7 @@ class _SprintBlockEditorSheetState extends State<_SprintBlockEditorSheet> {
   Future<void> _delete() async {
     final block = widget.block;
     if (block == null) return;
-    final confirmed = await showDialog<bool>(
+    final confirmed = await sprintShowDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('일정 삭제'),

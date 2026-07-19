@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../../app/utils/snackbar_helper.dart';
+import '../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../shared/secondary/widgets/ops_console_dialogs.dart';
 import '../../../shared/secondary/widgets/ops_console_widgets.dart';
 import '../../dev/application/area_state.dart';
 import '../applications/bill_state.dart';
@@ -30,12 +34,10 @@ class _BillManagementState extends State<BillManagement> {
   }
 
   void _showBillSettingBottomSheet(BuildContext context) {
-    showModalBottomSheet(
+    showPromptOverlayBottomSheet<void>(
       context: context,
-      isScrollControlled: true,
       useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) {
+      builder: (sheetContext) {
         return FractionallySizedBox(
           heightFactor: 1,
           child: BillSettingBottomSheet(
@@ -43,13 +45,17 @@ class _BillManagementState extends State<BillManagement> {
               try {
                 await context.read<BillState>().addBillFromMap(billData);
                 if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('정산 유형을 저장했습니다.')),
+                showSuccessSnackbar(
+                  context,
+                  '정산 유형을 저장했습니다.',
+                  usePromptUi: true,
                 );
               } catch (_) {
                 if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('정산 유형 저장에 실패했습니다.')),
+                showFailedSnackbar(
+                  context,
+                  '정산 유형 저장에 실패했습니다.',
+                  usePromptUi: true,
                 );
               }
             },
@@ -59,25 +65,15 @@ class _BillManagementState extends State<BillManagement> {
     );
   }
 
-  Future<bool> _confirmDelete(BuildContext context) async {
-    return await showDialog<bool>(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: const Text('정산 유형 삭제 확인'),
-            content: const Text('선택한 정산 유형을 삭제하시겠습니까?'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('취소'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('삭제'),
-              ),
-            ],
-          ),
-        ) ??
-        false;
+  Future<bool> _confirmDelete(BuildContext context) {
+    return showOpsConfirmDialog(
+      context: context,
+      title: '정산 유형 삭제 확인',
+      message: '선택한 정산 유형을 삭제하시겠습니까?',
+      confirmLabel: '삭제',
+      icon: Icons.delete_forever_rounded,
+      destructive: true,
+    );
   }
 
   Future<void> _deleteSelectedBill(BuildContext context) async {
@@ -92,13 +88,17 @@ class _BillManagementState extends State<BillManagement> {
     try {
       await billState.deleteBill([selectedId]);
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('정산 유형을 삭제했습니다.')),
+      showSuccessSnackbar(
+        context,
+        '정산 유형을 삭제했습니다.',
+        usePromptUi: true,
       );
     } catch (_) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('정산 유형 삭제에 실패했습니다.')),
+      showFailedSnackbar(
+        context,
+        '정산 유형 삭제에 실패했습니다.',
+        usePromptUi: true,
       );
     }
   }
@@ -248,7 +248,6 @@ class _BillManagementState extends State<BillManagement> {
   }
 
   Widget _buildCommandBar(BuildContext context, int visible, int total) {
-    final cs = Theme.of(context).colorScheme;
     return OpsCommandPanel(
       children: [
         OpsSearchField(
@@ -265,10 +264,11 @@ class _BillManagementState extends State<BillManagement> {
             OpsFilterChip(label: '변동', selected: _typeFilter == BillType.general, icon: Icons.receipt_long_rounded, onSelected: () => setState(() => _typeFilter = BillType.general)),
             OpsFilterChip(label: '정기', selected: _typeFilter == BillType.regular, icon: Icons.event_repeat_rounded, onSelected: () => setState(() => _typeFilter = BillType.regular)),
             OpsFilterChip(label: '$visible/$total', selected: false, icon: Icons.filter_alt_rounded, onSelected: () {}),
-            IconButton.filledTonal(
+            PromptIconButton(
+              icon: Icons.refresh_rounded,
               tooltip: '새로고침',
               onPressed: () => _refresh(context),
-              icon: Icon(Icons.refresh_rounded, color: cs.primary),
+              haptic: PromptHaptic.selection,
             ),
           ],
         ),
@@ -342,10 +342,11 @@ class _BillManagementState extends State<BillManagement> {
                       icon: Icons.receipt_long_rounded,
                       title: total == 0 ? '정산 유형이 없습니다' : '검색 결과가 없습니다',
                       message: total == 0 ? '운영 지점에 맞는 요금 기준을 등록하세요.' : '검색어와 유형 필터를 조정하세요.',
-                      action: FilledButton.icon(
+                      action: PromptButton(
+                        label: '정산 유형 등록',
+                        icon: Icons.add_card_rounded,
                         onPressed: () => _showBillSettingBottomSheet(context),
-                        icon: const Icon(Icons.add_card_rounded),
-                        label: const Text('정산 유형 등록'),
+                        haptic: PromptHaptic.selection,
                       ),
                     )
                   : ListView(

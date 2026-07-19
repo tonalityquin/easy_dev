@@ -37,6 +37,34 @@ class GoogleSessionBlockedException implements Exception {
   String toString() => message;
 }
 
+
+class GoogleAuthIdentity {
+  const GoogleAuthIdentity({
+    required this.id,
+    required this.email,
+    required this.displayName,
+  });
+
+  final String id;
+  final String email;
+  final String displayName;
+
+  String get normalizedEmail => email.trim().toLowerCase();
+}
+
+class GoogleAccountMismatchException implements Exception {
+  GoogleAccountMismatchException({
+    required this.expectedEmail,
+    required this.actualEmail,
+  });
+
+  final String expectedEmail;
+  final String actualEmail;
+
+  @override
+  String toString() => 'google_account_mismatch:$expectedEmail:$actualEmail';
+}
+
 class GoogleAuthSession {
   GoogleAuthSession._();
 
@@ -49,6 +77,8 @@ class GoogleAuthSession {
   auth.AuthClient? _client;
   late List<String> _scopes;
   StreamSubscription<GoogleSignInAuthenticationEvent>? _authSub;
+  final StreamController<GoogleAuthIdentity?> _identityController =
+      StreamController<GoogleAuthIdentity?>.broadcast();
   bool _initialized = false;
 
   DateTime? _lastAuthorizedAt;
@@ -103,6 +133,7 @@ class GoogleAuthSession {
       _client = null;
       _user = null;
       _lastAuthorizedAt = null;
+      _emitIdentity();
 
       await _authSub?.cancel();
       _authSub = null;
@@ -133,6 +164,7 @@ class GoogleAuthSession {
       _client = null;
       _user = null;
       _lastAuthorizedAt = null;
+      _emitIdentity();
       return;
     }
 
@@ -144,6 +176,9 @@ class GoogleAuthSession {
       _authSub = signIn.authenticationEvents.listen((event) {
         if (event is GoogleSignInAuthenticationEventSignIn) {
           _user = event.user;
+          _client = null;
+          _lastAuthorizedAt = null;
+          _emitIdentity();
           debugPrint(
               '[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] authenticationEvents signIn email=${event.user.email}');
           unawaited(
@@ -161,6 +196,7 @@ class GoogleAuthSession {
           _user = null;
           _client = null;
           _lastAuthorizedAt = null;
+          _emitIdentity();
           debugPrint(
               '[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] authenticationEvents signOut');
           unawaited(
@@ -175,6 +211,7 @@ class GoogleAuthSession {
       });
 
       _user = await signIn.attemptLightweightAuthentication();
+      _emitIdentity();
       debugPrint(
           '[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] init lightweight result email=${_user?.email}');
       if (_user != null) {
@@ -238,6 +275,9 @@ class GoogleAuthSession {
       if (GoogleSignIn.instance.supportsAuthenticate()) {
         final user = await GoogleSignIn.instance.authenticate();
         _user = user;
+        _client = null;
+        _lastAuthorizedAt = null;
+        _emitIdentity();
         debugPrint(
             '[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] interactive authenticate success email=${user.email}');
         final firebaseOk = await FirebaseGoogleAuthBridge.instance
@@ -330,6 +370,7 @@ class GoogleAuthSession {
       _user = null;
       _client = null;
       _lastAuthorizedAt = null;
+      _emitIdentity();
       return;
     }
 
@@ -338,6 +379,7 @@ class GoogleAuthSession {
       _user = null;
       _client = null;
       _lastAuthorizedAt = null;
+      _emitIdentity();
       await FirebaseGoogleAuthBridge.instance.signOutFirebaseOnly();
       debugPrint(
           '[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] GoogleAuthSession.signOut -> Firebase signOut complete');
@@ -356,6 +398,91 @@ class GoogleAuthSession {
       );
       rethrow;
     }
+  }
+
+  GoogleAuthIdentity? get currentIdentity {
+    final user = _user;
+    if (user == null) return null;
+    return GoogleAuthIdentity(
+      id: user.id,
+      email: user.email.trim(),
+      displayName: user.displayName?.trim() ?? '',
+    );
+  }
+
+  Stream<GoogleAuthIdentity?> get identityChanges => _identityController.stream;
+
+  Future<auth.AuthClient> safeClientFor({
+    required String expectedEmail,
+  }) async {
+    final expected = expectedEmail.trim().toLowerCase();
+    final before = currentIdentity;
+    if (before != null && before.normalizedEmail != expected) {
+      throw GoogleAccountMismatchException(
+        expectedEmail: expected,
+        actualEmail: before.email,
+      );
+    }
+    final client = await safeClient();
+    final after = currentIdentity;
+    if (after == null || after.normalizedEmail != expected) {
+      throw GoogleAccountMismatchException(
+        expectedEmail: expected,
+        actualEmail: after?.email ?? '',
+      );
+    }
+    return client;
+  }
+
+  Future<GoogleAuthIdentity> authenticateAccount({
+    String? expectedEmail,
+    bool forceAccountSelection = false,
+  }) async {
+    await _ensureBlockFlagLoaded();
+    _throwIfBlocked('authenticateAccount');
+    if (!_initialized) await init();
+    final expected = expectedEmail?.trim().toLowerCase();
+    final current = currentIdentity;
+    if (!forceAccountSelection &&
+        current != null &&
+        (expected == null || current.normalizedEmail == expected)) {
+      await safeClientFor(expectedEmail: current.email);
+      return current;
+    }
+    if (current != null) {
+      await signOut();
+    }
+    if (!GoogleSignIn.instance.supportsAuthenticate()) {
+      throw StateError('interactive_google_auth_not_supported');
+    }
+    final user = await GoogleSignIn.instance.authenticate();
+    _user = user;
+    _client = null;
+    _lastAuthorizedAt = null;
+    _emitIdentity();
+    await FirebaseGoogleAuthBridge.instance.ensureSignedInWithGoogleUser(user);
+    final identity = currentIdentity!;
+    if (expected != null && identity.normalizedEmail != expected) {
+      throw GoogleAccountMismatchException(
+        expectedEmail: expected,
+        actualEmail: identity.email,
+      );
+    }
+    await _ensureAuthorizedClient(forceAuthorize: true);
+    if (_client == null) {
+      throw StateError('google_auth_client_unavailable');
+    }
+    return identity;
+  }
+
+  void invalidateClient() {
+    _client = null;
+    _lastAuthorizedAt = null;
+  }
+
+  void _emitIdentity() {
+    if (_identityController.isClosed) return;
+    _identityController.add(currentIdentity);
   }
 
   GoogleSignInAccount? get currentUser => _user;

@@ -1,120 +1,113 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
+import '../../../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+
 Future<void> inputRegionPickerBottomSheet({
   required BuildContext context,
   required String selectedRegion,
   required List<String> regions,
   required Function(String selected) onConfirm,
+  bool usePromptUi = false,
 }) async {
-  String tempSelected = selectedRegion;
+  var tempSelected = selectedRegion;
 
-  await showModalBottomSheet(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    builder: (context) {
-      final cs = Theme.of(context).colorScheme;
-
-      return DraggableScrollableSheet(
-        initialChildSize: 0.5,
-        minChildSize: 0.4,
-        maxChildSize: 0.9,
-        builder: (_, scrollController) {
-          final initialIndex = regions.indexOf(selectedRegion).clamp(0, regions.isEmpty ? 0 : regions.length - 1);
-
-          return Container(
-            decoration: BoxDecoration(
-              color: cs.surface,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-              border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            child: Column(
-              children: [
-                Container(
-                  width: 40,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: cs.outlineVariant.withOpacity(0.9),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                Text(
-                  '지역 선택',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w900,
-                    color: cs.onSurface,
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                Expanded(
-                  child: CupertinoTheme(
-                    data: CupertinoThemeData(
-                      primaryColor: cs.primary,
-                      brightness: cs.brightness,
-                      textTheme: CupertinoTextThemeData(
-                        pickerTextStyle: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w900,
-                          color: cs.onSurface,
+  Widget builder(BuildContext sheetContext) {
+    final tokens = PromptUiTheme.of(sheetContext);
+    final initialIndex = regions.isEmpty
+        ? 0
+        : regions.indexOf(selectedRegion).clamp(0, regions.length - 1);
+    return SizedBox(
+      height: MediaQuery.sizeOf(sheetContext).height * .58,
+      child: PromptSheetScaffold(
+        title: '지역 선택',
+        icon: Icons.location_on_rounded,
+        onClose: () => Navigator.of(sheetContext).pop(),
+        body: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+          child: Column(
+            children: [
+              Expanded(
+                child: regions.isEmpty
+                    ? Center(
+                        child: Text(
+                          '선택할 수 있는 지역이 없습니다.',
+                          style: Theme.of(sheetContext)
+                              .textTheme
+                              .bodyMedium
+                              ?.copyWith(color: tokens.textSecondary),
                         ),
-                      ),
-                    ),
-                    child: CupertinoPicker(
-                      scrollController: FixedExtentScrollController(initialItem: initialIndex),
-                      itemExtent: 48,
-                      onSelectedItemChanged: (index) {
-                        tempSelected = regions[index];
-                      },
-                      children: regions
-                          .map(
-                            (region) => Center(
-                          child: Text(
-                            region,
-                            style: TextStyle(
+                      )
+                    : CupertinoTheme(
+                        data: CupertinoThemeData(
+                          primaryColor: tokens.accent,
+                          brightness: tokens.brightness,
+                          textTheme: CupertinoTextThemeData(
+                            pickerTextStyle: TextStyle(
                               fontSize: 18,
-                              fontWeight: FontWeight.w900,
-                              color: cs.onSurface,
+                              fontWeight: FontWeight.w800,
+                              color: tokens.textPrimary,
                             ),
                           ),
                         ),
-                      )
-                          .toList(),
-                    ),
-                  ),
-                ),
+                        child: CupertinoPicker(
+                          scrollController: FixedExtentScrollController(
+                            initialItem: initialIndex,
+                          ),
+                          itemExtent: 48,
+                          onSelectedItemChanged: (index) {
+                            tempSelected = regions[index];
+                          },
+                          children: regions
+                              .map(
+                                (region) => Center(
+                                  child: Text(
+                                    region,
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w800,
+                                      color: tokens.textPrimary,
+                                    ),
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                        ),
+                      ),
+              ),
+              const SizedBox(height: 12),
+              PromptButton(
+                label: '확인',
+                icon: Icons.check_rounded,
+                expand: true,
+                onPressed: regions.isEmpty
+                    ? null
+                    : () {
+                        Navigator.of(sheetContext).pop();
+                        onConfirm(tempSelected);
+                      },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
-                Divider(height: 1, color: cs.outlineVariant.withOpacity(0.85)),
-                const SizedBox(height: 12),
+  if (usePromptUi) {
+    await showPromptOverlayBottomSheet<void>(
+      context: context,
+      useSafeArea: false,
+      builder: builder,
+    );
+    return;
+  }
 
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      onConfirm(tempSelected);
-                    },
-                    style: FilledButton.styleFrom(
-                      backgroundColor: cs.primary,
-                      foregroundColor: cs.onPrimary,
-                      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
-                    ),
-                    child: const Text('확인'),
-                  ),
-                ),
-
-                const SizedBox(height: 24),
-              ],
-            ),
-          );
-        },
-      );
-    },
+  await showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    builder: builder,
   );
 }

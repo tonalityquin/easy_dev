@@ -2,11 +2,15 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+
 import '../../domain/models/grid_rect.dart';
 import '../../domain/models/parking_grid_model.dart';
 import 'widgets/location_draft.dart';
 import 'widgets/parking_grid_2d_editor.dart';
 import 'widgets/parking_grid_child_rect_selector.dart';
+import '../../../../shared/secondary/widgets/ops_console_dialogs.dart';
 import '../../../../shared/secondary/widgets/ops_console_widgets.dart';
 
 enum _LocationEntryMode { structured, plainText }
@@ -632,19 +636,18 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
     });
   }
 
-  Future<String?> _promptWallGroupName(BuildContext context, {String initial = ''}) async {
-    final controller = TextEditingController(text: initial);
+  Future<String?> _promptWallGroupName(BuildContext context) async {
+    final controller = TextEditingController();
 
     try {
-      final result = await showDialog<String>(
+      final result = await showPromptOverlayDialog<String>(
         context: context,
-        barrierColor: Theme.of(context).colorScheme.scrim.withOpacity(.42),
         builder: (ctx) {
           final cs = Theme.of(ctx).colorScheme;
           final tt = Theme.of(ctx).textTheme;
           return Dialog(
             elevation: 0,
-            backgroundColor: Colors.transparent,
+            backgroundColor: PromptUiTheme.of(ctx).transparent,
             insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 430),
@@ -1341,95 +1344,15 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
     );
   }
 
-  Future<bool> _confirmParentGridUpdate(ColorScheme cs) async {
-    return await showDialog<bool>(
-          context: context,
-          builder: (dialogContext) {
-            return Dialog(
-              elevation: 0,
-              backgroundColor: Colors.transparent,
-              insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 430),
-                child: OpsPanel(
-                  margin: EdgeInsets.zero,
-                  padding: EdgeInsets.zero,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
-                        decoration: BoxDecoration(
-                          color: cs.inverseSurface,
-                          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 38,
-                              height: 38,
-                              decoration: BoxDecoration(
-                                color: cs.error,
-                                borderRadius: BorderRadius.circular(13),
-                              ),
-                              child: Icon(Icons.warning_amber_rounded, color: cs.onError, size: 22),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                '부모 구역 수정 저장',
-                                style: TextStyle(color: cs.onInverseSurface, fontWeight: FontWeight.w900, fontSize: 17),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            OpsInlineMessage(
-                              message: '부모 도면을 저장하면 하위 자식 구역의 슬롯 정보가 재계산될 수 있습니다.',
-                              danger: true,
-                              icon: Icons.info_outline_rounded,
-                            ),
-                            const SizedBox(height: 14),
-                            _buildParentSaveSummary(cs),
-                            const SizedBox(height: 14),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: OpsActionButton(
-                                    label: '취소',
-                                    icon: Icons.close_rounded,
-                                    tonal: true,
-                                    onPressed: () => Navigator.pop(dialogContext, false),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: OpsActionButton(
-                                    label: '저장',
-                                    icon: Icons.save_rounded,
-                                    danger: true,
-                                    onPressed: () => Navigator.pop(dialogContext, true),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          },
-        ) ??
-        false;
+  Future<bool> _confirmParentGridUpdate() {
+    return showOpsConfirmDialog(
+      context: context,
+      title: '부모 구역 수정 저장',
+      message: '부모 도면을 저장하면 하위 자식 구역의 슬롯 정보가 재계산될 수 있습니다.',
+      confirmLabel: '저장',
+      icon: Icons.warning_amber_rounded,
+      destructive: true,
+    );
   }
 
   Future<void> _handleSave() async {
@@ -1438,7 +1361,7 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
     if (draft == null) return;
 
     if (draft is CompositeParentUpdateDraft) {
-      final confirmed = await _confirmParentGridUpdate(Theme.of(context).colorScheme);
+      final confirmed = await _confirmParentGridUpdate();
       if (!confirmed) return;
       if (!mounted) return;
     }

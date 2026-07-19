@@ -10,6 +10,7 @@ import '../../../app/config/overlay_mode_config.dart';
 import '../../../app/theme/brand_theme.dart';
 import '../../../app/theme/theme_prefs_controller.dart';
 import '../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../design_system/prompt_ui/prompt_ui_overlays.dart';
 import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
 import '../../dev/page/sheets/dev_quick_actions.dart';
 import '../application/dev_auth.dart';
@@ -38,13 +39,9 @@ class ServiceBottomSheet {
   static Future<void> show({
     required BuildContext context,
   }) async {
-    final tokens = PromptUiTheme.of(context);
-    await showModalBottomSheet<void>(
+    await showPromptOverlayBottomSheet<void>(
       context: context,
-      isScrollControlled: true,
       useSafeArea: true,
-      backgroundColor: tokens.transparent,
-      barrierColor: tokens.scrim,
       builder: (sheetContext) {
         return _ServiceBottomSheetView(
           parentContext: context,

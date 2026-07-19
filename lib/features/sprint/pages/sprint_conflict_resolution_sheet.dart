@@ -9,13 +9,11 @@ Future<bool> showSprintConflictResolutionSheet({
   required SprintModeStore store,
   required SprintAttentionItem item,
 }) async {
-  final result = await showModalBottomSheet<bool>(
+  final result = await sprintShowBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
     showDragHandle: true,
-    backgroundColor: Theme.of(context).colorScheme.surface,
-    barrierColor: Theme.of(context).colorScheme.scrim,
     builder: (_) => _SprintConflictResolutionSheet(
       store: store,
       item: item,

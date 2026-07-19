@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../../../app/utils/snackbar_helper.dart';
+import '../../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
 import '../../../../../shared/auth/five_digit_password_generator.dart';
 import '../../../../../shared/secondary/widgets/ops_console_widgets.dart';
 import '../../../domain/models/user/user_model.dart';
@@ -295,20 +297,21 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
   }
 
   Future<void> _pickWeeklyTime({required String day, required bool isStart}) async {
-    final theme = Theme.of(context);
     final current = isStart ? _startByDay[day] : _endByDay[day];
-    final initial = current ?? (isStart ? const TimeOfDay(hour: 9, minute: 0) : const TimeOfDay(hour: 18, minute: 0));
+    final initial = current ??
+        (isStart
+            ? const TimeOfDay(hour: 9, minute: 0)
+            : const TimeOfDay(hour: 18, minute: 0));
     final wasHoliday = _isHoliday(day);
-    final picked = await showTimePicker(
+    final picked = await showPromptTimePicker(
       context: context,
       initialTime: initial,
-      helpText: isStart ? '$day 출근 시간' : '$day 퇴근 시간',
-      confirmText: '확인',
-      cancelText: '취소',
-      builder: (ctx, child) {
+      builder: (pickerContext, child) {
         return MediaQuery(
-          data: MediaQuery.of(ctx).copyWith(alwaysUse24HourFormat: true),
-          child: Theme(data: theme, child: child!),
+          data: MediaQuery.of(pickerContext).copyWith(
+            alwaysUse24HourFormat: true,
+          ),
+          child: child ?? const SizedBox.shrink(),
         );
       },
     );
@@ -364,7 +367,11 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
   Future<void> _copyPassword() async {
     await Clipboard.setData(ClipboardData(text: _passwordController.text));
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('비밀번호를 복사했습니다.')));
+    showSelectedSnackbar(
+      context,
+      '비밀번호를 복사했습니다.',
+      usePromptUi: true,
+    );
   }
 
   void _handleSave() {
@@ -454,7 +461,6 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
               context,
               label: '전화번호',
 
-              helperText: '최소 9자리 이상',
               prefixIcon: const Icon(Icons.phone_rounded),
               locked: isEditMode,
               errorText: _errorMessage == '전화번호를 다시 입력하세요' ? _errorMessage : null,

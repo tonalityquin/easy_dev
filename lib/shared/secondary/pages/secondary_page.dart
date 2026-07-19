@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
 import '../application/secondary_info.dart';
 import '../application/secondary_state.dart';
 
@@ -23,7 +26,11 @@ class _SecondaryPageState extends State<SecondaryPage> {
 
   @override
   Widget build(BuildContext context) {
-    return const _SecondaryConsoleRoot(key: ValueKey('secondary_console_root'));
+    return const PromptUiScope(
+      child: _SecondaryConsoleRoot(
+        key: ValueKey<String>('secondary_console_root'),
+      ),
+    );
   }
 }
 
@@ -32,62 +39,173 @@ class _SecondaryConsoleRoot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<SecondaryState>(
-      builder: (context, state, _) {
-        final cs = Theme.of(context).colorScheme;
-        if (state.pages.isEmpty) {
-          return Scaffold(
-            backgroundColor: cs.surfaceVariant.withOpacity(.22),
-            body: const Center(child: Text('표시할 관리 항목이 없습니다')),
+    final tokens = PromptUiTheme.of(context);
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final brightness = Theme.of(context).brightness;
+    final overlayStyle = brightness == Brightness.dark
+        ? SystemUiOverlayStyle.light
+        : SystemUiOverlayStyle.dark;
+
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: overlayStyle.copyWith(
+        statusBarColor: tokens.surfaceRaised,
+        systemNavigationBarColor: tokens.canvas,
+        systemNavigationBarDividerColor: tokens.borderSubtle,
+      ),
+      child: Consumer<SecondaryState>(
+        builder: (context, state, _) {
+          if (state.pages.isEmpty) {
+            return Scaffold(
+              backgroundColor: tokens.canvas,
+              body: SafeArea(
+                child: Center(
+                  child: PromptAnimatedReveal(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 58,
+                          height: 58,
+                          decoration: BoxDecoration(
+                            color: tokens.surfaceOverlay,
+                            borderRadius: BorderRadius.circular(
+                              PromptUiShapes.card,
+                            ),
+                            border: Border.all(color: tokens.borderSubtle),
+                          ),
+                          alignment: Alignment.center,
+                          child: Icon(
+                            Icons.inbox_outlined,
+                            color: tokens.iconSecondary,
+                            size: 28,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          '표시할 관리 항목이 없습니다',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                color: tokens.textPrimary,
+                                fontWeight: FontWeight.w700,
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }
+
+          final safeIndex = state.selectedIndex.clamp(
+            0,
+            state.pages.length - 1,
           );
-        }
+          final selectedPage = state.pages[safeIndex];
 
-        final safeIndex = state.selectedIndex.clamp(0, state.pages.length - 1);
-        final selectedPage = state.pages[safeIndex];
-
-        return Scaffold(
-          backgroundColor: cs.surfaceVariant.withOpacity(.22),
-          body: Column(
-            children: [
-              SafeArea(
-                bottom: false,
-                child: _SecondaryNavBar(
-                  pages: state.pages,
-                  selectedIndex: safeIndex,
-                  isLoading: state.isLoading,
-                  onSelect: state.onItemTapped,
+          return Scaffold(
+            backgroundColor: tokens.canvas,
+            body: Column(
+              children: [
+                SafeArea(
+                  bottom: false,
+                  child: _SecondaryNavBar(
+                    pages: state.pages,
+                    selectedIndex: safeIndex,
+                    isLoading: state.isLoading,
+                    onSelect: state.onItemTapped,
+                  ),
                 ),
-              ),
-              Expanded(
-                child: Stack(
-                  children: [
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 180),
-                      child: KeyedSubtree(
-                        key: ValueKey<String>('secondary_page_${selectedPage.title}_$safeIndex'),
-                        child: MediaQuery.removePadding(
-                          context: context,
-                          removeTop: true,
-                          child: selectedPage.page,
+                Expanded(
+                  child: Stack(
+                    children: [
+                      AnimatedSwitcher(
+                        duration: reduceMotion
+                            ? Duration.zero
+                            : PromptUiMotion.component,
+                        switchInCurve: PromptUiMotion.enter,
+                        switchOutCurve: PromptUiMotion.exit,
+                        transitionBuilder: (child, animation) {
+                          final curved = CurvedAnimation(
+                            parent: animation,
+                            curve: PromptUiMotion.enter,
+                            reverseCurve: PromptUiMotion.exit,
+                          );
+                          return FadeTransition(
+                            opacity: curved,
+                            child: SlideTransition(
+                              position: Tween<Offset>(
+                                begin: const Offset(.025, 0),
+                                end: Offset.zero,
+                              ).animate(curved),
+                              child: child,
+                            ),
+                          );
+                        },
+                        child: KeyedSubtree(
+                          key: ValueKey<String>(
+                            'secondary_page_${selectedPage.title}_$safeIndex',
+                          ),
+                          child: MediaQuery.removePadding(
+                            context: context,
+                            removeTop: true,
+                            child: selectedPage.page,
+                          ),
                         ),
                       ),
-                    ),
-                    Positioned.fill(
-                      child: IgnorePointer(
-                        ignoring: !state.isLoading,
-                        child: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 180),
-                          child: state.isLoading ? const _LoadingOverlay() : const SizedBox.shrink(),
+                      Positioned.fill(
+                        child: IgnorePointer(
+                          ignoring: !state.isLoading,
+                          child: AnimatedOpacity(
+                            opacity: state.isLoading ? 1 : 0,
+                            duration: reduceMotion
+                                ? Duration.zero
+                                : PromptUiMotion.selection,
+                            child: ColoredBox(
+                              color: tokens.scrim.withOpacity(.12),
+                              child: Center(
+                                child: Container(
+                                  width: 54,
+                                  height: 54,
+                                  decoration: BoxDecoration(
+                                    color: tokens.surfaceRaised,
+                                    borderRadius: BorderRadius.circular(
+                                      PromptUiShapes.control,
+                                    ),
+                                    border: Border.all(
+                                      color: tokens.borderSubtle,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: tokens.shadow,
+                                        blurRadius: 18,
+                                        offset: const Offset(0, 8),
+                                      ),
+                                    ],
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: SizedBox(
+                                    width: 25,
+                                    height: 25,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.7,
+                                      color: tokens.accent,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ),
-        );
-      },
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 }
@@ -107,14 +225,14 @@ class _SecondaryNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
+    final tokens = PromptUiTheme.of(context);
+    final textTheme = Theme.of(context).textTheme;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
       decoration: BoxDecoration(
-        color: cs.inverseSurface,
-        border: Border(bottom: BorderSide(color: cs.outlineVariant.withOpacity(.28))),
+        color: tokens.surfaceRaised,
+        border: Border(bottom: BorderSide(color: tokens.borderSubtle)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -122,13 +240,19 @@ class _SecondaryNavBar extends StatelessWidget {
           Row(
             children: [
               Container(
-                width: 38,
-                height: 38,
+                width: 40,
+                height: 40,
                 decoration: BoxDecoration(
-                  color: cs.primary,
-                  borderRadius: BorderRadius.circular(13),
+                  color: tokens.accentContainer,
+                  borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                  border: Border.all(color: tokens.borderSubtle),
                 ),
-                child: Icon(Icons.admin_panel_settings_rounded, color: cs.onPrimary, size: 21),
+                alignment: Alignment.center,
+                child: Icon(
+                  Icons.admin_panel_settings_rounded,
+                  color: tokens.onAccentContainer,
+                  size: 22,
+                ),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -137,32 +261,42 @@ class _SecondaryNavBar extends StatelessWidget {
                   children: [
                     Text(
                       '보조 운영 콘솔',
-                      style: (tt.titleMedium ?? const TextStyle(fontSize: 16)).copyWith(
-                        color: cs.onInverseSurface,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: -.2,
+                      style: textTheme.titleMedium?.copyWith(
+                        color: tokens.textPrimary,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       '설정·계정·구역·태블릿·정산 관리',
-                      style: (tt.bodySmall ?? const TextStyle(fontSize: 12)).copyWith(
-                        color: cs.onInverseSurface.withOpacity(.70),
-                        fontWeight: FontWeight.w800,
+                      style: textTheme.bodySmall?.copyWith(
+                        color: tokens.textSecondary,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ],
                 ),
               ),
-              if (isLoading)
-                SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.5,
-                    valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
-                  ),
-                ),
+              AnimatedSwitcher(
+                duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false
+                    ? Duration.zero
+                    : PromptUiMotion.selection,
+                child: isLoading
+                    ? SizedBox(
+                        key: const ValueKey<String>('secondary_loading'),
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          color: tokens.accent,
+                        ),
+                      )
+                    : const SizedBox(
+                        key: ValueKey<String>('secondary_idle'),
+                        width: 22,
+                        height: 22,
+                      ),
+              ),
             ],
           ),
           const SizedBox(height: 10),
@@ -174,11 +308,10 @@ class _SecondaryNavBar extends StatelessWidget {
               separatorBuilder: (_, __) => const SizedBox(width: 8),
               itemBuilder: (context, index) {
                 final item = pages[index];
-                final selected = index == selectedIndex;
                 return _NavChip(
                   title: item.title,
                   icon: item.icon.icon ?? Icons.circle,
-                  selected: selected,
+                  selected: index == selectedIndex,
                   onTap: () => onSelect(index),
                 );
               },
@@ -205,52 +338,50 @@ class _NavChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(999),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+    final tokens = PromptUiTheme.of(context);
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final foreground = selected ? tokens.onAccentContainer : tokens.textSecondary;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: title,
+      child: AnimatedContainer(
+        duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
         decoration: BoxDecoration(
-          color: selected ? cs.onInverseSurface : cs.onInverseSurface.withOpacity(.08),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: selected ? cs.onInverseSurface : cs.onInverseSurface.withOpacity(.15)),
+          color: selected ? tokens.accentContainer : tokens.surfaceOverlay,
+          borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+          border: Border.all(
+            color: selected ? tokens.accent : tokens.borderSubtle,
+          ),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 17, color: selected ? cs.inverseSurface : cs.onInverseSurface.withOpacity(.74)),
-            const SizedBox(width: 6),
-            Text(
-              title,
-              style: TextStyle(
-                color: selected ? cs.inverseSurface : cs.onInverseSurface.withOpacity(.78),
-                fontWeight: FontWeight.w900,
-                fontSize: 12.5,
+        child: Material(
+          color: tokens.transparent,
+          borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+          child: InkWell(
+            onTap: () {
+              HapticFeedback.selectionClick();
+              onTap();
+            },
+            borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon, size: 17, color: foreground),
+                  const SizedBox(width: 6),
+                  Text(
+                    title,
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          color: foreground,
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _LoadingOverlay extends StatelessWidget {
-  const _LoadingOverlay();
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      color: cs.scrim.withOpacity(.10),
-      alignment: Alignment.center,
-      child: SizedBox(
-        width: 28,
-        height: 28,
-        child: CircularProgressIndicator(
-          strokeWidth: 3,
-          valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
+          ),
         ),
       ),
     );

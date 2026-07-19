@@ -1233,7 +1233,6 @@ class _ParkingGrid3DPreviewCardState extends State<ParkingGrid3DPreviewCard> {
   int _navDir = 0;
 
   static const double _bodyFixedHeight = 430.0;
-  static const double _previewHeight = _bodyFixedHeight;
 
   List<LocationModel> _readCompositeParents() {
     final parents = <LocationModel>[];
@@ -1658,21 +1657,26 @@ class _ParkingGrid3DPreviewCardState extends State<ParkingGrid3DPreviewCard> {
     final kindIcon =
     entry.isStructured ? Icons.account_tree_rounded : Icons.text_fields_rounded;
 
-    final body = entry.isStructured
-        ? _buildStructuredPreviewBody(
-      entry: entry,
-      index: idx,
-      count: count,
-      cs: cs,
-      tt: tt,
-    )
-        : _buildTextPreviewPanel(
-      entry: entry,
-      index: idx,
-      count: count,
-      cs: cs,
-      tt: tt,
-    );
+    Widget buildBody(double previewHeight) {
+      return entry.isStructured
+          ? _buildStructuredPreviewBody(
+              entry: entry,
+              index: idx,
+              count: count,
+              cs: cs,
+              tt: tt,
+              previewHeight: previewHeight,
+            )
+          : _buildTextPreviewPanel(
+              entry: entry,
+              index: idx,
+              count: count,
+              cs: cs,
+              tt: tt,
+              previewHeight: previewHeight,
+            );
+    }
+
     final contentKey = ValueKey<String>(
       '${entry.kind.name}_${idx}_${_nameKey(nameTrimmed)}',
     );
@@ -1680,17 +1684,30 @@ class _ParkingGrid3DPreviewCardState extends State<ParkingGrid3DPreviewCard> {
     return _wrapSwipe(
       count: count,
       child: _cardShell(
-        child: Column(
-          children: [
-            _opsHeaderRow(
-              title: displayName,
-              onPick: pickBtn,
-              kindLabel: kindLabel,
-              kindIcon: kindIcon,
-            ),
-            const SizedBox(height: 8),
-            _animatedBody(key: contentKey, child: body),
-          ],
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            const headerHeight = 58.0;
+            const bodySpacing = 8.0;
+            final previewHeight = constraints.hasBoundedHeight
+                ? (constraints.maxHeight - headerHeight - bodySpacing)
+                    .clamp(0.0, _bodyFixedHeight)
+                    .toDouble()
+                : _bodyFixedHeight;
+            final body = buildBody(previewHeight);
+
+            return Column(
+              children: [
+                _opsHeaderRow(
+                  title: displayName,
+                  onPick: pickBtn,
+                  kindLabel: kindLabel,
+                  kindIcon: kindIcon,
+                ),
+                const SizedBox(height: bodySpacing),
+                _animatedBody(key: contentKey, child: body),
+              ],
+            );
+          },
         ),
       ),
     );
