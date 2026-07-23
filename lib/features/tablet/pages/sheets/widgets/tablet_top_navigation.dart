@@ -4,6 +4,10 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+
 import '../../../../../app/init/app_exit_service.dart';
 import '../../../../../app/init/logout_helper.dart';
 import '../../../../../app/utils/operational_data_sync_workflow.dart';
@@ -13,6 +17,7 @@ import '../../../../dev/application/area_state.dart';
 import '../../../applications/tablet_pad_mode_state.dart';
 import '../../../applications/tablet_parking_completed_view_toggle_state.dart';
 import '../../../applications/tablet_work_session_state.dart';
+import '../../widgets/tablet_prompt_components.dart';
 
 class TabletTopNavigation extends StatefulWidget {
   final bool isAreaSelectable;
@@ -105,6 +110,7 @@ class _TabletTopNavigationState extends State<TabletTopNavigation> {
         context: context,
         title: '데이터 새로고침',
         message: '주차 구역, 정산 데이터, 월정기 사용 여부를 새로고침하기 전 요청을 준비하고 있습니다.',
+        usePromptUi: true,
       );
     } finally {
       if (!mounted) return;
@@ -114,7 +120,7 @@ class _TabletTopNavigationState extends State<TabletTopNavigation> {
   }
 
   Future<void> _openThemeSettingsDialog(BuildContext context) async {
-    await showDialog<void>(
+    await showPromptOverlayDialog<void>(
       context: context,
       barrierDismissible: true,
       builder: (dialogContext) {
@@ -258,10 +264,12 @@ class _TabletTopNavigationState extends State<TabletTopNavigation> {
                   ),
                 ),
               ),
-              actions: [
-                TextButton(
+              actions: <Widget>[
+                PromptButton(
+                  label: '닫기',
+                  variant: PromptButtonVariant.tertiary,
+                  minHeight: 44,
                   onPressed: () => Navigator.of(ctx).pop(),
-                  child: const Text('닫기'),
                 ),
               ],
             );
@@ -328,12 +336,13 @@ class _TabletTopNavigationState extends State<TabletTopNavigation> {
     final area = context.read<AreaState>().currentArea;
     final padMode = context.read<TabletPadModeState>().mode;
 
-    await showDialog<void>(
+    await showPromptOverlayDialog<void>(
       context: context,
       barrierDismissible: true,
       builder: (dialogCtx) {
         final cs = Theme.of(dialogCtx).colorScheme;
         final text = Theme.of(dialogCtx).textTheme;
+        final tokens = PromptUiTheme.of(dialogCtx);
 
         Color tint(double opacity) => _tintOnSurface(cs, opacity);
 
@@ -361,73 +370,92 @@ class _TabletTopNavigationState extends State<TabletTopNavigation> {
           required String subtitle,
           required IconData icon,
         }) {
-          final bool selected = padMode == target;
-
-          final sideColor = selected ? cs.primary : cs.outlineVariant;
-          final bg = bgForMode(target);
-
-          return SizedBox(
-            width: double.infinity,
-            child: OutlinedButton(
-              onPressed: () {
-                dialogCtx.read<TabletPadModeState>().setMode(target);
-                Navigator.of(dialogCtx, rootNavigator: true).pop();
-              },
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size.fromHeight(56),
-                side: BorderSide(
-                  color: sideColor.withOpacity(selected ? 0.95 : 0.85),
-                  width: selected ? 1.5 : 1.0,
-                ),
-                backgroundColor: bg,
-                foregroundColor: cs.onSurface,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-                padding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              ).copyWith(
-                overlayColor: MaterialStateProperty.resolveWith<Color?>(
-                      (states) => states.contains(MaterialState.pressed)
-                      ? cs.primary.withOpacity(
-                      cs.brightness == Brightness.dark ? 0.14 : 0.10)
-                      : null,
+          final selected = padMode == target;
+          return Semantics(
+            button: true,
+            selected: selected,
+            label: '$title, $subtitle',
+            child: AnimatedContainer(
+              duration: tabletPromptDuration(
+                dialogCtx,
+                PromptUiMotion.selection,
+              ),
+              curve: PromptUiMotion.standard,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: selected ? tokens.surfaceSelected : bgForMode(target),
+                borderRadius: BorderRadius.circular(PromptUiShapes.button),
+                border: Border.all(
+                  color: selected ? tokens.accent : tokens.borderSubtle,
+                  width: selected ? 2 : 1,
                 ),
               ),
-              child: Row(
-                children: [
-                  Icon(icon, color: cs.primary),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          style: (text.bodyLarge ?? const TextStyle()).copyWith(
-                            fontWeight: FontWeight.w800,
-                            color: cs.onSurface,
-                            fontSize: 15,
+              child: Material(
+                color: tokens.transparent,
+                borderRadius: BorderRadius.circular(PromptUiShapes.button),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    dialogCtx.read<TabletPadModeState>().setMode(target);
+                    Navigator.of(dialogCtx, rootNavigator: true).pop();
+                  },
+                  borderRadius: BorderRadius.circular(PromptUiShapes.button),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 58),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
+                      child: Row(
+                        children: <Widget>[
+                          Icon(icon, color: tokens.accent),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                Text(
+                                  title,
+                                  style: text.bodyLarge?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    color: tokens.textPrimary,
+                                  ),
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  subtitle,
+                                  style: text.bodySmall?.copyWith(
+                                    color: tokens.textSecondary,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          subtitle,
-                          style: (text.bodySmall ?? const TextStyle()).copyWith(
-                            fontSize: 12.5,
-                            color: cs.onSurfaceVariant,
-                            fontWeight: FontWeight.w600,
+                          AnimatedSwitcher(
+                            duration: tabletPromptDuration(
+                              dialogCtx,
+                              PromptUiMotion.selection,
+                            ),
+                            child: selected
+                                ? Icon(
+                                    Icons.check_circle_rounded,
+                                    key: const ValueKey<String>('selected'),
+                                    color: tokens.accent,
+                                  )
+                                : const SizedBox.shrink(
+                                    key: ValueKey<String>('unselected'),
+                                  ),
                           ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
-                  if (selected) ...[
-                    const SizedBox(width: 8),
-                    Icon(Icons.check_circle, color: cs.primary),
-                  ],
-                ],
+                ),
               ),
             ),
           );
@@ -496,10 +524,10 @@ class _TabletTopNavigationState extends State<TabletTopNavigation> {
                             ),
                           ),
                           const Spacer(),
-                          IconButton(
-                            icon: Icon(Icons.close, color: cs.onSurfaceVariant),
-                            onPressed: () => Navigator.of(dialogCtx).pop(),
+                          PromptIconButton(
+                            icon: Icons.close_rounded,
                             tooltip: '닫기',
+                            onPressed: () => Navigator.of(dialogCtx).pop(),
                           ),
                         ],
                       ),
@@ -559,7 +587,10 @@ class _TabletTopNavigationState extends State<TabletTopNavigation> {
                                       const Duration(milliseconds: 32),
                                     );
                                     if (!context.mounted) return;
-                                    await AppExitService.exitApp(context);
+                                    await AppExitService.exitApp(
+                                      context,
+                                      usePromptUi: true,
+                                    );
                                   },
                                   icon: const Icon(Icons.power_settings_new),
                                   label: const Text('업무 종료'),
@@ -854,16 +885,11 @@ class _TabletTopNavigationState extends State<TabletTopNavigation> {
                       const SizedBox(height: 8),
                       Align(
                         alignment: Alignment.centerRight,
-                        child: TextButton(
+                        child: PromptButton(
+                          label: '닫기',
+                          variant: PromptButtonVariant.tertiary,
+                          minHeight: 44,
                           onPressed: () => Navigator.of(dialogCtx).pop(),
-                          child: Text(
-                            '닫기',
-                            style:
-                            (text.labelLarge ?? const TextStyle()).copyWith(
-                              color: cs.primary,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
                         ),
                       ),
                     ],
@@ -882,6 +908,7 @@ class _TabletTopNavigationState extends State<TabletTopNavigation> {
       context,
       checkWorking: true,
       delay: const Duration(seconds: 1),
+      usePromptUi: true,
     );
   }
 }

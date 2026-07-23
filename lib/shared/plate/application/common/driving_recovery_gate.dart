@@ -130,6 +130,7 @@ class _DrivingRecoveryDialog extends StatefulWidget {
 class _DrivingRecoveryDialogState extends State<_DrivingRecoveryDialog> {
   late List<PlateModel> _plates;
   bool _busyAll = false;
+  final Set<String> _busyIds = <String>{};
 
   @override
   void initState() {
@@ -223,32 +224,88 @@ class _DrivingRecoveryDialogState extends State<_DrivingRecoveryDialog> {
   }
 
   Future<void> _unlockOne(PlateModel p) async {
+    if (_busyIds.contains(p.id)) return;
+
+    setState(() {
+      _busyIds.add(p.id);
+    });
+
     final repo = context.read<PlateRepository>();
 
-    await repo.recordWhoPlateClick(
-      p.id,
-      false,
-      area: p.area,
-    );
-
-    await _appendCancelLog(
-      plateId: p.id,
-      phase: _kindLabel(p),
-      userName: widget.userName,
-    );
-
-    final updated = p.copyWith(isSelected: false, selectedBy: null);
-    await _updateLocalState(updated);
-
-    if (!mounted) return;
-
     try {
-      showSuccessSnackbar(context, '잠금이 해제되었습니다. (${p.plateNumber})');
-    } catch (_) {}
+      late final PlateModel? latest;
+      try {
+        latest = await repo.getPlate(p.id);
+      } catch (_) {
+        return;
+      }
 
-    _removeById(p.id);
-    if (_plates.isEmpty && mounted) {
-      Navigator.of(context, rootNavigator: true).pop();
+      if (!mounted) return;
+
+      if (latest == null || !_isStillMyDriving(latest)) {
+        _removeById(p.id);
+        if (_plates.isEmpty && mounted) {
+          Navigator.of(context, rootNavigator: true).pop();
+        }
+        return;
+      }
+
+      try {
+        await repo.recordWhoPlateClick(
+          latest.id,
+          false,
+          area: latest.area,
+        );
+      } catch (_) {
+        PlateModel? current = p;
+        var refreshed = false;
+        try {
+          current = await repo.getPlate(p.id);
+          refreshed = true;
+        } catch (_) {}
+
+        if (!mounted) return;
+
+        if (refreshed &&
+            (current == null || !_isStillMyDriving(current))) {
+          _removeById(p.id);
+          if (_plates.isEmpty && mounted) {
+            Navigator.of(context, rootNavigator: true).pop();
+          }
+          return;
+        }
+
+        rethrow;
+      }
+
+      await _appendCancelLog(
+        plateId: latest.id,
+        phase: _kindLabel(latest),
+        userName: widget.userName,
+      );
+
+      final updated = latest.copyWith(isSelected: false, selectedBy: null);
+      await _updateLocalState(updated);
+
+      if (!mounted) return;
+
+      try {
+        showSuccessSnackbar(
+          context,
+          '잠금이 해제되었습니다. (${latest.plateNumber})',
+        );
+      } catch (_) {}
+
+      _removeById(latest.id);
+      if (_plates.isEmpty && mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _busyIds.remove(p.id);
+        });
+      }
     }
   }
 
@@ -260,7 +317,9 @@ class _DrivingRecoveryDialogState extends State<_DrivingRecoveryDialog> {
       final snapshot = List<PlateModel>.of(_plates);
       for (final p in snapshot) {
         if (!mounted) return;
-        await _unlockOne(p);
+        try {
+          await _unlockOne(p);
+        } catch (_) {}
       }
     } finally {
       if (mounted) setState(() => _busyAll = false);
@@ -397,27 +456,57 @@ class _DrivingRecoveryDialogState extends State<_DrivingRecoveryDialog> {
               ),
               const Divider(height: 1),
               Expanded(
-                child: _plates.isEmpty
-                    ? const Center(
-                        child: Padding(
-                          padding: EdgeInsets.all(18),
-                          child: Text(
-                            '남아있는 주행 중 항목이 없습니다.',
-                            style: TextStyle(
-                                color: Colors.black54,
-                                fontWeight: FontWeight.w700),
+                child: AnimatedSwitcher(
+                  duration: media.disableAnimations
+                      ? Duration.zero
+                      : const Duration(milliseconds: 240),
+                  reverseDuration: media.disableAnimations
+                      ? Duration.zero
+                      : const Duration(milliseconds: 160),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  transitionBuilder: (child, animation) {
+                    final offset = Tween<Offset>(
+                      begin: const Offset(0, 0.04),
+                      end: Offset.zero,
+                    ).animate(
+                      CurvedAnimation(
+                        parent: animation,
+                        curve: Curves.easeOutCubic,
+                      ),
+                    );
+                    return FadeTransition(
+                      opacity: animation,
+                      child: SlideTransition(position: offset, child: child),
+                    );
+                  },
+                  child: _plates.isEmpty
+                      ? const Center(
+                          key: ValueKey<String>('driving-recovery-empty'),
+                          child: Padding(
+                            padding: EdgeInsets.all(18),
+                            child: Text(
+                              '남아있는 주행 중 항목이 없습니다.',
+                              style: TextStyle(
+                                  color: Colors.black54,
+                                  fontWeight: FontWeight.w700),
+                            ),
                           ),
-                        ),
-                      )
-                    : ListView.separated(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                        itemCount: _plates.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 10),
-                        itemBuilder: (_, i) {
-                          final p = _plates[i];
-                          final label = _kindLabel(p);
+                        )
+                      : ListView.separated(
+                          key: ValueKey<String>(
+                            _plates.map((p) => p.id).join('|'),
+                          ),
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                          itemCount: _plates.length,
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 10),
+                          itemBuilder: (_, i) {
+                            final p = _plates[i];
+                            final label = _kindLabel(p);
+                            final busy = _busyIds.contains(p.id);
 
-                          return Container(
+                            return Container(
                             padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(14),
@@ -473,7 +562,9 @@ class _DrivingRecoveryDialogState extends State<_DrivingRecoveryDialog> {
                                   children: [
                                     Expanded(
                                       child: FilledButton.icon(
-                                        onPressed: () => _openStatusSheet(p),
+                                        onPressed: busy || _busyAll
+                                            ? null
+                                            : () => _openStatusSheet(p),
                                         icon: const Icon(Icons.open_in_new),
                                         label: const Text('상태 열기'),
                                         style: FilledButton.styleFrom(
@@ -490,9 +581,45 @@ class _DrivingRecoveryDialogState extends State<_DrivingRecoveryDialog> {
                                     const SizedBox(width: 10),
                                     Expanded(
                                       child: OutlinedButton.icon(
-                                        onPressed: () => _unlockOne(p),
-                                        icon: const Icon(Icons.lock_open),
-                                        label: const Text('잠금 해제'),
+                                        onPressed: busy || _busyAll
+                                            ? null
+                                            : () => _unlockOne(p),
+                                        icon: AnimatedSwitcher(
+                                          duration: media.disableAnimations
+                                              ? Duration.zero
+                                              : const Duration(
+                                                  milliseconds: 180,
+                                                ),
+                                          child: busy
+                                              ? const SizedBox(
+                                                  key: ValueKey<String>(
+                                                    'unlock-progress',
+                                                  ),
+                                                  width: 18,
+                                                  height: 18,
+                                                  child:
+                                                      CircularProgressIndicator(
+                                                    strokeWidth: 2.2,
+                                                  ),
+                                                )
+                                              : const Icon(
+                                                  Icons.lock_open,
+                                                  key: ValueKey<String>(
+                                                    'unlock-icon',
+                                                  ),
+                                                ),
+                                        ),
+                                        label: AnimatedSwitcher(
+                                          duration: media.disableAnimations
+                                              ? Duration.zero
+                                              : const Duration(
+                                                  milliseconds: 180,
+                                                ),
+                                          child: Text(
+                                            busy ? '해제 중' : '잠금 해제',
+                                            key: ValueKey<bool>(busy),
+                                          ),
+                                        ),
                                         style: OutlinedButton.styleFrom(
                                           minimumSize:
                                               const Size(double.infinity, 44),
@@ -513,8 +640,9 @@ class _DrivingRecoveryDialogState extends State<_DrivingRecoveryDialog> {
                               ],
                             ),
                           );
-                        },
-                      ),
+                          },
+                        ),
+                ),
               ),
             ],
           ),

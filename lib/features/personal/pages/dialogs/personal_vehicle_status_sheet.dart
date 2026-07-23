@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+
 import '../../../../app/utils/dev_firebase_debug_dialog.dart';
 import '../../../../shared/plate/application/common/movement_plate.dart';
 import '../../../../shared/plate/domain/enums/plate_type.dart';
@@ -8,6 +12,7 @@ import '../../../../shared/plate/domain/models/plate_model.dart';
 import '../../application/personal_saved_vehicle_store.dart';
 import '../../application/personal_vehicle_status_service.dart';
 import '../../domain/models/personal_saved_vehicle.dart';
+import '../widgets/personal_prompt_components.dart';
 import '../widgets/personal_vehicle_timeline.dart';
 import 'personal_departure_success_dialog.dart';
 
@@ -17,11 +22,10 @@ Future<bool?> showPersonalVehicleStatusSheet({
   required String area,
   PlateModel? initialPlate,
 }) {
-  return showModalBottomSheet<bool>(
+  return showPromptOverlayBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    backgroundColor: Colors.transparent,
     builder: (_) => PersonalVehicleStatusSheet(
       vehicle: vehicle,
       area: area,
@@ -83,6 +87,7 @@ class _PersonalVehicleStatusSheetState extends State<PersonalVehicleStatusSheet>
         operation: 'personal.vehicleStatusSheet.refresh',
         error: e,
         stackTrace: st,
+        usePromptUi: true,
         details: <String, Object?>{
           'area': widget.area,
           'vehicleId': widget.vehicle.id,
@@ -122,6 +127,7 @@ class _PersonalVehicleStatusSheetState extends State<PersonalVehicleStatusSheet>
         operation: 'personal.departureRequest.submit',
         error: e,
         stackTrace: st,
+        usePromptUi: true,
         details: <String, Object?>{
           'collection': 'plates',
           'plateNumber': plate.plateNumber,
@@ -145,158 +151,141 @@ class _PersonalVehicleStatusSheetState extends State<PersonalVehicleStatusSheet>
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final text = Theme.of(context).textTheme;
-    final mq = MediaQuery.of(context);
-    final maxHeight = mq.size.height * .90;
+    final tokens = PromptUiTheme.of(context);
+    final textTheme = Theme.of(context).textTheme;
+    final mediaQuery = MediaQuery.of(context);
+    final maxHeight = mediaQuery.size.height * .90;
     final plate = _plate;
     final type = plate?.typeEnum;
     final canRequest = type == PlateType.parkingCompleted;
 
-    return Container(
+    return ConstrainedBox(
       constraints: BoxConstraints(maxHeight: maxHeight),
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
-        boxShadow: [
-          BoxShadow(
-            color: cs.shadow.withOpacity(.18),
-            blurRadius: 28,
-            offset: const Offset(0, -12),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(height: 10),
-          Container(
-            width: 42,
-            height: 5,
-            decoration: BoxDecoration(
-              color: cs.outlineVariant,
-              borderRadius: BorderRadius.circular(999),
-            ),
-          ),
-          Flexible(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              widget.vehicle.displayPlate,
-                              style: text.headlineSmall?.copyWith(
-                                color: cs.onSurface,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: -0.6,
-                              ),
+      child: PromptSheetScaffold(
+        title: widget.vehicle.displayPlate,
+        icon: Icons.directions_car_filled_rounded,
+        onClose: _requesting ? () {} : () => Navigator.of(context).pop(false),
+        body: Column(
+          children: <Widget>[
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: Text(
+                            '${widget.vehicle.displayLabel} · ${widget.area.trim().isEmpty ? '지점 미확인' : widget.area.trim()}',
+                            style: textTheme.bodyMedium?.copyWith(
+                              color: tokens.textSecondary,
+                              fontWeight: FontWeight.w600,
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '${widget.vehicle.displayLabel} · ${widget.area.trim().isEmpty ? '지점 미확인' : widget.area.trim()}',
-                              style: text.bodyMedium?.copyWith(
-                                color: cs.onSurfaceVariant,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
-                      ),
-                      IconButton(
-                        tooltip: '닫기',
-                        onPressed: _requesting ? null : () => Navigator.of(context).pop(false),
-                        icon: const Icon(Icons.close_rounded),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  _StatusHero(plate: plate, loading: _loading, error: _error),
-                  if (plate != null) ...[
-                    const SizedBox(height: 14),
-                    _InfoGrid(plate: plate),
-                    const SizedBox(height: 14),
-                    Container(
-                      height: 260,
-                      decoration: BoxDecoration(
-                        color: cs.surfaceContainerLowest,
-                        borderRadius: BorderRadius.circular(22),
-                        border: Border.all(color: cs.outlineVariant.withOpacity(.55)),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(22),
-                        child: PersonalDepartureRequestFocusedGrid(
-                          area: plate.area,
-                          details: parsePersonalParkingLocation(plate.location),
+                        PersonalPromptStatusPill(
+                          label: _loading
+                              ? '확인 중'
+                              : _statusLabel(type),
+                          foreground: _statusForeground(tokens, type,
+                              loading: _loading, error: _error != null),
+                          background: _statusBackground(tokens, type,
+                              loading: _loading, error: _error != null),
+                          icon: _statusIcon(
+                            type,
+                            loading: _loading,
+                            error: _error != null,
+                          ),
                         ),
-                      ),
+                      ],
                     ),
                     const SizedBox(height: 14),
-                    PersonalVehicleTimeline(plate: plate),
-                  ] else ...[
-                    const SizedBox(height: 18),
-                    _EmptyStatusCard(onRefresh: _refresh),
+                    PersonalPromptAnimatedSwap(
+                      stateKey: '${_loading}_${_error ?? ''}_${plate?.id ?? ''}',
+                      alignment: Alignment.topCenter,
+                      child: _StatusHero(
+                        plate: plate,
+                        loading: _loading,
+                        error: _error,
+                      ),
+                    ),
+                    if (plate != null) ...<Widget>[
+                      const SizedBox(height: 14),
+                      PromptAnimatedReveal(child: _InfoGrid(plate: plate)),
+                      const SizedBox(height: 14),
+                      PersonalPromptPanel(
+                        padding: EdgeInsets.zero,
+                        child: SizedBox(
+                          height: 260,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(
+                              PromptUiShapes.card,
+                            ),
+                            child: PersonalDepartureRequestFocusedGrid(
+                              area: plate.area,
+                              details: parsePersonalParkingLocation(
+                                plate.location,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      PromptAnimatedReveal(
+                        delay: const Duration(milliseconds: 40),
+                        child: PersonalVehicleTimeline(plate: plate),
+                      ),
+                    ] else ...<Widget>[
+                      const SizedBox(height: 18),
+                      _EmptyStatusCard(onRefresh: _refresh),
+                    ],
                   ],
+                ),
+              ),
+            ),
+            Container(
+              padding: EdgeInsets.fromLTRB(
+                20,
+                12,
+                20,
+                12 + mediaQuery.padding.bottom,
+              ),
+              decoration: BoxDecoration(
+                color: tokens.surfaceRaised,
+                border: Border(
+                  top: BorderSide(color: tokens.borderSubtle),
+                ),
+              ),
+              child: Row(
+                children: <Widget>[
+                  Expanded(
+                    child: PromptButton(
+                      label: '상태 새로고침',
+                      icon: Icons.refresh_rounded,
+                      loading: _loading,
+                      variant: PromptButtonVariant.secondary,
+                      haptic: PromptHaptic.selection,
+                      onPressed: _requesting ? null : _refresh,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: PromptButton(
+                      label: _requesting ? '요청 중' : '출차 요청하기',
+                      icon: Icons.near_me_rounded,
+                      loading: _requesting,
+                      haptic: PromptHaptic.medium,
+                      onPressed: canRequest && !_requesting
+                          ? _requestDeparture
+                          : null,
+                    ),
+                  ),
                 ],
               ),
             ),
-          ),
-          Container(
-            padding: EdgeInsets.fromLTRB(20, 12, 20, 12 + mq.padding.bottom),
-            decoration: BoxDecoration(
-              color: cs.surface,
-              border: Border(top: BorderSide(color: cs.outlineVariant.withOpacity(.55))),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _requesting ? null : _refresh,
-                    icon: _loading
-                        ? SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: cs.primary),
-                          )
-                        : const Icon(Icons.refresh_rounded),
-                    label: const Text('상태 새로고침'),
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(50),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: canRequest && !_requesting ? _requestDeparture : null,
-                    icon: _requesting
-                        ? SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: cs.onPrimary),
-                          )
-                        : const Icon(Icons.near_me_rounded),
-                    label: Text(_requesting ? '요청 중...' : '출차 요청하기'),
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size.fromHeight(50),
-                      backgroundColor: cs.primary,
-                      foregroundColor: cs.onPrimary,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -456,10 +445,12 @@ class _EmptyStatusCard extends StatelessWidget {
             style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700, height: 1.35),
           ),
           const SizedBox(height: 12),
-          OutlinedButton.icon(
+          PromptButton(
+            label: '다시 확인',
+            icon: Icons.refresh_rounded,
+            variant: PromptButtonVariant.secondary,
+            haptic: PromptHaptic.selection,
             onPressed: onRefresh,
-            icon: const Icon(Icons.refresh_rounded),
-            label: const Text('다시 확인'),
           ),
         ],
       ),
@@ -513,6 +504,50 @@ IconData _statusIcon(PlateType? type, {required bool loading, required bool erro
       return (cs.onSecondaryContainer, cs.secondaryContainer);
     case null:
       return (cs.onSurfaceVariant, cs.surfaceContainerHighest);
+  }
+}
+
+Color _statusForeground(
+  PromptUiTokens tokens,
+  PlateType? type, {
+  required bool loading,
+  required bool error,
+}) {
+  if (error) return tokens.danger;
+  if (loading) return tokens.statusSettlementPending;
+  switch (type) {
+    case PlateType.parkingCompleted:
+      return tokens.statusParkingCompleted;
+    case PlateType.departureRequests:
+      return tokens.statusDepartureRequested;
+    case PlateType.departureCompleted:
+      return tokens.statusSynchronized;
+    case PlateType.parkingRequests:
+      return tokens.statusSettlementPending;
+    case null:
+      return tokens.statusOffline;
+  }
+}
+
+Color _statusBackground(
+  PromptUiTokens tokens,
+  PlateType? type, {
+  required bool loading,
+  required bool error,
+}) {
+  if (error) return tokens.dangerContainer;
+  if (loading) return tokens.statusSettlementPendingContainer;
+  switch (type) {
+    case PlateType.parkingCompleted:
+      return tokens.statusParkingCompletedContainer;
+    case PlateType.departureRequests:
+      return tokens.statusDepartureRequestedContainer;
+    case PlateType.departureCompleted:
+      return tokens.statusSynchronizedContainer;
+    case PlateType.parkingRequests:
+      return tokens.statusSettlementPendingContainer;
+    case null:
+      return tokens.statusOfflineContainer;
   }
 }
 

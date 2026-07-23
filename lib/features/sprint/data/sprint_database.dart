@@ -18,7 +18,7 @@ class SprintDatabaseSnapshot {
     required this.conflictResolutions,
     required this.googleAccounts,
     required this.calendarProfiles,
-    required this.activeCalendarProfileId,
+    required this.defaultCalendarProfileId,
     required this.workspaceScope,
     required this.selectedDate,
     required this.lastObservedToday,
@@ -38,7 +38,7 @@ class SprintDatabaseSnapshot {
   final List<SprintConflictResolution> conflictResolutions;
   final List<SprintGoogleAccount> googleAccounts;
   final List<SprintCalendarProfile> calendarProfiles;
-  final String? activeCalendarProfileId;
+  final String? defaultCalendarProfileId;
   final SprintWorkspaceScope workspaceScope;
   final DateTime selectedDate;
   final DateTime lastObservedToday;
@@ -54,7 +54,7 @@ class SprintDatabase {
   static final SprintDatabase instance = SprintDatabase._();
 
   static const String _databaseName = 'sprint_mode.db';
-  static const int _databaseVersion = 10;
+  static const int _databaseVersion = 12;
   static const String _legacyMigrationKey = 'legacy_preferences_migrated';
   static const String _calendarProfilesMigrationKey =
       'calendar_profiles_migrated_v10';
@@ -119,6 +119,9 @@ class SprintDatabase {
         '1',
         DateTime.now().millisecondsSinceEpoch,
       );
+    }
+    if (oldVersion < 12) {
+      await _migrateCalendarProfileRoles(db);
     }
     await _ensureSchema(db);
   }
@@ -252,6 +255,81 @@ class SprintDatabase {
     );
   }
 
+  Future<void> _ensureCalendarProfileRoleColumn(Database db) async {
+    await _ensureColumn(
+      db,
+      table: 'sprint_calendar_profiles',
+      column: 'profile_role',
+      definition: "TEXT NOT NULL DEFAULT 'secondary'",
+    );
+  }
+
+  Future<void> _migrateCalendarProfileRoles(Database db) async {
+    await _ensureCalendarProfileRoleColumn(db);
+    await db.update(
+      'sprint_calendar_profiles',
+      <String, Object?>{'profile_role': 'secondary'},
+      where: 'deleted_at_ms IS NULL',
+    );
+    final settings = await db.query(
+      'sprint_settings',
+      columns: <String>['setting_key', 'setting_value'],
+      where: 'setting_key IN (?, ?)',
+      whereArgs: <Object?>[
+        'default_calendar_profile_id',
+        'active_calendar_profile_id',
+      ],
+      orderBy: "CASE setting_key WHEN 'default_calendar_profile_id' THEN 0 ELSE 1 END",
+    );
+    String? defaultProfileId;
+    for (final row in settings) {
+      final value = row['setting_value']?.toString().trim();
+      if (value?.isNotEmpty == true) {
+        final matches = Sqflite.firstIntValue(
+              await db.rawQuery(
+                '''
+                SELECT COUNT(*)
+                FROM sprint_calendar_profiles
+                WHERE id = ? AND enabled = 1 AND deleted_at_ms IS NULL
+                ''',
+                <Object?>[value],
+              ),
+            ) ??
+            0;
+        if (matches > 0) {
+          defaultProfileId = value;
+          break;
+        }
+      }
+    }
+    if (defaultProfileId == null) {
+      final profiles = await db.query(
+        'sprint_calendar_profiles',
+        columns: <String>['id'],
+        where: 'enabled = 1 AND deleted_at_ms IS NULL',
+        orderBy: 'sort_order ASC, created_at_ms ASC',
+        limit: 1,
+      );
+      if (profiles.isNotEmpty) {
+        defaultProfileId = profiles.first['id']?.toString();
+      }
+    }
+    if (defaultProfileId?.isNotEmpty == true) {
+      await db.update(
+        'sprint_calendar_profiles',
+        <String, Object?>{'profile_role': 'primary'},
+        where: 'id = ? AND deleted_at_ms IS NULL',
+        whereArgs: <Object?>[defaultProfileId],
+      );
+      await _setSetting(
+        db,
+        'default_calendar_profile_id',
+        defaultProfileId!,
+        DateTime.now().millisecondsSinceEpoch,
+      );
+    }
+  }
+
   Future<void> _ensureTaskDescriptionColumn(Database db) async {
     await _ensureColumn(
       db,
@@ -307,6 +385,7 @@ class SprintDatabase {
         account_id TEXT NOT NULL,
         calendar_id TEXT NOT NULL,
         label TEXT NOT NULL,
+        profile_role TEXT NOT NULL DEFAULT 'secondary',
         locked INTEGER NOT NULL DEFAULT 0,
         enabled INTEGER NOT NULL DEFAULT 1,
         sort_order INTEGER NOT NULL DEFAULT 0,
@@ -318,6 +397,7 @@ class SprintDatabase {
         FOREIGN KEY(account_id) REFERENCES sprint_google_accounts(id)
       )
     ''');
+    await _ensureCalendarProfileRoleColumn(db);
     await _ensureColumn(
       db,
       table: 'sprint_tasks',
@@ -672,6 +752,7 @@ class SprintDatabase {
         account_id TEXT NOT NULL,
         calendar_id TEXT NOT NULL,
         label TEXT NOT NULL,
+        profile_role TEXT NOT NULL DEFAULT 'secondary',
         locked INTEGER NOT NULL DEFAULT 0,
         enabled INTEGER NOT NULL DEFAULT 1,
         sort_order INTEGER NOT NULL DEFAULT 0,
@@ -919,10 +1000,12 @@ class SprintDatabase {
           accountRows.map(_googleAccountFromRow).toList(growable: false),
       calendarProfiles:
           profileRows.map(_calendarProfileFromRow).toList(growable: false),
-      activeCalendarProfileId:
-          settings['active_calendar_profile_id']?.trim().isNotEmpty == true
-              ? settings['active_calendar_profile_id']!.trim()
-              : null,
+      defaultCalendarProfileId:
+          settings['default_calendar_profile_id']?.trim().isNotEmpty == true
+              ? settings['default_calendar_profile_id']!.trim()
+              : settings['active_calendar_profile_id']?.trim().isNotEmpty == true
+                  ? settings['active_calendar_profile_id']!.trim()
+                  : null,
       workspaceScope: SprintWorkspaceScope.fromStorageValue(
         settings['workspace_scope'],
       ),
@@ -993,6 +1076,7 @@ class SprintDatabase {
             'account_id': profile.accountId,
             'calendar_id': profile.calendarId,
             'label': profile.label,
+            'profile_role': profile.role.name,
             'locked': profile.locked ? 1 : 0,
             'enabled': profile.enabled ? 1 : 0,
             'sort_order': profile.sortOrder,
@@ -1006,6 +1090,7 @@ class SprintDatabase {
             'account_id': profile.accountId,
             'calendar_id': profile.calendarId,
             'label': profile.label,
+            'profile_role': profile.role.name,
             'locked': profile.locked ? 1 : 0,
             'enabled': profile.enabled ? 1 : 0,
             'sort_order': profile.sortOrder,
@@ -1361,8 +1446,8 @@ class SprintDatabase {
       );
       await _setSetting(
         transaction,
-        'active_calendar_profile_id',
-        snapshot.activeCalendarProfileId ?? '',
+        'default_calendar_profile_id',
+        snapshot.defaultCalendarProfileId ?? '',
         now,
       );
       await _setSetting(
@@ -1451,6 +1536,10 @@ class SprintDatabase {
       accountId: row['account_id'].toString(),
       calendarId: row['calendar_id'].toString(),
       label: row['label'].toString(),
+      role: SprintCalendarProfileRole.values.firstWhere(
+        (value) => value.name == row['profile_role']?.toString(),
+        orElse: () => SprintCalendarProfileRole.secondary,
+      ),
       locked: _int(row['locked']) != 0,
       enabled: _int(row['enabled']) != 0,
       sortOrder: _int(row['sort_order']),

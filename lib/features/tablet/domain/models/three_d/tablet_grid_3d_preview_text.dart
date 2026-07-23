@@ -29,21 +29,31 @@ class _AttentionPulseState extends State<_AttentionPulse>
       parent: _controller,
       curve: Curves.easeInOut,
     );
-    if (widget.active) {
+  }
+
+  void _syncMotion() {
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (reduceMotion || !widget.active) {
+      _controller.stop();
+      _controller.value = 0;
+      return;
+    }
+    if (!_controller.isAnimating) {
       _controller.repeat(reverse: true);
     }
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncMotion();
+  }
+
+  @override
   void didUpdateWidget(covariant _AttentionPulse oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.active == oldWidget.active) return;
-    if (widget.active) {
-      _controller.repeat(reverse: true);
-    } else {
-      _controller.stop();
-      _controller.value = 0.0;
-    }
+    _syncMotion();
   }
 
   @override
@@ -54,7 +64,9 @@ class _AttentionPulseState extends State<_AttentionPulse>
 
   @override
   Widget build(BuildContext context) {
-    if (!widget.active) {
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (!widget.active || reduceMotion) {
       return Container(
         width: 10,
         height: 10,
@@ -137,8 +149,8 @@ extension _TabletGridTextPreviewPart on _TabletGrid3dPreviewState {
     final labelColor = emphasize ? cs.onSurface : cs.onSurfaceVariant;
 
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOut,
+      duration: tabletPromptDuration(context, PromptUiMotion.component),
+      curve: PromptUiMotion.standard,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: bg,
@@ -248,6 +260,7 @@ extension _TabletGridTextPreviewPart on _TabletGrid3dPreviewState {
     required ColorScheme cs,
     required TextTheme tt,
   }) {
+    final tokens = PromptUiTheme.of(context);
     final loc = entry.location;
     final capacity = max(
       0,
@@ -293,8 +306,8 @@ extension _TabletGridTextPreviewPart on _TabletGrid3dPreviewState {
     final overCapacity = capacity > 0 && plateCount > capacity;
     final statusColor = overCapacity || available == 0 ? cs.error : cs.primary;
 
-    final currentVehicleTone = cs.primary;
-    final departureTone = cs.error;
+    final currentVehicleTone = tokens.statusParkingCompleted;
+    final departureTone = tokens.statusDepartureRequested;
 
     final metricRows = <Widget>[
       Row(

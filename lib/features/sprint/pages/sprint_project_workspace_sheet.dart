@@ -797,8 +797,9 @@ class _SprintAccountArea extends StatelessWidget {
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final duration =
         reduceMotion ? Duration.zero : const Duration(milliseconds: 180);
-    final profile = store.activeCalendarProfile;
-    final account = store.activeGoogleAccount;
+    final profile = store.defaultCalendarProfile;
+    final account = store.accountForProfile(profile?.id);
+    final profileCount = store.calendarProfiles.length;
     final title = profile?.label.trim().isNotEmpty == true
         ? profile!.label.trim()
         : 'Google 캘린더 계정';
@@ -806,6 +807,12 @@ class _SprintAccountArea extends StatelessWidget {
     final calendarLabel = profile?.calendarId.trim().isNotEmpty == true
         ? profile!.calendarId.trim()
         : '캘린더 미설정';
+    final accountSummary = email.isEmpty
+        ? calendarLabel
+        : '$email · $calendarLabel';
+    final subtitle = profileCount <= 1
+        ? accountSummary
+        : '기본 · $accountSummary · 총 $profileCount개';
     final initial = title.isEmpty ? 'G' : title.substring(0, 1).toUpperCase();
 
     return ColoredBox(
@@ -871,9 +878,7 @@ class _SprintAccountArea extends StatelessWidget {
                                 ),
                                 const SizedBox(height: 3),
                                 Text(
-                                  email.isEmpty
-                                      ? calendarLabel
-                                      : '$email · $calendarLabel',
+                                  subtitle,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
@@ -897,11 +902,11 @@ class _SprintAccountArea extends StatelessWidget {
                                   ),
                                 )
                               : Icon(
-                                  store.googleCalendarIdLocked
-                                      ? Icons.lock_rounded
-                                      : Icons.swap_horiz_rounded,
+                                  profileCount > 1
+                                      ? Icons.calendar_view_month_rounded
+                                      : Icons.calendar_month_outlined,
                                   key: ValueKey<String>(
-                                    'account-${store.activeCalendarProfileId}',
+                                    'account-${store.defaultCalendarProfileId}',
                                   ),
                                 ),
                         ),
@@ -1338,9 +1343,12 @@ class _SprintAccountSheet extends StatefulWidget {
 
 class _SprintAccountSheetState extends State<_SprintAccountSheet> {
   String? _busyProfileId;
-  bool _adding = false;
+  bool _addingCurrentAccount = false;
+  bool _addingOtherAccount = false;
 
-  bool get _busy => _adding ||
+  bool get _busy =>
+      _addingCurrentAccount ||
+      _addingOtherAccount ||
       _busyProfileId != null ||
       widget.store.accountBusy;
 
@@ -1350,7 +1358,7 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
     }
     if (error is StateError) {
       if (error.message == 'calendar_profile_in_use') {
-        return '연결된 스프린트 일정이 있어 이 캘린더를 삭제할 수 없습니다.';
+        return '연결된 스프린트 업무가 있어 이 캘린더를 삭제할 수 없습니다.';
       }
       if (error.message == 'interactive_google_auth_not_supported') {
         return '이 환경에서는 Google 계정 선택을 시작할 수 없습니다.';
@@ -1358,27 +1366,54 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
       if (error.message == 'calendar_profile_not_found') {
         return '저장된 캘린더 정보를 찾지 못했습니다.';
       }
+      if (error.message == 'calendar_profile_duplicate') {
+        return '같은 Google 계정과 Calendar ID 조합이 이미 등록돼 있습니다.';
+      }
+      if (error.message == 'calendar_write_access_required') {
+        return '선택한 Google 계정에 이 캘린더의 일정 변경 권한이 없습니다.';
+      }
+      if (error.message == 'account_operation_in_progress') {
+        return '다른 Google 계정 작업이 진행 중입니다.';
+      }
+    }
+    final message = error.toString().toLowerCase();
+    if (message.contains('status: 403') || message.contains('status 403')) {
+      return '선택한 Google 계정에 이 캘린더의 읽기 또는 쓰기 권한이 없습니다.';
+    }
+    if (message.contains('status: 404') || message.contains('status 404')) {
+      return '캘린더를 찾지 못했거나 선택한 Google 계정으로 접근할 수 없습니다.';
     }
     return 'Google 캘린더 작업을 완료하지 못했습니다.';
   }
 
-  Future<void> _addProfile({required bool forceAccountSelection}) async {
+  Future<void> _addProfile({
+    required bool forceAccountSelection,
+  }) async {
     if (_busy) return;
     final draft = await _showSprintCalendarProfileEditor(context);
     if (draft == null || !mounted) return;
-    setState(() => _adding = true);
+    setState(() {
+      if (forceAccountSelection) {
+        _addingOtherAccount = true;
+      } else {
+        _addingCurrentAccount = true;
+      }
+    });
     try {
+      final firstProfile = widget.store.calendarProfiles.isEmpty;
       await widget.store.addGoogleCalendarProfile(
         label: draft.label,
         calendarId: draft.calendarId,
         locked: draft.locked,
         forceAccountSelection: forceAccountSelection,
-        makeActive: true,
+        makeActive: firstProfile,
       );
       if (!mounted) return;
       sprintShowMessage(
         context: context,
-        message: 'Google 캘린더를 저장하고 메인으로 전환했습니다.',
+        message: firstProfile
+            ? 'Google 캘린더를 연결하고 기본 캘린더로 설정했습니다.'
+            : 'Google 캘린더를 추가했습니다.',
       );
     } catch (error) {
       if (!mounted) return;
@@ -1388,19 +1423,80 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
         danger: true,
       );
     } finally {
-      if (mounted) setState(() => _adding = false);
+      if (mounted) {
+        setState(() {
+          _addingCurrentAccount = false;
+          _addingOtherAccount = false;
+        });
+      }
     }
   }
 
-  Future<void> _switchProfile(SprintCalendarProfile profile) async {
-    if (_busy || profile.id == widget.store.activeCalendarProfileId) return;
+  Future<void> _setDefault(SprintCalendarProfile profile) async {
+    if (_busy || profile.id == widget.store.defaultCalendarProfileId) return;
     setState(() => _busyProfileId = profile.id);
     try {
-      await widget.store.switchActiveCalendarProfile(profile.id);
+      await widget.store.setDefaultCalendarProfile(profile.id);
       if (!mounted) return;
       sprintShowMessage(
         context: context,
-        message: '${profile.label} 캘린더를 메인으로 전환했습니다.',
+        message: '${profile.label} 캘린더를 기본 업무 대상으로 설정했습니다.',
+      );
+    } catch (error) {
+      if (!mounted) return;
+      sprintShowMessage(
+        context: context,
+        message: _errorMessage(error),
+        danger: true,
+      );
+    } finally {
+      if (mounted) setState(() => _busyProfileId = null);
+    }
+  }
+
+  Future<void> _syncProfile(SprintCalendarProfile profile) async {
+    if (_busy) return;
+    setState(() => _busyProfileId = profile.id);
+    try {
+      await widget.store.syncCalendarProfile(profile.id);
+      if (!mounted) return;
+      final state = widget.store.calendarStateForProfile(profile.id);
+      final success = state == SprintCalendarConnectionState.connected;
+      sprintShowMessage(
+        context: context,
+        message: success
+            ? '${profile.label} 캘린더를 동기화했습니다.'
+            : '${profile.label} 캘린더 동기화를 완료하지 못했습니다.',
+        danger: !success,
+      );
+    } catch (error) {
+      if (!mounted) return;
+      sprintShowMessage(
+        context: context,
+        message: _errorMessage(error),
+        danger: true,
+      );
+    } finally {
+      if (mounted) setState(() => _busyProfileId = null);
+    }
+  }
+
+  Future<void> _authenticateProfile(SprintCalendarProfile profile) async {
+    if (_busy) return;
+    setState(() => _busyProfileId = profile.id);
+    try {
+      await widget.store.authenticateCalendarProfile(
+        profile.id,
+        forceAccountSelection: true,
+      );
+      await widget.store.syncCalendarProfile(
+        profile.id,
+        interactive: false,
+      );
+      if (!mounted) return;
+      sprintShowMessage(
+        context: context,
+        message: '${profile.label} Google 계정을 인증하고 동기화했습니다.',
       );
     } catch (error) {
       if (!mounted) return;
@@ -1432,7 +1528,7 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
       if (!mounted) return;
       sprintShowMessage(
         context: context,
-        message: '캘린더 표시 설정을 저장했습니다.',
+        message: '캘린더 설정을 저장했습니다.',
       );
     } catch (error) {
       if (!mounted) return;
@@ -1449,27 +1545,50 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
   Future<void> _removeProfile(SprintCalendarProfile profile) async {
     if (_busy) return;
     final colors = Theme.of(context).colorScheme;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final duration =
+        reduceMotion ? Duration.zero : const Duration(milliseconds: 280);
     final confirmed = await sprintShowDialog<bool>(
           context: context,
           barrierDismissible: false,
           builder: (dialogContext) {
             return AlertDialog(
               title: const Text('저장된 캘린더 삭제'),
-              content: Text(
-                '${profile.label} 캘린더를 저장 목록에서 삭제할까요?',
+              content: TweenAnimationBuilder<double>(
+                tween: Tween<double>(begin: 0, end: 1),
+                duration: duration,
+                curve: Curves.easeOutCubic,
+                builder: (context, value, child) {
+                  return Opacity(
+                    opacity: value,
+                    child: Transform.translate(
+                      offset: Offset(0, 10 * (1 - value)),
+                      child: Transform.scale(
+                        scale: 0.97 + 0.03 * value,
+                        alignment: Alignment.topCenter,
+                        child: child,
+                      ),
+                    ),
+                  );
+                },
+                child: Text(
+                  '${profile.label} 캘린더를 저장 목록에서 삭제할까요? 다른 캘린더는 유지됩니다.',
+                ),
               ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.of(dialogContext).pop(false),
                   child: const Text('취소'),
                 ),
-                FilledButton(
+                FilledButton.icon(
                   onPressed: () => Navigator.of(dialogContext).pop(true),
                   style: FilledButton.styleFrom(
                     backgroundColor: colors.error,
                     foregroundColor: colors.onError,
                   ),
-                  child: const Text('삭제'),
+                  icon: const Icon(Icons.delete_outline_rounded),
+                  label: const Text('삭제'),
                 ),
               ],
             );
@@ -1497,9 +1616,9 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
     }
   }
 
-  Future<void> _syncActive() async {
-    if (_busy || widget.store.activeCalendarProfile == null) return;
-    setState(() => _busyProfileId = widget.store.activeCalendarProfileId);
+  Future<void> _syncAll() async {
+    if (_busy || widget.store.calendarProfiles.isEmpty) return;
+    setState(() => _busyProfileId = 'all');
     try {
       await widget.store.syncGoogleCalendar();
       if (!mounted) return;
@@ -1508,8 +1627,8 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
       sprintShowMessage(
         context: context,
         message: success
-            ? '메인 캘린더를 동기화했습니다.'
-            : '메인 캘린더 동기화를 완료하지 못했습니다.',
+            ? '연결된 Google 캘린더를 모두 동기화했습니다.'
+            : '일부 Google 캘린더에 재인증 또는 동기화 확인이 필요합니다.',
         danger: !success,
       );
     } catch (error) {
@@ -1531,13 +1650,13 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final duration =
-        reduceMotion ? Duration.zero : const Duration(milliseconds: 220);
+        reduceMotion ? Duration.zero : const Duration(milliseconds: 260);
     return AnimatedBuilder(
       animation: widget.store,
       builder: (context, child) {
         final profiles = widget.store.calendarProfiles;
-        final active = widget.store.activeCalendarProfile;
-        final activeAccount = widget.store.activeGoogleAccount;
+        final active = widget.store.defaultCalendarProfile;
+        final activeAccount = widget.store.accountForProfile(active?.id);
         final activeEmail = activeAccount?.email.trim() ?? '';
         final calendarState = widget.store.calendarState;
         String? verificationMessage;
@@ -1545,19 +1664,18 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
         Color? verificationBackground;
         Color? verificationForeground;
         if (calendarState == SprintCalendarConnectionState.switching) {
-          verificationMessage = 'Google 계정과 캘린더 접근 권한을 확인하고 있습니다.';
+          verificationMessage = 'Google 계정과 캘린더 권한을 확인하고 있습니다.';
           verificationIcon = Icons.verified_user_outlined;
           verificationBackground = colors.secondaryContainer;
           verificationForeground = colors.onSecondaryContainer;
         } else if (calendarState ==
             SprintCalendarConnectionState.reauthenticationRequired) {
-          verificationMessage = 'Google 계정 연결 또는 재인증이 필요합니다.';
+          verificationMessage = '일부 Google 캘린더 계정에 재인증이 필요합니다.';
           verificationIcon = Icons.lock_person_outlined;
           verificationBackground = colors.tertiaryContainer;
           verificationForeground = colors.onTertiaryContainer;
         } else if (calendarState == SprintCalendarConnectionState.failed) {
-          verificationMessage =
-              '캘린더 접근을 확인하지 못했습니다. 저장된 계정 정보는 유지됩니다.';
+          verificationMessage = '일부 Google 캘린더 동기화에 실패했습니다.';
           verificationIcon = Icons.error_outline_rounded;
           verificationBackground = colors.errorContainer;
           verificationForeground = colors.onErrorContainer;
@@ -1569,6 +1687,7 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
             minimum: const EdgeInsets.only(bottom: 10),
             child: AnimatedPadding(
               duration: duration,
+              curve: Curves.easeOutCubic,
               padding: EdgeInsets.only(bottom: keyboardInset),
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
@@ -1584,15 +1703,29 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      '저장된 Gmail 계정과 캘린더 중 하나를 메인으로 선택합니다.',
+                      '모든 캘린더는 업무 생성, 수정, 삭제와 독립 동기화를 동일하게 지원합니다. 기본 캘린더는 신규 업무의 최초 선택값입니다.',
                       style: TextStyle(color: colors.onSurfaceVariant),
                     ),
                     const SizedBox(height: 16),
                     AnimatedSwitcher(
                       duration: duration,
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      transitionBuilder: (child, animation) {
+                        return FadeTransition(
+                          opacity: animation,
+                          child: SlideTransition(
+                            position: Tween<Offset>(
+                              begin: const Offset(0, 0.05),
+                              end: Offset.zero,
+                            ).animate(animation),
+                            child: child,
+                          ),
+                        );
+                      },
                       child: active == null
                           ? SprintSurface(
-                              key: const ValueKey<String>('no-active-profile'),
+                              key: const ValueKey<String>('no-default-profile'),
                               backgroundColor: colors.surfaceContainerHigh,
                               child: const Row(
                                 children: [
@@ -1600,7 +1733,7 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
                                   SizedBox(width: 12),
                                   Expanded(
                                     child: Text(
-                                      '메인 Google 캘린더가 설정되지 않았습니다.',
+                                      '기본 Google 캘린더가 설정되지 않았습니다.',
                                       style: TextStyle(
                                         fontWeight: FontWeight.w800,
                                       ),
@@ -1610,7 +1743,7 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
                               ),
                             )
                           : SprintSurface(
-                              key: ValueKey<String>('active-${active.id}'),
+                              key: ValueKey<String>('default-${active.id}'),
                               backgroundColor: colors.primaryContainer,
                               child: Row(
                                 children: [
@@ -1635,22 +1768,14 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
                                           ),
                                         ),
                                         const SizedBox(height: 3),
-                                        AnimatedSwitcher(
-                                          duration: duration,
-                                          child: Text(
-                                            activeEmail.isNotEmpty
-                                                ? '$activeEmail · ${active.calendarId}'
-                                                : 'Google 계정 연결 필요 · ${active.calendarId}',
-                                            key: ValueKey<String>(
-                                              activeEmail.isNotEmpty
-                                                  ? activeEmail.toLowerCase()
-                                                  : 'unbound-${active.id}',
-                                            ),
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(
-                                              color: colors.onPrimaryContainer,
-                                            ),
+                                        Text(
+                                          activeEmail.isNotEmpty
+                                              ? '$activeEmail · ${active.calendarId}'
+                                              : 'Google 계정 연결 필요 · ${active.calendarId}',
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            color: colors.onPrimaryContainer,
                                           ),
                                         ),
                                       ],
@@ -1665,17 +1790,13 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
                       curve: Curves.easeOutCubic,
                       child: AnimatedSwitcher(
                         duration: duration,
-                        switchInCurve: Curves.easeOutCubic,
-                        switchOutCurve: Curves.easeInCubic,
                         child: verificationMessage == null
                             ? const SizedBox.shrink(
-                                key: ValueKey<String>(
-                                  'calendar-verification-idle',
-                                ),
+                                key: ValueKey<String>('calendar-state-idle'),
                               )
                             : Padding(
                                 key: ValueKey<String>(
-                                  'calendar-verification-${calendarState.name}',
+                                  'calendar-state-${calendarState.name}',
                                 ),
                                 padding: const EdgeInsets.only(top: 10),
                                 child: SprintSurface(
@@ -1689,11 +1810,12 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
                                                     .switching
                                             ? SizedBox(
                                                 key: const ValueKey<String>(
-                                                  'calendar-verification-progress',
+                                                  'calendar-state-progress',
                                                 ),
                                                 width: 20,
                                                 height: 20,
-                                                child: CircularProgressIndicator(
+                                                child:
+                                                    CircularProgressIndicator(
                                                   strokeWidth: 2.2,
                                                   color:
                                                       verificationForeground,
@@ -1702,7 +1824,7 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
                                             : Icon(
                                                 verificationIcon,
                                                 key: ValueKey<String>(
-                                                  'calendar-verification-icon-${calendarState.name}',
+                                                  'calendar-state-icon-${calendarState.name}',
                                                 ),
                                                 color: verificationForeground,
                                               ),
@@ -1723,15 +1845,15 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
                               ),
                       ),
                     ),
-                    if (active != null) ...[
+                    if (profiles.isNotEmpty) ...[
                       const SizedBox(height: 10),
                       OutlinedButton.icon(
-                        onPressed: _busy ? null : _syncActive,
+                        onPressed: _busy ? null : _syncAll,
                         icon: AnimatedSwitcher(
                           duration: duration,
-                          child: _busyProfileId == active.id
+                          child: _busyProfileId == 'all'
                               ? const SizedBox(
-                                  key: ValueKey<String>('sync-busy'),
+                                  key: ValueKey<String>('sync-all-busy'),
                                   width: 20,
                                   height: 20,
                                   child: CircularProgressIndicator(
@@ -1740,64 +1862,43 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
                                 )
                               : const Icon(
                                   Icons.sync_rounded,
-                                  key: ValueKey<String>('sync-ready'),
+                                  key: ValueKey<String>('sync-all-ready'),
                                 ),
                         ),
-                        label: Text(
-                          widget.store.calendarState ==
-                                  SprintCalendarConnectionState
-                                      .reauthenticationRequired
-                              ? '재인증하고 동기화'
-                              : '메인 캘린더 동기화',
-                        ),
+                        label: const Text('모든 캘린더 동기화'),
                       ),
                     ],
                     const SizedBox(height: 22),
-                    Text(
-                      '저장된 캘린더',
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w900),
-                    ),
-                    const SizedBox(height: 10),
-                    AnimatedSize(
+                    _AnimatedCalendarProfileSection(
+                      title: '연결된 캘린더',
+                      emptyText: '연결된 Google 캘린더가 없습니다.',
+                      profiles: profiles,
                       duration: duration,
-                      curve: Curves.easeOutCubic,
-                      child: profiles.isEmpty
-                          ? SprintSurface(
-                              backgroundColor: colors.surfaceContainerHigh,
-                              child: const Text('저장된 캘린더가 없습니다.'),
-                            )
-                          : Column(
-                              children: [
-                                for (final profile in profiles)
-                                  Padding(
-                                    padding: const EdgeInsets.only(bottom: 10),
-                                    child: _SprintCalendarProfileCard(
-                                      profile: profile,
-                                      account: widget.store
-                                          .accountForProfile(profile.id),
-                                      active: profile.id ==
-                                          widget.store.activeCalendarProfileId,
-                                      busy: _busyProfileId == profile.id ||
-                                          widget.store.accountBusy,
-                                      duration: duration,
-                                      onActivate: _busy
-                                          ? null
-                                          : () => _switchProfile(profile),
-                                      onEdit: _busy
-                                          ? null
-                                          : () => _editProfile(profile),
-                                      onDelete: _busy
-                                          ? null
-                                          : () => _removeProfile(profile),
-                                    ),
-                                  ),
-                              ],
-                            ),
+                      builder: (profile) {
+                        final state =
+                            widget.store.calendarStateForProfile(profile.id);
+                        return _SprintCalendarProfileCard(
+                          profile: profile,
+                          account: widget.store.accountForProfile(profile.id),
+                          active: profile.id ==
+                              widget.store.defaultCalendarProfileId,
+                          busy: _busyProfileId == profile.id ||
+                              widget.store.accountBusy,
+                          duration: duration,
+                          connectionState: state,
+                          error: widget.store.calendarErrorForProfile(profile.id),
+                          onSetDefault:
+                              _busy ? null : () => _setDefault(profile),
+                          onAuthenticate:
+                              _busy ? null : () => _authenticateProfile(profile),
+                          onSync: _busy ? null : () => _syncProfile(profile),
+                          onEdit: _busy ? null : () => _editProfile(profile),
+                          onDelete:
+                              _busy ? null : () => _removeProfile(profile),
+                        );
+                      },
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 16),
                     FilledButton.icon(
                       onPressed: _busy
                           ? null
@@ -1807,8 +1908,23 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
                       style: FilledButton.styleFrom(
                         minimumSize: const Size.fromHeight(52),
                       ),
-                      icon: const Icon(Icons.event_available_outlined),
-                      label: const Text('현재 Google 계정에 캘린더 추가'),
+                      icon: AnimatedSwitcher(
+                        duration: duration,
+                        child: _addingCurrentAccount
+                            ? const SizedBox(
+                                key: ValueKey<String>('adding-current'),
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.2,
+                                ),
+                              )
+                            : const Icon(
+                                Icons.event_available_outlined,
+                                key: ValueKey<String>('add-current'),
+                              ),
+                      ),
+                      label: const Text('현재 Google 계정 캘린더 추가'),
                     ),
                     const SizedBox(height: 10),
                     OutlinedButton.icon(
@@ -1822,9 +1938,9 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
                       ),
                       icon: AnimatedSwitcher(
                         duration: duration,
-                        child: _adding
+                        child: _addingOtherAccount
                             ? const SizedBox(
-                                key: ValueKey<String>('adding-account'),
+                                key: ValueKey<String>('adding-other'),
                                 width: 20,
                                 height: 20,
                                 child: CircularProgressIndicator(
@@ -1833,10 +1949,10 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
                               )
                             : const Icon(
                                 Icons.person_add_alt_1_rounded,
-                                key: ValueKey<String>('add-account'),
+                                key: ValueKey<String>('add-other'),
                               ),
                       ),
-                      label: const Text('다른 Google 계정 추가'),
+                      label: const Text('다른 Google 계정 캘린더 추가'),
                     ),
                   ],
                 ),
@@ -1849,6 +1965,98 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
   }
 }
 
+class _AnimatedCalendarProfileSection extends StatelessWidget {
+  const _AnimatedCalendarProfileSection({
+    required this.title,
+    required this.emptyText,
+    required this.profiles,
+    required this.duration,
+    required this.builder,
+  });
+
+  final String title;
+  final String emptyText;
+  final List<SprintCalendarProfile> profiles;
+  final Duration duration;
+  final Widget Function(SprintCalendarProfile profile) builder;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final contentKey = profiles.map((profile) => profile.id).join('|');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          title,
+          style: Theme.of(context)
+              .textTheme
+              .titleMedium
+              ?.copyWith(fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: 10),
+        AnimatedSize(
+          duration: duration,
+          curve: Curves.easeOutCubic,
+          child: AnimatedSwitcher(
+            duration: duration,
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (child, animation) {
+              return FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0, 0.04),
+                    end: Offset.zero,
+                  ).animate(animation),
+                  child: child,
+                ),
+              );
+            },
+            child: profiles.isEmpty
+                ? SprintSurface(
+                    key: ValueKey<String>('empty-$title'),
+                    backgroundColor: colors.surfaceContainerHigh,
+                    child: Text(emptyText),
+                  )
+                : Column(
+                    key: ValueKey<String>('$title-$contentKey'),
+                    children: [
+                      for (var index = 0; index < profiles.length; index += 1)
+                        TweenAnimationBuilder<double>(
+                          key: ValueKey<String>(profiles[index].id),
+                          tween: Tween<double>(begin: 0, end: 1),
+                          duration: duration == Duration.zero
+                              ? Duration.zero
+                              : Duration(
+                                  milliseconds:
+                                      duration.inMilliseconds + index * 35,
+                                ),
+                          curve: Curves.easeOutCubic,
+                          builder: (context, value, child) {
+                            return Opacity(
+                              opacity: value,
+                              child: Transform.translate(
+                                offset: Offset(0, 12 * (1 - value)),
+                                child: child,
+                              ),
+                            );
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: builder(profiles[index]),
+                          ),
+                        ),
+                    ],
+                  ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _SprintCalendarProfileCard extends StatelessWidget {
   const _SprintCalendarProfileCard({
     required this.profile,
@@ -1856,7 +2064,11 @@ class _SprintCalendarProfileCard extends StatelessWidget {
     required this.active,
     required this.busy,
     required this.duration,
-    required this.onActivate,
+    required this.connectionState,
+    required this.error,
+    required this.onSetDefault,
+    required this.onAuthenticate,
+    required this.onSync,
     required this.onEdit,
     required this.onDelete,
   });
@@ -1866,7 +2078,11 @@ class _SprintCalendarProfileCard extends StatelessWidget {
   final bool active;
   final bool busy;
   final Duration duration;
-  final VoidCallback? onActivate;
+  final SprintCalendarConnectionState connectionState;
+  final String? error;
+  final VoidCallback? onSetDefault;
+  final VoidCallback? onAuthenticate;
+  final VoidCallback? onSync;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
 
@@ -1874,17 +2090,33 @@ class _SprintCalendarProfileCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final accountEmail = account?.email.trim() ?? '';
+    final requiresAuthentication = connectionState ==
+        SprintCalendarConnectionState.reauthenticationRequired;
+    final syncing = connectionState == SprintCalendarConnectionState.syncing ||
+        connectionState == SprintCalendarConnectionState.switching;
+    final background = active
+        ? colors.secondaryContainer
+        : colors.surfaceContainerHigh;
+    final borderColor = active ? colors.secondary : colors.outlineVariant;
+    final statusColor = requiresAuthentication
+        ? colors.tertiaryContainer
+        : connectionState == SprintCalendarConnectionState.failed
+            ? colors.errorContainer
+            : colors.surfaceContainerHighest;
+    final statusForeground = requiresAuthentication
+        ? colors.onTertiaryContainer
+        : connectionState == SprintCalendarConnectionState.failed
+            ? colors.onErrorContainer
+            : colors.onSurfaceVariant;
     return AnimatedContainer(
       duration: duration,
       curve: Curves.easeOutCubic,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: active
-            ? colors.secondaryContainer
-            : colors.surfaceContainerHigh,
+        color: background,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: active ? colors.secondary : colors.outlineVariant,
+          color: borderColor,
           width: active ? 1.6 : 1,
         ),
       ),
@@ -1892,11 +2124,17 @@ class _SprintCalendarProfileCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               AnimatedSwitcher(
                 duration: duration,
+                transitionBuilder: (child, animation) {
+                  return ScaleTransition(scale: animation, child: child);
+                },
                 child: Icon(
-                  active ? Icons.star_rounded : Icons.calendar_month_outlined,
+                  active
+                      ? Icons.star_rounded
+                      : Icons.calendar_month_outlined,
                   key: ValueKey<bool>(active),
                 ),
               ),
@@ -1905,32 +2143,70 @@ class _SprintCalendarProfileCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      profile.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            profile.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontWeight: FontWeight.w900),
+                          ),
+                        ),
+                        AnimatedContainer(
+                          duration: duration,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: active
+                                ? colors.secondary
+                                : colors.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            active ? '기본' : '추가',
+                            style: TextStyle(
+                              color: active
+                                  ? colors.onSecondary
+                                  : colors.onSurfaceVariant,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 3),
+                    const SizedBox(height: 4),
                     AnimatedSwitcher(
                       duration: duration,
                       child: Text(
                         accountEmail.isNotEmpty
-                            ? '$accountEmail · ${profile.calendarId}'
-                            : 'Google 계정 연결 필요 · ${profile.calendarId}',
+                            ? accountEmail
+                            : 'Google 계정 연결 필요',
                         key: ValueKey<String>(
-                          accountEmail.isNotEmpty
-                              ? accountEmail.toLowerCase()
-                              : 'unbound-${profile.id}',
+                          '${profile.id}-${accountEmail.toLowerCase()}',
                         ),
-                        maxLines: 2,
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(color: colors.onSurfaceVariant),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      profile.calendarId,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: colors.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ],
                 ),
               ),
+              const SizedBox(width: 6),
               AnimatedSwitcher(
                 duration: duration,
                 child: busy
@@ -1942,7 +2218,7 @@ class _SprintCalendarProfileCard extends StatelessWidget {
                       )
                     : IconButton(
                         key: const ValueKey<String>('profile-edit'),
-                        tooltip: '표시 설정',
+                        tooltip: '캘린더 설정',
                         onPressed: onEdit,
                         icon: const Icon(Icons.edit_outlined),
                       ),
@@ -1954,17 +2230,142 @@ class _SprintCalendarProfileCard extends StatelessWidget {
               ),
             ],
           ),
-          if (!active) ...[
-            const SizedBox(height: 10),
-            FilledButton.tonalIcon(
-              onPressed: onActivate,
-              icon: const Icon(Icons.swap_horiz_rounded),
-              label: const Text('메인으로 사용'),
+          const SizedBox(height: 10),
+          AnimatedContainer(
+            duration: duration,
+            curve: Curves.easeOutCubic,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: statusColor,
+              borderRadius: BorderRadius.circular(12),
             ),
-          ],
+            child: Row(
+              children: [
+                AnimatedSwitcher(
+                  duration: duration,
+                  child: syncing
+                      ? SizedBox(
+                          key: const ValueKey<String>('profile-state-progress'),
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: statusForeground,
+                          ),
+                        )
+                      : Icon(
+                          requiresAuthentication
+                              ? Icons.lock_person_outlined
+                              : connectionState ==
+                                      SprintCalendarConnectionState.failed
+                                  ? Icons.error_outline_rounded
+                                  : connectionState ==
+                                          SprintCalendarConnectionState.connected
+                                      ? Icons.cloud_done_rounded
+                                      : Icons.cloud_queue_rounded,
+                          key: ValueKey<SprintCalendarConnectionState>(
+                            connectionState,
+                          ),
+                          size: 18,
+                          color: statusForeground,
+                        ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _profileConnectionLabel(connectionState),
+                    style: TextStyle(
+                      color: statusForeground,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          AnimatedSize(
+            duration: duration,
+            curve: Curves.easeOutCubic,
+            child: AnimatedSwitcher(
+              duration: duration,
+              child: error?.trim().isNotEmpty == true
+                  ? Padding(
+                      key: ValueKey<String>('profile-error-${profile.id}-$error'),
+                      padding: const EdgeInsets.only(top: 10),
+                      child: Text(
+                        '동기화 오류: $error',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: colors.error,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    )
+                  : const SizedBox.shrink(
+                      key: ValueKey<String>('profile-error-none'),
+                    ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              if (!active)
+                FilledButton.tonalIcon(
+                  onPressed: busy ? null : onSetDefault,
+                  icon: const Icon(Icons.star_outline_rounded),
+                  label: const Text('기본으로 설정'),
+                ),
+              OutlinedButton.icon(
+                onPressed: busy
+                    ? null
+                    : requiresAuthentication
+                        ? onAuthenticate
+                        : onSync,
+                icon: AnimatedSwitcher(
+                  duration: duration,
+                  child: busy || syncing
+                      ? const SizedBox(
+                          key: ValueKey<String>('profile-action-progress'),
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Icon(
+                          requiresAuthentication
+                              ? Icons.lock_open_rounded
+                              : Icons.sync_rounded,
+                          key: ValueKey<bool>(requiresAuthentication),
+                        ),
+                ),
+                label: Text(requiresAuthentication ? '재인증' : '동기화'),
+              ),
+            ],
+          ),
         ],
       ),
     );
+  }
+}
+
+String _profileConnectionLabel(SprintCalendarConnectionState state) {
+  switch (state) {
+    case SprintCalendarConnectionState.notConnected:
+      return '연결되지 않음';
+    case SprintCalendarConnectionState.cached:
+      return '인증됨';
+    case SprintCalendarConnectionState.reauthenticationRequired:
+      return '재인증 필요';
+    case SprintCalendarConnectionState.switching:
+      return '계정 확인 중';
+    case SprintCalendarConnectionState.syncing:
+      return '동기화 중';
+    case SprintCalendarConnectionState.connected:
+      return '동기화 완료';
+    case SprintCalendarConnectionState.failed:
+      return '동기화 실패';
   }
 }
 
@@ -1986,8 +2387,9 @@ Future<_SprintCalendarProfileDraft?> _showSprintCalendarProfileEditor(
   bool calendarIdReadOnly = false,
 }) async {
   final labelController = TextEditingController(text: profile?.label ?? '');
-  final calendarController =
-      TextEditingController(text: profile?.calendarId ?? 'primary');
+  final calendarController = TextEditingController(
+    text: profile?.calendarId ?? 'primary',
+  );
   var locked = profile?.locked ?? false;
   final result = await sprintShowDialog<_SprintCalendarProfileDraft>(
     context: context,
@@ -1995,7 +2397,9 @@ Future<_SprintCalendarProfileDraft?> _showSprintCalendarProfileEditor(
       return StatefulBuilder(
         builder: (context, setState) {
           return AlertDialog(
-            title: Text(profile == null ? '캘린더 추가' : '캘린더 표시 설정'),
+            title: Text(
+              profile == null ? 'Google 캘린더 연결' : '캘린더 설정',
+            ),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,

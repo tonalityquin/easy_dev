@@ -29,6 +29,11 @@ enum SprintCalendarConnectionState {
   failed,
 }
 
+enum SprintCalendarProfileRole {
+  primary,
+  secondary,
+}
+
 enum SprintGoogleSyncState {
   none,
   pendingCreate,
@@ -124,6 +129,7 @@ class SprintCalendarProfile {
     required this.accountId,
     required this.calendarId,
     required this.label,
+    this.role = SprintCalendarProfileRole.secondary,
     this.locked = false,
     this.enabled = true,
     this.sortOrder = 0,
@@ -136,6 +142,7 @@ class SprintCalendarProfile {
 
   final String id;
   final String accountId;
+  SprintCalendarProfileRole role;
   String calendarId;
   String label;
   bool locked;
@@ -145,6 +152,9 @@ class SprintCalendarProfile {
   String? lastSyncError;
   DateTime createdAt;
   DateTime updatedAt;
+
+  bool get isPrimary => role == SprintCalendarProfileRole.primary;
+  bool get isSecondary => role == SprintCalendarProfileRole.secondary;
 }
 
 class SprintWorkspaceScope {
@@ -516,6 +526,7 @@ class SprintTaskCreationPreview {
     required this.title,
     required this.description,
     required this.projectId,
+    required this.calendarProfileId,
     required this.priority,
     required this.startDate,
     required this.endDate,
@@ -525,6 +536,7 @@ class SprintTaskCreationPreview {
   final String title;
   final String description;
   final String projectId;
+  final String? calendarProfileId;
   final SprintTaskPriority priority;
   final DateTime startDate;
   final DateTime endDate;
@@ -546,6 +558,22 @@ class SprintOperationResult {
   final bool success;
   final String message;
   final List<SprintScheduleConflict> conflicts;
+}
+
+class SprintBulkDeleteResult {
+  const SprintBulkDeleteResult({
+    required this.requestedCount,
+    required this.deletedCount,
+    required this.pendingRemoteDeleteCount,
+    required this.skippedCount,
+  });
+
+  final int requestedCount;
+  final int deletedCount;
+  final int pendingRemoteDeleteCount;
+  final int skippedCount;
+
+  int get processedCount => deletedCount + pendingRemoteDeleteCount;
 }
 
 class SprintDayLoad {

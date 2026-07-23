@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 
-import '../../../shared/google_calendar/google_event_colors.dart';
 import '../application/sprint_mode_store.dart';
 import '../domain/sprint_models.dart';
 import 'sprint_block_editor_sheet.dart';
@@ -229,9 +228,21 @@ class _SprintModeHomePageState extends State<SprintModeHomePage>
     showSprintAttentionSheet(context: context, store: _store);
   }
 
-  String? _selectedDateAddError() {
+  String? _selectedDateAddError([DateTime? date]) {
+    final value = date ?? _store.selectedDate;
+    final selected = DateTime(value.year, value.month, value.day);
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    if (selected.isBefore(today)) {
+      return '과거 날짜에는 업무를 추가할 수 없습니다.';
+    }
     if (_store.projects.isEmpty) {
       return '업무를 추가하려면 먼저 프로젝트를 생성하세요.';
+    }
+    final projectId = _store.selectedProjectId;
+    if (projectId != null && !_store.canScheduleProjectOn(projectId, selected)) {
+      final lowerBound = _store.projectScheduleLowerBound(projectId)!;
+      return '이 프로젝트는 ${sprintFormatDate(lowerBound)}부터 업무를 추가할 수 있습니다.';
     }
     return null;
   }
@@ -243,7 +254,7 @@ class _SprintModeHomePageState extends State<SprintModeHomePage>
   Future<void> _openTaskCreateForDate(DateTime date) async {
     final selected = DateTime(date.year, date.month, date.day);
     _store.selectDate(selected);
-    final validationMessage = _selectedDateAddError();
+    final validationMessage = _selectedDateAddError(selected);
     if (validationMessage != null) {
       sprintShowMessage(context: context, message: validationMessage);
       return;
@@ -884,9 +895,8 @@ class _ScheduleTimeline extends StatelessWidget {
     final entries = store.timelineFor(store.selectedDate);
     return RefreshIndicator(
       onRefresh: () async {
-        if (store.activeCalendarProfile != null &&
-            store.calendarState != SprintCalendarConnectionState.switching &&
-            store.calendarState != SprintCalendarConnectionState.syncing) {
+        if (store.calendarState == SprintCalendarConnectionState.connected ||
+            store.calendarState == SprintCalendarConnectionState.failed) {
           await store.syncGoogleCalendar();
         }
       },
@@ -920,7 +930,12 @@ class _ScheduleTimeline extends StatelessWidget {
           if (entry.isExternal) {
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
-              child: _ExternalEventCard(event: entry.externalEvent!),
+              child: _ExternalEventCard(
+                event: entry.externalEvent!,
+                calendarLabel: store.calendarProfileLabel(
+                  entry.externalEvent!.calendarProfileId,
+                ),
+              ),
             );
           }
           final task = entry.task!;
@@ -968,11 +983,26 @@ class _DateTaskAddButton extends StatelessWidget {
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final duration =
         reduceMotion ? Duration.zero : const Duration(milliseconds: 200);
+    final now = DateTime.now();
+    final selected = DateTime(
+      store.selectedDate.year,
+      store.selectedDate.month,
+      store.selectedDate.day,
+    );
+    final today = DateTime(now.year, now.month, now.day);
+    final isPast = selected.isBefore(today);
     final hasProjects = store.projects.isNotEmpty;
-    final enabled = hasProjects;
-    final label = hasProjects
-        ? '${sprintFormatDate(store.selectedDate)}에 업무 추가'
-        : '프로젝트를 만든 뒤 업무를 추가하세요';
+    final selectedProjectId = store.selectedProjectId;
+    final beforeProjectStart = selectedProjectId != null &&
+        !store.canScheduleProjectOn(selectedProjectId, selected);
+    final enabled = !isPast && hasProjects && !beforeProjectStart;
+    final label = isPast
+        ? '과거 날짜에는 업무를 추가할 수 없습니다'
+        : !hasProjects
+            ? '프로젝트를 만든 뒤 업무를 추가하세요'
+            : beforeProjectStart
+                ? '이 프로젝트는 ${sprintFormatDate(store.projectScheduleLowerBound(selectedProjectId)!)}부터 시작합니다'
+                : '${sprintFormatDate(store.selectedDate)}에 업무 추가';
     return AnimatedContainer(
       duration: duration,
       curve: Curves.easeOutCubic,
@@ -1050,30 +1080,38 @@ class _TimelineStatusHeader extends StatelessWidget {
     final now = DateTime.now();
     final today = sprintSameDay(store.selectedDate, now);
     final calendarState = store.calendarState;
-    String calendarLabel;
+    final profileCount = store.calendarProfiles.length;
+    String stateLabel;
     switch (calendarState) {
       case SprintCalendarConnectionState.notConnected:
-        calendarLabel = 'Google 캘린더 연결 안 됨';
+        stateLabel = '연결 안 됨';
         break;
       case SprintCalendarConnectionState.cached:
-        calendarLabel = '저장된 캘린더';
+        stateLabel = '인증됨';
         break;
       case SprintCalendarConnectionState.reauthenticationRequired:
-        calendarLabel = 'Google 계정 재인증 필요';
+        stateLabel = '일부 재인증 필요';
         break;
       case SprintCalendarConnectionState.switching:
-        calendarLabel = 'Google 계정 전환 중';
+        stateLabel = '계정 확인 중';
         break;
       case SprintCalendarConnectionState.syncing:
-        calendarLabel = 'Google 캘린더 동기화 중';
+        stateLabel = '동기화 중';
         break;
       case SprintCalendarConnectionState.connected:
-        calendarLabel = 'Google 캘린더 연결됨';
+        stateLabel = '동기화 완료';
         break;
       case SprintCalendarConnectionState.failed:
-        calendarLabel = 'Google 캘린더 동기화 실패';
+        stateLabel = '일부 동기화 실패';
         break;
     }
+    final calendarLabel = profileCount == 0
+        ? 'Google 캘린더 · $stateLabel'
+        : 'Google 캘린더 $profileCount개 · $stateLabel';
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final duration =
+        reduceMotion ? Duration.zero : const Duration(milliseconds: 180);
 
     return Row(
       children: [
@@ -1086,17 +1124,31 @@ class _TimelineStatusHeader extends StatelessWidget {
                 ),
           ),
         ),
-        Text(
-          calendarLabel,
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: calendarState == SprintCalendarConnectionState.failed ||
-                        calendarState ==
-                            SprintCalendarConnectionState
-                                .reauthenticationRequired
-                    ? colors.error
-                    : colors.onSurfaceVariant,
-                fontWeight: FontWeight.w700,
-              ),
+        AnimatedSwitcher(
+          duration: duration,
+          transitionBuilder: (child, animation) => FadeTransition(
+            opacity: animation,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0.04, 0),
+                end: Offset.zero,
+              ).animate(animation),
+              child: child,
+            ),
+          ),
+          child: Text(
+            calendarLabel,
+            key: ValueKey<String>(calendarLabel),
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: calendarState == SprintCalendarConnectionState.failed ||
+                          calendarState ==
+                              SprintCalendarConnectionState
+                                  .reauthenticationRequired
+                      ? colors.error
+                      : colors.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
         ),
       ],
     );
@@ -1195,10 +1247,6 @@ class _TaskDismissibleCard extends StatelessWidget {
     final todayDay = DateTime(today.year, today.month, today.day);
     final overdue = !completed && task.endDate.isBefore(todayDay);
     final projectLabel = project?.name ?? '프로젝트 없음';
-    final projectColor = googleEventColor(
-      project?.googleColorId,
-      colors.primary,
-    );
 
     return Dismissible(
       key: ValueKey<String>('task-${task.id}'),
@@ -1250,17 +1298,6 @@ class _TaskDismissibleCard extends StatelessWidget {
               children: [
                 AnimatedContainer(
                   duration: duration,
-                  curve: Curves.easeOutCubic,
-                  width: 5,
-                  height: 74,
-                  decoration: BoxDecoration(
-                    color: projectColor,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                AnimatedContainer(
-                  duration: duration,
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
@@ -1294,7 +1331,7 @@ class _TaskDismissibleCard extends StatelessWidget {
                                   .textTheme
                                   .labelLarge
                                   ?.copyWith(
-                                    color: projectColor,
+                                    color: colors.primary,
                                     fontWeight: FontWeight.w900,
                                   ),
                             ),
@@ -1330,24 +1367,6 @@ class _TaskDismissibleCard extends StatelessWidget {
                               fontWeight: FontWeight.w900,
                             ),
                       ),
-                      AnimatedSize(
-                        duration: duration,
-                        curve: Curves.easeOutCubic,
-                        child: task.description.trim().isEmpty
-                            ? const SizedBox.shrink()
-                            : Padding(
-                                padding: const EdgeInsets.only(top: 5),
-                                child: Text(
-                                  task.description,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: colors.onSurfaceVariant,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                      ),
                       const SizedBox(height: 6),
                       Row(
                         children: [
@@ -1368,36 +1387,6 @@ class _TaskDismissibleCard extends StatelessWidget {
                               size: 17,
                               color: colors.onSurfaceVariant,
                             ),
-                          if (block.locked &&
-                              task.googleSyncState !=
-                                  SprintGoogleSyncState.none)
-                            const SizedBox(width: 6),
-                          AnimatedSwitcher(
-                            duration: duration,
-                            child: task.googleSyncState ==
-                                    SprintGoogleSyncState.failed
-                                ? Icon(
-                                    Icons.cloud_off_rounded,
-                                    key: const ValueKey<String>('sync-failed'),
-                                    size: 17,
-                                    color: colors.error,
-                                  )
-                                : task.hasPendingGoogleSync
-                                    ? SizedBox(
-                                        key: const ValueKey<String>(
-                                          'sync-pending',
-                                        ),
-                                        width: 15,
-                                        height: 15,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: projectColor,
-                                        ),
-                                      )
-                                    : const SizedBox.shrink(
-                                        key: ValueKey<String>('sync-idle'),
-                                      ),
-                          ),
                         ],
                       ),
                     ],
@@ -1415,9 +1404,13 @@ class _TaskDismissibleCard extends StatelessWidget {
 }
 
 class _ExternalEventCard extends StatelessWidget {
-  const _ExternalEventCard({required this.event});
+  const _ExternalEventCard({
+    required this.event,
+    required this.calendarLabel,
+  });
 
   final SprintExternalEvent event;
+  final String calendarLabel;
 
   void _openDetails(BuildContext context) {
     sprintShowBottomSheet<void>(
@@ -1460,11 +1453,7 @@ class _ExternalEventCard extends StatelessWidget {
                     : '${sprintFormatTime(event.start)}–${sprintFormatTime(event.end)}',
               ),
               const SizedBox(height: 14),
-              Text(
-                event.blocksTime
-                    ? 'Google 캘린더 · 시간 점유 · 읽기 전용'
-                    : 'Google 캘린더 · 시간 비점유 · 읽기 전용',
-              ),
+              Text('$calendarLabel · 외부 일정 · 읽기 전용'),
               const SizedBox(height: 20),
               FilledButton.tonal(
                 onPressed: () => Navigator.of(sheetContext).pop(),
@@ -1483,10 +1472,9 @@ class _ExternalEventCard extends StatelessWidget {
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final duration =
-        reduceMotion ? Duration.zero : const Duration(milliseconds: 220);
-    final eventColor = googleEventColor(event.colorId, colors.outline);
+        reduceMotion ? Duration.zero : const Duration(milliseconds: 240);
     return Material(
-      color: eventColor.withOpacity(0.08),
+      color: Colors.transparent,
       borderRadius: BorderRadius.circular(20),
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
@@ -1497,23 +1485,23 @@ class _ExternalEventCard extends StatelessWidget {
           constraints: const BoxConstraints(minHeight: 84),
           padding: const EdgeInsets.all(15),
           decoration: BoxDecoration(
+            color: colors.surfaceContainerLow,
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: eventColor.withOpacity(0.7)),
+            border: Border.all(color: colors.outlineVariant),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
+              AnimatedContainer(
+                duration: duration,
+                curve: Curves.easeOutCubic,
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: eventColor.withOpacity(0.2),
+                  color: colors.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: Icon(
-                  Icons.event_outlined,
-                  color: eventColor,
-                ),
+                child: const Icon(Icons.event_outlined),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -1522,10 +1510,20 @@ class _ExternalEventCard extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        const Expanded(
-                          child: Text(
-                            '외부 일정',
-                            style: TextStyle(fontWeight: FontWeight.w800),
+                        Expanded(
+                          child: AnimatedSwitcher(
+                            duration: duration,
+                            child: Text(
+                              calendarLabel,
+                              key: ValueKey<String>(
+                                '${event.calendarProfileId}-$calendarLabel',
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
                           ),
                         ),
                         Icon(
@@ -1543,13 +1541,19 @@ class _ExternalEventCard extends StatelessWidget {
                       style: const TextStyle(fontWeight: FontWeight.w900),
                     ),
                     const SizedBox(height: 5),
-                    Text(
-                      event.allDay
-                          ? '종일 · 읽기 전용'
-                          : '${sprintFormatTime(event.start)}–${sprintFormatTime(event.end)} · 읽기 전용',
-                      style: TextStyle(
-                        color: colors.onSurfaceVariant,
-                        fontWeight: FontWeight.w600,
+                    AnimatedSwitcher(
+                      duration: duration,
+                      child: Text(
+                        event.allDay
+                            ? '종일 · 외부 일정 · 읽기 전용'
+                            : '${sprintFormatTime(event.start)}–${sprintFormatTime(event.end)} · 외부 일정 · 읽기 전용',
+                        key: ValueKey<String>(
+                          '${event.id}-${event.start.millisecondsSinceEpoch}',
+                        ),
+                        style: TextStyle(
+                          color: colors.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   ],
@@ -1695,7 +1699,19 @@ class _SprintBottomDock extends StatelessWidget {
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final duration =
         reduceMotion ? Duration.zero : const Duration(milliseconds: 180);
-    final inputEnabled = store.projects.isNotEmpty;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final selected = DateTime(
+      store.selectedDate.year,
+      store.selectedDate.month,
+      store.selectedDate.day,
+    );
+    final selectedProjectId = store.selectedProjectId;
+    final beforeProjectStart = selectedProjectId != null &&
+        !store.canScheduleProjectOn(selectedProjectId, selected);
+    final inputEnabled = !selected.isBefore(today) &&
+        store.projects.isNotEmpty &&
+        !beforeProjectStart;
 
     return Material(
       color: colors.surfaceContainer,
@@ -1831,7 +1847,11 @@ class _SprintBottomDock extends StatelessWidget {
                     : Padding(
                         padding: const EdgeInsets.only(top: 6),
                         child: Text(
-                          '프로젝트를 만든 뒤 업무를 추가할 수 있습니다.',
+                          selected.isBefore(today)
+                              ? '과거 날짜에는 업무를 추가할 수 없습니다.'
+                              : store.projects.isEmpty
+                                  ? '프로젝트를 만든 뒤 업무를 추가할 수 있습니다.'
+                                  : '프로젝트 목표 시작일 이후 날짜를 선택하세요.',
                           style: Theme.of(context)
                               .textTheme
                               .labelMedium
@@ -2114,17 +2134,156 @@ class _PostponeTile extends StatelessWidget {
   }
 }
 
-class _UnplacedTasksSheet extends StatelessWidget {
+class _UnplacedTasksSheet extends StatefulWidget {
   const _UnplacedTasksSheet({required this.store});
 
   final SprintModeStore store;
 
   @override
+  State<_UnplacedTasksSheet> createState() => _UnplacedTasksSheetState();
+}
+
+class _UnplacedTasksSheetState extends State<_UnplacedTasksSheet> {
+  bool _deletingAll = false;
+
+  Future<void> _deleteAll(List<SprintTask> tasks) async {
+    if (_deletingAll || tasks.isEmpty) return;
+    final taskIds = tasks.map((task) => task.id).toList(growable: false);
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final duration =
+        reduceMotion ? Duration.zero : const Duration(milliseconds: 280);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        final colors = Theme.of(dialogContext).colorScheme;
+        return AlertDialog(
+          title: const Text(
+            '미배치 업무 전체 삭제',
+            style: TextStyle(fontWeight: FontWeight.w900),
+          ),
+          content: TweenAnimationBuilder<double>(
+            tween: Tween<double>(begin: 0, end: 1),
+            duration: duration,
+            curve: Curves.easeOutCubic,
+            builder: (context, value, child) {
+              return Opacity(
+                opacity: value,
+                child: Transform.translate(
+                  offset: Offset(0, 12 * (1 - value)),
+                  child: Transform.scale(
+                    scale: 0.96 + (0.04 * value),
+                    child: child,
+                  ),
+                ),
+              );
+            },
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: colors.errorContainer,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: colors.error.withAlpha(72),
+                ),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.delete_sweep_rounded,
+                        color: colors.onErrorContainer,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          '${tasks.length}개 업무를 삭제합니다.',
+                          style: TextStyle(
+                            color: colors.onErrorContainer,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    '모든 활성 프로젝트의 미배치 업무가 대상입니다. 연결된 Google Calendar 일정도 삭제되며 이 작업은 되돌릴 수 없습니다.',
+                    style: TextStyle(
+                      color: colors.onErrorContainer,
+                      height: 1.45,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('취소'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: colors.error,
+                foregroundColor: colors.onError,
+              ),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('전체 삭제'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _deletingAll = true);
+    try {
+      final result = await widget.store.deleteUnplacedTasks(taskIds);
+      if (!mounted) return;
+      sprintShowMessage(
+        context: context,
+        message: _deleteResultMessage(result),
+      );
+    } finally {
+      if (mounted) setState(() => _deletingAll = false);
+    }
+  }
+
+  String _deleteResultMessage(SprintBulkDeleteResult result) {
+    if (result.processedCount == 0) {
+      return result.skippedCount > 0
+          ? '삭제 직전에 상태가 변경되어 삭제할 미배치 업무가 없습니다.'
+          : '삭제할 미배치 업무가 없습니다.';
+    }
+    final parts = <String>[
+      '미배치 업무 ${result.processedCount}개를 삭제 처리했습니다.',
+    ];
+    if (result.pendingRemoteDeleteCount > 0) {
+      parts.add(
+        '${result.pendingRemoteDeleteCount}개는 Google Calendar 삭제 대기 또는 진행 중입니다.',
+      );
+    }
+    if (result.skippedCount > 0) {
+      parts.add('${result.skippedCount}개는 상태가 변경되어 제외했습니다.');
+    }
+    return parts.join(' ');
+  }
+
+  @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: store,
+      animation: widget.store,
       builder: (context, child) {
-        final tasks = store.unplacedTasks();
+        final tasks = widget.store.unplacedTasks();
+        final colors = Theme.of(context).colorScheme;
+        final reduceMotion =
+            MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+        final duration =
+            reduceMotion ? Duration.zero : const Duration(milliseconds: 240);
         return DraggableScrollableSheet(
           expand: false,
           initialChildSize: 0.72,
@@ -2136,69 +2295,205 @@ class _UnplacedTasksSheet extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    '미배치 업무 ${tasks.length}',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w900,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: AnimatedSwitcher(
+                          duration: duration,
+                          switchInCurve: Curves.easeOutCubic,
+                          switchOutCurve: Curves.easeInCubic,
+                          transitionBuilder: (child, animation) {
+                            return FadeTransition(
+                              opacity: animation,
+                              child: SlideTransition(
+                                position: Tween<Offset>(
+                                  begin: const Offset(0, 0.18),
+                                  end: Offset.zero,
+                                ).animate(animation),
+                                child: child,
+                              ),
+                            );
+                          },
+                          child: Text(
+                            '미배치 업무 ${tasks.length}',
+                            key: ValueKey<int>(tasks.length),
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleLarge
+                                ?.copyWith(fontWeight: FontWeight.w900),
+                          ),
                         ),
+                      ),
+                      const SizedBox(width: 12),
+                      AnimatedSwitcher(
+                        duration: duration,
+                        switchInCurve: Curves.easeOutCubic,
+                        switchOutCurve: Curves.easeInCubic,
+                        child: tasks.isEmpty
+                            ? const SizedBox.shrink(
+                                key: ValueKey<String>('empty-delete'),
+                              )
+                            : FilledButton.tonalIcon(
+                                key: const ValueKey<String>('delete-all'),
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: colors.errorContainer,
+                                  foregroundColor: colors.onErrorContainer,
+                                ),
+                                onPressed: _deletingAll
+                                    ? null
+                                    : () => _deleteAll(tasks),
+                                icon: AnimatedSwitcher(
+                                  duration: duration,
+                                  child: _deletingAll
+                                      ? const SizedBox(
+                                          key: ValueKey<String>('deleting'),
+                                          width: 18,
+                                          height: 18,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2.2,
+                                          ),
+                                        )
+                                      : const Icon(
+                                          Icons.delete_sweep_rounded,
+                                          key: ValueKey<String>('delete'),
+                                        ),
+                                ),
+                                label: AnimatedSwitcher(
+                                  duration: duration,
+                                  child: Text(
+                                    _deletingAll ? '삭제 중' : '전체 삭제',
+                                    key: ValueKey<bool>(_deletingAll),
+                                  ),
+                                ),
+                              ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 12),
                   Expanded(
-                    child: tasks.isEmpty
-                        ? const Center(child: Text('미배치 업무가 없습니다.'))
-                        : ListView.separated(
-                            controller: scrollController,
-                            itemCount: tasks.length,
-                            separatorBuilder: (_, __) =>
-                                const SizedBox(height: 10),
-                            itemBuilder: (context, index) {
-                              final task = tasks[index];
-                              return SprintSurface(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Icon(sprintPriorityIcon(task.priority)),
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: Text(
-                                            task.title,
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.w900,
-                                            ),
-                                          ),
+                    child: AnimatedSwitcher(
+                      duration: duration,
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      layoutBuilder: (currentChild, previousChildren) {
+                        return Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            ...previousChildren,
+                            if (currentChild != null) currentChild,
+                          ],
+                        );
+                      },
+                      transitionBuilder: (child, animation) {
+                        return FadeTransition(
+                          opacity: animation,
+                          child: SlideTransition(
+                            position: Tween<Offset>(
+                              begin: const Offset(0, 0.035),
+                              end: Offset.zero,
+                            ).animate(
+                              CurvedAnimation(
+                                parent: animation,
+                                curve: Curves.easeOutCubic,
+                              ),
+                            ),
+                            child: child,
+                          ),
+                        );
+                      },
+                      child: tasks.isEmpty
+                          ? const Center(
+                              key: ValueKey<String>('empty'),
+                              child: Text('미배치 업무가 없습니다.'),
+                            )
+                          : ListView.separated(
+                              key: const ValueKey<String>('tasks'),
+                              controller: scrollController,
+                              itemCount: tasks.length,
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(height: 10),
+                              itemBuilder: (context, index) {
+                                final task = tasks[index];
+                                final itemDuration = reduceMotion
+                                    ? Duration.zero
+                                    : Duration(
+                                        milliseconds:
+                                            180 + (index.clamp(0, 7).toInt() * 22),
+                                      );
+                                return TweenAnimationBuilder<double>(
+                                  key: ValueKey<String>(task.id),
+                                  tween: Tween<double>(begin: 0, end: 1),
+                                  duration: itemDuration,
+                                  curve: Curves.easeOutCubic,
+                                  builder: (context, value, child) {
+                                    return Opacity(
+                                      opacity: value,
+                                      child: Transform.translate(
+                                        offset: Offset(0, 10 * (1 - value)),
+                                        child: Transform.scale(
+                                          scale: 0.985 + (0.015 * value),
+                                          alignment: Alignment.topCenter,
+                                          child: child,
                                         ),
+                                      ),
+                                    );
+                                  },
+                                  child: SprintSurface(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Icon(
+                                              sprintPriorityIcon(task.priority),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Text(
+                                                task.title,
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.w900,
+                                                ),
+                                              ),
+                                            ),
+                                            Text(
+                                              sprintPriorityLabel(
+                                                task.priority,
+                                              ),
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.w800,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 6),
                                         Text(
-                                          sprintPriorityLabel(task.priority),
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.w800,
-                                          ),
+                                          '종일 · ${sprintFormatDateRange(task.startDate, task.endDate)}',
+                                        ),
+                                        const SizedBox(height: 12),
+                                        FilledButton.tonal(
+                                          onPressed: _deletingAll
+                                              ? null
+                                              : () async {
+                                                  await widget.store
+                                                      .placeUnplacedTask(task);
+                                                  if (!context.mounted) return;
+                                                  sprintShowMessage(
+                                                    context: context,
+                                                    message:
+                                                        '${sprintFormatDate(widget.store.selectedDate)}에 업무를 배치했습니다.',
+                                                  );
+                                                },
+                                          child: const Text('선택 날짜에 배치'),
                                         ),
                                       ],
                                     ),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      '종일 · ${sprintFormatDateRange(task.startDate, task.endDate)}',
-                                    ),
-                                    const SizedBox(height: 12),
-                                    FilledButton.tonal(
-                                      onPressed: () async {
-                                        await store.placeUnplacedTask(task);
-                                        if (!context.mounted) return;
-                                        sprintShowMessage(
-                                          context: context,
-                                          message:
-                                              '${sprintFormatDate(store.selectedDate)}에 업무를 배치했습니다.',
-                                        );
-                                      },
-                                      child: const Text('선택 날짜에 배치'),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
+                                  ),
+                                );
+                              },
+                            ),
+                    ),
                   ),
                 ],
               ),
@@ -2443,7 +2738,7 @@ class _SprintReviewSettingsPage extends StatelessWidget {
                     const ListTile(
                       leading: Icon(Icons.notifications_outlined),
                       title: Text('알림 설정'),
-                      subtitle: Text('기한과 확인 필요 항목 중심'),
+                      subtitle: Text('종일 업무는 시작 전날 17:00에 알림'),
                     ),
                     const Divider(height: 1),
                     const ListTile(
@@ -2526,6 +2821,8 @@ class _GoogleCalendarSettingTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = store.calendarState;
+    final profiles = store.calendarProfiles;
+    final defaultProfile = store.defaultCalendarProfile;
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final duration =
@@ -2536,7 +2833,7 @@ class _GoogleCalendarSettingTile extends StatelessWidget {
         status = '연결 안 됨';
         break;
       case SprintCalendarConnectionState.cached:
-        status = '저장된 일정 표시 중';
+        status = '연결 정보 준비됨';
         break;
       case SprintCalendarConnectionState.reauthenticationRequired:
         status = '재인증 필요';
@@ -2554,52 +2851,65 @@ class _GoogleCalendarSettingTile extends StatelessWidget {
         status = '동기화 실패';
         break;
     }
-    final email = store.activeGoogleEmail;
-    final calendar = store.googleCalendarId;
-    final detail = email.isEmpty
-        ? '$calendar · $status'
-        : '$email · $calendar · $status';
-    final busy = state == SprintCalendarConnectionState.syncing ||
-        state == SprintCalendarConnectionState.switching;
 
-    return ListTile(
-      leading: AnimatedSwitcher(
-        duration: duration,
-        child: Icon(
-          store.googleCalendarIdLocked
-              ? Icons.lock_rounded
-              : Icons.event_available_outlined,
-          key: ValueKey<String>(
-            '${store.activeCalendarProfileId}-${store.googleCalendarIdLocked}',
+    final profileCount = profiles.length;
+    final defaultLabel = defaultProfile?.label.trim().isNotEmpty == true
+        ? defaultProfile!.label.trim()
+        : '기본 캘린더 없음';
+    final subtitle = profileCount == 0
+        ? status
+        : '$defaultLabel · 총 $profileCount개 · $status';
+    return AnimatedContainer(
+      duration: duration,
+      curve: Curves.easeOutCubic,
+      decoration: BoxDecoration(
+        color: state == SprintCalendarConnectionState.failed ||
+                state == SprintCalendarConnectionState.reauthenticationRequired
+            ? Theme.of(context).colorScheme.errorContainer.withOpacity(0.28)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: ListTile(
+        leading: AnimatedSwitcher(
+          duration: duration,
+          child: Icon(
+            profileCount > 1
+                ? Icons.calendar_view_month_rounded
+                : Icons.event_available_outlined,
+            key: ValueKey<int>(profileCount),
           ),
         ),
+        title: const Text('Google 캘린더 계정'),
+        subtitle: AnimatedSwitcher(
+          duration: duration,
+          child: Text(
+            subtitle,
+            key: ValueKey<String>(subtitle),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        trailing: AnimatedSwitcher(
+          duration: duration,
+          child: state == SprintCalendarConnectionState.syncing
+              ? const SizedBox(
+                  key: ValueKey<String>('calendar-setting-syncing'),
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2.5),
+                )
+              : const Icon(
+                  Icons.chevron_right_rounded,
+                  key: ValueKey<String>('calendar-setting-ready'),
+                ),
+        ),
+        onTap: state == SprintCalendarConnectionState.syncing
+            ? null
+            : () => showSprintAccountSheet(
+                  context: context,
+                  store: store,
+                ),
       ),
-      title: Text(store.activeCalendarLabel),
-      subtitle: Text(
-        detail,
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-      ),
-      trailing: AnimatedSwitcher(
-        duration: duration,
-        child: busy
-            ? const SizedBox(
-                key: ValueKey<String>('calendar-busy'),
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(strokeWidth: 2.5),
-              )
-            : const Icon(
-                Icons.chevron_right_rounded,
-                key: ValueKey<String>('calendar-ready'),
-              ),
-      ),
-      onTap: busy
-          ? null
-          : () => showSprintAccountSheet(
-                context: context,
-                store: store,
-              ),
     );
   }
 }

@@ -41,6 +41,7 @@ class PersonalVehicleStatusService {
             operation: 'personal.plates.exactPlateQuery.parse',
             error: e,
             stackTrace: st,
+            usePromptUi: true,
             details: <String, Object?>{
               'collection': 'plates',
               'docId': doc.id,
@@ -58,6 +59,7 @@ class PersonalVehicleStatusService {
         operation: 'personal.plates.exactPlateQuery',
         error: e,
         stackTrace: st,
+        usePromptUi: true,
         details: <String, Object?>{
           'collection': 'plates',
           'area': normalizedArea,
@@ -99,6 +101,7 @@ class PersonalVehicleStatusService {
               operation: 'personal.plates.tail4Query.parse',
               error: e,
               stackTrace: st,
+              usePromptUi: true,
               details: <String, Object?>{
                 'collection': 'plates',
                 'docId': doc.id,
@@ -117,6 +120,7 @@ class PersonalVehicleStatusService {
           operation: 'personal.plates.tail4Query',
           error: e,
           stackTrace: st,
+          usePromptUi: true,
           details: <String, Object?>{
             'collection': 'plates',
             'area': normalizedArea,
@@ -166,6 +170,7 @@ class PersonalVehicleStatusService {
         operation: 'personal.monthlyPlateStatus.fetch',
         error: e,
         stackTrace: st,
+        usePromptUi: true,
         details: <String, Object?>{
           'collection': 'monthly_plate_status',
           'docId': docId,

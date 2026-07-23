@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../pages/widgets/tablet_prompt_components.dart';
 import '../../../../../app/utils/dev_firebase_debug_dialog.dart';
 
 import '../../../../../shared/plate/application/common/view_doc_rows_store.dart';
@@ -225,6 +227,7 @@ class _ParkingStatusPreviewCardAreaState
                 'overlayStatus': spec.status.name,
                 'widget': 'ParkingStatusPreviewCardArea',
               },
+              usePromptUi: true,
             ),
           );
           if (!mounted) return;
@@ -345,30 +348,22 @@ class _ParkingStatusPreviewCardAreaState
     ParkingGridOverlay overlay,
     Map<String, TextParkingPreviewMetrics> textMetricsByLocation,
   ) {
-    final cs = Theme.of(context).colorScheme;
-
     if (locations.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 18),
-          child: Text(
-            '주차구역 메타가 없습니다.\n설정에서 주차구역 새로고침 후 다시 시도하세요.',
-            textAlign: TextAlign.center,
-            style: Theme.of(context)
-                .textTheme
-                .bodyMedium
-                ?.copyWith(color: cs.onSurfaceVariant),
-          ),
-        ),
+      return const TabletPromptEmptyState(
+        title: '주차 구역 정보가 없습니다',
+        message: '설정에서 주차 구역 데이터를 새로고침한 뒤 다시 시도하세요.',
+        icon: Icons.local_parking_rounded,
       );
     }
 
-    return Padding(
-      padding: const EdgeInsets.all(12),
-      child: TabletGrid3dPreview(
-        locations: locations,
-        overlay: overlay,
-        textMetricsByLocation: textMetricsByLocation,
+    return PromptAnimatedReveal(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: TabletGrid3dPreview(
+          locations: locations,
+          overlay: overlay,
+          textMetricsByLocation: textMetricsByLocation,
+        ),
       ),
     );
   }
@@ -399,16 +394,8 @@ class _ParkingStatusPreviewCardAreaState
         future: _prefsFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            final cs = Theme.of(context).colorScheme;
-            return Center(
-              child: SizedBox(
-                width: 28,
-                height: 28,
-                child: CircularProgressIndicator(
-                  strokeWidth: 3,
-                  valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
-                ),
-              ),
+            return const TabletPromptLoadingState(
+              label: '주차 구역 불러오는 중',
             );
           }
 

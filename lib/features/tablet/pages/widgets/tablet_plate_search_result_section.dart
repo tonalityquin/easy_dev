@@ -1,16 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
 import '../../../../shared/plate/domain/enums/plate_type.dart';
 import '../../../../shared/plate/domain/models/plate_model.dart';
+import 'tablet_prompt_components.dart';
 
 class TabletPlateSearchResultSection extends StatelessWidget {
-  final List<PlateModel> results;
-  final void Function(PlateModel) onSelect;
-  final VoidCallback? onRefresh;
-
-  
-  final bool compact;
-
   const TabletPlateSearchResultSection({
     super.key,
     required this.results,
@@ -19,81 +15,90 @@ class TabletPlateSearchResultSection extends StatelessWidget {
     this.compact = false,
   });
 
-  Color _tintOnSurface(ColorScheme cs, Color tint, {required double opacity}) {
-    return Color.alphaBlend(tint.withOpacity(opacity), cs.surface);
-  }
+  final List<PlateModel> results;
+  final void Function(PlateModel) onSelect;
+  final VoidCallback? onRefresh;
+  final bool compact;
 
   String _formatDateTime(DateTime time) {
-    final m = time.month.toString().padLeft(2, '0');
-    final d = time.day.toString().padLeft(2, '0');
-    final hh = time.hour.toString().padLeft(2, '0');
-    final mm = time.minute.toString().padLeft(2, '0');
-    return '$m-$d $hh:$mm';
+    final month = time.month.toString().padLeft(2, '0');
+    final day = time.day.toString().padLeft(2, '0');
+    final hour = time.hour.toString().padLeft(2, '0');
+    final minute = time.minute.toString().padLeft(2, '0');
+    return '$month-$day $hour:$minute';
   }
 
-  ({Color fg, Color bg, Color border}) _chipColors(ColorScheme cs, PlateType? type) {
-    final Color base = switch (type) {
-      PlateType.parkingRequests => cs.primary,
-      PlateType.parkingCompleted => cs.tertiary,
-      PlateType.departureRequests => cs.secondary,
-      PlateType.departureCompleted => cs.primary,
-      null => cs.primary,
-    };
-
-    final bg = _tintOnSurface(
-      cs,
-      base,
-      opacity: cs.brightness == Brightness.dark ? 0.18 : 0.10,
-    );
-    final border = base.withOpacity(cs.brightness == Brightness.dark ? 0.55 : 0.45);
-    return (fg: base, bg: bg, border: border);
+  _StatusColors _statusColors(PromptUiTokens tokens, PlateType? type) {
+    switch (type) {
+      case PlateType.parkingRequests:
+        return _StatusColors(
+          foreground: tokens.info,
+          background: tokens.infoContainer,
+          onBackground: tokens.onInfoContainer,
+        );
+      case PlateType.parkingCompleted:
+        return _StatusColors(
+          foreground: tokens.statusParkingCompleted,
+          background: tokens.statusParkingCompletedContainer,
+          onBackground: tokens.onStatusParkingCompletedContainer,
+        );
+      case PlateType.departureRequests:
+        return _StatusColors(
+          foreground: tokens.statusDepartureRequested,
+          background: tokens.statusDepartureRequestedContainer,
+          onBackground: tokens.onStatusDepartureRequestedContainer,
+        );
+      case PlateType.departureCompleted:
+        return _StatusColors(
+          foreground: tokens.statusSynchronized,
+          background: tokens.statusSynchronizedContainer,
+          onBackground: tokens.onStatusSynchronizedContainer,
+        );
+      case null:
+        return _StatusColors(
+          foreground: tokens.iconSecondary,
+          background: tokens.surfaceOverlay,
+          onBackground: tokens.textSecondary,
+        );
+    }
   }
 
   IconData _leadingIcon(PlateType? type) {
-    return switch (type) {
-      PlateType.parkingRequests => Icons.login,
-      PlateType.parkingCompleted => Icons.check_circle_outline,
-      PlateType.departureRequests => Icons.logout,
-      PlateType.departureCompleted => Icons.check_circle_outline,
-      null => Icons.directions_car,
-    };
+    switch (type) {
+      case PlateType.parkingRequests:
+        return Icons.login_rounded;
+      case PlateType.parkingCompleted:
+        return Icons.check_circle_outline_rounded;
+      case PlateType.departureRequests:
+        return Icons.logout_rounded;
+      case PlateType.departureCompleted:
+        return Icons.task_alt_rounded;
+      case null:
+        return Icons.directions_car_rounded;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final tokens = PromptUiTheme.of(context);
     final text = Theme.of(context).textTheme;
-
-    final showMultiHint = results.length >= 2;
-    final extra = showMultiHint ? 1 : 0;
-
+    final showMultiple = results.length >= 2;
+    final extra = showMultiple ? 1 : 0;
     final outerPadding = compact ? 12.0 : 16.0;
     final itemGap = compact ? 10.0 : 12.0;
-
     final cardRadius = compact ? 16.0 : 18.0;
     final iconBox = compact ? 40.0 : 46.0;
-    final iconRadius = compact ? 14.0 : 16.0;
-    final iconSize = compact ? 20.0 : 22.0;
-
-    final cardPadH = compact ? 14.0 : 18.0;
-    final cardPadV = compact ? 14.0 : 16.0;
-
-    
-    final TextStyle plateBase =
-    compact ? (text.titleMedium ?? const TextStyle()) : (text.titleLarge ?? const TextStyle());
-    final TextStyle metaBase =
-    compact ? (text.bodyMedium ?? const TextStyle()) : (text.bodyLarge ?? const TextStyle());
-
-    final plateStyle = plateBase.copyWith(
-      fontWeight: FontWeight.w900,
-      color: cs.onSurface,
-      height: 1.05,
+    final cardHorizontal = compact ? 14.0 : 18.0;
+    final cardVertical = compact ? 14.0 : 16.0;
+    final plateStyle = (compact ? text.titleMedium : text.titleLarge)?.copyWith(
+      fontWeight: FontWeight.w700,
+      color: tokens.textPrimary,
+      height: 1.12,
     );
-
-    final metaStyle = metaBase.copyWith(
-      color: cs.onSurfaceVariant,
-      fontWeight: FontWeight.w800,
-      height: 1.25,
+    final metaStyle = (compact ? text.bodyMedium : text.bodyLarge)?.copyWith(
+      color: tokens.textSecondary,
+      fontWeight: FontWeight.w500,
+      height: 1.35,
     );
 
     return ListView.separated(
@@ -101,41 +106,39 @@ class TabletPlateSearchResultSection extends StatelessWidget {
       itemCount: results.length + extra,
       separatorBuilder: (_, __) => SizedBox(height: itemGap),
       itemBuilder: (context, index) {
-        if (showMultiHint && index == 0) {
-          final bg = _tintOnSurface(
-            cs,
-            cs.primary,
-            opacity: cs.brightness == Brightness.dark ? 0.14 : 0.08,
-          );
-
-          return Container(
-            padding: EdgeInsets.symmetric(
-              horizontal: compact ? 12 : 14,
-              vertical: compact ? 12 : 14,
-            ),
-            decoration: BoxDecoration(
-              color: bg,
-              borderRadius: BorderRadius.circular(compact ? 14 : 16),
-              border: Border.all(
-                color: cs.primary.withOpacity(cs.brightness == Brightness.dark ? 0.40 : 0.22),
+        if (showMultiple && index == 0) {
+          return PromptAnimatedReveal(
+            child: Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: compact ? 12 : 14,
+                vertical: compact ? 12 : 14,
               ),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.info_outline, size: compact ? 20 : 22, color: cs.primary),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    '동일 뒷번호로 ${results.length}건이 조회되었습니다.\n아래에서 전체 번호판을 선택하세요.',
-                    style: (compact ? (text.bodyMedium ?? const TextStyle()) : (text.bodyLarge ?? const TextStyle()))
-                        .copyWith(
-                      color: cs.onSurface,
-                      fontWeight: FontWeight.w900,
-                      height: 1.25,
+              decoration: BoxDecoration(
+                color: tokens.infoContainer,
+                borderRadius: BorderRadius.circular(compact ? 14 : 16),
+                border: Border.all(color: tokens.info),
+              ),
+              child: Row(
+                children: <Widget>[
+                  Icon(
+                    Icons.info_outline_rounded,
+                    size: compact ? 20 : 22,
+                    color: tokens.info,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      '동일 뒷번호로 ${results.length}건이 조회되었습니다. 아래에서 전체 번호판을 선택하세요.',
+                      style: (compact ? text.bodyMedium : text.bodyLarge)
+                          ?.copyWith(
+                        color: tokens.onInfoContainer,
+                        fontWeight: FontWeight.w600,
+                        height: 1.35,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           );
         }
@@ -143,98 +146,108 @@ class TabletPlateSearchResultSection extends StatelessWidget {
         final plate = results[index - extra];
         final type = plate.typeEnum;
         final typeLabel = type?.label ?? plate.type;
-
-        final chip = _chipColors(cs, type);
-
+        final colors = _statusColors(tokens, type);
         final selected = plate.isSelected;
-        final cardBg = selected
-            ? _tintOnSurface(
-          cs,
-          cs.primary,
-          opacity: cs.brightness == Brightness.dark ? 0.18 : 0.10,
-        )
-            : cs.surface;
-
-        final borderColor = selected
-            ? cs.primary.withOpacity(cs.brightness == Brightness.dark ? 0.65 : 0.55)
-            : cs.outlineVariant.withOpacity(cs.brightness == Brightness.dark ? 0.55 : 0.42);
-
-        final shadowColor = cs.shadow.withOpacity(cs.brightness == Brightness.dark ? 0.20 : 0.06);
-
         final meta =
             '${_formatDateTime(plate.requestTime)} · ${plate.location.isEmpty ? '위치 미지정' : plate.location}';
-
-        return Material(
-          color: cardBg,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(cardRadius),
-            side: BorderSide(color: borderColor),
-          ),
-          clipBehavior: Clip.antiAlias,
-          elevation: 0,
-          child: InkWell(
-            onTap: () => onSelect(plate),
-            child: Container(
+        return PromptAnimatedReveal(
+          key: ValueKey<String>('plate-${plate.id}-$selected'),
+          delay: Duration(milliseconds: (index - extra).clamp(0, 6).toInt() * 28),
+          offset: const Offset(0, 0.025),
+          child: Semantics(
+            button: true,
+            selected: selected,
+            label: '${plate.plateNumber}, $typeLabel, $meta',
+            child: AnimatedContainer(
+              duration: tabletPromptDuration(context, PromptUiMotion.selection),
+              curve: PromptUiMotion.standard,
               decoration: BoxDecoration(
-                boxShadow: [
+                color: selected ? tokens.surfaceSelected : tokens.surfaceRaised,
+                borderRadius: BorderRadius.circular(cardRadius),
+                border: Border.all(
+                  color: selected ? tokens.accent : tokens.borderSubtle,
+                  width: selected ? 2 : 1,
+                ),
+                boxShadow: <BoxShadow>[
                   BoxShadow(
-                    color: shadowColor,
-                    blurRadius: 12,
-                    offset: const Offset(0, 8),
+                    color: tokens.shadow,
+                    blurRadius: selected ? 16 : 12,
+                    offset: const Offset(0, 6),
                   ),
                 ],
               ),
-              padding: EdgeInsets.symmetric(horizontal: cardPadH, vertical: cardPadV),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Container(
-                    width: iconBox,
-                    height: iconBox,
-                    decoration: BoxDecoration(
-                      color: _tintOnSurface(
-                        cs,
-                        chip.fg,
-                        opacity: cs.brightness == Brightness.dark ? 0.20 : 0.12,
-                      ),
-                      borderRadius: BorderRadius.circular(iconRadius),
-                      border: Border.all(color: chip.border.withOpacity(.55)),
+              child: Material(
+                color: tokens.transparent,
+                borderRadius: BorderRadius.circular(cardRadius),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: () => onSelect(plate),
+                  borderRadius: BorderRadius.circular(cardRadius),
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: cardHorizontal,
+                      vertical: cardVertical,
                     ),
-                    child: Icon(
-                      _leadingIcon(type),
-                      size: iconSize,
-                      color: chip.fg,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          plate.plateNumber,
-                          style: plateStyle,
-                          overflow: TextOverflow.ellipsis,
+                    child: Row(
+                      children: <Widget>[
+                        AnimatedContainer(
+                          duration: tabletPromptDuration(
+                            context,
+                            PromptUiMotion.selection,
+                          ),
+                          width: iconBox,
+                          height: iconBox,
+                          decoration: BoxDecoration(
+                            color: colors.background,
+                            borderRadius: BorderRadius.circular(
+                              compact ? 14 : 16,
+                            ),
+                            border: Border.all(color: colors.foreground),
+                          ),
+                          child: Icon(
+                            _leadingIcon(type),
+                            size: compact ? 20 : 22,
+                            color: colors.foreground,
+                          ),
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          meta,
-                          style: metaStyle,
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 2,
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Text(
+                                plate.plateNumber,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: plateStyle?.copyWith(
+                                  fontFeatures: const <FontFeature>[
+                                    FontFeature.tabularFigures(),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                meta,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: metaStyle,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        _TypeChip(
+                          label: typeLabel,
+                          foreground: colors.onBackground,
+                          background: colors.background,
+                          border: colors.foreground,
+                          compact: compact,
+                          selected: selected,
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  _TypeChip(
-                    label: typeLabel,
-                    fg: chip.fg,
-                    bg: chip.bg,
-                    border: chip.border,
-                    compact: compact,
-                  ),
-                ],
+                ),
               ),
             ),
           ),
@@ -244,47 +257,71 @@ class TabletPlateSearchResultSection extends StatelessWidget {
   }
 }
 
-class _TypeChip extends StatelessWidget {
-  final String label;
-  final Color fg;
-  final Color bg;
-  final Color border;
-  final bool compact;
+class _StatusColors {
+  const _StatusColors({
+    required this.foreground,
+    required this.background,
+    required this.onBackground,
+  });
 
+  final Color foreground;
+  final Color background;
+  final Color onBackground;
+}
+
+class _TypeChip extends StatelessWidget {
   const _TypeChip({
     required this.label,
-    required this.fg,
-    required this.bg,
+    required this.foreground,
+    required this.background,
     required this.border,
     required this.compact,
+    required this.selected,
   });
+
+  final String label;
+  final Color foreground;
+  final Color background;
+  final Color border;
+  final bool compact;
+  final bool selected;
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
-
-    
-    final TextStyle base =
-    compact ? (t.labelLarge ?? const TextStyle()) : (t.titleSmall ?? const TextStyle());
-
-    return Container(
+    return AnimatedContainer(
+      duration: tabletPromptDuration(context, PromptUiMotion.selection),
+      curve: PromptUiMotion.standard,
       constraints: BoxConstraints(minHeight: compact ? 32 : 38),
       padding: EdgeInsets.symmetric(
         horizontal: compact ? 10 : 12,
         vertical: compact ? 7 : 8,
       ),
       decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: border),
+        color: background,
+        borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+        border: Border.all(color: border, width: selected ? 2 : 1),
       ),
-      child: Text(
-        label,
-        style: base.copyWith(
-          color: fg,
-          fontWeight: FontWeight.w900,
-        ),
-        overflow: TextOverflow.ellipsis,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          if (selected) ...<Widget>[
+            Icon(Icons.check_rounded, size: 15, color: foreground),
+            const SizedBox(width: 5),
+          ],
+          Flexible(
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              style: (compact
+                      ? Theme.of(context).textTheme.labelLarge
+                      : Theme.of(context).textTheme.titleSmall)
+                  ?.copyWith(
+                color: foreground,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

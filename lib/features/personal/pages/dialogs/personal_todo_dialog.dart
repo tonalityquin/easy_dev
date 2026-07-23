@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
+import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
 import '../../application/personal_todo_store.dart';
 import '../../domain/models/personal_todo_item.dart';
+import '../widgets/personal_prompt_components.dart';
 
 Future<bool?> showPersonalTodoDialog(BuildContext context) {
-  return showDialog<bool>(
+  return showPromptOverlayDialog<bool>(
     context: context,
-    barrierDismissible: true,
     builder: (_) => const PersonalTodoDialog(),
   );
 }
@@ -39,17 +43,21 @@ class _PersonalTodoDialogState extends State<PersonalTodoDialog> {
   }
 
   Future<void> _toggle(PersonalTodoItem todo) async {
-    await _store.upsert(todo.copyWith(done: !todo.done, updatedAt: DateTime.now()));
+    HapticFeedback.selectionClick();
+    await _store.upsert(
+      todo.copyWith(done: !todo.done, updatedAt: DateTime.now()),
+    );
     await _load();
   }
 
   Future<void> _remove(PersonalTodoItem todo) async {
+    HapticFeedback.mediumImpact();
     await _store.remove(todo.id);
     await _load();
   }
 
   Future<void> _add() async {
-    final item = await showDialog<PersonalTodoItem>(
+    final item = await showPromptOverlayDialog<PersonalTodoItem>(
       context: context,
       builder: (_) => const _TodoEditorDialog(),
     );
@@ -60,70 +68,172 @@ class _PersonalTodoDialogState extends State<PersonalTodoDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final text = Theme.of(context).textTheme;
+    final tokens = PromptUiTheme.of(context);
+    final textTheme = Theme.of(context).textTheme;
+    final size = MediaQuery.sizeOf(context);
 
-    return AlertDialog(
+    return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      title: Row(
-        children: [
-          Icon(Icons.checklist_rounded, color: cs.primary),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text('내 차량 할 일', style: text.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
-          ),
-        ],
+      backgroundColor: tokens.surfaceRaised,
+      surfaceTintColor: tokens.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(PromptUiShapes.dialog),
+        side: BorderSide(color: tokens.borderSubtle),
       ),
-      content: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520, maxHeight: 560),
-        child: _loading
-            ? const SizedBox(height: 140, child: Center(child: CircularProgressIndicator()))
-            : _todos.isEmpty
-                ? _EmptyTodo(onAdd: _add)
-                : SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: _todos
-                          .map(
-                            (todo) => Card(
-                              elevation: 0,
-                              color: todo.done ? cs.surfaceContainerLow : cs.surface,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                side: BorderSide(color: cs.outlineVariant.withOpacity(.55)),
-                              ),
-                              child: CheckboxListTile(
-                                value: todo.done,
-                                onChanged: (_) => _toggle(todo),
-                                title: Text(
-                                  todo.title,
-                                  style: text.bodyMedium?.copyWith(
-                                    fontWeight: FontWeight.w800,
-                                    decoration: todo.done ? TextDecoration.lineThrough : null,
-                                  ),
-                                ),
-                                subtitle: Text(
-                                  _todoSubtitle(todo),
-                                  style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700),
-                                ),
-                                secondary: IconButton(
-                                  tooltip: '삭제',
-                                  icon: const Icon(Icons.delete_outline_rounded),
-                                  onPressed: () => _remove(todo),
-                                ),
-                                controlAffinity: ListTileControlAffinity.leading,
-                              ),
-                            ),
-                          )
-                          .toList(),
+      child: SafeArea(
+        minimum: const EdgeInsets.all(18),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: 540,
+            maxHeight: size.height * .82,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Row(
+                children: <Widget>[
+                  Container(
+                    width: 42,
+                    height: 42,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: tokens.accentContainer,
+                      borderRadius: BorderRadius.circular(
+                        PromptUiShapes.control,
+                      ),
+                    ),
+                    child: Icon(
+                      Icons.checklist_rounded,
+                      color: tokens.onAccentContainer,
                     ),
                   ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      '내 차량 할 일',
+                      style: textTheme.titleLarge?.copyWith(
+                        color: tokens.textPrimary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  PersonalPromptStatusPill(
+                    label: '${_todos.where((todo) => !todo.done).length}개 진행',
+                    foreground: tokens.statusSettlementPending,
+                    background: tokens.statusSettlementPendingContainer,
+                    icon: Icons.pending_actions_rounded,
+                  ),
+                  const SizedBox(width: 6),
+                  PromptIconButton(
+                    icon: Icons.close_rounded,
+                    tooltip: '닫기',
+                    onPressed: () => Navigator.of(context).pop(false),
+                    haptic: PromptHaptic.selection,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Divider(height: 1, color: tokens.borderSubtle),
+              const SizedBox(height: 14),
+              Flexible(
+                child: PersonalPromptAnimatedSwap(
+                  stateKey: _loading
+                      ? 'loading'
+                      : _todos.isEmpty
+                          ? 'empty'
+                          : 'list-${_todos.length}',
+                  alignment: Alignment.topCenter,
+                  child: _loading
+                      ? const Center(
+                          child: PersonalPromptLoadingState(
+                            label: '할 일을 불러오는 중입니다.',
+                          ),
+                        )
+                      : _todos.isEmpty
+                          ? PersonalPromptEmptyState(
+                              icon: Icons.task_alt_rounded,
+                              title: '아직 등록된 할 일이 없습니다.',
+                              message: '차량 관련 메모를 남겨두면 홈에서 바로 확인할 수 있습니다.',
+                              actionLabel: '할 일 추가',
+                              onAction: _add,
+                            )
+                          : ListView.separated(
+                              shrinkWrap: true,
+                              itemCount: _todos.length,
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(height: 8),
+                              itemBuilder: (context, index) {
+                                final todo = _todos[index];
+                                return PromptAnimatedReveal(
+                                  key: ValueKey<String>(todo.id),
+                                  delay: Duration(milliseconds: index * 24),
+                                  child: AnimatedContainer(
+                                    duration: personalPromptDuration(
+                                      context,
+                                      PromptUiMotion.selection,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: todo.done
+                                          ? tokens.surfaceOverlay
+                                          : tokens.surfaceRaised,
+                                      borderRadius: BorderRadius.circular(
+                                        PromptUiShapes.card,
+                                      ),
+                                      border: Border.all(
+                                        color: todo.done
+                                            ? tokens.statusSynchronized
+                                                .withOpacity(.34)
+                                            : tokens.borderSubtle,
+                                      ),
+                                    ),
+                                    child: CheckboxListTile(
+                                      value: todo.done,
+                                      onChanged: (_) => _toggle(todo),
+                                      title: Text(
+                                        todo.title,
+                                        style: textTheme.bodyMedium?.copyWith(
+                                          color: tokens.textPrimary,
+                                          fontWeight: FontWeight.w700,
+                                          decoration: todo.done
+                                              ? TextDecoration.lineThrough
+                                              : null,
+                                        ),
+                                      ),
+                                      subtitle: Text(
+                                        _todoSubtitle(todo),
+                                        style: textTheme.bodySmall?.copyWith(
+                                          color: tokens.textSecondary,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                      secondary: PromptIconButton(
+                                        icon: Icons.delete_outline_rounded,
+                                        tooltip: '삭제',
+                                        onPressed: () => _remove(todo),
+                                        haptic: PromptHaptic.medium,
+                                      ),
+                                      controlAffinity:
+                                          ListTileControlAffinity.leading,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              PromptButton(
+                label: '할 일 추가',
+                icon: Icons.add_rounded,
+                expand: true,
+                haptic: PromptHaptic.light,
+                onPressed: _add,
+              ),
+            ],
+          ),
+        ),
       ),
-      actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('닫기')),
-        FilledButton.icon(onPressed: _add, icon: const Icon(Icons.add_rounded), label: const Text('할 일 추가')),
-      ],
     );
   }
 }
@@ -149,7 +259,7 @@ class _TodoEditorDialogState extends State<_TodoEditorDialog> {
 
   Future<void> _pickDate() async {
     final now = DateTime.now();
-    final picked = await showDatePicker(
+    final picked = await showPromptDatePicker(
       context: context,
       initialDate: _dueDate ?? now,
       firstDate: DateTime(now.year - 1),
@@ -161,7 +271,10 @@ class _TodoEditorDialogState extends State<_TodoEditorDialog> {
 
   void _save() {
     final title = _titleController.text.trim();
-    if (title.isEmpty) return;
+    if (title.isEmpty) {
+      HapticFeedback.mediumImpact();
+      return;
+    }
     final now = DateTime.now();
     Navigator.of(context).pop(
       PersonalTodoItem(
@@ -177,52 +290,93 @@ class _TodoEditorDialogState extends State<_TodoEditorDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('할 일 추가'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextField(controller: _titleController, decoration: const InputDecoration(labelText: '할 일', border: OutlineInputBorder())),
-          const SizedBox(height: 12),
-          TextField(controller: _plateController, decoration: const InputDecoration(labelText: '차량 번호 또는 메모', border: OutlineInputBorder())),
-          const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: _pickDate,
-            icon: const Icon(Icons.event_rounded),
-            label: Text(_dueDate == null ? '날짜 선택' : _formatDate(_dueDate!)),
-          ),
-        ],
+    final tokens = PromptUiTheme.of(context);
+    final textTheme = Theme.of(context).textTheme;
+    return Dialog(
+      backgroundColor: tokens.surfaceRaised,
+      surfaceTintColor: tokens.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(PromptUiShapes.dialog),
+        side: BorderSide(color: tokens.borderSubtle),
       ),
-      actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('취소')),
-        FilledButton(onPressed: _save, child: const Text('저장')),
-      ],
-    );
-  }
-}
-
-class _EmptyTodo extends StatelessWidget {
-  const _EmptyTodo({required this.onAdd});
-
-  final VoidCallback onAdd;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final text = Theme.of(context).textTheme;
-    return SizedBox(
-      height: 220,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.task_alt_rounded, color: cs.primary, size: 42),
-          const SizedBox(height: 12),
-          Text('아직 등록된 할 일이 없습니다.', style: text.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
-          const SizedBox(height: 6),
-          Text('차량 관련 메모를 남겨두면 홈에서 바로 확인할 수 있어요.', textAlign: TextAlign.center, style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 14),
-          FilledButton.icon(onPressed: onAdd, icon: const Icon(Icons.add_rounded), label: const Text('할 일 추가')),
-        ],
+      child: SafeArea(
+        minimum: const EdgeInsets.all(20),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Row(
+                children: <Widget>[
+                  Icon(Icons.add_task_rounded, color: tokens.accent),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      '할 일 추가',
+                      style: textTheme.titleLarge?.copyWith(
+                        color: tokens.textPrimary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              TextField(
+                controller: _titleController,
+                autofocus: true,
+                textInputAction: TextInputAction.next,
+                decoration: const InputDecoration(
+                  labelText: '할 일',
+                  prefixIcon: Icon(Icons.edit_note_rounded),
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _plateController,
+                textInputAction: TextInputAction.done,
+                decoration: const InputDecoration(
+                  labelText: '차량 번호 또는 메모',
+                  prefixIcon: Icon(Icons.directions_car_outlined),
+                  border: OutlineInputBorder(),
+                ),
+                onSubmitted: (_) => _save(),
+              ),
+              const SizedBox(height: 12),
+              PromptButton(
+                label: _dueDate == null ? '날짜 선택' : _formatDate(_dueDate!),
+                icon: Icons.event_rounded,
+                variant: PromptButtonVariant.secondary,
+                expand: true,
+                haptic: PromptHaptic.selection,
+                onPressed: _pickDate,
+              ),
+              const SizedBox(height: 18),
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: PromptButton(
+                      label: '취소',
+                      variant: PromptButtonVariant.tertiary,
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: PromptButton(
+                      label: '저장',
+                      icon: Icons.check_rounded,
+                      haptic: PromptHaptic.light,
+                      onPressed: _save,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

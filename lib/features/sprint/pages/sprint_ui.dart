@@ -217,6 +217,91 @@ Future<String?> sprintSelectTaskProject({
   );
 }
 
+
+Future<String?> sprintSelectTaskCalendar({
+  required BuildContext context,
+  required SprintModeStore store,
+  String? initialProfileId,
+}) async {
+  final profiles = store.calendarProfiles;
+  if (profiles.isEmpty) return null;
+  final preferred = store.calendarProfileById(initialProfileId) ??
+      store.defaultCalendarProfile ??
+      profiles.first;
+  if (profiles.length == 1) return preferred.id;
+  return sprintShowBottomSheet<String>(
+    context: context,
+    builder: (sheetContext) {
+      final reduceMotion =
+          MediaQuery.maybeOf(sheetContext)?.disableAnimations ?? false;
+      final duration = reduceMotion ? Duration.zero : PromptUiMotion.component;
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+        child: AnimatedSize(
+          duration: duration,
+          curve: PromptUiMotion.enter,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Google 캘린더 선택',
+                style: Theme.of(sheetContext).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+              const SizedBox(height: 12),
+              ...profiles.indexed.map(
+                (entry) {
+                  final profile = entry.$2;
+                  final account = store.accountForProfile(profile.id);
+                  final selected = profile.id == preferred.id;
+                  return PromptAnimatedReveal(
+                    delay: reduceMotion
+                        ? Duration.zero
+                        : Duration(milliseconds: entry.$1 * 45),
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: SprintSurface(
+                        padding: EdgeInsets.zero,
+                        onTap: () => Navigator.of(sheetContext).pop(profile.id),
+                        child: ListTile(
+                          minTileHeight: 62,
+                          leading: AnimatedSwitcher(
+                            duration: duration,
+                            child: Icon(
+                              selected
+                                  ? Icons.star_rounded
+                                  : Icons.calendar_month_outlined,
+                              key: ValueKey<bool>(selected),
+                            ),
+                          ),
+                          title: Text(
+                            profile.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          subtitle: Text(
+                            '${account?.email ?? ''} · ${profile.calendarId}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          trailing: const Icon(Icons.chevron_right_rounded),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
 Future<SprintTask?> sprintCreateTaskFromComposer({
   required BuildContext context,
   required SprintModeStore store,
@@ -229,7 +314,38 @@ Future<SprintTask?> sprintCreateTaskFromComposer({
     initialProjectId: store.selectedProjectId,
   );
   if (projectId == null || !context.mounted) return null;
-  final preview = store.previewTaskFromText(rawText, projectId: projectId);
+  String? calendarProfileId;
+  if (store.calendarProfiles.isNotEmpty) {
+    calendarProfileId = await sprintSelectTaskCalendar(
+      context: context,
+      store: store,
+      initialProfileId: store.defaultCalendarProfile?.id,
+    );
+    if (calendarProfileId == null || !context.mounted) return null;
+  }
+  if (calendarProfileId != null &&
+      !store.isProfileAuthenticated(calendarProfileId)) {
+    try {
+      await store.authenticateCalendarProfile(
+        calendarProfileId,
+        forceAccountSelection: true,
+      );
+    } catch (_) {
+      if (context.mounted) {
+        sprintShowMessage(
+          context: context,
+          message: '선택한 캘린더의 Google 계정을 인증하지 못했습니다.',
+          danger: true,
+        );
+      }
+      return null;
+    }
+  }
+  final preview = store.previewTaskFromText(
+    rawText,
+    projectId: projectId,
+    calendarProfileId: calendarProfileId,
+  );
   if (preview == null) {
     final error = store.taskInputError;
     if (error != null && context.mounted) {

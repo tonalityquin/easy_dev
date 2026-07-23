@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../app/utils/dev_firebase_debug_dialog.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
 
 import '../../../../shared/plate/domain/enums/plate_type.dart';
 import '../../../../shared/plate/domain/models/plate_model.dart';
@@ -19,6 +21,7 @@ import '../dialogs/personal_departure_success_dialog.dart';
 import '../dialogs/personal_todo_dialog.dart';
 import '../dialogs/personal_vehicle_editor_dialog.dart';
 import '../dialogs/personal_vehicle_status_sheet.dart';
+import '../widgets/personal_prompt_components.dart';
 
 class PersonalHomePanel extends StatefulWidget {
   const PersonalHomePanel({
@@ -215,6 +218,7 @@ class PersonalHomePanelState extends State<PersonalHomePanel> {
         operation: 'personal.home.vehicleStatusRefresh',
         error: e,
         stackTrace: st,
+        usePromptUi: true,
         details: <String, Object?>{
           'area': area,
           'vehicleId': vehicle.id,
@@ -285,12 +289,13 @@ class PersonalHomePanelState extends State<PersonalHomePanel> {
   void _showSnack(String message, {required bool success}) {
     final messenger = ScaffoldMessenger.maybeOf(context);
     if (messenger == null) return;
+    final tokens = PromptUiTheme.of(context);
     messenger.clearSnackBars();
     messenger.showSnackBar(
       SnackBar(
         content: Text(message),
         behavior: SnackBarBehavior.floating,
-        backgroundColor: success ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.error,
+        backgroundColor: success ? tokens.success : tokens.danger,
       ),
     );
   }
@@ -322,7 +327,7 @@ class PersonalHomePanelState extends State<PersonalHomePanel> {
     if (delta < -1) delta += 3;
     _pageController.animateToPage(
       _rawPageIndex + delta,
-      duration: const Duration(milliseconds: 260),
+      duration: personalPromptDuration(context, PromptUiMotion.overlay),
       curve: Curves.easeOutCubic,
     );
   }
@@ -334,71 +339,88 @@ class PersonalHomePanelState extends State<PersonalHomePanel> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final bottom = MediaQuery.of(context).padding.bottom;
+    final tokens = PromptUiTheme.of(context);
+    final bottom = MediaQuery.paddingOf(context).bottom;
 
-    return Column(
-      children: [
-        Expanded(
-          child: PageView.builder(
-            controller: _pageController,
-            onPageChanged: _handlePageChanged,
-            itemBuilder: (context, rawIndex) {
-              final index = _logicalPageIndex(rawIndex);
-              if (index == 0) {
-                return _VehicleLocationPage(
-                  name: _personalName,
-                  area: widget.area,
-                  vehicles: _vehicles,
-                  selectedVehicle: _selectedVehicle,
-                  statusByVehicleId: _statusByVehicleId,
-                  monthlyStatusByVehicleId: _monthlyStatusByVehicleId,
-                  loadingVehicleIds: _loadingVehicleIds,
-                  loadingMonthlyVehicleIds: _loadingMonthlyVehicleIds,
-                  loadingVehicles: _loadingVehicles,
-                  showMonthlyParkingPanel: _showMonthlyParkingPanel,
-                  onToggleVehiclePanel: _toggleVehiclePanel,
-                  onSelectVehicle: (vehicle) => setState(() {
-                    _selectedVehicleId = vehicle.id;
-                    _showMonthlyParkingPanel = false;
-                  }),
-                  onRefreshVehicle: _refreshVehicleStatus,
-                  onOpenVehicle: _openVehicle,
-                );
-              }
-              if (index == 1) {
-                return _TodayTodoPage(
-                  todos: _todos,
-                  events: _events,
-                  onToggleTodo: _toggleTodo,
-                  onOpenTodo: _openTodoDialog,
-                  onOpenCalendar: _openCalendarDialog,
-                );
-              }
-              return _CalendarFocusPage(
-                todos: _todos,
-                events: _events,
-                selectedDay: _selectedCalendarDay,
-                onSelectDay: (day) => setState(() => _selectedCalendarDay = day),
-                onToggleTodo: _toggleTodo,
-                onOpenTodo: _openTodoDialog,
-                onOpenCalendar: _openCalendarDialog,
-              );
-            },
+    return ColoredBox(
+      color: tokens.canvas,
+      child: Column(
+        children: <Widget>[
+          Expanded(
+            child: PromptAnimatedReveal(
+              child: PageView.builder(
+                controller: _pageController,
+                onPageChanged: _handlePageChanged,
+                itemBuilder: (context, rawIndex) {
+                  final index = _logicalPageIndex(rawIndex);
+                  if (index == 0) {
+                    return _VehicleLocationPage(
+                      name: _personalName,
+                      area: widget.area,
+                      vehicles: _vehicles,
+                      selectedVehicle: _selectedVehicle,
+                      statusByVehicleId: _statusByVehicleId,
+                      monthlyStatusByVehicleId: _monthlyStatusByVehicleId,
+                      loadingVehicleIds: _loadingVehicleIds,
+                      loadingMonthlyVehicleIds: _loadingMonthlyVehicleIds,
+                      loadingVehicles: _loadingVehicles,
+                      showMonthlyParkingPanel: _showMonthlyParkingPanel,
+                      onToggleVehiclePanel: _toggleVehiclePanel,
+                      onSelectVehicle: (vehicle) {
+                        setState(() {
+                          _selectedVehicleId = vehicle.id;
+                          _showMonthlyParkingPanel = false;
+                        });
+                      },
+                      onRefreshVehicle: _refreshVehicleStatus,
+                      onOpenVehicle: _openVehicle,
+                    );
+                  }
+                  if (index == 1) {
+                    return _TodayTodoPage(
+                      todos: _todos,
+                      events: _events,
+                      onToggleTodo: _toggleTodo,
+                      onOpenTodo: _openTodoDialog,
+                      onOpenCalendar: _openCalendarDialog,
+                    );
+                  }
+                  return _CalendarFocusPage(
+                    todos: _todos,
+                    events: _events,
+                    selectedDay: _selectedCalendarDay,
+                    onSelectDay: (day) {
+                      setState(() => _selectedCalendarDay = day);
+                    },
+                    onToggleTodo: _toggleTodo,
+                    onOpenTodo: _openTodoDialog,
+                    onOpenCalendar: _openCalendarDialog,
+                  );
+                },
+              ),
+            ),
           ),
-        ),
-        Container(
-          padding: EdgeInsets.fromLTRB(16, 8, 16, 10 + bottom),
-          decoration: BoxDecoration(
-            color: cs.surface,
-            border: Border(top: BorderSide(color: cs.outlineVariant.withOpacity(.42))),
+          AnimatedContainer(
+            duration: personalPromptDuration(context),
+            padding: EdgeInsets.fromLTRB(16, 8, 16, 10 + bottom),
+            decoration: BoxDecoration(
+              color: tokens.surfaceRaised,
+              border: Border(top: BorderSide(color: tokens.borderSubtle)),
+              boxShadow: <BoxShadow>[
+                BoxShadow(
+                  color: tokens.shadow,
+                  blurRadius: 12,
+                  offset: const Offset(0, -4),
+                ),
+              ],
+            ),
+            child: _PageSwitcher(
+              current: _pageIndex,
+              onTap: _goToPage,
+            ),
           ),
-          child: _PageSwitcher(
-            current: _pageIndex,
-            onTap: _goToPage,
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -606,10 +628,13 @@ class _CalendarFocusPage extends StatelessWidget {
             ...selectedTodos.map((todo) => _TodoRowCard(todo: todo, onToggle: () => onToggleTodo(todo))),
           ],
           const SizedBox(height: 6),
-          OutlinedButton.icon(
+          PromptButton(
+            label: '이 날짜의 할 일 관리',
+            icon: Icons.add_task_rounded,
+            variant: PromptButtonVariant.secondary,
+            expand: true,
+            haptic: PromptHaptic.selection,
             onPressed: onOpenTodo,
-            icon: const Icon(Icons.add_task_rounded),
-            label: const Text('이 날짜의 할 일 관리'),
           ),
         ],
       ),
@@ -717,7 +742,7 @@ class _HomeHero extends StatelessWidget {
 }
 
 
-class _HeroDetailIcon extends StatefulWidget {
+class _HeroDetailIcon extends StatelessWidget {
   const _HeroDetailIcon({
     required this.enabled,
     required this.onTap,
@@ -727,66 +752,18 @@ class _HeroDetailIcon extends StatefulWidget {
   final VoidCallback? onTap;
 
   @override
-  State<_HeroDetailIcon> createState() => _HeroDetailIconState();
-}
-
-class _HeroDetailIconState extends State<_HeroDetailIcon> {
-  bool _pressed = false;
-
-  void _setPressed(bool value) {
-    if (!widget.enabled || _pressed == value) return;
-    setState(() => _pressed = value);
-  }
-
-  void _handleTap() {
-    if (!widget.enabled) return;
-    widget.onTap?.call();
-  }
-
-  @override
-  void didUpdateWidget(covariant _HeroDetailIcon oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (!widget.enabled && _pressed) {
-      _pressed = false;
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Tooltip(
-      message: widget.enabled ? '선택 차량 상세 보기' : '차량을 먼저 추가해 주세요',
-      child: AnimatedOpacity(
-        duration: const Duration(milliseconds: 160),
-        opacity: widget.enabled ? 1 : .46,
-        child: AnimatedScale(
-          duration: const Duration(milliseconds: 110),
-          curve: Curves.easeOutCubic,
-          scale: _pressed ? .94 : 1,
-          child: Material(
-            color: Colors.transparent,
-            borderRadius: BorderRadius.circular(22),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(22),
-              onTap: widget.enabled ? _handleTap : null,
-              onTapDown: widget.enabled ? (_) => _setPressed(true) : null,
-              onTapUp: widget.enabled ? (_) => _setPressed(false) : null,
-              onTapCancel: widget.enabled ? () => _setPressed(false) : null,
-              child: Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: cs.primary,
-                  borderRadius: BorderRadius.circular(22),
-                  boxShadow: [
-                    BoxShadow(color: cs.primary.withOpacity(.20), blurRadius: 18, offset: const Offset(0, 8)),
-                  ],
-                ),
-                child: Icon(Icons.near_me_rounded, color: cs.onPrimary, size: 30),
-              ),
-            ),
-          ),
-        ),
+    return AnimatedOpacity(
+      duration: personalPromptDuration(context, PromptUiMotion.selection),
+      opacity: enabled ? 1 : .46,
+      child: PromptIconButton(
+        icon: Icons.near_me_rounded,
+        tooltip: enabled ? '선택 차량 상세 보기' : '차량을 먼저 추가해 주세요',
+        onPressed: enabled ? onTap : null,
+        selected: enabled,
+        haptic: PromptHaptic.selection,
+        size: 56,
+        iconSize: 28,
       ),
     );
   }
@@ -1230,7 +1207,12 @@ class _PageTitleCard extends StatelessWidget {
               ],
             ),
           ),
-          TextButton(onPressed: onAction, child: Text(actionLabel)),
+          PromptButton(
+            label: actionLabel,
+            variant: PromptButtonVariant.tertiary,
+            minHeight: 38,
+            onPressed: onAction,
+          ),
         ],
       ),
     );
@@ -1296,7 +1278,12 @@ class _LinkedSectionTitle extends StatelessWidget {
       child: Row(
         children: [
           Expanded(child: Text(title, style: text.titleMedium?.copyWith(color: cs.onSurface, fontWeight: FontWeight.w900))),
-          TextButton(onPressed: onAction, child: Text(actionLabel)),
+          PromptButton(
+            label: actionLabel,
+            variant: PromptButtonVariant.tertiary,
+            minHeight: 38,
+            onPressed: onAction,
+          ),
         ],
       ),
     );
@@ -1404,9 +1391,23 @@ class _InlineCalendar extends StatelessWidget {
         children: [
           Row(
             children: [
-              IconButton(onPressed: () => onSelectDay(DateTime(month.year, month.month - 1, 1)), icon: const Icon(Icons.chevron_left_rounded)),
+              PromptIconButton(
+                icon: Icons.chevron_left_rounded,
+                tooltip: '이전 달',
+                size: 40,
+                onPressed: () => onSelectDay(
+                  DateTime(month.year, month.month - 1, 1),
+                ),
+              ),
               Expanded(child: Text('${month.year}년 ${month.month}월', textAlign: TextAlign.center, style: text.titleMedium?.copyWith(fontWeight: FontWeight.w900))),
-              IconButton(onPressed: () => onSelectDay(DateTime(month.year, month.month + 1, 1)), icon: const Icon(Icons.chevron_right_rounded)),
+              PromptIconButton(
+                icon: Icons.chevron_right_rounded,
+                tooltip: '다음 달',
+                size: 40,
+                onPressed: () => onSelectDay(
+                  DateTime(month.year, month.month + 1, 1),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 4),
@@ -1467,7 +1468,16 @@ class _DayDot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(width: 5, height: 5, decoration: BoxDecoration(color: visible ? color : Colors.transparent, shape: BoxShape.circle));
+    final tokens = PromptUiTheme.of(context);
+    return AnimatedContainer(
+      duration: personalPromptDuration(context, PromptUiMotion.selection),
+      width: 5,
+      height: 5,
+      decoration: BoxDecoration(
+        color: visible ? color : tokens.transparent,
+        shape: BoxShape.circle,
+      ),
+    );
   }
 }
 
@@ -1479,34 +1489,78 @@ class _PageSwitcher extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final icons = <IconData>[
+    const icons = <IconData>[
       Icons.directions_car_filled_rounded,
       Icons.checklist_rounded,
       Icons.calendar_month_rounded,
     ];
-    final labels = <String>['내 차량', '할 일', '달력'];
-    final cs = Theme.of(context).colorScheme;
+    const labels = <String>['내 차량', '할 일', '달력'];
+    final tokens = PromptUiTheme.of(context);
+    final textTheme = Theme.of(context).textTheme;
     return Container(
       padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(color: cs.surfaceContainerLow, borderRadius: BorderRadius.circular(999), border: Border.all(color: cs.outlineVariant.withOpacity(.45))),
+      decoration: BoxDecoration(
+        color: tokens.surfaceOverlay,
+        borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+        border: Border.all(color: tokens.borderSubtle),
+      ),
       child: Row(
-        children: [
+        children: <Widget>[
           for (var i = 0; i < labels.length; i++)
             Expanded(
-              child: InkWell(
-                borderRadius: BorderRadius.circular(999),
-                onTap: () => onTap(i),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  decoration: BoxDecoration(color: current == i ? cs.primary : Colors.transparent, borderRadius: BorderRadius.circular(999)),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(icons[i], size: 17, color: current == i ? cs.onPrimary : cs.onSurfaceVariant),
-                      const SizedBox(width: 5),
-                      Text(labels[i], style: TextStyle(color: current == i ? cs.onPrimary : cs.onSurfaceVariant, fontWeight: FontWeight.w900, fontSize: 12)),
-                    ],
+              child: Semantics(
+                button: true,
+                selected: current == i,
+                label: labels[i],
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+                  onTap: () => onTap(i),
+                  child: AnimatedContainer(
+                    duration: personalPromptDuration(
+                      context,
+                      PromptUiMotion.selection,
+                    ),
+                    curve: PromptUiMotion.standard,
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(
+                      color: current == i
+                          ? tokens.accent
+                          : tokens.transparent,
+                      borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: <Widget>[
+                        AnimatedScale(
+                          scale: current == i ? 1 : .94,
+                          duration: personalPromptDuration(
+                            context,
+                            PromptUiMotion.selection,
+                          ),
+                          child: Icon(
+                            icons[i],
+                            size: 17,
+                            color: current == i
+                                ? tokens.onAccent
+                                : tokens.iconSecondary,
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                        Flexible(
+                          child: Text(
+                            labels[i],
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: textTheme.labelMedium?.copyWith(
+                              color: current == i
+                                  ? tokens.onAccent
+                                  : tokens.textSecondary,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -1516,7 +1570,6 @@ class _PageSwitcher extends StatelessWidget {
     );
   }
 }
-
 
 String _emptyDash(String? value) {
   final text = (value ?? '').trim();

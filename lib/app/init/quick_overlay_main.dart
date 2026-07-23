@@ -1191,7 +1191,6 @@ class _OverlayEdgeHandle extends StatelessWidget {
           child: Container(
             width: width,
             height: height,
-            padding: const EdgeInsets.symmetric(vertical: 8),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(999),
               gradient: LinearGradient(
@@ -1208,40 +1207,69 @@ class _OverlayEdgeHandle extends StatelessWidget {
                 ),
               ],
             ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  icon,
-                  size: 18,
-                  color: cs.onSurface.withOpacity(0.92),
-                ),
-                const SizedBox(height: 4),
-                SizedBox(
-                  height: 24,
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: RotatedBox(
-                      quarterTurns: turns,
-                      child: Text(
-                        elapsedText,
-                        maxLines: 1,
-                        style: TextStyle(
-                          color: cs.onSurfaceVariant.withOpacity(0.84),
-                          fontSize: 8,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.15,
-                          height: 1,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final availableHeight = constraints.maxHeight;
+                final compact = availableHeight < 64;
+                final iconSize = compact ? 14.0 : 16.0;
+                final edgeInset = compact ? 3.0 : 5.0;
+                final timeTop = edgeInset + iconSize + 2;
+                final showGrip = availableHeight >= 62;
+                final timeBottom = showGrip ? 13.0 : edgeInset;
+
+                return ClipRect(
+                  child: Stack(
+                    fit: StackFit.expand,
+                    alignment: Alignment.center,
+                    children: [
+                      Positioned(
+                        top: edgeInset,
+                        left: 0,
+                        right: 0,
+                        child: Icon(
+                          icon,
+                          size: iconSize,
+                          color: cs.onSurface.withOpacity(0.92),
                         ),
                       ),
-                    ),
+                      Positioned(
+                        top: timeTop,
+                        bottom: timeBottom,
+                        left: 1,
+                        right: 1,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: RotatedBox(
+                            quarterTurns: turns,
+                            child: Text(
+                              elapsedText,
+                              maxLines: 1,
+                              style: TextStyle(
+                                color:
+                                    cs.onSurfaceVariant.withOpacity(0.84),
+                                fontSize: 8,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.15,
+                                height: 1,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      if (showGrip)
+                        Positioned(
+                          bottom: 5,
+                          left: 0,
+                          right: 0,
+                          child: _GripDots(
+                            color:
+                                cs.onSurfaceVariant.withOpacity(0.56),
+                          ),
+                        ),
+                    ],
                   ),
-                ),
-                const SizedBox(height: 6),
-                _GripDots(
-                  color: cs.onSurfaceVariant.withOpacity(0.56),
-                ),
-              ],
+                );
+              },
             ),
           ),
         ),
@@ -1257,13 +1285,14 @@ class _GripDots extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return Row(
       mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
         _Dot(color: color),
-        const SizedBox(height: 4),
+        const SizedBox(width: 2),
         _Dot(color: color),
-        const SizedBox(height: 4),
+        const SizedBox(width: 2),
         _Dot(color: color),
       ],
     );

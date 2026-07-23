@@ -124,6 +124,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
   static const Duration _overrideWindow = Duration(seconds: 12);
 
   bool _primaryBusy = false;
+  String? _completionMessage;
 
   final GlobalKey _billingTileKey = GlobalKey();
 
@@ -383,6 +384,24 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
 
     if (!mounted) return;
     Navigator.pop(context);
+  }
+
+  Future<void> _showCompletionFeedback(String message) async {
+    if (!mounted) return;
+
+    setState(() {
+      _completionMessage = message;
+    });
+
+    try {
+      HapticFeedback.mediumImpact();
+    } catch (_) {}
+
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (!reduceMotion) {
+      await Future<void>.delayed(const Duration(milliseconds: 220));
+    }
   }
 
   Future<void> _logDrivingCancel({
@@ -752,11 +771,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
         return;
       }
 
-      final repo = context.read<PlateRepository>();
-      final plateState = context.read<MinorPlateState>();
       final movementPlate = context.read<MovementPlate>();
-      final id = _plateDocId();
-
       final area = _resolveAreaForCache();
 
       final picked = await _pickParkingLocationViaInputBottomSheet(
@@ -778,19 +793,11 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
         return;
       }
 
-      try {
-        await repo.recordWhoPlateClick(id, false, area: _plate.area);
-      } catch (_) {}
-
-      final updated = _plate.copyWith(isSelected: false, selectedBy: null);
-      if (mounted) setState(() => _plate = updated);
-      try {
-        await plateState.minorUpdatePlateLocally(
-          PlateType.parkingRequests,
-          updated,
-        );
-      } catch (_) {}
-
+      if (!mounted) return;
+      setState(() {
+        _plate = _plate.copyWith(isSelected: false, selectedBy: null);
+      });
+      await _showCompletionFeedback('입차 완료');
       if (!mounted) return;
       Navigator.pop(context);
     });
@@ -808,26 +815,19 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
         return;
       }
 
-      final repo = context.read<PlateRepository>();
-      final plateState = context.read<MinorPlateState>();
       final movementPlate = context.read<MovementPlate>();
-      final id = _plateDocId();
-
-      await movementPlate.setDepartureCompleted(_plate);
 
       try {
-        await repo.recordWhoPlateClick(id, false, area: _plate.area);
-      } catch (_) {}
+        await movementPlate.setDepartureCompleted(_plate);
+      } catch (_) {
+        return;
+      }
 
-      final updated = _plate.copyWith(isSelected: false, selectedBy: null);
-      if (mounted) setState(() => _plate = updated);
-      try {
-        await plateState.minorUpdatePlateLocally(
-          PlateType.departureRequests,
-          updated,
-        );
-      } catch (_) {}
-
+      if (!mounted) return;
+      setState(() {
+        _plate = _plate.copyWith(isSelected: false, selectedBy: null);
+      });
+      await _showCompletionFeedback('출차 완료');
       if (!mounted) return;
       Navigator.pop(context);
     });
@@ -863,6 +863,8 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
           _plate = _plate.copyWith(isSelected: false, selectedBy: null);
         });
 
+        await _showCompletionFeedback('출차 완료');
+        if (!mounted) return;
         Navigator.pop(context);
       } catch (_) {
         return;
@@ -889,7 +891,6 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
         return;
       }
 
-      final repo = context.read<PlateRepository>();
       final movementPlate = context.read<MovementPlate>();
 
       try {
@@ -910,20 +911,14 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
           picked,
         );
 
-        try {
-          await repo.recordWhoPlateClick(
-            _plateDocId(),
-            false,
-            area: _plate.area,
-          );
-        } catch (_) {}
-
         if (!mounted) return;
 
         setState(() {
           _plate = _plate.copyWith(isSelected: false, selectedBy: null);
         });
 
+        await _showCompletionFeedback('입차 완료');
+        if (!mounted) return;
         Navigator.pop(context);
       } catch (_) {
         return;
@@ -1029,7 +1024,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
       onDriveCancel = _cancelDepartureDriving;
     }
 
-    return PopScope(
+    final sheet = PopScope(
       canPop: !drivingLatched,
       onPopInvoked: (didPop) {},
       child: SafeArea(
@@ -1338,6 +1333,131 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        sheet,
+        Positioned.fill(
+          child: AbsorbPointer(
+            absorbing: _completionMessage != null,
+            child: AnimatedSwitcher(
+              duration: reduceMotion
+                  ? Duration.zero
+                  : const Duration(milliseconds: 220),
+              reverseDuration: reduceMotion
+                  ? Duration.zero
+                  : const Duration(milliseconds: 140),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (child, animation) {
+                final scale = Tween<double>(begin: 0.94, end: 1).animate(
+                  CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOutCubic,
+                  ),
+                );
+                return FadeTransition(
+                  opacity: animation,
+                  child: ScaleTransition(scale: scale, child: child),
+                );
+              },
+              child: _completionMessage == null
+                  ? const SizedBox.shrink(
+                      key: ValueKey<String>('completion-empty'),
+                    )
+                  : _DrivingCompletionOverlay(
+                      key: ValueKey<String>(_completionMessage!),
+                      colorScheme: cs,
+                      message: _completionMessage!,
+                    ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DrivingCompletionOverlay extends StatelessWidget {
+  const _DrivingCompletionOverlay({
+    super.key,
+    required this.colorScheme,
+    required this.message,
+  });
+
+  final ColorScheme colorScheme;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: colorScheme.scrim.withOpacity(0.34),
+      child: Center(
+        child: Semantics(
+          liveRegion: true,
+          label: message,
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 280),
+            margin: const EdgeInsets.symmetric(horizontal: 24),
+            padding: const EdgeInsets.fromLTRB(24, 22, 24, 20),
+            decoration: BoxDecoration(
+              color: colorScheme.surface,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: colorScheme.primary.withOpacity(0.36),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: colorScheme.shadow.withOpacity(0.18),
+                  blurRadius: 24,
+                  offset: const Offset(0, 12),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: colorScheme.primaryContainer,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.check_rounded,
+                    color: colorScheme.onPrimaryContainer,
+                    size: 30,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  message,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: colorScheme.onSurface,
+                        fontWeight: FontWeight.w900,
+                      ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '상태 변경이 완료되었습니다.',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../../app/utils/snackbar_helper.dart';
+import '../../../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
 import '../../../../../shared/auth/five_digit_password_generator.dart';
 import '../../../../../shared/secondary/widgets/ops_console_widgets.dart';
 import '../../../domain/models/tablet/tablet_model.dart';
@@ -191,12 +193,16 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
   }
 
   Widget _buildRoleSection(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final tokens = PromptUiTheme.of(context);
     return OpsWorkSection(
       title: '운영 권한',
       subtitle: '태블릿 단말이 수행할 수 있는 현장 역할을 지정합니다.',
       icon: Icons.security_rounded,
-      trailing: OpsStatusBadge(label: _selectedRole.label, color: cs.primary, icon: Icons.verified_user_rounded),
+      trailing: OpsStatusBadge(
+        label: _selectedRole.label,
+        color: tokens.statusMonthlyParking,
+        icon: Icons.verified_user_rounded,
+      ),
       child: DropdownButtonFormField<TabletRoleType>(
         value: _selectedRole,
         isExpanded: true,
@@ -242,7 +248,7 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final tokens = PromptUiTheme.of(context);
     final title = isEditMode ? '태블릿 계정 수정' : '태블릿 등록';
     final subtitle = isEditMode ? '현장 단말의 배정 정보와 권한을 갱신합니다.' : '운영 구역에 배정할 태블릿 계정을 프로비저닝합니다.';
     final areaLabel = widget.division.trim().isEmpty ? widget.areaValue : '${widget.division} · ${widget.areaValue}';
@@ -253,10 +259,36 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
       icon: Icons.tablet_mac_rounded,
       areaLabel: areaLabel,
       metrics: [
-        OpsMetric(label: '이름', value: _nameOk ? '완료' : '필수', icon: Icons.tablet_rounded, color: _nameOk ? cs.primary : cs.error),
-        OpsMetric(label: '아이디', value: _handleOk ? '정상' : '검증', icon: Icons.alternate_email_rounded, color: _handleOk ? cs.primary : cs.error),
-        OpsMetric(label: '권한', value: _selectedRole.label, icon: Icons.security_rounded, color: cs.primary),
-        OpsMetric(label: '이메일', value: _emailOk ? '정상' : '필수', icon: Icons.mail_rounded, color: _emailOk ? cs.primary : cs.error),
+        OpsMetric(
+          label: '이름',
+          value: _nameOk ? '완료' : '필수',
+          icon: Icons.tablet_rounded,
+          color: _nameOk
+              ? tokens.statusSynchronized
+              : tokens.statusSettlementPending,
+        ),
+        OpsMetric(
+          label: '아이디',
+          value: _handleOk ? '정상' : '검증',
+          icon: Icons.alternate_email_rounded,
+          color: _handleOk
+              ? tokens.statusSynchronized
+              : tokens.statusSettlementPending,
+        ),
+        OpsMetric(
+          label: '권한',
+          value: _selectedRole.label,
+          icon: Icons.security_rounded,
+          color: tokens.statusMonthlyParking,
+        ),
+        OpsMetric(
+          label: '이메일',
+          value: _emailOk ? '정상' : '필수',
+          icon: Icons.mail_rounded,
+          color: _emailOk
+              ? tokens.statusSynchronized
+              : tokens.statusSettlementPending,
+        ),
       ],
       bottomBar: OpsBottomActionBar(
         children: [
@@ -296,9 +328,18 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
             ],
           ),
           const SizedBox(height: 12),
-          _buildIdentitySection(context),
-          _buildRoleSection(context),
-          _buildPasswordSection(context),
+          PromptAnimatedReveal(
+            delay: const Duration(milliseconds: 40),
+            child: _buildIdentitySection(context),
+          ),
+          PromptAnimatedReveal(
+            delay: const Duration(milliseconds: 80),
+            child: _buildRoleSection(context),
+          ),
+          PromptAnimatedReveal(
+            delay: const Duration(milliseconds: 120),
+            child: _buildPasswordSection(context),
+          ),
         ],
       ),
     );

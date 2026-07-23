@@ -1,6 +1,10 @@
 import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
+
+import '../../../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../pages/widgets/tablet_prompt_components.dart';
 import '../../../../location/domain/models/grid_rect.dart';
 import '../../../../location/domain/models/location_model.dart';
 import '../../../../location/domain/models/parking_grid_model.dart';
@@ -1370,10 +1374,11 @@ class _TabletGrid3dPreviewState extends State<TabletGrid3dPreview> {
     if (count <= 1) return child;
 
     final cs = Theme.of(context).colorScheme;
+    final tokens = PromptUiTheme.of(context);
 
     Widget chevronButton(IconData icon) => AnimatedContainer(
-      duration: const Duration(milliseconds: 180),
-      curve: Curves.easeOutCubic,
+      duration: tabletPromptDuration(context, PromptUiMotion.selection),
+      curve: PromptUiMotion.standard,
       width: 46,
       height: 46,
       decoration: BoxDecoration(
@@ -1417,8 +1422,8 @@ class _TabletGrid3dPreviewState extends State<TabletGrid3dPreview> {
       children: List.generate(count, (i) {
         final selected = i == index;
         return AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOut,
+          duration: tabletPromptDuration(context, PromptUiMotion.selection),
+          curve: PromptUiMotion.standard,
           width: selected ? 16 : 6,
           height: 6,
           margin: const EdgeInsets.symmetric(horizontal: 3),
@@ -1449,7 +1454,7 @@ class _TabletGrid3dPreviewState extends State<TabletGrid3dPreview> {
             button: true,
             label: semanticsLabel,
             child: Material(
-              color: Colors.transparent,
+              color: tokens.transparent,
               child: InkWell(
                 onTap: onTap,
                 child: DecoratedBox(
@@ -1464,7 +1469,7 @@ class _TabletGrid3dPreviewState extends State<TabletGrid3dPreview> {
                       colors: [
                         edgeShade,
                         edgeShade.withOpacity(0.42),
-                        Colors.transparent,
+                        tokens.transparent,
                       ],
                       stops: const [0.0, 0.56, 1.0],
                     ),
@@ -1531,9 +1536,9 @@ class _TabletGrid3dPreviewState extends State<TabletGrid3dPreview> {
 
   Widget _animatedBody({required Key key, required Widget child}) {
     return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 240),
-      switchInCurve: Curves.easeOutCubic,
-      switchOutCurve: Curves.easeInCubic,
+      duration: tabletPromptDuration(context, PromptUiMotion.component),
+      switchInCurve: PromptUiMotion.enter,
+      switchOutCurve: PromptUiMotion.exit,
       layoutBuilder: (currentChild, previousChildren) {
         return Stack(
           alignment: Alignment.topCenter,
@@ -1561,48 +1566,27 @@ class _TabletGrid3dPreviewState extends State<TabletGrid3dPreview> {
   Widget _cardShell({
     required Widget child,
     EdgeInsets padding =
-    const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
+        const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
   }) {
-    final cs = Theme.of(context).colorScheme;
-    return Card(
-      color: cs.surface,
-      surfaceTintColor: Colors.transparent,
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: BorderSide(color: cs.outlineVariant.withOpacity(0.55)),
-      ),
-      child: Padding(padding: padding, child: child),
+    return TabletPromptPanel(
+      padding: padding,
+      clipBehavior: Clip.antiAlias,
+      child: child,
     );
   }
 
   Widget _kindBadge({
-    required ColorScheme cs,
-    required TextTheme tt,
     required String label,
     required IconData icon,
   }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: cs.outlineVariant.withOpacity(0.75)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: cs.onSurfaceVariant),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: (tt.labelSmall ?? const TextStyle(fontSize: 11)).copyWith(
-              fontWeight: FontWeight.w900,
-              color: cs.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
+    final tokens = PromptUiTheme.of(context);
+    return TabletPromptStatusPill(
+      label: label,
+      icon: icon,
+      tone: icon == Icons.account_tree_rounded
+          ? tokens.info
+          : tokens.warning,
+      selected: true,
     );
   }
 
@@ -1612,57 +1596,40 @@ class _TabletGrid3dPreviewState extends State<TabletGrid3dPreview> {
     String? kindLabel,
     IconData? kindIcon,
   }) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-
-    final btnStyle = OutlinedButton.styleFrom(
-      foregroundColor: cs.onSurface,
-      side: BorderSide(color: cs.outlineVariant.withOpacity(0.75)),
-      shape: const StadiumBorder(),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-    );
-
-    Widget actionButtons() {
-      return IntrinsicWidth(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            SizedBox(
-              height: 44,
-              child: OutlinedButton.icon(
-                onPressed: onPick,
-                icon: const Icon(Icons.layers_rounded, size: 18),
-                label: const Text('구역 선택'),
-                style: btnStyle,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
+    final tokens = PromptUiTheme.of(context);
+    final text = Theme.of(context).textTheme;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(Icons.view_in_ar, color: cs.onSurfaceVariant, size: 18),
-        const SizedBox(width: 8),
+      children: <Widget>[
+        Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: tokens.surfaceOverlay,
+            borderRadius: BorderRadius.circular(PromptUiShapes.control),
+            border: Border.all(color: tokens.borderSubtle),
+          ),
+          child: Icon(
+            Icons.view_in_ar_rounded,
+            color: tokens.iconSecondary,
+            size: 20,
+          ),
+        ),
+        const SizedBox(width: 10),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+            children: <Widget>[
               Text(
                 title,
-                style:
-                (tt.titleMedium ?? const TextStyle(fontSize: 16)).copyWith(
-                  fontWeight: FontWeight.w800,
-                  color: cs.onSurface,
+                style: text.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: tokens.textPrimary,
                 ),
               ),
-              if (kindLabel != null && kindLabel.trim().isNotEmpty) ...[
-                const SizedBox(height: 6),
+              if (kindLabel != null && kindLabel.trim().isNotEmpty) ...<Widget>[
+                const SizedBox(height: 7),
                 _kindBadge(
-                  cs: cs,
-                  tt: tt,
                   label: kindLabel,
                   icon: kindIcon ?? Icons.label_rounded,
                 ),
@@ -1670,7 +1637,15 @@ class _TabletGrid3dPreviewState extends State<TabletGrid3dPreview> {
             ],
           ),
         ),
-        actionButtons(),
+        const SizedBox(width: 12),
+        PromptButton(
+          label: '구역 선택',
+          icon: Icons.layers_rounded,
+          variant: PromptButtonVariant.secondary,
+          minHeight: 44,
+          onPressed: onPick,
+          haptic: PromptHaptic.selection,
+        ),
       ],
     );
   }

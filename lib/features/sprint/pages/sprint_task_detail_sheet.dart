@@ -42,6 +42,7 @@ class _SprintTaskDetailSheetState extends State<_SprintTaskDetailSheet> {
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
   String? _projectId;
+  String? _calendarProfileId;
   SprintTaskPriority _priority = SprintTaskPriority.normal;
   late DateTime _startDate;
   late DateTime _endDate;
@@ -60,6 +61,8 @@ class _SprintTaskDetailSheetState extends State<_SprintTaskDetailSheet> {
       text: task?.description ?? '',
     );
     _projectId = task?.projectId;
+    _calendarProfileId =
+        task?.googleCalendarProfileId ?? widget.store.defaultCalendarProfile?.id;
     _priority = task?.priority ?? SprintTaskPriority.normal;
     _startDate = task?.startDate ??
         DateTime(today.year, today.month, today.day);
@@ -85,6 +88,10 @@ class _SprintTaskDetailSheetState extends State<_SprintTaskDetailSheet> {
       _startDate = adjusted;
       _endDate = adjusted.add(Duration(days: duration));
     });
+  }
+
+  void _selectCalendar(String? value) {
+    setState(() => _calendarProfileId = value);
   }
 
   Future<void> _pickStartDate() async {
@@ -123,11 +130,31 @@ class _SprintTaskDetailSheetState extends State<_SprintTaskDetailSheet> {
     final projectId = _projectId;
     if (task == null || projectId == null) return;
     setState(() => _saving = true);
+    final calendarProfileId = _calendarProfileId;
+    if (calendarProfileId != null &&
+        !widget.store.isProfileAuthenticated(calendarProfileId)) {
+      try {
+        await widget.store.authenticateCalendarProfile(
+          calendarProfileId,
+          forceAccountSelection: true,
+        );
+      } catch (_) {
+        if (!mounted) return;
+        setState(() => _saving = false);
+        sprintShowMessage(
+          context: context,
+          message: '선택한 캘린더의 Google 계정을 인증하지 못했습니다.',
+          danger: true,
+        );
+        return;
+      }
+    }
     final saved = await widget.store.updateTask(
       taskId: task.id,
       title: _titleController.text,
       description: _descriptionController.text,
       projectId: projectId,
+      calendarProfileId: _calendarProfileId,
       priority: _priority,
       startDate: _startDate,
       endDate: _endDate,
@@ -136,7 +163,10 @@ class _SprintTaskDetailSheetState extends State<_SprintTaskDetailSheet> {
     setState(() => _saving = false);
     sprintShowMessage(
       context: context,
-      message: saved ? '업무를 수정했습니다.' : '업무 날짜 범위를 확인하세요.',
+      message: saved
+          ? '업무를 수정했습니다.'
+          : widget.store.taskInputError ?? '업무 정보를 확인하세요.',
+      danger: !saved,
     );
     if (saved) Navigator.of(context).pop(true);
   }
@@ -220,16 +250,6 @@ class _SprintTaskDetailSheetState extends State<_SprintTaskDetailSheet> {
   Future<void> _retrySync() async {
     final task = _task;
     if (task == null || _syncing) return;
-    final profileId = task.googleCalendarProfileId;
-    if (profileId != null &&
-        profileId != widget.store.activeCalendarProfileId) {
-      final profile = widget.store.calendarProfileById(profileId);
-      sprintShowMessage(
-        context: context,
-        message: '${profile?.label ?? '연결된 캘린더'}를 메인으로 전환한 후 다시 시도하세요.',
-      );
-      return;
-    }
     setState(() => _syncing = true);
     final success = await widget.store.retryTaskGoogleSync(task.id);
     if (!mounted) return;
@@ -271,12 +291,9 @@ class _SprintTaskDetailSheetState extends State<_SprintTaskDetailSheet> {
     final duration =
         reduceMotion ? Duration.zero : const Duration(milliseconds: 220);
     final projects = widget.store.projects;
-    final taskProfile = widget.store.calendarProfileById(
-          task.googleCalendarProfileId,
-        ) ??
-        widget.store.activeCalendarProfile;
+    final calendarProfiles = widget.store.calendarProfiles;
+    final taskProfile = widget.store.calendarProfileById(_calendarProfileId);
     final taskAccount = widget.store.accountForProfile(taskProfile?.id);
-    final profileIsOriginal = task.googleCalendarProfileId != null;
     final project = widget.store.projectById(_projectId);
     final projectColor = googleEventColor(
       project?.googleColorId,
@@ -302,8 +319,64 @@ class _SprintTaskDetailSheetState extends State<_SprintTaskDetailSheet> {
                   ),
             ),
             const SizedBox(height: 14),
+            if (calendarProfiles.isNotEmpty) ...[
+              DropdownButtonFormField<String>(
+                value: _calendarProfileId,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Google 캘린더',
+                  border: OutlineInputBorder(),
+                ),
+                items: calendarProfiles
+                    .map(
+                      (profile) {
+                        final account =
+                            widget.store.accountForProfile(profile.id);
+                        return DropdownMenuItem<String>(
+                          value: profile.id,
+                          child: Row(
+                            children: [
+                              Icon(
+                                profile.id ==
+                                        widget.store.defaultCalendarProfileId
+                                    ? Icons.star_rounded
+                                    : Icons.calendar_month_outlined,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  '${profile.label} · ${account?.email ?? ''}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    )
+                    .toList(growable: false),
+                onChanged: _saving ? null : _selectCalendar,
+              ),
+              const SizedBox(height: 10),
+            ],
             AnimatedSwitcher(
               duration: duration,
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (child, animation) {
+                return FadeTransition(
+                  opacity: animation,
+                  child: SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(0, 0.05),
+                      end: Offset.zero,
+                    ).animate(animation),
+                    child: child,
+                  ),
+                );
+              },
               child: Container(
                 key: ValueKey<String>(taskProfile?.id ?? 'local-only'),
                 padding: const EdgeInsets.all(14),
@@ -324,16 +397,14 @@ class _SprintTaskDetailSheetState extends State<_SprintTaskDetailSheet> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            profileIsOriginal
-                                ? '연결된 Google 일정'
-                                : '최초 동기화 대상',
+                            taskProfile?.label ?? '로컬 업무',
                             style: const TextStyle(fontWeight: FontWeight.w900),
                           ),
                           const SizedBox(height: 3),
                           Text(
                             taskProfile == null
                                 ? '연결된 캘린더가 없어 로컬 변경만 저장합니다.'
-                                : '${taskProfile.label} · ${taskAccount?.email ?? ''} · ${taskProfile.calendarId}',
+                                : '${taskAccount?.email ?? ''} · ${taskProfile.calendarId}',
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(color: colors.onSurfaceVariant),

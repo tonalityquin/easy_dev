@@ -1,5 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
+import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
 
 import '../../../location/applications/location_state.dart';
 import '../../../location/domain/models/location_model.dart';
@@ -10,6 +16,7 @@ import '../../../tablet/domain/models/two_d/tablet_grid_2d_preview.dart'
         TabletGrid2dPreview,
         parkingOverlayCanonicalChildKey;
 import '../../../../shared/plate/domain/models/plate_model.dart';
+import '../widgets/personal_prompt_components.dart';
 
 @immutable
 class PersonalParkingLocationDetails {
@@ -40,16 +47,14 @@ Future<void> showPersonalDepartureRequestedSuccessDialog(
 ) async {
   final details = parsePersonalParkingLocation(plate.location);
 
-  await showDialog<void>(
+  await showPromptOverlayDialog<void>(
     context: context,
     useRootNavigator: true,
     barrierDismissible: true,
-    builder: (_) {
-      return PersonalDepartureRequestSuccessDialog(
-        plate: plate,
-        details: details,
-      );
-    },
+    builder: (_) => PersonalDepartureRequestSuccessDialog(
+      plate: plate,
+      details: details,
+    ),
   );
 }
 
@@ -112,26 +117,53 @@ class PersonalDepartureRequestSuccessDialog extends StatefulWidget {
 class _PersonalDepartureRequestSuccessDialogState
     extends State<PersonalDepartureRequestSuccessDialog>
     with SingleTickerProviderStateMixin {
+  static const Duration _autoCloseDuration = Duration(seconds: 5);
+
   late final AnimationController _progressController;
+  Timer? _closeTimer;
+  DateTime? _openedAt;
   bool _closing = false;
+  bool _reduceMotion = false;
 
   @override
   void initState() {
     super.initState();
+    _openedAt = DateTime.now();
     _progressController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 5),
-    )
-      ..addStatusListener((status) {
-        if (status == AnimationStatus.completed) {
-          _closeDialog();
-        }
-      })
-      ..forward();
+      duration: _autoCloseDuration,
+    );
+    _closeTimer = Timer(_autoCloseDuration, _closeDialog);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final next = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (_reduceMotion == next &&
+        (_progressController.isAnimating || next)) {
+      return;
+    }
+    _reduceMotion = next;
+    if (_reduceMotion) {
+      _progressController.stop();
+      return;
+    }
+    _progressController.forward(from: _elapsedFraction);
+  }
+
+  double get _elapsedFraction {
+    final openedAt = _openedAt;
+    if (openedAt == null) return 0;
+    final elapsed = DateTime.now().difference(openedAt).inMilliseconds;
+    return (elapsed / _autoCloseDuration.inMilliseconds)
+        .clamp(0.0, 1.0)
+        .toDouble();
   }
 
   @override
   void dispose() {
+    _closeTimer?.cancel();
     _progressController.dispose();
     super.dispose();
   }
@@ -139,20 +171,21 @@ class _PersonalDepartureRequestSuccessDialogState
   void _closeDialog() {
     if (_closing || !mounted) return;
     _closing = true;
+    _closeTimer?.cancel();
     Navigator.of(context, rootNavigator: true).pop();
   }
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final text = Theme.of(context).textTheme;
-    final mq = MediaQuery.of(context);
-    final isPhone = mq.size.shortestSide < 600;
-
+    final tokens = PromptUiTheme.of(context);
+    final textTheme = Theme.of(context).textTheme;
+    final mediaQuery = MediaQuery.of(context);
+    final isPhone = mediaQuery.size.shortestSide < 600;
     final dialogWidth =
-        ((isPhone ? mq.size.width - 24 : 860.0).clamp(320.0, 860.0)).toDouble();
+        ((isPhone ? mediaQuery.size.width - 24 : 860.0).clamp(320.0, 860.0))
+            .toDouble();
     final dialogHeight =
-        ((isPhone ? mq.size.height * 0.66 : 640.0).clamp(420.0, 700.0))
+        ((isPhone ? mediaQuery.size.height * .66 : 640.0).clamp(420.0, 700.0))
             .toDouble();
 
     return Dialog(
@@ -160,26 +193,74 @@ class _PersonalDepartureRequestSuccessDialogState
         horizontal: isPhone ? 12 : 24,
         vertical: 24,
       ),
+      backgroundColor: tokens.surfaceRaised,
+      surfaceTintColor: tokens.transparent,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(PromptUiShapes.dialog),
+        side: BorderSide(color: tokens.borderSubtle),
       ),
       child: SizedBox(
         width: dialogWidth,
         height: dialogHeight,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
+        child: SafeArea(
+          minimum: const EdgeInsets.fromLTRB(16, 16, 16, 18),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: cs.surfaceContainerLowest,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: cs.outline.withOpacity(.12)),
+            children: <Widget>[
+              Row(
+                children: <Widget>[
+                  Container(
+                    width: 42,
+                    height: 42,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: tokens.statusDepartureRequestedContainer,
+                      borderRadius: BorderRadius.circular(
+                        PromptUiShapes.control,
+                      ),
+                    ),
+                    child: Icon(
+                      Icons.near_me_rounded,
+                      color: tokens.statusDepartureRequested,
+                    ),
                   ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          '출차 요청이 완료되었습니다.',
+                          style: textTheme.titleLarge?.copyWith(
+                            color: tokens.textPrimary,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          widget.plate.plateNumber,
+                          style: textTheme.bodyMedium?.copyWith(
+                            color: tokens.textSecondary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  PromptIconButton(
+                    icon: Icons.close_rounded,
+                    tooltip: '닫기',
+                    onPressed: _closeDialog,
+                    haptic: PromptHaptic.selection,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Expanded(
+                child: PersonalPromptPanel(
+                  padding: EdgeInsets.zero,
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(PromptUiShapes.card),
                     child: PersonalDepartureRequestFocusedGrid(
                       area: widget.plate.area,
                       details: widget.details,
@@ -187,54 +268,56 @@ class _PersonalDepartureRequestSuccessDialogState
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
               Text(
                 '현재 고객님의 차량 위치를 표시해드립니다.\n차량은 사전에 안내받은 위치에 준비될 예정입니다.',
                 textAlign: TextAlign.center,
-                style: (text.titleMedium ?? const TextStyle()).copyWith(
-                  color: cs.onSurfaceVariant,
-                  fontWeight: FontWeight.w800,
-                  height: 1.4,
+                style: textTheme.bodyLarge?.copyWith(
+                  color: tokens.textSecondary,
+                  fontWeight: FontWeight.w600,
+                  height: 1.45,
                 ),
               ),
-              const SizedBox(height: 16),
-              Align(
-                alignment: Alignment.center,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 320),
-                  child: AnimatedBuilder(
-                    animation: _progressController,
-                    builder: (context, _) {
-                      return ClipRRect(
-                        borderRadius: BorderRadius.circular(999),
-                        child: LinearProgressIndicator(
-                          minHeight: 8,
-                          value: _progressController.value,
-                          valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
-                          backgroundColor: cs.outlineVariant.withOpacity(.28),
+              const SizedBox(height: 14),
+              PersonalPromptAnimatedSwap(
+                stateKey: _reduceMotion,
+                child: _reduceMotion
+                    ? PersonalPromptStatusPill(
+                        label: '잠시 후 자동으로 닫힙니다.',
+                        foreground: tokens.statusSynchronized,
+                        background: tokens.statusSynchronizedContainer,
+                        icon: Icons.timer_outlined,
+                      )
+                    : Semantics(
+                        label: '자동 닫기 진행 상태',
+                        child: AnimatedBuilder(
+                          animation: _progressController,
+                          builder: (context, _) {
+                            return ClipRRect(
+                              borderRadius: BorderRadius.circular(
+                                PromptUiShapes.pill,
+                              ),
+                              child: LinearProgressIndicator(
+                                minHeight: 8,
+                                value: _progressController.value,
+                                color: tokens.statusSynchronized,
+                                backgroundColor: tokens.shimmerBase,
+                              ),
+                            );
+                          },
                         ),
-                      );
-                    },
-                  ),
-                ),
+                      ),
               ),
               const SizedBox(height: 14),
               Align(
                 alignment: Alignment.center,
-                child: FilledButton.icon(
-                  onPressed: _closeDialog,
-                  icon: const Icon(Icons.close),
-                  label: const Text('닫기'),
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size(140, 48),
-                    backgroundColor: cs.primary,
-                    foregroundColor: cs.onPrimary,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    textStyle: (text.titleMedium ?? const TextStyle()).copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: 160),
+                  child: PromptButton(
+                    label: '닫기',
+                    icon: Icons.close_rounded,
+                    haptic: PromptHaptic.selection,
+                    onPressed: _closeDialog,
                   ),
                 ),
               ),

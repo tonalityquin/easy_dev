@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
+import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
 import '../../application/personal_calendar_store.dart';
 import '../../domain/models/personal_calendar_event.dart';
+import '../widgets/personal_prompt_components.dart';
 
 Future<bool?> showPersonalCalendarDialog(BuildContext context) {
-  return showDialog<bool>(
+  return showPromptOverlayDialog<bool>(
     context: context,
-    barrierDismissible: true,
     builder: (_) => const PersonalCalendarDialog(),
   );
 }
@@ -22,7 +26,11 @@ class _PersonalCalendarDialogState extends State<PersonalCalendarDialog> {
   final PersonalCalendarStore _store = PersonalCalendarStore();
   List<PersonalCalendarEvent> _events = const <PersonalCalendarEvent>[];
   DateTime _visibleMonth = DateTime(DateTime.now().year, DateTime.now().month);
-  DateTime _selectedDay = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+  DateTime _selectedDay = DateTime(
+    DateTime.now().year,
+    DateTime.now().month,
+    DateTime.now().day,
+  );
   bool _loading = true;
 
   @override
@@ -41,7 +49,7 @@ class _PersonalCalendarDialogState extends State<PersonalCalendarDialog> {
   }
 
   Future<void> _add() async {
-    final event = await showDialog<PersonalCalendarEvent>(
+    final event = await showPromptOverlayDialog<PersonalCalendarEvent>(
       context: context,
       builder: (_) => _CalendarEventEditorDialog(initialDate: _selectedDay),
     );
@@ -51,108 +59,269 @@ class _PersonalCalendarDialogState extends State<PersonalCalendarDialog> {
   }
 
   Future<void> _remove(PersonalCalendarEvent event) async {
+    HapticFeedback.mediumImpact();
     await _store.remove(event.id);
     await _load();
   }
 
   void _moveMonth(int delta) {
+    HapticFeedback.selectionClick();
     setState(() {
-      _visibleMonth = DateTime(_visibleMonth.year, _visibleMonth.month + delta);
+      _visibleMonth = DateTime(
+        _visibleMonth.year,
+        _visibleMonth.month + delta,
+      );
       _selectedDay = DateTime(_visibleMonth.year, _visibleMonth.month, 1);
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final text = Theme.of(context).textTheme;
-    final selectedEvents = _events.where((e) => _sameDay(e.dayOnly, _selectedDay)).toList();
+    final tokens = PromptUiTheme.of(context);
+    final textTheme = Theme.of(context).textTheme;
+    final size = MediaQuery.sizeOf(context);
+    final selectedEvents = _events
+        .where((event) => _sameDay(event.dayOnly, _selectedDay))
+        .toList(growable: false);
 
-    return AlertDialog(
-      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      title: Row(
-        children: [
-          Icon(Icons.calendar_month_rounded, color: cs.primary),
-          const SizedBox(width: 10),
-          Expanded(child: Text('내 일정', style: text.titleLarge?.copyWith(fontWeight: FontWeight.w900))),
-        ],
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 20),
+      backgroundColor: tokens.surfaceRaised,
+      surfaceTintColor: tokens.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(PromptUiShapes.dialog),
+        side: BorderSide(color: tokens.borderSubtle),
       ),
-      content: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 560, maxHeight: 620),
-        child: _loading
-            ? const SizedBox(height: 180, child: Center(child: CircularProgressIndicator()))
-            : SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Row(
-                      children: [
-                        IconButton(onPressed: () => _moveMonth(-1), icon: const Icon(Icons.chevron_left_rounded)),
-                        Expanded(
-                          child: Text(
-                            '${_visibleMonth.year}년 ${_visibleMonth.month}월',
-                            textAlign: TextAlign.center,
-                            style: text.titleMedium?.copyWith(fontWeight: FontWeight.w900),
-                          ),
-                        ),
-                        IconButton(onPressed: () => _moveMonth(1), icon: const Icon(Icons.chevron_right_rounded)),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    _CalendarGrid(
-                      month: _visibleMonth,
-                      selectedDay: _selectedDay,
-                      events: _events,
-                      onSelect: (day) => setState(() => _selectedDay = day),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      _formatDate(_selectedDay),
-                      style: text.titleSmall?.copyWith(color: cs.onSurface, fontWeight: FontWeight.w900),
-                    ),
-                    const SizedBox(height: 8),
-                    if (selectedEvents.isEmpty)
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: cs.surfaceContainerLow,
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Text(
-                          '이 날 등록된 일정이 없습니다.',
-                          style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700),
-                        ),
-                      )
-                    else
-                      ...selectedEvents.map(
-                        (event) => Card(
-                          elevation: 0,
-                          color: cs.surface,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                            side: BorderSide(color: cs.outlineVariant.withOpacity(.55)),
-                          ),
-                          child: ListTile(
-                            title: Text(event.title, style: text.bodyMedium?.copyWith(fontWeight: FontWeight.w900)),
-                            subtitle: Text(_eventSubtitle(event), style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700)),
-                            trailing: IconButton(
-                              tooltip: '삭제',
-                              icon: const Icon(Icons.delete_outline_rounded),
-                              onPressed: () => _remove(event),
-                            ),
-                          ),
-                        ),
+      child: SafeArea(
+        minimum: const EdgeInsets.all(18),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: 580,
+            maxHeight: size.height * .88,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Row(
+                children: <Widget>[
+                  Container(
+                    width: 42,
+                    height: 42,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: tokens.accentContainer,
+                      borderRadius: BorderRadius.circular(
+                        PromptUiShapes.control,
                       ),
-                  ],
+                    ),
+                    child: Icon(
+                      Icons.calendar_month_rounded,
+                      color: tokens.onAccentContainer,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      '내 일정',
+                      style: textTheme.titleLarge?.copyWith(
+                        color: tokens.textPrimary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  PersonalPromptStatusPill(
+                    label: '${_events.length}개 일정',
+                    foreground: tokens.statusMonthlyParking,
+                    background: tokens.statusMonthlyParkingContainer,
+                    icon: Icons.event_available_rounded,
+                  ),
+                  const SizedBox(width: 6),
+                  PromptIconButton(
+                    icon: Icons.close_rounded,
+                    tooltip: '닫기',
+                    onPressed: () => Navigator.of(context).pop(false),
+                    haptic: PromptHaptic.selection,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Divider(height: 1, color: tokens.borderSubtle),
+              const SizedBox(height: 14),
+              Flexible(
+                child: PersonalPromptAnimatedSwap(
+                  stateKey: _loading ? 'loading' : 'calendar',
+                  alignment: Alignment.topCenter,
+                  child: _loading
+                      ? const Center(
+                          child: PersonalPromptLoadingState(
+                            label: '일정을 불러오는 중입니다.',
+                          ),
+                        )
+                      : SingleChildScrollView(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: <Widget>[
+                              PersonalPromptPanel(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 8,
+                                ),
+                                child: Row(
+                                  children: <Widget>[
+                                    PromptIconButton(
+                                      icon: Icons.chevron_left_rounded,
+                                      tooltip: '이전 달',
+                                      onPressed: () => _moveMonth(-1),
+                                      haptic: PromptHaptic.selection,
+                                    ),
+                                    Expanded(
+                                      child: AnimatedSwitcher(
+                                        duration: personalPromptDuration(
+                                          context,
+                                          PromptUiMotion.selection,
+                                        ),
+                                        child: Text(
+                                          '${_visibleMonth.year}년 ${_visibleMonth.month}월',
+                                          key: ValueKey<String>(
+                                            '${_visibleMonth.year}-${_visibleMonth.month}',
+                                          ),
+                                          textAlign: TextAlign.center,
+                                          style: textTheme.titleMedium?.copyWith(
+                                            color: tokens.textPrimary,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    PromptIconButton(
+                                      icon: Icons.chevron_right_rounded,
+                                      tooltip: '다음 달',
+                                      onPressed: () => _moveMonth(1),
+                                      haptic: PromptHaptic.selection,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              _CalendarGrid(
+                                month: _visibleMonth,
+                                selectedDay: _selectedDay,
+                                events: _events,
+                                onSelect: (day) {
+                                  HapticFeedback.selectionClick();
+                                  setState(() => _selectedDay = day);
+                                },
+                              ),
+                              const SizedBox(height: 16),
+                              Row(
+                                children: <Widget>[
+                                  Expanded(
+                                    child: Text(
+                                      _formatDate(_selectedDay),
+                                      style: textTheme.titleSmall?.copyWith(
+                                        color: tokens.textPrimary,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ),
+                                  PersonalPromptStatusPill(
+                                    label: '${selectedEvents.length}개',
+                                    foreground: tokens.statusSynchronized,
+                                    background:
+                                        tokens.statusSynchronizedContainer,
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              PersonalPromptAnimatedSwap(
+                                stateKey:
+                                    '${_selectedDay.millisecondsSinceEpoch}-${selectedEvents.length}',
+                                alignment: Alignment.topCenter,
+                                child: selectedEvents.isEmpty
+                                    ? const PersonalPromptEmptyState(
+                                        icon: Icons.event_busy_rounded,
+                                        title: '이 날 등록된 일정이 없습니다.',
+                                      )
+                                    : Column(
+                                        children: selectedEvents
+                                            .asMap()
+                                            .entries
+                                            .map(
+                                              (entry) => Padding(
+                                                padding: const EdgeInsets.only(
+                                                  bottom: 8,
+                                                ),
+                                                child: PromptAnimatedReveal(
+                                                  key: ValueKey<String>(
+                                                    entry.value.id,
+                                                  ),
+                                                  delay: Duration(
+                                                    milliseconds:
+                                                        entry.key * 24,
+                                                  ),
+                                                  child: PersonalPromptPanel(
+                                                    padding:
+                                                        const EdgeInsets.all(4),
+                                                    child: ListTile(
+                                                      title: Text(
+                                                        entry.value.title,
+                                                        style: textTheme
+                                                            .bodyMedium
+                                                            ?.copyWith(
+                                                          color: tokens
+                                                              .textPrimary,
+                                                          fontWeight:
+                                                              FontWeight.w700,
+                                                        ),
+                                                      ),
+                                                      subtitle: Text(
+                                                        _eventSubtitle(
+                                                          entry.value,
+                                                        ),
+                                                        style: textTheme
+                                                            .bodySmall
+                                                            ?.copyWith(
+                                                          color: tokens
+                                                              .textSecondary,
+                                                          fontWeight:
+                                                              FontWeight.w500,
+                                                        ),
+                                                      ),
+                                                      trailing: PromptIconButton(
+                                                        icon: Icons
+                                                            .delete_outline_rounded,
+                                                        tooltip: '삭제',
+                                                        onPressed: () =>
+                                                            _remove(entry.value),
+                                                        haptic:
+                                                            PromptHaptic.medium,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            )
+                                            .toList(growable: false),
+                                      ),
+                              ),
+                            ],
+                          ),
+                        ),
                 ),
               ),
+              const SizedBox(height: 14),
+              PromptButton(
+                label: '일정 추가',
+                icon: Icons.add_rounded,
+                expand: true,
+                haptic: PromptHaptic.light,
+                onPressed: _add,
+              ),
+            ],
+          ),
+        ),
       ),
-      actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('닫기')),
-        FilledButton.icon(onPressed: _add, icon: const Icon(Icons.add_rounded), label: const Text('일정 추가')),
-      ],
     );
   }
 }
@@ -172,78 +341,129 @@ class _CalendarGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final tokens = PromptUiTheme.of(context);
+    final textTheme = Theme.of(context).textTheme;
     final first = DateTime(month.year, month.month, 1);
     final startOffset = first.weekday % 7;
     final gridStart = first.subtract(Duration(days: startOffset));
-    final days = List<DateTime>.generate(42, (i) => DateTime(gridStart.year, gridStart.month, gridStart.day + i));
-    final weekdayLabels = const ['일', '월', '화', '수', '목', '금', '토'];
+    final days = List<DateTime>.generate(
+      42,
+      (index) => DateTime(
+        gridStart.year,
+        gridStart.month,
+        gridStart.day + index,
+      ),
+    );
+    const weekdayLabels = <String>['일', '월', '화', '수', '목', '금', '토'];
 
-    return Column(
-      children: [
-        Row(
-          children: weekdayLabels
-              .map(
-                (label) => Expanded(
-                  child: Center(
-                    child: Text(
-                      label,
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: cs.onSurfaceVariant,
-                            fontWeight: FontWeight.w900,
+    return PersonalPromptPanel(
+      padding: const EdgeInsets.all(10),
+      child: Column(
+        children: <Widget>[
+          Row(
+            children: weekdayLabels
+                .map(
+                  (label) => Expanded(
+                    child: Center(
+                      child: Text(
+                        label,
+                        style: textTheme.labelSmall?.copyWith(
+                          color: tokens.textSecondary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                )
+                .toList(growable: false),
+          ),
+          const SizedBox(height: 6),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: days.length,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 7,
+              mainAxisSpacing: 6,
+              crossAxisSpacing: 6,
+            ),
+            itemBuilder: (context, index) {
+              final day = days[index];
+              final inMonth = day.month == month.month;
+              final selected = _sameDay(day, selectedDay);
+              final hasEvent = events.any(
+                (event) => _sameDay(event.dayOnly, day),
+              );
+              return Semantics(
+                button: true,
+                selected: selected,
+                label: '${day.month}월 ${day.day}일',
+                value: hasEvent ? '일정 있음' : '일정 없음',
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                  onTap: () => onSelect(
+                    DateTime(day.year, day.month, day.day),
+                  ),
+                  child: AnimatedContainer(
+                    duration: personalPromptDuration(
+                      context,
+                      PromptUiMotion.selection,
+                    ),
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? tokens.accent
+                          : inMonth
+                              ? tokens.surfaceOverlay
+                              : tokens.surfaceDisabled,
+                      borderRadius: BorderRadius.circular(
+                        PromptUiShapes.control,
+                      ),
+                      border: Border.all(
+                        color: selected
+                            ? tokens.accent
+                            : tokens.borderSubtle,
+                      ),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: <Widget>[
+                        Text(
+                          '${day.day}',
+                          style: textTheme.labelMedium?.copyWith(
+                            color: selected
+                                ? tokens.onAccent
+                                : inMonth
+                                    ? tokens.textPrimary
+                                    : tokens.textDisabled,
+                            fontWeight: FontWeight.w700,
                           ),
+                        ),
+                        const SizedBox(height: 3),
+                        AnimatedContainer(
+                          duration: personalPromptDuration(
+                            context,
+                            PromptUiMotion.selection,
+                          ),
+                          width: 5,
+                          height: 5,
+                          decoration: BoxDecoration(
+                            color: hasEvent
+                                ? selected
+                                    ? tokens.onAccent
+                                    : tokens.statusMonthlyParking
+                                : tokens.transparent,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
-              )
-              .toList(),
-        ),
-        const SizedBox(height: 6),
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: days.length,
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 7, mainAxisSpacing: 6, crossAxisSpacing: 6),
-          itemBuilder: (context, index) {
-            final day = days[index];
-            final inMonth = day.month == month.month;
-            final selected = _sameDay(day, selectedDay);
-            final hasEvent = events.any((e) => _sameDay(e.dayOnly, day));
-            return InkWell(
-              borderRadius: BorderRadius.circular(12),
-              onTap: () => onSelect(DateTime(day.year, day.month, day.day)),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: selected ? cs.primary : inMonth ? cs.surfaceContainerLow : cs.surfaceContainerLowest,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: selected ? cs.primary : cs.outlineVariant.withOpacity(.35)),
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      '${day.day}',
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                            color: selected ? cs.onPrimary : inMonth ? cs.onSurface : cs.onSurfaceVariant.withOpacity(.55),
-                            fontWeight: FontWeight.w900,
-                          ),
-                    ),
-                    const SizedBox(height: 3),
-                    Container(
-                      width: 5,
-                      height: 5,
-                      decoration: BoxDecoration(
-                        color: hasEvent ? (selected ? cs.onPrimary : cs.primary) : Colors.transparent,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        ),
-      ],
+              );
+            },
+          ),
+        ],
+      ),
     );
   }
 }
@@ -254,10 +474,12 @@ class _CalendarEventEditorDialog extends StatefulWidget {
   final DateTime initialDate;
 
   @override
-  State<_CalendarEventEditorDialog> createState() => _CalendarEventEditorDialogState();
+  State<_CalendarEventEditorDialog> createState() =>
+      _CalendarEventEditorDialogState();
 }
 
-class _CalendarEventEditorDialogState extends State<_CalendarEventEditorDialog> {
+class _CalendarEventEditorDialogState
+    extends State<_CalendarEventEditorDialog> {
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _plateController = TextEditingController();
   final TextEditingController _noteController = TextEditingController();
@@ -279,7 +501,7 @@ class _CalendarEventEditorDialogState extends State<_CalendarEventEditorDialog> 
 
   Future<void> _pickDate() async {
     final now = DateTime.now();
-    final picked = await showDatePicker(
+    final picked = await showPromptDatePicker(
       context: context,
       initialDate: _date,
       firstDate: DateTime(now.year - 1),
@@ -291,7 +513,10 @@ class _CalendarEventEditorDialogState extends State<_CalendarEventEditorDialog> 
 
   void _save() {
     final title = _titleController.text.trim();
-    if (title.isEmpty) return;
+    if (title.isEmpty) {
+      HapticFeedback.mediumImpact();
+      return;
+    }
     final now = DateTime.now();
     Navigator.of(context).pop(
       PersonalCalendarEvent(
@@ -308,35 +533,121 @@ class _CalendarEventEditorDialogState extends State<_CalendarEventEditorDialog> 
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('일정 추가'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: _titleController, decoration: const InputDecoration(labelText: '일정 제목', border: OutlineInputBorder())),
-            const SizedBox(height: 12),
-            TextField(controller: _plateController, decoration: const InputDecoration(labelText: '차량 번호', border: OutlineInputBorder())),
-            const SizedBox(height: 12),
-            TextField(controller: _noteController, minLines: 1, maxLines: 3, decoration: const InputDecoration(labelText: '메모', border: OutlineInputBorder())),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(onPressed: _pickDate, icon: const Icon(Icons.event_rounded), label: Text(_formatDate(_date))),
-          ],
+    final tokens = PromptUiTheme.of(context);
+    final textTheme = Theme.of(context).textTheme;
+    return Dialog(
+      backgroundColor: tokens.surfaceRaised,
+      surfaceTintColor: tokens.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(PromptUiShapes.dialog),
+        side: BorderSide(color: tokens.borderSubtle),
+      ),
+      child: SafeArea(
+        minimum: const EdgeInsets.all(20),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 430),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Row(
+                  children: <Widget>[
+                    Icon(Icons.event_note_rounded, color: tokens.accent),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        '일정 추가',
+                        style: textTheme.titleLarge?.copyWith(
+                          color: tokens.textPrimary,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                TextField(
+                  controller: _titleController,
+                  autofocus: true,
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(
+                    labelText: '일정 제목',
+                    prefixIcon: Icon(Icons.title_rounded),
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _plateController,
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(
+                    labelText: '차량 번호',
+                    prefixIcon: Icon(Icons.directions_car_outlined),
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _noteController,
+                  minLines: 1,
+                  maxLines: 3,
+                  textInputAction: TextInputAction.done,
+                  decoration: const InputDecoration(
+                    labelText: '메모',
+                    prefixIcon: Icon(Icons.notes_rounded),
+                    border: OutlineInputBorder(),
+                  ),
+                  onSubmitted: (_) => _save(),
+                ),
+                const SizedBox(height: 12),
+                PromptButton(
+                  label: _formatDate(_date),
+                  icon: Icons.event_rounded,
+                  variant: PromptButtonVariant.secondary,
+                  expand: true,
+                  haptic: PromptHaptic.selection,
+                  onPressed: _pickDate,
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: PromptButton(
+                        label: '취소',
+                        variant: PromptButtonVariant.tertiary,
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: PromptButton(
+                        label: '저장',
+                        icon: Icons.check_rounded,
+                        haptic: PromptHaptic.light,
+                        onPressed: _save,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         ),
       ),
-      actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('취소')),
-        FilledButton(onPressed: _save, child: const Text('저장')),
-      ],
     );
   }
 }
 
-bool _sameDay(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
+bool _sameDay(DateTime a, DateTime b) {
+  return a.year == b.year && a.month == b.month && a.day == b.day;
+}
 
 String _eventSubtitle(PersonalCalendarEvent event) {
   final parts = <String>[];
-  if (event.plateNumber.trim().isNotEmpty) parts.add(event.plateNumber.trim());
+  if (event.plateNumber.trim().isNotEmpty) {
+    parts.add(event.plateNumber.trim());
+  }
   if (event.note.trim().isNotEmpty) parts.add(event.note.trim());
   return parts.isEmpty ? _formatDate(event.date) : parts.join(' · ');
 }

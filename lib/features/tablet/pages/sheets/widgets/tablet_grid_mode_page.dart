@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
 import '../../../applications/tablet_parking_completed_view_toggle_state.dart';
 import '../../../domain/models/two_d/tablet_grid_2d_preview.dart';
 import '../../../domain/models/two_d/tablet_status_preview_card_area.dart' as grid3d;
+import '../../widgets/tablet_prompt_components.dart';
 
 class TabletGridModePage extends StatelessWidget {
   const TabletGridModePage({
@@ -15,55 +17,56 @@ class TabletGridModePage extends StatelessWidget {
 
   static List<grid3d.ParkingStatusOverlaySpec> _overlaySpecs({
     required bool includeParkingCompletedView,
-  }) =>
-      <grid3d.ParkingStatusOverlaySpec>[
-        if (includeParkingCompletedView)
-          const grid3d.ParkingStatusOverlaySpec(
-            collection: 'parking_completed_view',
-            status: ParkingSlotStatus.parked,
-          ),
+  }) {
+    return <grid3d.ParkingStatusOverlaySpec>[
+      if (includeParkingCompletedView)
         const grid3d.ParkingStatusOverlaySpec(
-          collection: 'departure_requests_view',
-          status: ParkingSlotStatus.departureRequest,
+          collection: 'parking_completed_view',
+          status: ParkingSlotStatus.parked,
         ),
-      ];
+      const grid3d.ParkingStatusOverlaySpec(
+        collection: 'departure_requests_view',
+        status: ParkingSlotStatus.departureRequest,
+      ),
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final tokens = PromptUiTheme.of(context);
     final resolvedArea = area.trim();
     final includeParkingCompletedView =
         context.select<TabletParkingCompletedViewToggleState, bool>(
-      (s) => s.includeParkingCompletedView,
+      (state) => state.includeParkingCompletedView,
     );
     final overlaySpecs = _overlaySpecs(
       includeParkingCompletedView: includeParkingCompletedView,
     );
-
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: cs.surface,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: cs.outline.withOpacity(.12)),
-          boxShadow: [
-            BoxShadow(
-              color: cs.shadow.withOpacity(.04),
-              blurRadius: 14,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(18),
-          child: ColoredBox(
-            color: cs.surfaceContainerLowest,
+    return ColoredBox(
+      color: tokens.canvas,
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: TabletPromptPanel(
+          padding: EdgeInsets.zero,
+          clipBehavior: Clip.antiAlias,
+          child: AnimatedSwitcher(
+            duration: tabletPromptDuration(context, PromptUiMotion.component),
+            switchInCurve: PromptUiMotion.enter,
+            switchOutCurve: PromptUiMotion.exit,
             child: resolvedArea.isEmpty
-                ? const SizedBox.expand()
-                : grid3d.ParkingStatusPreviewCardArea(
-                    area: resolvedArea,
-                    overlay: overlaySpecs,
+                ? const TabletPromptEmptyState(
+                    key: ValueKey<String>('grid-empty'),
+                    title: '선택된 지역이 없습니다',
+                    message: '상단 메뉴에서 운영 지역을 선택하세요.',
+                    icon: Icons.map_outlined,
+                  )
+                : ColoredBox(
+                    key: ValueKey<String>('grid-$resolvedArea'),
+                    color: tokens.surface,
+                    child: grid3d.ParkingStatusPreviewCardArea(
+                      area: resolvedArea,
+                      overlay: overlaySpecs,
+                    ),
                   ),
           ),
         ),

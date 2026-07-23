@@ -1,18 +1,10 @@
 import 'package:flutter/material.dart';
-import '../keypad/tablet_num_keypad_for_tablet_plate_search.dart';
+
+import '../../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../widgets/tablet_prompt_components.dart';
+import 'tablet_num_keypad_for_tablet_plate_search.dart';
 
 class TabletAnimatedKeypad extends StatelessWidget {
-  final Animation<Offset> slideAnimation;
-  final Animation<double> fadeAnimation;
-  final TextEditingController controller;
-  final VoidCallback onComplete;
-  final VoidCallback onReset;
-  final int maxLength;
-  final bool enableDigitModeSwitch;
-
-  
-  final bool fullHeight;
-
   const TabletAnimatedKeypad({
     super.key,
     required this.slideAnimation,
@@ -25,40 +17,52 @@ class TabletAnimatedKeypad extends StatelessWidget {
     this.fullHeight = false,
   });
 
+  final Animation<Offset> slideAnimation;
+  final Animation<double> fadeAnimation;
+  final TextEditingController controller;
+  final VoidCallback onComplete;
+  final VoidCallback onReset;
+  final int maxLength;
+  final bool enableDigitModeSwitch;
+  final bool fullHeight;
+
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final theme = Theme.of(context);
-
-    final keypad = Container(
-      
-      padding: const EdgeInsets.only(bottom: 8),
+    final tokens = PromptUiTheme.of(context);
+    final keypad = AnimatedContainer(
+      duration: tabletPromptDuration(context, PromptUiMotion.component),
+      curve: PromptUiMotion.standard,
+      constraints: fullHeight
+          ? const BoxConstraints()
+          : BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height * 0.45,
+            ),
       decoration: BoxDecoration(
-        
-        color: cs.surface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-        boxShadow: [
+        color: tokens.surfaceRaised,
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(PromptUiShapes.card),
+        ),
+        border: Border(
+          top: BorderSide(color: tokens.borderSubtle),
+        ),
+        boxShadow: <BoxShadow>[
           BoxShadow(
-            
-            color: theme.shadowColor.withOpacity(0.12),
-            blurRadius: 6,
-            offset: const Offset(0, -2),
+            color: tokens.shadow,
+            blurRadius: 16,
+            offset: const Offset(0, -4),
           ),
         ],
       ),
-      
-      constraints: fullHeight
-          ? const BoxConstraints() 
-          : BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.45),
-      child: TabletNumKeypadForTabletPlateSearch(
-        controller: controller,
-        maxLength: maxLength,
-        enableDigitModeSwitch: enableDigitModeSwitch,
-        onComplete: onComplete,
-        onReset: onReset,
-
-        
-        
+      child: SafeArea(
+        top: false,
+        minimum: const EdgeInsets.only(bottom: 8),
+        child: TabletNumKeypadForTabletPlateSearch(
+          controller: controller,
+          maxLength: maxLength,
+          enableDigitModeSwitch: enableDigitModeSwitch,
+          onComplete: onComplete,
+          onReset: onReset,
+        ),
       ),
     );
 
@@ -66,10 +70,7 @@ class TabletAnimatedKeypad extends StatelessWidget {
       opacity: fadeAnimation,
       child: SlideTransition(
         position: slideAnimation,
-        child: fullHeight
-        
-            ? SizedBox.expand(child: keypad)
-            : keypad,
+        child: fullHeight ? SizedBox.expand(child: keypad) : keypad,
       ),
     );
   }

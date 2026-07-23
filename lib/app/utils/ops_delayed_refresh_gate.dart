@@ -3,7 +3,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
-import '../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../design_system/prompt_ui/prompt_ui_overlays.dart';
 
 import '../../features/selector/application/dev_auth.dart';
 
@@ -28,7 +28,7 @@ class OpsDelayedRefreshGate {
     if (!context.mounted) return false;
 
     final completed = usePromptUi
-        ? await showPromptDialog<bool>(
+        ? await showPromptOverlayDialog<bool>(
             context: context,
             barrierDismissible: false,
             builder: (_) => _OpsDelayedRefreshDialog(

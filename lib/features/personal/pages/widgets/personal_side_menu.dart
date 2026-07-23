@@ -9,12 +9,16 @@ import '../../../../app/init/app_exit_service.dart';
 import '../../../../app/utils/dev_firebase_debug_dialog.dart';
 import '../../../../app/theme/brand_theme.dart';
 import '../../../../app/utils/ops_delayed_refresh_gate.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
 import '../../../../app/theme/theme_prefs_controller.dart';
 import '../../../../shared/plate/domain/repositories/plate_repository.dart';
 import '../../../dev/application/area_state.dart';
 import '../../../location/applications/location_state.dart';
 import '../../../payment/applications/bill_state.dart';
 import '../../../tablet/applications/tablet_work_session_state.dart';
+import 'personal_prompt_components.dart';
 
 class PersonalSideMenu extends StatefulWidget {
   const PersonalSideMenu({
@@ -44,7 +48,9 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
 
   Future<void> _runAfterClose(Future<void> Function() action) async {
     widget.onClose();
-    await Future<void>.delayed(const Duration(milliseconds: 180));
+    await Future<void>.delayed(
+      personalPromptDuration(context, PromptUiMotion.selection),
+    );
     await action();
   }
 
@@ -66,6 +72,7 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
         operation: 'personal.monthly_plate_status.exists',
         error: e,
         stackTrace: st,
+        usePromptUi: true,
         details: <String, Object?>{
           'collection': 'monthly_plate_status',
           'area': area,
@@ -90,6 +97,7 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
         context: context,
         title: '데이터 갱신',
         message: '내 차량, 위치, 정산 데이터를 다시 불러오기 전 요청을 준비하고 있습니다.',
+        usePromptUi: true,
       );
       if (!shouldRefresh || !mounted) return;
 
@@ -106,6 +114,7 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
         operation: 'personal.sideMenu.refreshAll',
         error: e,
         stackTrace: st,
+        usePromptUi: true,
         details: <String, Object?>{
           'area': debugArea,
           'steps': 'locations.manualLocationRefresh, bill.manualBillRefresh, monthly_plate_status.exists, onRefreshContent',
@@ -120,13 +129,14 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
   }
 
   Future<void> _openThemeSettingsDialog() async {
-    await showDialog<void>(
+    await showPromptOverlayDialog<void>(
       context: context,
       barrierDismissible: true,
       builder: (dialogContext) {
         return Consumer<ThemePrefsController>(
           builder: (ctx, themeCtrl, _) {
             final cs = Theme.of(ctx).colorScheme;
+            final tokens = PromptUiTheme.of(ctx);
             final text = Theme.of(ctx).textTheme;
             final modes = themeModeSpecs();
             final presets = brandPresets();
@@ -158,7 +168,7 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
                       Text(
                         '브랜드 테마 컬러를 개인형 화면 전체에 적용합니다.',
                         style: text.bodySmall?.copyWith(
-                          color: cs.onSurfaceVariant,
+                          color: tokens.textSecondary,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -176,19 +186,27 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
                         runSpacing: 8,
                         children: modes.map((m) {
                           final selected = m.id == themeCtrl.themeModeId;
-                          return ChoiceChip(
-                            selected: selected,
-                            onSelected: (_) async {
-                              HapticFeedback.selectionClick();
-                              await themeCtrl.setThemeModeId(m.id);
-                            },
-                            label: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(m.icon, size: 16),
-                                const SizedBox(width: 6),
-                                Text(m.label),
-                              ],
+                          return AnimatedScale(
+                            scale: selected ? 1.03 : 1,
+                            duration: personalPromptDuration(
+                              ctx,
+                              PromptUiMotion.selection,
+                            ),
+                            curve: PromptUiMotion.standard,
+                            child: ChoiceChip(
+                              selected: selected,
+                              onSelected: (_) async {
+                                HapticFeedback.selectionClick();
+                                await themeCtrl.setThemeModeId(m.id);
+                              },
+                              label: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(m.icon, size: 16),
+                                  const SizedBox(width: 6),
+                                  Text(m.label),
+                                ],
+                              ),
                             ),
                           );
                         }).toList(),
@@ -209,19 +227,27 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
                         runSpacing: 8,
                         children: presets.map((p) {
                           final selected = p.id == themeCtrl.presetId;
-                          return ChoiceChip(
-                            selected: selected,
-                            onSelected: (_) async {
-                              HapticFeedback.selectionClick();
-                              await themeCtrl.setPresetId(p.id);
-                            },
-                            label: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                _PresetPreviewDots(colors: p.preview),
-                                const SizedBox(width: 8),
-                                Text(p.label),
-                              ],
+                          return AnimatedScale(
+                            scale: selected ? 1.03 : 1,
+                            duration: personalPromptDuration(
+                              ctx,
+                              PromptUiMotion.selection,
+                            ),
+                            curve: PromptUiMotion.standard,
+                            child: ChoiceChip(
+                              selected: selected,
+                              onSelected: (_) async {
+                                HapticFeedback.selectionClick();
+                                await themeCtrl.setPresetId(p.id);
+                              },
+                              label: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  _PresetPreviewDots(colors: p.preview),
+                                  const SizedBox(width: 8),
+                                  Text(p.label),
+                                ],
+                              ),
                             ),
                           );
                         }).toList(),
@@ -231,9 +257,12 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
                 ),
               ),
               actions: [
-                TextButton(
+                PromptButton(
+                  label: '닫기',
+                  variant: PromptButtonVariant.tertiary,
+                  minHeight: 40,
+                  haptic: PromptHaptic.selection,
                   onPressed: () => Navigator.of(dialogContext).pop(),
-                  child: const Text('닫기'),
                 ),
               ],
             );
@@ -284,6 +313,7 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
         operation: 'personal.sideMenu.logout',
         error: e,
         stackTrace: st,
+        usePromptUi: true,
         details: <String, Object?>{
           'collection': 'personal_accounts',
           'accountId': accountId,
@@ -301,18 +331,19 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
     final work = context.read<TabletWorkSessionState>();
     await work.stopWork();
     if (!mounted) return;
-    await AppExitService.exitApp(context);
+    await AppExitService.exitApp(context, usePromptUi: true);
   }
 
   void _showSnack(String message, {required bool success}) {
     final messenger = ScaffoldMessenger.maybeOf(context);
     if (messenger == null) return;
+    final tokens = PromptUiTheme.of(context);
     messenger.clearSnackBars();
     messenger.showSnackBar(
       SnackBar(
         content: Text(message),
         behavior: SnackBarBehavior.floating,
-        backgroundColor: success ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.error,
+        backgroundColor: success ? tokens.success : tokens.danger,
       ),
     );
   }
@@ -325,99 +356,120 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final text = Theme.of(context).textTheme;
-    final area = context.select<AreaState, String>((s) => s.currentArea).trim();
+    final tokens = PromptUiTheme.of(context);
+    final textTheme = Theme.of(context).textTheme;
+    final area = context.select<AreaState, String>(
+      (state) => state.currentArea,
+    ).trim();
     final themeCtrl = context.watch<ThemePrefsController>();
-    final bottom = MediaQuery.of(context).padding.bottom;
+    final bottom = MediaQuery.paddingOf(context).bottom;
 
     return Material(
-      color: cs.surface,
-      elevation: 20,
-      shadowColor: cs.shadow.withOpacity(.24),
+      color: tokens.surfaceRaised,
+      surfaceTintColor: tokens.transparent,
+      elevation: 0,
+      shadowColor: tokens.shadow,
       child: SafeArea(
         left: false,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
+          children: <Widget>[
             Padding(
               padding: const EdgeInsets.fromLTRB(18, 12, 8, 12),
               child: Row(
-                children: [
+                children: <Widget>[
                   Container(
                     width: 42,
                     height: 42,
+                    alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: Color.alphaBlend(cs.primary.withOpacity(.12), cs.surface),
-                      borderRadius: BorderRadius.circular(16),
+                      color: tokens.accentContainer,
+                      borderRadius: BorderRadius.circular(
+                        PromptUiShapes.control,
+                      ),
+                      border: Border.all(
+                        color: tokens.accent.withOpacity(.24),
+                      ),
                     ),
-                    child: Icon(Icons.dashboard_customize_rounded, color: cs.primary),
+                    child: Icon(
+                      Icons.dashboard_customize_rounded,
+                      color: tokens.onAccentContainer,
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
+                      children: <Widget>[
                         Text(
                           '메뉴',
-                          style: text.titleMedium?.copyWith(
-                            color: cs.onSurface,
-                            fontWeight: FontWeight.w900,
+                          style: textTheme.titleMedium?.copyWith(
+                            color: tokens.textPrimary,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
                         const SizedBox(height: 2),
-                        Text(
-                          area.isEmpty ? '이용 지점 확인 중' : area,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: text.bodySmall?.copyWith(
-                            color: cs.onSurfaceVariant,
-                            fontWeight: FontWeight.w700,
+                        AnimatedSwitcher(
+                          duration: personalPromptDuration(
+                            context,
+                            PromptUiMotion.selection,
+                          ),
+                          child: Text(
+                            area.isEmpty ? '이용 지점 확인 중' : area,
+                            key: ValueKey<String>(area),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: textTheme.bodySmall?.copyWith(
+                              color: tokens.textSecondary,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ],
                     ),
                   ),
-                  IconButton(
+                  PromptIconButton(
+                    icon: Icons.close_rounded,
                     tooltip: '메뉴 닫기',
                     onPressed: widget.onClose,
-                    icon: const Icon(Icons.close_rounded),
+                    haptic: PromptHaptic.selection,
                   ),
                 ],
               ),
             ),
-            Divider(height: 1, color: cs.outlineVariant.withOpacity(.55)),
+            Divider(height: 1, color: tokens.borderSubtle),
             Expanded(
               child: ListView(
                 padding: EdgeInsets.fromLTRB(14, 14, 14, 18 + bottom),
-                children: [
-                  FilledButton.icon(
+                children: <Widget>[
+                  PromptButton(
+                    label: '차량 추가',
+                    icon: Icons.add_rounded,
+                    expand: true,
+                    haptic: PromptHaptic.light,
                     onPressed: () => _runAfterClose(widget.onAddVehicle),
-                    icon: const Icon(Icons.add_rounded),
-                    label: const Text('차량 추가'),
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size.fromHeight(52),
-                      backgroundColor: cs.primary,
-                      foregroundColor: cs.onPrimary,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    ),
                   ),
                   const SizedBox(height: 10),
                   _MenuTile(
                     icon: Icons.refresh_rounded,
-                    title: _refreshing ? '데이터 갱신 중...' : '데이터 갱신',
-                    subtitle: _lastRefreshAt == null ? '내 차량, 위치, 정산 데이터를 다시 불러옵니다' : '마지막 동기화 ${_formatLastSync(_lastRefreshAt!)}',
+                    title: _refreshing ? '데이터 갱신 중' : '데이터 갱신',
+                    subtitle: _lastRefreshAt == null
+                        ? '내 차량, 위치, 정산 데이터를 다시 불러옵니다'
+                        : '마지막 동기화 ${_formatLastSync(_lastRefreshAt!)}',
                     trailing: _refreshing
                         ? SizedBox(
                             width: 18,
                             height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: cs.primary),
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: tokens.statusSynchronized,
+                            ),
                           )
                         : null,
                     onTap: _refreshing ? null : _refreshAll,
                   ),
                   const SizedBox(height: 8),
-                  _MenuSectionLabel(label: '바로가기'),
+                  const _MenuSectionLabel(label: '바로가기'),
                   _MenuTile(
                     icon: Icons.checklist_rounded,
                     title: '할 일 관리',
@@ -431,7 +483,7 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
                     onTap: () => _runAfterClose(widget.onOpenCalendar),
                   ),
                   const SizedBox(height: 12),
-                  _MenuSectionLabel(label: '설정'),
+                  const _MenuSectionLabel(label: '설정'),
                   _MenuTile(
                     icon: Icons.palette_outlined,
                     title: '테마 설정',
@@ -472,15 +524,22 @@ class _MenuSectionLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final tokens = PromptUiTheme.of(context);
     final text = Theme.of(context).textTheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
-      child: Text(
-        label,
-        style: text.labelLarge?.copyWith(
-          color: cs.onSurfaceVariant,
-          fontWeight: FontWeight.w900,
+      child: PromptAnimatedReveal(
+        duration: personalPromptDuration(
+          context,
+          PromptUiMotion.selection,
+        ),
+        offset: const Offset(0, 0.08),
+        child: Text(
+          label,
+          style: text.labelLarge?.copyWith(
+            color: tokens.textSecondary,
+            fontWeight: FontWeight.w900,
+          ),
         ),
       ),
     );
@@ -506,21 +565,23 @@ class _MenuTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final tokens = PromptUiTheme.of(context);
     final text = Theme.of(context).textTheme;
-    final fg = danger ? cs.error : cs.primary;
+    final fg = danger ? tokens.danger : tokens.accent;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
         onTap: onTap,
-        child: Ink(
+        child: AnimatedContainer(
+          duration: personalPromptDuration(context),
+          curve: PromptUiMotion.standard,
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: cs.surfaceContainerLow,
+            color: tokens.surfaceOverlay,
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: cs.outlineVariant.withOpacity(.45)),
+            border: Border.all(color: tokens.borderSubtle),
           ),
           child: Row(
             children: [
@@ -528,7 +589,7 @@ class _MenuTile extends StatelessWidget {
                 width: 38,
                 height: 38,
                 decoration: BoxDecoration(
-                  color: Color.alphaBlend(fg.withOpacity(.11), cs.surface),
+                  color: danger ? tokens.dangerContainer : tokens.accentContainer,
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Icon(icon, color: fg, size: 21),
@@ -541,7 +602,7 @@ class _MenuTile extends StatelessWidget {
                     Text(
                       title,
                       style: text.bodyMedium?.copyWith(
-                        color: danger ? cs.error : cs.onSurface,
+                        color: danger ? tokens.danger : tokens.textPrimary,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
@@ -551,7 +612,7 @@ class _MenuTile extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: text.labelSmall?.copyWith(
-                        color: cs.onSurfaceVariant,
+                        color: tokens.textSecondary,
                         fontWeight: FontWeight.w700,
                         height: 1.25,
                       ),
@@ -559,7 +620,7 @@ class _MenuTile extends StatelessWidget {
                   ],
                 ),
               ),
-              trailing ?? Icon(Icons.chevron_right_rounded, color: cs.onSurfaceVariant),
+              trailing ?? Icon(Icons.chevron_right_rounded, color: tokens.iconSecondary),
             ],
           ),
         ),

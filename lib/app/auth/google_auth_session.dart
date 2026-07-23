@@ -8,6 +8,8 @@ import '../../features/dashboard/applications/common/firebase_google_auth_bridge
 import '../../features/dev/debug/debug_api_logger.dart';
 
 class AppScopes {
+  static const String calendar =
+      'https://www.googleapis.com/auth/calendar';
   static const String calendarEvents =
       'https://www.googleapis.com/auth/calendar.events';
   static const String spreadsheets =
@@ -19,6 +21,7 @@ class AppScopes {
       'https://www.googleapis.com/auth/devstorage.full_control';
 
   static List<String> all() => <String>{
+        calendar,
         calendarEvents,
         spreadsheets,
         documents,
@@ -82,6 +85,14 @@ class GoogleAuthSession {
   bool _initialized = false;
 
   DateTime? _lastAuthorizedAt;
+  final Map<String, auth.AuthClient> _clientsByEmail =
+      <String, auth.AuthClient>{};
+  final Map<String, DateTime> _authorizedAtByEmail = <String, DateTime>{};
+  final Map<String, GoogleAuthIdentity> _identitiesByEmail =
+      <String, GoogleAuthIdentity>{};
+  final Map<String, Future<auth.AuthClient>> _refreshClientFuturesByEmail =
+      <String, Future<auth.AuthClient>>{};
+  bool _accountSwitchInProgress = false;
 
   Duration _maxClientAge = const Duration(minutes: 30);
 
@@ -133,6 +144,9 @@ class GoogleAuthSession {
       _client = null;
       _user = null;
       _lastAuthorizedAt = null;
+      _clientsByEmail.clear();
+      _authorizedAtByEmail.clear();
+      _identitiesByEmail.clear();
       _emitIdentity();
 
       await _authSub?.cancel();
@@ -164,6 +178,9 @@ class GoogleAuthSession {
       _client = null;
       _user = null;
       _lastAuthorizedAt = null;
+      _clientsByEmail.clear();
+      _authorizedAtByEmail.clear();
+      _identitiesByEmail.clear();
       _emitIdentity();
       return;
     }
@@ -178,39 +195,53 @@ class GoogleAuthSession {
           _user = event.user;
           _client = null;
           _lastAuthorizedAt = null;
+          _rememberIdentity(event.user);
+          _restoreCachedClientForCurrentUser();
           _emitIdentity();
           debugPrint(
               '[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] authenticationEvents signIn email=${event.user.email}');
-          unawaited(
-            FirebaseGoogleAuthBridge.instance
-                .ensureSignedInWithGoogleUser(event.user)
-                .then((ok) {
-              debugPrint(
-                  '[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] authenticationEvents signIn -> Firebase bridge ok=$ok email=${event.user.email}');
-            }).catchError((Object e, StackTrace st) {
-              debugPrint(
-                  '[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] authenticationEvents signIn -> Firebase bridge failed: $e\n$st');
-            }),
-          );
+          if (!_accountSwitchInProgress) {
+            unawaited(
+              FirebaseGoogleAuthBridge.instance
+                  .ensureSignedInWithGoogleUser(event.user)
+                  .then((ok) {
+                debugPrint(
+                    '[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] authenticationEvents signIn -> Firebase bridge ok=$ok email=${event.user.email}');
+              }).catchError((Object e, StackTrace st) {
+                debugPrint(
+                    '[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] authenticationEvents signIn -> Firebase bridge failed: $e\n$st');
+              }),
+            );
+          }
         } else if (event is GoogleSignInAuthenticationEventSignOut) {
+          _cacheCurrentClient();
           _user = null;
           _client = null;
           _lastAuthorizedAt = null;
           _emitIdentity();
           debugPrint(
               '[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] authenticationEvents signOut');
-          unawaited(
-            FirebaseGoogleAuthBridge.instance
-                .signOutFirebaseOnly()
-                .catchError((Object e, StackTrace st) {
-              debugPrint(
-                  '[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] authenticationEvents signOut -> Firebase signOut failed: $e\n$st');
-            }),
-          );
+          if (!_accountSwitchInProgress) {
+            _clientsByEmail.clear();
+            _authorizedAtByEmail.clear();
+            _identitiesByEmail.clear();
+            unawaited(
+              FirebaseGoogleAuthBridge.instance
+                  .signOutFirebaseOnly()
+                  .catchError((Object e, StackTrace st) {
+                debugPrint(
+                    '[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] authenticationEvents signOut -> Firebase signOut failed: $e\n$st');
+              }),
+            );
+          }
         }
       });
 
       _user = await signIn.attemptLightweightAuthentication();
+      if (_user != null) {
+        _rememberIdentity(_user!);
+        _restoreCachedClientForCurrentUser();
+      }
       _emitIdentity();
       debugPrint(
           '[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] init lightweight result email=${_user?.email}');
@@ -227,8 +258,6 @@ class GoogleAuthSession {
           }),
         );
       }
-      _client = null;
-      _lastAuthorizedAt = null;
     } catch (e, st) {
       await DebugApiLogger().log(
         {
@@ -257,6 +286,10 @@ class GoogleAuthSession {
       }
 
       _user ??= await GoogleSignIn.instance.attemptLightweightAuthentication();
+      if (_user != null) {
+        _rememberIdentity(_user!);
+        _restoreCachedClientForCurrentUser();
+      }
 
       if (_client != null && _lastAuthorizedAt != null) {
         final age = DateTime.now().difference(_lastAuthorizedAt!);
@@ -277,6 +310,7 @@ class GoogleAuthSession {
         _user = user;
         _client = null;
         _lastAuthorizedAt = null;
+        _rememberIdentity(user);
         _emitIdentity();
         debugPrint(
             '[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] interactive authenticate success email=${user.email}');
@@ -328,30 +362,72 @@ class GoogleAuthSession {
         tags: const ['auth', 'google'],
       );
 
-      try {
-        await signOut();
-      } catch (_) {}
-
+      invalidateClient();
       rethrow;
     }
   }
 
   Future<void> refreshIfNeeded() async {
-    await _ensureBlockFlagLoaded();
-    _throwIfBlocked('refreshIfNeeded');
+    await refreshClient();
+  }
 
-    _client = null;
-    _lastAuthorizedAt = null;
+  Future<auth.AuthClient> refreshClient({
+    String? expectedEmail,
+  }) async {
+    await _ensureBlockFlagLoaded();
+    _throwIfBlocked('refreshClient');
+
+    final expected = _normalizeEmail(
+      expectedEmail ?? currentIdentity?.email,
+    );
+    final key = expected ?? '';
+    final activeRefresh = _refreshClientFuturesByEmail[key];
+    if (activeRefresh != null) return activeRefresh;
+
+    final future = _performClientRefresh(expectedEmail: expected);
+    _refreshClientFuturesByEmail[key] = future;
 
     try {
+      return await future;
+    } finally {
+      if (identical(_refreshClientFuturesByEmail[key], future)) {
+        _refreshClientFuturesByEmail.remove(key);
+      }
+    }
+  }
+
+  Future<auth.AuthClient> _performClientRefresh({
+    String? expectedEmail,
+  }) async {
+    try {
+      if (!_initialized) await init();
+      _user ??= await GoogleSignIn.instance.attemptLightweightAuthentication();
+      if (_user != null) {
+        _rememberIdentity(_user!);
+        _restoreCachedClientForCurrentUser();
+      }
+      _emitIdentity();
+      _verifyExpectedIdentity(expectedEmail);
+      if (_user == null) {
+        throw StateError('google_authentication_required');
+      }
+      _client = null;
+      _lastAuthorizedAt = null;
       await _ensureAuthorizedClient(forceAuthorize: true);
+      final client = _client;
+      if (client == null) {
+        throw StateError('google_auth_client_unavailable');
+      }
+      _verifyExpectedIdentity(expectedEmail);
+      return client;
     } catch (e, st) {
       await DebugApiLogger().log(
         {
-          'tag': 'GoogleAuthSession.refreshIfNeeded',
+          'tag': 'GoogleAuthSession.refreshClient',
           'message': '토큰 강제 갱신 실패',
           'error': e.toString(),
           'stack': st.toString(),
+          'expectedEmail': expectedEmail ?? 'null',
           'userEmail': _user?.email ?? 'null',
           'scopes': _scopes,
           'sessionBlocked': _sessionBlocked,
@@ -363,6 +439,18 @@ class GoogleAuthSession {
     }
   }
 
+  void _verifyExpectedIdentity(String? expectedEmail) {
+    if (expectedEmail == null || expectedEmail.isEmpty) return;
+
+    final identity = currentIdentity;
+    if (identity == null || identity.normalizedEmail != expectedEmail) {
+      throw GoogleAccountMismatchException(
+        expectedEmail: expectedEmail,
+        actualEmail: identity?.email ?? '',
+      );
+    }
+  }
+
   Future<void> signOut() async {
     await _ensureBlockFlagLoaded();
 
@@ -370,15 +458,22 @@ class GoogleAuthSession {
       _user = null;
       _client = null;
       _lastAuthorizedAt = null;
+      _clientsByEmail.clear();
+      _authorizedAtByEmail.clear();
+      _identitiesByEmail.clear();
       _emitIdentity();
       return;
     }
 
     try {
+      _accountSwitchInProgress = false;
       await GoogleSignIn.instance.signOut();
       _user = null;
       _client = null;
       _lastAuthorizedAt = null;
+      _clientsByEmail.clear();
+      _authorizedAtByEmail.clear();
+      _identitiesByEmail.clear();
       _emitIdentity();
       await FirebaseGoogleAuthBridge.instance.signOutFirebaseOnly();
       debugPrint(
@@ -415,12 +510,17 @@ class GoogleAuthSession {
   Future<auth.AuthClient> safeClientFor({
     required String expectedEmail,
   }) async {
-    final expected = expectedEmail.trim().toLowerCase();
-    final before = currentIdentity;
-    if (before != null && before.normalizedEmail != expected) {
+    final expected = _normalizeEmail(expectedEmail);
+    if (expected == null) {
+      throw StateError('google_account_email_required');
+    }
+    final cached = _cachedClientFor(expected);
+    if (cached != null) return cached;
+    final current = currentIdentity;
+    if (current == null || current.normalizedEmail != expected) {
       throw GoogleAccountMismatchException(
         expectedEmail: expected,
-        actualEmail: before.email,
+        actualEmail: current?.email ?? '',
       );
     }
     final client = await safeClient();
@@ -431,17 +531,26 @@ class GoogleAuthSession {
         actualEmail: after?.email ?? '',
       );
     }
+    _cacheCurrentClient();
     return client;
   }
 
   Future<GoogleAuthIdentity> authenticateAccount({
     String? expectedEmail,
     bool forceAccountSelection = false,
+    bool bridgeFirebase = true,
   }) async {
     await _ensureBlockFlagLoaded();
     _throwIfBlocked('authenticateAccount');
     if (!_initialized) await init();
-    final expected = expectedEmail?.trim().toLowerCase();
+    final expected = _normalizeEmail(expectedEmail);
+    if (!forceAccountSelection && expected != null) {
+      final cachedIdentity = _identitiesByEmail[expected];
+      final cachedClient = _cachedClientFor(expected);
+      if (cachedIdentity != null && cachedClient != null) {
+        return cachedIdentity;
+      }
+    }
     final current = currentIdentity;
     if (!forceAccountSelection &&
         current != null &&
@@ -449,35 +558,79 @@ class GoogleAuthSession {
       await safeClientFor(expectedEmail: current.email);
       return current;
     }
-    if (current != null) {
-      await signOut();
-    }
     if (!GoogleSignIn.instance.supportsAuthenticate()) {
       throw StateError('interactive_google_auth_not_supported');
     }
-    final user = await GoogleSignIn.instance.authenticate();
-    _user = user;
-    _client = null;
-    _lastAuthorizedAt = null;
-    _emitIdentity();
-    await FirebaseGoogleAuthBridge.instance.ensureSignedInWithGoogleUser(user);
-    final identity = currentIdentity!;
-    if (expected != null && identity.normalizedEmail != expected) {
-      throw GoogleAccountMismatchException(
-        expectedEmail: expected,
-        actualEmail: identity.email,
-      );
+    _cacheCurrentClient();
+    _accountSwitchInProgress = true;
+    try {
+      if (_user != null) {
+        await GoogleSignIn.instance.signOut();
+        _user = null;
+        _client = null;
+        _lastAuthorizedAt = null;
+        _emitIdentity();
+      }
+      final user = await GoogleSignIn.instance.authenticate();
+      _user = user;
+      _client = null;
+      _lastAuthorizedAt = null;
+      _rememberIdentity(user);
+      _emitIdentity();
+      if (bridgeFirebase) {
+        await FirebaseGoogleAuthBridge.instance.ensureSignedInWithGoogleUser(user);
+      }
+      final identity = currentIdentity!;
+      if (expected != null && identity.normalizedEmail != expected) {
+        throw GoogleAccountMismatchException(
+          expectedEmail: expected,
+          actualEmail: identity.email,
+        );
+      }
+      await _ensureAuthorizedClient(forceAuthorize: true);
+      if (_client == null) {
+        throw StateError('google_auth_client_unavailable');
+      }
+      _cacheCurrentClient();
+      return identity;
+    } finally {
+      _accountSwitchInProgress = false;
     }
-    await _ensureAuthorizedClient(forceAuthorize: true);
-    if (_client == null) {
-      throw StateError('google_auth_client_unavailable');
-    }
-    return identity;
   }
 
-  void invalidateClient() {
-    _client = null;
-    _lastAuthorizedAt = null;
+  bool hasCachedClientFor(String email) {
+    final normalized = _normalizeEmail(email);
+    if (normalized == null) return false;
+    return _cachedClientFor(normalized) != null;
+  }
+
+  GoogleAuthIdentity? cachedIdentityFor(String email) {
+    final normalized = _normalizeEmail(email);
+    return normalized == null ? null : _identitiesByEmail[normalized];
+  }
+
+  void forgetAccount(String email) {
+    final normalized = _normalizeEmail(email);
+    if (normalized == null) return;
+    _clientsByEmail.remove(normalized);
+    _authorizedAtByEmail.remove(normalized);
+    _identitiesByEmail.remove(normalized);
+    if (currentIdentity?.normalizedEmail == normalized) {
+      _client = null;
+      _lastAuthorizedAt = null;
+    }
+  }
+
+  void invalidateClient({String? accountEmail}) {
+    final normalized = _normalizeEmail(accountEmail ?? currentIdentity?.email);
+    if (normalized != null) {
+      _clientsByEmail.remove(normalized);
+      _authorizedAtByEmail.remove(normalized);
+    }
+    if (normalized == null || currentIdentity?.normalizedEmail == normalized) {
+      _client = null;
+      _lastAuthorizedAt = null;
+    }
   }
 
   void _emitIdentity() {
@@ -505,6 +658,7 @@ class GoogleAuthSession {
 
       _client = authorization.authClient(scopes: _scopes);
       _lastAuthorizedAt = DateTime.now();
+      _cacheCurrentClient();
     } catch (e, st) {
       await DebugApiLogger().log(
         {
@@ -524,17 +678,101 @@ class GoogleAuthSession {
     }
   }
 
+  String? _normalizeEmail(String? email) {
+    final normalized = email?.trim().toLowerCase();
+    return normalized?.isNotEmpty == true ? normalized : null;
+  }
+
+  void _rememberIdentity(GoogleSignInAccount user) {
+    final identity = GoogleAuthIdentity(
+      id: user.id,
+      email: user.email.trim(),
+      displayName: user.displayName?.trim() ?? '',
+    );
+    _identitiesByEmail[identity.normalizedEmail] = identity;
+  }
+
+  void _cacheCurrentClient() {
+    final identity = currentIdentity;
+    final client = _client;
+    final authorizedAt = _lastAuthorizedAt;
+    if (identity == null || client == null || authorizedAt == null) return;
+    _clientsByEmail[identity.normalizedEmail] = client;
+    _authorizedAtByEmail[identity.normalizedEmail] = authorizedAt;
+    _identitiesByEmail[identity.normalizedEmail] = identity;
+  }
+
+  void _restoreCachedClientForCurrentUser() {
+    final identity = currentIdentity;
+    if (identity == null) return;
+    final client = _cachedClientFor(identity.normalizedEmail);
+    if (client == null) return;
+    _client = client;
+    _lastAuthorizedAt = _authorizedAtByEmail[identity.normalizedEmail];
+  }
+
+  auth.AuthClient? _cachedClientFor(String normalizedEmail) {
+    final client = _clientsByEmail[normalizedEmail];
+    final authorizedAt = _authorizedAtByEmail[normalizedEmail];
+    if (client == null || authorizedAt == null) return null;
+    if (DateTime.now().difference(authorizedAt) > _maxClientAge &&
+        currentIdentity?.normalizedEmail == normalizedEmail) {
+      _clientsByEmail.remove(normalizedEmail);
+      _authorizedAtByEmail.remove(normalizedEmail);
+      _client = null;
+      _lastAuthorizedAt = null;
+      return null;
+    }
+    return client;
+  }
+
   void dispose() {
     _authSub?.cancel();
     _authSub = null;
   }
 
   static bool isInvalidTokenError(Object e) {
-    final msg = e.toString();
+    final dynamic error = e;
 
-    if (msg.contains('invalid_token')) return true;
-    if (msg.contains('Access was denied')) return true;
+    try {
+      final status = error.status;
+      if (status == 401 || status?.toString() == '401') return true;
+    } catch (_) {}
 
-    return false;
+    try {
+      final code = error.code;
+      if (code == 401 || code?.toString() == '401') return true;
+    } catch (_) {}
+
+    try {
+      final errors = error.errors;
+      if (errors is Iterable) {
+        for (final item in errors) {
+          if (_containsAuthenticationFailure(item.toString())) return true;
+        }
+      }
+    } catch (_) {}
+
+    return _containsAuthenticationFailure(e.toString());
+  }
+
+  static bool _containsAuthenticationFailure(String value) {
+    final message = value.toLowerCase();
+    return message.contains('invalid_token') ||
+        message.contains('invalid credentials') ||
+        message.contains('invalid authentication credentials') ||
+        message.contains('request had invalid authentication credentials') ||
+        message.contains('login required') ||
+        message.contains('autherror') ||
+        message.contains('unauthenticated') ||
+        message.contains('access token expired') ||
+        message.contains('token has expired') ||
+        message.contains('token expired') ||
+        message.contains('access was denied') ||
+        message.contains('status: 401') ||
+        message.contains('statuscode: 401') ||
+        message.contains('status code: 401') ||
+        message.contains('code: 401') ||
+        message.contains('http 401');
   }
 }

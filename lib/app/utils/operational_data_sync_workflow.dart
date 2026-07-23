@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../design_system/prompt_ui/prompt_ui_overlays.dart';
 import '../../features/dev/application/area_state.dart';
 import '../../features/location/applications/location_state.dart';
 import '../../features/payment/applications/bill_state.dart';
 import '../../shared/plate/domain/repositories/plate_repository.dart';
 import '../init/app_exit_service.dart';
 import 'ops_delayed_refresh_gate.dart';
+import 'snackbar_helper.dart';
 
 enum OperationalDataSyncResult {
   cancelled,
@@ -23,7 +25,9 @@ class OperationalDataSyncWorkflow {
   static Future<OperationalDataSyncResult> run({
     required BuildContext context,
     String title = '운영 데이터 동기화',
-    String message = '주차 구역, 정산 타입, 월정기 사용 여부를 새로고침하기 전 요청을 준비하고 있습니다.',
+    String message =
+        '주차 구역, 정산 타입, 월정기 사용 여부를 새로고침하기 전 요청을 준비하고 있습니다.',
+    bool usePromptUi = false,
   }) async {
     if (_running) return OperationalDataSyncResult.cancelled;
 
@@ -35,7 +39,11 @@ class OperationalDataSyncWorkflow {
     final rootContext = Navigator.of(context, rootNavigator: true).context;
 
     if (area.isEmpty) {
-      _showFailure(rootContext, '현재 지역 정보가 없어 운영 데이터를 동기화할 수 없습니다.');
+      _showFailure(
+        rootContext,
+        '현재 지역 정보가 없어 운영 데이터를 동기화할 수 없습니다.',
+        usePromptUi: usePromptUi,
+      );
       return OperationalDataSyncResult.failed;
     }
 
@@ -46,6 +54,7 @@ class OperationalDataSyncWorkflow {
         context: context,
         title: title,
         message: message,
+        usePromptUi: usePromptUi,
       );
       if (!shouldRefresh) {
         return OperationalDataSyncResult.cancelled;
@@ -77,28 +86,41 @@ class OperationalDataSyncWorkflow {
         throw StateError('완료 안내 화면을 표시할 수 없습니다.');
       }
 
-      await showDialog<void>(
-        context: rootContext,
-        barrierDismissible: false,
-        builder: (dialogContext) {
-          return AlertDialog(
-            title: const Text('운영 데이터 동기화 완료'),
-            content: const Text(
-              '기존 로컬 운영 데이터를 삭제하고 최신 데이터를 새로 저장했습니다.\n\n변경 사항 적용을 위해 앱을 종료합니다. 앱을 다시 실행해 주세요.',
+      Widget completionDialog(BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('운영 데이터 동기화 완료'),
+          content: const Text(
+            '기존 로컬 운영 데이터를 삭제하고 최신 데이터를 새로 저장했습니다.\n\n변경 사항 적용을 위해 앱을 종료합니다. 앱을 다시 실행해 주세요.',
+          ),
+          actions: <Widget>[
+            FilledButton.icon(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              icon: const Icon(Icons.power_settings_new_rounded),
+              label: const Text('확인 및 종료'),
             ),
-            actions: [
-              FilledButton.icon(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                icon: const Icon(Icons.power_settings_new_rounded),
-                label: const Text('확인 및 종료'),
-              ),
-            ],
-          );
-        },
-      );
+          ],
+        );
+      }
+
+      if (usePromptUi) {
+        await showPromptOverlayDialog<void>(
+          context: rootContext,
+          barrierDismissible: false,
+          builder: completionDialog,
+        );
+      } else {
+        await showDialog<void>(
+          context: rootContext,
+          barrierDismissible: false,
+          builder: completionDialog,
+        );
+      }
 
       if (rootContext.mounted) {
-        await AppExitService.exitApp(rootContext);
+        await AppExitService.exitApp(
+          rootContext,
+          usePromptUi: usePromptUi,
+        );
       }
       return OperationalDataSyncResult.completed;
     } catch (_) {
@@ -114,7 +136,11 @@ class OperationalDataSyncWorkflow {
         } catch (_) {}
       }
       if (rootContext.mounted) {
-        _showFailure(rootContext, '운영 데이터 동기화에 실패했습니다.');
+        _showFailure(
+          rootContext,
+          '운영 데이터 동기화에 실패했습니다.',
+          usePromptUi: usePromptUi,
+        );
       }
       return OperationalDataSyncResult.failed;
     } finally {
@@ -153,7 +179,15 @@ class OperationalDataSyncWorkflow {
     }
   }
 
-  static void _showFailure(BuildContext context, String message) {
+  static void _showFailure(
+    BuildContext context,
+    String message, {
+    required bool usePromptUi,
+  }) {
+    if (usePromptUi) {
+      showFailedSnackbar(context, message, usePromptUi: true);
+      return;
+    }
     ScaffoldMessenger.maybeOf(context)?.showSnackBar(
       SnackBar(
         content: Text(message),

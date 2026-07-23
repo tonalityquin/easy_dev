@@ -68,6 +68,26 @@ class PromptUiTokens {
     required this.onInfoContainer,
     required this.focusRing,
     required this.scrim,
+    required this.shimmerBase,
+    required this.shimmerHighlight,
+    required this.statusParkingCompleted,
+    required this.statusParkingCompletedContainer,
+    required this.onStatusParkingCompletedContainer,
+    required this.statusDepartureRequested,
+    required this.statusDepartureRequestedContainer,
+    required this.onStatusDepartureRequestedContainer,
+    required this.statusSettlementPending,
+    required this.statusSettlementPendingContainer,
+    required this.onStatusSettlementPendingContainer,
+    required this.statusMonthlyParking,
+    required this.statusMonthlyParkingContainer,
+    required this.onStatusMonthlyParkingContainer,
+    required this.statusOffline,
+    required this.statusOfflineContainer,
+    required this.onStatusOfflineContainer,
+    required this.statusSynchronized,
+    required this.statusSynchronizedContainer,
+    required this.onStatusSynchronizedContainer,
     required this.shadow,
     required this.handle,
     required this.transparent,
@@ -112,6 +132,26 @@ class PromptUiTokens {
   final Color onInfoContainer;
   final Color focusRing;
   final Color scrim;
+  final Color shimmerBase;
+  final Color shimmerHighlight;
+  final Color statusParkingCompleted;
+  final Color statusParkingCompletedContainer;
+  final Color onStatusParkingCompletedContainer;
+  final Color statusDepartureRequested;
+  final Color statusDepartureRequestedContainer;
+  final Color onStatusDepartureRequestedContainer;
+  final Color statusSettlementPending;
+  final Color statusSettlementPendingContainer;
+  final Color onStatusSettlementPendingContainer;
+  final Color statusMonthlyParking;
+  final Color statusMonthlyParkingContainer;
+  final Color onStatusMonthlyParkingContainer;
+  final Color statusOffline;
+  final Color statusOfflineContainer;
+  final Color onStatusOfflineContainer;
+  final Color statusSynchronized;
+  final Color statusSynchronizedContainer;
+  final Color onStatusSynchronizedContainer;
   final Color shadow;
   final Color handle;
   final Color transparent;
@@ -164,6 +204,26 @@ class PromptUiTokens {
         onInfoContainer = const Color(0xFF164B68),
         focusRing = const Color(0xFF2D8C88),
         scrim = const Color.fromRGBO(10, 20, 32, 0.42),
+        shimmerBase = const Color(0xFFE1EAE8),
+        shimmerHighlight = const Color(0xFFF7FAF9),
+        statusParkingCompleted = const Color(0xFF0F7A46),
+        statusParkingCompletedContainer = const Color(0xFFDDF5E8),
+        onStatusParkingCompletedContainer = const Color(0xFF0B4F31),
+        statusDepartureRequested = const Color(0xFFA64B00),
+        statusDepartureRequestedContainer = const Color(0xFFFFE8CC),
+        onStatusDepartureRequestedContainer = const Color(0xFF663000),
+        statusSettlementPending = const Color(0xFF76519C),
+        statusSettlementPendingContainer = const Color(0xFFF0E3FF),
+        onStatusSettlementPendingContainer = const Color(0xFF49246A),
+        statusMonthlyParking = const Color(0xFF1F6D99),
+        statusMonthlyParkingContainer = const Color(0xFFDDF1FA),
+        onStatusMonthlyParkingContainer = const Color(0xFF164B68),
+        statusOffline = const Color(0xFF667085),
+        statusOfflineContainer = const Color(0xFFEAECF0),
+        onStatusOfflineContainer = const Color(0xFF344054),
+        statusSynchronized = const Color(0xFF1F7774),
+        statusSynchronizedContainer = const Color(0xFFD4EAE7),
+        onStatusSynchronizedContainer = const Color(0xFF124B48),
         shadow = const Color.fromRGBO(12, 35, 31, 0.16),
         handle = const Color(0xFF879A95),
         transparent = Colors.transparent;
@@ -208,6 +268,26 @@ class PromptUiTokens {
         onInfoContainer = const Color(0xFFD4F2FF),
         focusRing = const Color(0xFF78DAD3),
         scrim = const Color.fromRGBO(0, 0, 0, 0.66),
+        shimmerBase = const Color(0xFF1A2926),
+        shimmerHighlight = const Color(0xFF2A3B37),
+        statusParkingCompleted = const Color(0xFF54D18B),
+        statusParkingCompletedContainer = const Color(0xFF153D2A),
+        onStatusParkingCompletedContainer = const Color(0xFFC7F5D9),
+        statusDepartureRequested = const Color(0xFFFFB45A),
+        statusDepartureRequestedContainer = const Color(0xFF4A3013),
+        onStatusDepartureRequestedContainer = const Color(0xFFFFE0AE),
+        statusSettlementPending = const Color(0xFFD6A7FF),
+        statusSettlementPendingContainer = const Color(0xFF3D2850),
+        onStatusSettlementPendingContainer = const Color(0xFFF2DFFF),
+        statusMonthlyParking = const Color(0xFF69C5EF),
+        statusMonthlyParkingContainer = const Color(0xFF163B4C),
+        onStatusMonthlyParkingContainer = const Color(0xFFD4F2FF),
+        statusOffline = const Color(0xFF98A2B3),
+        statusOfflineContainer = const Color(0xFF2B313A),
+        onStatusOfflineContainer = const Color(0xFFE4E7EC),
+        statusSynchronized = const Color(0xFF69C9C2),
+        statusSynchronizedContainer = const Color(0xFF18443F),
+        onStatusSynchronizedContainer = const Color(0xFFD2F4F0),
         shadow = const Color.fromRGBO(0, 0, 0, 0.46),
         handle = const Color(0xFF718A84),
         transparent = Colors.transparent;

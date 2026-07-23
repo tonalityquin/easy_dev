@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
 import '../../../applications/tablet_parking_completed_view_toggle_state.dart';
 import '../../../domain/models/two_d/tablet_grid_2d_preview.dart';
 import '../../../domain/models/two_d/tablet_status_preview_card_area.dart' as grid2d;
 import '../../panels/tablet_right_panel.dart';
+import '../../widgets/tablet_prompt_components.dart';
 
 class TabletGridPadModePage extends StatelessWidget {
   const TabletGridPadModePage({
@@ -16,47 +18,63 @@ class TabletGridPadModePage extends StatelessWidget {
 
   static List<grid2d.ParkingStatusOverlaySpec> _overlaySpecs({
     required bool includeParkingCompletedView,
-  }) => <grid2d.ParkingStatusOverlaySpec>[
-    if (includeParkingCompletedView)
+  }) {
+    return <grid2d.ParkingStatusOverlaySpec>[
+      if (includeParkingCompletedView)
+        const grid2d.ParkingStatusOverlaySpec(
+          collection: 'parking_completed_view',
+          status: ParkingSlotStatus.parked,
+        ),
       const grid2d.ParkingStatusOverlaySpec(
-        collection: 'parking_completed_view',
-        status: ParkingSlotStatus.parked,
+        collection: 'departure_requests_view',
+        status: ParkingSlotStatus.departureRequest,
       ),
-    const grid2d.ParkingStatusOverlaySpec(
-      collection: 'departure_requests_view',
-      status: ParkingSlotStatus.departureRequest,
-    ),
-  ];
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final tokens = PromptUiTheme.of(context);
     final resolvedArea = area.trim();
     final includeParkingCompletedView =
         context.select<TabletParkingCompletedViewToggleState, bool>(
-      (s) => s.includeParkingCompletedView,
+      (state) => state.includeParkingCompletedView,
     );
     final overlaySpecs = _overlaySpecs(
       includeParkingCompletedView: includeParkingCompletedView,
     );
-
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
+      children: <Widget>[
         Expanded(
           child: ColoredBox(
-            color: cs.surfaceContainerLow,
+            color: tokens.canvas,
             child: Padding(
               padding: const EdgeInsets.all(24),
-              child: _GridPaneCard(
-                child: ColoredBox(
-                  color: cs.surfaceContainerLowest,
+              child: TabletPromptPanel(
+                padding: EdgeInsets.zero,
+                clipBehavior: Clip.antiAlias,
+                child: AnimatedSwitcher(
+                  duration: tabletPromptDuration(
+                    context,
+                    PromptUiMotion.component,
+                  ),
+                  switchInCurve: PromptUiMotion.enter,
+                  switchOutCurve: PromptUiMotion.exit,
                   child: resolvedArea.isEmpty
-                      ? const SizedBox.expand()
-                      : grid2d.ParkingStatusPreviewCardArea(
-                          key: ValueKey('grid-pad-2d-$resolvedArea'),
-                          area: resolvedArea,
-                          overlay: overlaySpecs,
+                      ? const TabletPromptEmptyState(
+                          key: ValueKey<String>('grid-pad-empty'),
+                          title: '선택된 지역이 없습니다',
+                          message: '상단 메뉴에서 운영 지역을 선택하세요.',
+                          icon: Icons.map_outlined,
+                        )
+                      : ColoredBox(
+                          key: ValueKey<String>('grid-pad-$resolvedArea'),
+                          color: tokens.surface,
+                          child: grid2d.ParkingStatusPreviewCardArea(
+                            area: resolvedArea,
+                            overlay: overlaySpecs,
+                          ),
                         ),
                 ),
               ),
@@ -66,53 +84,23 @@ class TabletGridPadModePage extends StatelessWidget {
         VerticalDivider(
           width: 1,
           thickness: 1,
-          color: cs.outlineVariant,
+          color: tokens.borderSubtle,
         ),
         Expanded(
           child: ColoredBox(
-            color: cs.surface,
+            color: tokens.surface,
             child: ClipRRect(
               borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(12),
+                topLeft: Radius.circular(PromptUiShapes.control),
               ),
               child: RightPaneSearchPanel(
-                key: ValueKey('grid-pad-right-$resolvedArea'),
+                key: ValueKey<String>('grid-pad-right-$resolvedArea'),
                 area: resolvedArea,
               ),
             ),
           ),
         ),
       ],
-    );
-  }
-}
-
-class _GridPaneCard extends StatelessWidget {
-  const _GridPaneCard({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: cs.outline.withOpacity(.12)),
-        boxShadow: [
-          BoxShadow(
-            color: cs.shadow.withOpacity(.04),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(18),
-        child: child,
-      ),
     );
   }
 }

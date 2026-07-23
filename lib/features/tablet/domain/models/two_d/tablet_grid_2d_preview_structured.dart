@@ -581,6 +581,19 @@ class _TabletGrid2DViewState extends State<_TabletGrid2DView>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (reduceMotion || !_hasDepartureAlert) {
+      if (_alertCtrl.isAnimating) _alertCtrl.stop();
+      _alertCtrl.value = 0;
+    } else if (!_alertCtrl.isAnimating) {
+      _alertCtrl.repeat(reverse: true);
+    }
+  }
+
+  @override
   void didUpdateWidget(covariant _TabletGrid2DView oldWidget) {
     super.didUpdateWidget(oldWidget);
 

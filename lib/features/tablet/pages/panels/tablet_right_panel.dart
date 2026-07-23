@@ -1,5 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
+import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
 import '../../../../app/utils/dev_firebase_debug_dialog.dart';
 import '../../../../shared/plate/application/common/movement_plate.dart';
 import '../../../../shared/plate/data/repositories/firestore_plate_repository.dart';
@@ -18,6 +24,7 @@ import '../sheets/widgets/keypad/tablet_animated_keypad.dart';
 import '../widgets/tablet_plate_number_display_section.dart';
 import '../widgets/tablet_plate_search_header_section.dart';
 import '../widgets/tablet_plate_search_result_section.dart';
+import '../widgets/tablet_prompt_components.dart';
 
 enum _UnifiedDialogCloseReason {
   reset,
@@ -48,6 +55,8 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
 
   bool _isLoading = false;
   bool _dialogOpen = false;
+  bool _didRunKeypadEntrance = false;
+  bool? _reduceMotion;
 
   late final AnimationController _keypadController;
   late final Animation<Offset> _slideAnimation;
@@ -58,19 +67,49 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
     super.initState();
     _keypadController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 500),
+      duration: PromptUiMotion.overlay,
     );
     _slideAnimation = Tween<Offset>(
       begin: const Offset(0, 0.2),
       end: Offset.zero,
     ).animate(
-      CurvedAnimation(parent: _keypadController, curve: Curves.easeOut),
+      CurvedAnimation(parent: _keypadController, curve: PromptUiMotion.enter),
     );
     _fadeAnimation = CurvedAnimation(
       parent: _keypadController,
-      curve: Curves.easeIn,
+      curve: PromptUiMotion.enter,
     );
-    _keypadController.forward();
+  }
+
+  void _runKeypadEntrance() {
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    _keypadController.duration =
+        reduceMotion ? Duration.zero : PromptUiMotion.overlay;
+    if (reduceMotion) {
+      _keypadController.value = 1;
+      return;
+    }
+    _keypadController.forward(from: 0);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final changed = _reduceMotion != reduceMotion;
+    _reduceMotion = reduceMotion;
+    _keypadController.duration =
+        reduceMotion ? Duration.zero : PromptUiMotion.overlay;
+    if (!_didRunKeypadEntrance) {
+      _didRunKeypadEntrance = true;
+      _runKeypadEntrance();
+      return;
+    }
+    if (changed && reduceMotion) {
+      _keypadController.value = 1;
+    }
   }
 
   @override
@@ -149,7 +188,7 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
   ) async {
     final details = _parseParkingLocation(plate.location);
 
-    await showDialog<void>(
+    await showPromptOverlayDialog<void>(
       context: dialogCtx,
       useRootNavigator: true,
       barrierDismissible: true,
@@ -167,7 +206,7 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
       _controller.clear();
       _isLoading = false;
     });
-    _keypadController.forward(from: 0);
+    _runKeypadEntrance();
   }
 
   void _onKeypadComplete() {
@@ -214,6 +253,7 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
           ],
           'widget': 'RightPaneSearchPanel',
         },
+        usePromptUi: true,
       );
     }
   }
@@ -222,7 +262,7 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
     if (!mounted || _dialogOpen) return;
     _dialogOpen = true;
 
-    final closeReason = await showDialog<_UnifiedDialogCloseReason>(
+    final closeReason = await showPromptOverlayDialog<_UnifiedDialogCloseReason>(
       context: context,
       useRootNavigator: true,
       barrierDismissible: true,
@@ -296,6 +336,7 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
                 'forceViewSync': true,
                 'widget': 'RightPaneSearchPanel.confirmDepartureRequested',
               },
+              usePromptUi: true,
             );
             setStateSB(() => busy = false);
           }
@@ -839,24 +880,7 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
   }
 
   Widget _panelCard({required Widget child}) {
-    final cs = Theme.of(context).colorScheme;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: cs.outline.withOpacity(.12)),
-        boxShadow: [
-          BoxShadow(
-            color: cs.shadow.withOpacity(.04),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.all(16),
-      child: child,
-    );
+    return TabletPromptPanel(child: child);
   }
 
   Widget _buildHeaderCard({required EdgeInsets padding}) {
@@ -884,7 +908,7 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
 
   Widget _buildSearchProgressBar(ColorScheme cs) {
     return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 180),
+      duration: tabletPromptDuration(context, PromptUiMotion.selection),
       child: _isLoading
           ? ClipRRect(
               borderRadius: BorderRadius.circular(999),
@@ -1108,26 +1132,62 @@ class _AutoCloseDepartureRequestDialog extends StatefulWidget {
 class _AutoCloseDepartureRequestDialogState
     extends State<_AutoCloseDepartureRequestDialog>
     with SingleTickerProviderStateMixin {
+  static const Duration _autoCloseDuration = Duration(seconds: 5);
+
   late final AnimationController _progressController;
+  late final DateTime _startedAt;
+  Timer? _closeTimer;
   bool _closing = false;
+  bool? _reduceMotion;
 
   @override
   void initState() {
     super.initState();
+    _startedAt = DateTime.now();
     _progressController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 5),
-    )
-      ..addStatusListener((status) {
-        if (status == AnimationStatus.completed) {
-          _closeDialog();
-        }
-      })
-      ..forward();
+      duration: _autoCloseDuration,
+    );
+    _closeTimer = Timer(_autoCloseDuration, _closeDialog);
+  }
+
+  double get _elapsedFraction {
+    final elapsed = DateTime.now().difference(_startedAt);
+    final raw = elapsed.inMicroseconds /
+        _autoCloseDuration.inMicroseconds;
+    return raw.clamp(0.0, 1.0).toDouble();
+  }
+
+  void _syncProgressMotion() {
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (_reduceMotion == reduceMotion) return;
+    _reduceMotion = reduceMotion;
+    final fraction = _elapsedFraction;
+    if (reduceMotion) {
+      _progressController.stop();
+      _progressController.value = fraction;
+      return;
+    }
+    final remaining = _autoCloseDuration -
+        DateTime.now().difference(_startedAt);
+    if (remaining <= Duration.zero) {
+      _progressController.value = 1;
+      return;
+    }
+    _progressController.duration = _autoCloseDuration;
+    _progressController.forward(from: fraction);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncProgressMotion();
   }
 
   @override
   void dispose() {
+    _closeTimer?.cancel();
     _progressController.dispose();
     super.dispose();
   }
@@ -1135,6 +1195,7 @@ class _AutoCloseDepartureRequestDialogState
   void _closeDialog() {
     if (_closing || !mounted) return;
     _closing = true;
+    _closeTimer?.cancel();
     Navigator.of(context, rootNavigator: true).pop();
   }
 
@@ -1198,16 +1259,75 @@ class _AutoCloseDepartureRequestDialogState
                 alignment: Alignment.center,
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 320),
-                  child: AnimatedBuilder(
-                    animation: _progressController,
-                    builder: (context, _) {
-                      return ClipRRect(
-                        borderRadius: BorderRadius.circular(999),
-                        child: LinearProgressIndicator(
-                          minHeight: 8,
-                          value: _progressController.value,
-                          valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
-                          backgroundColor: cs.outlineVariant.withOpacity(.28),
+                  child: Builder(
+                    builder: (context) {
+                      final tokens = PromptUiTheme.of(context);
+                      final reduceMotion =
+                          MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+                      if (reduceMotion) {
+                        return Semantics(
+                          label: '자동 닫기',
+                          value: '잠시 후 닫힘',
+                          child: Container(
+                            constraints: const BoxConstraints(minHeight: 36),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: tokens.statusSynchronizedContainer,
+                              borderRadius: BorderRadius.circular(
+                                PromptUiShapes.pill,
+                              ),
+                              border: Border.all(
+                                color: tokens.statusSynchronized,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: <Widget>[
+                                Icon(
+                                  Icons.timer_outlined,
+                                  size: 17,
+                                  color: tokens.statusSynchronized,
+                                ),
+                                const SizedBox(width: 7),
+                                Flexible(
+                                  child: Text(
+                                    '잠시 후 자동으로 닫힙니다',
+                                    textAlign: TextAlign.center,
+                                    style: text.labelLarge?.copyWith(
+                                      color: tokens
+                                          .onStatusSynchronizedContainer,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }
+                      return Semantics(
+                        label: '자동 닫기 진행 상태',
+                        child: AnimatedBuilder(
+                          animation: _progressController,
+                          builder: (context, _) {
+                            return ClipRRect(
+                              borderRadius: BorderRadius.circular(
+                                PromptUiShapes.pill,
+                              ),
+                              child: LinearProgressIndicator(
+                                minHeight: 8,
+                                value: _progressController.value,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  tokens.statusSynchronized,
+                                ),
+                                backgroundColor:
+                                    tokens.statusSynchronizedContainer,
+                              ),
+                            );
+                          },
                         ),
                       );
                     },
@@ -1217,20 +1337,13 @@ class _AutoCloseDepartureRequestDialogState
               const SizedBox(height: 14),
               Align(
                 alignment: Alignment.center,
-                child: FilledButton.icon(
-                  onPressed: _closeDialog,
-                  icon: const Icon(Icons.close),
-                  label: const Text('닫기'),
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size(140, 48),
-                    backgroundColor: cs.primary,
-                    foregroundColor: cs.onPrimary,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    textStyle: (text.titleMedium ?? const TextStyle()).copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: 160),
+                  child: PromptButton(
+                    label: '닫기',
+                    icon: Icons.close_rounded,
+                    onPressed: _closeDialog,
+                    haptic: PromptHaptic.selection,
                   ),
                 ),
               ),

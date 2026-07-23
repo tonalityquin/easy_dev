@@ -12,6 +12,16 @@ class UpdateBottomSheet extends StatelessWidget {
 
   static final List<UpdateEntry> defaultEntries = <UpdateEntry>[
     const UpdateEntry(
+      version: 'v0.1.4',
+      highlights: <String>[
+        'UI/UX 디자인 및 애니메이션 개선',
+        '상기의 업데이트로 다크모드 지원은 일시적으로 제한됩니다.',
+        '본사 대시보드 일부 기능 추가 및 개선',
+        '일부 과도하게 메모리 사용을 유발하는 기능 개선',
+        '일부 본사 관련 기능 사전 UI 업데이트',
+      ],
+    ),
+    const UpdateEntry(
       version: 'v0.1.3',
       highlights: <String>[
         '휴무, 휴게 상세 옵션 설정 기능 추가',

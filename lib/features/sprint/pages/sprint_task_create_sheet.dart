@@ -47,6 +47,7 @@ class _SprintTaskCreateSheetState extends State<_SprintTaskCreateSheet> {
   late DateTime _startDate;
   late DateTime _endDate;
   String? _projectId;
+  String? _calendarProfileId;
   SprintTaskPriority _priority = SprintTaskPriority.normal;
   bool _saving = false;
 
@@ -59,6 +60,7 @@ class _SprintTaskCreateSheetState extends State<_SprintTaskCreateSheet> {
       widget.initialDate.day,
     );
     _projectId = widget.store.preferredTaskProjectId(widget.initialProjectId);
+    _calendarProfileId = widget.store.defaultCalendarProfile?.id;
     final projectId = _projectId;
     _startDate = projectId == null
         ? requested
@@ -102,6 +104,10 @@ class _SprintTaskCreateSheetState extends State<_SprintTaskCreateSheet> {
         message: '프로젝트 목표 시작일에 맞춰 시작일을 ${sprintFormatDate(adjusted)}로 변경했습니다.',
       );
     }
+  }
+
+  void _selectCalendar(String? value) {
+    setState(() => _calendarProfileId = value);
   }
 
   Future<void> _pickStartDate() async {
@@ -153,6 +159,7 @@ class _SprintTaskCreateSheetState extends State<_SprintTaskCreateSheet> {
       title: _titleController.text,
       description: _descriptionController.text,
       projectId: projectId,
+      calendarProfileId: _calendarProfileId,
       priority: _priority,
       startDate: _startDate,
       endDate: _endDate,
@@ -172,6 +179,25 @@ class _SprintTaskCreateSheetState extends State<_SprintTaskCreateSheet> {
       return;
     }
     setState(() => _saving = true);
+    final calendarProfileId = preview.calendarProfileId;
+    if (calendarProfileId != null &&
+        !widget.store.isProfileAuthenticated(calendarProfileId)) {
+      try {
+        await widget.store.authenticateCalendarProfile(
+          calendarProfileId,
+          forceAccountSelection: true,
+        );
+      } catch (_) {
+        if (!mounted) return;
+        setState(() => _saving = false);
+        sprintShowMessage(
+          context: context,
+          message: '선택한 캘린더의 Google 계정을 인증하지 못했습니다.',
+          danger: true,
+        );
+        return;
+      }
+    }
     final task = await widget.store.createTaskFromPreview(preview);
     if (!mounted) return;
     if (task == null) {
@@ -197,8 +223,11 @@ class _SprintTaskCreateSheetState extends State<_SprintTaskCreateSheet> {
     final duration =
         reduceMotion ? Duration.zero : const Duration(milliseconds: 220);
     final projects = widget.store.projects;
-    final calendarProfile = widget.store.activeCalendarProfile;
-    final calendarAccount = widget.store.activeGoogleAccount;
+    final calendarProfiles = widget.store.calendarProfiles;
+    final calendarProfile =
+        widget.store.calendarProfileById(_calendarProfileId);
+    final calendarAccount =
+        widget.store.accountForProfile(calendarProfile?.id);
     final project = widget.store.projectById(_projectId);
     final targetDate = project?.targetDate;
     final afterTarget = targetDate != null &&
@@ -230,8 +259,68 @@ class _SprintTaskCreateSheetState extends State<_SprintTaskCreateSheet> {
                       ),
                 ),
                 const SizedBox(height: 14),
+                if (calendarProfiles.isNotEmpty) ...[
+                  const Text(
+                    'Google 캘린더',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    value: _calendarProfileId,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                    ),
+                    items: calendarProfiles
+                        .map(
+                          (profile) {
+                            final account =
+                                widget.store.accountForProfile(profile.id);
+                            return DropdownMenuItem<String>(
+                              value: profile.id,
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    profile.id ==
+                                            widget.store.defaultCalendarProfileId
+                                        ? Icons.star_rounded
+                                        : Icons.calendar_month_outlined,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      '${profile.label} · ${account?.email ?? ''}',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        )
+                        .toList(growable: false),
+                    onChanged: _saving ? null : _selectCalendar,
+                  ),
+                  const SizedBox(height: 10),
+                ],
                 AnimatedSwitcher(
                   duration: duration,
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  transitionBuilder: (child, animation) {
+                    return FadeTransition(
+                      opacity: animation,
+                      child: SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(0, 0.05),
+                          end: Offset.zero,
+                        ).animate(animation),
+                        child: child,
+                      ),
+                    );
+                  },
                   child: Container(
                     key: ValueKey<String>(calendarProfile?.id ?? 'local-only'),
                     padding: const EdgeInsets.all(14),
@@ -251,15 +340,19 @@ class _SprintTaskCreateSheetState extends State<_SprintTaskCreateSheet> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text(
-                                'Google 일정 대상',
-                                style: TextStyle(fontWeight: FontWeight.w900),
+                              Text(
+                                calendarProfile == null
+                                    ? '로컬 업무'
+                                    : calendarProfile.label,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                ),
                               ),
                               const SizedBox(height: 3),
                               Text(
                                 calendarProfile == null
                                     ? '연결된 캘린더가 없어 로컬에 저장합니다.'
-                                    : '${calendarProfile.label} · ${calendarAccount?.email ?? ''} · ${calendarProfile.calendarId}',
+                                    : '${calendarAccount?.email ?? ''} · ${calendarProfile.calendarId}',
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
