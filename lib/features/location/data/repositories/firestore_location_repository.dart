@@ -27,40 +27,48 @@ class FirestoreLocationRepository implements LocationRepository {
   }
 
   @override
-  Future<void> addCompositeParent(LocationModel parent) {
-    return _writeService.addCompositeParent(parent);
+  Future<void> createCompositeParent(LocationModel parent) {
+    return _writeService.createCompositeParent(parent);
   }
 
   @override
-  Future<void> addCompositeChild(LocationModel child) {
-    return _writeService.addCompositeChild(child);
+  Future<void> updateCompositeParentWithChildren({
+    required LocationModel parent,
+    required List<LocationModel> children,
+  }) {
+    return _writeService.updateCompositeParentWithChildren(
+      parent: parent,
+      children: children,
+    );
   }
 
   @override
-  Future<void> addPlainTextLocation(LocationModel location) {
-    return _writeService.addPlainTextLocation(location);
-  }
-
-  @override
-  Future<void> addCompositeChildWithParentGridUpdate({
+  Future<void> createCompositeChild({
     required LocationModel parent,
     required LocationModel child,
   }) {
-    return _writeService.addCompositeChildWithParentGridUpdate(
+    return _writeService.createCompositeChild(
       parent: parent,
       child: child,
     );
   }
 
   @override
-  Future<void> saveCompositeParentWithChildren({
+  Future<void> updateCompositeChild({
     required LocationModel parent,
-    required List<LocationModel> children,
+    required LocationModel previous,
+    required LocationModel updated,
   }) {
-    return _writeService.saveCompositeParentWithChildren(
+    return _writeService.updateCompositeChild(
       parent: parent,
-      children: children,
+      previous: previous,
+      updated: updated,
     );
+  }
+
+  @override
+  Future<void> updatePlainTextLocation(LocationModel location) {
+    return _writeService.updatePlainTextLocation(location);
   }
 
   @override
@@ -68,12 +76,14 @@ class FirestoreLocationRepository implements LocationRepository {
     required String area,
     required List<String> ids,
     List<({String parentId, ParkingGridModel parkingGrid})> parentGridUpdates =
-    const [],
+        const [],
+    List<LocationSlotReservationKey> slotReservationDeletes = const [],
   }) {
     return _writeService.deleteLocations(
       area: area,
       ids: ids,
       parentGridUpdates: parentGridUpdates,
+      slotReservationDeletes: slotReservationDeletes,
     );
   }
 
@@ -84,7 +94,9 @@ class FirestoreLocationRepository implements LocationRepository {
     String type = PlateTypeFirestoreValue.parkingCompleted,
   }) async {
     final requested = locationNames.toSet().toList();
-    debugPrint('📌 plateCount 집계: count() 수행: ${requested.length}개 (area=$area, type=$type)');
+    debugPrint(
+      '📌 plateCount 집계: count() 수행: ${requested.length}개 (area=$area, type=$type)',
+    );
 
     return _countService.getPlateCountsForLocations(
       locationNames: requested,

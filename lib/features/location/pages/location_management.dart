@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../app/utils/location_debug_status.dart';
 import '../../../app/utils/snackbar_helper.dart';
 import '../../../design_system/prompt_ui/prompt_ui_overlays.dart';
 
@@ -41,6 +42,17 @@ class _LocationManagementState extends State<LocationManagement> {
   static String _childCompositeKey(String parent, String child) =>
       '${_nameKey(parent)}|${_nameKey(child)}';
 
+  static String _resolvedParentName(
+    LocationModel child,
+    Map<String, LocationModel> parentsById,
+  ) {
+    final storedName = (child.parent ?? '').trim();
+    if (storedName.isNotEmpty) return storedName;
+    final parentId = (child.parentId ?? '').trim();
+    if (parentId.isEmpty) return '';
+    return (parentsById[parentId]?.locationName ?? '').trim();
+  }
+
   static List<String> _childAreaIds(LocationModel loc) {
     final out = <String>[];
     final seen = <String>{};
@@ -79,12 +91,21 @@ class _LocationManagementState extends State<LocationManagement> {
   static const String _miscGroupKey = '__misc__';
 
 
-  void _openFocusedParent(String key) {
+  void _openFocusedParent(String key, LocationState state) {
+    final selectedId = state.selectedLocationId;
+    if (selectedId != null) {
+      state.toggleLocationSelection(selectedId);
+    }
     setState(() => _focusedParentKey = key);
   }
 
   void _closeFocusedParent() {
     if (_focusedParentKey == null) return;
+    final state = context.read<LocationState>();
+    final selectedId = state.selectedLocationId;
+    if (selectedId != null) {
+      state.toggleLocationSelection(selectedId);
+    }
     setState(() => _focusedParentKey = null);
   }
 
@@ -208,56 +229,138 @@ class _LocationManagementState extends State<LocationManagement> {
     }
   }
 
-  Future<void> _handleAdd(BuildContext context) async {
+  Future<bool> _runWrite(
+    BuildContext context,
+    Future<bool> Function(ValueChanged<String> onError) operation,
+  ) async {
+    String? errorMessage;
+    final debugArea = context.read<AreaState>().currentArea.trim();
+    final debugSelectedLocationId =
+        context.read<LocationState>().selectedLocationId;
+
+    try {
+      final ok = await operation((message) {
+        final value = message.trim();
+        if (value.isNotEmpty) errorMessage = value;
+      });
+
+      if (!mounted || !context.mounted) return ok;
+
+      if (!ok) {
+        showFailedSnackbar(
+          context,
+          errorMessage ?? '주차 구역 작업에 실패했습니다.',
+          usePromptUi: true,
+        );
+      }
+
+      return ok;
+    } catch (error, stackTrace) {
+      LocationDebugStatus.report(
+        context: context,
+        title: '주차 구역 작업 실패',
+        operation: 'LocationManagement._runWrite',
+        error: error,
+        stackTrace: stackTrace,
+        details: <String, Object?>{
+          'area': debugArea,
+          'selectedLocationId': debugSelectedLocationId,
+        },
+      );
+
+      if (mounted && context.mounted) {
+        showFailedSnackbar(
+          context,
+          errorMessage ?? '주차 구역 작업에 실패했습니다.',
+          usePromptUi: true,
+        );
+      }
+
+      return false;
+    }
+  }
+
+  Future<void> _handleAddParent(BuildContext context) async {
     final locationState = context.read<LocationState>();
     final currentArea = context.read<AreaState>().currentArea.trim();
-
     final allInArea = locationState.locations
-        .where((loc) => loc.area.trim() == currentArea)
+        .where((location) => location.area.trim() == currentArea)
+        .toList();
+    final existingNameKeysInArea =
+        allInArea.map((location) => _nameKey(location.locationName)).toSet();
+
+    await showPromptOverlayBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      builder: (_) {
+        return FractionallySizedBox(
+          heightFactor: 1,
+          child: LocationSettingBottomSheet(
+            intent: LocationSettingIntent.createParent,
+            existingNameKeysInArea: existingNameKeysInArea,
+            existingChildCompositeKeysInArea: const <String>{},
+            parentParkingGridsByParentKey:
+                const <String, ParkingGridModel>{},
+            onSave: (draft) async {
+              if (draft is! CompositeParentDraft) return false;
+              final area = context.read<AreaState>().currentArea.trim();
+              return _runWrite(
+                context,
+                (onError) => locationState.createCompositeParent(
+                  draft.parent,
+                  area,
+                  parkingGrid: draft.parkingGrid,
+                  onError: onError,
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _handleAddChild(
+    BuildContext context,
+    LocationModel parent,
+  ) async {
+    if (!_isCompositeParent(parent) || parent.parkingGrid == null) return;
+
+    final locationState = context.read<LocationState>();
+    final currentArea = context.read<AreaState>().currentArea.trim();
+    final allInArea = locationState.locations
+        .where((location) => location.area.trim() == currentArea)
         .toList();
 
     final existingNameKeysInArea =
-        allInArea.map((loc) => _nameKey(loc.locationName)).toSet();
-
+        allInArea.map((location) => _nameKey(location.locationName)).toSet();
     final existingChildCompositeKeysInArea = allInArea
-        .where((loc) =>
-            _isCompositeChild(loc) && (loc.parent ?? '').trim().isNotEmpty)
-        .map((loc) => _childCompositeKey(loc.parent!, loc.locationName))
+        .where((location) =>
+            _isCompositeChild(location) &&
+            (location.parent ?? '').trim().isNotEmpty)
+        .map(
+          (location) =>
+              _childCompositeKey(location.parent!, location.locationName),
+        )
         .toSet();
 
-    final parentNamesInArea = allInArea
-        .where(_isCompositeParent)
-        .map((p) => p.locationName)
-        .toList()
-      ..sort();
+    final parentKey = _nameKey(parent.locationName);
+    final existingChildRects = <GridRect>[];
+    final existingChildAreaIds = <String>{};
 
-    final Map<String, ParkingGridModel> parentParkingGridsByParentKey = {};
-    for (final p in allInArea.where(_isCompositeParent)) {
-      final grid = p.parkingGrid;
-      if (grid == null) continue;
-      parentParkingGridsByParentKey[_nameKey(p.locationName)] = grid;
-    }
+    for (final child in allInArea.where(_isCompositeChild)) {
+      final childParentId = (child.parentId ?? '').trim();
+      final legacyParent = (child.parent ?? '').trim();
+      final belongsToParent = childParentId.isNotEmpty
+          ? childParentId == parent.id
+          : _nameKey(legacyParent) == parentKey;
+      if (!belongsToParent) continue;
 
-    final Map<String, List<GridRect>> existingChildRectsByParentKey = {};
-    final Map<String, Set<String>> existingChildAreaIdsByParentKey = {};
-    for (final c in allInArea.where(_isCompositeChild)) {
-      final pName = (c.parent ?? '').trim();
-      if (pName.isEmpty) continue;
-
-      final pk = _nameKey(pName);
-      final areaIds = _childAreaIds(c);
-      if (areaIds.isNotEmpty) {
-        existingChildAreaIdsByParentKey
-            .putIfAbsent(pk, () => <String>{})
-            .addAll(areaIds);
+      existingChildAreaIds.addAll(_childAreaIds(child));
+      final rect = child.childRect;
+      if (rect != null) {
+        existingChildRects.add(rect.normalized());
       }
-
-      final cr = c.childRect;
-      if (cr == null) continue;
-
-      existingChildRectsByParentKey
-          .putIfAbsent(pk, () => <GridRect>[])
-          .add(cr.normalized());
     }
 
     await showPromptOverlayBottomSheet<void>(
@@ -267,54 +370,38 @@ class _LocationManagementState extends State<LocationManagement> {
         return FractionallySizedBox(
           heightFactor: 1,
           child: LocationSettingBottomSheet(
+            intent: LocationSettingIntent.createChild,
+            fixedParentName: parent.locationName,
             existingNameKeysInArea: existingNameKeysInArea,
-            existingChildCompositeKeysInArea: existingChildCompositeKeysInArea,
-            parentNamesInArea: parentNamesInArea,
-            parentParkingGridsByParentKey: parentParkingGridsByParentKey,
-            existingChildRectsByParentKey: existingChildRectsByParentKey,
-            existingChildAreaIdsByParentKey: existingChildAreaIdsByParentKey,
+            existingChildCompositeKeysInArea:
+                existingChildCompositeKeysInArea,
+            parentParkingGridsByParentKey: <String, ParkingGridModel>{
+              parentKey: parent.parkingGrid!,
+            },
+            existingChildRectsByParentKey: <String, List<GridRect>>{
+              parentKey: existingChildRects,
+            },
+            existingChildAreaIdsByParentKey: <String, Set<String>>{
+              parentKey: existingChildAreaIds,
+            },
             onSave: (draft) async {
+              if (draft is! CompositeChildDraft) return false;
               final area = context.read<AreaState>().currentArea.trim();
-
-              if (draft is CompositeParentDraft) {
-                await locationState.addCompositeParent(
-                  draft.parent,
-                  area,
-                  parkingGrid: draft.parkingGrid,
-                  onError: (_) {},
-                );
-                if (!mounted) return;
-                return;
-              }
-
-              if (draft is CompositeChildDraft) {
-                await locationState.addCompositeChild(
-                  parent: draft.parent,
+              return _runWrite(
+                context,
+                (onError) => locationState.createCompositeChild(
+                  parentId: parent.id,
                   child: draft.child,
                   capacity: draft.capacity,
                   area: area,
                   rect: draft.rect,
                   childSlotAreaIds: draft.childSlotAreaIds,
-                  childSlotNumbersByAreaId: draft.childSlotNumbersByAreaId,
+                  childSlotNumbersByAreaId:
+                      draft.childSlotNumbersByAreaId,
                   isTower: draft.isTower,
-                  onError: (_) {},
-                );
-                if (!mounted) return;
-                return;
-              }
-
-              if (draft is PlainTextLocationDraft) {
-                await locationState.addPlainTextLocation(
-                  name: draft.name,
-                  capacity: draft.capacity,
-                  area: area,
-                  onError: (_) {},
-                );
-                if (!mounted) return;
-                return;
-              }
-
-              if (!mounted) return;
+                  onError: onError,
+                ),
+              );
             },
           ),
         );
@@ -322,32 +409,33 @@ class _LocationManagementState extends State<LocationManagement> {
     );
   }
 
-  Future<void> _handleEditParent(BuildContext context) async {
+  Future<void> _handleEditParent(
+    BuildContext context, {
+    LocationModel? targetParent,
+  }) async {
     final locationState = context.read<LocationState>();
     final currentArea = context.read<AreaState>().currentArea.trim();
 
-    final selectedId = locationState.selectedLocationId;
-    if (selectedId == null) {
-      return;
-    }
-
-    LocationModel? selected;
-    for (final l in locationState.locations) {
-      if (l.id == selectedId) {
-        selected = l;
-        break;
+    LocationModel? parent = targetParent;
+    if (parent == null) {
+      final selectedId = locationState.selectedLocationId;
+      if (selectedId == null) {
+        return;
+      }
+      for (final location in locationState.locations) {
+        if (location.id == selectedId) {
+          parent = location;
+          break;
+        }
       }
     }
 
-    if (selected == null) {
+    final resolvedParent = parent;
+    if (resolvedParent == null || !_isCompositeParent(resolvedParent)) {
       return;
     }
 
-    if (!_isCompositeParent(selected)) {
-      return;
-    }
-
-    final parentGrid = selected.parkingGrid;
+    final parentGrid = resolvedParent.parkingGrid;
     if (parentGrid == null) {
       return;
     }
@@ -365,12 +453,6 @@ class _LocationManagementState extends State<LocationManagement> {
         .map((loc) => _childCompositeKey(loc.parent!, loc.locationName))
         .toSet();
 
-    final parentNamesInArea = allInArea
-        .where(_isCompositeParent)
-        .map((p) => p.locationName)
-        .toList()
-      ..sort();
-
     final Map<String, ParkingGridModel> parentParkingGridsByParentKey = {};
     for (final p in allInArea.where(_isCompositeParent)) {
       final grid = p.parkingGrid;
@@ -407,56 +489,26 @@ class _LocationManagementState extends State<LocationManagement> {
         return FractionallySizedBox(
           heightFactor: 1,
           child: LocationSettingBottomSheet(
+            intent: LocationSettingIntent.editParent,
             existingNameKeysInArea: existingNameKeysInArea,
             existingChildCompositeKeysInArea: existingChildCompositeKeysInArea,
-            parentNamesInArea: parentNamesInArea,
             parentParkingGridsByParentKey: parentParkingGridsByParentKey,
             existingChildRectsByParentKey: existingChildRectsByParentKey,
             existingChildAreaIdsByParentKey: existingChildAreaIdsByParentKey,
-            editingParentName: selected!.locationName,
+            editingParentName: resolvedParent.locationName,
             editingParentParkingGrid: parentGrid,
             onSave: (draft) async {
+              if (draft is! CompositeParentUpdateDraft) return false;
               final area = context.read<AreaState>().currentArea.trim();
-
-              if (draft is CompositeParentUpdateDraft) {
-                await locationState.saveCompositeParentGrid(
-                  parent: draft.parent,
+              return _runWrite(
+                context,
+                (onError) => locationState.updateCompositeParent(
+                  parentId: resolvedParent.id,
                   area: area,
                   parkingGrid: draft.parkingGrid,
-                  onError: (_) {},
-                );
-                if (!mounted) return;
-                return;
-              }
-
-              if (draft is CompositeChildDraft) {
-                await locationState.addCompositeChild(
-                  parent: draft.parent,
-                  child: draft.child,
-                  capacity: draft.capacity,
-                  area: area,
-                  rect: draft.rect,
-                  childSlotAreaIds: draft.childSlotAreaIds,
-                  childSlotNumbersByAreaId: draft.childSlotNumbersByAreaId,
-                  isTower: draft.isTower,
-                  onError: (_) {},
-                );
-                if (!mounted) return;
-                return;
-              }
-
-              if (draft is CompositeParentDraft) {
-                await locationState.addCompositeParent(
-                  draft.parent,
-                  area,
-                  parkingGrid: draft.parkingGrid,
-                  onError: (_) {},
-                );
-                if (!mounted) return;
-                return;
-              }
-
-              if (!mounted) return;
+                  onError: onError,
+                ),
+              );
             },
           ),
         );
@@ -489,10 +541,7 @@ class _LocationManagementState extends State<LocationManagement> {
       return;
     }
 
-    final parentName = (selected.parent ?? '').trim();
-    if (parentName.isEmpty) {
-      return;
-    }
+    final legacyParentName = (selected.parent ?? '').trim();
 
     final rect = selected.childRect;
     if (rect == null) {
@@ -503,6 +552,26 @@ class _LocationManagementState extends State<LocationManagement> {
         .where((l) => l.area.trim() == currentArea)
         .toList();
 
+    LocationModel? parentModel;
+    final storedParentId = (selected.parentId ?? '').trim();
+    for (final location in allInArea) {
+      if (!_isCompositeParent(location)) continue;
+      final matchesId =
+          storedParentId.isNotEmpty && location.id == storedParentId;
+      final matchesLegacyName = storedParentId.isEmpty &&
+          legacyParentName.isNotEmpty &&
+          _nameKey(location.locationName) == _nameKey(legacyParentName);
+      if (matchesId || matchesLegacyName) {
+        parentModel = location;
+        break;
+      }
+    }
+
+    if (parentModel == null || parentModel.parkingGrid == null) {
+      return;
+    }
+    final parentName = parentModel.locationName.trim();
+
     final existingNameKeysInArea =
         allInArea.map((l) => _nameKey(l.locationName)).toSet();
 
@@ -511,12 +580,6 @@ class _LocationManagementState extends State<LocationManagement> {
             _isCompositeChild(loc) && (loc.parent ?? '').trim().isNotEmpty)
         .map((loc) => _childCompositeKey(loc.parent!, loc.locationName))
         .toSet();
-
-    final parentNamesInArea = allInArea
-        .where(_isCompositeParent)
-        .map((p) => p.locationName)
-        .toList()
-      ..sort();
 
     final Map<String, ParkingGridModel> parentParkingGridsByParentKey = {};
     for (final p in allInArea.where(_isCompositeParent)) {
@@ -554,9 +617,10 @@ class _LocationManagementState extends State<LocationManagement> {
         return FractionallySizedBox(
           heightFactor: 1,
           child: LocationSettingBottomSheet(
+            intent: LocationSettingIntent.editChild,
+            fixedParentName: parentModel!.locationName,
             existingNameKeysInArea: existingNameKeysInArea,
             existingChildCompositeKeysInArea: existingChildCompositeKeysInArea,
-            parentNamesInArea: parentNamesInArea,
             parentParkingGridsByParentKey: parentParkingGridsByParentKey,
             existingChildRectsByParentKey: existingChildRectsByParentKey,
             existingChildAreaIdsByParentKey: existingChildAreaIdsByParentKey,
@@ -569,53 +633,24 @@ class _LocationManagementState extends State<LocationManagement> {
             editingChildSlotAreaIds: _childAreaIds(selected),
             editingChildSlotNumbersByAreaId: _childSlotNumbersByAreaId(selected),
             onSave: (draft) async {
+              if (draft is! CompositeChildUpdateDraft) return false;
               final area = context.read<AreaState>().currentArea.trim();
-
-              if (draft is CompositeChildUpdateDraft) {
-                await locationState.saveCompositeChild(
+              return _runWrite(
+                context,
+                (onError) => locationState.updateCompositeChild(
                   id: draft.id,
-                  parent: draft.parent,
+                  parentId: parentModel!.id,
                   child: draft.child,
                   capacity: draft.capacity,
                   area: area,
                   rect: draft.rect,
                   childSlotAreaIds: draft.childSlotAreaIds,
-                  childSlotNumbersByAreaId: draft.childSlotNumbersByAreaId,
+                  childSlotNumbersByAreaId:
+                      draft.childSlotNumbersByAreaId,
                   isTower: draft.isTower,
-                  onError: (_) {},
-                );
-                if (!mounted) return;
-                return;
-              }
-
-              if (draft is CompositeChildDraft) {
-                await locationState.addCompositeChild(
-                  parent: draft.parent,
-                  child: draft.child,
-                  capacity: draft.capacity,
-                  area: area,
-                  rect: draft.rect,
-                  childSlotAreaIds: draft.childSlotAreaIds,
-                  childSlotNumbersByAreaId: draft.childSlotNumbersByAreaId,
-                  isTower: draft.isTower,
-                  onError: (_) {},
-                );
-                if (!mounted) return;
-                return;
-              }
-
-              if (draft is PlainTextLocationDraft) {
-                await locationState.addPlainTextLocation(
-                  name: draft.name,
-                  capacity: draft.capacity,
-                  area: area,
-                  onError: (_) {},
-                );
-                if (!mounted) return;
-                return;
-              }
-
-              if (!mounted) return;
+                  onError: onError,
+                ),
+              );
             },
           ),
         );
@@ -661,12 +696,6 @@ class _LocationManagementState extends State<LocationManagement> {
         .map((loc) => _childCompositeKey(loc.parent!, loc.locationName))
         .toSet();
 
-    final parentNamesInArea = allInArea
-        .where(_isCompositeParent)
-        .map((p) => p.locationName)
-        .toList()
-      ..sort();
-
     final Map<String, ParkingGridModel> parentParkingGridsByParentKey = {};
     for (final p in allInArea.where(_isCompositeParent)) {
       final grid = p.parkingGrid;
@@ -703,9 +732,9 @@ class _LocationManagementState extends State<LocationManagement> {
         return FractionallySizedBox(
           heightFactor: 1,
           child: LocationSettingBottomSheet(
+            intent: LocationSettingIntent.editPlainText,
             existingNameKeysInArea: existingNameKeysInArea,
             existingChildCompositeKeysInArea: existingChildCompositeKeysInArea,
-            parentNamesInArea: parentNamesInArea,
             parentParkingGridsByParentKey: parentParkingGridsByParentKey,
             existingChildRectsByParentKey: existingChildRectsByParentKey,
             existingChildAreaIdsByParentKey: existingChildAreaIdsByParentKey,
@@ -713,32 +742,18 @@ class _LocationManagementState extends State<LocationManagement> {
             editingPlainTextName: selected.locationName,
             editingPlainTextCapacity: selected.capacity,
             onSave: (draft) async {
+              if (draft is! PlainTextLocationUpdateDraft) return false;
               final area = context.read<AreaState>().currentArea.trim();
-
-              if (draft is PlainTextLocationUpdateDraft) {
-                await locationState.savePlainTextLocation(
+              return _runWrite(
+                context,
+                (onError) => locationState.updatePlainTextLocation(
                   id: draft.id,
                   name: draft.name,
                   capacity: draft.capacity,
                   area: area,
-                  onError: (_) {},
-                );
-                if (!mounted) return;
-                return;
-              }
-
-              if (draft is PlainTextLocationDraft) {
-                await locationState.addPlainTextLocation(
-                  name: draft.name,
-                  capacity: draft.capacity,
-                  area: area,
-                  onError: (_) {},
-                );
-                if (!mounted) return;
-                return;
-              }
-
-              if (!mounted) return;
+                  onError: onError,
+                ),
+              );
             },
           ),
         );
@@ -746,23 +761,32 @@ class _LocationManagementState extends State<LocationManagement> {
     );
   }
 
-  Future<void> _handleDelete(BuildContext context) async {
+  Future<void> _handleDelete(
+    BuildContext context, {
+    String? targetId,
+    bool closeFocusedOnSuccess = false,
+  }) async {
     final locationState = context.read<LocationState>();
-    final selectedId = locationState.selectedLocationId;
+    final locationId = targetId ?? locationState.selectedLocationId;
 
-    if (selectedId == null) {
+    if (locationId == null) {
       return;
     }
 
     final confirmed = await _confirmDelete(context);
     if (!confirmed) return;
 
-    await locationState.deleteLocations(
-      [selectedId],
-      onError: (_) {},
+    final deleted = await _runWrite(
+      context,
+      (onError) => locationState.deleteLocations(
+        [locationId],
+        onError: onError,
+      ),
     );
 
-    if (!mounted) return;
+    if (deleted && closeFocusedOnSuccess && mounted) {
+      _closeFocusedParent();
+    }
   }
 
   Future<void> _handleRefresh(BuildContext context) async {
@@ -854,7 +878,7 @@ class _LocationManagementState extends State<LocationManagement> {
             child: OpsActionButton(
               label: '구역 추가',
               icon: Icons.add_location_alt_rounded,
-              onPressed: () => _handleAdd(context),
+              onPressed: () => _handleAddParent(context),
             ),
           ),
         ],
@@ -866,9 +890,9 @@ class _LocationManagementState extends State<LocationManagement> {
       children: [
         Expanded(
           child: OpsActionButton(
-            label: '추가',
+            label: '구역 추가',
             icon: Icons.add_location_alt_rounded,
-            onPressed: () => _handleAdd(context),
+            onPressed: () => _handleAddParent(context),
             tonal: true,
           ),
         ),
@@ -905,6 +929,57 @@ class _LocationManagementState extends State<LocationManagement> {
     );
   }
 
+  Widget _animateFocusedBottomBar({
+    required BuildContext context,
+    required String stateKey,
+    required Widget child,
+  }) {
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final duration =
+        reduceMotion ? Duration.zero : const Duration(milliseconds: 240);
+
+    return AnimatedSwitcher(
+      duration: duration,
+      reverseDuration: duration,
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      layoutBuilder: (currentChild, previousChildren) {
+        return Stack(
+          alignment: Alignment.bottomCenter,
+          children: <Widget>[
+            ...previousChildren,
+            if (currentChild != null) currentChild,
+          ],
+        );
+      },
+      transitionBuilder: (current, animation) {
+        final position = Tween<Offset>(
+          begin: const Offset(0, 0.08),
+          end: Offset.zero,
+        ).animate(
+          CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+            reverseCurve: Curves.easeInCubic,
+          ),
+        );
+
+        return FadeTransition(
+          opacity: animation,
+          child: SlideTransition(
+            position: position,
+            child: current,
+          ),
+        );
+      },
+      child: KeyedSubtree(
+        key: ValueKey<String>('focused-bottom-bar-$stateKey'),
+        child: child,
+      ),
+    );
+  }
+
   Widget _buildFocusedBottomBar({
     required BuildContext context,
     required LocationModel? parentModel,
@@ -912,67 +987,105 @@ class _LocationManagementState extends State<LocationManagement> {
     required LocationModel? selectedLocation,
   }) {
     final selectedId = selectedLocation?.id;
-    final parentSelected = parentModel != null && selectedId == parentModel.id;
-    final childSelected = selectedId != null && children.any((child) => child.id == selectedId);
-    final canEditParent = parentModel != null && parentSelected && parentModel.parkingGrid != null;
-    final canEditChild = childSelected && selectedLocation != null && selectedLocation.childRect != null;
-    final hasFocusedSelection = parentSelected || childSelected;
+    final parent = parentModel;
+    final childSelected = selectedId != null &&
+        children.any((child) => child.id == selectedId);
+    final canEditChild = childSelected &&
+        selectedLocation != null &&
+        selectedLocation.childRect != null;
 
-    if (!hasFocusedSelection) {
-      return OpsBottomActionBar(
+    if (childSelected) {
+      return _animateFocusedBottomBar(
+        context: context,
+        stateKey: 'child-selected-$selectedId',
+        child: OpsBottomActionBar(
+          children: [
+            Expanded(
+              child: OpsActionButton(
+                label: '자식 수정',
+                icon: Icons.edit_location_alt_rounded,
+                onPressed: canEditChild
+                    ? () => _handleEditChild(context)
+                    : null,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: OpsActionButton(
+                label: '삭제',
+                icon: Icons.delete_forever_rounded,
+                onPressed: () => _handleDelete(
+                  context,
+                  targetId: selectedId,
+                ),
+                danger: true,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (parent != null) {
+      return _animateFocusedBottomBar(
+        context: context,
+        stateKey: 'parent-focused-${parent.id}',
+        child: OpsBottomActionBar(
+          children: [
+            Expanded(
+              child: OpsActionButton(
+                label: '자식 추가',
+                icon: Icons.add_location_alt_rounded,
+                onPressed: () => _handleAddChild(context, parent),
+                tonal: true,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: OpsActionButton(
+                label: '부모 수정',
+                icon: Icons.edit_location_alt_rounded,
+                onPressed: parent.parkingGrid == null
+                    ? null
+                    : () => _handleEditParent(
+                          context,
+                          targetParent: parent,
+                        ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: OpsActionButton(
+                label: '삭제',
+                icon: Icons.delete_forever_rounded,
+                onPressed: () => _handleDelete(
+                  context,
+                  targetId: parent.id,
+                  closeFocusedOnSuccess: true,
+                ),
+                danger: true,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return _animateFocusedBottomBar(
+      context: context,
+      stateKey: 'missing-parent',
+      child: OpsBottomActionBar(
         children: [
           Expanded(
             child: OpsActionButton(
               label: '자식 추가',
               icon: Icons.add_location_alt_rounded,
-              onPressed: () => _handleAdd(context),
+              onPressed: null,
               tonal: true,
             ),
           ),
-          if (parentModel != null) ...[
-            const SizedBox(width: 8),
-            Expanded(
-              child: OpsActionButton(
-                label: '부모 선택',
-                icon: Icons.account_tree_rounded,
-                onPressed: () => context.read<LocationState>().toggleLocationSelection(parentModel.id),
-              ),
-            ),
-          ],
         ],
-      );
-    }
-
-    return OpsBottomActionBar(
-      children: [
-        Expanded(
-          child: OpsActionButton(
-            label: '추가',
-            icon: Icons.add_location_alt_rounded,
-            onPressed: () => _handleAdd(context),
-            tonal: true,
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: OpsActionButton(
-            label: parentSelected ? '부모 수정' : '자식 수정',
-            icon: Icons.edit_location_alt_rounded,
-            onPressed: parentSelected
-                ? (canEditParent ? () => _handleEditParent(context) : null)
-                : (canEditChild ? () => _handleEditChild(context) : null),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: OpsActionButton(
-            label: '삭제',
-            icon: Icons.delete_forever_rounded,
-            onPressed: () => _handleDelete(context),
-            danger: true,
-          ),
-        ),
-      ],
+      ),
     );
   }
 
@@ -999,6 +1112,9 @@ class _LocationManagementState extends State<LocationManagement> {
     final Map<String, LocationModel> parentByKey = {
       for (final p in allParents) _nameKey(p.locationName): p,
     };
+    final Map<String, LocationModel> parentById = {
+      for (final p in allParents) p.id: p,
+    };
 
     final Map<String, String> groupDisplayNameByKey = {
       for (final p in allParents) _nameKey(p.locationName): _normalizeName(p.locationName),
@@ -1006,8 +1122,7 @@ class _LocationManagementState extends State<LocationManagement> {
 
     final Map<String, List<LocationModel>> groupedChildren = {};
     for (final child in children) {
-      final rawParent = child.parent ?? '';
-      final parentTrim = rawParent.trim();
+      final parentTrim = _resolvedParentName(child, parentById);
 
       if (parentTrim.isEmpty) {
         groupedChildren.putIfAbsent(_miscGroupKey, () => []).add(child);
@@ -1060,7 +1175,7 @@ class _LocationManagementState extends State<LocationManagement> {
                   title: '현재 지역에 주차 구역이 없습니다',
                   message: '구역을 추가해 현장 주차면과 복합 슬롯 구조를 등록하세요.',
                   action: FilledButton.icon(
-                    onPressed: () => _handleAdd(context),
+                    onPressed: () => _handleAddParent(context),
                     icon: const Icon(Icons.add_location_alt_rounded),
                     label: const Text('구역 추가'),
                   ),
@@ -1372,17 +1487,15 @@ class _LocationManagementState extends State<LocationManagement> {
       final children = [...(groupedChildren[gKey] ?? const <LocationModel>[])]..sort((a, b) => a.locationName.compareTo(b.locationName));
       final totalCapacity = children.fold<int>(0, (sum, loc) => sum + loc.capacity);
       final parentModel = parentByKey[gKey];
-      final parentId = parentModel?.id;
-      final parentSelected = parentId != null && state.selectedLocationId == parentId;
       final grid = parentModel?.parkingGrid;
       final selectedChildCount = children.where((child) => state.selectedLocationId == child.id).length;
       final accent = selectedChildCount > 0 ? cs.secondary : cs.primary;
 
       return InkWell(
-        onTap: () => _openFocusedParent(gKey),
+        onTap: () => _openFocusedParent(gKey, state),
         borderRadius: BorderRadius.circular(16),
         child: OpsPanel(
-          selected: parentSelected || selectedChildCount > 0,
+          selected: selectedChildCount > 0,
           padding: EdgeInsets.zero,
           accentColor: accent,
           margin: const EdgeInsets.fromLTRB(16, 6, 16, 10),
@@ -1440,20 +1553,13 @@ class _LocationManagementState extends State<LocationManagement> {
                   ),
                 ),
               ),
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton.filledTonal(
-                    tooltip: parentSelected ? '부모 선택 해제' : '부모 선택',
-                    onPressed: parentId == null ? null : () => state.toggleLocationSelection(parentId),
-                    icon: Icon(parentSelected ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded),
-                  ),
-                  const SizedBox(height: 5),
-                  Padding(
-                    padding: const EdgeInsets.only(right: 12),
-                    child: Icon(Icons.open_in_full_rounded, color: cs.primary, size: 20),
-                  ),
-                ],
+              Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: Icon(
+                  Icons.open_in_full_rounded,
+                  color: cs.primary,
+                  size: 20,
+                ),
               ),
             ],
           ),
@@ -1544,13 +1650,6 @@ class _LocationManagementState extends State<LocationManagement> {
                   icon: Icons.tag_rounded,
                   onSelected: () => setState(() => _showSelectedChildSlotNumbers = !_showSelectedChildSlotNumbers),
                 ),
-                if (parentModel != null)
-                  OpsFilterChip(
-                    label: state.selectedLocationId == parentModel.id ? '부모 선택됨' : '부모 선택',
-                    selected: state.selectedLocationId == parentModel.id,
-                    icon: Icons.account_tree_rounded,
-                    onSelected: () => state.toggleLocationSelection(parentModel.id),
-                  ),
               ],
             ),
           ],

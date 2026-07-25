@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../app/utils/location_debug_status.dart';
 import '../../dev/application/area_state.dart';
 import '../domain/models/grid_rect.dart';
 import '../domain/models/location_model.dart';
@@ -151,12 +152,6 @@ class LocationState extends ChangeNotifier {
     required String area,
   }) =>
       '${_safeIdSeg(parent)}__${_safeIdSeg(child)}_${area.trim()}';
-
-  static String _plainTextDocId({
-    required String name,
-    required String area,
-  }) =>
-      'single__${_safeIdSeg(name)}_${area.trim()}';
 
   static String _childCompositeKey(String parent, String child) =>
       '${_nameKey(parent)}|${_nameKey(child)}';
@@ -330,9 +325,17 @@ class LocationState extends ChangeNotifier {
 
       final prefs = await SharedPreferences.getInstance();
       await _writeCache(area: trimmedArea, data: data, prefs: prefs);
-    } catch (e) {
-      debugPrint(
-          '🔥 LocationState repo sync 실패(reason=$reason, area=$trimmedArea): $e');
+    } catch (e, stackTrace) {
+      LocationDebugStatus.report(
+        title: '구역 동기화 실패',
+        operation: 'LocationState._syncFromRepositoryInternal',
+        error: e,
+        stackTrace: stackTrace,
+        details: <String, Object?>{
+          'reason': reason,
+          'area': trimmedArea,
+        },
+      );
       if (rethrowErrors) rethrow;
     } finally {
       if (_shouldDropRepoResult(seq: seq, requestedArea: trimmedArea)) return;
@@ -391,8 +394,14 @@ class LocationState extends ChangeNotifier {
           return;
         _locations = [];
       }
-    } catch (e) {
-      debugPrint('⚠️ 주차 구역 캐시 로드/디코딩 실패(area=$requestedArea): $e');
+    } catch (e, stackTrace) {
+      LocationDebugStatus.report(
+        title: '구역 캐시 오류',
+        operation: 'LocationState._loadFromLocationCacheInternal',
+        error: e,
+        stackTrace: stackTrace,
+        details: <String, Object?>{'area': requestedArea},
+      );
       if (_shouldDropCacheResult(seq: seq, requestedArea: requestedArea))
         return;
       _locations = [];
@@ -676,7 +685,7 @@ class LocationState extends ChangeNotifier {
     return true;
   }
 
-  Future<bool> addCompositeParent(
+  Future<bool> createCompositeParent(
     String parent,
     String area, {
     required ParkingGridModel parkingGrid,
@@ -688,10 +697,6 @@ class LocationState extends ChangeNotifier {
 
     if (cleanArea.isEmpty) {
       onError?.call('⚠️ 지역(area)이 비어 있어 부모 구역을 추가할 수 없습니다.');
-      return false;
-    }
-    if (cleanParent.isEmpty) {
-      onError?.call('⚠️ 부모(상위) 주차 구역명을 입력하세요.');
       return false;
     }
     if (!_validateParkingGridForParent(parkingGrid, onError: onError)) {
@@ -719,31 +724,40 @@ class LocationState extends ChangeNotifier {
         parkingGrid: parkingGrid,
       );
 
-      await _repository.addCompositeParent(parentModel);
+      await _repository.createCompositeParent(parentModel);
       await _syncFromFirestoreAfterWrite(cleanArea);
       return true;
-    } catch (e) {
+    } catch (e, stackTrace) {
+      LocationDebugStatus.report(
+        title: '부모 구역 추가 실패',
+        operation: 'LocationState.createCompositeParent',
+        error: e,
+        stackTrace: stackTrace,
+        details: <String, Object?>{
+          'area': cleanArea,
+          'parent': cleanParent,
+        },
+      );
       onError?.call('🚨 부모 구역 추가 실패: $e');
       return false;
     }
   }
 
-  Future<bool> saveCompositeParentGrid({
-    required String parent,
+  Future<bool> updateCompositeParent({
+    required String parentId,
     required String area,
     required ParkingGridModel parkingGrid,
     void Function(String)? onError,
   }) async {
+    final cleanParentId = parentId.trim();
     final cleanArea = area.trim();
-    final cleanParent = _normalizeName(parent);
-    final parentKey = _nameKey(cleanParent);
 
-    if (cleanArea.isEmpty) {
-      onError?.call('⚠️ 지역(area)이 비어 있어 저장할 수 없습니다.');
+    if (cleanParentId.isEmpty) {
+      onError?.call('⚠️ 부모 구역 ID가 비어 있어 저장할 수 없습니다.');
       return false;
     }
-    if (cleanParent.isEmpty) {
-      onError?.call('⚠️ 부모(상위) 주차 구역명이 비어 있습니다.');
+    if (cleanArea.isEmpty) {
+      onError?.call('⚠️ 지역(area)이 비어 있어 저장할 수 없습니다.');
       return false;
     }
     if (!_validateParkingGridForParent(parkingGrid, onError: onError)) {
@@ -752,29 +766,35 @@ class LocationState extends ChangeNotifier {
 
     try {
       final snapshot = await _fetchAreaSnapshot(cleanArea);
-      final keys = _buildExistingKeysFromSnapshot(snapshot);
-      final parentExists = keys.parentKeys.contains(parentKey);
 
-      if (!parentExists && keys.allNameKeys.contains(parentKey)) {
-        onError?.call('⚠️ "$cleanArea" 지역에 이미 "$cleanParent" 이름이 존재합니다.');
+      LocationModel? existingParent;
+      for (final location in snapshot) {
+        if (location.id == cleanParentId &&
+            _isCompositeParent(location) &&
+            location.area.trim() == cleanArea) {
+          existingParent = location;
+          break;
+        }
+      }
+
+      if (existingParent == null) {
+        onError?.call('⚠️ 수정할 부모 구역을 찾을 수 없습니다.');
         return false;
       }
 
-      final parentModel = LocationModel(
-        id: _parentDocId(parent: cleanParent, area: cleanArea),
-        locationName: cleanParent,
+      final cleanParent = _normalizeName(existingParent.locationName);
+      final parentModel = existingParent.copyWith(
         area: cleanArea,
+        parentId: null,
         parent: null,
         type: 'composite_parent',
-        capacity: 0,
-        isSelected: false,
-        plateCount: 0,
         parkingGrid: parkingGrid,
       );
 
       final childrenToUpdate = _rebuildChildrenForParentGrid(
         snapshot: snapshot,
         area: cleanArea,
+        parentId: existingParent.id,
         parent: cleanParent,
         parentGrid: parkingGrid,
         onError: onError,
@@ -782,14 +802,24 @@ class LocationState extends ChangeNotifier {
 
       if (childrenToUpdate == null) return false;
 
-      await _repository.saveCompositeParentWithChildren(
+      await _repository.updateCompositeParentWithChildren(
         parent: parentModel,
         children: childrenToUpdate,
       );
       await _syncFromFirestoreAfterWrite(cleanArea);
       return true;
-    } catch (e) {
-      onError?.call('🚨 부모 그리드 저장 실패: $e');
+    } catch (error, stackTrace) {
+      LocationDebugStatus.report(
+        title: '부모 구역 저장 실패',
+        operation: 'LocationState.updateCompositeParent',
+        error: error,
+        stackTrace: stackTrace,
+        details: <String, Object?>{
+          'area': cleanArea,
+          'parentId': cleanParentId,
+        },
+      );
+      onError?.call('🚨 부모 그리드 저장 실패: $error');
       return false;
     }
   }
@@ -1018,13 +1048,19 @@ class LocationState extends ChangeNotifier {
   List<LocationModel>? _rebuildChildrenForParentGrid({
     required List<LocationModel> snapshot,
     required String area,
+    required String parentId,
     required String parent,
+    String? legacyParentName,
     required ParkingGridModel parentGrid,
     void Function(String)? onError,
   }) {
     final cleanArea = area.trim();
     final cleanParent = _normalizeName(parent);
-    final parentKey = _nameKey(cleanParent);
+    final legacyParentKey = _nameKey(
+      legacyParentName == null || legacyParentName.trim().isEmpty
+          ? cleanParent
+          : legacyParentName,
+    );
 
     final existingAreaIds = parentGrid.parkingAreas
         .map((a) => a.id.trim())
@@ -1037,13 +1073,18 @@ class LocationState extends ChangeNotifier {
       if (!_isCompositeChild(loc)) continue;
       if (loc.area.trim() != cleanArea) continue;
 
+      final childParentId = (loc.parentId ?? '').trim();
       final rawParent = (loc.parent ?? '').trim();
-      if (rawParent.isEmpty || _nameKey(rawParent) != parentKey) continue;
+      final belongsToParent = childParentId.isNotEmpty
+          ? childParentId == parentId
+          : rawParent.isNotEmpty && _nameKey(rawParent) == legacyParentKey;
+      if (!belongsToParent) continue;
 
       final rect = loc.childRect;
       if (rect == null) {
         out.add(
           loc.copyWith(
+            parentId: parentId,
             parent: cleanParent,
             area: cleanArea,
             type: 'composite_child',
@@ -1091,6 +1132,7 @@ class LocationState extends ChangeNotifier {
 
       out.add(
         loc.copyWith(
+          parentId: parentId,
           parent: cleanParent,
           area: cleanArea,
           type: 'composite_child',
@@ -1132,6 +1174,7 @@ class LocationState extends ChangeNotifier {
         final rebuilt = _rebuildChildrenForParentGrid(
           snapshot: snapshot,
           area: cleanArea,
+          parentId: parent.id,
           parent: parent.locationName,
           parentGrid: grid,
           onError: onError,
@@ -1139,7 +1182,7 @@ class LocationState extends ChangeNotifier {
 
         if (rebuilt == null) return false;
 
-        await _repository.saveCompositeParentWithChildren(
+        await _repository.updateCompositeParentWithChildren(
           parent: parent.copyWith(
             area: cleanArea,
             type: 'composite_parent',
@@ -1152,14 +1195,21 @@ class LocationState extends ChangeNotifier {
 
       await _syncFromFirestoreAfterWrite(cleanArea);
       return true;
-    } catch (e) {
+    } catch (e, stackTrace) {
+      LocationDebugStatus.report(
+        title: '자식 슬롯 재계산 실패',
+        operation: 'LocationState.refreshChildSlotsForCurrentArea',
+        error: e,
+        stackTrace: stackTrace,
+        details: <String, Object?>{'area': cleanArea},
+      );
       onError?.call('🚨 자식 슬롯 재계산 실패: $e');
       return false;
     }
   }
 
-  Future<bool> addCompositeChild({
-    required String parent,
+  Future<bool> createCompositeChild({
+    required String parentId,
     required String child,
     required int capacity,
     required String area,
@@ -1170,15 +1220,15 @@ class LocationState extends ChangeNotifier {
     void Function(String)? onError,
   }) async {
     final cleanArea = area.trim();
-    final cleanParent = _normalizeName(parent);
+    final cleanParentId = parentId.trim();
     final cleanChild = _normalizeName(child);
 
     if (cleanArea.isEmpty) {
       onError?.call('⚠️ 지역(area)이 비어 있어 자식 구역을 추가할 수 없습니다.');
       return false;
     }
-    if (cleanParent.isEmpty) {
-      onError?.call('⚠️ 부모(상위) 구역명을 선택/입력하세요.');
+    if (cleanParentId.isEmpty) {
+      onError?.call('⚠️ 부모 구역 ID가 비어 있어 자식 구역을 추가할 수 없습니다.');
       return false;
     }
     if (cleanChild.isEmpty) {
@@ -1189,77 +1239,73 @@ class LocationState extends ChangeNotifier {
       onError?.call('⚠️ 수용 대수(capacity)는 1 이상이어야 합니다.');
       return false;
     }
-    if (_nameKey(cleanParent) == _nameKey(cleanChild)) {
-      onError?.call('⚠️ 자식 "$cleanChild"는 부모 "$cleanParent"와 같을 수 없습니다.');
-      return false;
-    }
 
     try {
       final snapshot = await _fetchAreaSnapshot(cleanArea);
 
-      final parentKey = _nameKey(cleanParent);
-      final childKey = _childCompositeKey(cleanParent, cleanChild);
-
       LocationModel? parentDoc;
-      for (final l in snapshot) {
-        if (_isCompositeParent(l) &&
-            l.area.trim() == cleanArea &&
-            _nameKey(l.locationName) == parentKey) {
-          parentDoc = l;
+      for (final location in snapshot) {
+        if (location.id == cleanParentId &&
+            _isCompositeParent(location) &&
+            location.area.trim() == cleanArea) {
+          parentDoc = location;
           break;
         }
       }
 
       if (parentDoc == null) {
-        onError?.call('⚠️ "$cleanParent" 부모 구역이 존재하지 않습니다. 먼저 부모를 생성하세요.');
+        onError?.call('⚠️ 선택한 부모 구역이 존재하지 않습니다.');
         return false;
       }
 
-      final existingChildCompositeKeys = <String>{};
-      for (final loc in snapshot) {
-        if (!_isCompositeChild(loc)) continue;
-        final p = (loc.parent ?? '').trim();
-        if (p.isEmpty) continue;
-        existingChildCompositeKeys.add(_childCompositeKey(p, loc.locationName));
+      final cleanParent = _normalizeName(parentDoc.locationName);
+      if (_nameKey(cleanParent) == _nameKey(cleanChild)) {
+        onError?.call('⚠️ 자식 "$cleanChild"는 부모 "$cleanParent"와 같을 수 없습니다.');
+        return false;
       }
 
-      if (existingChildCompositeKeys.contains(childKey)) {
-        onError?.call('⚠️ "$cleanParent - $cleanChild" 자식 구역이 이미 존재합니다.');
-        return false;
+      final childKey = _childCompositeKey(cleanParent, cleanChild);
+      for (final location in snapshot) {
+        if (!_isCompositeChild(location)) continue;
+        final locationParentId = (location.parentId ?? '').trim();
+        final legacyParent = (location.parent ?? '').trim();
+        final sameParent = locationParentId.isNotEmpty
+            ? locationParentId == parentDoc.id
+            : _nameKey(legacyParent) == _nameKey(cleanParent);
+        if (!sameParent) continue;
+        if (_childCompositeKey(cleanParent, location.locationName) == childKey) {
+          onError?.call('⚠️ "$cleanParent - $cleanChild" 자식 구역이 이미 존재합니다.');
+          return false;
+        }
       }
 
       final parentGrid = parentDoc.parkingGrid;
       if (parentGrid == null) {
-        onError?.call(
-          '⚠️ "$cleanParent" 부모 구역에 parkingGrid가 없습니다. (부모 그리드 저장/마이그레이션 확인 필요)',
-        );
+        onError?.call('⚠️ "$cleanParent" 부모 구역에 parkingGrid가 없습니다.');
         return false;
       }
 
-      final norm = rect.normalized();
-      if (!_rectInGrid(norm, parentGrid)) {
+      final normalizedRect = rect.normalized();
+      if (!_rectInGrid(normalizedRect, parentGrid)) {
         onError?.call(
           '⚠️ 선택 영역이 부모 그리드 범위를 벗어납니다. '
-          '(rows=${parentGrid.rows}, cols=${parentGrid.cols}, rect=$norm)',
+          '(rows=${parentGrid.rows}, cols=${parentGrid.cols}, rect=$normalizedRect)',
         );
         return false;
       }
 
-      if (isTower) {
-        if (!_isRegisteredTowerRect(norm, parentGrid)) {
-          onError?.call(
-            '⚠️ 주차 타워 자식 구역은 부모에서 지정된 “주차 타워 영역” 중 하나를 선택해야 합니다. '
-            '(선택 rect=$norm)',
-          );
-          return false;
-        }
+      if (isTower && !_isRegisteredTowerRect(normalizedRect, parentGrid)) {
+        onError?.call(
+          '⚠️ 주차 타워 자식 구역은 부모에서 지정된 주차 타워 영역 중 하나를 선택해야 합니다.',
+        );
+        return false;
       }
 
       final selectedIds = isTower
           ? const <String>[]
           : _resolveSelectedAreaIds(
               parentGrid: parentGrid,
-              rect: norm,
+              rect: normalizedRect,
               requestedAreaIds: childSlotAreaIds,
               snapshot: snapshot,
               area: cleanArea,
@@ -1268,12 +1314,6 @@ class LocationState extends ChangeNotifier {
             );
 
       if (selectedIds == null) return false;
-
-      final childDocId = _childDocId(
-        parent: cleanParent,
-        child: cleanChild,
-        area: cleanArea,
-      );
 
       final childSlots = isTower
           ? const <ChildSlot>[]
@@ -1293,33 +1333,52 @@ class LocationState extends ChangeNotifier {
       }
 
       final childModel = LocationModel(
-        id: childDocId,
+        id: _childDocId(
+          parent: cleanParent,
+          child: cleanChild,
+          area: cleanArea,
+        ),
         locationName: cleanChild,
         area: cleanArea,
+        parentId: parentDoc.id,
         parent: cleanParent,
         type: 'composite_child',
         capacity: effectiveCapacity,
         isSelected: false,
         plateCount: 0,
         parkingGrid: null,
-        childRect: norm,
+        childRect: normalizedRect,
         childKind: isTower ? 'tower' : 'normal',
         childSlotAreaIds: selectedIds,
         childSlots: childSlots,
       );
 
-      await _repository.addCompositeChild(childModel);
+      await _repository.createCompositeChild(
+        parent: parentDoc,
+        child: childModel,
+      );
       await _syncFromFirestoreAfterWrite(cleanArea);
       return true;
-    } catch (e) {
-      onError?.call('🚨 자식 구역 추가 실패: $e');
+    } catch (error, stackTrace) {
+      LocationDebugStatus.report(
+        title: '자식 구역 추가 실패',
+        operation: 'LocationState.createCompositeChild',
+        error: error,
+        stackTrace: stackTrace,
+        details: <String, Object?>{
+          'area': cleanArea,
+          'parentId': cleanParentId,
+          'child': cleanChild,
+        },
+      );
+      onError?.call('🚨 자식 구역 추가 실패: $error');
       return false;
     }
   }
 
-  Future<bool> saveCompositeChild({
+  Future<bool> updateCompositeChild({
     required String id,
-    required String parent,
+    required String parentId,
     required String child,
     required int capacity,
     required String area,
@@ -1329,20 +1388,21 @@ class LocationState extends ChangeNotifier {
     bool isTower = false,
     void Function(String)? onError,
   }) async {
+    final cleanId = id.trim();
     final cleanArea = area.trim();
-    final cleanParent = _normalizeName(parent);
+    final cleanParentId = parentId.trim();
     final cleanChild = _normalizeName(child);
 
-    if (id.trim().isEmpty) {
-      onError?.call('⚠️ 자식 구역 id가 비어 있어 수정할 수 없습니다.');
+    if (cleanId.isEmpty) {
+      onError?.call('⚠️ 자식 구역 ID가 비어 있어 수정할 수 없습니다.');
       return false;
     }
     if (cleanArea.isEmpty) {
       onError?.call('⚠️ 지역(area)이 비어 있어 자식 구역을 수정할 수 없습니다.');
       return false;
     }
-    if (cleanParent.isEmpty) {
-      onError?.call('⚠️ 부모(상위) 구역명이 비어 있습니다.');
+    if (cleanParentId.isEmpty) {
+      onError?.call('⚠️ 부모 구역 ID가 비어 있어 자식 구역을 수정할 수 없습니다.');
       return false;
     }
     if (cleanChild.isEmpty) {
@@ -1353,68 +1413,58 @@ class LocationState extends ChangeNotifier {
       onError?.call('⚠️ 수용 대수(capacity)는 1 이상이어야 합니다.');
       return false;
     }
-    if (_nameKey(cleanParent) == _nameKey(cleanChild)) {
-      onError?.call('⚠️ 자식 "$cleanChild"는 부모 "$cleanParent"와 같을 수 없습니다.');
-      return false;
-    }
 
     try {
       final snapshot = await _fetchAreaSnapshot(cleanArea);
 
       LocationModel? targetChild;
-      for (final l in snapshot) {
-        if (l.id == id) {
-          targetChild = l;
-          break;
-        }
-      }
-      if (targetChild == null) {
-        onError?.call('⚠️ 수정할 자식 구역을 찾을 수 없습니다. (id=$id)');
-        return false;
-      }
-      if (!_isCompositeChild(targetChild)) {
-        onError?.call('⚠️ 자식(composite_child) 구역만 수정할 수 있습니다.');
-        return false;
-      }
-
-      final existingParent = (targetChild.parent ?? '').trim();
-      if (existingParent.isEmpty) {
-        onError?.call('⚠️ 기존 자식 구역의 parent 정보가 비어 있습니다.');
-        return false;
-      }
-      if (_nameKey(existingParent) != _nameKey(cleanParent)) {
-        onError?.call(
-            '⚠️ 부모 구역 변경은 현재 지원하지 않습니다. (기존="$existingParent", 요청="$cleanParent")');
-        return false;
-      }
-
-      final parentKey = _nameKey(cleanParent);
-
       LocationModel? parentDoc;
-      for (final l in snapshot) {
-        if (_isCompositeParent(l) &&
-            l.area.trim() == cleanArea &&
-            _nameKey(l.locationName) == parentKey) {
-          parentDoc = l;
-          break;
+      for (final location in snapshot) {
+        if (location.id == cleanId) {
+          targetChild = location;
         }
+        if (location.id == cleanParentId &&
+            _isCompositeParent(location) &&
+            location.area.trim() == cleanArea) {
+          parentDoc = location;
+        }
+      }
+
+      if (targetChild == null || !_isCompositeChild(targetChild)) {
+        onError?.call('⚠️ 수정할 자식 구역을 찾을 수 없습니다.');
+        return false;
       }
       if (parentDoc == null) {
-        onError?.call('⚠️ "$cleanParent" 부모 구역이 존재하지 않습니다. 먼저 부모를 생성하세요.');
+        onError?.call('⚠️ 선택한 부모 구역이 존재하지 않습니다.');
+        return false;
+      }
+
+      final cleanParent = _normalizeName(parentDoc.locationName);
+      final existingParentId = (targetChild.parentId ?? '').trim();
+      final existingParentName = (targetChild.parent ?? '').trim();
+      final sameParent = existingParentId.isNotEmpty
+          ? existingParentId == parentDoc.id
+          : _nameKey(existingParentName) == _nameKey(cleanParent);
+      if (!sameParent) {
+        onError?.call('⚠️ 자식 구역의 부모는 변경할 수 없습니다.');
+        return false;
+      }
+      if (_nameKey(cleanParent) == _nameKey(cleanChild)) {
+        onError?.call('⚠️ 자식 "$cleanChild"는 부모 "$cleanParent"와 같을 수 없습니다.');
         return false;
       }
 
       final targetCompositeKey = _childCompositeKey(cleanParent, cleanChild);
-      for (final loc in snapshot) {
-        if (!_isCompositeChild(loc)) continue;
-        if (loc.id == id) continue;
-
-        final p = (loc.parent ?? '').trim();
-        if (p.isEmpty) continue;
-        if (_nameKey(p) != parentKey) continue;
-
-        final ck = _childCompositeKey(p, loc.locationName);
-        if (ck == targetCompositeKey) {
+      for (final location in snapshot) {
+        if (!_isCompositeChild(location) || location.id == cleanId) continue;
+        final locationParentId = (location.parentId ?? '').trim();
+        final legacyParent = (location.parent ?? '').trim();
+        final sameTargetParent = locationParentId.isNotEmpty
+            ? locationParentId == parentDoc.id
+            : _nameKey(legacyParent) == _nameKey(cleanParent);
+        if (!sameTargetParent) continue;
+        if (_childCompositeKey(cleanParent, location.locationName) ==
+            targetCompositeKey) {
           onError?.call('⚠️ "$cleanParent - $cleanChild" 자식 구역이 이미 존재합니다.');
           return false;
         }
@@ -1422,41 +1472,36 @@ class LocationState extends ChangeNotifier {
 
       final parentGrid = parentDoc.parkingGrid;
       if (parentGrid == null) {
-        onError?.call(
-          '⚠️ "$cleanParent" 부모 구역에 parkingGrid가 없습니다. (부모 그리드 저장/마이그레이션 확인 필요)',
-        );
+        onError?.call('⚠️ "$cleanParent" 부모 구역에 parkingGrid가 없습니다.');
         return false;
       }
 
-      final norm = rect.normalized();
-      if (!_rectInGrid(norm, parentGrid)) {
+      final normalizedRect = rect.normalized();
+      if (!_rectInGrid(normalizedRect, parentGrid)) {
         onError?.call(
           '⚠️ 선택 영역이 부모 그리드 범위를 벗어납니다. '
-          '(rows=${parentGrid.rows}, cols=${parentGrid.cols}, rect=$norm)',
+          '(rows=${parentGrid.rows}, cols=${parentGrid.cols}, rect=$normalizedRect)',
         );
         return false;
       }
 
-      if (isTower) {
-        if (!_isRegisteredTowerRect(norm, parentGrid)) {
-          onError?.call(
-            '⚠️ 주차 타워 자식 구역은 부모에서 지정된 “주차 타워 영역” 중 하나를 선택해야 합니다. '
-            '(선택 rect=$norm)',
-          );
-          return false;
-        }
+      if (isTower && !_isRegisteredTowerRect(normalizedRect, parentGrid)) {
+        onError?.call(
+          '⚠️ 주차 타워 자식 구역은 부모에서 지정된 주차 타워 영역 중 하나를 선택해야 합니다.',
+        );
+        return false;
       }
 
       final selectedIds = isTower
           ? const <String>[]
           : _resolveSelectedAreaIds(
               parentGrid: parentGrid,
-              rect: norm,
+              rect: normalizedRect,
               requestedAreaIds: childSlotAreaIds,
               snapshot: snapshot,
               area: cleanArea,
               parent: cleanParent,
-              excludeChildId: id,
+              excludeChildId: cleanId,
               onError: onError,
             );
 
@@ -1482,75 +1527,42 @@ class LocationState extends ChangeNotifier {
       final updated = targetChild.copyWith(
         locationName: cleanChild,
         capacity: effectiveCapacity,
-        childRect: norm,
+        childRect: normalizedRect,
         childKind: isTower ? 'tower' : 'normal',
         childSlotAreaIds: selectedIds,
         childSlots: childSlots,
         type: 'composite_child',
+        parentId: parentDoc.id,
         parent: cleanParent,
         area: cleanArea,
       );
 
-      await _repository.addCompositeChild(updated);
-      await _syncFromFirestoreAfterWrite(cleanArea);
-      return true;
-    } catch (e) {
-      onError?.call('🚨 자식 구역 수정 실패: $e');
-      return false;
-    }
-  }
-
-  Future<bool> addPlainTextLocation({
-    required String name,
-    required int capacity,
-    required String area,
-    void Function(String)? onError,
-  }) async {
-    final cleanArea = area.trim();
-    final cleanName = _normalizeName(name);
-
-    if (cleanArea.isEmpty) {
-      onError?.call('⚠️ 지역(area)이 비어 있어 텍스트 구역을 저장할 수 없습니다.');
-      return false;
-    }
-    if (cleanName.isEmpty) {
-      onError?.call('⚠️ 구역명을 입력하세요.');
-      return false;
-    }
-    if (capacity < 0) {
-      onError?.call('⚠️ 수용 대수(capacity)는 0 이상이어야 합니다.');
-      return false;
-    }
-
-    try {
-      final snapshot = await _fetchAreaSnapshot(cleanArea);
-      final keys = _buildExistingKeysFromSnapshot(snapshot);
-
-      if (keys.allNameKeys.contains(_nameKey(cleanName))) {
-        onError?.call('⚠️ "$cleanName" 구역이 이미 존재합니다.');
-        return false;
-      }
-
-      final model = LocationModel(
-        id: _plainTextDocId(name: cleanName, area: cleanArea),
-        area: cleanArea,
-        capacity: capacity,
-        isSelected: false,
-        locationName: cleanName,
-        type: 'single',
-        plateCount: 0,
+      await _repository.updateCompositeChild(
+        parent: parentDoc,
+        previous: targetChild,
+        updated: updated,
       );
-
-      await _repository.addPlainTextLocation(model);
       await _syncFromFirestoreAfterWrite(cleanArea);
       return true;
-    } catch (e) {
-      onError?.call('🚨 텍스트 구역 추가 실패: $e');
+    } catch (error, stackTrace) {
+      LocationDebugStatus.report(
+        title: '자식 구역 수정 실패',
+        operation: 'LocationState.updateCompositeChild',
+        error: error,
+        stackTrace: stackTrace,
+        details: <String, Object?>{
+          'id': cleanId,
+          'area': cleanArea,
+          'parentId': cleanParentId,
+          'child': cleanChild,
+        },
+      );
+      onError?.call('🚨 자식 구역 수정 실패: $error');
       return false;
     }
   }
 
-  Future<bool> savePlainTextLocation({
+  Future<bool> updatePlainTextLocation({
     required String id,
     required String name,
     required int capacity,
@@ -1617,10 +1629,21 @@ class LocationState extends ChangeNotifier {
         childSlots: const <ChildSlot>[],
       );
 
-      await _repository.addPlainTextLocation(updated);
+      await _repository.updatePlainTextLocation(updated);
       await _syncFromFirestoreAfterWrite(cleanArea);
       return true;
-    } catch (e) {
+    } catch (e, stackTrace) {
+      LocationDebugStatus.report(
+        title: '텍스트 구역 수정 실패',
+        operation: 'LocationState.updatePlainTextLocation',
+        error: e,
+        stackTrace: stackTrace,
+        details: <String, Object?>{
+          'id': id,
+          'area': cleanArea,
+          'name': cleanName,
+        },
+      );
       onError?.call('🚨 텍스트 구역 수정 실패: $e');
       return false;
     }
@@ -1632,84 +1655,75 @@ class LocationState extends ChangeNotifier {
   }) async {
     if (ids.isEmpty) return true;
 
+    final currentArea = _areaState.currentArea.trim();
+
     try {
-      final currentArea = _areaState.currentArea.trim();
       final latest = currentArea.isNotEmpty
           ? await _fetchAreaSnapshot(currentArea)
           : List<LocationModel>.of(_locations);
 
       final byId = <String, LocationModel>{
-        for (final loc in latest) loc.id: loc,
+        for (final location in latest) location.id: location,
       };
 
       final toDelete = <String>{...ids};
 
       for (final id in ids) {
-        final loc = byId[id];
-        if (loc == null) continue;
+        final location = byId[id];
+        if (location == null || !_isCompositeParent(location)) continue;
 
-        if (_isCompositeParent(loc)) {
-          final parentName = loc.locationName.trim();
-          final area = loc.area.trim();
+        final parentName = location.locationName.trim();
+        final area = location.area.trim();
 
-          for (final child in latest.where(
-            (l) =>
-                _isCompositeChild(l) &&
-                l.area.trim() == area &&
-                (l.parent ?? '').trim() == parentName,
-          )) {
+        for (final child in latest) {
+          if (!_isCompositeChild(child) || child.area.trim() != area) continue;
+          final childParentId = (child.parentId ?? '').trim();
+          final legacyParentName = (child.parent ?? '').trim();
+          final belongsToParent = childParentId.isNotEmpty
+              ? childParentId == location.id
+              : _nameKey(legacyParentName) == _nameKey(parentName);
+          if (belongsToParent) {
             toDelete.add(child.id);
           }
         }
       }
 
-      final parentsToCheck = <({String area, String parentName})>{};
+      final reservationDeletes = <LocationSlotReservationKey>{};
 
-      for (final id in ids) {
-        final loc = byId[id];
-        if (loc == null) continue;
-        if (_isCompositeChild(loc)) {
-          final parentName = (loc.parent ?? '').trim();
-          final area = loc.area.trim();
-          if (parentName.isNotEmpty && area.isNotEmpty) {
-            parentsToCheck.add((area: area, parentName: parentName));
-          }
-        }
-      }
+      for (final id in toDelete) {
+        final child = byId[id];
+        if (child == null || !_isCompositeChild(child)) continue;
 
-      for (final key in parentsToCheck) {
-        final childIds = latest
-            .where((l) =>
-                _isCompositeChild(l) &&
-                l.area.trim() == key.area &&
-                (l.parent ?? '').trim() == key.parentName)
-            .map((l) => l.id)
-            .toList();
-
-        if (childIds.isEmpty) continue;
-
-        final willDeleteAllChildren = childIds.every(toDelete.contains);
-        if (willDeleteAllChildren) {
-          LocationModel? parentDoc;
-          for (final l in latest) {
-            if (_isCompositeParent(l) &&
-                l.area.trim() == key.area &&
-                _nameKey(l.locationName) == _nameKey(key.parentName)) {
-              parentDoc = l;
+        var parentId = (child.parentId ?? '').trim();
+        if (parentId.isEmpty) {
+          final parentName = (child.parent ?? '').trim();
+          final area = child.area.trim();
+          for (final candidate in latest) {
+            if (!_isCompositeParent(candidate)) continue;
+            if (candidate.area.trim() != area) continue;
+            if (_nameKey(candidate.locationName) == _nameKey(parentName)) {
+              parentId = candidate.id;
               break;
             }
           }
-
-          if (parentDoc != null) {
-            toDelete.add(parentDoc.id);
-          } else {
-            toDelete.add(_parentDocId(parent: key.parentName, area: key.area));
+          if (parentId.isEmpty && parentName.isNotEmpty && area.isNotEmpty) {
+            parentId = _parentDocId(parent: parentName, area: area);
           }
+        }
+
+        if (parentId.isEmpty) continue;
+        for (final areaId in _areaIdsForLocation(child)) {
+          final cleanAreaId = areaId.trim();
+          if (cleanAreaId.isEmpty) continue;
+          reservationDeletes.add(
+            (parentId: parentId, areaId: cleanAreaId),
+          );
         }
       }
 
       if (currentArea.isEmpty) {
-        _locations = _locations.where((l) => !toDelete.contains(l.id)).toList();
+        _locations =
+            _locations.where((location) => !toDelete.contains(location.id)).toList();
         _selectedLocationId = null;
         _safeNotify();
         return true;
@@ -1719,13 +1733,25 @@ class LocationState extends ChangeNotifier {
         area: currentArea,
         ids: toDelete.toList(),
         parentGridUpdates: const [],
+        slotReservationDeletes: reservationDeletes.toList(),
       );
 
       await _syncFromFirestoreAfterWrite(currentArea);
       return true;
-    } catch (e) {
-      onError?.call('🚨 주차 구역 삭제 실패: $e');
+    } catch (error, stackTrace) {
+      LocationDebugStatus.report(
+        title: '주차 구역 삭제 실패',
+        operation: 'LocationState.deleteLocations',
+        error: error,
+        stackTrace: stackTrace,
+        details: <String, Object?>{
+          'area': currentArea,
+          'ids': ids.join(','),
+        },
+      );
+      onError?.call('🚨 주차 구역 삭제 실패: $error');
       return false;
     }
   }
+
 }

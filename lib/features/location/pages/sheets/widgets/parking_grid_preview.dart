@@ -22,10 +22,8 @@ class ParkingGridPreview extends StatelessWidget {
   final double maxExtent;
 
   final bool showLegend;
-  final bool showWalls;
   final bool showGates;
   final bool showTowers;
-  final bool showWallNames;
 
   final bool showParkingAreas;
   final bool showParkingAreaLabels;
@@ -43,10 +41,8 @@ class ParkingGridPreview extends StatelessWidget {
     required this.grid,
     this.maxExtent = 280,
     this.showLegend = true,
-    this.showWalls = true,
     this.showGates = true,
     this.showTowers = true,
-    this.showWallNames = true,
     this.showParkingAreas = true,
     this.showParkingAreaLabels = true,
     this.showChildRegions = true,
@@ -122,14 +118,10 @@ class ParkingGridPreview extends StatelessWidget {
 
     final ratio = (grid.rows > 0) ? (grid.cols / grid.rows) : 1.0;
 
-    final wallCount = grid.walls.length;
-    final groupCount = grid.wallGroups.length;
 
     final rectGateCount = grid.entranceRects.length + grid.exitRects.length;
     final towerCount = grid.towerRects.length;
-    final legacyGateCount =
-        (grid.entranceGate != null ? 1 : 0) + (grid.exitGate != null ? 1 : 0);
-    final gateCount = rectGateCount > 0 ? rectGateCount : legacyGateCount;
+    final gateCount = rectGateCount;
 
     final parkingAreaCount = grid.parkingAreas.length;
 
@@ -149,10 +141,8 @@ class ParkingGridPreview extends StatelessWidget {
                 painter: _ParkingGridPainter(
                   grid: grid,
                   colorScheme: cs,
-                  showWalls: showWalls,
                   showGates: showGates,
                   showTowers: showTowers,
-                  showWallNames: showWallNames,
                   showParkingAreas: showParkingAreas,
                   showParkingAreaLabels: showParkingAreaLabels,
                   showChildRegions: showChildRegions,
@@ -180,10 +170,8 @@ class ParkingGridPreview extends StatelessWidget {
               pill('${grid.rows}×${grid.cols}'),
               if (showParkingAreas && parkingAreaCount > 0)
                 pill('주차면적 $parkingAreaCount'),
-              if (showWalls && wallCount > 0) pill('벽 $wallCount'),
               if (showGates && gateCount > 0) pill('게이트 $gateCount'),
               if (showTowers && towerCount > 0) pill('주차 타워 $towerCount'),
-              if (showWalls && groupCount > 0) pill('그룹 $groupCount'),
               if (showChildRegions && childRegions.isNotEmpty)
                 pill('자식영역 ${childRegions.length}'),
               if (showChildSlotNumbers && childSlotsToLabel.isNotEmpty)
@@ -277,15 +265,11 @@ class _GridLayout {
   }
 }
 
-enum _LegacyGateKind { entrance, exit, mixed }
-
 class _ParkingGridPainter extends CustomPainter {
   final ParkingGridModel grid;
   final ColorScheme colorScheme;
-  final bool showWalls;
   final bool showGates;
   final bool showTowers;
-  final bool showWallNames;
   final bool showParkingAreas;
   final bool showParkingAreaLabels;
 
@@ -300,10 +284,8 @@ class _ParkingGridPainter extends CustomPainter {
   _ParkingGridPainter({
     required this.grid,
     required this.colorScheme,
-    required this.showWalls,
     required this.showGates,
     required this.showTowers,
-    required this.showWallNames,
     required this.showParkingAreas,
     required this.showParkingAreaLabels,
     required this.showChildRegions,
@@ -326,117 +308,6 @@ class _ParkingGridPainter extends CustomPainter {
       case ParkingGridCellType.empty:
         return cs.primaryContainer.withOpacity(0.55);
     }
-  }
-
-  _LegacyGateKind _gateKindFor(EdgePlacement g) {
-    final e = grid.entranceGate;
-    final x = grid.exitGate;
-    final isE = (e != null && e == g);
-    final isX = (x != null && x == g);
-    if (isE && isX) return _LegacyGateKind.mixed;
-    if (isE) return _LegacyGateKind.entrance;
-    return _LegacyGateKind.exit;
-  }
-
-  Color _gateAccent(_LegacyGateKind k) {
-    switch (k) {
-      case _LegacyGateKind.entrance:
-        return Colors.green;
-      case _LegacyGateKind.exit:
-        return Colors.red;
-      case _LegacyGateKind.mixed:
-        return Colors.amber;
-    }
-  }
-
-  String _gateLabel(_LegacyGateKind k) {
-    switch (k) {
-      case _LegacyGateKind.entrance:
-        return '입구';
-      case _LegacyGateKind.exit:
-        return '출구';
-      case _LegacyGateKind.mixed:
-        return '입/출';
-    }
-  }
-
-  void _drawLegacyGate(Canvas canvas, _GridLayout layout, EdgePlacement g,
-      _LegacyGateKind kind) {
-    final cs = colorScheme;
-    final rect = layout.cellRect(g.r, g.c);
-    final cell = layout.cell;
-
-    Offset edgeCenter;
-    Offset outward;
-    switch (g.side) {
-      case EdgeSide.north:
-        edgeCenter = Offset(rect.center.dx, rect.top);
-        outward = const Offset(0, -1);
-        break;
-      case EdgeSide.south:
-        edgeCenter = Offset(rect.center.dx, rect.bottom);
-        outward = const Offset(0, 1);
-        break;
-      case EdgeSide.west:
-        edgeCenter = Offset(rect.left, rect.center.dy);
-        outward = const Offset(-1, 0);
-        break;
-      case EdgeSide.east:
-        edgeCenter = Offset(rect.right, rect.center.dy);
-        outward = const Offset(1, 0);
-        break;
-    }
-
-    final accent = _gateAccent(kind);
-    final th = math.max(5.0, cell * 0.12);
-    final len = cell * 0.78;
-    final out = math.max(4.0, cell * 0.10);
-
-    Rect barRect;
-    if (g.side == EdgeSide.north || g.side == EdgeSide.south) {
-      barRect = Rect.fromCenter(
-        center: edgeCenter + outward * out,
-        width: len,
-        height: th,
-      );
-    } else {
-      barRect = Rect.fromCenter(
-        center: edgeCenter + outward * out,
-        width: th,
-        height: len,
-      );
-    }
-
-    final fill = Paint()
-      ..style = PaintingStyle.fill
-      ..color = cs.surface.withOpacity(0.96);
-
-    final stroke = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = math.max(1.1, th * 0.12)
-      ..color = accent.withOpacity(0.95);
-
-    canvas.drawRRect(
-        RRect.fromRectAndRadius(barRect, Radius.circular(th * 0.45)), fill);
-    canvas.drawRRect(
-        RRect.fromRectAndRadius(barRect, Radius.circular(th * 0.45)), stroke);
-
-    final tp = TextPainter(
-      text: TextSpan(
-        text: _gateLabel(kind),
-        style: TextStyle(
-          fontSize: math.max(9.0, cell * 0.18),
-          fontWeight: FontWeight.w900,
-          color: accent.withOpacity(0.95),
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-      maxLines: 1,
-      ellipsis: '…',
-    )..layout(maxWidth: 60);
-
-    final labelPos = barRect.topLeft + Offset(2, -math.max(14.0, cell * 0.24));
-    tp.paint(canvas, labelPos);
   }
 
   void _drawRectList(
@@ -531,109 +402,10 @@ class _ParkingGridPainter extends CustomPainter {
     );
   }
 
-  void _drawWall(Canvas canvas, _GridLayout layout, EdgePlacement w,
-      {required bool named}) {
-    final cs = colorScheme;
-    final rect = layout.cellRect(w.r, w.c);
-    final cell = layout.cell;
-
-    final th = math.max(2.6, cell * 0.11);
-    final out = math.max(3.5, cell * 0.10);
-
-    Offset a;
-    Offset b;
-    Offset outward;
-
-    switch (w.side) {
-      case EdgeSide.north:
-        a = Offset(rect.left, rect.top);
-        b = Offset(rect.right, rect.top);
-        outward = const Offset(0, -1);
-        break;
-      case EdgeSide.south:
-        a = Offset(rect.left, rect.bottom);
-        b = Offset(rect.right, rect.bottom);
-        outward = const Offset(0, 1);
-        break;
-      case EdgeSide.west:
-        a = Offset(rect.left, rect.top);
-        b = Offset(rect.left, rect.bottom);
-        outward = const Offset(-1, 0);
-        break;
-      case EdgeSide.east:
-        a = Offset(rect.right, rect.top);
-        b = Offset(rect.right, rect.bottom);
-        outward = const Offset(1, 0);
-        break;
-    }
-
-    a = a + outward * out;
-    b = b + outward * out;
-
-    final base = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeWidth = th
-      ..color = cs.onSurface.withOpacity(0.35);
-
-    final hi = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeWidth = th + 1.0
-      ..color = named
-          ? cs.primary.withOpacity(0.90)
-          : cs.outlineVariant.withOpacity(0.80);
-
-    canvas.drawLine(a, b, base);
-    canvas.drawLine(a, b, hi);
-  }
-
-  void _drawWallName(
-      Canvas canvas, _GridLayout layout, EdgePlacement w, String name) {
-    final cs = colorScheme;
-    final rect = layout.cellRect(w.r, w.c);
-    final cell = layout.cell;
-
-    Offset pos;
-    switch (w.side) {
-      case EdgeSide.north:
-        pos = Offset(rect.center.dx, rect.top - math.max(18.0, cell * 0.28));
-        break;
-      case EdgeSide.south:
-        pos = Offset(rect.center.dx, rect.bottom + math.max(6.0, cell * 0.12));
-        break;
-      case EdgeSide.west:
-        pos =
-            Offset(rect.left - math.max(60.0, cell * 0.80), rect.center.dy - 8);
-        break;
-      case EdgeSide.east:
-        pos =
-            Offset(rect.right + math.max(6.0, cell * 0.12), rect.center.dy - 8);
-        break;
-    }
-
-    final tp = TextPainter(
-      text: TextSpan(
-        text: name,
-        style: TextStyle(
-          fontSize: math.max(10.0, cell * 0.18),
-          fontWeight: FontWeight.w900,
-          color: cs.onSurface.withOpacity(0.85),
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-      maxLines: 1,
-      ellipsis: '…',
-    )..layout(maxWidth: 160);
-
-    tp.paint(canvas, pos);
-  }
-
-  (int h, int w) _parkingSizeForKind(ParkingAreaKind k) => (k.h, k.w);
-
   void _drawParkingArea(Canvas canvas, _GridLayout layout, ParkingArea a,
       {required bool drawLabel}) {
-    final (h, w) = _parkingSizeForKind(a.kind);
+    final h = a.kind.h;
+    final w = a.kind.w;
     final top = a.r0;
     final left = a.c0;
     final bottom = a.r0 + h - 1;
@@ -941,21 +713,7 @@ class _ParkingGridPainter extends CustomPainter {
     }
 
     if (showGates) {
-      if (grid.entranceRects.isNotEmpty || grid.exitRects.isNotEmpty) {
-        _drawRectGates(canvas, layout);
-      } else {
-        final gateSet = <EdgePlacement>{};
-        final entrance = grid.entranceGate;
-        final exit = grid.exitGate;
-
-        if (entrance != null && isEdgeValid(entrance, rows, cols))
-          gateSet.add(entrance);
-        if (exit != null && isEdgeValid(exit, rows, cols)) gateSet.add(exit);
-
-        for (final g in gateSet) {
-          _drawLegacyGate(canvas, layout, g, _gateKindFor(g));
-        }
-      }
+      _drawRectGates(canvas, layout);
     }
 
     if (showTowers && grid.towerRects.isNotEmpty) {
@@ -965,59 +723,6 @@ class _ParkingGridPainter extends CustomPainter {
     if (showChildRegions && childRegions.isNotEmpty) {
       for (final ov in childRegions) {
         _drawChildRegion(canvas, layout, ov);
-      }
-    }
-
-    Map<EdgePlacement, WallGroupId?> parsedWalls = const {};
-    if (showWalls && grid.walls.isNotEmpty) {
-      final tmp = <EdgePlacement, WallGroupId?>{};
-      for (final e in grid.walls.entries) {
-        try {
-          final edge = EdgePlacement.fromKey(e.key);
-          if (!isEdgeValid(edge, rows, cols)) continue;
-          tmp[edge] = e.value;
-        } catch (_) {}
-      }
-      parsedWalls = tmp;
-
-      for (final w in parsedWalls.entries) {
-        final gid = w.value;
-        final named =
-            (gid != null) && (grid.wallGroups[gid]?.trim().isNotEmpty ?? false);
-        _drawWall(canvas, layout, w.key, named: named);
-      }
-
-      if (showWallNames &&
-          grid.wallGroups.isNotEmpty &&
-          parsedWalls.isNotEmpty) {
-        final reps = <WallGroupId, EdgePlacement>{};
-        for (final e in parsedWalls.entries) {
-          final gid = e.value;
-          if (gid == null) continue;
-
-          final name = grid.wallGroups[gid]?.trim();
-          if (name == null || name.isEmpty) continue;
-
-          if (!reps.containsKey(gid)) {
-            reps[gid] = e.key;
-          } else {
-            final cur = reps[gid]!;
-            if (edgeSortKey(e.key) < edgeSortKey(cur)) {
-              reps[gid] = e.key;
-            }
-          }
-        }
-
-        for (final entry in reps.entries) {
-          final name = grid.wallGroups[entry.key]?.trim() ?? '';
-          if (name.isNotEmpty) _drawWallName(canvas, layout, entry.value, name);
-        }
-      }
-    }
-
-    if (showParkingAreas && grid.parkingAreas.isNotEmpty) {
-      for (final a in grid.parkingAreas) {
-        _drawParkingArea(canvas, layout, a, drawLabel: showParkingAreaLabels);
       }
     }
 
@@ -1032,10 +737,8 @@ class _ParkingGridPainter extends CustomPainter {
   bool shouldRepaint(covariant _ParkingGridPainter oldDelegate) {
     return oldDelegate.grid != grid ||
         oldDelegate.colorScheme != colorScheme ||
-        oldDelegate.showWalls != showWalls ||
         oldDelegate.showGates != showGates ||
         oldDelegate.showTowers != showTowers ||
-        oldDelegate.showWallNames != showWallNames ||
         oldDelegate.showParkingAreas != showParkingAreas ||
         oldDelegate.showParkingAreaLabels != showParkingAreaLabels ||
         oldDelegate.showChildRegions != showChildRegions ||

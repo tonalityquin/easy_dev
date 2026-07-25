@@ -3,6 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'parking_grid_model.dart';
 import 'grid_rect.dart';
 
+const Object _locationModelUnset = Object();
+
 class ChildSlot {
   final int no;
   final String areaId;
@@ -166,6 +168,7 @@ class LocationModel {
   final int capacity;
   final bool isSelected;
   final String locationName;
+  final String? parentId;
   final String? parent;
   final String? type;
   final int plateCount;
@@ -185,6 +188,7 @@ class LocationModel {
     required this.capacity,
     required this.isSelected,
     required this.locationName,
+    this.parentId,
     this.parent,
     this.type,
     this.plateCount = 0,
@@ -278,6 +282,7 @@ class LocationModel {
       capacity: (data['capacity'] as num?)?.toInt() ?? 0,
       isSelected: data['isSelected'] == true,
       locationName: (data['locationName'] ?? '').toString(),
+      parentId: data['parentId']?.toString(),
       parent: data['parent']?.toString(),
       type: data['type']?.toString(),
       plateCount: (data['plateCount'] as num?)?.toInt() ?? 0,
@@ -299,6 +304,10 @@ class LocationModel {
       'capacity': capacity,
       'isSelected': isSelected,
       'locationName': locationName,
+      'parentId':
+          resolvedType == 'composite_child' || resolvedType == 'composite'
+              ? parentId
+              : null,
       'parent': resolvedParent,
       'timestamp': FieldValue.serverTimestamp(),
       'type': resolvedType,
@@ -335,6 +344,7 @@ class LocationModel {
       'capacity': capacity,
       'isSelected': isSelected,
       'locationName': locationName,
+      'parentId': parentId,
       'parent': parent,
       'type': type,
       'plateCount': plateCount,
@@ -365,6 +375,7 @@ class LocationModel {
       capacity: (data['capacity'] as num?)?.toInt() ?? 0,
       isSelected: data['isSelected'] == true,
       locationName: (data['locationName'] ?? '').toString(),
+      parentId: data['parentId']?.toString(),
       parent: data['parent']?.toString(),
       type: data['type']?.toString(),
       plateCount: (data['plateCount'] as num?)?.toInt() ?? 0,
@@ -382,12 +393,13 @@ class LocationModel {
     int? capacity,
     bool? isSelected,
     String? locationName,
-    String? parent,
-    String? type,
+    Object? parentId = _locationModelUnset,
+    Object? parent = _locationModelUnset,
+    Object? type = _locationModelUnset,
     int? plateCount,
-    ParkingGridModel? parkingGrid,
-    GridRect? childRect,
-    String? childKind,
+    Object? parkingGrid = _locationModelUnset,
+    Object? childRect = _locationModelUnset,
+    Object? childKind = _locationModelUnset,
     List<ChildSlot>? childSlots,
     List<String>? childSlotAreaIds,
   }) {
@@ -397,12 +409,23 @@ class LocationModel {
       capacity: capacity ?? this.capacity,
       isSelected: isSelected ?? this.isSelected,
       locationName: locationName ?? this.locationName,
-      parent: parent ?? this.parent,
-      type: type ?? this.type,
+      parentId: identical(parentId, _locationModelUnset)
+          ? this.parentId
+          : parentId as String?,
+      parent: identical(parent, _locationModelUnset)
+          ? this.parent
+          : parent as String?,
+      type: identical(type, _locationModelUnset) ? this.type : type as String?,
       plateCount: plateCount ?? this.plateCount,
-      parkingGrid: parkingGrid ?? this.parkingGrid,
-      childRect: childRect ?? this.childRect,
-      childKind: childKind ?? this.childKind,
+      parkingGrid: identical(parkingGrid, _locationModelUnset)
+          ? this.parkingGrid
+          : parkingGrid as ParkingGridModel?,
+      childRect: identical(childRect, _locationModelUnset)
+          ? this.childRect
+          : childRect as GridRect?,
+      childKind: identical(childKind, _locationModelUnset)
+          ? this.childKind
+          : childKind as String?,
       childSlots: childSlots ?? this.childSlots,
       childSlotAreaIds: childSlotAreaIds ?? this.childSlotAreaIds,
     );

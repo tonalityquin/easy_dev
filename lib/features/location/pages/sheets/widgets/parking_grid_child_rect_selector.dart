@@ -396,17 +396,6 @@ class _ParkingGridChildRectPainter extends CustomPainter {
     required this.parkingAreaPickMode,
   });
 
-  static (int r, int c, int edge)? _parseEdgeKey(String key) {
-    final parts = key.split('|');
-    if (parts.length != 3) return null;
-    final r = int.tryParse(parts[0]);
-    final c = int.tryParse(parts[1]);
-    final e = int.tryParse(parts[2]);
-    if (r == null || c == null || e == null) return null;
-    if (e < 0 || e > 3) return null;
-    return (r, c, e);
-  }
-
   void _drawPillarMarker(Canvas canvas, Rect rect, double cell, ColorScheme cs) {
     final center = rect.center;
     final rr = max(3.0, cell * 0.18);
@@ -725,106 +714,6 @@ class _ParkingGridChildRectPainter extends CustomPainter {
         _drawParkingArea(canvas, a, cell, cs, drawLabel: true);
       }
     }
-
-    final wallPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeWidth = max(2.0, cell * 0.12)
-      ..color = cs.secondary.withOpacity(0.80);
-
-    for (final e in grid.walls.entries) {
-      final key = e.key;
-      final parsed = _parseEdgeKey(key);
-      if (parsed == null) continue;
-      final r = parsed.$1;
-      final c = parsed.$2;
-      final edge = parsed.$3;
-
-      final onPerimeter = r == 0 || r == rows - 1 || c == 0 || c == cols - 1;
-      if (!onPerimeter) continue;
-
-      Offset a, b;
-      final x = c * cell;
-      final y = r * cell;
-
-      switch (edge) {
-        case 0:
-          if (r != 0) continue;
-          a = Offset(x, y);
-          b = Offset(x + cell, y);
-          break;
-        case 1:
-          if (c != cols - 1) continue;
-          a = Offset(x + cell, y);
-          b = Offset(x + cell, y + cell);
-          break;
-        case 2:
-          if (r != rows - 1) continue;
-          a = Offset(x, y + cell);
-          b = Offset(x + cell, y + cell);
-          break;
-        case 3:
-          if (c != 0) continue;
-          a = Offset(x, y);
-          b = Offset(x, y + cell);
-          break;
-        default:
-          continue;
-      }
-
-      canvas.drawLine(a, b, wallPaint);
-    }
-
-    void drawGate(String? key, Paint paint) {
-      final k = key?.trim();
-      if (k == null || k.isEmpty) return;
-      final parsed = _parseEdgeKey(k);
-      if (parsed == null) return;
-      final r = parsed.$1;
-      final c = parsed.$2;
-      final edge = parsed.$3;
-
-      final x = c * cell;
-      final y = r * cell;
-
-      Offset a, b;
-      switch (edge) {
-        case 0:
-          a = Offset(x, y);
-          b = Offset(x + cell, y);
-          break;
-        case 1:
-          a = Offset(x + cell, y);
-          b = Offset(x + cell, y + cell);
-          break;
-        case 2:
-          a = Offset(x, y + cell);
-          b = Offset(x + cell, y + cell);
-          break;
-        case 3:
-          a = Offset(x, y);
-          b = Offset(x, y + cell);
-          break;
-        default:
-          return;
-      }
-      canvas.drawLine(a, b, paint);
-    }
-
-    final entrancePaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeWidth = max(3.0, cell * 0.16)
-      ..color = cs.primary.withOpacity(0.88);
-
-    final exitPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeWidth = max(3.0, cell * 0.16)
-      ..color = cs.error.withOpacity(0.88);
-
-    drawGate(grid.entranceGateKey, entrancePaint);
-    drawGate(grid.exitGateKey, exitPaint);
 
     final frame = Paint()
       ..style = PaintingStyle.stroke

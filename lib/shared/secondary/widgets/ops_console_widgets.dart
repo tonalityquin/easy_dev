@@ -735,17 +735,21 @@ class OpsActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PromptButton(
-      label: label,
-      icon: icon,
-      onPressed: onPressed,
-      expand: true,
-      haptic: danger ? PromptHaptic.medium : PromptHaptic.selection,
-      variant: danger
-          ? PromptButtonVariant.destructive
-          : tonal
-              ? PromptButtonVariant.secondary
-              : PromptButtonVariant.primary,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return PromptButton(
+          label: label,
+          icon: icon,
+          onPressed: onPressed,
+          expand: constraints.hasBoundedWidth,
+          haptic: danger ? PromptHaptic.medium : PromptHaptic.selection,
+          variant: danger
+              ? PromptButtonVariant.destructive
+              : tonal
+                  ? PromptButtonVariant.secondary
+                  : PromptButtonVariant.primary,
+        );
+      },
     );
   }
 }

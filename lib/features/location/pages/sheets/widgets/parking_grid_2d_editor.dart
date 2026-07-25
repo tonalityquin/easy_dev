@@ -9,9 +9,6 @@ enum GridEditTool {
   road,
   road2,
   pillar,
-  wall,
-  wallEraser,
-  wallSelect,
   parkingCompact12,
   parkingCompact21,
   parkingStandard12,
@@ -60,16 +57,11 @@ class ParkingGrid2DEditor extends StatefulWidget {
   final ValueChanged<List<GridRect>> onChangedExitRects;
   final ValueChanged<List<GridRect>> onChangedTowerRects;
 
-  final Map<EdgePlacement, WallGroupId?> walls;
-  final Map<WallGroupId, String> wallGroups;
-  final Set<EdgePlacement> selectedWalls;
 
   final List<ParkingArea> parkingAreas;
   final ValueChanged<List<ParkingArea>> onChangedParkingAreas;
 
   final ValueChanged<List<ParkingGridCellType>> onChangedCells;
-  final ValueChanged<Map<EdgePlacement, WallGroupId?>> onChangedWalls;
-  final ValueChanged<Set<EdgePlacement>> onChangedSelectedWalls;
 
   const ParkingGrid2DEditor({
     super.key,
@@ -85,14 +77,9 @@ class ParkingGrid2DEditor extends StatefulWidget {
     required this.onChangedEntranceRects,
     required this.onChangedExitRects,
     required this.onChangedTowerRects,
-    required this.walls,
-    required this.wallGroups,
-    required this.selectedWalls,
     required this.parkingAreas,
     required this.onChangedParkingAreas,
     required this.onChangedCells,
-    required this.onChangedWalls,
-    required this.onChangedSelectedWalls,
   });
 
   @override
@@ -101,7 +88,6 @@ class ParkingGrid2DEditor extends StatefulWidget {
 
 class _ParkingGrid2DEditorState extends State<ParkingGrid2DEditor> {
   int _lastDragIdx = -1;
-  EdgePlacement? _lastDragEdge;
 
   bool _longPressActive = false;
   int _lastLongPressIdx = -1;
@@ -128,11 +114,6 @@ class _ParkingGrid2DEditorState extends State<ParkingGrid2DEditor> {
           t == GridEditTool.road ||
           t == GridEditTool.road2 ||
           t == GridEditTool.pillar;
-
-  bool _isWallTool(GridEditTool t) =>
-      t == GridEditTool.wall || t == GridEditTool.wallEraser || t == GridEditTool.wallSelect;
-
-  bool _isEdgeTool(GridEditTool t) => _isWallTool(t);
 
   bool _isParkingTool(GridEditTool t) =>
       t == GridEditTool.parkingEraser || _kindForTool(t) != null;
@@ -451,55 +432,6 @@ class _ParkingGrid2DEditorState extends State<ParkingGrid2DEditor> {
     }
   }
 
-  Set<EdgeSide> _allowedOutwardSidesForCell(int r, int c) {
-    final sides = <EdgeSide>{};
-    if (r == 0) sides.add(EdgeSide.north);
-    if (r == widget.rows - 1) sides.add(EdgeSide.south);
-    if (c == 0) sides.add(EdgeSide.west);
-    if (c == widget.cols - 1) sides.add(EdgeSide.east);
-    return sides;
-  }
-
-  EdgeSide _resolvePerimeterSide({
-    required int idx,
-    required Offset p,
-    required Rect rect,
-    required _Grid2DLayout layout,
-  }) {
-    final r = idx ~/ widget.cols;
-    final c = idx % widget.cols;
-
-    final allowed = _allowedOutwardSidesForCell(r, c);
-    final raw = layout.nearestSide(p, rect);
-
-    if (allowed.isEmpty) return raw;
-    if (allowed.contains(raw)) return raw;
-
-    double distFor(EdgeSide s) {
-      switch (s) {
-        case EdgeSide.north:
-          return (p.dy - rect.top).abs();
-        case EdgeSide.south:
-          return (rect.bottom - p.dy).abs();
-        case EdgeSide.west:
-          return (p.dx - rect.left).abs();
-        case EdgeSide.east:
-          return (rect.right - p.dx).abs();
-      }
-    }
-
-    EdgeSide best = allowed.first;
-    double bestD = distFor(best);
-    for (final s in allowed) {
-      final d = distFor(s);
-      if (d < bestD) {
-        bestD = d;
-        best = s;
-      }
-    }
-    return best;
-  }
-
   void _applyCellAt(int idx) {
     if (idx < 0 || idx >= widget.cells.length) return;
 
@@ -558,43 +490,6 @@ class _ParkingGrid2DEditorState extends State<ParkingGrid2DEditor> {
     if (changedRoad2) widget.onChangedRoad2Cells(nextRoad2);
   }
 
-  void _applyWallAt({required int idx, required EdgeSide side}) {
-    final r = idx ~/ widget.cols;
-    final c = idx % widget.cols;
-    final w = EdgePlacement(r: r, c: c, side: side);
-    if (!isEdgeValid(w, widget.rows, widget.cols)) return;
-
-    final nextWalls = Map<EdgePlacement, WallGroupId?>.from(widget.walls);
-    final nextSel = Set<EdgePlacement>.from(widget.selectedWalls);
-
-    switch (widget.tool) {
-      case GridEditTool.wall:
-        nextWalls.putIfAbsent(w, () => null);
-        widget.onChangedWalls(nextWalls);
-        return;
-      case GridEditTool.wallEraser:
-        if (nextWalls.containsKey(w)) {
-          nextWalls.remove(w);
-          nextSel.remove(w);
-          widget.onChangedWalls(nextWalls);
-          widget.onChangedSelectedWalls(nextSel);
-        }
-        return;
-      case GridEditTool.wallSelect:
-        nextWalls.putIfAbsent(w, () => null);
-        if (nextSel.contains(w)) {
-          nextSel.remove(w);
-        } else {
-          nextSel.add(w);
-        }
-        widget.onChangedWalls(nextWalls);
-        widget.onChangedSelectedWalls(nextSel);
-        return;
-      default:
-        return;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -637,13 +532,6 @@ class _ParkingGrid2DEditorState extends State<ParkingGrid2DEditor> {
             final r = idx ~/ widget.cols;
             final c = idx % widget.cols;
             _applyParkingAreaAtCell(r, c);
-            return;
-          }
-
-          if (_isEdgeTool(widget.tool)) {
-            final rect = layout.rectForIndex(idx);
-            final side = _resolvePerimeterSide(idx: idx, p: localPos, rect: rect, layout: layout);
-            _applyWallAt(idx: idx, side: side);
             return;
           }
 
@@ -736,18 +624,6 @@ class _ParkingGrid2DEditorState extends State<ParkingGrid2DEditor> {
             return;
           }
 
-          if (_isEdgeTool(widget.tool)) {
-            final rect = layout.rectForIndex(idx);
-            final side = _resolvePerimeterSide(idx: idx, p: localPos, rect: rect, layout: layout);
-            final r = idx ~/ widget.cols;
-            final c = idx % widget.cols;
-            final edge = EdgePlacement(r: r, c: c, side: side);
-            if (_lastDragEdge == edge) return;
-            _lastDragEdge = edge;
-            _applyWallAt(idx: idx, side: side);
-            return;
-          }
-
           if (idx == _lastDragIdx) return;
           _lastDragIdx = idx;
           _applyCellAt(idx);
@@ -781,15 +657,11 @@ class _ParkingGrid2DEditorState extends State<ParkingGrid2DEditor> {
           _lastLongPressIdx = -1;
         }
 
-        final visibleSelectedWalls =
-        widget.tool == GridEditTool.wallSelect ? widget.selectedWalls : <EdgePlacement>{};
-
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTapUp: (d) => handleTap(d.localPosition),
           onPanStart: (d) {
             _lastDragIdx = -1;
-            _lastDragEdge = null;
             if (_isRectTool(widget.tool)) {
               startRectDrag(d.localPosition);
             } else {
@@ -805,7 +677,6 @@ class _ParkingGrid2DEditorState extends State<ParkingGrid2DEditor> {
           },
           onPanEnd: (_) {
             _lastDragIdx = -1;
-            _lastDragEdge = null;
             if (_isRectTool(widget.tool)) endRectDrag();
           },
           onLongPressStart: (d) => handleLongPressStart(d.localPosition),
@@ -824,9 +695,6 @@ class _ParkingGrid2DEditorState extends State<ParkingGrid2DEditor> {
               draftRectLayer: _rectDraftLayer,
               colorScheme: cs,
               layout: layout,
-              walls: widget.walls,
-              wallGroups: widget.wallGroups,
-              selectedWalls: visibleSelectedWalls,
               parkingAreas: widget.parkingAreas,
             ),
             child: const SizedBox.expand(),
@@ -912,19 +780,6 @@ class _Grid2DLayout {
     return cellRect(r, c);
   }
 
-  EdgeSide nearestSide(Offset p, Rect rect) {
-    final dTop = (p.dy - rect.top).abs();
-    final dBottom = (rect.bottom - p.dy).abs();
-    final dLeft = (p.dx - rect.left).abs();
-    final dRight = (rect.right - p.dx).abs();
-
-    final minD = min(min(dTop, dBottom), min(dLeft, dRight));
-    if (minD == dTop) return EdgeSide.north;
-    if (minD == dBottom) return EdgeSide.south;
-    if (minD == dLeft) return EdgeSide.west;
-    return EdgeSide.east;
-  }
-
   int hitTest(Offset p) {
     final x = p.dx;
     final y = p.dy;
@@ -957,9 +812,6 @@ class _ParkingGrid2DPainter extends CustomPainter {
   final ColorScheme colorScheme;
   final _Grid2DLayout layout;
 
-  final Map<EdgePlacement, WallGroupId?> walls;
-  final Map<WallGroupId, String> wallGroups;
-  final Set<EdgePlacement> selectedWalls;
   final List<ParkingArea> parkingAreas;
 
   _ParkingGrid2DPainter({
@@ -974,9 +826,6 @@ class _ParkingGrid2DPainter extends CustomPainter {
     required this.draftRectLayer,
     required this.colorScheme,
     required this.layout,
-    required this.walls,
-    required this.wallGroups,
-    required this.selectedWalls,
     required this.parkingAreas,
   });
 
@@ -1248,98 +1097,6 @@ class _ParkingGrid2DPainter extends CustomPainter {
     );
   }
 
-  void _drawWall2D(Canvas canvas, EdgePlacement w, {required bool selected}) {
-    final cs = colorScheme;
-    final cell = layout.cell;
-    final rect = layout.cellRect(w.r, w.c);
-
-    final th = max(3.0, cell * 0.12);
-    final out = max(4.0, cell * 0.10);
-
-    Offset a;
-    Offset b;
-    Offset outward;
-
-    switch (w.side) {
-      case EdgeSide.north:
-        a = Offset(rect.left, rect.top);
-        b = Offset(rect.right, rect.top);
-        outward = const Offset(0, -1);
-        break;
-      case EdgeSide.south:
-        a = Offset(rect.left, rect.bottom);
-        b = Offset(rect.right, rect.bottom);
-        outward = const Offset(0, 1);
-        break;
-      case EdgeSide.west:
-        a = Offset(rect.left, rect.top);
-        b = Offset(rect.left, rect.bottom);
-        outward = const Offset(-1, 0);
-        break;
-      case EdgeSide.east:
-        a = Offset(rect.right, rect.top);
-        b = Offset(rect.right, rect.bottom);
-        outward = const Offset(1, 0);
-        break;
-    }
-
-    a = a + outward * out;
-    b = b + outward * out;
-
-    final base = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeWidth = th
-      ..color = cs.onSurface.withOpacity(0.40);
-
-    final hi = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeWidth = th + 1.2
-      ..color = selected ? cs.primary.withOpacity(0.92) : cs.outlineVariant.withOpacity(0.65);
-
-    canvas.drawLine(a, b, base);
-    canvas.drawLine(a, b, hi);
-  }
-
-  void _drawWallName2D(Canvas canvas, EdgePlacement w, String name) {
-    final cs = colorScheme;
-    final rect = layout.cellRect(w.r, w.c);
-    final cell = layout.cell;
-
-    Offset pos;
-    switch (w.side) {
-      case EdgeSide.north:
-        pos = Offset(rect.center.dx, rect.top - max(18.0, cell * 0.28));
-        break;
-      case EdgeSide.south:
-        pos = Offset(rect.center.dx, rect.bottom + max(6.0, cell * 0.12));
-        break;
-      case EdgeSide.west:
-        pos = Offset(rect.left - max(60.0, cell * 0.80), rect.center.dy - 8);
-        break;
-      case EdgeSide.east:
-        pos = Offset(rect.right + max(6.0, cell * 0.12), rect.center.dy - 8);
-        break;
-    }
-
-    final tp = TextPainter(
-      text: TextSpan(
-        text: name,
-        style: TextStyle(
-          fontSize: max(10.0, cell * 0.18),
-          fontWeight: FontWeight.w900,
-          color: cs.onSurface.withOpacity(0.85),
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-      maxLines: 1,
-      ellipsis: '…',
-    )..layout(maxWidth: 160);
-
-    tp.paint(canvas, pos);
-  }
-
   @override
   void paint(Canvas canvas, Size size) {
     final cs = colorScheme;
@@ -1444,32 +1201,6 @@ class _ParkingGrid2DPainter extends CustomPainter {
     _drawRectLayer(canvas, towerRects, layer: _RectLayer.tower);
     _drawDraftRect(canvas);
 
-    for (final w in walls.keys) {
-      _drawWall2D(canvas, w, selected: selectedWalls.contains(w));
-    }
-
-    final reps = <WallGroupId, EdgePlacement>{};
-    for (final e in walls.entries) {
-      final gid = e.value;
-      if (gid == null) continue;
-
-      final name = wallGroups[gid]?.trim();
-      if (name == null || name.isEmpty) continue;
-
-      if (!reps.containsKey(gid)) {
-        reps[gid] = e.key;
-      } else {
-        final cur = reps[gid]!;
-        final a = edgeSortKey(e.key);
-        final b = edgeSortKey(cur);
-        if (a < b) reps[gid] = e.key;
-      }
-    }
-
-    for (final entry in reps.entries) {
-      final name = wallGroups[entry.key]?.trim() ?? '';
-      if (name.isNotEmpty) _drawWallName2D(canvas, entry.value, name);
-    }
   }
 
   @override
@@ -1486,9 +1217,6 @@ class _ParkingGrid2DPainter extends CustomPainter {
         oldDelegate.draftRect != draftRect ||
         oldDelegate.draftRectLayer != draftRectLayer ||
         oldDelegate.colorScheme != colorScheme ||
-        oldDelegate.walls != walls ||
-        oldDelegate.wallGroups != wallGroups ||
-        oldDelegate.selectedWalls != selectedWalls ||
         oldDelegate.parkingAreas != parkingAreas;
   }
 }

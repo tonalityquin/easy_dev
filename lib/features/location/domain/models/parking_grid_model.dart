@@ -16,72 +16,6 @@ String parkingGridCellTypeLabel(ParkingGridCellType t) {
   }
 }
 
-enum EdgeSide { north, east, south, west }
-
-String edgeSideLabel(EdgeSide s) {
-  switch (s) {
-    case EdgeSide.north:
-      return '북';
-    case EdgeSide.east:
-      return '동';
-    case EdgeSide.south:
-      return '남';
-    case EdgeSide.west:
-      return '서';
-  }
-}
-
-@immutable
-class EdgePlacement {
-  final int r;
-  final int c;
-  final EdgeSide side;
-
-  const EdgePlacement({required this.r, required this.c, required this.side});
-
-  String toKey() => '$r|$c|${side.index}';
-
-  static EdgePlacement fromKey(String key) {
-    final parts = key.split('|');
-    return EdgePlacement(
-      r: int.parse(parts[0]),
-      c: int.parse(parts[1]),
-      side: EdgeSide.values[int.parse(parts[2])],
-    );
-  }
-
-  @override
-  bool operator ==(Object other) {
-    return other is EdgePlacement && other.r == r && other.c == c && other.side == side;
-  }
-
-  @override
-  int get hashCode => Object.hash(r, c, side);
-}
-
-bool isEdgeValid(EdgePlacement e, int rows, int cols) {
-  if (rows <= 0 || cols <= 0) return false;
-  if (e.r < 0 || e.r >= rows || e.c < 0 || e.c >= cols) return false;
-
-  final onPerimeter = e.r == 0 || e.r == rows - 1 || e.c == 0 || e.c == cols - 1;
-  if (!onPerimeter) return false;
-
-  switch (e.side) {
-    case EdgeSide.north:
-      return e.r == 0;
-    case EdgeSide.south:
-      return e.r == rows - 1;
-    case EdgeSide.west:
-      return e.c == 0;
-    case EdgeSide.east:
-      return e.c == cols - 1;
-  }
-}
-
-int edgeSortKey(EdgePlacement e) => (e.r * 100000) + (e.c * 10) + e.side.index;
-
-typedef WallGroupId = String;
-
 enum ParkingAreaKind {
   compact1x2,
   compact2x1,
@@ -656,11 +590,7 @@ class ParkingGridModel {
   final int cols;
   final List<ParkingGridCellType> cells;
 
-  final String? entranceGateKey;
-  final String? exitGateKey;
 
-  final Map<String, WallGroupId?> walls;
-  final Map<WallGroupId, String> wallGroups;
 
   final List<ParkingArea> parkingAreas;
 
@@ -675,10 +605,6 @@ class ParkingGridModel {
     required this.rows,
     required this.cols,
     required this.cells,
-    this.entranceGateKey,
-    this.exitGateKey,
-    this.walls = const {},
-    this.wallGroups = const {},
     this.parkingAreas = const <ParkingArea>[],
     this.entranceRects = const <GridRect>[],
     this.exitRects = const <GridRect>[],
@@ -690,10 +616,6 @@ class ParkingGridModel {
     required int rows,
     required int cols,
     required List<ParkingGridCellType> cells,
-    String? entranceGateKey,
-    String? exitGateKey,
-    Map<String, WallGroupId?>? walls,
-    Map<WallGroupId, String>? wallGroups,
     List<ParkingArea>? parkingAreas,
     List<GridRect>? entranceRects,
     List<GridRect>? exitRects,
@@ -704,10 +626,6 @@ class ParkingGridModel {
       rows: rows,
       cols: cols,
       cells: List.unmodifiable(cells),
-      entranceGateKey: entranceGateKey,
-      exitGateKey: exitGateKey,
-      walls: Map.unmodifiable(walls ?? const {}),
-      wallGroups: Map.unmodifiable(wallGroups ?? const {}),
       parkingAreas: List.unmodifiable(parkingAreas ?? const <ParkingArea>[]),
       entranceRects: List.unmodifiable(entranceRects ?? const <GridRect>[]),
       exitRects: List.unmodifiable(exitRects ?? const <GridRect>[]),
@@ -718,17 +636,11 @@ class ParkingGridModel {
 
   ParkingGridCellType cellTypeAt(int idx) => cells[idx];
 
-  EdgePlacement? get entranceGate => entranceGateKey == null ? null : EdgePlacement.fromKey(entranceGateKey!);
-  EdgePlacement? get exitGate => exitGateKey == null ? null : EdgePlacement.fromKey(exitGateKey!);
 
   ParkingGridModel copyWith({
     int? rows,
     int? cols,
     List<ParkingGridCellType>? cells,
-    String? entranceGateKey,
-    String? exitGateKey,
-    Map<String, WallGroupId?>? walls,
-    Map<WallGroupId, String>? wallGroups,
     List<ParkingArea>? parkingAreas,
     List<GridRect>? entranceRects,
     List<GridRect>? exitRects,
@@ -739,10 +651,6 @@ class ParkingGridModel {
       rows: rows ?? this.rows,
       cols: cols ?? this.cols,
       cells: List.unmodifiable(cells ?? this.cells),
-      entranceGateKey: entranceGateKey ?? this.entranceGateKey,
-      exitGateKey: exitGateKey ?? this.exitGateKey,
-      walls: Map.unmodifiable(walls ?? this.walls),
-      wallGroups: Map.unmodifiable(wallGroups ?? this.wallGroups),
       parkingAreas: List.unmodifiable(parkingAreas ?? this.parkingAreas),
       entranceRects: List.unmodifiable(entranceRects ?? this.entranceRects),
       exitRects: List.unmodifiable(exitRects ?? this.exitRects),
@@ -756,10 +664,6 @@ class ParkingGridModel {
       'rows': rows,
       'cols': cols,
       'cells': cells.map((e) => e.index).toList(),
-      'entranceGateKey': entranceGateKey,
-      'exitGateKey': exitGateKey,
-      'walls': walls,
-      'wallGroups': wallGroups,
       'parkingAreas': parkingAreas.map((e) => e.toJson()).toList(),
       'entranceRects': entranceRects.map((e) => e.toJson()).toList(),
       'exitRects': exitRects.map((e) => e.toJson()).toList(),
@@ -853,104 +757,6 @@ class ParkingGridModel {
       cells[i] = parseCell(rawCellsList[i]);
     }
 
-    EdgePlacement? tryParseGate(dynamic v) {
-      if (v == null) return null;
-
-      if (v is String) {
-        try {
-          final e = EdgePlacement.fromKey(v);
-          return isEdgeValid(e, resolvedRows, resolvedCols) ? e : null;
-        } catch (_) {
-          return null;
-        }
-      }
-
-      final m = readMap(v);
-      if (m != null) {
-        final r = readInt(m['r']);
-        final c = readInt(m['c']);
-        final sideIdx = readInt(m['side']);
-        if (r == null || c == null || sideIdx == null) return null;
-        if (sideIdx < 0 || sideIdx >= EdgeSide.values.length) return null;
-        final e = EdgePlacement(r: r, c: c, side: EdgeSide.values[sideIdx]);
-        return isEdgeValid(e, resolvedRows, resolvedCols) ? e : null;
-      }
-
-      return null;
-    }
-
-    final entranceRaw = pickFirst(['entranceGateKey', 'entranceGate', 'entrance', 'entryGateKey', 'entryGate']);
-    final exitRaw = pickFirst(['exitGateKey', 'exitGate', 'exit', 'outGateKey', 'outGate']);
-
-    final entrance = tryParseGate(entranceRaw);
-    final exit = tryParseGate(exitRaw);
-
-    EdgePlacement? tryParseEdgeKey(String key) {
-      try {
-        final e = EdgePlacement.fromKey(key);
-        return isEdgeValid(e, resolvedRows, resolvedCols) ? e : null;
-      } catch (_) {
-        return null;
-      }
-    }
-
-    final wallsRaw = pickFirst(['walls', 'wallEdges', 'wallEdgeKeys']);
-    final Map<String, WallGroupId?> walls = {};
-
-    final asMap = readMap(wallsRaw);
-    if (asMap != null) {
-      asMap.forEach((k, v) {
-        final keyStr = k.toString();
-        final e = tryParseEdgeKey(keyStr);
-        if (e == null) return;
-
-        WallGroupId? gid;
-        if (v == null) {
-          gid = null;
-        } else if (v is String) {
-          gid = v;
-        } else if (v is Map) {
-          final g = v['groupId'] ?? v['id'];
-          gid = g == null ? null : g.toString();
-        } else {
-          gid = v.toString();
-        }
-
-        walls[e.toKey()] = gid;
-      });
-    } else {
-      final asList = readList(wallsRaw);
-      if (asList != null) {
-        for (final it in asList) {
-          final keyStr = it.toString();
-          final e = tryParseEdgeKey(keyStr);
-          if (e == null) continue;
-          walls[e.toKey()] = null;
-        }
-      }
-    }
-
-    final wallGroupsRaw = readMap(pickFirst(['wallGroups', 'wallGroupNames'])) ?? const {};
-    final Map<WallGroupId, String> wallGroups = {};
-    wallGroupsRaw.forEach((k, v) {
-      final id = k.toString();
-      final name = v?.toString() ?? '';
-      if (id.trim().isEmpty) return;
-      wallGroups[id] = name;
-    });
-
-    final usedIds = walls.values.whereType<WallGroupId>().toSet();
-    wallGroups.removeWhere((id, _) => !usedIds.contains(id));
-
-    final entranceKey = entrance?.toKey();
-    final exitKey = exit?.toKey();
-    if (entranceKey != null && walls.containsKey(entranceKey)) {
-      walls.remove(entranceKey);
-    }
-    if (exitKey != null && walls.containsKey(exitKey)) {
-      walls.remove(exitKey);
-    }
-
     final rawAreas = pickFirst(['parkingAreas', 'parkingAreaList', 'areas']);
     final list = readList(rawAreas) ?? const <dynamic>[];
 
@@ -1019,16 +825,9 @@ class ParkingGridModel {
       'parkingTowers',
     ]);
 
-    var entranceRects = parseRectList(entranceRectsRaw);
-    var exitRects = parseRectList(exitRectsRaw);
+    final entranceRects = parseRectList(entranceRectsRaw);
+    final exitRects = parseRectList(exitRectsRaw);
     final towerRects = parseRectList(towerRectsRaw);
-
-    if (entranceRects.isEmpty && entrance != null) {
-      entranceRects = <GridRect>[GridRect(r0: entrance.r, c0: entrance.c, r1: entrance.r, c1: entrance.c)];
-    }
-    if (exitRects.isEmpty && exit != null) {
-      exitRects = <GridRect>[GridRect(r0: exit.r, c0: exit.c, r1: exit.r, c1: exit.c)];
-    }
 
     final road2Raw = pickFirst(['road2Cells', 'roadBCells', 'roadLane2Cells']);
     final road2List = readList(road2Raw) ?? const <dynamic>[];
@@ -1045,10 +844,6 @@ class ParkingGridModel {
       rows: resolvedRows,
       cols: resolvedCols,
       cells: List.unmodifiable(cells),
-      entranceGateKey: entranceKey,
-      exitGateKey: exitKey,
-      walls: Map.unmodifiable(walls),
-      wallGroups: Map.unmodifiable(wallGroups),
       parkingAreas: List.unmodifiable(parsedAreas),
       entranceRects: List.unmodifiable(entranceRects.map((e) => e.normalized()).toList()),
       exitRects: List.unmodifiable(exitRects.map((e) => e.normalized()).toList()),

@@ -452,16 +452,6 @@ String _previewSubtitleForLocation(LocationModel l, _PreviewEntryKind kind) {
   return parts.join(' · ');
 }
 
-String _edgeKeyToString(Object? k) {
-  if (k == null) return '';
-  if (k is String) return k.trim();
-  try {
-    final d = k as dynamic;
-    final v = d.toKey();
-    if (v is String) return v.trim();
-  } catch (_) {}
-  return k.toString().trim();
-}
 
 Map<String, Object?>? _toLooseMap(Object? it) {
   if (it == null) return null;

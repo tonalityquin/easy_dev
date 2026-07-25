@@ -2,9 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
-
+import '../../../../app/utils/location_debug_status.dart';
 import '../../domain/models/grid_rect.dart';
 import '../../domain/models/parking_grid_model.dart';
 import 'widgets/location_draft.dart';
@@ -13,18 +11,24 @@ import 'widgets/parking_grid_child_rect_selector.dart';
 import '../../../../shared/secondary/widgets/ops_console_dialogs.dart';
 import '../../../../shared/secondary/widgets/ops_console_widgets.dart';
 
-enum _LocationEntryMode { structured, plainText }
-enum _CreateMode { parent, child }
-enum _ParentToolGroup { basic, parking, boundary, facility }
+enum LocationSettingIntent {
+  createParent,
+  editParent,
+  createChild,
+  editChild,
+  editPlainText,
+}
+enum _ParentToolGroup { basic, parking, facility }
 
 class LocationSettingBottomSheet extends StatefulWidget {
-  final ValueChanged<LocationDraft> onSave;
+  final LocationSettingIntent intent;
+  final Future<bool> Function(LocationDraft draft) onSave;
   final Set<String> existingNameKeysInArea;
   final Set<String> existingChildCompositeKeysInArea;
-  final List<String> parentNamesInArea;
   final Map<String, ParkingGridModel> parentParkingGridsByParentKey;
   final Map<String, List<GridRect>> existingChildRectsByParentKey;
   final Map<String, Set<String>> existingChildAreaIdsByParentKey;
+  final String? fixedParentName;
 
   final String? editingParentName;
   final ParkingGridModel? editingParentParkingGrid;
@@ -45,13 +49,14 @@ class LocationSettingBottomSheet extends StatefulWidget {
 
   const LocationSettingBottomSheet({
     super.key,
+    required this.intent,
     required this.onSave,
     required this.existingNameKeysInArea,
     required this.existingChildCompositeKeysInArea,
-    required this.parentNamesInArea,
     required this.parentParkingGridsByParentKey,
     this.existingChildRectsByParentKey = const <String, List<GridRect>>{},
     this.existingChildAreaIdsByParentKey = const <String, Set<String>>{},
+    this.fixedParentName,
     this.editingParentName,
     this.editingParentParkingGrid,
     this.editingChildId,
@@ -72,19 +77,34 @@ class LocationSettingBottomSheet extends StatefulWidget {
 }
 
 class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet> {
-  _LocationEntryMode _entryMode = _LocationEntryMode.structured;
-  _CreateMode _mode = _CreateMode.parent;
+  bool get _isParentIntent =>
+      widget.intent == LocationSettingIntent.createParent ||
+      widget.intent == LocationSettingIntent.editParent;
 
-  bool get _isParentEdit => widget.editingParentName != null && widget.editingParentParkingGrid != null;
+  bool get _isChildIntent =>
+      widget.intent == LocationSettingIntent.createChild ||
+      widget.intent == LocationSettingIntent.editChild;
 
-  bool get _isChildEdit => widget.editingChildId != null &&
+  bool get _isPlainTextIntent =>
+      widget.intent == LocationSettingIntent.editPlainText;
+
+  bool get _isParentEdit =>
+      widget.intent == LocationSettingIntent.editParent &&
+      widget.editingParentName != null &&
+      widget.editingParentParkingGrid != null;
+
+  bool get _isChildEdit =>
+      widget.intent == LocationSettingIntent.editChild &&
+      widget.editingChildId != null &&
       widget.editingChildParentName != null &&
       widget.editingChildName != null &&
       widget.editingChildCapacity != null &&
       widget.editingChildRect != null;
 
   bool get _isPlainTextEdit =>
-      widget.editingPlainTextId != null && widget.editingPlainTextName != null;
+      widget.intent == LocationSettingIntent.editPlainText &&
+      widget.editingPlainTextId != null &&
+      widget.editingPlainTextName != null;
 
   String? _editingChildOriginalCompositeKey;
   String? _editingPlainTextOriginalNameKey;
@@ -103,10 +123,6 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
   late List<ParkingGridCellType> _gridCells;
   Set<int> _road2Cells = <int>{};
 
-  Map<EdgePlacement, WallGroupId?> _walls = <EdgePlacement, WallGroupId?>{};
-  Map<WallGroupId, String> _wallGroups = <WallGroupId, String>{};
-  Set<EdgePlacement> _selectedWalls = <EdgePlacement>{};
-  int _wallGroupSeq = 0;
 
   List<ParkingArea> _parkingAreas = <ParkingArea>[];
 
@@ -129,6 +145,7 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
   bool _childSquareLock = false;
 
   String? _errorMessage;
+  bool _saving = false;
 
   final TextEditingController _tlRController = TextEditingController();
   final TextEditingController _tlCController = TextEditingController();
@@ -305,20 +322,17 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
     super.initState();
 
     if (_isPlainTextEdit) {
-      _entryMode = _LocationEntryMode.plainText;
       _plainTextNameController.text = (widget.editingPlainTextName ?? '').trim();
       final cap = widget.editingPlainTextCapacity;
-      _plainTextCapacityController.text = cap == null || cap <= 0 ? '' : cap.toString();
-      _editingPlainTextOriginalNameKey = _nameKey(_plainTextNameController.text);
-    } else if (_isChildEdit) {
-      _entryMode = _LocationEntryMode.structured;
-      _mode = _CreateMode.child;
-      _selectedParent = (widget.editingChildParentName ?? '').trim();
-    } else {
-      _entryMode = _LocationEntryMode.structured;
-      if (widget.parentNamesInArea.isNotEmpty) {
-        _selectedParent = widget.parentNamesInArea.first;
-      }
+      _plainTextCapacityController.text =
+          cap == null || cap <= 0 ? '' : cap.toString();
+      _editingPlainTextOriginalNameKey =
+          _nameKey(_plainTextNameController.text);
+    } else if (_isChildIntent) {
+      _selectedParent = (widget.fixedParentName ??
+              widget.editingChildParentName ??
+              '')
+          .trim();
     }
 
     _gridCells = List<ParkingGridCellType>.filled(
@@ -334,8 +348,6 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
     _towerRects = <GridRect>[];
 
     if (_isParentEdit) {
-      _entryMode = _LocationEntryMode.structured;
-      _mode = _CreateMode.parent;
       _parentController.text = (widget.editingParentName ?? '').trim();
       final g = widget.editingParentParkingGrid;
       if (g != null) {
@@ -344,22 +356,24 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
     }
 
     if (_isChildEdit) {
-      _entryMode = _LocationEntryMode.structured;
-      _mode = _CreateMode.child;
-      _selectedParent = (widget.editingChildParentName ?? '').trim();
+      _selectedParent = (widget.fixedParentName ??
+              widget.editingChildParentName ??
+              '')
+          .trim();
       _childController.text = (widget.editingChildName ?? '').trim();
       _capacityController.text = (widget.editingChildCapacity ?? 0).toString();
       _selectedChildRect = widget.editingChildRect?.normalized();
+      _childIsTower = widget.editingChildIsTower == true;
       _setSelectedChildParkingAreaIds(
         widget.editingChildSlotAreaIds
             .map((e) => e.trim())
             .where((e) => e.isNotEmpty)
             .toSet(),
         initialNumbers: widget.editingChildSlotNumbersByAreaId,
+        updateCapacity: !_childIsTower,
       );
       _syncChildRectInputsFromRect(_selectedChildRect);
 
-      _childIsTower = widget.editingChildIsTower == true;
       if (_childIsTower) {
         _childSquareLock = false;
       }
@@ -410,31 +424,7 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
   void _clearError() => setState(() => _errorMessage = null);
 
   void _setTool(GridEditTool next) {
-    setState(() {
-      _tool = next;
-      if (_tool != GridEditTool.wallSelect) {
-        _selectedWalls = <EdgePlacement>{};
-      }
-    });
-  }
-
-  WallGroupId _newWallGroupId() {
-    _wallGroupSeq++;
-    return 'wg_${DateTime.now().microsecondsSinceEpoch}_${_wallGroupSeq}';
-  }
-
-  void _cleanupWallGroups() {
-    final used = _walls.values.whereType<WallGroupId>().toSet();
-    _wallGroups.removeWhere((id, _) => !used.contains(id));
-  }
-
-  WallGroupId? _findGroupIdByName(String name) {
-    final target = name.trim();
-    if (target.isEmpty) return null;
-    for (final e in _wallGroups.entries) {
-      if (e.value.trim() == target) return e.key;
-    }
-    return null;
+    setState(() => _tool = next);
   }
 
   bool _rectInBounds(GridRect r, int rows, int cols) {
@@ -488,17 +478,6 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
       if (nextCells[newIdx] == ParkingGridCellType.road) nextRoad2.add(newIdx);
     }
 
-    final nextWalls = <EdgePlacement, WallGroupId?>{};
-    for (final e in grid.walls.entries) {
-      try {
-        final ep = EdgePlacement.fromKey(e.key);
-        if (!isEdgeValid(ep, target, target)) continue;
-        nextWalls[ep] = e.value;
-      } catch (_) {}
-    }
-
-    final nextGroups = Map<WallGroupId, String>.from(grid.wallGroups);
-
     final nextParkingAreas = <ParkingArea>[];
     for (final a in grid.parkingAreas) {
       final r1 = a.r0 + a.kind.h - 1;
@@ -512,30 +491,15 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
     var exitRects = _filterRectsWithin(grid.exitRects, target, target);
     final towerRects = _filterRectsWithin(grid.towerRects, target, target);
 
-    final legacyE = grid.entranceGate;
-    final legacyX = grid.exitGate;
-
-    if (entranceRects.isEmpty && legacyE != null) {
-      entranceRects = <GridRect>[GridRect(r0: legacyE.r, c0: legacyE.c, r1: legacyE.r, c1: legacyE.c)];
-    }
-
-    if (exitRects.isEmpty && legacyX != null) {
-      exitRects = <GridRect>[GridRect(r0: legacyX.r, c0: legacyX.c, r1: legacyX.r, c1: legacyX.c)];
-    }
-
     _gridSize = target;
     _tool = GridEditTool.empty;
     _gridCells = nextCells;
     _road2Cells = nextRoad2;
-    _walls = nextWalls;
-    _wallGroups = nextGroups;
-    _selectedWalls = <EdgePlacement>{};
     _parkingAreas = nextParkingAreas;
     _entranceRects = entranceRects;
     _exitRects = exitRects;
     _towerRects = towerRects;
 
-    _cleanupWallGroups();
   }
 
   void _resizeGridPreserving({required int nextSize}) {
@@ -575,15 +539,6 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
       if (nextCells[newIdx] == ParkingGridCellType.road) nextRoad2.add(newIdx);
     }
 
-    final nextWalls = <EdgePlacement, WallGroupId?>{};
-    for (final e in _walls.entries) {
-      final ep = e.key;
-      if (!isEdgeValid(ep, to, to)) continue;
-      nextWalls[ep] = e.value;
-    }
-
-    final nextGroups = Map<WallGroupId, String>.from(_wallGroups);
-
     final nextParkingAreas = <ParkingArea>[];
     for (final a in _parkingAreas) {
       final r1 = a.r0 + a.kind.h - 1;
@@ -601,14 +556,10 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
       _gridSize = to;
       _gridCells = nextCells;
       _road2Cells = nextRoad2;
-      _walls = nextWalls;
-      _wallGroups = nextGroups;
-      _selectedWalls = _selectedWalls.where(_walls.containsKey).toSet();
       _parkingAreas = nextParkingAreas;
       _entranceRects = nextEntrances;
       _exitRects = nextExits;
       _towerRects = nextTowers;
-      _cleanupWallGroups();
     });
   }
 
@@ -624,9 +575,6 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
       );
 
       _road2Cells = <int>{};
-      _walls = <EdgePlacement, WallGroupId?>{};
-      _wallGroups = <WallGroupId, String>{};
-      _selectedWalls = <EdgePlacement>{};
 
       _parkingAreas = <ParkingArea>[];
 
@@ -634,219 +582,6 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
       _exitRects = <GridRect>[];
       _towerRects = <GridRect>[];
     });
-  }
-
-  Future<String?> _promptWallGroupName(BuildContext context) async {
-    final controller = TextEditingController();
-
-    try {
-      final result = await showPromptOverlayDialog<String>(
-        context: context,
-        builder: (ctx) {
-          final cs = Theme.of(ctx).colorScheme;
-          final tt = Theme.of(ctx).textTheme;
-          return Dialog(
-            elevation: 0,
-            backgroundColor: PromptUiTheme.of(ctx).transparent,
-            insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 430),
-              child: OpsPanel(
-                margin: EdgeInsets.zero,
-                padding: EdgeInsets.zero,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
-                      decoration: BoxDecoration(
-                        color: cs.inverseSurface,
-                        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: cs.primary,
-                              borderRadius: BorderRadius.circular(13),
-                            ),
-                            child: Icon(Icons.linear_scale_rounded, color: cs.onPrimary, size: 21),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '벽 그룹명 지정',
-                                  style: (tt.titleMedium ?? const TextStyle(fontSize: 17)).copyWith(
-                                    color: cs.onInverseSurface,
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: -.2,
-                                  ),
-                                ),
-                                const SizedBox(height: 3),
-                                Text(
-                                  '선택한 벽 묶음을 운영자가 식별할 수 있게 이름으로 관리합니다.',
-                                  style: (tt.bodySmall ?? const TextStyle(fontSize: 12)).copyWith(
-                                    color: cs.onInverseSurface.withOpacity(.72),
-                                    fontWeight: FontWeight.w800,
-                                    height: 1.25,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          IconButton.filledTonal(
-                            tooltip: '닫기',
-                            onPressed: () => Navigator.of(ctx).pop(null),
-                            icon: const Icon(Icons.close_rounded),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 6),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          OpsInlineMessage(
-                            message: '도로·외곽·출구 앞 벽처럼 현장 기준으로 바로 구분되는 이름을 입력하세요.',
-                            danger: false,
-                            icon: Icons.info_outline_rounded,
-                          ),
-                          TextField(
-                            controller: controller,
-                            autofocus: true,
-                            textInputAction: TextInputAction.done,
-                            style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w900),
-                            decoration: opsInputDecoration(
-                              ctx,
-                              label: '벽 그룹명',
-
-                              prefixIcon: const Icon(Icons.edit_rounded),
-                            ),
-                            onSubmitted: (_) => Navigator.of(ctx).pop(controller.text.trim()),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: FilledButton.tonalIcon(
-                              onPressed: () => Navigator.of(ctx).pop(null),
-                              icon: const Icon(Icons.close_rounded, size: 18),
-                              label: const Text('취소'),
-                              style: FilledButton.styleFrom(
-                                minimumSize: const Size.fromHeight(46),
-                                textStyle: const TextStyle(fontWeight: FontWeight.w900),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: FilledButton.icon(
-                              onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
-                              icon: const Icon(Icons.save_rounded, size: 18),
-                              label: const Text('저장'),
-                              style: FilledButton.styleFrom(
-                                minimumSize: const Size.fromHeight(46),
-                                textStyle: const TextStyle(fontWeight: FontWeight.w900),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
-      );
-
-      final name = result?.trim();
-      if (name == null || name.isEmpty) return null;
-      return name;
-    } finally {
-      controller.dispose();
-    }
-  }
-
-  void _applyNameToSelectedWalls(String name) {
-    if (_selectedWalls.isEmpty) return;
-    final trimmed = name.trim();
-    if (trimmed.isEmpty) return;
-
-    final nextWalls = Map<EdgePlacement, WallGroupId?>.from(_walls);
-    final nextGroups = Map<WallGroupId, String>.from(_wallGroups);
-
-    final existingId = _findGroupIdByName(trimmed);
-    final gid = existingId ?? _newWallGroupId();
-
-    if (existingId == null) {
-      nextGroups[gid] = trimmed;
-    }
-
-    for (final w in _selectedWalls) {
-      if (nextWalls.containsKey(w)) nextWalls[w] = gid;
-    }
-
-    setState(() {
-      _walls = nextWalls;
-      _wallGroups = nextGroups;
-      _cleanupWallGroups();
-    });
-  }
-
-  void _clearNameOfSelectedWalls() {
-    if (_selectedWalls.isEmpty) return;
-
-    final nextWalls = Map<EdgePlacement, WallGroupId?>.from(_walls);
-    for (final w in _selectedWalls) {
-      if (nextWalls.containsKey(w)) nextWalls[w] = null;
-    }
-
-    setState(() {
-      _walls = nextWalls;
-      _cleanupWallGroups();
-    });
-  }
-
-  void _deleteSelectedWalls() {
-    if (_selectedWalls.isEmpty) return;
-
-    final next = Map<EdgePlacement, WallGroupId?>.from(_walls);
-    for (final w in _selectedWalls) {
-      next.remove(w);
-    }
-
-    setState(() {
-      _walls = next;
-      _selectedWalls = <EdgePlacement>{};
-      _cleanupWallGroups();
-    });
-  }
-
-  Map<WallGroupId, List<EdgePlacement>> _wallGroupsToEdges() {
-    final groups = <WallGroupId, List<EdgePlacement>>{};
-    for (final e in _walls.entries) {
-      final gid = e.value;
-      if (gid == null) continue;
-      final name = _wallGroups[gid]?.trim();
-      if (name == null || name.isEmpty) continue;
-      groups.putIfAbsent(gid, () => <EdgePlacement>[]).add(e.key);
-    }
-    return groups;
   }
 
   bool _overlapsExistingChildRects(
@@ -1123,7 +858,7 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
   }
 
   LocationDraft? _tryBuildDraft() {
-    if (_entryMode == _LocationEntryMode.plainText) {
+    if (_isPlainTextIntent) {
       final name = _normalizeName(_plainTextNameController.text);
       final nameKey = _nameKey(name);
       final capText = _plainTextCapacityController.text.trim();
@@ -1147,18 +882,19 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
 
       _clearError();
 
-      if (_isPlainTextEdit) {
-        return PlainTextLocationUpdateDraft(
-          id: widget.editingPlainTextId!,
-          name: name,
-          capacity: cap,
-        );
+      if (!_isPlainTextEdit) {
+        _setError('수정할 텍스트 구역 정보를 찾을 수 없습니다.');
+        return null;
       }
 
-      return PlainTextLocationDraft(name: name, capacity: cap);
+      return PlainTextLocationUpdateDraft(
+        id: widget.editingPlainTextId!,
+        name: name,
+        capacity: cap,
+      );
     }
 
-    if (_mode == _CreateMode.parent) {
+    if (_isParentIntent) {
       final parent = _normalizeName(_parentController.text);
       final parentKey = _nameKey(parent);
 
@@ -1167,7 +903,8 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
         return null;
       }
 
-      if (!_isParentEdit && widget.existingNameKeysInArea.contains(parentKey)) {
+      if (!_isParentEdit &&
+          widget.existingNameKeysInArea.contains(parentKey)) {
         _setError('이미 사용 중인 주차 구역명입니다: "$parent"');
         return null;
       }
@@ -1222,8 +959,6 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
         rows: _gridSize,
         cols: _gridSize,
         cells: _gridCells,
-        walls: _walls.map((e, gid) => MapEntry(e.toKey(), gid)),
-        wallGroups: _wallGroups,
         parkingAreas: _parkingAreas,
         entranceRects: cleanedEntrances,
         exitRects: cleanedExits,
@@ -1299,13 +1034,13 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
     }
 
     final ids = _childIsTower
-        ? const <String>[]
-        : _selectedChildParkingAreaIds
-            .map((e) => e.trim())
-            .where((e) => e.isNotEmpty)
-            .toSet()
-            .toList()
-      ..sort();
+        ? <String>[]
+        : (_selectedChildParkingAreaIds
+              .map((e) => e.trim())
+              .where((e) => e.isNotEmpty)
+              .toSet()
+              .toList()
+          ..sort());
 
     if (!_childIsTower && ids.isEmpty) {
       _setError('자식 구역에 포함할 주차면적을 1개 이상 선택하세요.');
@@ -1323,7 +1058,6 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
     if (_isChildEdit) {
       return CompositeChildUpdateDraft(
         id: widget.editingChildId!,
-        parent: parent,
         child: child,
         capacity: cap,
         rect: rect,
@@ -1334,7 +1068,6 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
     }
 
     return CompositeChildDraft(
-      parent: parent,
       child: child,
       capacity: cap,
       rect: rect,
@@ -1356,19 +1089,38 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
   }
 
   Future<void> _handleSave() async {
+    if (_saving) return;
     FocusScope.of(context).unfocus();
     final draft = _tryBuildDraft();
     if (draft == null) return;
+    if (!_draftMatchesIntent(draft)) {
+      _setError('현재 작업과 일치하지 않는 저장 요청입니다.');
+      return;
+    }
 
     if (draft is CompositeParentUpdateDraft) {
       final confirmed = await _confirmParentGridUpdate();
-      if (!confirmed) return;
-      if (!mounted) return;
+      if (!confirmed || !mounted) return;
     }
 
-    widget.onSave(draft);
+    setState(() => _saving = true);
+    var saved = false;
+    try {
+      saved = await widget.onSave(draft);
+    } catch (e, stackTrace) {
+      LocationDebugStatus.report(
+        context: context,
+        title: '구역 저장 실패',
+        operation: 'LocationSettingBottomSheet._handleSave',
+        error: e,
+        stackTrace: stackTrace,
+        details: <String, Object?>{'draftType': draft.runtimeType},
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
     if (!mounted) return;
-    Navigator.pop(context);
+    if (saved) Navigator.pop(context);
   }
 
   Widget _sectionCard(
@@ -1463,86 +1215,6 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
     );
   }
 
-  Widget _buildEntryModeChips(ColorScheme cs) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        OpsFormChip(
-          label: '구조형',
-          selected: _entryMode == _LocationEntryMode.structured,
-          icon: Icons.account_tree_rounded,
-          onTap: () {
-            if (_entryMode == _LocationEntryMode.structured) return;
-            if (_isPlainTextEdit) return;
-            setState(() {
-              _entryMode = _LocationEntryMode.structured;
-              _errorMessage = null;
-              if (_selectedParent == null && widget.parentNamesInArea.isNotEmpty) {
-                _selectedParent = widget.parentNamesInArea.first;
-              }
-            });
-            _syncSelectedParentGrid(resetChildSelection: !_isChildEdit);
-          },
-        ),
-        OpsFormChip(
-          label: '텍스트형',
-          selected: _entryMode == _LocationEntryMode.plainText,
-          icon: Icons.text_fields_rounded,
-          onTap: () {
-            if (_entryMode == _LocationEntryMode.plainText) return;
-            if (_isParentEdit || _isChildEdit) return;
-            setState(() {
-              _entryMode = _LocationEntryMode.plainText;
-              _errorMessage = null;
-            });
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStructuredModeChips(ColorScheme cs) {
-    final parentLabel = _isParentEdit ? '부모 수정' : '부모 생성';
-    final childLabel = _isChildEdit ? '자식 수정' : '자식 생성';
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        OpsFormChip(
-          label: parentLabel,
-          selected: _mode == _CreateMode.parent,
-          icon: _isParentEdit ? Icons.edit_rounded : Icons.add_rounded,
-          onTap: () {
-            if (_mode == _CreateMode.parent) return;
-            if (_isChildEdit) return;
-            setState(() {
-              _mode = _CreateMode.parent;
-              _errorMessage = null;
-            });
-          },
-        ),
-        OpsFormChip(
-          label: childLabel,
-          selected: _mode == _CreateMode.child,
-          icon: _isChildEdit ? Icons.edit_rounded : Icons.call_split_rounded,
-          onTap: () {
-            if (_mode == _CreateMode.child) return;
-            if (_isParentEdit) return;
-            setState(() {
-              _mode = _CreateMode.child;
-              _errorMessage = null;
-              if (_selectedParent == null && widget.parentNamesInArea.isNotEmpty) {
-                _selectedParent = widget.parentNamesInArea.first;
-              }
-            });
-            _syncSelectedParentGrid();
-          },
-        ),
-      ],
-    );
-  }
-
   Widget _toolChip(ColorScheme cs, String label, GridEditTool tool, IconData icon) {
     final selected = _tool == tool;
     final fg = selected ? cs.onPrimaryContainer : cs.onSurface;
@@ -1576,8 +1248,6 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
         return '기본';
       case _ParentToolGroup.parking:
         return '주차면';
-      case _ParentToolGroup.boundary:
-        return '경계';
       case _ParentToolGroup.facility:
         return '시설';
     }
@@ -1589,8 +1259,6 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
         return Icons.layers_rounded;
       case _ParentToolGroup.parking:
         return Icons.local_parking_rounded;
-      case _ParentToolGroup.boundary:
-        return Icons.fence_rounded;
       case _ParentToolGroup.facility:
         return Icons.login_rounded;
     }
@@ -1647,12 +1315,6 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
           _toolChip(cs, '장애인 확장형 B 2×2', GridEditTool.parkingDisabledExtendedB22, Icons.accessible_rounded),
           _toolChip(cs, '주차면 삭제', GridEditTool.parkingEraser, Icons.delete_outline_rounded),
         ];
-      case _ParentToolGroup.boundary:
-        return [
-          _toolChip(cs, '벽', GridEditTool.wall, Icons.fence_rounded),
-          _toolChip(cs, '벽 삭제', GridEditTool.wallEraser, Icons.delete_outline_rounded),
-          _toolChip(cs, '벽 선택', GridEditTool.wallSelect, Icons.select_all_rounded),
-        ];
       case _ParentToolGroup.facility:
         return [
           _toolChip(cs, '입구', GridEditTool.entranceRect, Icons.login_rounded),
@@ -1692,7 +1354,7 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
               OpsInfoPill(text: '부모명 잠금', icon: Icons.lock_rounded),
               OpsInfoPill(text: '지역 잠금', icon: Icons.business_rounded),
               OpsInfoPill(text: '도면 수정 가능', icon: Icons.grid_4x4_rounded),
-              OpsInfoPill(text: '벽·주차면 수정 가능', icon: Icons.tune_rounded),
+              OpsInfoPill(text: '주차면 수정 가능', icon: Icons.tune_rounded),
             ],
           ),
           const SizedBox(height: 12),
@@ -1729,8 +1391,6 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
             children: [
               _statPill(cs, '그리드', '$_gridSize×$_gridSize'),
               _statPill(cs, '주차면', '${_parkingAreas.length}'),
-              _statPill(cs, '벽', '${_walls.length}'),
-              _statPill(cs, '벽그룹', '${_wallGroups.length}'),
               _statPill(cs, '도로1', '$road1Count'),
               _statPill(cs, '도로2', '$road2Count'),
               _statPill(cs, '기둥', '$pillarCount'),
@@ -1769,20 +1429,6 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
   }
 
   Widget _buildParentGridEditor(ColorScheme cs) {
-    final groups = _wallGroupsToEdges();
-    final groupIds = groups.keys.toList()
-      ..sort((a, b) {
-        final an = (_wallGroups[a] ?? '').trim();
-        final bn = (_wallGroups[b] ?? '').trim();
-        return an.compareTo(bn);
-      });
-
-    final unnamedCount = _walls.values.where((gid) => gid == null).length;
-
-    final wallSelectMode = _tool == GridEditTool.wallSelect;
-    final selectedCount = wallSelectMode ? _selectedWalls.length : 0;
-    final parkingCount = _parkingAreas.length;
-
     final gridStepper = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1882,115 +1528,12 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
                 onChangedEntranceRects: (next) => setState(() => _entranceRects = next),
                 onChangedExitRects: (next) => setState(() => _exitRects = next),
                 onChangedTowerRects: (next) => setState(() => _towerRects = next),
-                walls: _walls,
-                wallGroups: _wallGroups,
-                selectedWalls: _selectedWalls,
                 parkingAreas: _parkingAreas,
                 onChangedParkingAreas: (next) => setState(() => _parkingAreas = next),
                 onChangedCells: (next) => setState(() => _gridCells = next),
-                onChangedWalls: (next) => setState(() {
-                  _walls = next;
-                  _selectedWalls = _selectedWalls.where(_walls.containsKey).toSet();
-                  _cleanupWallGroups();
-                }),
-                onChangedSelectedWalls: (sel) => setState(() {
-                  if (_tool == GridEditTool.wallSelect) {
-                    _selectedWalls = sel.where(_walls.containsKey).toSet();
-                  }
-                }),
               ),
             ),
           ),
-        ],
-      ),
-    );
-
-    final wallManage = _sectionCard(
-      cs,
-      title: '벽(외곽 변) 관리',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Wrap(
-            spacing: 10,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              _statPill(cs, '벽', '${_walls.length}'),
-              _statPill(cs, '그룹', '${_wallGroups.length}'),
-              _statPill(cs, '선택', '$selectedCount'),
-              _statPill(cs, '이름없음', '$unnamedCount'),
-              _statPill(cs, '주차면적', '$parkingCount'),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 10,
-            runSpacing: 8,
-            children: [
-              FilledButton.tonalIcon(
-                onPressed: (!wallSelectMode || _selectedWalls.isEmpty)
-                    ? null
-                    : () async {
-                  final name = await _promptWallGroupName(context);
-                  if (name == null) return;
-                  _applyNameToSelectedWalls(name);
-                },
-                icon: const Icon(Icons.edit_rounded),
-                label: const Text('이름 지정'),
-              ),
-              FilledButton.tonalIcon(
-                onPressed: (!wallSelectMode || _selectedWalls.isEmpty) ? null : _clearNameOfSelectedWalls,
-                icon: const Icon(Icons.label_off_rounded),
-                label: const Text('이름 제거'),
-              ),
-              FilledButton.tonalIcon(
-                onPressed: (!wallSelectMode || _selectedWalls.isEmpty) ? null : _deleteSelectedWalls,
-                icon: const Icon(Icons.delete_rounded),
-                label: const Text('선택 삭제'),
-              ),
-              FilledButton.tonalIcon(
-                onPressed: (!wallSelectMode || _selectedWalls.isEmpty)
-                    ? null
-                    : () => setState(() => _selectedWalls = <EdgePlacement>{}),
-                icon: const Icon(Icons.deselect_rounded),
-                label: const Text('선택 해제'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          if (groupIds.isNotEmpty) ...[
-            Text('벽 그룹', style: TextStyle(fontWeight: FontWeight.w900, color: cs.onSurface)),
-            const SizedBox(height: 8),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Wrap(
-                spacing: 8,
-                children: [
-                  for (final gid in groupIds)
-                    ActionChip(
-                      label: Text(
-                        '${_wallGroups[gid] ?? gid} (${groups[gid]!.length})',
-                        style: const TextStyle(fontWeight: FontWeight.w800),
-                      ),
-                      avatar: const Icon(Icons.label_rounded),
-                      onPressed: !wallSelectMode
-                          ? null
-                          : () {
-                        setState(() {
-                          _selectedWalls = groups[gid]!.toSet();
-                        });
-                      },
-                    ),
-                ],
-              ),
-            ),
-          ] else ...[
-            Text(
-              '이름이 지정된 벽 그룹이 없습니다.',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: cs.onSurfaceVariant.withOpacity(.85)),
-            ),
-          ],
         ],
       ),
     );
@@ -2067,8 +1610,6 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
       children: [
         const SizedBox(height: 14),
         editor,
-        const SizedBox(height: 12),
-        wallManage,
         const SizedBox(height: 12),
         gateList,
         const SizedBox(height: 12),
@@ -2693,19 +2234,85 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
 
 
 
+  bool _draftMatchesIntent(LocationDraft draft) {
+    switch (widget.intent) {
+      case LocationSettingIntent.createParent:
+        return draft is CompositeParentDraft;
+      case LocationSettingIntent.editParent:
+        return draft is CompositeParentUpdateDraft;
+      case LocationSettingIntent.createChild:
+        return draft is CompositeChildDraft;
+      case LocationSettingIntent.editChild:
+        return draft is CompositeChildUpdateDraft;
+      case LocationSettingIntent.editPlainText:
+        return draft is PlainTextLocationUpdateDraft;
+    }
+  }
+
+  Widget _animatedContent({
+    required Key key,
+    required Widget child,
+  }) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 280),
+      reverseDuration: const Duration(milliseconds: 220),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      transitionBuilder: (current, animation) {
+        final offset = Tween<Offset>(
+          begin: const Offset(0, .025),
+          end: Offset.zero,
+        ).animate(animation);
+        final scale = Tween<double>(
+          begin: .985,
+          end: 1,
+        ).animate(animation);
+        return FadeTransition(
+          opacity: animation,
+          child: SlideTransition(
+            position: offset,
+            child: ScaleTransition(
+              scale: scale,
+              child: current,
+            ),
+          ),
+        );
+      },
+      child: KeyedSubtree(
+        key: key,
+        child: child,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final noParents = widget.parentNamesInArea.isEmpty;
-    final isStructured = _entryMode == _LocationEntryMode.structured;
+    final isEditMode = _isParentEdit || _isChildEdit || _isPlainTextEdit;
+    final isChild = _isChildIntent;
+    final parentName = isChild
+        ? (_selectedParent ?? '').trim()
+        : _parentController.text.trim();
+    final noParent = isChild &&
+        (parentName.isEmpty || _selectedParentGrid == null);
 
-    final title = _entryMode == _LocationEntryMode.plainText
-        ? (_isPlainTextEdit ? '텍스트 구역 수정' : '텍스트 구역 추가')
-        : (_mode == _CreateMode.parent && _isParentEdit)
-            ? '부모 구역 수정'
-            : (_mode == _CreateMode.child && _isChildEdit)
-                ? '자식 구역 수정'
-                : (_mode == _CreateMode.parent ? '부모 구역 추가' : '자식 구역 추가');
+    final title = switch (widget.intent) {
+      LocationSettingIntent.createParent => '부모 구역 추가',
+      LocationSettingIntent.editParent => '부모 구역 수정',
+      LocationSettingIntent.createChild => '자식 구역 추가',
+      LocationSettingIntent.editChild => '자식 구역 수정',
+      LocationSettingIntent.editPlainText => '텍스트 구역 수정',
+    };
+
+    final saveLabel = switch (widget.intent) {
+      LocationSettingIntent.createParent => '부모 구역 저장',
+      LocationSettingIntent.editParent => '부모 수정 저장',
+      LocationSettingIntent.createChild => '자식 구역 저장',
+      LocationSettingIntent.editChild => '자식 수정 저장',
+      LocationSettingIntent.editPlainText => '구역 수정 저장',
+    };
+
+    final contentKey = ValueKey<LocationSettingIntent>(widget.intent);
 
     final parentContent = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2722,7 +2329,6 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
             decoration: _inputDecoration(
               '부모 구역명',
               cs: cs,
-
               prefixIcon: const Icon(Icons.location_on_rounded),
             ),
           ),
@@ -2735,40 +2341,26 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
     final childInfo = _sectionCard(
       cs,
       title: '자식 구역 식별값',
-      subtitle: '부모 구역, 하위 구역명, 실제 수용 대수를 업무 기준으로 입력합니다.',
+      subtitle: '선택한 부모 구역에 고정된 자식 구역 정보를 입력합니다.',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (noParents)
-            _banner(
-              cs,
-              text: '현재 지역에 생성된 부모 구역이 없습니다. 먼저 부모 구역을 만든 뒤 자식 구역을 추가하세요.',
-              icon: Icons.error_outline_rounded,
-              isError: true,
-            )
-          else
-            DropdownButtonFormField<String>(
-              value: _selectedParent,
-              items: widget.parentNamesInArea
-                  .map(
-                    (p) => DropdownMenuItem<String>(
-                      value: p,
-                      child: Text(p, maxLines: 1, overflow: TextOverflow.ellipsis),
-                    ),
-                  )
-                  .toList(),
-              onChanged: _isChildEdit
-                  ? null
-                  : (v) {
-                      setState(() => _selectedParent = v);
-                      _syncSelectedParentGrid();
-                    },
-              decoration: _inputDecoration(
-                '부모 구역 선택',
-                cs: cs,
-                prefixIcon: const Icon(Icons.account_tree_rounded),
+          InputDecorator(
+            decoration: _inputDecoration(
+              '부모 구역',
+              cs: cs,
+              prefixIcon: const Icon(Icons.account_tree_rounded),
+            ),
+            child: Text(
+              parentName.isEmpty ? '부모 구역 없음' : parentName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: parentName.isEmpty ? cs.error : cs.onSurface,
+                fontWeight: FontWeight.w800,
               ),
             ),
+          ),
           const SizedBox(height: 12),
           TextField(
             controller: _childController,
@@ -2778,7 +2370,6 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
             decoration: _inputDecoration(
               '자식 구역명',
               cs: cs,
-
               prefixIcon: const Icon(Icons.edit_location_alt_rounded),
             ),
           ),
@@ -2787,13 +2378,15 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
             controller: _capacityController,
             onTapOutside: (_) => FocusScope.of(context).unfocus(),
             keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(4)],
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(4),
+            ],
             textInputAction: TextInputAction.done,
             style: TextStyle(color: cs.onSurface),
             decoration: _inputDecoration(
               '수용 가능 차량 수',
               cs: cs,
-
               prefixIcon: const Icon(Icons.local_parking_rounded),
             ),
           ),
@@ -2804,40 +2397,79 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
     final childContent = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (noParent)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _banner(
+              cs,
+              text: '선택한 부모 구역의 도면을 찾을 수 없습니다.',
+              icon: Icons.error_outline_rounded,
+              isError: true,
+            ),
+          ),
         childInfo,
         const SizedBox(height: 12),
         _buildChildGridSelector(cs),
       ],
     );
 
-    final content = _entryMode == _LocationEntryMode.plainText
-        ? _buildPlainTextContent(cs)
-        : (_mode == _CreateMode.parent ? parentContent : childContent);
+    final content = switch (widget.intent) {
+      LocationSettingIntent.createParent ||
+      LocationSettingIntent.editParent =>
+        parentContent,
+      LocationSettingIntent.createChild ||
+      LocationSettingIntent.editChild =>
+        childContent,
+      LocationSettingIntent.editPlainText => _buildPlainTextContent(cs),
+    };
 
-    final contentKey = _entryMode == _LocationEntryMode.plainText
-        ? 'plain_text'
-        : (_mode == _CreateMode.parent ? 'structured_parent' : 'structured_child');
-
-    final isEditMode = _isPlainTextEdit ||
-        (_entryMode == _LocationEntryMode.structured &&
-            ((_mode == _CreateMode.parent && _isParentEdit) ||
-                (_mode == _CreateMode.child && _isChildEdit)));
-
-    final parentCount = widget.parentNamesInArea.length;
-    final selectedParent = _mode == _CreateMode.parent ? _parentController.text.trim() : (_selectedParent ?? '').trim();
     final selectedSlotCount = _selectedChildParkingAreaIds.length;
-    final gridLabel = _mode == _CreateMode.parent ? '${_gridSize}×$_gridSize' : (_selectedParentGrid == null ? '-' : '${_selectedParentGrid!.rows}×${_selectedParentGrid!.cols}');
+    final gridLabel = _isParentIntent
+        ? '${_gridSize}×$_gridSize'
+        : (_selectedParentGrid == null
+            ? '-'
+            : '${_selectedParentGrid!.rows}×${_selectedParentGrid!.cols}');
 
     return OpsWorkSheet(
       title: title,
       subtitle: '',
-      icon: Icons.location_on_rounded,
+      icon: isChild
+          ? Icons.subdirectory_arrow_right_rounded
+          : Icons.location_on_rounded,
       areaLabel: isEditMode ? '수정 작업' : '신규 작업',
       metrics: [
-        OpsMetric(label: '방식', value: isStructured ? '구조형' : '텍스트', icon: Icons.schema_rounded, color: cs.primary),
-        OpsMetric(label: '부모', value: '$parentCount', icon: Icons.account_tree_rounded, color: parentCount == 0 && _mode == _CreateMode.child ? cs.error : cs.primary),
-        OpsMetric(label: '그리드', value: gridLabel, icon: Icons.grid_4x4_rounded, color: cs.primary),
-        OpsMetric(label: '슬롯', value: '$selectedSlotCount', icon: Icons.local_parking_rounded, color: selectedSlotCount == 0 && _mode == _CreateMode.child ? cs.error : cs.primary),
+        OpsMetric(
+          label: '대상',
+          value: _isParentIntent
+              ? '부모'
+              : (_isChildIntent ? '자식' : '텍스트'),
+          icon: _isParentIntent
+              ? Icons.account_tree_rounded
+              : (_isChildIntent
+                  ? Icons.subdirectory_arrow_right_rounded
+                  : Icons.text_fields_rounded),
+          color: cs.primary,
+        ),
+        OpsMetric(
+          label: '부모',
+          value: parentName.isEmpty ? '-' : parentName,
+          icon: Icons.account_tree_rounded,
+          color: noParent ? cs.error : cs.primary,
+        ),
+        OpsMetric(
+          label: '그리드',
+          value: gridLabel,
+          icon: Icons.grid_4x4_rounded,
+          color: cs.primary,
+        ),
+        OpsMetric(
+          label: '슬롯',
+          value: '$selectedSlotCount',
+          icon: Icons.local_parking_rounded,
+          color: isChild && selectedSlotCount == 0 && !_childIsTower
+              ? cs.error
+              : cs.primary,
+        ),
       ],
       bottomBar: OpsBottomActionBar(
         children: [
@@ -2845,64 +2477,113 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
             child: OpsActionButton(
               label: '취소',
               icon: Icons.close_rounded,
-              onPressed: () => Navigator.pop(context),
+              onPressed: _saving ? null : () => Navigator.pop(context),
               tonal: true,
             ),
           ),
           const SizedBox(width: 8),
           Expanded(
             child: OpsActionButton(
-              label: isEditMode ? '구역 수정 저장' : '구역 저장',
-              icon: isEditMode ? Icons.save_rounded : Icons.add_location_alt_rounded,
-              onPressed: (_entryMode == _LocationEntryMode.structured && _mode == _CreateMode.child && noParents) ? null : _handleSave,
+              label: _saving ? '저장 중' : saveLabel,
+              icon: _saving
+                  ? Icons.hourglass_top_rounded
+                  : (isEditMode
+                      ? Icons.save_rounded
+                      : Icons.add_location_alt_rounded),
+              onPressed: _saving || noParent ? null : _handleSave,
             ),
           ),
         ],
       ),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 180),
-            child: _errorMessage == null
-                ? const SizedBox.shrink()
-                : Padding(
-                    key: ValueKey<String>(_errorMessage!),
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: _banner(cs, text: _errorMessage!, icon: Icons.error_outline_rounded, isError: true),
-                  ),
-          ),
-          OpsCommandPanel(
-            children: [
-              _buildEntryModeChips(cs),
-              if (isStructured) ...[
-                const SizedBox(height: 10),
-                _buildStructuredModeChips(cs),
-              ],
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  OpsInfoPill(text: isEditMode ? '수정 모드' : '등록 모드', icon: isEditMode ? Icons.edit_rounded : Icons.add_rounded),
-                  OpsInfoPill(text: selectedParent.isEmpty ? '부모 미선택' : selectedParent, icon: Icons.account_tree_rounded),
-                  OpsInfoPill(text: _childIsTower ? '타워 자식' : '일반 구역', icon: _childIsTower ? Icons.apartment_rounded : Icons.crop_square_rounded),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 220),
-            switchInCurve: Curves.easeOut,
-            switchOutCurve: Curves.easeIn,
-            child: Padding(
-              key: ValueKey<String>(contentKey),
-              padding: const EdgeInsets.only(bottom: 10),
-              child: content,
+      body: TweenAnimationBuilder<double>(
+        duration: const Duration(milliseconds: 320),
+        curve: Curves.easeOutCubic,
+        tween: Tween<double>(begin: 0, end: 1),
+        builder: (context, value, child) {
+          return Opacity(
+            opacity: value,
+            child: Transform.translate(
+              offset: Offset(0, 14 * (1 - value)),
+              child: child,
             ),
-          ),
-        ],
+          );
+        },
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 220),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (child, animation) {
+                return SizeTransition(
+                  sizeFactor: animation,
+                  axisAlignment: -1,
+                  child: FadeTransition(
+                    opacity: animation,
+                    child: child,
+                  ),
+                );
+              },
+              child: _errorMessage == null
+                  ? const SizedBox.shrink()
+                  : Padding(
+                      key: ValueKey<String>(_errorMessage!),
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: _banner(
+                        cs,
+                        text: _errorMessage!,
+                        icon: Icons.error_outline_rounded,
+                        isError: true,
+                      ),
+                    ),
+            ),
+            OpsCommandPanel(
+              children: [
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    OpsInfoPill(
+                      text: isEditMode ? '수정 모드' : '등록 모드',
+                      icon: isEditMode ? Icons.edit_rounded : Icons.add_rounded,
+                    ),
+                    OpsInfoPill(
+                      text: _isParentIntent
+                          ? '부모 전용'
+                          : (_isChildIntent ? '자식 전용' : '텍스트 전용'),
+                      icon: _isParentIntent
+                          ? Icons.account_tree_rounded
+                          : (_isChildIntent
+                              ? Icons.subdirectory_arrow_right_rounded
+                              : Icons.text_fields_rounded),
+                    ),
+                    if (_isChildIntent)
+                      OpsInfoPill(
+                        text: parentName.isEmpty ? '부모 미지정' : parentName,
+                        icon: Icons.lock_rounded,
+                      ),
+                    if (_isChildIntent)
+                      OpsInfoPill(
+                        text: _childIsTower ? '타워 자식' : '일반 자식',
+                        icon: _childIsTower
+                            ? Icons.apartment_rounded
+                            : Icons.crop_square_rounded,
+                      ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _animatedContent(
+              key: contentKey,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: content,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

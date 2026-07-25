@@ -217,9 +217,6 @@ class _ModelPalette {
   final Color pillarSideA;
   final Color pillarSideB;
 
-  final Color wallTop;
-  final Color wallSideA;
-  final Color wallSideB;
 
   final Color outline;
   final Color frame;
@@ -255,9 +252,6 @@ class _ModelPalette {
     required this.pillarTop,
     required this.pillarSideA,
     required this.pillarSideB,
-    required this.wallTop,
-    required this.wallSideA,
-    required this.wallSideB,
     required this.outline,
     required this.frame,
     required this.entrance,
@@ -318,17 +312,6 @@ class _ModelPalette {
     final pillarSideB =
         _ColorUtil.shiftLightness(pillarBase, isLight ? -0.16 : 0.16)
             .withOpacity(0.88);
-
-    final wallBase = _ColorUtil.ensureContrast(cs.secondaryContainer, bg,
-        fallback: cs.secondary, target: 2.0);
-    final wallTop = _ColorUtil.shiftLightness(wallBase, isLight ? -0.03 : 0.03)
-        .withOpacity(0.84);
-    final wallSideA =
-        _ColorUtil.shiftLightness(wallBase, isLight ? -0.13 : 0.13)
-            .withOpacity(0.68);
-    final wallSideB =
-        _ColorUtil.shiftLightness(wallBase, isLight ? -0.10 : 0.10)
-            .withOpacity(0.72);
 
     final outline = _ColorUtil.ensureContrast(cs.outlineVariant, bg,
             fallback: cs.onSurface, target: 1.8)
@@ -395,9 +378,6 @@ class _ModelPalette {
       pillarTop: pillarTop,
       pillarSideA: pillarSideA,
       pillarSideB: pillarSideB,
-      wallTop: wallTop,
-      wallSideA: wallSideA,
-      wallSideB: wallSideB,
       outline: outline,
       frame: frame,
       entrance: entrance,
@@ -447,15 +427,11 @@ class _ColorUtil {
 enum _CellKind { empty, road, road2, pillar }
 
 class _ParkingGridModel {
-  static const String kUngroupedWall = '__ungrouped_wall__';
 
   final int rows;
   final int cols;
   final List<_CellKind> cells;
-  final Map<String, String?> wallGroupIdByKey;
 
-  final String? entranceGateKey;
-  final String? exitGateKey;
 
   final List<GridRect> entranceRects;
   final List<GridRect> exitRects;
@@ -470,9 +446,6 @@ class _ParkingGridModel {
     required this.rows,
     required this.cols,
     required this.cells,
-    required this.wallGroupIdByKey,
-    required this.entranceGateKey,
-    required this.exitGateKey,
     required this.entranceRects,
     required this.exitRects,
     required this.towerRects,
@@ -517,20 +490,10 @@ class _ParkingGridModel {
       }
     }
 
-    final wallGroupIdByKey = <String, String?>{};
-    for (final e in pg.walls.entries) {
-      final key = _edgeKeyToString(e.key);
-      if (key.isEmpty) continue;
-      wallGroupIdByKey[key] = e.value?.toString();
-    }
-
     return _ParkingGridModel(
       rows: pg.rows,
       cols: pg.cols,
       cells: cells,
-      wallGroupIdByKey: wallGroupIdByKey,
-      entranceGateKey: pg.entranceGateKey,
-      exitGateKey: pg.exitGateKey,
       entranceRects: List<GridRect>.from(pg.entranceRects),
       exitRects: List<GridRect>.from(pg.exitRects),
       towerRects: List<GridRect>.from(pg.towerRects),
@@ -666,12 +629,6 @@ enum _EdgeKind { entrance, exit }
 
 enum _RoadAxis { none, x, z, cross }
 
-class _WallRun {
-  final Vec3 a;
-  final Vec3 b;
-
-  const _WallRun(this.a, this.b);
-}
 
 class _RectXZ {
   final int x0, x1;
@@ -708,8 +665,6 @@ class _ParkingGrid2DPainter extends CustomPainter {
   static const double _roadHeight = 0.04;
   static const double _pillarHeightFull = 0.80;
   static const double _pillarHeightLod = 0.12;
-  static const double _wallHeightFull = 0.55;
-  static const double _wallHeightLod = 0.08;
 
   static const double _towerHeightFull = 0.72;
   static const double _towerHeightLod = 0.14;
@@ -718,9 +673,6 @@ class _ParkingGrid2DPainter extends CustomPainter {
   static const double _childSlotInset = 0.22;
   static const double _childSlotZBias = 0.0017;
 
-  static const double _wallBaseThickness = 0.06;
-  static const double _wallTopHighlightStripPx = 1.6;
-  static const double _wallTopViewMinThicknessPx = 3.0;
 
   late Mat3 _r;
   late double _fitScale;
@@ -832,38 +784,8 @@ class _ParkingGrid2DPainter extends CustomPainter {
     return _RoadAxis.z;
   }
 
-  bool _isPerimeterEdgeValid(int r, int c, int edge) {
-    if (model.rows <= 0 || model.cols <= 0) return false;
-    if (r < 0 || r >= model.rows || c < 0 || c >= model.cols) return false;
 
-    final onPerimeter =
-        r == 0 || r == model.rows - 1 || c == 0 || c == model.cols - 1;
-    if (!onPerimeter) return false;
 
-    switch (edge) {
-      case 0:
-        return r == 0;
-      case 1:
-        return c == model.cols - 1;
-      case 2:
-        return r == model.rows - 1;
-      case 3:
-        return c == 0;
-      default:
-        return false;
-    }
-  }
-
-  double _wallThicknessForView() {
-    if (!isOrtho) return _wallBaseThickness;
-    final needWorld = (_wallTopViewMinThicknessPx / max(0.0001, _fitScale));
-    return max(_wallBaseThickness, needWorld);
-  }
-
-  double _wallHighlightStripWorld(double thickness) {
-    final pxToWorld = _wallTopHighlightStripPx / max(0.0001, _fitScale);
-    return (max(pxToWorld, thickness * 0.12)).clamp(0.008, thickness * 0.28);
-  }
 
   bool _isObstacleCell(_CellKind k) =>
       (k == _CellKind.road || k == _CellKind.road2 || k == _CellKind.pillar);
@@ -923,10 +845,6 @@ class _ParkingGrid2DPainter extends CustomPainter {
       faces.addAll(_buildTowerRects().faces);
     }
 
-    final wallRuns = _buildWallRunsByGroup();
-    for (final run in wallRuns) {
-      faces.addAll(_buildWallRunFaces(a: run.a, b: run.b).faces);
-    }
 
     if (model.childRegions.isNotEmpty) {
       faces.addAll(_buildChildRegions().faces);
@@ -939,8 +857,6 @@ class _ParkingGrid2DPainter extends CustomPainter {
       alerts.addAll(res.alerts);
     }
 
-    final hasGateRects =
-        model.entranceRects.isNotEmpty || model.exitRects.isNotEmpty;
 
     if (model.entranceRects.isNotEmpty) {
       final res =
@@ -954,27 +870,6 @@ class _ParkingGrid2DPainter extends CustomPainter {
       labels.addAll(res.labels);
     }
 
-    if (!hasGateRects) {
-      final entranceKey = model.entranceGateKey?.trim();
-      final exitKey = model.exitGateKey?.trim();
-
-      if (entranceKey != null && entranceKey.isNotEmpty) {
-        final edge = _edgeFromKey(entranceKey);
-        if (edge != null) {
-          final res = _buildGate(edge: edge, kind: _EdgeKind.entrance);
-          faces.addAll(res.faces);
-          labels.addAll(res.labels);
-        }
-      }
-      if (exitKey != null && exitKey.isNotEmpty) {
-        final edge = _edgeFromKey(exitKey);
-        if (edge != null) {
-          final res = _buildGate(edge: edge, kind: _EdgeKind.exit);
-          faces.addAll(res.faces);
-          labels.addAll(res.labels);
-        }
-      }
-    }
 
     final fillPaint = Paint()..style = PaintingStyle.fill;
     final strokePaint = Paint()
@@ -1599,132 +1494,8 @@ class _ParkingGrid2DPainter extends CustomPainter {
     return rects;
   }
 
-  List<_WallRun> _buildWallRunsByGroup() {
-    final rows = model.rows;
-    final cols = model.cols;
 
-    final hGroup =
-        List.generate(rows + 1, (_) => List<String?>.filled(cols, null));
-    final vGroup =
-        List.generate(cols + 1, (_) => List<String?>.filled(rows, null));
 
-    final entranceKey = model.entranceGateKey;
-    final exitKey = model.exitGateKey;
-
-    void putH(int z, int x, String groupKey) {
-      if (z < 0 || z > rows) return;
-      if (x < 0 || x >= cols) return;
-      hGroup[z][x] = groupKey;
-    }
-
-    void putV(int x, int z, String groupKey) {
-      if (x < 0 || x > cols) return;
-      if (z < 0 || z >= rows) return;
-      vGroup[x][z] = groupKey;
-    }
-
-    model.wallGroupIdByKey.forEach((key, gid) {
-      if (entranceKey != null && key == entranceKey) return;
-      if (exitKey != null && key == exitKey) return;
-
-      final parsed = _parseEdgeKey(key);
-      if (parsed == null) return;
-
-      final r = parsed.$1;
-      final c = parsed.$2;
-      final edge = parsed.$3;
-
-      if (!_isPerimeterEdgeValid(r, c, edge)) return;
-
-      final groupKey = gid ?? _ParkingGridModel.kUngroupedWall;
-
-      if (edge == 0) {
-        putH(r, c, groupKey);
-      } else if (edge == 2) {
-        putH(r + 1, c, groupKey);
-      } else if (edge == 1) {
-        putV(c + 1, r, groupKey);
-      } else if (edge == 3) {
-        putV(c, r, groupKey);
-      }
-    });
-
-    final runs = <_WallRun>[];
-
-    for (int z = 0; z <= rows; z++) {
-      int x = 0;
-      while (x < cols) {
-        final g = hGroup[z][x];
-        if (g == null) {
-          x++;
-          continue;
-        }
-        final start = x;
-        while (x < cols && hGroup[z][x] == g) {
-          x++;
-        }
-        final end = x;
-        runs.add(_WallRun(Vec3(start.toDouble(), 0, z.toDouble()),
-            Vec3(end.toDouble(), 0, z.toDouble())));
-      }
-    }
-
-    for (int x = 0; x <= cols; x++) {
-      int z = 0;
-      while (z < rows) {
-        final g = vGroup[x][z];
-        if (g == null) {
-          z++;
-          continue;
-        }
-        final start = z;
-        while (z < rows && vGroup[x][z] == g) {
-          z++;
-        }
-        final end = z;
-        runs.add(_WallRun(Vec3(x.toDouble(), 0, start.toDouble()),
-            Vec3(x.toDouble(), 0, end.toDouble())));
-      }
-    }
-
-    return runs;
-  }
-
-  (int r, int c, int edge)? _parseEdgeKey(String key) {
-    final parts = key.split('|');
-    if (parts.length != 3) return null;
-    final r = int.tryParse(parts[0]);
-    final c = int.tryParse(parts[1]);
-    final e = int.tryParse(parts[2]);
-    if (r == null || c == null || e == null) return null;
-    if (e < 0 || e > 3) return null;
-    return (r, c, e);
-  }
-
-  _Edge2D? _edgeFromKey(String key) {
-    final parsed = _parseEdgeKey(key);
-    if (parsed == null) return null;
-
-    final r = parsed.$1;
-    final c = parsed.$2;
-    final edge = parsed.$3;
-
-    if (!_isPerimeterEdgeValid(r, c, edge)) return null;
-
-    final x = c.toDouble();
-    final z = r.toDouble();
-
-    if (edge == 0) {
-      return _Edge2D(key: key, a: Vec3(x, 0, z), b: Vec3(x + 1, 0, z));
-    } else if (edge == 1) {
-      return _Edge2D(key: key, a: Vec3(x + 1, 0, z), b: Vec3(x + 1, 0, z + 1));
-    } else if (edge == 2) {
-      return _Edge2D(key: key, a: Vec3(x, 0, z + 1), b: Vec3(x + 1, 0, z + 1));
-    } else if (edge == 3) {
-      return _Edge2D(key: key, a: Vec3(x, 0, z), b: Vec3(x, 0, z + 1));
-    }
-    return null;
-  }
 
   double _avgDepth(List<Vec3> vs) {
     if (vs.isEmpty) return 0;
@@ -1941,104 +1712,6 @@ class _ParkingGrid2DPainter extends CustomPainter {
     return _TileResult(faces: faces);
   }
 
-  _TileResult _buildWallRunFaces({required Vec3 a, required Vec3 b}) {
-    final h = (isOrtho ? _wallHeightLod : _wallHeightFull).abs();
-    final yBase = _yFloorTop - _ySurfaceEps;
-
-    final runLen = (b - a).length;
-    if (runLen <= 0.00001) return const _TileResult(faces: []);
-
-    final thickness = _wallThicknessForView();
-
-    final baseRes = _buildEdgePrism(
-      a: a,
-      b: b,
-      yBase: yBase,
-      thickness: thickness,
-      height: h,
-      top: palette.wallTop,
-      sideA: palette.wallSideA,
-      sideB: palette.wallSideB,
-      zKeyBias: 0.0,
-    );
-
-    final faces = <_FacePaint>[]..addAll(baseRes.faces);
-
-    final dir = (b - a).normalized;
-    final n = Vec3(-dir.z, 0, dir.x);
-
-    final yTop = yBase - h;
-    final yTopLift = yTop - 0.0006;
-
-    final a0t = Vec3(a.x, yTopLift, a.z) + n * (thickness * 0.5);
-    final a1t = Vec3(a.x, yTopLift, a.z) - n * (thickness * 0.5);
-    final b0t = Vec3(b.x, yTopLift, b.z) + n * (thickness * 0.5);
-    final b1t = Vec3(b.x, yTopLift, b.z) - n * (thickness * 0.5);
-
-    final isLightTheme = cs.surfaceContainerLowest.computeLuminance() > 0.5;
-    final stripW = _wallHighlightStripWorld(thickness);
-
-    final hiFill =
-        _ColorUtil.shiftLightness(palette.wallTop, isLightTheme ? 0.08 : -0.08)
-            .withOpacity(0.92);
-    final loFill =
-        _ColorUtil.shiftLightness(palette.wallTop, isLightTheme ? -0.10 : 0.10)
-            .withOpacity(0.70);
-
-    final a0i = a0t - n * stripW;
-    final b0i = b0t - n * stripW;
-    faces.add(_FacePaint(
-      pts2: [_project(a0t), _project(b0t), _project(b0i), _project(a0i)],
-      fill: hiFill,
-      zKey: _avgDepth([a0t, b0t, b0i, a0i]) + 0.0008,
-    ));
-
-    final a1i = a1t + n * stripW;
-    final b1i = b1t + n * stripW;
-    faces.add(_FacePaint(
-      pts2: [_project(a1i), _project(b1i), _project(b1t), _project(a1t)],
-      fill: loFill,
-      zKey: _avgDepth([a1i, b1i, b1t, a1t]) + 0.00075,
-    ));
-
-    final bevelLenBase = max(thickness * 0.95, 0.06);
-    final bevelLen = min(bevelLenBase, runLen * 0.35);
-    final bevelDrop = isOrtho ? 0.0 : 0.035;
-    final bevelFillA =
-        _ColorUtil.shiftLightness(palette.wallTop, isLightTheme ? 0.06 : -0.06)
-            .withOpacity(0.90);
-    final bevelFillB =
-        _ColorUtil.shiftLightness(palette.wallTop, isLightTheme ? -0.06 : 0.06)
-            .withOpacity(0.86);
-
-    if (bevelLen > 0.0001) {
-      final s0 = a0t;
-      final s1 = a1t;
-      final s2 = a1t + dir * bevelLen + Vec3(0, bevelDrop, 0);
-      final s3 = a0t + dir * bevelLen + Vec3(0, bevelDrop, 0);
-
-      faces.add(_FacePaint(
-        pts2: [_project(s0), _project(s1), _project(s2), _project(s3)],
-        fill: bevelFillA,
-        zKey: _avgDepth([s0, s1, s2, s3]) + 0.0011,
-      ));
-    }
-
-    if (bevelLen > 0.0001) {
-      final e0 = b0t;
-      final e1 = b1t;
-      final e2 = b1t - dir * bevelLen + Vec3(0, bevelDrop, 0);
-      final e3 = b0t - dir * bevelLen + Vec3(0, bevelDrop, 0);
-
-      faces.add(_FacePaint(
-        pts2: [_project(e3), _project(e2), _project(e1), _project(e0)],
-        fill: bevelFillB,
-        zKey: _avgDepth([e3, e2, e1, e0]) + 0.00105,
-      ));
-    }
-
-    return _TileResult(faces: faces);
-  }
 
   _TileResult _buildTowerRects() {
     final faces = <_FacePaint>[];
@@ -2252,161 +1925,6 @@ class _ParkingGrid2DPainter extends CustomPainter {
     return _EdgeResult(faces: faces, labels: labels);
   }
 
-  _EdgeResult _buildGate({required _Edge2D edge, required _EdgeKind kind}) {
-    final faces = <_FacePaint>[];
-
-    final labels = <_TextAnchor>[];
-
-    final baseFill =
-        (kind == _EdgeKind.entrance) ? palette.entrance : palette.exit;
-    final baseSide = baseFill.withOpacity(0.90);
-
-    final iconBase = (kind == _EdgeKind.entrance) ? cs.onPrimary : cs.onError;
-    final iconFill = _ColorUtil.ensureContrast(iconBase, baseFill,
-            fallback: cs.onSurface, target: 2.0)
-        .withOpacity(0.80);
-
-    final dir = (edge.b - edge.a).normalized;
-    final len = (edge.b - edge.a).length;
-    final n = Vec3(-dir.z, 0, dir.x);
-
-    final postHalf = isOrtho ? 0.070 : 0.055;
-
-    final postH = (isOrtho ? 0.34 : 0.45).abs();
-    final plateH = (isOrtho ? 0.05 : 0.06).abs();
-    final ctrlH = (isOrtho ? 0.16 : 0.20).abs();
-
-    final armT = (isOrtho ? 0.10 : 0.075).abs();
-    final armH = (isOrtho ? 0.07 : 0.08).abs();
-
-    final armYBase = (_yFloorTop - _ySurfaceEps) - (isOrtho ? 0.26 : 0.34);
-
-    Vec3 postPos(double t) => edge.a + dir * (len * t);
-
-    final pA = postPos(0.18);
-    final pB = postPos(0.82);
-
-    faces.addAll(_buildAxisBox(
-      center: Vec3(pA.x, 0, pA.z) + n * (isOrtho ? 0.00 : 0.02),
-      halfX: postHalf * 1.55,
-      halfZ: postHalf * 1.55,
-      yBase: _yFloorTop - _ySurfaceEps,
-      height: plateH,
-      top: baseFill.withOpacity(0.92),
-      sideA: baseSide,
-      sideB: baseSide,
-      zKeyBias: 0.004,
-    ).faces);
-
-    faces.addAll(_buildAxisBox(
-      center: Vec3(pB.x, 0, pB.z) + n * (isOrtho ? 0.00 : 0.02),
-      halfX: postHalf * 1.55,
-      halfZ: postHalf * 1.55,
-      yBase: _yFloorTop - _ySurfaceEps,
-      height: plateH,
-      top: baseFill.withOpacity(0.92),
-      sideA: baseSide,
-      sideB: baseSide,
-      zKeyBias: 0.004,
-    ).faces);
-
-    faces.addAll(_buildAxisBox(
-      center: pA,
-      halfX: postHalf,
-      halfZ: postHalf,
-      yBase: _yFloorTop - _ySurfaceEps,
-      height: postH,
-      top: baseFill.withOpacity(0.96),
-      sideA: baseSide,
-      sideB: baseSide,
-      zKeyBias: 0.005,
-    ).faces);
-
-    faces.addAll(_buildAxisBox(
-      center: pB,
-      halfX: postHalf,
-      halfZ: postHalf,
-      yBase: _yFloorTop - _ySurfaceEps,
-      height: postH,
-      top: baseFill.withOpacity(0.96),
-      sideA: baseSide,
-      sideB: baseSide,
-      zKeyBias: 0.005,
-    ).faces);
-
-    final ctrlCenter =
-        pA + n * (isOrtho ? 0.16 : 0.18) + dir * (isOrtho ? 0.00 : 0.02);
-    faces.addAll(_buildAxisBox(
-      center: ctrlCenter,
-      halfX: isOrtho ? 0.11 : 0.12,
-      halfZ: isOrtho ? 0.07 : 0.08,
-      yBase: _yFloorTop - _ySurfaceEps,
-      height: ctrlH,
-      top: _ColorUtil.shiftLightness(baseFill, 0.08).withOpacity(0.94),
-      sideA: _ColorUtil.shiftLightness(baseSide, -0.06).withOpacity(0.90),
-      sideB: _ColorUtil.shiftLightness(baseSide, -0.02).withOpacity(0.90),
-      zKeyBias: 0.006,
-    ).faces);
-
-    final armStart = edge.a + dir * (len * 0.22);
-    final armEnd = edge.b - dir * (len * 0.22);
-
-    final arm = _buildEdgePrism(
-      a: armStart,
-      b: armEnd,
-      yBase: armYBase,
-      thickness: armT,
-      height: armH,
-      top: baseFill.withOpacity(0.99),
-      sideA: baseSide,
-      sideB: baseSide,
-      zKeyBias: 0.007,
-    );
-    faces.addAll(arm.faces);
-
-    final armLen = (armEnd - armStart).length;
-    final stripeHalfLen = armLen * 0.07;
-    final stripeHalfW = armT * 0.55;
-    final stripeY = (armYBase - armH) - 0.001;
-
-    for (final t in const [0.25, 0.50, 0.75]) {
-      final c = armStart + dir * (armLen * t);
-      final p0 =
-          c - dir * stripeHalfLen - n * stripeHalfW + Vec3(0, stripeY, 0);
-      final p1 =
-          c + dir * stripeHalfLen - n * stripeHalfW + Vec3(0, stripeY, 0);
-      final p2 =
-          c + dir * stripeHalfLen + n * stripeHalfW + Vec3(0, stripeY, 0);
-      final p3 =
-          c - dir * stripeHalfLen + n * stripeHalfW + Vec3(0, stripeY, 0);
-
-      faces.add(_FacePaint(
-        pts2: [_project(p0), _project(p1), _project(p2), _project(p3)],
-        fill: cs.surface.withOpacity(0.58),
-        zKey: _avgDepth([p0, p1, p2, p3]) + 0.008,
-      ));
-    }
-
-    final mid = (edge.a + edge.b) * 0.5;
-    final toCenter =
-        (Vec3(_pivot.x, 0, _pivot.z) - Vec3(mid.x, 0, mid.z)).normalized;
-    final d = (kind == _EdgeKind.entrance) ? toCenter : (toCenter * -1.0);
-    final perp = Vec3(-d.z, 0, d.x);
-
-    final floorY = _yFloorTop - _ySurfaceEps;
-    final tip = Vec3(mid.x, floorY, mid.z) + d * 0.52;
-    final baseC = Vec3(mid.x, floorY, mid.z) + d * 0.26;
-    final b1 = baseC + perp * 0.22;
-    final b2 = baseC - perp * 0.22;
-
-    faces.add(_FacePaint(
-      pts2: [_project(tip), _project(b1), _project(b2)],
-      fill: iconFill,
-      zKey: _avgDepth([tip, b1, b2]) + 0.009,
-    ));
-
-    return _EdgeResult(faces: faces, labels: labels);
-  }
 
   _TileResult _buildAxisBox({
     required Vec3 center,
@@ -2470,70 +1988,6 @@ class _ParkingGrid2DPainter extends CustomPainter {
     return _TileResult(faces: faces);
   }
 
-  _TileResult _buildEdgePrism({
-    required Vec3 a,
-    required Vec3 b,
-    required double yBase,
-    required double thickness,
-    required double height,
-    required Color top,
-    required Color sideA,
-    required Color sideB,
-    required double zKeyBias,
-  }) {
-    final h = height.abs();
-
-    final dir = (b - a).normalized;
-    final n = Vec3(-dir.z, 0, dir.x);
-
-    final a0 = Vec3(a.x, yBase, a.z) + n * (thickness * 0.5);
-    final a1 = Vec3(a.x, yBase, a.z) - n * (thickness * 0.5);
-    final b0 = Vec3(b.x, yBase, b.z) + n * (thickness * 0.5);
-    final b1 = Vec3(b.x, yBase, b.z) - n * (thickness * 0.5);
-
-    final a0t = Vec3(a0.x, yBase - h, a0.z);
-    final a1t = Vec3(a1.x, yBase - h, a1.z);
-    final b0t = Vec3(b0.x, yBase - h, b0.z);
-    final b1t = Vec3(b1.x, yBase - h, b1.z);
-
-    final faces = <_FacePaint>[];
-
-    faces.add(_FacePaint(
-      pts2: [_project(a0t), _project(b0t), _project(b1t), _project(a1t)],
-      fill: top,
-      zKey: _avgDepth([a0t, b0t, b1t, a1t]) + zKeyBias,
-    ));
-
-    if (isOrtho) return _TileResult(faces: faces);
-
-    final sA2 =
-        _ColorUtil.shiftLightness(sideA, -0.06).withOpacity(sideA.opacity);
-    final sB2 =
-        _ColorUtil.shiftLightness(sideB, -0.06).withOpacity(sideB.opacity);
-
-    faces.add(_FacePaint(
-      pts2: [_project(a0), _project(b0), _project(b0t), _project(a0t)],
-      fill: sideA,
-      zKey: _avgDepth([a0, b0, b0t, a0t]) + zKeyBias,
-    ));
-    faces.add(_FacePaint(
-      pts2: [_project(b0), _project(b1), _project(b1t), _project(b0t)],
-      fill: sideB,
-      zKey: _avgDepth([b0, b1, b1t, b0t]) + zKeyBias,
-    ));
-    faces.add(_FacePaint(
-      pts2: [_project(b1), _project(a1), _project(a1t), _project(b1t)],
-      fill: sA2,
-      zKey: _avgDepth([b1, a1, a1t, b1t]) + zKeyBias,
-    ));
-    faces.add(_FacePaint(
-      pts2: [_project(a1), _project(a0), _project(a0t), _project(a1t)],
-      fill: sB2,
-      zKey: _avgDepth([a1, a0, a0t, a1t]) + zKeyBias,
-    ));
-
-    return _TileResult(faces: faces);
-  }
 
   @override
   bool shouldRepaint(covariant _ParkingGrid2DPainter oldDelegate) {
@@ -2648,13 +2102,6 @@ class _AlertOverlay {
       {required this.pts2, required this.center2, required this.zKey});
 }
 
-class _Edge2D {
-  final String key;
-  final Vec3 a;
-  final Vec3 b;
-
-  const _Edge2D({required this.key, required this.a, required this.b});
-}
 
 class _FacePaint {
   final List<Offset> pts2;

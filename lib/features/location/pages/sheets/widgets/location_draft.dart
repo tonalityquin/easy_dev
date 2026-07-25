@@ -27,7 +27,6 @@ class CompositeParentUpdateDraft extends LocationDraft {
 
 class CompositeChildDraft extends LocationDraft {
   const CompositeChildDraft({
-    required this.parent,
     required this.child,
     required this.capacity,
     required this.rect,
@@ -36,7 +35,6 @@ class CompositeChildDraft extends LocationDraft {
     this.isTower = false,
   });
 
-  final String parent;
   final String child;
   final int capacity;
   final GridRect rect;
@@ -48,7 +46,6 @@ class CompositeChildDraft extends LocationDraft {
 class CompositeChildUpdateDraft extends LocationDraft {
   const CompositeChildUpdateDraft({
     required this.id,
-    required this.parent,
     required this.child,
     required this.capacity,
     required this.rect,
@@ -58,23 +55,12 @@ class CompositeChildUpdateDraft extends LocationDraft {
   });
 
   final String id;
-  final String parent;
   final String child;
   final int capacity;
   final GridRect rect;
   final List<String> childSlotAreaIds;
   final Map<String, int> childSlotNumbersByAreaId;
   final bool isTower;
-}
-
-class PlainTextLocationDraft extends LocationDraft {
-  const PlainTextLocationDraft({
-    required this.name,
-    required this.capacity,
-  });
-
-  final String name;
-  final int capacity;
 }
 
 class PlainTextLocationUpdateDraft extends LocationDraft {

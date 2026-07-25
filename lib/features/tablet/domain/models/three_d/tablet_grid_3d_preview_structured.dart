@@ -227,9 +227,6 @@ class _ModelPalette {
   final Color pillarSideA;
   final Color pillarSideB;
 
-  final Color wallTop;
-  final Color wallSideA;
-  final Color wallSideB;
 
   final Color outline;
   final Color frame;
@@ -269,9 +266,6 @@ class _ModelPalette {
     required this.pillarTop,
     required this.pillarSideA,
     required this.pillarSideB,
-    required this.wallTop,
-    required this.wallSideA,
-    required this.wallSideB,
     required this.outline,
     required this.frame,
     required this.entrance,
@@ -310,9 +304,6 @@ class _ModelPalette {
             other.pillarTop == pillarTop &&
             other.pillarSideA == pillarSideA &&
             other.pillarSideB == pillarSideB &&
-            other.wallTop == wallTop &&
-            other.wallSideA == wallSideA &&
-            other.wallSideB == wallSideB &&
             other.outline == outline &&
             other.frame == frame &&
             other.entrance == entrance &&
@@ -349,9 +340,6 @@ class _ModelPalette {
         pillarTop,
         pillarSideA,
         pillarSideB,
-        wallTop,
-        wallSideA,
-        wallSideB,
         outline,
         frame,
         entrance,
@@ -475,14 +463,6 @@ class _ModelPalette {
         _ColorUtil.shiftLightness(pillarTop, isLight ? -0.13 : 0.14)
             .withOpacity(0.88);
 
-    final wallTop =
-        _ColorUtil.mix(ivory, const Color(0xFFFFFFFF), isLight ? 0.18 : 0.06)
-            .withOpacity(0.98);
-    final wallSideA = _ColorUtil.shiftLightness(wallTop, isLight ? -0.08 : 0.08)
-        .withOpacity(0.94);
-    final wallSideB = _ColorUtil.shiftLightness(wallTop, isLight ? -0.12 : 0.12)
-        .withOpacity(0.90);
-
     final outline = _ColorUtil.ensureContrast(
       _ColorUtil.mix(
           cs.outlineVariant, const Color(0xFF4E5965), isLight ? 0.42 : 0.18),
@@ -556,9 +536,6 @@ class _ModelPalette {
       pillarTop: pillarTop,
       pillarSideA: pillarSideA,
       pillarSideB: pillarSideB,
-      wallTop: wallTop,
-      wallSideA: wallSideA,
-      wallSideB: wallSideB,
       outline: outline,
       frame: frame,
       entrance: entrance,
@@ -608,15 +585,11 @@ class _ColorUtil {
 enum _CellKind { empty, road, road2, pillar }
 
 class _ParkingGridModel {
-  static const String kUngroupedWall = '__ungrouped_wall__';
 
   final int rows;
   final int cols;
   final List<_CellKind> cells;
-  final Map<String, String?> wallGroupIdByKey;
 
-  final String? entranceGateKey;
-  final String? exitGateKey;
 
   final List<GridRect> entranceRects;
   final List<GridRect> exitRects;
@@ -631,9 +604,6 @@ class _ParkingGridModel {
     required this.rows,
     required this.cols,
     required this.cells,
-    required this.wallGroupIdByKey,
-    required this.entranceGateKey,
-    required this.exitGateKey,
     required this.entranceRects,
     required this.exitRects,
     required this.towerRects,
@@ -646,10 +616,6 @@ class _ParkingGridModel {
         rows,
         cols,
         Object.hashAll(cells),
-        Object.hashAll(
-            wallGroupIdByKey.entries.map((e) => Object.hash(e.key, e.value))),
-        entranceGateKey,
-        exitGateKey,
         Object.hashAll(
             entranceRects.map((r) => Object.hash(r.r0, r.c0, r.r1, r.c1))),
         Object.hashAll(
@@ -714,20 +680,10 @@ class _ParkingGridModel {
       }
     }
 
-    final wallGroupIdByKey = <String, String?>{};
-    for (final e in pg.walls.entries) {
-      final key = _edgeKeyToString(e.key);
-      if (key.isEmpty) continue;
-      wallGroupIdByKey[key] = e.value?.toString();
-    }
-
     return _ParkingGridModel(
       rows: pg.rows,
       cols: pg.cols,
       cells: cells,
-      wallGroupIdByKey: wallGroupIdByKey,
-      entranceGateKey: pg.entranceGateKey,
-      exitGateKey: pg.exitGateKey,
       entranceRects: List<GridRect>.from(pg.entranceRects),
       exitRects: List<GridRect>.from(pg.exitRects),
       towerRects: List<GridRect>.from(pg.towerRects),
@@ -749,41 +705,7 @@ class _Recommended3DViewConfig {
   });
 }
 
-(int r, int c, int edge)? _parseParkingGridEdgeKey(String? raw) {
-  final value = (raw ?? '').trim();
-  if (value.isEmpty) return null;
 
-  final parts = value.split('|');
-  if (parts.length != 3) return null;
-
-  final r = int.tryParse(parts[0]);
-  final c = int.tryParse(parts[1]);
-  final edge = int.tryParse(parts[2]);
-  if (r == null || c == null || edge == null) return null;
-  if (edge < 0 || edge > 3) return null;
-  return (r, c, edge);
-}
-
-Vec3? _parkingGridGateCenterFromEdgeKey(String? raw) {
-  final parsed = _parseParkingGridEdgeKey(raw);
-  if (parsed == null) return null;
-
-  final r = parsed.$1;
-  final c = parsed.$2;
-  final edge = parsed.$3;
-
-  switch (edge) {
-    case 0:
-      return Vec3(c + 0.5, 0, r.toDouble());
-    case 1:
-      return Vec3(c + 1.0, 0, r + 0.5);
-    case 2:
-      return Vec3(c + 0.5, 0, r + 1.0);
-    case 3:
-      return Vec3(c.toDouble(), 0, r + 0.5);
-  }
-  return null;
-}
 
 Iterable<Vec3> _parkingGridGateCentersFromRects(List<GridRect> rects) sync* {
   for (final rect in rects) {
@@ -814,12 +736,6 @@ Vec3 _preferredParkingGridHorizontalLook(_ParkingGridModel model) {
     ..._parkingGridGateCentersFromRects(model.exitRects),
   ];
 
-  final entranceEdgeCenter =
-      _parkingGridGateCenterFromEdgeKey(model.entranceGateKey);
-  if (entranceEdgeCenter != null) samples.add(entranceEdgeCenter);
-
-  final exitEdgeCenter = _parkingGridGateCenterFromEdgeKey(model.exitGateKey);
-  if (exitEdgeCenter != null) samples.add(exitEdgeCenter);
 
   if (samples.isEmpty) return fallback.normalized;
 
@@ -1045,12 +961,6 @@ enum _EdgeKind { entrance, exit }
 
 enum _RoadAxis { none, x, z, cross }
 
-class _WallRun {
-  final Vec3 a;
-  final Vec3 b;
-
-  const _WallRun(this.a, this.b);
-}
 
 class _RectXZ {
   final int x0, x1;
@@ -1085,16 +995,11 @@ class _ParkingGrid3DPainter extends CustomPainter {
   static const double _roadHeight = 0.05;
   static const double _pillarHeightFull = 0.94;
   static const double _pillarHeightLod = 0.12;
-  static const double _wallHeightFull = 0.78;
-  static const double _wallHeightLod = 0.08;
 
   static const double _childSlotHeight = 0.16;
   static const double _childSlotInset = 0.18;
   static const double _childSlotZBias = 0.0017;
 
-  static const double _wallBaseThickness = 0.06;
-  static const double _wallTopHighlightStripPx = 1.6;
-  static const double _wallTopViewMinThicknessPx = 3.0;
 
   late Mat3 _r;
   late double _fitScale;
@@ -1421,23 +1326,6 @@ class _ParkingGrid3DPainter extends CustomPainter {
     return kind == _EdgeKind.entrance ? inward : inward * -1.0;
   }
 
-  Vec3 _inwardNormalForEdgeKey(String key) {
-    final parsed = _parseEdgeKey(key);
-    if (parsed == null) return const Vec3(0, 0, 1);
-    final edge = parsed.$3;
-    switch (edge) {
-      case 0:
-        return const Vec3(0, 0, 1);
-      case 1:
-        return const Vec3(-1, 0, 0);
-      case 2:
-        return const Vec3(0, 0, -1);
-      case 3:
-        return const Vec3(1, 0, 0);
-      default:
-        return const Vec3(0, 0, 1);
-    }
-  }
 
   Vec3 _towerFrontDirectionForRect(int rr0, int rr1, int cc0, int cc1) {
     final cx = (cc0 + cc1 + 1) * 0.5;
@@ -1465,38 +1353,8 @@ class _ParkingGrid3DPainter extends CustomPainter {
     return _majorAxisDirection(towardCenter, fallback: const Vec3(0, 0, 1));
   }
 
-  bool _isPerimeterEdgeValid(int r, int c, int edge) {
-    if (model.rows <= 0 || model.cols <= 0) return false;
-    if (r < 0 || r >= model.rows || c < 0 || c >= model.cols) return false;
 
-    final onPerimeter =
-        r == 0 || r == model.rows - 1 || c == 0 || c == model.cols - 1;
-    if (!onPerimeter) return false;
 
-    switch (edge) {
-      case 0:
-        return r == 0;
-      case 1:
-        return c == model.cols - 1;
-      case 2:
-        return r == model.rows - 1;
-      case 3:
-        return c == 0;
-      default:
-        return false;
-    }
-  }
-
-  double _wallThicknessForView() {
-    if (!isOrtho) return _wallBaseThickness;
-    final needWorld = (_wallTopViewMinThicknessPx / max(0.0001, _fitScale));
-    return max(_wallBaseThickness, needWorld);
-  }
-
-  double _wallHighlightStripWorld(double thickness) {
-    final pxToWorld = _wallTopHighlightStripPx / max(0.0001, _fitScale);
-    return (max(pxToWorld, thickness * 0.12)).clamp(0.008, thickness * 0.28);
-  }
 
   bool _isObstacleCell(_CellKind k) =>
       (k == _CellKind.road || k == _CellKind.road2 || k == _CellKind.pillar);
@@ -1558,10 +1416,6 @@ class _ParkingGrid3DPainter extends CustomPainter {
       labels.addAll(res.labels);
     }
 
-    final wallRuns = _buildWallRunsByGroup();
-    for (final run in wallRuns) {
-      faces.addAll(_buildWallRunFaces(a: run.a, b: run.b).faces);
-    }
 
     if (model.childRegions.isNotEmpty) {
       faces.addAll(_buildChildRegions().faces);
@@ -1574,8 +1428,6 @@ class _ParkingGrid3DPainter extends CustomPainter {
       alerts.addAll(res.alerts);
     }
 
-    final hasGateRects =
-        model.entranceRects.isNotEmpty || model.exitRects.isNotEmpty;
 
     if (model.entranceRects.isNotEmpty) {
       final res =
@@ -1589,27 +1441,6 @@ class _ParkingGrid3DPainter extends CustomPainter {
       labels.addAll(res.labels);
     }
 
-    if (!hasGateRects) {
-      final entranceKey = model.entranceGateKey?.trim();
-      final exitKey = model.exitGateKey?.trim();
-
-      if (entranceKey != null && entranceKey.isNotEmpty) {
-        final edge = _edgeFromKey(entranceKey);
-        if (edge != null) {
-          final res = _buildGate(edge: edge, kind: _EdgeKind.entrance);
-          faces.addAll(res.faces);
-          labels.addAll(res.labels);
-        }
-      }
-      if (exitKey != null && exitKey.isNotEmpty) {
-        final edge = _edgeFromKey(exitKey);
-        if (edge != null) {
-          final res = _buildGate(edge: edge, kind: _EdgeKind.exit);
-          faces.addAll(res.faces);
-          labels.addAll(res.labels);
-        }
-      }
-    }
 
     final shouldPaintLabels = !_useMinimalDetailMode;
     final fillPaint = Paint()..style = PaintingStyle.fill;
@@ -2458,132 +2289,8 @@ class _ParkingGrid3DPainter extends CustomPainter {
     return rects;
   }
 
-  List<_WallRun> _buildWallRunsByGroup() {
-    final rows = model.rows;
-    final cols = model.cols;
 
-    final hGroup =
-        List.generate(rows + 1, (_) => List<String?>.filled(cols, null));
-    final vGroup =
-        List.generate(cols + 1, (_) => List<String?>.filled(rows, null));
 
-    final entranceKey = model.entranceGateKey;
-    final exitKey = model.exitGateKey;
-
-    void putH(int z, int x, String groupKey) {
-      if (z < 0 || z > rows) return;
-      if (x < 0 || x >= cols) return;
-      hGroup[z][x] = groupKey;
-    }
-
-    void putV(int x, int z, String groupKey) {
-      if (x < 0 || x > cols) return;
-      if (z < 0 || z >= rows) return;
-      vGroup[x][z] = groupKey;
-    }
-
-    model.wallGroupIdByKey.forEach((key, gid) {
-      if (entranceKey != null && key == entranceKey) return;
-      if (exitKey != null && key == exitKey) return;
-
-      final parsed = _parseEdgeKey(key);
-      if (parsed == null) return;
-
-      final r = parsed.$1;
-      final c = parsed.$2;
-      final edge = parsed.$3;
-
-      if (!_isPerimeterEdgeValid(r, c, edge)) return;
-
-      final groupKey = gid ?? _ParkingGridModel.kUngroupedWall;
-
-      if (edge == 0) {
-        putH(r, c, groupKey);
-      } else if (edge == 2) {
-        putH(r + 1, c, groupKey);
-      } else if (edge == 1) {
-        putV(c + 1, r, groupKey);
-      } else if (edge == 3) {
-        putV(c, r, groupKey);
-      }
-    });
-
-    final runs = <_WallRun>[];
-
-    for (int z = 0; z <= rows; z++) {
-      int x = 0;
-      while (x < cols) {
-        final g = hGroup[z][x];
-        if (g == null) {
-          x++;
-          continue;
-        }
-        final start = x;
-        while (x < cols && hGroup[z][x] == g) {
-          x++;
-        }
-        final end = x;
-        runs.add(_WallRun(Vec3(start.toDouble(), 0, z.toDouble()),
-            Vec3(end.toDouble(), 0, z.toDouble())));
-      }
-    }
-
-    for (int x = 0; x <= cols; x++) {
-      int z = 0;
-      while (z < rows) {
-        final g = vGroup[x][z];
-        if (g == null) {
-          z++;
-          continue;
-        }
-        final start = z;
-        while (z < rows && vGroup[x][z] == g) {
-          z++;
-        }
-        final end = z;
-        runs.add(_WallRun(Vec3(x.toDouble(), 0, start.toDouble()),
-            Vec3(x.toDouble(), 0, end.toDouble())));
-      }
-    }
-
-    return runs;
-  }
-
-  (int r, int c, int edge)? _parseEdgeKey(String key) {
-    final parts = key.split('|');
-    if (parts.length != 3) return null;
-    final r = int.tryParse(parts[0]);
-    final c = int.tryParse(parts[1]);
-    final e = int.tryParse(parts[2]);
-    if (r == null || c == null || e == null) return null;
-    if (e < 0 || e > 3) return null;
-    return (r, c, e);
-  }
-
-  _Edge3D? _edgeFromKey(String key) {
-    final parsed = _parseEdgeKey(key);
-    if (parsed == null) return null;
-
-    final r = parsed.$1;
-    final c = parsed.$2;
-    final edge = parsed.$3;
-
-    if (!_isPerimeterEdgeValid(r, c, edge)) return null;
-
-    final x = c.toDouble();
-    final z = r.toDouble();
-
-    if (edge == 0) {
-      return _Edge3D(key: key, a: Vec3(x, 0, z), b: Vec3(x + 1, 0, z));
-    } else if (edge == 1) {
-      return _Edge3D(key: key, a: Vec3(x + 1, 0, z), b: Vec3(x + 1, 0, z + 1));
-    } else if (edge == 2) {
-      return _Edge3D(key: key, a: Vec3(x, 0, z + 1), b: Vec3(x + 1, 0, z + 1));
-    } else if (edge == 3) {
-      return _Edge3D(key: key, a: Vec3(x, 0, z), b: Vec3(x, 0, z + 1));
-    }
-    return null;
-  }
 
   double _avgDepth(List<Vec3> vs) {
     if (vs.isEmpty) return 0;
@@ -3086,175 +2793,6 @@ class _ParkingGrid3DPainter extends CustomPainter {
     return _TileResult(faces: faces);
   }
 
-  _TileResult _buildWallRunFaces({required Vec3 a, required Vec3 b}) {
-    final h = (isOrtho ? _wallHeightLod : _wallHeightFull).abs();
-
-    if (_useMinimalDetailMode) {
-      return _buildEdgePrism(
-        a: a,
-        b: b,
-        yBase: _yFloorTop - _ySurfaceEps,
-        thickness: _wallThicknessForView(),
-        height: h,
-        top: palette.wallTop,
-        sideA: palette.wallSideA,
-        sideB: palette.wallSideB,
-        zKeyBias: 0.0,
-      );
-    }
-    final yBase = _yFloorTop - _ySurfaceEps;
-
-    final runLen = (b - a).length;
-    if (runLen <= 0.00001) return const _TileResult(faces: []);
-
-    final thickness = _wallThicknessForView();
-    final faces = <_FacePaint>[];
-
-    final dir = (b - a).normalized;
-    final n = Vec3(-dir.z, 0, dir.x);
-    final mid = Vec3((a.x + b.x) * 0.5, 0, (a.z + b.z) * 0.5);
-    final toCenter = Vec3(_pivot.x - mid.x, 0, _pivot.z - mid.z);
-    final inward = toCenter.dot(n) >= 0 ? n : n * -1.0;
-    final isLightTheme = cs.surfaceContainerLowest.computeLuminance() > 0.5;
-
-    final wallTop = _ColorUtil.mix(palette.wallTop, const Color(0xFFFFFFFF),
-            isLightTheme ? 0.16 : 0.04)
-        .withOpacity(0.98);
-    final wallSideA =
-        _ColorUtil.shiftLightness(wallTop, isLightTheme ? -0.08 : 0.08)
-            .withOpacity(0.94);
-    final wallSideB =
-        _ColorUtil.shiftLightness(wallTop, isLightTheme ? -0.12 : 0.12)
-            .withOpacity(0.92);
-    faces.addAll(_buildEdgePrism(
-      a: a,
-      b: b,
-      yBase: yBase,
-      thickness: thickness,
-      height: h,
-      top: wallTop,
-      sideA: wallSideA,
-      sideB: wallSideB,
-      zKeyBias: 0.0,
-    ).faces);
-
-    final capHeight = isOrtho ? 0.016 : 0.032;
-    faces.addAll(_buildEdgePrism(
-      a: a,
-      b: b,
-      yBase: yBase - h,
-      thickness: thickness * 1.12,
-      height: capHeight,
-      top: _ColorUtil.shiftLightness(wallTop, isLightTheme ? 0.06 : 0.04),
-      sideA: _ColorUtil.shiftLightness(wallSideA, isLightTheme ? 0.02 : 0.04),
-      sideB: _ColorUtil.shiftLightness(wallSideB, isLightTheme ? 0.02 : 0.04),
-      zKeyBias: 0.0010,
-    ).faces);
-
-    final skirtingThickness = thickness * 0.52;
-    final skirtingHeight = isOrtho ? 0.034 : min(0.13, h * 0.18);
-    final skirtingOffset =
-        inward * ((thickness - skirtingThickness) * 0.5 + 0.004);
-    final skirtingTop =
-        _ColorUtil.mix(const Color(0xFF8B9198), cs.surfaceVariant, 0.34)
-            .withOpacity(0.98);
-    final skirtingSideA =
-        _ColorUtil.shiftLightness(skirtingTop, isLightTheme ? -0.10 : 0.10)
-            .withOpacity(0.96);
-    final skirtingSideB =
-        _ColorUtil.shiftLightness(skirtingTop, isLightTheme ? -0.14 : 0.14)
-            .withOpacity(0.94);
-    faces.addAll(_buildEdgePrism(
-      a: a + skirtingOffset,
-      b: b + skirtingOffset,
-      yBase: yBase - 0.002,
-      thickness: skirtingThickness,
-      height: skirtingHeight,
-      top: skirtingTop,
-      sideA: skirtingSideA,
-      sideB: skirtingSideB,
-      zKeyBias: 0.0011,
-    ).faces);
-
-    final ribbonThickness = thickness * 0.32;
-    final ribbonHeight = isOrtho ? 0.022 : min(0.08, h * 0.10);
-    final ribbonOffset = inward * ((thickness - ribbonThickness) * 0.5 + 0.008);
-    final ribbonBase = yBase - h * 0.58;
-    final ribbonTop = _ColorUtil.ensureContrast(
-      _ColorUtil.mix(cs.primary, const Color(0xFF2F6FA8), 0.42),
-      cs.surfaceContainerLowest,
-      fallback: cs.primary,
-      target: 2.0,
-    ).withOpacity(0.92);
-    final ribbonSideA =
-        _ColorUtil.shiftLightness(ribbonTop, isLightTheme ? -0.10 : 0.08)
-            .withOpacity(0.90);
-    final ribbonSideB =
-        _ColorUtil.shiftLightness(ribbonTop, isLightTheme ? -0.16 : 0.12)
-            .withOpacity(0.88);
-    faces.addAll(_buildEdgePrism(
-      a: a + ribbonOffset,
-      b: b + ribbonOffset,
-      yBase: ribbonBase,
-      thickness: ribbonThickness,
-      height: ribbonHeight,
-      top: ribbonTop,
-      sideA: ribbonSideA,
-      sideB: ribbonSideB,
-      zKeyBias: 0.0016,
-    ).faces);
-
-    final adThickness = thickness * 0.20;
-    final adHeight = isOrtho ? 0.016 : min(0.06, h * 0.08);
-    final adOffset = inward * ((thickness - adThickness) * 0.5 + 0.011);
-    final adBase = yBase - h * 0.30;
-    final adTop = _ColorUtil.mix(const Color(0xFFF0E1B2), Colors.white, 0.38)
-        .withOpacity(0.94);
-    final adSideA =
-        _ColorUtil.shiftLightness(adTop, isLightTheme ? -0.08 : 0.06)
-            .withOpacity(0.90);
-    final adSideB =
-        _ColorUtil.shiftLightness(adTop, isLightTheme ? -0.12 : 0.10)
-            .withOpacity(0.88);
-    faces.addAll(_buildEdgePrism(
-      a: a + adOffset,
-      b: b + adOffset,
-      yBase: adBase,
-      thickness: adThickness,
-      height: adHeight,
-      top: adTop,
-      sideA: adSideA,
-      sideB: adSideB,
-      zKeyBias: 0.0019,
-    ).faces);
-
-    final yTop = yBase - h;
-    final stripW = _wallHighlightStripWorld(thickness) * 0.72;
-    final a0t = Vec3(a.x, yTop - 0.0006, a.z) + n * (thickness * 0.5);
-    final a1t = Vec3(a.x, yTop - 0.0006, a.z) - n * (thickness * 0.5);
-    final b0t = Vec3(b.x, yTop - 0.0006, b.z) + n * (thickness * 0.5);
-    final b1t = Vec3(b.x, yTop - 0.0006, b.z) - n * (thickness * 0.5);
-    final a0i = a0t - n * stripW;
-    final b0i = b0t - n * stripW;
-    final a1i = a1t + n * stripW;
-    final b1i = b1t + n * stripW;
-    final hiFill = Colors.white.withOpacity(isOrtho ? 0.18 : 0.24);
-    final loFill = _ColorUtil.mix(palette.outline, wallTop, 0.62)
-        .withOpacity(isOrtho ? 0.14 : 0.20);
-
-    faces.add(_FacePaint(
-      pts2: [_project(a0t), _project(b0t), _project(b0i), _project(a0i)],
-      fill: hiFill,
-      zKey: _avgDepth([a0t, b0t, b0i, a0i]) + 0.0008,
-    ));
-    faces.add(_FacePaint(
-      pts2: [_project(a1i), _project(b1i), _project(b1t), _project(a1t)],
-      fill: loFill,
-      zKey: _avgDepth([a1i, b1i, b1t, a1t]) + 0.00075,
-    ));
-
-    return _TileResult(faces: faces);
-  }
 
   _EdgeResult _buildTowerRects() {
     final faces = <_FacePaint>[];
@@ -3582,26 +3120,6 @@ class _ParkingGrid3DPainter extends CustomPainter {
     return _EdgeResult(faces: faces, labels: labels);
   }
 
-  _EdgeResult _buildGate({required _Edge3D edge, required _EdgeKind kind}) {
-    final faces = <_FacePaint>[];
-    final labels = <_TextAnchor>[];
-
-    final inward = _inwardNormalForEdgeKey(edge.key);
-    final d = kind == _EdgeKind.entrance ? inward : inward * -1.0;
-    final len = (edge.b - edge.a).length;
-    final span = (len * 0.34).clamp(0.36, 0.98).toDouble();
-    final gate = _buildBarrierGateScene(
-      thresholdCenter: (edge.a + edge.b) * 0.5,
-      travelDir: d,
-      span: span,
-      kind: kind,
-      floorBase: _yFloorTop - _ySurfaceEps,
-    );
-    faces.addAll(gate.faces);
-    labels.addAll(gate.labels);
-
-    return _EdgeResult(faces: faces, labels: labels);
-  }
 
   double _perimeterDistanceAlong(Vec3 point, Vec3 dir) {
     if (dir.x > 0.5) return max(0.0, model.cols - point.x);
@@ -3688,9 +3206,9 @@ class _ParkingGrid3DPainter extends CustomPainter {
         halfZ: isOrtho ? 0.08 : 0.10,
         yBase: floorBase,
         height: isOrtho ? 0.18 : 0.34,
-        top: palette.wallTop,
-        sideA: palette.wallSideA,
-        sideB: palette.wallSideB,
+        top: palette.pillarTop,
+        sideA: palette.pillarSideA,
+        sideB: palette.pillarSideB,
         zKeyBias: 0.0062,
       ).faces);
       faces.addAll(_buildAxisBox(
@@ -4079,70 +3597,6 @@ class _ParkingGrid3DPainter extends CustomPainter {
     return _TileResult(faces: faces);
   }
 
-  _TileResult _buildEdgePrism({
-    required Vec3 a,
-    required Vec3 b,
-    required double yBase,
-    required double thickness,
-    required double height,
-    required Color top,
-    required Color sideA,
-    required Color sideB,
-    required double zKeyBias,
-  }) {
-    final h = height.abs();
-
-    final dir = (b - a).normalized;
-    final n = Vec3(-dir.z, 0, dir.x);
-
-    final a0 = Vec3(a.x, yBase, a.z) + n * (thickness * 0.5);
-    final a1 = Vec3(a.x, yBase, a.z) - n * (thickness * 0.5);
-    final b0 = Vec3(b.x, yBase, b.z) + n * (thickness * 0.5);
-    final b1 = Vec3(b.x, yBase, b.z) - n * (thickness * 0.5);
-
-    final a0t = Vec3(a0.x, yBase - h, a0.z);
-    final a1t = Vec3(a1.x, yBase - h, a1.z);
-    final b0t = Vec3(b0.x, yBase - h, b0.z);
-    final b1t = Vec3(b1.x, yBase - h, b1.z);
-
-    final faces = <_FacePaint>[];
-
-    faces.add(_FacePaint(
-      pts2: [_project(a0t), _project(b0t), _project(b1t), _project(a1t)],
-      fill: top,
-      zKey: _avgDepth([a0t, b0t, b1t, a1t]) + zKeyBias,
-    ));
-
-    if (isOrtho) return _TileResult(faces: faces);
-
-    final sA2 =
-        _ColorUtil.shiftLightness(sideA, -0.06).withOpacity(sideA.opacity);
-    final sB2 =
-        _ColorUtil.shiftLightness(sideB, -0.06).withOpacity(sideB.opacity);
-
-    faces.add(_FacePaint(
-      pts2: [_project(a0), _project(b0), _project(b0t), _project(a0t)],
-      fill: sideA,
-      zKey: _avgDepth([a0, b0, b0t, a0t]) + zKeyBias,
-    ));
-    faces.add(_FacePaint(
-      pts2: [_project(b0), _project(b1), _project(b1t), _project(b0t)],
-      fill: sideB,
-      zKey: _avgDepth([b0, b1, b1t, b0t]) + zKeyBias,
-    ));
-    faces.add(_FacePaint(
-      pts2: [_project(b1), _project(a1), _project(a1t), _project(b1t)],
-      fill: sA2,
-      zKey: _avgDepth([b1, a1, a1t, b1t]) + zKeyBias,
-    ));
-    faces.add(_FacePaint(
-      pts2: [_project(a1), _project(a0), _project(a0t), _project(a1t)],
-      fill: sB2,
-      zKey: _avgDepth([a1, a0, a0t, a1t]) + zKeyBias,
-    ));
-
-    return _TileResult(faces: faces);
-  }
 
   @override
   bool shouldRepaint(covariant _ParkingGrid3DPainter oldDelegate) {
@@ -4256,13 +3710,6 @@ class _AlertOverlay {
       {required this.pts2, required this.center2, required this.zKey});
 }
 
-class _Edge3D {
-  final String key;
-  final Vec3 a;
-  final Vec3 b;
-
-  const _Edge3D({required this.key, required this.a, required this.b});
-}
 
 class _FacePaint {
   final List<Offset> pts2;
