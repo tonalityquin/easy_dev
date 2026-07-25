@@ -1,6 +1,8 @@
 import 'dart:math';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
+import '../../../../../app/utils/location_debug_status.dart';
 import '../../../domain/models/grid_rect.dart';
 import '../../../domain/models/parking_grid_model.dart';
 
@@ -11,6 +13,7 @@ class ParkingGridChildRectSelector extends StatefulWidget {
   final Set<String> selectedParkingAreaIds;
   final Set<String> disabledParkingAreaIds;
   final ValueChanged<Set<String>>? onChangedSelectedParkingAreaIds;
+  final ValueChanged<bool>? onInteractionChanged;
   final bool parkingAreaPickMode;
 
   final bool squareLock;
@@ -36,6 +39,7 @@ class ParkingGridChildRectSelector extends StatefulWidget {
     this.selectedParkingAreaIds = const <String>{},
     this.disabledParkingAreaIds = const <String>{},
     this.onChangedSelectedParkingAreaIds,
+    this.onInteractionChanged,
     this.parkingAreaPickMode = false,
     required this.squareLock,
     this.showHint = true,
@@ -54,6 +58,100 @@ class ParkingGridChildRectSelector extends StatefulWidget {
 class _ParkingGridChildRectSelectorState extends State<ParkingGridChildRectSelector> {
   int? _anchorR;
   int? _anchorC;
+  int? _activePointer;
+  GridRect? _valueBeforeDrag;
+  bool _dragSelectionActive = false;
+  bool _interactionActive = false;
+
+  void _reportGestureFailure(
+    String operation,
+    Object error,
+    StackTrace stackTrace, {
+    Map<String, Object?> details = const <String, Object?>{},
+  }) {
+    LocationDebugStatus.report(
+      context: context,
+      title: '자식 영역 제스처 처리 실패',
+      operation: 'ParkingGridChildRectSelector.$operation',
+      error: error,
+      stackTrace: stackTrace,
+      details: <String, Object?>{
+        'activePointer': _activePointer,
+        'interactionActive': _interactionActive,
+        'dragSelectionActive': _dragSelectionActive,
+        'rows': widget.grid.rows,
+        'cols': widget.grid.cols,
+        ...details,
+      },
+    );
+  }
+
+  void _runGesture(
+    String operation,
+    VoidCallback action, {
+    Map<String, Object?> details = const <String, Object?>{},
+  }) {
+    try {
+      action();
+    } catch (error, stackTrace) {
+      _reportGestureFailure(
+        operation,
+        error,
+        stackTrace,
+        details: details,
+      );
+    }
+  }
+
+  void _setInteractionActive(bool active) {
+    if (_interactionActive == active) return;
+    _interactionActive = active;
+    widget.onInteractionChanged?.call(active);
+    debugPrint(
+      '[ParkingGridChildRectSelector] interaction=$active pointer=$_activePointer',
+    );
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  void _beginPointerInteraction(PointerDownEvent event) {
+    if (_activePointer != null) return;
+    _activePointer = event.pointer;
+    _valueBeforeDrag = widget.value?.normalized();
+    _setInteractionActive(true);
+  }
+
+  void _completeDragSelection() {
+    _clearAnchor();
+    _dragSelectionActive = false;
+    _valueBeforeDrag = null;
+  }
+
+  void _cancelDragSelection() {
+    final previous = _valueBeforeDrag;
+    final restore = _dragSelectionActive;
+    _clearAnchor();
+    _dragSelectionActive = false;
+    _valueBeforeDrag = null;
+    if (restore) {
+      widget.onChanged(previous);
+    }
+  }
+
+  void _finishPointerInteraction(PointerUpEvent event) {
+    if (_activePointer != event.pointer) return;
+    _completeDragSelection();
+    _activePointer = null;
+    _setInteractionActive(false);
+  }
+
+  void _cancelPointerInteraction(PointerCancelEvent event) {
+    if (_activePointer != event.pointer) return;
+    _cancelDragSelection();
+    _activePointer = null;
+    _setInteractionActive(false);
+  }
 
   void _clearAnchor() {
     _anchorR = null;
@@ -97,11 +195,28 @@ class _ParkingGridChildRectSelectorState extends State<ParkingGridChildRectSelec
     widget.onChangedSelectedParkingAreaIds?.call(current);
   }
 
-  (int r, int c)? _hitTestCell(Offset local, double cellSize) {
+  (int r, int c)? _hitTestCell(
+    Offset local,
+    double cellSize, {
+    bool clampToBounds = false,
+  }) {
     if (cellSize <= 0) return null;
-    final c = (local.dx / cellSize).floor();
-    final r = (local.dy / cellSize).floor();
-    if (r < 0 || c < 0 || r >= widget.grid.rows || c >= widget.grid.cols) return null;
+
+    var dx = local.dx;
+    var dy = local.dy;
+
+    if (clampToBounds) {
+      final maxDx = max(0.0, widget.grid.cols * cellSize - 0.001);
+      final maxDy = max(0.0, widget.grid.rows * cellSize - 0.001);
+      dx = dx.clamp(0.0, maxDx).toDouble();
+      dy = dy.clamp(0.0, maxDy).toDouble();
+    }
+
+    final c = (dx / cellSize).floor();
+    final r = (dy / cellSize).floor();
+    if (r < 0 || c < 0 || r >= widget.grid.rows || c >= widget.grid.cols) {
+      return null;
+    }
     return (r, c);
   }
 
@@ -225,88 +340,214 @@ class _ParkingGridChildRectSelectorState extends State<ParkingGridChildRectSelec
       child: SizedBox(
         width: gridW,
         height: gridH,
-        child: GestureDetector(
+        child: Listener(
           behavior: HitTestBehavior.opaque,
-          onDoubleTap: () {
-            _clearAnchor();
-            widget.onChanged(null);
-          },
-          onTapDown: (d) {
-            final hit = _hitTestCell(d.localPosition, cellSize);
-            if (hit == null) return;
-
-            _clearAnchor();
-
-            if (widget.parkingAreaPickMode && !widget.towerSelectMode) {
-              final area = _parkingAreaAtCell(hit.$1, hit.$2);
-              if (area != null) {
-                _toggleParkingArea(area);
-              }
-              return;
-            }
-
-            if (widget.towerSelectMode) {
-              final tr = _towerRectAtCell(hit.$1, hit.$2);
-              if (tr == null) return;
-              widget.onChanged(tr);
-              return;
-            }
-
-            widget.onChanged(
-              GridRect(r0: hit.$1, c0: hit.$2, r1: hit.$1, c1: hit.$2),
-            );
-          },
-          onPanStart: (d) {
-            final hit = _hitTestCell(d.localPosition, cellSize);
-            if (hit == null) return;
-
-            if (widget.parkingAreaPickMode && !widget.towerSelectMode) {
-              return;
-            }
-
-            if (widget.towerSelectMode) {
+          onPointerDown: (event) => _runGesture(
+            'onPointerDown',
+            () => _beginPointerInteraction(event),
+            details: <String, Object?>{'pointer': event.pointer},
+          ),
+          onPointerUp: (event) => _runGesture(
+            'onPointerUp',
+            () => _finishPointerInteraction(event),
+            details: <String, Object?>{'pointer': event.pointer},
+          ),
+          onPointerCancel: (event) => _runGesture(
+            'onPointerCancel',
+            () => _cancelPointerInteraction(event),
+            details: <String, Object?>{'pointer': event.pointer},
+          ),
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            dragStartBehavior: DragStartBehavior.down,
+            onDoubleTap: () {
               _clearAnchor();
-              final tr = _towerRectAtCell(hit.$1, hit.$2);
-              if (tr == null) return;
-              widget.onChanged(tr);
-              return;
-            }
+              widget.onChanged(null);
+            },
+            onTapDown: (details) {
+              final hit = _hitTestCell(details.localPosition, cellSize);
+              if (hit == null) return;
 
-            _anchorR = hit.$1;
-            _anchorC = hit.$2;
-            widget.onChanged(
-              GridRect(r0: hit.$1, c0: hit.$2, r1: hit.$1, c1: hit.$2),
-            );
-          },
-          onPanUpdate: (d) {
-            final hit = _hitTestCell(d.localPosition, cellSize);
-            if (hit == null) return;
+              _clearAnchor();
 
-            if (widget.towerSelectMode) {
-              final tr = _towerRectAtCell(hit.$1, hit.$2);
-              if (tr == null) return;
-              widget.onChanged(tr);
-              return;
-            }
+              if (widget.parkingAreaPickMode && !widget.towerSelectMode) {
+                final area = _parkingAreaAtCell(hit.$1, hit.$2);
+                if (area != null) {
+                  _toggleParkingArea(area);
+                }
+                return;
+              }
 
-            _updateByCell(hit.$1, hit.$2);
-          },
-          onPanEnd: (_) => _clearAnchor(),
-          onPanCancel: _clearAnchor,
-          child: CustomPaint(
-            painter: _ParkingGridChildRectPainter(
-              grid: grid,
-              selection: widget.value,
-              colorScheme: cs,
-              showParkingAreas: widget.showParkingAreas,
-              showAxisIndex: widget.showAxisIndex,
-              axisIndexStep: widget.axisIndexStep,
-              towerRects: widget.towerRects,
-              selectedParkingAreaIds: widget.selectedParkingAreaIds,
-              disabledParkingAreaIds: widget.disabledParkingAreaIds,
-              parkingAreaPickMode: widget.parkingAreaPickMode,
+              if (widget.towerSelectMode) {
+                final tower = _towerRectAtCell(hit.$1, hit.$2);
+                if (tower == null) return;
+                widget.onChanged(tower);
+                return;
+              }
+
+              widget.onChanged(
+                GridRect(
+                  r0: hit.$1,
+                  c0: hit.$2,
+                  r1: hit.$1,
+                  c1: hit.$2,
+                ),
+              );
+            },
+            onPanStart: (details) => _runGesture(
+              'onPanStart',
+              () {
+                final hit = _hitTestCell(
+                  details.localPosition,
+                  cellSize,
+                  clampToBounds: true,
+                );
+                if (hit == null) return;
+
+                if (widget.parkingAreaPickMode && !widget.towerSelectMode) {
+                  return;
+                }
+
+                if (widget.towerSelectMode) {
+                  _clearAnchor();
+                  final tower = _towerRectAtCell(hit.$1, hit.$2);
+                  if (tower == null) return;
+                  _dragSelectionActive = true;
+                  widget.onChanged(tower);
+                  return;
+                }
+
+                _dragSelectionActive = true;
+                _anchorR = hit.$1;
+                _anchorC = hit.$2;
+                widget.onChanged(
+                  GridRect(
+                    r0: hit.$1,
+                    c0: hit.$2,
+                    r1: hit.$1,
+                    c1: hit.$2,
+                  ),
+                );
+              },
+              details: <String, Object?>{
+                'dx': details.localPosition.dx,
+                'dy': details.localPosition.dy,
+              },
             ),
-            child: const SizedBox.expand(),
+            onPanUpdate: (details) => _runGesture(
+              'onPanUpdate',
+              () {
+                final hit = _hitTestCell(
+                  details.localPosition,
+                  cellSize,
+                  clampToBounds: true,
+                );
+                if (hit == null) return;
+
+                if (widget.towerSelectMode) {
+                  final tower = _towerRectAtCell(hit.$1, hit.$2);
+                  if (tower == null) return;
+                  widget.onChanged(tower);
+                  return;
+                }
+
+                _updateByCell(hit.$1, hit.$2);
+              },
+              details: <String, Object?>{
+                'dx': details.localPosition.dx,
+                'dy': details.localPosition.dy,
+              },
+            ),
+            onPanEnd: (_) => _runGesture(
+              'onPanEnd',
+              _completeDragSelection,
+            ),
+            onPanCancel: () => _runGesture(
+              'onPanCancel',
+              _cancelDragSelection,
+            ),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                CustomPaint(
+                  painter: _ParkingGridChildRectPainter(
+                    grid: grid,
+                    selection: widget.value,
+                    colorScheme: cs,
+                    showParkingAreas: widget.showParkingAreas,
+                    showAxisIndex: widget.showAxisIndex,
+                    axisIndexStep: widget.axisIndexStep,
+                    towerRects: widget.towerRects,
+                    selectedParkingAreaIds: widget.selectedParkingAreaIds,
+                    disabledParkingAreaIds: widget.disabledParkingAreaIds,
+                    parkingAreaPickMode: widget.parkingAreaPickMode,
+                  ),
+                  child: const SizedBox.expand(),
+                ),
+                IgnorePointer(
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 160),
+                    curve: Curves.easeOutCubic,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: _interactionActive
+                            ? cs.primary.withOpacity(0.9)
+                            : cs.outlineVariant.withOpacity(0.25),
+                        width: _interactionActive ? 2.5 : 1,
+                      ),
+                      boxShadow: _interactionActive
+                          ? [
+                              BoxShadow(
+                                color: cs.primary.withOpacity(0.18),
+                                blurRadius: 16,
+                                spreadRadius: 1,
+                              ),
+                            ]
+                          : const <BoxShadow>[],
+                    ),
+                  ),
+                ),
+                IgnorePointer(
+                  child: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 140),
+                    curve: Curves.easeOutCubic,
+                    opacity: _interactionActive ? 1 : 0,
+                    child: Column(
+                      children: [
+                        Container(
+                          height: 16,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                cs.primary.withOpacity(0.22),
+                                cs.primary.withOpacity(0),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const Spacer(),
+                        Container(
+                          height: 16,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.bottomCenter,
+                              end: Alignment.topCenter,
+                              colors: [
+                                cs.primary.withOpacity(0.22),
+                                cs.primary.withOpacity(0),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

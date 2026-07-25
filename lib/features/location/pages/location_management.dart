@@ -366,6 +366,7 @@ class _LocationManagementState extends State<LocationManagement> {
     await showPromptOverlayBottomSheet<void>(
       context: context,
       useSafeArea: true,
+      enableDrag: false,
       builder: (_) {
         return FractionallySizedBox(
           heightFactor: 1,
@@ -613,6 +614,7 @@ class _LocationManagementState extends State<LocationManagement> {
     await showPromptOverlayBottomSheet<void>(
       context: context,
       useSafeArea: true,
+      enableDrag: false,
       builder: (_) {
         return FractionallySizedBox(
           heightFactor: 1,

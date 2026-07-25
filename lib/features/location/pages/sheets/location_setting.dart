@@ -141,6 +141,11 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
   Set<String> _selectedChildParkingAreaIds = <String>{};
   final Map<String, TextEditingController> _childSlotNoControllers = <String, TextEditingController>{};
   bool _childAreaPickMode = false;
+  bool _childGridInteractionActive = false;
+  final ScrollController _bodyScrollController = ScrollController();
+  ScrollHoldController? _bodyScrollHold;
+  double? _lockedBodyScrollOffset;
+  bool _restoringBodyScrollOffset = false;
 
   bool _childSquareLock = false;
 
@@ -161,6 +166,123 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
 
   String _childCompositeKey(String parent, String child) {
     return '${_nameKey(parent)}|${_nameKey(child)}';
+  }
+
+  void _enforceBodyScrollLock() {
+    if (!_childGridInteractionActive ||
+        _restoringBodyScrollOffset ||
+        !_bodyScrollController.hasClients) {
+      return;
+    }
+
+    final locked = _lockedBodyScrollOffset;
+    if (locked == null) return;
+
+    final position = _bodyScrollController.position;
+    final target = locked
+        .clamp(
+          position.minScrollExtent,
+          position.maxScrollExtent,
+        )
+        .toDouble();
+
+    if ((position.pixels - target).abs() < 0.1) return;
+
+    try {
+      _restoringBodyScrollOffset = true;
+      position.jumpTo(target);
+      debugPrint(
+        '[LocationSettingBottomSheet] bodyScrollOffset=restored target=$target',
+      );
+    } catch (error, stackTrace) {
+      LocationDebugStatus.report(
+        context: context,
+        title: '자식 영역 스크롤 잠금 실패',
+        operation: 'LocationSettingBottomSheet._enforceBodyScrollLock',
+        error: error,
+        stackTrace: stackTrace,
+        details: <String, Object?>{
+          'lockedOffset': locked,
+          'currentOffset': position.pixels,
+          'intent': widget.intent.name,
+        },
+      );
+    } finally {
+      _restoringBodyScrollOffset = false;
+    }
+  }
+
+  void _acquireBodyScrollHold() {
+    if (!_bodyScrollController.hasClients) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_childGridInteractionActive) return;
+        _acquireBodyScrollHold();
+      });
+      return;
+    }
+
+    final position = _bodyScrollController.position;
+    _lockedBodyScrollOffset = position.pixels;
+
+    if (_bodyScrollHold == null) {
+      _bodyScrollHold = position.hold(() {
+        _bodyScrollHold = null;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || !_childGridInteractionActive) return;
+          _acquireBodyScrollHold();
+        });
+      });
+    }
+
+    debugPrint(
+      '[LocationSettingBottomSheet] bodyScrollHold=acquired offset=${position.pixels}',
+    );
+  }
+
+  void _releaseBodyScrollHold() {
+    final hold = _bodyScrollHold;
+    _bodyScrollHold = null;
+    _lockedBodyScrollOffset = null;
+    hold?.cancel();
+
+    debugPrint(
+      '[LocationSettingBottomSheet] bodyScrollHold=released intent=${widget.intent.name}',
+    );
+  }
+
+  void _setChildGridInteractionActive(bool active) {
+    if (!mounted || _childGridInteractionActive == active) return;
+
+    try {
+      _childGridInteractionActive = active;
+
+      if (active) {
+        _acquireBodyScrollHold();
+      } else {
+        _releaseBodyScrollHold();
+      }
+
+      setState(() {});
+
+      debugPrint(
+        '[LocationSettingBottomSheet] childGridInteraction=$active intent=${widget.intent.name}',
+      );
+    } catch (error, stackTrace) {
+      LocationDebugStatus.report(
+        context: context,
+        title: '자식 영역 제스처 처리 실패',
+        operation: 'LocationSettingBottomSheet._setChildGridInteractionActive',
+        error: error,
+        stackTrace: stackTrace,
+        details: <String, Object?>{
+          'active': active,
+          'intent': widget.intent.name,
+          'parent': (_selectedParent ?? '').trim(),
+          'hasScrollClients': _bodyScrollController.hasClients,
+          'holdActive': _bodyScrollHold != null,
+        },
+      );
+    }
   }
 
   void _syncChildSlotNoControllers({Map<String, int> initialNumbers = const <String, int>{}}) {
@@ -320,6 +442,7 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
   @override
   void initState() {
     super.initState();
+    _bodyScrollController.addListener(_enforceBodyScrollLock);
 
     if (_isPlainTextEdit) {
       _plainTextNameController.text = (widget.editingPlainTextName ?? '').trim();
@@ -399,6 +522,10 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
 
   @override
   void dispose() {
+    _bodyScrollController.removeListener(_enforceBodyScrollLock);
+    _bodyScrollHold?.cancel();
+    _bodyScrollHold = null;
+    _bodyScrollController.dispose();
     _parentController.dispose();
     _childController.dispose();
     _capacityController.dispose();
@@ -1864,6 +1991,7 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
             value: _selectedChildRect,
             selectedParkingAreaIds: _selectedChildParkingAreaIds,
             disabledParkingAreaIds: disabledAreaIds,
+            onInteractionChanged: _setChildGridInteractionActive,
             onChangedSelectedParkingAreaIds: (ids) {
               setState(() {
                 _setSelectedChildParkingAreaIds(ids);
@@ -2495,6 +2623,10 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
           ),
         ],
       ),
+      bodyScrollController: _bodyScrollController,
+      bodyScrollPhysics: _childGridInteractionActive
+          ? const NeverScrollableScrollPhysics()
+          : null,
       body: TweenAnimationBuilder<double>(
         duration: const Duration(milliseconds: 320),
         curve: Curves.easeOutCubic,

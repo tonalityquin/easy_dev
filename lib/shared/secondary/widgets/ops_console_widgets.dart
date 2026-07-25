@@ -773,6 +773,8 @@ class OpsWorkSheet extends StatelessWidget {
   final Widget? bottomBar;
   final Widget? trailing;
   final EdgeInsetsGeometry bodyPadding;
+  final ScrollPhysics? bodyScrollPhysics;
+  final ScrollController? bodyScrollController;
 
   const OpsWorkSheet({
     super.key,
@@ -785,6 +787,8 @@ class OpsWorkSheet extends StatelessWidget {
     this.bottomBar,
     this.trailing,
     this.bodyPadding = const EdgeInsets.fromLTRB(16, 14, 16, 24),
+    this.bodyScrollPhysics,
+    this.bodyScrollController,
   });
 
   @override
@@ -840,6 +844,8 @@ class OpsWorkSheet extends StatelessWidget {
                       ),
                       Expanded(
                         child: SingleChildScrollView(
+                          controller: bodyScrollController,
+                          physics: bodyScrollPhysics,
                           padding: bodyPadding,
                           child: PromptAnimatedReveal(child: body),
                         ),
