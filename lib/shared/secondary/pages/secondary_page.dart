@@ -268,7 +268,7 @@ class _SecondaryNavBar extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '설정·계정·구역·태블릿·정산 관리',
+                      '설정·계정·섹터·구역·태블릿·정산 관리',
                       style: textTheme.bodySmall?.copyWith(
                         color: tokens.textSecondary,
                         fontWeight: FontWeight.w500,

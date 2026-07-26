@@ -1,5 +1,6 @@
 enum Capability {
   location,
+  sector,
   tablet,
   monthly,
   bill,
@@ -11,6 +12,8 @@ extension CapabilityKey on Capability {
     switch (this) {
       case Capability.location:
         return 'location';
+      case Capability.sector:
+        return 'sector';
       case Capability.tablet:
         return 'tablet';
       case Capability.monthly:
@@ -26,6 +29,8 @@ extension CapabilityKey on Capability {
     switch (this) {
       case Capability.location:
         return '구역 관리';
+      case Capability.sector:
+        return '섹터 관리';
       case Capability.tablet:
         return '태블릿 관리';
       case Capability.monthly:
@@ -99,6 +104,11 @@ class Cap {
       case '구역':
       case '지역':
         return Capability.location;
+      case 'sector':
+      case '섹터':
+      case '방문처':
+      case '방문목적지':
+        return Capability.sector;
       case 'tablet':
       case 'device':
       case '단말':

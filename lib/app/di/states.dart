@@ -14,6 +14,8 @@ import '../../features/location/applications/location_state.dart';
 import '../../features/location/data/repositories/firestore_location_repository.dart';
 import '../../features/payment/applications/bill_state.dart';
 import '../../features/payment/domain/repositories/bill_repository.dart';
+import '../../features/sector/applications/sector_state.dart';
+import '../../features/sector/domain/repositories/sector_repository.dart';
 import '../../features/tablet/applications/tablet_pad_mode_state.dart';
 import '../../features/tablet/applications/tablet_parking_completed_view_toggle_state.dart';
 import '../../features/tablet/applications/tablet_work_session_state.dart';
@@ -107,6 +109,12 @@ final List<SingleChildWidget> stateProviders = [
   ChangeNotifierProvider(
     create: (context) => BillState(
       context.read<BillRepository>(),
+      context.read<AreaState>(),
+    ),
+  ),
+  ChangeNotifierProvider(
+    create: (context) => SectorState(
+      context.read<SectorRepository>(),
       context.read<AreaState>(),
     ),
   ),

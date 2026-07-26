@@ -119,7 +119,10 @@ class _DashboardSettingState extends State<DashboardSetting> {
 
     setState(() => _refreshing = true);
     try {
-      await OperationalDataSyncWorkflow.run(context: context);
+      final result = await OperationalDataSyncWorkflow.run(context: context);
+      if (result == OperationalDataSyncResult.completed && mounted) {
+        await _load();
+      }
     } finally {
       if (!mounted) return;
       setState(() => _refreshing = false);
@@ -270,7 +273,7 @@ class _DashboardSettingState extends State<DashboardSetting> {
       _Section(
         title: '데이터 새로고침',
         icon: Icons.refresh_rounded,
-        subtitle: '주차 구역/정산 데이터를 수동으로 동기화합니다.',
+        subtitle: '주차 구역/섹터/정산 데이터를 수동으로 동기화합니다.',
         trailing: _refreshing
             ? const SizedBox(
                 width: 18,

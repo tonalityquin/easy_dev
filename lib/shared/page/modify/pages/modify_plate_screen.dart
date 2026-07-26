@@ -2,6 +2,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../app/utils/snackbar_helper.dart';
 import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
 import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
@@ -103,13 +104,11 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
   final TextEditingController locationController = TextEditingController();
   final List<XFile> _capturedImages = <XFile>[];
   final List<String> _existingImageUrls = <String>[];
-  final DraggableScrollableController _sheetController =
-      DraggableScrollableController();
+  final ScrollController _sheetContentController = ScrollController();
 
   bool isLoading = false;
   bool _sheetOpen = false;
-  bool _sheetStateUpdateScheduled = false;
-  bool? _pendingSheetOpen;
+  bool _sheetAnimating = false;
   late List<String> selectedStatusNames;
 
   @override
@@ -129,60 +128,115 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
     _controller.initializePlate();
     _controller.initializeFieldValues();
     selectedStatusNames = List<String>.from(widget.plate.statusList);
-    _sheetController.addListener(_handleSheetSizeChanged);
   }
 
-  void _handleSheetSizeChanged() {
-    try {
-      final openNow =
-          _sheetController.size >= ((_sheetClosed + _sheetOpened) / 2);
-      if (openNow == _sheetOpen && _pendingSheetOpen == null) return;
-      _pendingSheetOpen = openNow;
-      if (_sheetStateUpdateScheduled) return;
-      _sheetStateUpdateScheduled = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _sheetStateUpdateScheduled = false;
-        if (!mounted) return;
-        final next = _pendingSheetOpen;
-        _pendingSheetOpen = null;
-        if (next == null || next == _sheetOpen) return;
-        setState(() => _sheetOpen = next);
-      });
-    } catch (_) {}
-  }
+  Future<void> _animateSheet({
+    required bool open,
+    required String source,
+    bool showDeveloperStatus = true,
+  }) async {
+    if (_sheetAnimating || _sheetOpen == open) {
+      debugPrint(
+        '[ModifyPlateScreen][TouchSheet] ignored source=$source '
+        'open=$open animating=$_sheetAnimating current=$_sheetOpen',
+      );
+      return;
+    }
 
-  Future<void> _animateSheet({required bool open}) async {
+    final previousOpen = _sheetOpen;
     final target = open ? _sheetOpened : _sheetClosed;
-    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    DeveloperOperationTrace? trace;
+
+    if (mounted) {
+      setState(() {
+        _sheetAnimating = true;
+        _sheetOpen = open;
+      });
+    }
+
     try {
-      if (reduceMotion) {
-        _sheetController.jumpTo(target);
+      if (showDeveloperStatus && mounted) {
+        trace = await DeveloperOperationTrace.start(
+          context: context,
+          title: '번호판 수정 추가 정보 카드',
+          initialMessage: open
+              ? '터치로 정산 및 상태 카드를 열고 있습니다.'
+              : '터치로 정산 및 상태 카드를 닫고 있습니다.',
+          usePromptUi: true,
+          developerModeMessage:
+              '개발자 모드 ON: 카드 제어 로그를 복사할 수 있습니다.',
+          standardModeMessage:
+              '개발자 모드 OFF: 터치 전용 카드 전환을 실행합니다.',
+        );
+        trace.log(
+          'screen=ModifyPlateScreen source=$source '
+          'target=${open ? 'open' : 'closed'} '
+          'plate=${widget.plate.plateNumber}',
+          progress: .24,
+        );
       } else {
-        await _sheetController.animateTo(
-          target,
-          duration: PromptUiMotion.layout,
-          curve: PromptUiMotion.standard,
+        debugPrint(
+          '[ModifyPlateScreen][TouchSheet] source=$source '
+          'target=${open ? 'open' : 'closed'}',
         );
       }
-      if (mounted && _sheetOpen != open) {
-        setState(() => _sheetOpen = open);
+
+      await HapticFeedback.selectionClick();
+
+      if (!open && _sheetContentController.hasClients) {
+        _sheetContentController.jumpTo(0);
       }
-    } catch (_) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        try {
-          _sheetController.jumpTo(target);
-        } catch (_) {
-          return;
-        }
-        if (mounted && _sheetOpen != open) {
-          setState(() => _sheetOpen = open);
-        }
-      });
+
+      final reduceMotion =
+          MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+      if (!reduceMotion) {
+        await Future<void>.delayed(PromptUiMotion.layout);
+      }
+
+      trace?.log(
+        '터치 전용 카드 위치 적용 완료: size=$target layout=AnimatedPositioned dragEnabled=false controllerRequired=false',
+        progress: .82,
+      );
+      if (trace != null) {
+        await trace.succeed(
+          open
+              ? '정산 및 상태 카드가 열렸습니다.'
+              : '정산 및 상태 카드가 닫혔습니다.',
+        );
+      } else {
+        debugPrint(
+          '[ModifyPlateScreen][TouchSheet] completed '
+          'target=${open ? 'open' : 'closed'} size=$target',
+        );
+      }
+    } catch (error, stackTrace) {
+      if (mounted) {
+        setState(() => _sheetOpen = previousOpen);
+      }
+
+      if (trace != null) {
+        await trace.fail(
+          '정산 및 상태 카드 전환에 실패했습니다.',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      } else {
+        debugPrint(
+          '[ModifyPlateScreen][TouchSheet] failed error=$error\n$stackTrace',
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _sheetAnimating = false);
+      }
     }
   }
 
-  void _toggleSheet() {
-    _animateSheet(open: !_sheetOpen);
+  Future<void> _toggleSheet({String source = 'toggle_header'}) {
+    return _animateSheet(
+      open: !_sheetOpen,
+      source: source,
+    );
   }
 
   Future<void> _handleModifyAction() async {
@@ -261,8 +315,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
 
   @override
   void dispose() {
-    _sheetController.removeListener(_handleSheetSizeChanged);
-    _sheetController.dispose();
+    _sheetContentController.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -325,7 +378,17 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
         widget.plate.billingType ??
         '-';
 
-    return AnnotatedRegion<SystemUiOverlayStyle>(
+    return PopScope(
+      canPop: !_sheetOpen && !_sheetAnimating,
+      onPopInvoked: (didPop) async {
+        if (didPop || !_sheetOpen || _sheetAnimating) return;
+        await _animateSheet(
+          open: false,
+          source: 'system_back',
+          showDeveloperStatus: false,
+        );
+      },
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle(
         statusBarColor: tokens.surface,
         statusBarIconBrightness: iconBrightness,
@@ -354,7 +417,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
           ),
         ),
         body: LayoutBuilder(
-          builder: (context, _) {
+          builder: (context, constraints) {
             return Stack(
               children: [
                 Positioned.fill(
@@ -384,14 +447,18 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
                     ),
                   ),
                 ),
-                DraggableScrollableSheet(
-                  controller: _sheetController,
-                  initialChildSize: _sheetClosed,
-                  minChildSize: _sheetClosed,
-                  maxChildSize: _sheetOpened,
-                  snap: true,
-                  snapSizes: const <double>[_sheetClosed, _sheetOpened],
-                  builder: (context, scrollController) {
+                AnimatedPositioned(
+                  duration: MediaQuery.of(context).disableAnimations
+                      ? Duration.zero
+                      : PromptUiMotion.layout,
+                  curve: PromptUiMotion.standard,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  height: constraints.maxHeight *
+                      (_sheetOpen ? _sheetOpened : _sheetClosed),
+                  child: Builder(
+                    builder: (context) {
                     return AnimatedContainer(
                       duration: mediaQuery.disableAnimations
                           ? Duration.zero
@@ -419,7 +486,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
                         top: true,
                         bottom: false,
                         child: ListView(
-                          controller: scrollController,
+                          controller: _sheetContentController,
                           physics: _sheetOpen
                               ? const ClampingScrollPhysics()
                               : const NeverScrollableScrollPhysics(),
@@ -436,59 +503,93 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
                                 borderRadius: BorderRadius.circular(
                                   PromptUiShapes.control,
                                 ),
-                                onTap: _toggleSheet,
-                                child: Padding(
-                                  padding:
-                                      const EdgeInsets.only(top: 8, bottom: 12),
-                                  child: Column(
+                                onTap: _sheetAnimating
+                                    ? null
+                                    : () => _toggleSheet(
+                                          source: 'toggle_header',
+                                        ),
+                                child: SizedBox(
+                                  height: 56,
+                                  child: Row(
                                     children: [
-                                      Container(
-                                        width: 36,
-                                        height: 4,
+                                      AnimatedContainer(
+                                        duration: mediaQuery.disableAnimations
+                                            ? Duration.zero
+                                            : PromptUiMotion.selection,
+                                        curve: PromptUiMotion.standard,
+                                        width: 40,
+                                        height: 40,
                                         decoration: BoxDecoration(
-                                          color: tokens.handle,
+                                          color: _sheetOpen
+                                              ? tokens.accentContainer
+                                              : tokens.surfaceOverlay,
                                           borderRadius: BorderRadius.circular(
-                                            PromptUiShapes.pill,
+                                            PromptUiShapes.control,
+                                          ),
+                                          border: Border.all(
+                                            color: _sheetOpen
+                                                ? tokens.accent.withOpacity(
+                                                    tokens.isDark ? .54 : .36,
+                                                  )
+                                                : tokens.borderSubtle,
                                           ),
                                         ),
-                                      ),
-                                      const SizedBox(height: 10),
-                                      Row(
-                                        children: [
-                                          Container(
-                                            width: 38,
-                                            height: 38,
-                                            decoration: BoxDecoration(
-                                              color: tokens.accentContainer,
-                                              borderRadius:
-                                                  BorderRadius.circular(
-                                                PromptUiShapes.control,
-                                              ),
-                                              border: Border.all(
-                                                color: tokens.accent.withOpacity(
-                                                  tokens.isDark ? .54 : .36,
+                                        alignment: Alignment.center,
+                                        child: AnimatedSwitcher(
+                                          duration: mediaQuery.disableAnimations
+                                              ? Duration.zero
+                                              : PromptUiMotion.selection,
+                                          child: _sheetAnimating
+                                              ? SizedBox(
+                                                  key: const ValueKey(
+                                                    'modify_sheet_loading',
+                                                  ),
+                                                  width: 18,
+                                                  height: 18,
+                                                  child:
+                                                      CircularProgressIndicator(
+                                                    strokeWidth: 2,
+                                                    color: tokens.accent,
+                                                  ),
+                                                )
+                                              : Icon(
+                                                  Icons.tune_rounded,
+                                                  key: const ValueKey(
+                                                    'modify_sheet_tune',
+                                                  ),
+                                                  color: _sheetOpen
+                                                      ? tokens
+                                                          .onAccentContainer
+                                                      : tokens.iconSecondary,
+                                                  size: 20,
                                                 ),
-                                              ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: AnimatedSwitcher(
+                                          duration: mediaQuery.disableAnimations
+                                              ? Duration.zero
+                                              : PromptUiMotion.selection,
+                                          child: Column(
+                                            key: ValueKey(
+                                              '${_sheetOpen}_$_sheetAnimating',
                                             ),
-                                            alignment: Alignment.center,
-                                            child: Icon(
-                                              Icons.tune_rounded,
-                                              color: tokens.onAccentContainer,
-                                              size: 20,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 10),
-                                          Expanded(
-                                            child: AnimatedSwitcher(
-                                              duration: mediaQuery
-                                                      .disableAnimations
-                                                  ? Duration.zero
-                                                  : PromptUiMotion.selection,
-                                              child: Text(
-                                                _sheetOpen
-                                                    ? '정산 및 상태 닫기'
-                                                    : '정산 및 상태 열기',
-                                                key: ValueKey(_sheetOpen),
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                _sheetAnimating
+                                                    ? _sheetOpen
+                                                        ? '정산 및 상태 여는 중'
+                                                        : '정산 및 상태 닫는 중'
+                                                    : _sheetOpen
+                                                        ? '정산 및 상태 닫기'
+                                                        : '정산 및 상태 보기',
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
                                                 style: Theme.of(context)
                                                     .textTheme
                                                     .titleMedium
@@ -498,32 +599,48 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
                                                           FontWeight.w800,
                                                     ),
                                               ),
+                                              Text(
+                                                _sheetOpen
+                                                    ? '이 헤더를 한 번 터치하면 닫힙니다.'
+                                                    : '이 헤더를 한 번 터치하면 열립니다.',
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .bodySmall
+                                                    ?.copyWith(
+                                                      color:
+                                                          tokens.textSecondary,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        widget.plate.plateNumber,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(
+                                              color: tokens.textSecondary,
+                                              fontWeight: FontWeight.w700,
                                             ),
-                                          ),
-                                          Text(
-                                            widget.plate.plateNumber,
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .bodySmall
-                                                ?.copyWith(
-                                                  color: tokens.textSecondary,
-                                                  fontWeight: FontWeight.w700,
-                                                ),
-                                          ),
-                                          const SizedBox(width: 6),
-                                          AnimatedRotation(
-                                            turns: _sheetOpen ? .5 : 0,
-                                            duration: mediaQuery
-                                                    .disableAnimations
-                                                ? Duration.zero
-                                                : PromptUiMotion.selection,
-                                            curve: PromptUiMotion.standard,
-                                            child: Icon(
-                                              Icons.expand_less_rounded,
-                                              color: tokens.iconSecondary,
-                                            ),
-                                          ),
-                                        ],
+                                      ),
+                                      const SizedBox(width: 6),
+                                      AnimatedRotation(
+                                        turns: _sheetOpen ? .5 : 0,
+                                        duration: mediaQuery.disableAnimations
+                                            ? Duration.zero
+                                            : PromptUiMotion.selection,
+                                        curve: PromptUiMotion.standard,
+                                        child: Icon(
+                                          Icons.expand_less_rounded,
+                                          color: tokens.iconSecondary,
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -595,7 +712,9 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
                         ),
                       ),
                     );
-                  },
+                  
+                    },
+                  ),
                 ),
               ],
             );
@@ -653,7 +772,8 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
           ],
         ),
       ),
-    );
+    ),
+  );
   }
 }
 

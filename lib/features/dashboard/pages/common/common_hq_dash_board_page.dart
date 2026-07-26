@@ -2556,6 +2556,7 @@ class _AreaChatReadOpenHelper {
 
 const List<Capability> _capabilityDisplayOrder = <Capability>[
   Capability.location,
+  Capability.sector,
   Capability.tablet,
   Capability.monthly,
   Capability.bill,
@@ -2566,6 +2567,8 @@ IconData _capabilityIcon(Capability capability) {
   switch (capability) {
     case Capability.location:
       return Icons.location_on_rounded;
+    case Capability.sector:
+      return Icons.hub_rounded;
     case Capability.tablet:
       return Icons.tablet_mac_rounded;
     case Capability.monthly:

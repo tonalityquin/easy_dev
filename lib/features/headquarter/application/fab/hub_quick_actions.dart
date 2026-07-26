@@ -10,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../../app/di/routes.dart';
 import '../../../../app/init/app_exit_service.dart';
 import '../../../../app/init/app_navigator.dart';
+import '../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../app/utils/ops_delayed_refresh_gate.dart';
 import '../../../../app/utils/snackbar_helper.dart';
 import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
@@ -199,7 +200,28 @@ class HeadHubActions {
     if (ctx == null) return;
 
     final division = ctx.read<UserState>().division.trim();
-    if (division.isEmpty) return;
+    final trace = await DeveloperOperationTrace.start(
+      context: ctx,
+      title: '지역 마스터 갱신',
+      initialMessage: '지역 마스터 갱신 요청을 확인하고 있습니다.',
+      usePromptUi: true,
+    );
+
+    if (division.isEmpty) {
+      const failureMessage = '회사 정보가 없어 지역 마스터를 갱신할 수 없습니다.';
+      await trace.fail(failureMessage);
+      if (!trace.developerMode && ctx.mounted) {
+        showFailedSnackbar(
+          ctx,
+          failureMessage,
+          usePromptUi: true,
+        );
+      }
+      return;
+    }
+
+    trace.log('회사 정보를 확인했습니다: $division', progress: 0.08);
+    trace.log('실행 전 갱신 게이트를 확인하고 있습니다.', progress: 0.16);
 
     final shouldRefresh = await OpsDelayedRefreshGate.waitIfNeeded(
       context: ctx,
@@ -207,10 +229,28 @@ class HeadHubActions {
       message: '지역 마스터를 갱신하기 전 요청을 준비하고 있습니다.',
       usePromptUi: true,
     );
-    if (!shouldRefresh) return;
+    if (!shouldRefresh) {
+      trace.log('사용자가 지역 마스터 갱신을 취소했습니다.');
+      return;
+    }
 
     try {
+      trace.log('기존 지역 마스터를 정리하고 있습니다.', progress: 0.3);
+      trace.log('최신 지역 마스터를 내려받고 있습니다.', progress: 0.56);
       final snapshot = await AreaMasterCache.refreshDivision(division);
+      trace.log(
+        '${snapshot.items.length}개 지역 정보를 저장하고 검증했습니다.',
+        progress: 0.94,
+      );
+
+      if (trace.developerMode) {
+        await trace.succeed(
+          '지역 마스터 갱신이 완료되었습니다. 개발자 모드에서는 앱을 종료하지 않습니다.',
+        );
+        return;
+      }
+
+      await trace.succeed('지역 마스터 갱신이 완료되었습니다.');
       if (!ctx.mounted) return;
 
       await showPromptDialog<void>(
@@ -289,13 +329,20 @@ class HeadHubActions {
       final exitContext = _bestContext();
       if (exitContext == null || !exitContext.mounted) return;
       await AppExitService.exitApp(exitContext, usePromptUi: true);
-    } catch (_) {
-      if (!ctx.mounted) return;
-      showFailedSnackbar(
-        ctx,
-        '지역 마스터 갱신에 실패했습니다.',
-        usePromptUi: true,
+    } catch (error, stackTrace) {
+      const failureMessage = '지역 마스터 갱신에 실패했습니다.';
+      await trace.fail(
+        failureMessage,
+        error: error,
+        stackTrace: stackTrace,
       );
+      if (!trace.developerMode && ctx.mounted) {
+        showFailedSnackbar(
+          ctx,
+          failureMessage,
+          usePromptUi: true,
+        );
+      }
     }
   }
 

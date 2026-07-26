@@ -8,6 +8,8 @@ import '../../../../../app/init/logout_helper.dart';
 import '../../../../../app/init/work_schedule_prefs.dart';
 import '../../../../../app/utils/operational_data_sync_workflow.dart';
 import '../../../../account/applications/user_state.dart';
+import '../../../../dev/application/area_state.dart';
+import '../../../../sector/applications/sector_state.dart';
 
 Future<void> showMyInfoDialog({required BuildContext context}) {
   return showDialog<void>(
@@ -34,6 +36,7 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
   bool _refreshing = false;
   bool? _hasMonthlyParking;
   DateTime? _lastRefreshAt;
+  int? _localSectorCount;
 
   String _name = '';
   String _phone = '';
@@ -144,7 +147,14 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
 
     setState(() => _refreshing = true);
     try {
-      await OperationalDataSyncWorkflow.run(context: context);
+      final result = await OperationalDataSyncWorkflow.run(
+        context: context,
+        title: '내 정보 데이터 새로고침',
+        message: '현재 지역의 주차 구역, 섹터, 정산 데이터를 로컬에 내려받기 전 요청을 준비하고 있습니다.',
+      );
+      if (result == OperationalDataSyncResult.completed && mounted) {
+        await _loadPrefs();
+      }
     } finally {
       if (!mounted) return;
       setState(() => _refreshing = false);
@@ -161,6 +171,7 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
 
   Future<void> _loadPrefs() async {
     setState(() => _loading = true);
+    final currentArea = context.read<AreaState>().currentArea.trim();
 
     final prefs = await SharedPreferences.getInstance();
     final cachedJson = prefs.getString('cachedUserJson') ?? '';
@@ -168,6 +179,7 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
 
     final prefsPhone = (prefs.getString('phone') ?? '').trim();
     final prefsArea = (prefs.getString('selectedArea') ?? '').trim();
+    final effectiveArea = currentArea.isNotEmpty ? currentArea : prefsArea;
     final prefsDivision = (prefs.getString('division') ?? '').trim();
     final prefsRole = (prefs.getString('role') ?? '').trim();
     final prefsPosition = (prefs.getString('position') ?? '').trim();
@@ -176,6 +188,12 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
     );
     final lastRefreshAt = DateTime.tryParse(
       prefs.getString(OperationalDataSyncWorkflow.lastSyncAtKey) ?? '',
+    );
+    final localSectorCount = SectorState.cachedCountOf(prefs, effectiveArea);
+    debugPrint(
+      '[MyInfoDialog] 로컬 동기화 상태 로드: '
+      'area=$effectiveArea, sectorCount=${localSectorCount ?? -1}, '
+      'syncedAt=$lastRefreshAt',
     );
 
     final name = ((cached['name'] as String?) ?? '').trim();
@@ -216,7 +234,7 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
     setState(() {
       _name = name;
       _phone = phone;
-      _area = prefsArea;
+      _area = effectiveArea;
       _division = prefsDivision;
       _role = prefsRole;
       _position = prefsPosition;
@@ -225,6 +243,7 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
       _breakDays = normalizedBreakDays;
       _hasMonthlyParking = hasMonthlyParking;
       _lastRefreshAt = lastRefreshAt;
+      _localSectorCount = localSectorCount;
       _loading = false;
     });
   }
@@ -415,6 +434,7 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
           refreshing: _refreshing,
           lastRefreshAt: _lastRefreshAt,
           hasMonthlyParking: _hasMonthlyParking,
+          localSectorCount: _localSectorCount,
           formatLastSync: _formatLastSync,
           onRefresh: _loading || _refreshing ? null : _manualRefreshAll,
         ),
@@ -735,6 +755,7 @@ class _OperationalDataSyncCard extends StatelessWidget {
   final bool refreshing;
   final DateTime? lastRefreshAt;
   final bool? hasMonthlyParking;
+  final int? localSectorCount;
   final String Function(DateTime dt) formatLastSync;
   final Future<void> Function()? onRefresh;
 
@@ -742,6 +763,7 @@ class _OperationalDataSyncCard extends StatelessWidget {
     required this.refreshing,
     required this.lastRefreshAt,
     required this.hasMonthlyParking,
+    required this.localSectorCount,
     required this.formatLastSync,
     required this.onRefresh,
   });
@@ -766,7 +788,7 @@ class _OperationalDataSyncCard extends StatelessWidget {
                 child: _SectionHeading(
                   icon: Icons.sync_rounded,
                   title: '운영 데이터 동기화',
-                  subtitle: '주차 구역, 정산 타입, 월정기 사용 여부를 재조회합니다.',
+                  subtitle: '주차 구역, 섹터, 정산 타입을 현재 지역 기준으로 로컬에 내려받습니다.',
                 ),
               ),
               const SizedBox(width: 8),
@@ -779,7 +801,7 @@ class _OperationalDataSyncCard extends StatelessWidget {
               Expanded(
                 child: _MetricCard(
                   label: '구역',
-                  value: '재조회',
+                  value: refreshing ? '저장 중' : '로컬',
                   icon: Icons.local_parking_rounded,
                   color: palette.action,
                 ),
@@ -787,8 +809,25 @@ class _OperationalDataSyncCard extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: _MetricCard(
+                  label: '섹터',
+                  value: refreshing
+                      ? '저장 중'
+                      : localSectorCount == null
+                          ? '미저장'
+                          : '${localSectorCount!}개',
+                  icon: Icons.place_rounded,
+                  color: palette.amber,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _MetricCard(
                   label: '정산',
-                  value: '재조회',
+                  value: refreshing ? '저장 중' : '로컬',
                   icon: Icons.receipt_long_rounded,
                   color: palette.green,
                 ),
@@ -816,17 +855,31 @@ class _OperationalDataSyncCard extends StatelessWidget {
             height: 46,
             child: FilledButton.icon(
               onPressed: onRefresh,
-              icon: refreshing
-                  ? SizedBox(
-                width: 17,
-                height: 17,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.3,
-                  valueColor: AlwaysStoppedAnimation<Color>(cs.onPrimary),
+              icon: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 240),
+                child: refreshing
+                    ? SizedBox(
+                        key: const ValueKey<String>('saving'),
+                        width: 17,
+                        height: 17,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.3,
+                          valueColor: AlwaysStoppedAnimation<Color>(cs.onPrimary),
+                        ),
+                      )
+                    : const Icon(
+                        Icons.download_rounded,
+                        key: ValueKey<String>('download'),
+                        size: 18,
+                      ),
+              ),
+              label: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 240),
+                child: Text(
+                  refreshing ? '로컬 저장 중' : '지금 내려받기',
+                  key: ValueKey<bool>(refreshing),
                 ),
-              )
-                  : const Icon(Icons.refresh_rounded, size: 18),
-              label: Text(refreshing ? '새로고침 중' : '지금 새로고침'),
+              ),
               style: FilledButton.styleFrom(
                 minimumSize: const Size.fromHeight(46),
                 backgroundColor: palette.action,
@@ -1366,15 +1419,33 @@ class _MetricCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 6),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w900,
-              color: color,
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 280),
+            switchInCurve: Curves.easeOutBack,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (child, animation) {
+              return FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0, 0.24),
+                    end: Offset.zero,
+                  ).animate(animation),
+                  child: child,
+                ),
+              );
+            },
+            child: Text(
+              value,
+              key: ValueKey<String>(value),
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w900,
+                color: color,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),

@@ -11,6 +11,8 @@ import '../../features/location/data/repositories/firestore_location_repository.
 import '../../features/location/domain/repositories/location_repository.dart';
 import '../../features/payment/data/repositories/firestore_bill_repository.dart';
 import '../../features/payment/domain/repositories/bill_repository.dart';
+import '../../features/sector/data/repositories/firestore_sector_repository.dart';
+import '../../features/sector/domain/repositories/sector_repository.dart';
 import '../../shared/plate/data/repositories/firestore_plate_repository.dart';
 import '../../shared/plate/domain/repositories/plate_repository.dart';
 
@@ -48,6 +50,11 @@ final List<SingleChildWidget> repositoryProviders = [
   Provider<BillRepository>(
     create: (_) {
       return FirestoreBillRepository();
+    },
+  ),
+  Provider<SectorRepository>(
+    create: (_) {
+      return FirestoreSectorRepository();
     },
   ),
 ];

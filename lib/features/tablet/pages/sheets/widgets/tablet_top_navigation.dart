@@ -14,6 +14,7 @@ import '../../../../../app/utils/operational_data_sync_workflow.dart';
 import '../../../../../app/theme/brand_theme.dart';
 import '../../../../../app/theme/theme_prefs_controller.dart';
 import '../../../../dev/application/area_state.dart';
+import '../../../../sector/applications/sector_state.dart';
 import '../../../applications/tablet_pad_mode_state.dart';
 import '../../../applications/tablet_parking_completed_view_toggle_state.dart';
 import '../../../applications/tablet_work_session_state.dart';
@@ -35,21 +36,31 @@ class _TabletTopNavigationState extends State<TabletTopNavigation> {
 
   bool _refreshing = false;
   DateTime? _lastRefreshAt;
+  int? _localSectorCount;
 
 
   @override
   void initState() {
     super.initState();
-    _loadLastRefreshAt();
+    _loadSyncSnapshot();
   }
 
-  Future<void> _loadLastRefreshAt() async {
+  Future<void> _loadSyncSnapshot() async {
     final prefs = await SharedPreferences.getInstance();
     final value = DateTime.tryParse(
       prefs.getString(OperationalDataSyncWorkflow.lastSyncAtKey) ?? '',
     );
+    final area = context.read<AreaState>().currentArea.trim();
+    final sectorCount = SectorState.cachedCountOf(prefs, area);
+    debugPrint(
+      '[TabletTopNavigation] 로컬 동기화 상태 로드: '
+      'area=$area, sectorCount=${sectorCount ?? -1}, syncedAt=$value',
+    );
     if (!mounted) return;
-    setState(() => _lastRefreshAt = value);
+    setState(() {
+      _lastRefreshAt = value;
+      _localSectorCount = sectorCount;
+    });
   }
 
   Color _tintOnSurface(ColorScheme cs, double opacity) {
@@ -106,12 +117,16 @@ class _TabletTopNavigationState extends State<TabletTopNavigation> {
     refreshDialog();
 
     try {
-      await OperationalDataSyncWorkflow.run(
+      final result = await OperationalDataSyncWorkflow.run(
         context: context,
         title: '데이터 새로고침',
-        message: '주차 구역, 정산 데이터, 월정기 사용 여부를 새로고침하기 전 요청을 준비하고 있습니다.',
+        message: '주차 구역, 섹터, 정산 데이터, 월정기 사용 여부를 새로고침하기 전 요청을 준비하고 있습니다.',
         usePromptUi: true,
       );
+      if (result == OperationalDataSyncResult.completed && mounted) {
+        await _loadSyncSnapshot();
+        refreshDialog();
+      }
     } finally {
       if (!mounted) return;
       setState(() => _refreshing = false);
@@ -763,10 +778,11 @@ class _TabletTopNavigationState extends State<TabletTopNavigation> {
                                   crossAxisAlignment: CrossAxisAlignment.stretch,
                                   children: [
                                     Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Expanded(
                                           child: Text(
-                                            '주차 구역/정산 데이터를 수동으로 동기화합니다.',
+                                            '주차 구역/섹터/정산 데이터를 현재 지역 기준으로 로컬에 내려받습니다.',
                                             style: (text.bodyMedium ??
                                                 const TextStyle())
                                                 .copyWith(
@@ -776,19 +792,53 @@ class _TabletTopNavigationState extends State<TabletTopNavigation> {
                                             ),
                                           ),
                                         ),
-                                        if (_refreshing)
-                                          const SizedBox(
-                                            width: 18,
-                                            height: 18,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                            ),
-                                          )
-                                        else if (_lastRefreshAt != null)
-                                          _DialogPill(
-                                            text:
-                                            '마지막: ${_formatLastSync(_lastRefreshAt!)}',
+                                        const SizedBox(width: 10),
+                                        Flexible(
+                                          child: AnimatedSwitcher(
+                                            duration: const Duration(milliseconds: 280),
+                                            switchInCurve: Curves.easeOutBack,
+                                            switchOutCurve: Curves.easeInCubic,
+                                            transitionBuilder: (child, animation) {
+                                              return FadeTransition(
+                                                opacity: animation,
+                                                child: ScaleTransition(
+                                                  scale: animation,
+                                                  child: child,
+                                                ),
+                                              );
+                                            },
+                                            child: _refreshing
+                                                ? const Align(
+                                                    key: ValueKey<String>('refreshing'),
+                                                    alignment: Alignment.topRight,
+                                                    child: SizedBox(
+                                                      width: 18,
+                                                      height: 18,
+                                                      child: CircularProgressIndicator(
+                                                        strokeWidth: 2,
+                                                      ),
+                                                    ),
+                                                  )
+                                                : Wrap(
+                                                    key: ValueKey<String>(
+                                                      'snapshot_${_localSectorCount}_${_lastRefreshAt?.millisecondsSinceEpoch}',
+                                                    ),
+                                                    alignment: WrapAlignment.end,
+                                                    spacing: 6,
+                                                    runSpacing: 6,
+                                                    children: [
+                                                      if (_localSectorCount != null)
+                                                        _DialogPill(
+                                                          text: '섹터 ${_localSectorCount!}개 로컬',
+                                                        ),
+                                                      if (_lastRefreshAt != null)
+                                                        _DialogPill(
+                                                          text: '마지막: ${_formatLastSync(_lastRefreshAt!)}',
+                                                        ),
+                                                    ],
+                                                  ),
                                           ),
+                                        ),
                                       ],
                                     ),
                                     const SizedBox(height: 12),
@@ -801,22 +851,32 @@ class _TabletTopNavigationState extends State<TabletTopNavigation> {
                                           setDialogState: setSB,
                                           dialogContext: innerCtx,
                                         ),
-                                        icon: _refreshing
-                                            ? SizedBox(
-                                          width: 20,
-                                          height: 20,
-                                          child:
-                                          CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            valueColor:
-                                            AlwaysStoppedAnimation<
-                                                Color>(
-                                              cs.onPrimary,
-                                            ),
+                                        icon: AnimatedSwitcher(
+                                          duration: const Duration(milliseconds: 240),
+                                          child: _refreshing
+                                              ? SizedBox(
+                                                  key: const ValueKey<String>('syncing'),
+                                                  width: 20,
+                                                  height: 20,
+                                                  child: CircularProgressIndicator(
+                                                    strokeWidth: 2,
+                                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                                      cs.onPrimary,
+                                                    ),
+                                                  ),
+                                                )
+                                              : const Icon(
+                                                  Icons.download_rounded,
+                                                  key: ValueKey<String>('download'),
+                                                ),
+                                        ),
+                                        label: AnimatedSwitcher(
+                                          duration: const Duration(milliseconds: 240),
+                                          child: Text(
+                                            _refreshing ? '로컬 저장 중' : '지금 내려받기',
+                                            key: ValueKey<bool>(_refreshing),
                                           ),
-                                        )
-                                            : const Icon(Icons.sync),
-                                        label: const Text('지금 새로고침'),
+                                        ),
                                         style: FilledButton.styleFrom(
                                           minimumSize:
                                           const Size.fromHeight(48),

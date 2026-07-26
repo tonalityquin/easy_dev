@@ -134,7 +134,10 @@ class _DashboardSettingState extends State<DashboardSetting> {
 
     setState(() => _refreshing = true);
     try {
-      await OperationalDataSyncWorkflow.run(context: context);
+      final result = await OperationalDataSyncWorkflow.run(context: context);
+      if (result == OperationalDataSyncResult.completed && mounted) {
+        await _load();
+      }
     } finally {
       if (!mounted) return;
       setState(() => _refreshing = false);
@@ -291,7 +294,7 @@ class _DashboardSettingState extends State<DashboardSetting> {
                             children: [
                               OpsSectionTitle(
                                 title: '운영 데이터 동기화',
-                                subtitle: '주차 구역, 정산 타입, 월정기 사용 여부를 수동으로 재조회합니다.',
+                                subtitle: '주차 구역, 섹터, 정산 타입, 월정기 사용 여부를 수동으로 재조회합니다.',
                                 icon: Icons.sync_rounded,
                                 trailing: _lastRefreshAt == null ? null : OpsStatusBadge(label: _formatLastSync(_lastRefreshAt!), color: cs.primary),
                               ),

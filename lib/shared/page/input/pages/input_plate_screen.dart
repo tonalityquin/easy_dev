@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
+import '../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../app/utils/status_dialog.dart';
 import '../../../../app/utils/snackbar_helper.dart';
 import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
@@ -123,11 +124,9 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
   bool _openedScannerOnce = false;
 
-  final DraggableScrollableController _sheetController =
-      DraggableScrollableController();
+  final ScrollController _sheetScrollController = ScrollController();
   bool _sheetOpen = false;
-
-  ScrollController? _sheetScrollController;
+  bool _sheetAnimating = false;
 
   _DockField? _dockEditing;
   bool _singleFieldDockEdit = false;
@@ -203,21 +202,11 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   void _jumpSheetScrollToTop() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       try {
-        final sc = _sheetScrollController;
-        if (sc != null && sc.hasClients) {
-          sc.jumpTo(0);
+        if (_sheetScrollController.hasClients) {
+          _sheetScrollController.jumpTo(0);
         }
       } catch (_) {}
     });
-  }
-
-  void _resetDockToBillPage() {
-    if (!mounted) return;
-    setState(() {
-      _dockSlideFromRight = false;
-      _dockPageIndex = _dockPageBill;
-    });
-    _jumpSheetScrollToTop();
   }
 
   void _setDockPage(int index) {
@@ -246,57 +235,154 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     }
   }
 
-  bool _isSheetFullyClosed() {
-    try {
-      if (!_sheetController.isAttached) return false;
-      return (_sheetController.size <= _sheetClosed + 0.0005);
-    } catch (_) {
-      return false;
-    }
-  }
-
-  Future<void> _animateSheet({required bool open}) async {
-    final target = open ? _sheetOpened : _sheetClosed;
-
-    if (open) {
-      _resetDockToBillPage();
-    }
-
-    if (!open) {
-      try {
-        final sc = _sheetScrollController;
-        if (sc != null && sc.hasClients) {
-          sc.jumpTo(0);
-        }
-      } catch (_) {}
-    }
-
-    try {
-      final reduceMotion =
-          MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-      if (reduceMotion) {
-        _sheetController.jumpTo(target);
-      } else {
-        await _sheetController.animateTo(
-          target,
-          duration: PromptUiMotion.component,
-          curve: PromptUiMotion.standard,
-        );
+  Future<void> _animateSheet({
+    required bool open,
+    int? pageIndex,
+    required String source,
+    bool showDeveloperStatus = true,
+  }) async {
+    if (_sheetAnimating || _sheetOpen == open) {
+      debugPrint(
+        '[InputPlateScreen][TouchSheet] ignored source=$source '
+        'open=$open animating=$_sheetAnimating current=$_sheetOpen',
+      );
+      if (open && pageIndex != null && !_sheetAnimating) {
+        _setDockPage(pageIndex);
       }
-      if (mounted) setState(() => _sheetOpen = open);
-    } catch (_) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _sheetController.jumpTo(target);
-        if (mounted) setState(() => _sheetOpen = open);
+      return;
+    }
+
+    final previousOpen = _sheetOpen;
+    final target = open ? _sheetOpened : _sheetClosed;
+    final pageLabel = pageIndex == _dockPageMemo ? '상태 메모' : '정산 유형';
+    DeveloperOperationTrace? trace;
+
+    if (mounted) {
+      setState(() {
+        _sheetAnimating = true;
+        _sheetOpen = open;
+        if (open && pageIndex != null) {
+          _dockSlideFromRight = pageIndex > _dockPageIndex;
+          _dockPageIndex = pageIndex;
+        }
       });
     }
+
+    try {
+      if (showDeveloperStatus && mounted) {
+        trace = await DeveloperOperationTrace.start(
+          context: context,
+          title: '입차 추가 정보 카드',
+          initialMessage: open
+              ? '터치로 추가 정보 카드를 열고 있습니다.'
+              : '터치로 추가 정보 카드를 닫고 있습니다.',
+          usePromptUi: true,
+          developerModeMessage:
+              '개발자 모드 ON: 카드 제어 로그를 복사할 수 있습니다.',
+          standardModeMessage:
+              '개발자 모드 OFF: 터치 전용 카드 전환을 실행합니다.',
+        );
+        trace.log(
+          'screen=InputPlateScreen source=$source target=${open ? 'open' : 'closed'} '
+          'page=$pageLabel plate=${controller.buildPlateNumber()}',
+          progress: .24,
+        );
+      } else {
+        debugPrint(
+          '[InputPlateScreen][TouchSheet] source=$source '
+          'target=${open ? 'open' : 'closed'} page=$pageLabel',
+        );
+      }
+
+      await HapticFeedback.selectionClick();
+
+      if (!open && _sheetScrollController.hasClients) {
+        _sheetScrollController.jumpTo(0);
+      }
+
+      final reduceMotion =
+          MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+      if (!reduceMotion) {
+        await Future<void>.delayed(PromptUiMotion.layout);
+      }
+
+      if (open) {
+        _jumpSheetScrollToTop();
+      }
+
+      trace?.log(
+        '터치 전용 카드 위치 적용 완료: size=$target layout=AnimatedPositioned dragEnabled=false controllerRequired=false',
+        progress: .82,
+      );
+      if (trace != null) {
+        await trace.succeed(
+          open ? '추가 정보 카드가 열렸습니다.' : '추가 정보 카드가 닫혔습니다.',
+        );
+      } else {
+        debugPrint(
+          '[InputPlateScreen][TouchSheet] completed '
+          'target=${open ? 'open' : 'closed'} size=$target',
+        );
+      }
+    } catch (error, stackTrace) {
+      if (mounted) {
+        setState(() => _sheetOpen = previousOpen);
+      }
+
+      if (trace != null) {
+        await trace.fail(
+          '추가 정보 카드 전환에 실패했습니다.',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      } else {
+        debugPrint(
+          '[InputPlateScreen][TouchSheet] failed error=$error\n$stackTrace',
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _sheetAnimating = false);
+      }
+    }
   }
 
-  void _toggleSheet() => _animateSheet(open: !_sheetOpen);
+  Future<void> _toggleSheet({String source = 'toggle_header'}) {
+    return _animateSheet(
+      open: !_sheetOpen,
+      source: source,
+    );
+  }
+
+  Future<void> _handleDockPageTap(int index) async {
+    final pageLabel = index == _dockPageMemo ? '상태 메모' : '정산 유형';
+    debugPrint(
+      '[InputPlateScreen][TouchSheet] pageTap page=$pageLabel '
+      'sheetOpen=$_sheetOpen animating=$_sheetAnimating',
+    );
+    if (_sheetAnimating) return;
+    if (!_sheetOpen) {
+      await _animateSheet(
+        open: true,
+        pageIndex: index,
+        source: index == _dockPageMemo
+            ? 'closed_memo_segment'
+            : 'closed_bill_segment',
+      );
+      return;
+    }
+    await HapticFeedback.selectionClick();
+    _setDockPage(index);
+  }
 
   Future<void> _openSheetToMemoPage() async {
     if (!_sheetOpen) {
-      await _animateSheet(open: true);
+      await _animateSheet(
+        open: true,
+        pageIndex: _dockPageMemo,
+        source: 'plate_status_dialog_memo',
+      );
+      return;
     }
     if (!mounted) return;
     _setDockPage(_dockPageMemo);
@@ -374,35 +460,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       controller.selectedBillType = '변동';
     }
 
-    _sheetController.addListener(() {
-      try {
-        final s = _sheetController.size;
-        final bool openNow = s >= ((_sheetClosed + _sheetOpened) / 2);
-
-        if (openNow != _sheetOpen && mounted) {
-          setState(() {
-            _sheetOpen = openNow;
-
-            if (openNow) {
-              _dockSlideFromRight = false;
-              _dockPageIndex = _dockPageBill;
-            }
-          });
-
-          if (openNow) {
-            _jumpSheetScrollToTop();
-          }
-        }
-
-        if (_isSheetFullyClosed()) {
-          final sc = _sheetScrollController;
-          if (sc != null && sc.hasClients && sc.offset != 0) {
-            sc.jumpTo(0);
-          }
-        }
-      } catch (_) {}
-    });
-
     controller.controllerBackDigit.addListener(() async {
       final text = controller.controllerBackDigit.text;
       if (text.length == 4 && controller.isInputValid()) {
@@ -479,7 +536,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
   @override
   void dispose() {
-    _sheetController.dispose();
+    _sheetScrollController.dispose();
     controller.dispose();
     super.dispose();
   }
@@ -596,7 +653,12 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     });
 
     if (!_sheetOpen) {
-      await _animateSheet(open: true);
+      await _animateSheet(
+        open: true,
+        pageIndex: _dockPageBill,
+        source: 'monthly_data_loaded',
+        showDeveloperStatus: false,
+      );
     }
   }
 
@@ -1390,7 +1452,11 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
   void _handleBackButtonPressed() {
     if (_sheetOpen) {
-      _animateSheet(open: false);
+      _animateSheet(
+        open: false,
+        source: 'appbar_back',
+        showDeveloperStatus: false,
+      );
       return;
     }
     _requestExit(defer: false);
@@ -1527,7 +1593,11 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
         if (didPop) return;
 
         if (_sheetOpen) {
-          await _animateSheet(open: false);
+          await _animateSheet(
+            open: false,
+            source: 'system_back',
+            showDeveloperStatus: false,
+          );
           return;
         }
 
@@ -1621,95 +1691,98 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                     ),
                   ),
                 ),
-                DraggableScrollableSheet(
-                  controller: _sheetController,
-                  initialChildSize: _sheetClosed,
-                  minChildSize: _sheetClosed,
-                  maxChildSize: _sheetOpened,
-                  snap: true,
-                  snapSizes: const [_sheetClosed, _sheetOpened],
-                  builder: (context, scrollController) {
-                    _sheetScrollController = scrollController;
-
-                    final bool lockScroll = _isSheetFullyClosed();
-                    final bool canSwipe = !lockScroll;
-
+                AnimatedPositioned(
+                  duration: MediaQuery.of(context).disableAnimations
+                      ? Duration.zero
+                      : PromptUiMotion.layout,
+                  curve: PromptUiMotion.standard,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  height: constraints.maxHeight *
+                      (_sheetOpen ? _sheetOpened : _sheetClosed),
+                  child: Builder(
+                    builder: (context) {
                     final sheetBottomPadding = 16.0 + viewInset;
 
-                    return Container(
+                    return AnimatedContainer(
+                      duration: MediaQuery.of(context).disableAnimations
+                          ? Duration.zero
+                          : PromptUiMotion.selection,
+                      curve: PromptUiMotion.standard,
                       decoration: BoxDecoration(
                         borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(16)),
+                          top: Radius.circular(16),
+                        ),
                         border: Border.all(
-                            color: tokens.borderSubtle),
+                          color: _sheetOpen
+                              ? tokens.accent
+                              : tokens.borderSubtle,
+                        ),
                         color: tokens.surfaceRaised,
                         boxShadow: [
                           BoxShadow(
                             color: tokens.shadow,
-                            blurRadius: 10,
+                            blurRadius: _sheetOpen ? 18 : 10,
                             offset: const Offset(0, -4),
                           ),
                         ],
                       ),
                       child: ClipRRect(
                         borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(16)),
+                          top: Radius.circular(16),
+                        ),
                         clipBehavior: Clip.antiAlias,
                         child: SafeArea(
                           top: true,
                           bottom: false,
-                          child: NotificationListener<ScrollNotification>(
-                            onNotification: (notification) {
-                              if (!lockScroll) return false;
-
-                              if (notification is ScrollUpdateNotification ||
-                                  notification is OverscrollNotification ||
-                                  notification is UserScrollNotification) {
-                                try {
-                                  if (scrollController.hasClients &&
-                                      scrollController.offset != 0) {
-                                    scrollController.jumpTo(0);
-                                  }
-                                } catch (_) {}
-                                return true;
-                              }
-                              return false;
-                            },
-                            child: CustomScrollView(
-                              controller: scrollController,
-                              physics: const ClampingScrollPhysics(),
-                              slivers: [
-                                SliverPersistentHeader(
-                                  pinned: true,
-                                  delegate: _SheetHeaderDelegate(
-                                    sheetOpen: _sheetOpen,
-                                    plateText: controller.buildPlateNumber(),
-                                    onToggle: _toggleSheet,
-                                    currentPageIndex: _dockPageIndex,
-                                    onSelectBill: () =>
-                                        _setDockPage(_dockPageBill),
-                                    onSelectMemo: () =>
-                                        _setDockPage(_dockPageMemo),
+                          child: CustomScrollView(
+                            controller: _sheetScrollController,
+                            physics: _sheetOpen
+                                ? const ClampingScrollPhysics()
+                                : const NeverScrollableScrollPhysics(),
+                            slivers: [
+                              SliverPersistentHeader(
+                                pinned: true,
+                                delegate: _SheetHeaderDelegate(
+                                  sheetOpen: _sheetOpen,
+                                  sheetAnimating: _sheetAnimating,
+                                  plateText: controller.buildPlateNumber(),
+                                  onToggle: () => _toggleSheet(
+                                    source: 'toggle_header',
+                                  ),
+                                  currentPageIndex: _dockPageIndex,
+                                  onSelectBill: () =>
+                                      _handleDockPageTap(_dockPageBill),
+                                  onSelectMemo: () =>
+                                      _handleDockPageTap(_dockPageMemo),
+                                ),
+                              ),
+                              SliverPadding(
+                                padding: EdgeInsets.fromLTRB(
+                                  16,
+                                  12,
+                                  16,
+                                  sheetBottomPadding,
+                                ),
+                                sliver: SliverList(
+                                  delegate: SliverChildListDelegate(
+                                    [
+                                      _buildDockPagedBody(
+                                        canSwipe: _sheetOpen,
+                                      ),
+                                    ],
                                   ),
                                 ),
-                                SliverPadding(
-                                  padding: EdgeInsets.fromLTRB(
-                                      16, 12, 16, sheetBottomPadding),
-                                  sliver: SliverList(
-                                    delegate: SliverChildListDelegate(
-                                      [
-                                        _buildDockPagedBody(canSwipe: canSwipe),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
                     );
-                  },
+                  
+                    },
+                  ),
                 ),
               ],
             );
@@ -1912,6 +1985,7 @@ class _PlateStatusLoadedDialog extends StatelessWidget {
 
 class _SheetHeaderDelegate extends SliverPersistentHeaderDelegate {
   final bool sheetOpen;
+  final bool sheetAnimating;
   final String plateText;
   final int currentPageIndex;
   final VoidCallback onToggle;
@@ -1920,6 +1994,7 @@ class _SheetHeaderDelegate extends SliverPersistentHeaderDelegate {
 
   _SheetHeaderDelegate({
     required this.sheetOpen,
+    required this.sheetAnimating,
     required this.plateText,
     required this.onToggle,
     required this.currentPageIndex,
@@ -1940,13 +2015,12 @@ class _SheetHeaderDelegate extends SliverPersistentHeaderDelegate {
     required VoidCallback? onTap,
   }) {
     final cs = Theme.of(context).colorScheme;
-
     final bg = selected
         ? cs.surfaceContainerLow
         : PromptUiTheme.of(context).transparent;
     final border = selected
-        ? cs.primary.withOpacity(0.55)
-        : cs.outlineVariant.withOpacity(0.85);
+        ? cs.primary.withOpacity(.55)
+        : cs.outlineVariant.withOpacity(.85);
     final fg = selected ? cs.onSurface : cs.onSurfaceVariant;
 
     return Material(
@@ -1955,14 +2029,17 @@ class _SheetHeaderDelegate extends SliverPersistentHeaderDelegate {
         onTap: onTap,
         borderRadius: BorderRadius.circular(10),
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          curve: Curves.easeOutCubic,
-          height: 36,
+          duration: PromptUiMotion.selection,
+          curve: PromptUiMotion.standard,
+          height: 34,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: bg,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: border, width: selected ? 1.4 : 1.0),
+            border: Border.all(
+              color: border,
+              width: selected ? 1.4 : 1,
+            ),
           ),
           child: Text(
             label,
@@ -1972,7 +2049,7 @@ class _SheetHeaderDelegate extends SliverPersistentHeaderDelegate {
               fontSize: 13,
               fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
               color: fg,
-              letterSpacing: 0.2,
+              letterSpacing: .2,
             ),
           ),
         ),
@@ -1982,14 +2059,14 @@ class _SheetHeaderDelegate extends SliverPersistentHeaderDelegate {
 
   @override
   Widget build(
-      BuildContext context, double shrinkOffset, bool overlapsContent) {
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
     final cs = Theme.of(context).colorScheme;
-
-    final VoidCallback? outerTap = sheetOpen ? null : onToggle;
-
-    final bool billSelected =
+    final billSelected =
         currentPageIndex == _InputPlateScreenState._dockPageBill;
-    final bool memoSelected =
+    final memoSelected =
         currentPageIndex == _InputPlateScreenState._dockPageMemo;
 
     return Material(
@@ -1998,77 +2075,152 @@ class _SheetHeaderDelegate extends SliverPersistentHeaderDelegate {
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: outerTap,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
-          child: Column(
-            children: [
-              InkWell(
-                onTap: sheetOpen ? onToggle : null,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+        child: Column(
+          children: [
+            Material(
+              color: PromptUiTheme.of(context).transparent,
+              child: InkWell(
+                onTap: sheetAnimating ? null : onToggle,
                 borderRadius: BorderRadius.circular(12),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 3),
-                  child: Center(
-                    child:
-                        _SheetHandle(color: cs.outlineVariant.withOpacity(0.9)),
+                child: SizedBox(
+                  height: 48,
+                  child: Row(
+                    children: [
+                      AnimatedContainer(
+                        duration: PromptUiMotion.selection,
+                        curve: PromptUiMotion.standard,
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: sheetOpen
+                              ? cs.primaryContainer
+                              : cs.surfaceContainerLow,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: sheetOpen
+                                ? cs.primary.withOpacity(.5)
+                                : cs.outlineVariant,
+                          ),
+                        ),
+                        alignment: Alignment.center,
+                        child: AnimatedSwitcher(
+                          duration: PromptUiMotion.selection,
+                          child: sheetAnimating
+                              ? SizedBox(
+                                  key: const ValueKey('loading'),
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: cs.primary,
+                                  ),
+                                )
+                              : Icon(
+                                  Icons.tune_rounded,
+                                  key: const ValueKey('tune'),
+                                  size: 20,
+                                  color: sheetOpen
+                                      ? cs.onPrimaryContainer
+                                      : cs.onSurfaceVariant,
+                                ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: AnimatedSwitcher(
+                          duration: PromptUiMotion.selection,
+                          child: Column(
+                            key: ValueKey(
+                              '${sheetOpen}_$sheetAnimating',
+                            ),
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                sheetAnimating
+                                    ? sheetOpen
+                                        ? '추가 정보 여는 중'
+                                        : '추가 정보 닫는 중'
+                                    : sheetOpen
+                                        ? '추가 정보 닫기'
+                                        : '추가 정보 보기',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w900,
+                                  color: cs.onSurface,
+                                ),
+                              ),
+                              Text(
+                                sheetOpen
+                                    ? '이 헤더를 한 번 터치하면 닫힙니다.'
+                                    : '이 헤더를 한 번 터치하면 열립니다.',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: cs.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          plateText,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      AnimatedRotation(
+                        turns: sheetOpen ? .5 : 0,
+                        duration: PromptUiMotion.selection,
+                        curve: PromptUiMotion.standard,
+                        child: Icon(
+                          Icons.expand_less_rounded,
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: _segmentButton(
-                      context: context,
-                      label: '정산 유형',
-                      selected: billSelected,
-                      onTap: sheetOpen ? onSelectBill : null,
-                    ),
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Expanded(
+                  child: _segmentButton(
+                    context: context,
+                    label: '정산 유형',
+                    selected: billSelected,
+                    onTap: sheetAnimating ? null : onSelectBill,
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _segmentButton(
-                      context: context,
-                      label: '상태 메모',
-                      selected: memoSelected,
-                      onTap: sheetOpen ? onSelectMemo : null,
-                    ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _segmentButton(
+                    context: context,
+                    label: '상태 메모',
+                    selected: memoSelected,
+                    onTap: sheetAnimating ? null : onSelectMemo,
                   ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      sheetOpen ? '핸들을 탭하면 닫힙니다' : '탭하면 카드가 열립니다',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: cs.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Text(
-                      plateText,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: cs.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
@@ -2077,28 +2229,9 @@ class _SheetHeaderDelegate extends SliverPersistentHeaderDelegate {
   @override
   bool shouldRebuild(covariant _SheetHeaderDelegate oldDelegate) {
     return oldDelegate.sheetOpen != sheetOpen ||
+        oldDelegate.sheetAnimating != sheetAnimating ||
         oldDelegate.plateText != plateText ||
         oldDelegate.currentPageIndex != currentPageIndex;
-  }
-}
-
-class _SheetHandle extends StatelessWidget {
-  final Color color;
-
-  const _SheetHandle({required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 40,
-      height: 4,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(2),
-        ),
-      ),
-    );
   }
 }
 
