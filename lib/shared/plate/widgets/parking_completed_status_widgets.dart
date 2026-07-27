@@ -3,8 +3,65 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../design_system/prompt_ui/prompt_ui_components.dart';
 import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
+
+Future<void> traceParkingStatusSectorSummary({
+  required BuildContext context,
+  required String mode,
+  required String statusTitle,
+  required String plateNumber,
+  required String area,
+  required String sectorId,
+  required String sectorName,
+}) async {
+  DeveloperOperationTrace? trace;
+  try {
+    final normalizedSectorId = sectorId.trim();
+    final normalizedSectorName = sectorName.trim();
+    final displaySector =
+        normalizedSectorName.isEmpty ? '—' : normalizedSectorName;
+
+    trace = await DeveloperOperationTrace.start(
+      context: context,
+      title: '차량 상태 카드 방문 구역',
+      initialMessage: '$statusTitle 화면의 차량 정보를 준비하고 있습니다.',
+      developerModeMessage: '개발자 모드 ON: 방문 구역 표시 로그를 복사할 수 있습니다.',
+      standardModeMessage: '개발자 모드 OFF: 방문 구역 표시 로그를 콘솔에 기록합니다.',
+      usePromptUi: true,
+    );
+    trace.log(
+      'mode=$mode status=$statusTitle plate=$plateNumber area=$area',
+      progress: .24,
+    );
+    trace.log(
+      'sectorId=${normalizedSectorId.isEmpty ? "—" : normalizedSectorId} '
+      'sectorName=$displaySector source=PlateModel',
+      progress: .52,
+    );
+    trace.log(
+      'layout=row3-left:상태 메모 row3-right:방문 구역 '
+      'firebaseRead=false firebaseWrite=false',
+      progress: .78,
+    );
+    await trace.succeed(
+      '차량 상태 카드에 방문 구역 정보를 표시할 준비가 완료되었습니다.',
+    );
+  } catch (error, stackTrace) {
+    if (trace != null) {
+      await trace.fail(
+        '차량 상태 카드 방문 구역 표시 준비에 실패했습니다.',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return;
+    }
+    debugPrint(
+      '[차량 상태 카드 방문 구역] 오류: $error\n$stackTrace',
+    );
+  }
+}
 
 class ParkingCompletedSheetTitleRow extends StatelessWidget {
   const ParkingCompletedSheetTitleRow({
@@ -78,6 +135,7 @@ class ParkingCompletedPlateSummaryCard extends StatelessWidget {
     required this.lockedFee,
     required this.paymentMethod,
     required this.statusMemo,
+    required this.sectorName,
     this.attention = 0,
     this.colorScheme,
     this.lockedBadgeColor,
@@ -95,6 +153,7 @@ class ParkingCompletedPlateSummaryCard extends StatelessWidget {
   final int? lockedFee;
   final String paymentMethod;
   final String statusMemo;
+  final String sectorName;
   final double attention;
   final ColorScheme? colorScheme;
   final Color? lockedBadgeColor;
@@ -125,6 +184,7 @@ class ParkingCompletedPlateSummaryCard extends StatelessWidget {
         : '—';
     final billingText = billingType.isNotEmpty ? billingType : '미지정';
     final memoText = statusMemo.trim().isNotEmpty ? statusMemo.trim() : '—';
+    final sectorText = sectorName.trim().isNotEmpty ? sectorName.trim() : '—';
     final resolvedBorder = borderColorResolver?.call(cs, safeAttention);
     final resolvedBackground =
         backgroundColorResolver?.call(cs, safeAttention);
@@ -306,10 +366,25 @@ class ParkingCompletedPlateSummaryCard extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  _ParkingCompletedInfoLine(
-                    icon: Icons.notes_rounded,
-                    label: '상태 메모',
-                    value: memoText,
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: _ParkingCompletedInfoLine(
+                          icon: Icons.notes_rounded,
+                          label: '상태 메모',
+                          value: memoText,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _ParkingCompletedInfoLine(
+                          icon: Icons.grid_view_rounded,
+                          label: '방문 구역',
+                          value: sectorText,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -355,13 +430,34 @@ class _ParkingCompletedInfoLine extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 3),
-              Text(
-                displayValue,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: textTheme.bodyMedium?.copyWith(
-                  color: tokens.textPrimary,
-                  fontWeight: FontWeight.w700,
+              AnimatedSwitcher(
+                duration: MediaQuery.maybeOf(context)?.disableAnimations == true
+                    ? Duration.zero
+                    : PromptUiMotion.component,
+                switchInCurve: PromptUiMotion.enter,
+                switchOutCurve: PromptUiMotion.exit,
+                transitionBuilder: (child, animation) {
+                  final offset = Tween<Offset>(
+                    begin: const Offset(0, .12),
+                    end: Offset.zero,
+                  ).animate(animation);
+                  return FadeTransition(
+                    opacity: animation,
+                    child: SlideTransition(
+                      position: offset,
+                      child: child,
+                    ),
+                  );
+                },
+                child: Text(
+                  displayValue,
+                  key: ValueKey<String>('$label:$displayValue'),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: tokens.textPrimary,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
             ],

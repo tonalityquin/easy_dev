@@ -67,6 +67,23 @@ Future<bool?> showMinorParkingCompletedStatusBottomSheet({
   final plateNumber = plate.plateNumber;
   final division = context.read<UserState>().division;
   final area = context.read<AreaState>().currentArea;
+  final plateType = plate.typeEnum;
+  final statusTitle = plateType == PlateType.parkingRequests
+      ? '입차 요청 상태 처리'
+      : plateType == PlateType.departureRequests
+          ? '출차 요청 상태 처리'
+          : '입차 완료 상태 처리';
+
+  await traceParkingStatusSectorSummary(
+    context: context,
+    mode: '마이너',
+    statusTitle: statusTitle,
+    plateNumber: plateNumber,
+    area: plate.area,
+    sectorId: plate.sectorId ?? '',
+    sectorName: plate.sectorName ?? '',
+  );
+  if (!context.mounted) return null;
 
   return showPromptOverlayBottomSheet<bool>(
     context: context,
@@ -1201,18 +1218,19 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                       controller: _scrollController,
                       padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
                       children: [
-                                                ParkingCompletedPlateSummaryCard(
-                                                      colorScheme: cs,
-                                                      plateNumber: widget.plateNumber,
-                                                      area: _plate.area,
-                                                      location: location,
-                                                      billingType: billingType,
-                                                      isLocked: isLocked,
-                                                      lockedFee: lockedFee,
-                                                      paymentMethod: paymentMethod,
-                                                      statusMemo: statusMemo,
-                                                      attention: _needsBilling ? attention : 0,
-                                                    ),
+                        ParkingCompletedPlateSummaryCard(
+                          colorScheme: cs,
+                          plateNumber: widget.plateNumber,
+                          area: _plate.area,
+                          location: location,
+                          billingType: billingType,
+                          isLocked: isLocked,
+                          lockedFee: lockedFee,
+                          paymentMethod: paymentMethod,
+                          statusMemo: statusMemo,
+                          sectorName: _plate.sectorName ?? '',
+                          attention: _needsBilling ? attention : 0,
+                        ),
                         const SizedBox(height: 14),
                         ParkingCompletedSectionCard(
                           colorScheme: cs,

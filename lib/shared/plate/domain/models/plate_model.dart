@@ -133,6 +133,8 @@ class PlateFields {
   static const String regularDurationHours = 'regularDurationHours';
   static const String requestTime = 'request_time';
   static const String selectedBy = 'selectedBy';
+  static const String sectorId = 'sectorId';
+  static const String sectorName = 'sectorName';
   static const String statusList = 'statusList';
   static const String type = 'type';
   static const String updatedAt = 'updatedAt';
@@ -175,6 +177,8 @@ class PlateModel {
   int? get regularDurationHours => regularDurationValue;
   final DateTime requestTime;
   final String? selectedBy;
+  final String? sectorId;
+  final String? sectorName;
   final List<String> statusList;
   final String type;
   final DateTime? updatedAt;
@@ -214,6 +218,8 @@ class PlateModel {
     int? regularDurationValue,
     required this.requestTime,
     this.selectedBy,
+    this.sectorId,
+    this.sectorName,
     this.statusList = const [],
     required this.type,
     this.updatedAt,
@@ -264,6 +270,8 @@ class PlateModel {
       requestTime:
           (timestamp is Timestamp) ? timestamp.toDate() : DateTime.now(),
       selectedBy: data[PlateFields.selectedBy],
+      sectorId: data[PlateFields.sectorId]?.toString().trim(),
+      sectorName: data[PlateFields.sectorName]?.toString().trim(),
       statusList: List<String>.from(data[PlateFields.statusList] ?? []),
       type: normalizePlateTypeFirestoreValue(data[PlateFields.type]),
       updatedAt:
@@ -316,6 +324,10 @@ class PlateModel {
       },
       PlateFields.requestTime: requestTime,
       PlateFields.selectedBy: selectedBy,
+      if (sectorId != null && sectorId!.trim().isNotEmpty)
+        PlateFields.sectorId: sectorId!.trim(),
+      if (sectorName != null && sectorName!.trim().isNotEmpty)
+        PlateFields.sectorName: sectorName!.trim(),
       PlateFields.statusList: statusList,
       PlateFields.type: type,
       if (updatedAt != null)
@@ -366,6 +378,8 @@ class PlateModel {
     int? regularDurationValue,
     DateTime? requestTime,
     String? selectedBy,
+    String? sectorId,
+    String? sectorName,
     List<String>? statusList,
     String? type,
     DateTime? updatedAt,
@@ -407,6 +421,8 @@ class PlateModel {
       regularDurationValue: regularDurationValue ?? regularDurationHours ?? this.regularDurationValue,
       requestTime: requestTime ?? this.requestTime,
       selectedBy: selectedBy ?? this.selectedBy,
+      sectorId: sectorId ?? this.sectorId,
+      sectorName: sectorName ?? this.sectorName,
       statusList: statusList ?? this.statusList,
       type: type ?? this.type,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -533,6 +549,15 @@ class PlateModel {
       changes['regularDurationValue'] = {
         'before': regularDurationValue,
         'after': other.regularDurationValue
+      };
+    }
+    if (sectorId != other.sectorId) {
+      changes['sectorId'] = {'before': sectorId, 'after': other.sectorId};
+    }
+    if (sectorName != other.sectorName) {
+      changes['sectorName'] = {
+        'before': sectorName,
+        'after': other.sectorName
       };
     }
     if (!listEquals(statusList, other.statusList)) {

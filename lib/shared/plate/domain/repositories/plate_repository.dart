@@ -265,6 +265,8 @@ abstract class PlateRepository {
     String? priority1SlotKey,
     String? priority2SlotKey,
     String? priority3SlotKey,
+    String? sectorId,
+    String? sectorName,
   });
 
   Future<void> setPlateStatus({

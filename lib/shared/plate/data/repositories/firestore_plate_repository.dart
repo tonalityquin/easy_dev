@@ -525,6 +525,8 @@ class FirestorePlateRepository implements PlateRepository {
     String? priority1SlotKey,
     String? priority2SlotKey,
     String? priority3SlotKey,
+    String? sectorId,
+    String? sectorName,
   }) {
     return _creationService.addPlate(
       plateNumber: plateNumber,
@@ -553,6 +555,8 @@ class FirestorePlateRepository implements PlateRepository {
       priority1SlotKey: priority1SlotKey,
       priority2SlotKey: priority2SlotKey,
       priority3SlotKey: priority3SlotKey,
+      sectorId: sectorId,
+      sectorName: sectorName,
     );
   }
 

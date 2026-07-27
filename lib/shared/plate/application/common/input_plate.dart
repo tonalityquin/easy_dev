@@ -37,9 +37,18 @@ class InputPlate with ChangeNotifier {
     String? priority1SlotKey,
     String? priority2SlotKey,
     String? priority3SlotKey,
+    String? sectorId,
+    String? sectorName,
   }) async {
     final correctedLocation = location.isEmpty ? '미지정' : location;
-    final plateType = isLocationSelected ? PlateType.parkingCompleted : PlateType.parkingRequests;
+    final plateType = isLocationSelected
+        ? PlateType.parkingCompleted
+        : PlateType.parkingRequests;
+    debugPrint(
+      '[InputPlate][Sector] plate=$plateNumber area=${areaState.currentArea} '
+      'sectorId=${(sectorId ?? '').trim()} '
+      'sectorName=${(sectorName ?? '').trim()} type=${plateType.firestoreValue}',
+    );
 
     try {
       await _plateRepository.addPlate(
@@ -67,6 +76,8 @@ class InputPlate with ChangeNotifier {
         priority1SlotKey: priority1SlotKey,
         priority2SlotKey: priority2SlotKey,
         priority3SlotKey: priority3SlotKey,
+        sectorId: sectorId,
+        sectorName: sectorName,
       );
 
       notifyListeners();

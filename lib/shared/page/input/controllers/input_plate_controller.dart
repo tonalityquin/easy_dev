@@ -1,15 +1,30 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:provider/provider.dart';
+import '../../../../app/models/capability.dart';
+import '../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../app/utils/snackbar_helper.dart';
 import '../../../../app/utils/status_dialog.dart';
 import '../../../../features/account/applications/user_state.dart';
 import '../../../../features/dev/application/area_state.dart';
 import '../../../../features/payment/applications/bill_state.dart';
+import '../../../../features/sector/applications/sector_state.dart';
+import '../../../../features/sector/domain/models/sector_model.dart';
 import '../../../plate/domain/repositories/plate_repository.dart';
 import '../../../plate/widgets/action_trace_dialog.dart';
 import '../application/input_plate_service.dart';
 import '../domain/repositories/ocr_learning_repository.dart';
+import '../pages/sheets/input_sector_selection_sheet.dart';
+
+class _SectorEntryResolution {
+  const _SectorEntryResolution({
+    required this.proceed,
+    this.sector,
+  });
+
+  final bool proceed;
+  final SectorModel? sector;
+}
 
 class InputPlateController {
   final bool isMinorMode;
@@ -320,6 +335,248 @@ class InputPlateController {
     );
   }
 
+  Future<bool> _reportSectorWorkflow({
+    required BuildContext context,
+    required String initialMessage,
+    required List<String> lines,
+    required bool success,
+    required String resultMessage,
+    Object? error,
+    StackTrace? stackTrace,
+  }) async {
+    if (!context.mounted) return false;
+    final operationTrace = await DeveloperOperationTrace.start(
+      context: context,
+      title: '입차 방문처 선택',
+      initialMessage: initialMessage,
+      usePromptUi: true,
+      developerModeMessage: '개발자 모드 ON: 방문처 선택 로그를 복사할 수 있습니다.',
+      standardModeMessage: '개발자 모드 OFF: 방문처 선택 로그를 콘솔에 기록합니다.',
+    );
+    for (final line in lines) {
+      operationTrace.log(line);
+    }
+    if (success) {
+      await operationTrace.succeed(resultMessage);
+    } else {
+      await operationTrace.fail(
+        resultMessage,
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+    return operationTrace.developerMode;
+  }
+
+  Future<_SectorEntryResolution> _resolveSectorForEntry({
+    required BuildContext context,
+    required AreaState areaState,
+    required String area,
+    ActionTraceController? trace,
+  }) async {
+    final canUseSector = areaState.capabilitiesOfCurrentArea.contains(
+      Capability.sector,
+    );
+    trace?.add('canUseSector=$canUseSector');
+    debugPrint(
+      '[InputPlateController][Sector] capability check '
+      'area=$area canUseSector=$canUseSector',
+    );
+
+    if (!canUseSector) {
+      await _reportSectorWorkflow(
+        context: context,
+        initialMessage: '현재 지역의 방문처 기능을 확인하고 있습니다.',
+        lines: <String>[
+          'area=$area',
+          'capability.sector=false',
+          'source=AreaState.capabilitiesOfCurrentArea',
+          'firebaseRead=false',
+          'selectionRequired=false',
+        ],
+        success: true,
+        resultMessage: '방문처 선택 단계를 생략하고 기존 입차 절차를 진행합니다.',
+      );
+      return const _SectorEntryResolution(proceed: true);
+    }
+
+    final sectorState = context.read<SectorState>();
+    final rawSectors = sectorState.sectors;
+    final validSectors = rawSectors
+        .where(
+          (sector) =>
+              sector.id.trim().isNotEmpty &&
+              sector.name.trim().isNotEmpty &&
+              sector.area.trim() == area.trim(),
+        )
+        .toList(growable: false);
+    final cacheKey = SectorState.cacheKeyForArea(area);
+    trace?.add(
+      'sectorState busy=${sectorState.isBusy} '
+      'count=${rawSectors.length} valid=${validSectors.length}',
+    );
+    debugPrint(
+      '[InputPlateController][Sector] local cache check '
+      'area=$area key=$cacheKey busy=${sectorState.isBusy} '
+      'count=${rawSectors.length} valid=${validSectors.length}',
+    );
+
+    if (sectorState.isBusy) {
+      final developerMode = await _reportSectorWorkflow(
+        context: context,
+        initialMessage: '로컬 방문처 데이터를 확인하고 있습니다.',
+        lines: <String>[
+          'area=$area',
+          'cacheKey=$cacheKey',
+          'sectorState.isBusy=true',
+          'firebaseRead=false',
+        ],
+        success: false,
+        resultMessage: '방문처 로컬 데이터 처리가 완료되지 않아 입차를 중단했습니다.',
+      );
+      if (!developerMode && context.mounted) {
+        await StatusDialog.showFailure(
+          context,
+          title: '방문처 데이터를 준비하고 있습니다.',
+          description: '잠시 후 입차 버튼을 다시 눌러주세요.',
+          usePromptUi: true,
+        );
+      }
+      return const _SectorEntryResolution(proceed: false);
+    }
+
+    if (rawSectors.length != validSectors.length || validSectors.isEmpty) {
+      final error = StateError(
+        validSectors.isEmpty
+            ? '현재 지역의 로컬 방문처 목록이 비어 있습니다.'
+            : '현재 지역과 일치하지 않는 방문처 데이터가 포함되어 있습니다.',
+      );
+      final developerMode = await _reportSectorWorkflow(
+        context: context,
+        initialMessage: '로컬 방문처 데이터 무결성을 확인하고 있습니다.',
+        lines: <String>[
+          'area=$area',
+          'cacheKey=$cacheKey',
+          'cachedCount=${rawSectors.length}',
+          'validCount=${validSectors.length}',
+          'firebaseRead=false',
+        ],
+        success: false,
+        resultMessage: '방문처 로컬 데이터가 올바르지 않아 입차를 중단했습니다.',
+        error: error,
+      );
+      if (!developerMode && context.mounted) {
+        await StatusDialog.showFailure(
+          context,
+          title: '선택할 방문처가 없습니다.',
+          description: '태블릿 설정 또는 내 정보에서 운영 데이터를 다시 내려받아 주세요.',
+          usePromptUi: true,
+        );
+      }
+      return const _SectorEntryResolution(proceed: false);
+    }
+
+    debugPrint(
+      '[InputPlateController][Sector] selection sheet open '
+      'area=$area count=${validSectors.length}',
+    );
+    final selected = await InputSectorSelectionSheet.show(
+      context: context,
+      area: area,
+      sectors: validSectors,
+    );
+    if (!context.mounted) {
+      return const _SectorEntryResolution(proceed: false);
+    }
+
+    if (selected == null) {
+      trace?.add('중단: Sector 선택 취소');
+      await _reportSectorWorkflow(
+        context: context,
+        initialMessage: '방문처 선택 결과를 확인하고 있습니다.',
+        lines: <String>[
+          'area=$area',
+          'cacheKey=$cacheKey',
+          'selectionResult=cancel',
+          'firebaseRead=false',
+          'firebaseWrite=false',
+        ],
+        success: false,
+        resultMessage: '사용자가 방문처 선택을 취소하여 입차를 진행하지 않습니다.',
+      );
+      return const _SectorEntryResolution(proceed: false);
+    }
+
+    final currentArea = areaState.currentArea.trim();
+    SectorModel? resolved;
+    for (final sector in sectorState.sectors) {
+      if (sector.id == selected.id) {
+        resolved = sector;
+        break;
+      }
+    }
+    final confirmedSector = resolved;
+    final selectionValid =
+        currentArea == area.trim() &&
+        confirmedSector != null &&
+        confirmedSector.area.trim() == currentArea &&
+        confirmedSector.id.trim().isNotEmpty &&
+        confirmedSector.name.trim().isNotEmpty &&
+        confirmedSector.name.trim() == selected.name.trim();
+
+    if (!selectionValid) {
+      final error = StateError('방문처 선택 중 현재 지역 또는 로컬 목록이 변경되었습니다.');
+      final developerMode = await _reportSectorWorkflow(
+        context: context,
+        initialMessage: '선택한 방문처를 다시 검증하고 있습니다.',
+        lines: <String>[
+          'requestedArea=$area',
+          'currentArea=$currentArea',
+          'selectedId=${selected.id}',
+          'selectedName=${selected.name}',
+          'resolved=${resolved != null}',
+          'firebaseRead=false',
+        ],
+        success: false,
+        resultMessage: '선택한 방문처를 확인할 수 없어 입차를 중단했습니다.',
+        error: error,
+      );
+      if (!developerMode && context.mounted) {
+        await StatusDialog.showFailure(
+          context,
+          title: '방문처 선택을 다시 진행해주세요.',
+          description: '현재 지역 또는 로컬 방문처 정보가 변경되었습니다.',
+          usePromptUi: true,
+        );
+      }
+      return const _SectorEntryResolution(proceed: false);
+    }
+
+    trace?.add(
+      'sectorId=${confirmedSector.id} sectorName=${confirmedSector.name}',
+    );
+    await _reportSectorWorkflow(
+      context: context,
+      initialMessage: '선택한 방문처를 입차 정보에 연결하고 있습니다.',
+      lines: <String>[
+        'area=$currentArea',
+        'cacheKey=$cacheKey',
+        'capability.sector=true',
+        'sectorId=${confirmedSector.id}',
+        'sectorName=${confirmedSector.name}',
+        'source=SectorState.sectors',
+        'firebaseRead=false',
+        'selectionRequired=true',
+      ],
+      success: true,
+      resultMessage: '방문처 선택이 완료되어 기존 입차 절차를 계속합니다.',
+    );
+    return _SectorEntryResolution(
+      proceed: true,
+      sector: confirmedSector,
+    );
+  }
+
   Future<bool> submitPlateEntry(
     BuildContext context,
     VoidCallback refreshUI, {
@@ -392,6 +649,18 @@ class InputPlateController {
       return false;
     }
 
+    final sectorResolution = await _resolveSectorForEntry(
+      context: context,
+      areaState: areaState,
+      area: area,
+      trace: trace,
+    );
+    if (!sectorResolution.proceed || !context.mounted) {
+      trace?.add('중단: Sector 준비 실패 또는 취소');
+      return false;
+    }
+    final selectedSector = sectorResolution.sector;
+
     isLoading = true;
     refreshUI();
 
@@ -439,6 +708,8 @@ class InputPlateController {
         priority1SlotKey: priority1SlotKey,
         priority2SlotKey: priority2SlotKey,
         priority3SlotKey: priority3SlotKey,
+        sectorId: selectedSector?.id,
+        sectorName: selectedSector?.name,
       );
       trace?.add('입차 등록 결과=$wasSuccessful');
 

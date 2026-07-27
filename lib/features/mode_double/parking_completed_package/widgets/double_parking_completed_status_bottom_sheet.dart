@@ -58,6 +58,17 @@ Future<bool?> showDoubleParkingCompletedStatusBottomSheet({
   final division = context.read<UserState>().division;
   final area = context.read<AreaState>().currentArea;
 
+  await traceParkingStatusSectorSummary(
+    context: context,
+    mode: '더블',
+    statusTitle: '입차 완료 상태 처리',
+    plateNumber: plateNumber,
+    area: plate.area,
+    sectorId: plate.sectorId ?? '',
+    sectorName: plate.sectorName ?? '',
+  );
+  if (!context.mounted) return null;
+
   return showPromptOverlayBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
@@ -487,17 +498,18 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                     controller: _scrollController,
                     padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
                     children: [
-                                            ParkingCompletedPlateSummaryCard(
-                                                  plateNumber: widget.plateNumber,
-                                                  area: _plate.area,
-                                                  location: location,
-                                                  billingType: billingType,
-                                                  isLocked: isLocked,
-                                                  lockedFee: lockedFee,
-                                                  paymentMethod: paymentMethod,
-                                                  statusMemo: statusMemo,
-                                                  attention: _needsBilling ? attention : 0,
-                                                ),
+                      ParkingCompletedPlateSummaryCard(
+                        plateNumber: widget.plateNumber,
+                        area: _plate.area,
+                        location: location,
+                        billingType: billingType,
+                        isLocked: isLocked,
+                        lockedFee: lockedFee,
+                        paymentMethod: paymentMethod,
+                        statusMemo: statusMemo,
+                        sectorName: _plate.sectorName ?? '',
+                        attention: _needsBilling ? attention : 0,
+                      ),
                       const SizedBox(height: 14),
                       ParkingCompletedSectionCard(
                         title: '핵심 작업',

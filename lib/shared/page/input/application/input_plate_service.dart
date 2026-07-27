@@ -284,6 +284,8 @@ class InputPlateService {
     String? priority1SlotKey,
     String? priority2SlotKey,
     String? priority3SlotKey,
+    String? sectorId,
+    String? sectorName,
   }) async {
     final inputState = context.read<InputPlate>();
     final areaState = context.read<AreaState>();
@@ -324,6 +326,8 @@ class InputPlateService {
         priority1SlotKey: priority1SlotKey,
         priority2SlotKey: priority2SlotKey,
         priority3SlotKey: priority3SlotKey,
+        sectorId: sectorId,
+        sectorName: sectorName,
       );
     } catch (e) {
       await _logApiError(
@@ -344,6 +348,8 @@ class InputPlateService {
           'priority1SlotKey': priority1SlotKey,
           'priority2SlotKey': priority2SlotKey,
           'priority3SlotKey': priority3SlotKey,
+          'sectorId': sectorId,
+          'sectorName': sectorName,
           'area': areaState.currentArea,
           'division': areaState.currentDivision,
           'userNameLen': userState.name.trim().length,

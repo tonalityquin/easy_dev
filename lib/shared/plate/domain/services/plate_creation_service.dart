@@ -145,12 +145,18 @@ class PlateCreationService {
     required String plateDocId,
     required String plateNumber,
     required String location,
+    String? sectorId,
+    String? sectorName,
   }) {
     final safeLocation = location.isNotEmpty ? location : '미지정';
     return <String, dynamic>{
       plateDocId: <String, dynamic>{
         PlateFields.plateNumber: plateNumber,
         PlateFields.location: safeLocation,
+        PlateFields.sectorId:
+            (sectorId ?? '').trim().isEmpty ? null : sectorId!.trim(),
+        PlateFields.sectorName:
+            (sectorName ?? '').trim().isEmpty ? null : sectorName!.trim(),
         'parkingCompletedAt': FieldValue.serverTimestamp(),
         PlateFields.updatedAt: FieldValue.serverTimestamp(),
       },
@@ -161,12 +167,18 @@ class PlateCreationService {
     required String plateDocId,
     required String plateNumber,
     required String location,
+    String? sectorId,
+    String? sectorName,
   }) {
     final safeLocation = location.isNotEmpty ? location : '미지정';
     return <String, dynamic>{
       plateDocId: <String, dynamic>{
         PlateFields.plateNumber: plateNumber,
         PlateFields.location: safeLocation,
+        PlateFields.sectorId:
+            (sectorId ?? '').trim().isEmpty ? null : sectorId!.trim(),
+        PlateFields.sectorName:
+            (sectorName ?? '').trim().isEmpty ? null : sectorName!.trim(),
         'parkingRequestedAt': FieldValue.serverTimestamp(),
         PlateFields.updatedAt: FieldValue.serverTimestamp(),
       },
@@ -228,6 +240,8 @@ class PlateCreationService {
     String? priority1SlotKey,
     String? priority2SlotKey,
     String? priority3SlotKey,
+    String? sectorId,
+    String? sectorName,
   }) async {
     final String plateDocId = '${plateNumber}_$area';
 
@@ -283,7 +297,20 @@ class PlateCreationService {
         isLockedFee || (billingType == null || billingType.trim().isEmpty);
 
     final normalizedLocation = _normalizeLocationString(location);
-    final normalizedDivision = division.trim().isEmpty ? '미지정' : division.trim();
+    final normalizedSectorId = (sectorId ?? '').trim();
+    final normalizedSectorName = (sectorName ?? '').trim();
+    final hasSector =
+        normalizedSectorId.isNotEmpty && normalizedSectorName.isNotEmpty;
+    if (normalizedSectorId.isEmpty != normalizedSectorName.isEmpty) {
+      throw ArgumentError('sectorId와 sectorName은 함께 전달되어야 합니다.');
+    }
+    debugPrint(
+      '[PlateCreationService][Sector] plate=$plateNumber area=$area '
+      'hasSector=$hasSector sectorId=$normalizedSectorId '
+      'sectorName=$normalizedSectorName',
+    );
+    final normalizedDivision =
+        division.trim().isEmpty ? '미지정' : division.trim();
     final countedAt = DateTime.now();
 
     final base = PlateModel(
@@ -306,6 +333,8 @@ class PlateCreationService {
       imageUrls: imageUrls,
       isSelected: false,
       selectedBy: null,
+      sectorId: hasSector ? normalizedSectorId : null,
+      sectorName: hasSector ? normalizedSectorName : null,
       isLockedFee: effectiveIsLockedFee,
       lockedAtTimeInSeconds: lockedAtTimeInSeconds,
       lockedFeeAmount: lockedFeeAmount,
@@ -406,6 +435,10 @@ class PlateCreationService {
                 PlateFields.parkingPriority2SlotKey: priority2SlotKey!.trim(),
               if ((priority3SlotKey ?? '').trim().isNotEmpty)
                 PlateFields.parkingPriority3SlotKey: priority3SlotKey!.trim(),
+              PlateFields.sectorId:
+                  hasSector ? normalizedSectorId : FieldValue.delete(),
+              PlateFields.sectorName:
+                  hasSector ? normalizedSectorName : FieldValue.delete(),
               if (lockedAtTimeInSeconds != null)
                 PlateFields.lockedAtTimeInSeconds: lockedAtTimeInSeconds,
               if (lockedFeeAmount != null)
@@ -432,6 +465,8 @@ class PlateCreationService {
                       plateDocId: plateDocId,
                       plateNumber: plateNumber,
                       location: base.location,
+                      sectorId: base.sectorId,
+                      sectorName: base.sectorName,
                     ),
                   },
                   SetOptions(merge: true),
@@ -472,6 +507,8 @@ class PlateCreationService {
                       plateDocId: plateDocId,
                       plateNumber: plateNumber,
                       location: base.location,
+                      sectorId: base.sectorId,
+                      sectorName: base.sectorName,
                     ),
                   },
                   SetOptions(merge: true),
@@ -549,6 +586,8 @@ class PlateCreationService {
                     plateDocId: plateDocId,
                     plateNumber: plateNumber,
                     location: base.location,
+                    sectorId: base.sectorId,
+                    sectorName: base.sectorName,
                   ),
                 },
                 SetOptions(merge: true),
@@ -574,6 +613,8 @@ class PlateCreationService {
                     plateDocId: plateDocId,
                     plateNumber: plateNumber,
                     location: base.location,
+                    sectorId: base.sectorId,
+                    sectorName: base.sectorName,
                   ),
                 },
                 SetOptions(merge: true),
