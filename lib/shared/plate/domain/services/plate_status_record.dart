@@ -40,6 +40,15 @@ DateTime? _readDateTime(dynamic value) {
   return null;
 }
 
+
+DateTime? _readDateOnly(String? value) {
+  final text = value?.trim() ?? '';
+  if (text.isEmpty) return null;
+  final parsed = DateTime.tryParse(text);
+  if (parsed == null) return null;
+  return DateTime(parsed.year, parsed.month, parsed.day);
+}
+
 String? _readTrimmedString(dynamic value) {
   if (value == null) return null;
   final text = value.toString().trim();
@@ -58,11 +67,6 @@ int? _readInt(dynamic value) {
   if (value is num) return value.toInt();
   if (value is String) return int.tryParse(value.trim());
   return null;
-}
-
-List<String> _readStringList(dynamic value) {
-  if (value is! List) return const <String>[];
-  return value.map((e) => e.toString()).toList(growable: false);
 }
 
 class PlateStatusPaymentRecord {
@@ -144,7 +148,6 @@ class PlateStatusRecord {
   final String? customStatus;
   final DateTime? updatedAt;
   final String? updatedAtRaw;
-  final List<String> statusList;
   final String? countType;
   final String? type;
   final String? periodUnit;
@@ -164,7 +167,6 @@ class PlateStatusRecord {
     required this.customStatus,
     required this.updatedAt,
     required this.updatedAtRaw,
-    required this.statusList,
     required this.countType,
     required this.type,
     required this.periodUnit,
@@ -190,7 +192,6 @@ class PlateStatusRecord {
       customStatus: _readTrimmedString(data['customStatus']),
       updatedAt: _readDateTime(rawUpdatedAt),
       updatedAtRaw: _readRawDateText(rawUpdatedAt),
-      statusList: _readStringList(data['statusList']),
       countType: _readTrimmedString(data['countType']),
       type: _readTrimmedString(data['type']),
       periodUnit: _readTrimmedString(data['periodUnit']),
@@ -211,13 +212,41 @@ class PlateStatusRecord {
     );
   }
 
+  DateTime? get effectiveStartDate {
+    final direct = _readDateOnly(startDate);
+    if (direct != null) return direct;
+    for (final payment in paymentHistory.reversed) {
+      final parsed = _readDateOnly(payment.startDate);
+      if (parsed != null) return parsed;
+    }
+    return null;
+  }
+
+  DateTime? get effectiveEndDate {
+    final direct = _readDateOnly(endDate);
+    if (direct != null) return direct;
+    for (final payment in paymentHistory.reversed) {
+      final parsed = _readDateOnly(payment.endDate);
+      if (parsed != null) return parsed;
+    }
+    return null;
+  }
+
+  bool isActiveAt(DateTime value) {
+    final today = DateTime(value.year, value.month, value.day);
+    final start = effectiveStartDate;
+    final end = effectiveEndDate;
+    if (start != null && today.isBefore(start)) return false;
+    if (end != null && today.isAfter(end)) return false;
+    return true;
+  }
+
   Map<String, dynamic> toMap() {
     return {
       'area': area,
       'region': region,
       'specialNote': specialNote,
       'customStatus': customStatus,
-      'statusList': statusList,
       'type': type,
       'countType': countType,
       'regularType': regularType,

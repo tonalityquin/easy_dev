@@ -320,7 +320,6 @@ class DoublePlateState extends ChangeNotifier {
                   area: '',
                   userName: '',
                   isSelected: false,
-                  statusList: const [],
                 ),
               );
 

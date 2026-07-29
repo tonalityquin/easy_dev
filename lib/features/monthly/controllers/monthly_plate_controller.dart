@@ -46,10 +46,6 @@ class MonthlyPlateController {
   int selectedAddStandard = 0;
   int selectedAddAmount = 0;
 
-  List<String> statuses = [];
-  List<bool> isSelected = [];
-  List<String> selectedStatuses = [];
-  List<String> fetchedStatusList = [];
   final List<XFile> capturedImages = [];
 
   TextEditingController? regularAmountController;
@@ -99,8 +95,7 @@ class MonthlyPlateController {
     _addInputListeners();
   }
 
-  bool get hasStatusOrMemo =>
-      customStatusController.text.trim().isNotEmpty || selectedStatuses.isNotEmpty;
+  bool get hasStatusOrMemo => customStatusController.text.trim().isNotEmpty;
 
   PlateRepository _plateRepository(BuildContext context) {
     return context.read<PlateRepository>();
@@ -323,15 +318,12 @@ class MonthlyPlateController {
     clearInput();
     clearLocation();
     capturedImages.clear();
-    selectedStatuses.clear();
     selectedBasicStandard = 0;
     selectedBasicAmount = 0;
     selectedAddStandard = 0;
     selectedAddAmount = 0;
     customStatusController.clear();
     fetchedCustomStatus = null;
-    fetchedStatusList = [];
-    isSelected = List.generate(statuses.length, (_) => false);
     isThreeDigit = true;
     selectedBillType = '정기';
     regularAmountController?.clear();
@@ -509,10 +501,7 @@ class MonthlyPlateController {
     );
 
     customStatusController.clear();
-    selectedStatuses.clear();
     fetchedCustomStatus = null;
-    fetchedStatusList = [];
-    isSelected = List.generate(statuses.length, (_) => false);
   }
 
   Future<void> loadExistingData(
@@ -549,8 +538,6 @@ class MonthlyPlateController {
     customStatusController.text = (data['customStatus'] ?? '').toString();
     specialNote = (data['specialNote'] ?? '').toString();
 
-    final statusList = data['statusList'] as List<dynamic>? ?? [];
-    selectedStatuses = statusList.map((e) => e.toString()).toList();
   }
 
   Future<void> updatePlateEntry(
@@ -581,7 +568,6 @@ class MonthlyPlateController {
         area: area,
         region: dropdownValue.trim().isEmpty ? '전국' : dropdownValue.trim(),
         customStatus: customStatusController.text.trim(),
-        statusList: selectedStatuses,
         createdBy: userName,
         countType: nameController?.text.trim() ?? '',
         regularAmount: _regularAmountValue(),
@@ -647,7 +633,6 @@ class MonthlyPlateController {
         area: area,
         region: dropdownValue.trim().isEmpty ? '전국' : dropdownValue.trim(),
         customStatus: customStatusController.text.trim(),
-        statusList: selectedStatuses,
         createdBy: userName,
         countType: nameController?.text.trim() ?? '',
         regularAmount: _regularAmountValue(),

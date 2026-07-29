@@ -4,6 +4,8 @@ import '../../../../app/utils/status_dialog.dart';
 import '../../../../features/account/applications/user_state.dart';
 import '../../../../features/dev/application/area_state.dart';
 import '../../domain/enums/plate_type.dart';
+import '../../domain/models/plate_status_draft.dart';
+import '../../domain/models/plate_status_lookup_result.dart';
 import '../../domain/repositories/plate_repository.dart';
 
 class InputPlate with ChangeNotifier {
@@ -20,7 +22,11 @@ class InputPlate with ChangeNotifier {
     required UserState userState,
     required String selectedBillType,
     String? billingType,
-    List<String>? statusList,
+    required bool statusWriteRequested,
+    required PlateStatusLookupState statusLookupState,
+    required bool statusEditedByUser,
+    required PlateStatusDraft expectedOriginalStatus,
+    String? expectedStatusSourcePath,
     int basicStandard = 0,
     int basicAmount = 0,
     int addStandard = 0,
@@ -59,7 +65,11 @@ class InputPlate with ChangeNotifier {
         userName: userState.name,
         plateType: plateType,
         billingType: billingType,
-        statusList: statusList ?? [],
+        statusWriteRequested: statusWriteRequested,
+        statusLookupState: statusLookupState,
+        statusEditedByUser: statusEditedByUser,
+        expectedOriginalStatus: expectedOriginalStatus,
+        expectedStatusSourcePath: expectedStatusSourcePath,
         basicStandard: basicStandard,
         basicAmount: basicAmount,
         addStandard: addStandard,
@@ -82,6 +92,10 @@ class InputPlate with ChangeNotifier {
 
       notifyListeners();
       return true;
+    } on PlateStatusConflictException {
+      rethrow;
+    } on PlateStatusScopeException {
+      rethrow;
     } catch (error) {
       if (!context.mounted) return false;
       if (error.toString().contains('이미 등록된 번호판')) {

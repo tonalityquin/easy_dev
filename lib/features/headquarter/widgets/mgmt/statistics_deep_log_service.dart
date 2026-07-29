@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:googleapis/storage/v1.dart' as gcs;
 
 import '../../../../app/auth/google_auth_v7.dart';
@@ -16,12 +17,14 @@ class StatisticsDeepLogService {
     required String division,
     required String area,
     required DateTime date,
+    bool sectorEnabled = false,
   }) {
     return loadByDates(
       division: division,
       area: area,
       dates: <DateTime>[date],
       scopeLabel: _yyyymmdd(DateTime(date.year, date.month, date.day)),
+      sectorEnabled: sectorEnabled,
     );
   }
 
@@ -30,6 +33,7 @@ class StatisticsDeepLogService {
     required String area,
     required DateTime start,
     required DateTime end,
+    bool sectorEnabled = false,
   }) {
     final normalizedStart = _normalizeDate(start);
     final normalizedEnd = _normalizeDate(end);
@@ -47,6 +51,7 @@ class StatisticsDeepLogService {
       area: area,
       dates: dates,
       scopeLabel: '${_yyyymmdd(a)} ~ ${_yyyymmdd(b)}',
+      sectorEnabled: sectorEnabled,
     );
   }
 
@@ -55,9 +60,11 @@ class StatisticsDeepLogService {
     required String area,
     required List<DateTime> dates,
     String? scopeLabel,
+    bool sectorEnabled = false,
   }) async {
     final trimmedDivision = division.trim();
     final trimmedArea = area.trim();
+    debugPrint('[STAT_DEEP] load start division=$trimmedDivision area=$trimmedArea dates=${dates.length} sectorEnabled=$sectorEnabled');
 
     if (trimmedDivision.isEmpty || trimmedArea.isEmpty) {
       throw StateError('사업부와 지역 정보가 필요합니다.');
@@ -113,6 +120,8 @@ class StatisticsDeepLogService {
       }
 
       final docsByKey = <String, _DeepDocBundle>{};
+      var sourceCsvRowCount = 0;
+      var duplicateMergedCount = 0;
 
       for (final objectName in targetNames) {
         final objectDateStr = _extractDateStrFromObjectName(objectName);
@@ -122,6 +131,8 @@ class StatisticsDeepLogService {
           storage: storage,
           objectName: objectName,
         );
+        sourceCsvRowCount += rows.length;
+        debugPrint('[STAT_DEEP] csv object=$objectName rows=${rows.length}');
 
         for (int i = 0; i < rows.length; i++) {
           final row = rows[i];
@@ -132,6 +143,7 @@ class StatisticsDeepLogService {
               '';
           final docId = docIdBase.isEmpty ? '$objectName#$i' : docIdBase;
           final mergeKey = '$objectDateStr|$docId';
+          final sectorFieldsPresent = _hasSectorColumns(row);
           final meta = _extractCsvMeta(row);
           final log = _extractCsvLog(row);
           final logs = log.isEmpty
@@ -144,9 +156,11 @@ class StatisticsDeepLogService {
             plateNumber: plate,
             meta: meta,
             logs: logs,
+            sectorFieldsPresent: sectorFieldsPresent,
           );
 
           final existing = docsByKey[mergeKey];
+          if (existing != null) duplicateMergedCount++;
           docsByKey[mergeKey] = existing == null ? doc : _mergeDocBundles(existing, doc);
         }
       }
@@ -182,12 +196,34 @@ class StatisticsDeepLogService {
             plateNumber: doc.plateNumber.isEmpty ? doc.docId : doc.plateNumber,
             createdAt: createdAt,
             departureAt: departureAt,
+            departureTimeSource: departureAt == null
+                ? StatisticsDepartureTimeSource.missing
+                : doc.departureTimeSource,
             fee: doc.lockedFeeAmount?.round(),
             paymentMethod: doc.paymentMethod,
             docId: doc.docId,
+            sectorId: doc.sectorId,
+            sectorName: doc.sectorName,
+            sectorConflict: doc.sectorConflict,
+            sectorIdentityConflict: false,
+            sectorFieldsPresent: doc.sectorFieldsPresent,
           ),
         );
       }
+
+      final diagnostics = StatisticsDeepDiagnostics(
+        sourceObjectCount: targetNames.length,
+        sourceCsvRowCount: sourceCsvRowCount,
+        mergedVehicleCount: rows.length,
+        duplicateMergedCount: duplicateMergedCount,
+        sectorConflictCount: rows.where((row) => row.sectorConflict).length,
+        sectorIdentityConflictCount: 0,
+        sectorFieldPresentCount:
+            rows.where((row) => row.sectorFieldsPresent).length,
+        sectorFieldMissingCount:
+            rows.where((row) => !row.sectorFieldsPresent).length,
+      );
+      debugPrint('[STAT_DEEP] load complete objects=${targetNames.length} csvRows=$sourceCsvRowCount vehicles=${rows.length} merged=$duplicateMergedCount sectorConflicts=${diagnostics.sectorConflictCount} sectorFields=${diagnostics.sectorFieldPresentCount}/${rows.length}');
 
       return StatisticsDeepReport.fromRows(
         division: trimmedDivision,
@@ -196,6 +232,8 @@ class StatisticsDeepLogService {
         rows: rows,
         objectNames: targetNames,
         dateStrs: dateStrs.toList()..sort(),
+        sectorEnabled: sectorEnabled,
+        diagnostics: diagnostics,
       );
     } finally {
       client.close();
@@ -344,6 +382,20 @@ class StatisticsDeepLogService {
     return rows;
   }
 
+  bool _hasSectorColumns(Map<String, String> row) {
+    const keys = <String>{
+      'meta.sectorId',
+      'meta.sector_id',
+      'meta.sectorName',
+      'meta.sector_name',
+      'log.sectorId',
+      'log.sector_id',
+      'log.sectorName',
+      'log.sector_name',
+    };
+    return row.keys.any(keys.contains);
+  }
+
   Map<String, dynamic> _extractCsvMeta(Map<String, String> row) {
     final meta = <String, dynamic>{};
 
@@ -410,14 +462,21 @@ class StatisticsDeepLogService {
     required String plateNumber,
     required Map<String, dynamic> meta,
     required List<Map<String, dynamic>> logs,
+    required bool sectorFieldsPresent,
   }) {
     final requestTime = _parseDateTime(
           meta['request_time'] ?? meta['requestTime'] ?? meta['createdAt'],
         ) ??
         _pickLogTime(logs, <String>['생성', '입차']);
 
-    final departureCompletedAt = _parseDateTime(meta['departureCompletedAt']) ??
-        _pickLogTime(logs, <String>['출차']);
+    final departureCompletedDirect = _parseDateTime(meta['departureCompletedAt']);
+    final departureLogTime = _pickLogTime(logs, <String>['출차']);
+    final departureCompletedAt = departureCompletedDirect ?? departureLogTime;
+    final departureTimeSource = departureCompletedDirect != null
+        ? StatisticsDepartureTimeSource.completedAt
+        : departureLogTime != null
+            ? StatisticsDepartureTimeSource.departureLog
+            : StatisticsDepartureTimeSource.lastLogFallback;
 
     final updatedAt = _parseDateTime(meta['updatedAt']);
     final lastLogTime = logs.isEmpty ? null : _parseDateTime(logs.last['timestamp']);
@@ -425,6 +484,31 @@ class StatisticsDeepLogService {
     final lockedFeeAmount = _toNum(meta['lockedFeeAmount']) ??
         _toNum(meta['lockedFee']) ??
         _pickNumFromLogs(logs, <String>['lockedFee', 'lockedFeeAmount']);
+
+    final metaSectorId = _pickString(<dynamic>[
+      meta['sectorId'],
+      meta['sector_id'],
+    ]);
+    final metaSectorName = _pickString(<dynamic>[
+      meta['sectorName'],
+      meta['sector_name'],
+    ]);
+    final logSectorId = _pickStringFromLogs(
+      logs,
+      <String>['sectorId', 'sector_id'],
+    );
+    final logSectorName = _pickStringFromLogs(
+      logs,
+      <String>['sectorName', 'sector_name'],
+    );
+    final sectorId = metaSectorId ?? logSectorId;
+    final sectorName = metaSectorName ?? logSectorName;
+    final sectorConflict = _hasSectorConflict(
+      metaSectorId: metaSectorId,
+      metaSectorName: metaSectorName,
+      logSectorId: logSectorId,
+      logSectorName: logSectorName,
+    );
 
     final paymentMethod = _normalizePaymentMethod(
           _pickString(<dynamic>[
@@ -457,10 +541,15 @@ class StatisticsDeepLogService {
       plateNumber: plateNumber,
       requestTime: requestTime,
       departureCompletedAt: departureCompletedAt,
+      departureTimeSource: departureTimeSource,
       updatedAt: updatedAt,
       lastLogTime: lastLogTime,
       lockedFeeAmount: lockedFeeAmount,
       paymentMethod: paymentMethod,
+      sectorId: sectorId,
+      sectorName: sectorName,
+      sectorConflict: sectorConflict,
+      sectorFieldsPresent: sectorFieldsPresent,
       meta: meta,
       logs: logs,
     );
@@ -488,6 +577,7 @@ class StatisticsDeepLogService {
       plateNumber: mergedPlate,
       meta: mergedMeta,
       logs: mergedLogs,
+      sectorFieldsPresent: a.sectorFieldsPresent || b.sectorFieldsPresent,
     );
   }
 
@@ -567,6 +657,22 @@ class StatisticsDeepLogService {
     return null;
   }
 
+  bool _hasSectorConflict({
+    required String? metaSectorId,
+    required String? metaSectorName,
+    required String? logSectorId,
+    required String? logSectorName,
+  }) {
+    final metaId = (metaSectorId ?? '').trim();
+    final metaName = (metaSectorName ?? '').trim();
+    final logId = (logSectorId ?? '').trim();
+    final logName = (logSectorName ?? '').trim();
+    final idConflict = metaId.isNotEmpty && logId.isNotEmpty && metaId != logId;
+    final nameConflict =
+        metaName.isNotEmpty && logName.isNotEmpty && metaName != logName;
+    return idConflict || nameConflict;
+  }
+
   String? _normalizePaymentMethod(String? raw) {
     final value = raw?.trim();
     if (value == null || value.isEmpty) return null;
@@ -626,10 +732,15 @@ class _DeepDocBundle {
   final String plateNumber;
   final DateTime? requestTime;
   final DateTime? departureCompletedAt;
+  final StatisticsDepartureTimeSource departureTimeSource;
   final DateTime? updatedAt;
   final DateTime? lastLogTime;
   final num? lockedFeeAmount;
   final String paymentMethod;
+  final String? sectorId;
+  final String? sectorName;
+  final bool sectorConflict;
+  final bool sectorFieldsPresent;
   final Map<String, dynamic> meta;
   final List<Map<String, dynamic>> logs;
 
@@ -639,10 +750,15 @@ class _DeepDocBundle {
     required this.plateNumber,
     required this.requestTime,
     required this.departureCompletedAt,
+    required this.departureTimeSource,
     required this.updatedAt,
     required this.lastLogTime,
     required this.lockedFeeAmount,
     required this.paymentMethod,
+    required this.sectorId,
+    required this.sectorName,
+    required this.sectorConflict,
+    required this.sectorFieldsPresent,
     required this.meta,
     required this.logs,
   });

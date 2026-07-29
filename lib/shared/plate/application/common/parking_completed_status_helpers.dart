@@ -87,15 +87,7 @@ String resolveParkingCompletedEffectiveLocation(
 }
 
 String resolveParkingCompletedStatusMemo(PlateModel plate) {
-  final customStatus = (plate.customStatus ?? '').trim();
-  if (customStatus.isNotEmpty) return customStatus;
-
-  final list = plate.statusList;
-  if (list.isNotEmpty) {
-    return list.map((e) => e.trim()).where((e) => e.isNotEmpty).join(', ');
-  }
-
-  return '';
+  return (plate.customStatus ?? '').trim();
 }
 
 void reportParkingCompletedDbSafe({

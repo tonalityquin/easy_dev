@@ -125,6 +125,11 @@ class _InputBottomActionSectionState extends State<InputBottomActionSection> {
     final isMinor = widget.controller.isMinorMode;
     final selected = widget.controller.isLocationSelected;
     final parkingButtonLabel = !isMinor && selected ? '구역 변경' : null;
+    final lookupInProgress = widget.controller.statusLookupInProgress;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final transitionDuration =
+        reduceMotion ? Duration.zero : const Duration(milliseconds: 220);
     return PromptAnimatedReveal(
       delay: const Duration(milliseconds: 120),
       child: PromptInputSectionCard(
@@ -149,11 +154,60 @@ class _InputBottomActionSectionState extends State<InputBottomActionSection> {
               ],
             ),
             const SizedBox(height: 12),
-            InputAnimatedActionButton(
-              isLoading: widget.controller.isLoading,
-              isLocationSelected: selected,
-              isMinorMode: isMinor,
-              onPressed: _handleSubmit,
+            AnimatedSwitcher(
+              duration: transitionDuration,
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              child: lookupInProgress
+                  ? Container(
+                      key: const ValueKey<String>('status-lookup-progress'),
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .secondaryContainer
+                            .withOpacity(.46),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.outlineVariant,
+                        ),
+                      ),
+                      child: const Row(
+                        children: [
+                          SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                          SizedBox(width: 10),
+                          Expanded(
+                            child: Text('상태 정보를 확인한 뒤 입차할 수 있습니다.'),
+                          ),
+                        ],
+                      ),
+                    )
+                  : const SizedBox.shrink(
+                      key: ValueKey<String>('status-lookup-ready'),
+                    ),
+            ),
+            AnimatedSwitcher(
+              duration: transitionDuration,
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              child: InputAnimatedActionButton(
+                key: ValueKey<String>(
+                  'entry-${widget.controller.isLoading}-$lookupInProgress',
+                ),
+                isLoading: widget.controller.isLoading,
+                isLocationSelected: selected,
+                isMinorMode: isMinor,
+                isStatusLookupInProgress: lookupInProgress,
+                onPressed: _handleSubmit,
+              ),
             ),
           ],
         ),

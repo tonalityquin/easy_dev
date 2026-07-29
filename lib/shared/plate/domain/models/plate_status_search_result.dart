@@ -26,7 +26,6 @@ class PlateStatusSearchResult {
       'area',
       'monthKey',
       'customStatus',
-      'statusList',
       'createdBy',
       'createdAt',
       'updatedAt',
@@ -45,7 +44,9 @@ class PlateStatusSearchResult {
       }
     }
 
-    final rest = data.entries.where((e) => !used.contains(e.key)).toList()
+    final rest = data.entries
+        .where((e) => !used.contains(e.key) && e.value is! List)
+        .toList()
       ..sort((a, b) => a.key.compareTo(b.key));
 
     entries.addAll(rest);

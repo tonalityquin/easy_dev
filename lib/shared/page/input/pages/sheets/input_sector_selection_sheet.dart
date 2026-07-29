@@ -11,20 +11,24 @@ class InputSectorSelectionSheet extends StatefulWidget {
     super.key,
     required this.area,
     required this.sectors,
+    this.initialSelectedId,
   });
 
   final String area;
   final List<SectorModel> sectors;
+  final String? initialSelectedId;
 
   static Future<SectorModel?> show({
     required BuildContext context,
     required String area,
     required List<SectorModel> sectors,
+    String? initialSelectedId,
   }) async {
     final sorted = List<SectorModel>.from(sectors)
       ..sort((a, b) => a.name.compareTo(b.name));
     debugPrint(
-      '[InputSectorSelectionSheet] open area=${area.trim()} count=${sorted.length}',
+      '[InputSectorSelectionSheet] open area=${area.trim()} count=${sorted.length} '
+      'initialSelectedId=${initialSelectedId?.trim() ?? ''}',
     );
     final result = await showPromptOverlayBottomSheet<SectorModel>(
       context: context,
@@ -36,6 +40,7 @@ class InputSectorSelectionSheet extends StatefulWidget {
         child: InputSectorSelectionSheet(
           area: area.trim(),
           sectors: sorted,
+          initialSelectedId: initialSelectedId?.trim(),
         ),
       ),
     );
@@ -54,6 +59,17 @@ class InputSectorSelectionSheet extends StatefulWidget {
 class _InputSectorSelectionSheetState
     extends State<InputSectorSelectionSheet> {
   String? _selectedId;
+
+  @override
+  void initState() {
+    super.initState();
+    final initialId = widget.initialSelectedId?.trim() ?? '';
+    if (initialId.isEmpty) return;
+    final exists = widget.sectors.any((sector) => sector.id == initialId);
+    if (exists) {
+      _selectedId = initialId;
+    }
+  }
 
   SectorModel? get _selectedSector {
     final id = _selectedId;

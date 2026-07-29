@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../../../shared/plate/domain/enums/plate_type.dart';
+import '../../../../shared/plate/domain/models/plate_model.dart';
 
 class LockedPlateRecord {
   final String docId;
@@ -40,6 +42,8 @@ class EndWorkReportFirestoreRepository {
   Future<void> appendPlateOutLogs({
     required String area,
     required List<LockedPlateRecord> plates,
+    required bool sectorEnabled,
+    void Function(String message)? onLog,
   }) async {
     final safeArea = _safeArea(area);
     if (plates.isEmpty) return;
@@ -48,6 +52,8 @@ class EndWorkReportFirestoreRepository {
       await _appendSinglePlateOutLog(
         safeArea: safeArea,
         record: plate,
+        sectorEnabled: sectorEnabled,
+        onLog: onLog,
       );
     }
   }
@@ -55,6 +61,8 @@ class EndWorkReportFirestoreRepository {
   Future<void> _appendSinglePlateOutLog({
     required String safeArea,
     required LockedPlateRecord record,
+    required bool sectorEnabled,
+    void Function(String message)? onLog,
   }) async {
     final data = record.data;
     final now = DateTime.now();
@@ -70,6 +78,13 @@ class EndWorkReportFirestoreRepository {
     final paymentMethod = _stringValue(data, const <String>['paymentMethod']);
     final reason = _latestReason(data);
     final customStatus = _stringValue(data, const <String>['customStatus']);
+    final sectorId = _stringValue(data, const <String>[PlateFields.sectorId]);
+    final sectorName = _stringValue(data, const <String>[PlateFields.sectorName]);
+    final hasSectorId = sectorId.isNotEmpty;
+    final hasSectorName = sectorName.isNotEmpty;
+    final hasValidSector = sectorEnabled && hasSectorId && hasSectorName;
+    final hasInvalidSectorPair =
+        sectorEnabled && (hasSectorId != hasSectorName);
     final logKey = _logKey(
       plateDocId: record.docId,
       completedAt: completedAt,
@@ -94,9 +109,17 @@ class EndWorkReportFirestoreRepository {
       'paymentMethod': paymentMethod,
       'reason': reason,
       'customStatus': customStatus,
+      if (sectorEnabled) ...<String, dynamic>{
+        'sectorEnabled': true,
+        PlateFields.sectorId: hasValidSector ? sectorId : null,
+        PlateFields.sectorName: hasValidSector ? sectorName : null,
+        'sectorAssigned': hasValidSector,
+        'sectorDataValid': !hasInvalidSectorPair,
+      },
       'createdAt': createdAt,
     };
 
+    var operation = 'append';
     await _firestore.runTransaction((tx) async {
       final snap = await tx.get(ref);
       final existing = snap.data();
@@ -106,6 +129,19 @@ class EndWorkReportFirestoreRepository {
         if (item is! Map) return false;
         return item['logKey'] == logKey;
       });
+      final mergedLogs = existingLogs.map((item) {
+        if (!sectorEnabled || item is! Map || item['logKey'] != logKey) {
+          return item;
+        }
+        return <String, dynamic>{
+          ...item.map((key, value) => MapEntry(key.toString(), value)),
+          'sectorEnabled': true,
+          PlateFields.sectorId: hasValidSector ? sectorId : null,
+          PlateFields.sectorName: hasValidSector ? sectorName : null,
+          'sectorAssigned': hasValidSector,
+          'sectorDataValid': !hasInvalidSectorPair,
+        };
+      }).toList(growable: false);
       final update = <String, dynamic>{
         'area': safeArea,
         'monthKey': monthKey,
@@ -119,6 +155,18 @@ class EndWorkReportFirestoreRepository {
         'lastPaymentMethod': paymentMethod,
         'lastReason': reason,
         'lastCustomStatus': customStatus,
+        'sectorEnabled': sectorEnabled,
+        if (sectorEnabled) ...<String, dynamic>{
+          'lastSectorId': hasValidSector ? sectorId : null,
+          'lastSectorName': hasValidSector ? sectorName : null,
+          'lastSectorAssigned': hasValidSector,
+          'lastSectorDataValid': !hasInvalidSectorPair,
+        } else ...<String, dynamic>{
+          'lastSectorId': FieldValue.delete(),
+          'lastSectorName': FieldValue.delete(),
+          'lastSectorAssigned': FieldValue.delete(),
+          'lastSectorDataValid': FieldValue.delete(),
+        },
         'updatedAt': FieldValue.serverTimestamp(),
         if (!snap.exists) 'createdAt': FieldValue.serverTimestamp(),
       };
@@ -126,10 +174,27 @@ class EndWorkReportFirestoreRepository {
       if (!alreadyExists) {
         update['logs'] = FieldValue.arrayUnion([logEntry]);
         update['logCount'] = FieldValue.increment(1);
+      } else if (sectorEnabled) {
+        update['logs'] = mergedLogs;
       }
 
+      operation = alreadyExists
+          ? sectorEnabled
+              ? 'merge-sector'
+              : 'keep-existing'
+          : 'append';
       tx.set(ref, update, SetOptions(merge: true));
     });
+
+    final message = '[EndWorkReport][plate_out_log] '
+        'plateDocId=${record.docId} plate=$plateNumber operation=$operation '
+        'sectorEnabled=$sectorEnabled sectorAssigned=$hasValidSector '
+        'sectorDataValid=${!hasInvalidSectorPair}';
+    if (onLog != null) {
+      onLog(message);
+    } else {
+      debugPrint(message);
+    }
   }
 
   Future<void> saveMonthlyEndWorkReport({

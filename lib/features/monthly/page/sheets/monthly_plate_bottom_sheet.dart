@@ -103,7 +103,6 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
     controller.selectedRegularType = _selectedRegularType;
     controller.customStatusController.text =
         (data['customStatus'] ?? '').toString();
-    controller.selectedStatuses = List<String>.from(data['statusList'] ?? []);
     controller.specialNote = (data['specialNote'] ?? '').toString();
   }
 

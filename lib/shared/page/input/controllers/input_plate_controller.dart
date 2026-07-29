@@ -10,6 +10,8 @@ import '../../../../features/dev/application/area_state.dart';
 import '../../../../features/payment/applications/bill_state.dart';
 import '../../../../features/sector/applications/sector_state.dart';
 import '../../../../features/sector/domain/models/sector_model.dart';
+import '../../../plate/domain/models/plate_status_draft.dart';
+import '../../../plate/domain/models/plate_status_lookup_result.dart';
 import '../../../plate/domain/repositories/plate_repository.dart';
 import '../../../plate/widgets/action_trace_dialog.dart';
 import '../application/input_plate_service.dart';
@@ -85,11 +87,129 @@ class InputPlateController {
     ];
   }
 
-  List<String> statuses = [];
-  List<bool> isSelected = [];
-  List<String> selectedStatuses = [];
+  bool statusWriteRequested = false;
+  bool statusDeletionRequested = false;
+  bool statusEditedByUser = false;
+  PlateStatusLookupState statusLookupState = PlateStatusLookupState.idle;
+  PlateStatusDraft expectedOriginalStatus = PlateStatusDraft(
+    customStatus: '',
+  );
+  String? expectedStatusSourcePath;
 
-  List<String> fetchedStatusList = [];
+  PlateStatusDraft get statusDraft => PlateStatusDraft(
+        customStatus: customStatusController.text,
+      );
+
+  bool get statusLookupInProgress =>
+      statusLookupState == PlateStatusLookupState.loading;
+
+  bool get statusLookupReadyForSubmit =>
+      statusLookupState == PlateStatusLookupState.found ||
+      statusLookupState == PlateStatusLookupState.notFound ||
+      statusLookupState == PlateStatusLookupState.failed;
+
+  bool get statusSnapshotValidationRequired =>
+      statusEditedByUser ||
+      statusWriteRequested ||
+      statusLookupState == PlateStatusLookupState.found ||
+      statusLookupState == PlateStatusLookupState.notFound;
+
+  void beginStatusLookup() {
+    fetchedCustomStatus = null;
+    customStatusController.clear();
+    statusLookupState = PlateStatusLookupState.loading;
+    expectedOriginalStatus = PlateStatusDraft(customStatus: '');
+    expectedStatusSourcePath = null;
+    statusEditedByUser = false;
+    statusWriteRequested = false;
+    statusDeletionRequested = false;
+  }
+
+  void resetStatusLookupToIdle() {
+    fetchedCustomStatus = null;
+    customStatusController.clear();
+    statusLookupState = PlateStatusLookupState.idle;
+    expectedOriginalStatus = PlateStatusDraft(customStatus: '');
+    expectedStatusSourcePath = null;
+    statusEditedByUser = false;
+    statusWriteRequested = false;
+    statusDeletionRequested = false;
+  }
+
+  void applyStatusInactive() {
+    fetchedCustomStatus = null;
+    customStatusController.clear();
+    statusLookupState = PlateStatusLookupState.inactive;
+    expectedOriginalStatus = PlateStatusDraft(customStatus: '');
+    expectedStatusSourcePath = null;
+    statusEditedByUser = false;
+    statusWriteRequested = false;
+    statusDeletionRequested = false;
+  }
+
+  void applyFetchedStatus({
+    required String? customStatus,
+    required String sourcePath,
+  }) {
+    final draft = PlateStatusDraft(customStatus: customStatus ?? '');
+    fetchedCustomStatus = draft.customStatus.isEmpty ? null : draft.customStatus;
+    customStatusController.text = draft.customStatus;
+    statusLookupState = PlateStatusLookupState.found;
+    expectedOriginalStatus = draft;
+    expectedStatusSourcePath = sourcePath.trim().isEmpty ? null : sourcePath.trim();
+    statusEditedByUser = false;
+    statusWriteRequested = true;
+    statusDeletionRequested = draft.isEmpty;
+  }
+
+  void applyStatusNotFound() {
+    fetchedCustomStatus = null;
+    customStatusController.clear();
+    statusLookupState = PlateStatusLookupState.notFound;
+    expectedOriginalStatus = PlateStatusDraft(customStatus: '');
+    expectedStatusSourcePath = null;
+    statusEditedByUser = false;
+    statusWriteRequested = true;
+    statusDeletionRequested = true;
+  }
+
+  void applyStatusLookupFailed() {
+    fetchedCustomStatus = null;
+    customStatusController.clear();
+    statusLookupState = PlateStatusLookupState.failed;
+    expectedOriginalStatus = PlateStatusDraft(customStatus: '');
+    expectedStatusSourcePath = null;
+    statusEditedByUser = false;
+    statusWriteRequested = false;
+    statusDeletionRequested = false;
+  }
+
+  void markStatusDraftEdited() {
+    statusEditedByUser = true;
+    statusWriteRequested = true;
+    statusDeletionRequested = statusDraft.isEmpty;
+  }
+
+  void markStatusDraftPersisted() {
+    final draft = statusDraft;
+    fetchedCustomStatus = draft.customStatus.isEmpty ? null : draft.customStatus;
+    statusWriteRequested = false;
+    statusDeletionRequested = false;
+    statusEditedByUser = false;
+    statusLookupState = PlateStatusLookupState.found;
+    expectedOriginalStatus = draft;
+  }
+
+  void clearStatusDraft() {
+    fetchedCustomStatus = null;
+    customStatusController.clear();
+    statusWriteRequested = false;
+    statusDeletionRequested = false;
+    statusEditedByUser = false;
+    statusLookupState = PlateStatusLookupState.notFound;
+    expectedOriginalStatus = PlateStatusDraft(customStatus: '');
+    expectedStatusSourcePath = null;
+  }
 
   final List<String> regions = [
     '전국',
@@ -231,7 +351,6 @@ class InputPlateController {
     clearInput();
     clearLocation();
     capturedImages.clear();
-    selectedStatuses.clear();
     selectedBill = null;
     selectedBasicStandard = 0;
     selectedBasicAmount = 0;
@@ -242,8 +361,12 @@ class InputPlateController {
     countTypeController.clear();
 
     fetchedCustomStatus = null;
-    fetchedStatusList = [];
-    isSelected = List.generate(statuses.length, (_) => false);
+    statusWriteRequested = false;
+    statusDeletionRequested = false;
+    statusEditedByUser = false;
+    statusLookupState = PlateStatusLookupState.idle;
+    expectedOriginalStatus = PlateStatusDraft(customStatus: '');
+    expectedStatusSourcePath = null;
     isThreeDigit = true;
     selectedBillType = '변동';
     clearVehicleInfo();
@@ -280,59 +403,42 @@ class InputPlateController {
     final plateNumber = buildPlateNumber();
     final area = context.read<AreaState>().currentArea;
     final plateRepo = _readPlateRepository(context);
-
-    final bool isMonthly = selectedBillType == '정기';
+    final isMonthly = selectedBillType == '정기';
+    final trace = await DeveloperOperationTrace.start(
+      context: context,
+      title: '입차 상태 메모 삭제',
+      initialMessage: '저장된 상태 메모를 삭제하고 있습니다.',
+      usePromptUi: true,
+      developerModeMessage:
+          '개발자 모드 ON: 상태 메모 삭제 로그를 복사할 수 있습니다.',
+      standardModeMessage:
+          '개발자 모드 OFF: 상태 메모 삭제 로그를 콘솔에 기록합니다.',
+    );
+    trace.log(
+      'plate=$plateNumber area=$area scope=${isMonthly ? 'monthly' : 'history'} '
+      'memoLength=${customStatusController.text.trim().length} ',
+      progress: .28,
+    );
 
     try {
-      if (!isMonthly) {
-        await plateRepo.deletePlateStatus(plateNumber, area);
-      } else {
+      if (isMonthly) {
         await plateRepo.clearMonthlyMemoAndStatus(
           plateNumber: plateNumber,
           area: area,
         );
+      } else {
+        await plateRepo.deletePlateStatus(plateNumber, area);
       }
-
-      fetchedCustomStatus = null;
-      fetchedStatusList = [];
-    } catch (e) {
+      clearStatusDraft();
+      await trace.succeed('저장된 상태 메모를 삭제했습니다.');
+    } catch (error, stackTrace) {
+      await trace.fail(
+        '상태 메모 삭제에 실패했습니다.',
+        error: error,
+        stackTrace: stackTrace,
+      );
       rethrow;
     }
-  }
-
-  Future<void> _persistMemoAndStatusAfterEntry({
-    required PlateRepository plateRepo,
-    required String plateNumber,
-    required String area,
-    required String userName,
-  }) async {
-    final bool isMonthly = selectedBillType.trim() == '정기';
-
-    final memo = customStatusController.text.trim();
-    final statuses = List<String>.from(selectedStatuses);
-
-    final bool hasAny = memo.isNotEmpty || statuses.isNotEmpty;
-    if (!hasAny) return;
-
-    if (!isMonthly) {
-      await plateRepo.setPlateStatus(
-        plateNumber: plateNumber,
-        area: area,
-        customStatus: memo,
-        statusList: statuses,
-        createdBy: userName,
-      );
-      return;
-    }
-
-    await plateRepo.setMonthlyMemoAndStatusOnly(
-      plateNumber: plateNumber,
-      area: area,
-      createdBy: userName,
-      customStatus: memo,
-      statusList: statuses,
-      skipIfDocMissing: true,
-    );
   }
 
   Future<bool> _reportSectorWorkflow({
@@ -584,6 +690,42 @@ class InputPlateController {
   }) async {
     trace?.add('입차 처리 시작');
 
+    if (!statusLookupReadyForSubmit) {
+      final stateName = statusLookupState.name;
+      final message = statusLookupInProgress
+          ? '상태 정보를 확인하고 있습니다. 확인이 끝난 뒤 다시 시도해 주세요.'
+          : statusLookupState == PlateStatusLookupState.inactive
+              ? '상태 정보의 유효기간을 다시 확인해 주세요.'
+              : '상태 정보 확인이 아직 시작되지 않았습니다. 번호판을 다시 확인해 주세요.';
+      debugPrint(
+        '[InputPlateController][StatusLookup] submitBlocked=true '
+        'state=$stateName plate=${buildPlateNumber()}',
+      );
+      trace?.add('중단: 상태 조회 미완료 state=$stateName');
+      if (context.mounted && trace == null) {
+        final lookupTrace = await DeveloperOperationTrace.start(
+          context: context,
+          title: '입차 상태 조회 확인',
+          initialMessage: '입차 전 상태 정보 확인 여부를 검사하고 있습니다.',
+          usePromptUi: true,
+          developerModeMessage:
+              '개발자 모드 ON: 상태 조회 차단 로그를 복사할 수 있습니다.',
+          standardModeMessage:
+              '개발자 모드 OFF: 상태 조회 차단 로그를 콘솔에 기록합니다.',
+        );
+        lookupTrace.log(
+          'plate=${buildPlateNumber()} lookupState=$stateName '
+          'submitBlocked=true preserveExistingStatus=true',
+          progress: .62,
+        );
+        await lookupTrace.fail(message);
+      }
+      if (context.mounted) {
+        showFailedSnackbar(context, message, usePromptUi: true);
+      }
+      return false;
+    }
+
     final isValid = isInputValid();
     trace?.add('isInputValid=$isValid');
     if (!isValid) {
@@ -596,7 +738,6 @@ class InputPlateController {
 
     final plateNumber = buildPlateNumber();
     final areaState = context.read<AreaState>();
-    final plateRepo = _readPlateRepository(context);
     final area = areaState.currentArea;
     final division = areaState.currentDivision;
     final userName = context.read<UserState>().name;
@@ -660,6 +801,34 @@ class InputPlateController {
       return false;
     }
     final selectedSector = sectorResolution.sector;
+    DeveloperOperationTrace? statusOperationTrace;
+    if (trace == null && context.mounted) {
+      statusOperationTrace = await DeveloperOperationTrace.start(
+        context: context,
+        title: '입차 상태 정보 저장',
+        initialMessage: '입차 정보와 상태 메모를 저장하고 있습니다.',
+        usePromptUi: true,
+        developerModeMessage:
+            '개발자 모드 ON: 상태 저장 로그를 복사할 수 있습니다.',
+        standardModeMessage:
+            '개발자 모드 OFF: 상태 저장 로그를 콘솔에 기록합니다.',
+      );
+      final draft = statusDraft;
+      statusOperationTrace.log(
+        'plate=$plateNumber area=$area '
+        'memoLength=${draft.customStatus.length} '
+
+        'writeRequested=$statusWriteRequested '
+        'deleteRequested=$statusDeletionRequested '
+        'lookupState=${statusLookupState.name} '
+        'edited=$statusEditedByUser '
+        'sourcePath=${expectedStatusSourcePath ?? ''} '
+        'snapshotValidation=$statusSnapshotValidationRequired '
+        'scope=${selectedBillType == '정기' ? 'monthly' : 'history'} '
+        'saveOwner=PlateCreationService',
+        progress: .24,
+      );
+    }
 
     isLoading = true;
     refreshUI();
@@ -685,6 +854,24 @@ class InputPlateController {
         );
       }
 
+      final draft = statusDraft;
+      debugPrint(
+        '[InputPlateController][Status] plate=$plateNumber area=$area '
+        'memoLength=${draft.customStatus.length} '
+        'writeRequested=$statusWriteRequested '
+        'deleteRequested=$statusDeletionRequested '
+        'lookupState=${statusLookupState.name} '
+        'edited=$statusEditedByUser '
+        'sourcePath=${expectedStatusSourcePath ?? ''} '
+        'snapshotValidation=$statusSnapshotValidationRequired '
+        'saveOwner=PlateCreationService',
+      );
+      trace?.add(
+        '상태 초안 memoLength=${draft.customStatus.length} '
+
+        'lookupState=${statusLookupState.name} '
+        'edited=$statusEditedByUser saveOwner=PlateCreationService',
+      );
       trace?.add('입차 등록 시작');
       final wasSuccessful = await InputPlateService.registerPlateEntry(
         context: context,
@@ -693,15 +880,17 @@ class InputPlateController {
         isLocationSelected: isLocationSelected,
         imageUrls: uploadResult.uploadedUrls,
         selectedBill: selectedBill,
-        selectedStatuses: selectedStatuses,
+        statusWriteRequested: statusWriteRequested,
+        statusLookupState: statusLookupState,
+        statusEditedByUser: statusEditedByUser,
+        expectedOriginalStatus: expectedOriginalStatus,
+        expectedStatusSourcePath: expectedStatusSourcePath,
         basicStandard: selectedBasicStandard,
         basicAmount: selectedBasicAmount,
         addStandard: selectedAddStandard,
         addAmount: selectedAddAmount,
         region: dropdownValue,
-        customStatus: customStatusController.text.trim().isNotEmpty
-            ? customStatusController.text
-            : fetchedCustomStatus ?? '',
+        customStatus: draft.customStatus,
         selectedBillType: selectedBillType,
         manufacturerName: selectedManufacturerName,
         modelName: selectedModelName,
@@ -715,11 +904,17 @@ class InputPlateController {
 
       if (!context.mounted) {
         trace?.add('중단: context unmounted after register');
+        if (statusOperationTrace != null) {
+          await statusOperationTrace.fail('화면 종료로 상태 저장 결과를 완료하지 못했습니다.');
+        }
         return false;
       }
 
       if (!wasSuccessful) {
         trace?.add('중단: registerPlateEntry returned false');
+        if (statusOperationTrace != null) {
+          await statusOperationTrace.fail('입차 상태 정보 저장이 완료되지 않았습니다.');
+        }
         return false;
       }
 
@@ -745,21 +940,14 @@ class InputPlateController {
         }
       }
 
-      try {
-        trace?.add('상태/메모 저장 시작');
-        await _persistMemoAndStatusAfterEntry(
-          plateRepo: plateRepo,
-          plateNumber: plateNumber,
-          area: area,
-          userName: userName,
-        );
-        trace?.add('상태/메모 저장 완료');
-      } catch (e) {
-        trace?.add('상태/메모 저장 실패: $e');
-        debugPrint('[submitPlateEntry] persist memo/status failed: $e');
-      }
+      trace?.add('상태/메모 저장은 PlateCreationService 동일 transaction에서 완료');
 
       trace?.add('입차 처리 성공');
+      if (statusOperationTrace != null) {
+        await statusOperationTrace.succeed(
+          '입차 정보와 상태 메모 저장이 완료되었습니다.',
+        );
+      }
       return true;
     } catch (e, st) {
       trace?.add('예외 발생: $e');
@@ -771,6 +959,13 @@ class InputPlateController {
           .join(' | ');
       if (compactStack.isNotEmpty) {
         trace?.add(compactStack);
+      }
+      if (statusOperationTrace != null) {
+        await statusOperationTrace.fail(
+          '입차 상태 정보 저장에 실패했습니다.',
+          error: e,
+          stackTrace: st,
+        );
       }
       if (context.mounted) {
         showFailedSnackbar(context, '입차 처리 실패: $e', usePromptUi: true);

@@ -66,9 +66,7 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
 
   bool _hasMemo(Map<String, dynamic> data) {
     final customStatus = (data['customStatus'] ?? '').toString().trim();
-    if (customStatus.isNotEmpty && customStatus != '없음') return true;
-    final statusList = data['statusList'];
-    return statusList is List && statusList.isNotEmpty;
+    return customStatus.isNotEmpty && customStatus != '없음';
   }
 
   int _asInt(dynamic value) {

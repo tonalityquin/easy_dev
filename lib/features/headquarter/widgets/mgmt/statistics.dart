@@ -8,6 +8,9 @@ import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../../app/models/capability.dart';
+import '../../../dashboard/domain/models/end_work_sector_metrics.dart';
+import '../../application/area/area_master_cache.dart';
 import '../../../dashboard/domain/repositories/end_work_report_repository.dart';
 import 'statistics_chart_page.dart';
 
@@ -65,7 +68,7 @@ class Statistics extends StatefulWidget {
 
 class _StatisticsState extends State<Statistics> {
   static const String _kDivisionPrefsKey = 'division';
-  static const String _kCachePrefix = 'end_work_reports_cache_v3:';
+  static const String _kCachePrefix = 'end_work_reports_cache_v4:';
   static const String _kLastAreaKey = 'statistics_last_area_v1';
   static const String _kLastModeKey = 'statistics_last_mode_v1';
   static const String _kLastDatesKey = 'statistics_last_dates_v1';
@@ -102,6 +105,7 @@ class _StatisticsState extends State<Statistics> {
 
   final Map<String, Map<String, Map<String, dynamic>>> _cacheByArea = {};
   List<String> _areaOptions = [];
+  Map<String, bool> _areaSectorEnabled = <String, bool>{};
 
   String? _selectedArea;
 
@@ -198,6 +202,54 @@ class _StatisticsState extends State<Statistics> {
     return null;
   }
 
+
+
+  Future<Map<String, bool>> _loadAreaSectorCapabilities({
+    required String division,
+    required Iterable<String> areas,
+    bool forceRefresh = false,
+  }) async {
+    final normalizedDivision = division.trim();
+    final areaList = areas.map((area) => area.trim()).where((area) => area.isNotEmpty).toSet();
+    final result = <String, bool>{for (final area in areaList) area: false};
+    if (normalizedDivision.isEmpty || areaList.isEmpty) return result;
+
+    AreaMasterSnapshot? snapshot;
+    try {
+      snapshot = forceRefresh
+          ? await AreaMasterCache.refreshDivision(normalizedDivision)
+          : await AreaMasterCache.readSnapshot(normalizedDivision);
+      snapshot ??= await AreaMasterCache.refreshDivision(normalizedDivision);
+    } catch (error, stackTrace) {
+      debugPrint(
+        '[STAT] area capability refresh failed '
+        'division=$normalizedDivision force=$forceRefresh error=$error',
+      );
+      debugPrint('[STAT] area capability stack=$stackTrace');
+    }
+
+    if (snapshot != null) {
+      for (final item in snapshot.items) {
+        final name = item.name.trim();
+        if (!areaList.contains(name)) continue;
+        result[name] = item.capabilities.contains(Capability.sector);
+      }
+    }
+
+    debugPrint(
+      '[STAT] sector capabilities division=$normalizedDivision '
+      '${result.entries.map((entry) => '${entry.key}:${entry.value}').join(',')}',
+    );
+    return result;
+  }
+
+  EndWorkSectorMetrics? _sectorMetricsFromDay(Map<String, dynamic> day) {
+    final metrics = _asMap(day['metrics']);
+    final sector = EndWorkSectorMetrics.fromDynamic(metrics?['sector']);
+    if (sector == null || !sector.enabled) return null;
+    return sector;
+  }
+
   void _ensureValidPage(int count) {
     if (count <= 0) return;
     if (_pageIndex <= count - 1) return;
@@ -277,6 +329,10 @@ class _StatisticsState extends State<Statistics> {
       }
 
       final areas = _cacheByArea.keys.toList()..sort();
+      final areaSectorEnabled = await _loadAreaSectorCapabilities(
+        division: div,
+        areas: areas,
+      );
 
       final restoredArea = (lastArea.isNotEmpty && areas.contains(lastArea)) ? lastArea : null;
 
@@ -287,6 +343,7 @@ class _StatisticsState extends State<Statistics> {
         _hasLocalCache = hasCache;
         _cachedAt = cachedAt;
         _areaOptions = areas;
+        _areaSectorEnabled = areaSectorEnabled;
         _selectedArea = restoredArea;
         _dateMode = restoredMode;
 
@@ -318,6 +375,7 @@ class _StatisticsState extends State<Statistics> {
         _cachedAt = null;
         _cacheByArea.clear();
         _areaOptions = [];
+        _areaSectorEnabled = <String, bool>{};
         _selectedArea = null;
         _dateMode = _DateMode.single;
         _selectedDates = <DateTime>{};
@@ -394,6 +452,11 @@ class _StatisticsState extends State<Statistics> {
       }
 
       final areas = rebuilt.keys.toList()..sort();
+      final areaSectorEnabled = await _loadAreaSectorCapabilities(
+        division: div,
+        areas: areas,
+        forceRefresh: true,
+      );
 
       if (!mounted) return;
       setState(() {
@@ -402,6 +465,7 @@ class _StatisticsState extends State<Statistics> {
           ..addAll(rebuilt);
 
         _areaOptions = areas;
+        _areaSectorEnabled = areaSectorEnabled;
 
         if (_selectedArea != null && !_areaOptions.contains(_selectedArea)) {
           _selectedArea = null;
@@ -581,10 +645,12 @@ class _StatisticsState extends State<Statistics> {
       ) ??
           0;
 
+      final sectorMetrics = _sectorMetricsFromDay(day);
       _savedReports.add({
         'date': dateStr,
         '출차': outCount,
         '정산금': lockedFee,
+        if (sectorMetrics != null) 'sector': sectorMetrics.toMap(),
       });
 
       existing.add(dateStr);
@@ -598,22 +664,30 @@ class _StatisticsState extends State<Statistics> {
   }
 
   void _openGraph() {
-    final Map<DateTime, Map<String, int>> parsedData = {};
+    final Map<DateTime, Map<String, dynamic>> parsedData = {};
     for (final report in _savedReports) {
       final date = DateTime.tryParse(report['date']?.toString() ?? '');
       if (date == null) continue;
 
-      parsedData[date] = {
+      final sectorMetrics = EndWorkSectorMetrics.fromDynamic(report['sector']);
+      parsedData[date] = <String, dynamic>{
         'vehicleOutput': (report['출차'] as int?) ?? 0,
         'totalLockedFee': (report['정산금'] as int?) ?? 0,
+        if (sectorMetrics != null) 'sector': sectorMetrics.toMap(),
       };
     }
 
+    final areaSectorEnabled = <String, bool>{
+      for (final area in _areaOptions)
+        area: _areaSectorEnabled[area] == true,
+    };
     final page = StatisticsChartPage(
       reportDataMap: parsedData,
       division: (_division ?? '').trim(),
       area: (_selectedArea ?? '').trim(),
       usePromptUi: widget.usePromptUi,
+      availableAreas: List<String>.unmodifiable(_areaOptions),
+      areaSectorEnabled: Map<String, bool>.unmodifiable(areaSectorEnabled),
     );
     if (!widget.usePromptUi) {
       Navigator.of(context).push(
@@ -1079,6 +1153,9 @@ class _StatisticsState extends State<Statistics> {
 
     final outCount = _asInt(day['vehicleOutput'] ?? vc?['vehicleOutput'] ?? day['vehicleInput'] ?? vc?['vehicleInput']);
     final lockedFee = _asInt(day['totalLockedFee'] ?? vc?['totalLockedFee'] ?? metrics?['snapshot_totalLockedFee']);
+    final sectorMetrics = _sectorMetricsFromDay(day);
+    final showSectorMetrics =
+        _areaSectorEnabled[(_selectedArea ?? '').trim()] == true;
 
     final outText = outCount?.toString() ?? '정보 없음';
     final feeText = lockedFee?.toString() ?? '정보 없음';
@@ -1161,6 +1238,10 @@ class _StatisticsState extends State<Statistics> {
                           Text('₩$feeText', style: const TextStyle(fontWeight: FontWeight.w900)),
                         ],
                       ),
+                      if (showSectorMetrics && sectorMetrics != null) ...[
+                        const SizedBox(height: 12),
+                        _StatisticsSectorMetricsCard(metrics: sectorMetrics),
+                      ],
                       const Spacer(),
                       Align(
                         alignment: Alignment.centerRight,
@@ -1180,10 +1261,14 @@ class _StatisticsState extends State<Statistics> {
                                 0;
 
                             setState(() {
+                              final selectedSectorMetrics =
+                                  _sectorMetricsFromDay(day);
                               _savedReports.add({
                                 'date': dateStr,
                                 '출차': outC,
                                 '정산금': feeC,
+                                if (selectedSectorMetrics != null)
+                                  'sector': selectedSectorMetrics.toMap(),
                               });
                             });
                           },
@@ -1198,6 +1283,136 @@ class _StatisticsState extends State<Statistics> {
           );
         },
       ),
+    );
+  }
+}
+
+class _StatisticsSectorMetricsCard extends StatelessWidget {
+  final EndWorkSectorMetrics metrics;
+
+  const _StatisticsSectorMetricsCard({required this.metrics});
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PromptUiTheme.of(context);
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final currency = NumberFormat('#,###');
+
+    return AnimatedSize(
+      duration: reduceMotion ? Duration.zero : PromptUiMotion.component,
+      curve: PromptUiMotion.enter,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: tokens.surfaceOverlay,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: tokens.borderSubtle),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.grid_view_rounded, size: 17, color: tokens.accent),
+                const SizedBox(width: 7),
+                Text(
+                  '방문 구역 집계',
+                  style: TextStyle(
+                    color: tokens.textPrimary,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  '${metrics.sectorCount}개 구역',
+                  style: TextStyle(
+                    color: tokens.textSecondary,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 9),
+            for (final item in metrics.items) ...[
+              _StatisticsSectorMetricLine(
+                label: item.sectorName,
+                vehicleCount: item.vehicleCount,
+                lockedFee: item.totalLockedFee,
+              ),
+              const SizedBox(height: 6),
+            ],
+            if (metrics.unassignedVehicleCount > 0)
+              _StatisticsSectorMetricLine(
+                label: '미지정',
+                vehicleCount: metrics.unassignedVehicleCount,
+                lockedFee: metrics.unassignedLockedFee,
+              ),
+            if (metrics.invalidSectorVehicleCount > 0) ...[
+              const SizedBox(height: 6),
+              _StatisticsSectorMetricLine(
+                label: '데이터 확인 필요',
+                vehicleCount: metrics.invalidSectorVehicleCount,
+                lockedFee: metrics.invalidSectorLockedFee,
+              ),
+            ],
+            const SizedBox(height: 8),
+            Text(
+              '지정 ${metrics.assignedVehicleCount}대 · '
+              '₩${currency.format(metrics.assignedLockedFee)}',
+              style: TextStyle(
+                color: tokens.textSecondary,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StatisticsSectorMetricLine extends StatelessWidget {
+  final String label;
+  final int vehicleCount;
+  final num lockedFee;
+
+  const _StatisticsSectorMetricLine({
+    required this.label,
+    required this.vehicleCount,
+    required this.lockedFee,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PromptUiTheme.of(context);
+    final currency = NumberFormat('#,###');
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: tokens.textPrimary,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          '$vehicleCount대 · ₩${currency.format(lockedFee)}',
+          style: TextStyle(
+            color: tokens.textSecondary,
+            fontWeight: FontWeight.w800,
+            fontSize: 12,
+          ),
+        ),
+      ],
     );
   }
 }

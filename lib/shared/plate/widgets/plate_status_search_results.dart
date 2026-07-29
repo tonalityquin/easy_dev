@@ -62,8 +62,6 @@ class _PlateStatusResultCard extends StatelessWidget {
     final plateNumber = item.stringValue('plateNumber') ?? item.docId;
     final monthKey = item.stringValue('monthKey') ?? '-';
     final customStatus = item.stringValue('customStatus');
-    final statusList = item.data['statusList'];
-    final hasStatusList = statusList is List && statusList.isNotEmpty;
 
     return Container(
       decoration: BoxDecoration(
@@ -121,8 +119,6 @@ class _PlateStatusResultCard extends StatelessWidget {
                           _ChipText(text: monthKey, icon: Icons.calendar_month),
                           if (customStatus != null)
                             _ChipText(text: '메모 있음', icon: Icons.edit_note),
-                          if (hasStatusList)
-                            _ChipText(text: '상태 ${statusList.length}개', icon: Icons.sell_outlined),
                         ],
                       ),
                     ],

@@ -9,10 +9,13 @@ import '../../../../app/utils/snackbar_helper.dart';
 import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
 import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
 import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../features/account/applications/user_state.dart';
 import '../../../../features/dev/application/area_state.dart';
 import '../../../../features/monthly/page/sheets/widgets/keypad/kor_keypad.dart';
 import '../../../../features/monthly/page/sheets/widgets/keypad/num_keypad.dart';
 import '../../../../features/payment/applications/bill_state.dart';
+import '../../../plate/domain/models/plate_status_lookup_result.dart';
+import '../../../plate/domain/models/plate_status_scope.dart';
 import '../../../plate/domain/repositories/plate_repository.dart';
 import '../../../plate/domain/services/plate_status_record.dart';
 import '../controllers/input_plate_controller.dart';
@@ -82,17 +85,27 @@ class _BrandTintedLogo extends StatelessWidget {
 
 enum _DockField { front, mid, back }
 
-enum _MonthlyFetchFailureType { notFound, readError }
+enum _MonthlyFetchFailureType { notFound, inactive, readError }
 
 class _MonthlyFetchResult {
   final PlateStatusRecord? data;
+  final String? sourcePath;
   final _MonthlyFetchFailureType? failure;
+  final Object? error;
 
-  const _MonthlyFetchResult.success(this.data) : failure = null;
+  const _MonthlyFetchResult.success({
+    required this.data,
+    required this.sourcePath,
+  })  : failure = null,
+        error = null;
 
-  const _MonthlyFetchResult.failure(this.failure) : data = null;
+  const _MonthlyFetchResult.failure(
+    this.failure, {
+    this.error,
+  })  : data = null,
+        sourcePath = null;
 
-  bool get isSuccess => data != null;
+  bool get isSuccess => data != null && sourcePath != null;
 }
 
 class InputPlateScreen extends StatefulWidget {
@@ -119,8 +132,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   bool _hasMonthlyParking = false;
   bool _hasMonthlyLoaded = false;
 
-  List<String> selectedStatusNames = [];
-  Key statusSectionKey = UniqueKey();
 
   bool _openedScannerOnce = false;
 
@@ -147,6 +158,9 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
   String? _lastPlateStatusDialogKey;
   bool _plateStatusDialogShowing = false;
+  int _statusLookupGeneration = 0;
+  int _monthlyLookupGeneration = 0;
+  bool _monthlyLookupInProgress = false;
 
   LiveOcrSessionResult? _lastOcrSessionResult;
 
@@ -448,6 +462,134 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     });
   }
 
+  Future<void> _lookupGeneralStatusForCurrentPlate() async {
+    final text = controller.controllerBackDigit.text;
+    if (text.length != 4 || !controller.isInputValid()) {
+      final generation = ++_statusLookupGeneration;
+      if (!mounted) return;
+      setState(() {
+        controller.resetStatusLookupToIdle();
+        _monthlyLookupGeneration++;
+        _monthlyLookupInProgress = false;
+        _monthlyDocExists = false;
+        _resolvedMonthlyDocId = null;
+        _lastPlateStatusDialogKey = null;
+      });
+      debugPrint(
+        '[InputPlateScreen][PlateStatusLookup] reset generation=$generation '
+        'reason=incompletePlate',
+      );
+      return;
+    }
+
+    final plateNumber = controller.buildPlateNumber();
+    final area = context.read<AreaState>().currentArea;
+    final lookupGeneration = ++_statusLookupGeneration;
+    setState(() {
+      controller.beginStatusLookup();
+      _monthlyLookupGeneration++;
+      _monthlyLookupInProgress = false;
+      _monthlyDocExists = false;
+      _resolvedMonthlyDocId = null;
+      _lastPlateStatusDialogKey = null;
+    });
+    debugPrint(
+      '[InputPlateScreen][PlateStatusLookup] loading=true '
+      'plate=$plateNumber area=$area generation=$lookupGeneration',
+    );
+
+    final lookup = await _fetchPlateStatus(plateNumber, area);
+    if (!mounted || lookupGeneration != _statusLookupGeneration) return;
+    if (!controller.isInputValid() ||
+        controller.buildPlateNumber() != plateNumber) {
+      return;
+    }
+
+    if (lookup.isFailed) {
+      setState(controller.applyStatusLookupFailed);
+      _showFloatingMessage(
+        '기존 상태 정보를 확인하지 못했습니다. 저장 시 기존 상태를 보호합니다.',
+      );
+      final trace = await DeveloperOperationTrace.start(
+        context: context,
+        title: '입차 상태 정보 조회',
+        initialMessage: '기존 상태 메모를 확인하고 있습니다.',
+        usePromptUi: true,
+        developerModeMessage:
+            '개발자 모드 ON: 상태 조회 실패 로그를 복사할 수 있습니다.',
+        standardModeMessage:
+            '개발자 모드 OFF: 상태 조회 실패 로그를 콘솔에 기록합니다.',
+      );
+      trace.log(
+        'plate=$plateNumber area=$area lookupState=failed '
+        'preserveExistingStatus=true generation=$lookupGeneration',
+        progress: .62,
+      );
+      await trace.fail(
+        '기존 상태 정보를 확인하지 못해 기존 상태를 보호합니다.',
+        error: lookup.error,
+      );
+      return;
+    }
+
+    if (lookup.isInactive) {
+      setState(controller.applyStatusInactive);
+      _showFloatingMessage('상태 정보의 유효기간을 확인할 수 없습니다.');
+      return;
+    }
+
+    if (lookup.isNotFound) {
+      setState(controller.applyStatusNotFound);
+      if (controller.selectedBillType == '정기') {
+        await _handleMonthlySelectedFetchAndApply();
+      }
+      return;
+    }
+
+    final data = lookup.record!;
+    final fetchedStatus = data.customStatus;
+    final String? fetchedCountType = data.countType;
+    final shouldResolveMonthly = controller.selectedBillType == '정기' ||
+        (fetchedCountType != null && fetchedCountType.isNotEmpty);
+
+    setState(() {
+      controller.applyFetchedStatus(
+        customStatus: fetchedStatus,
+        sourcePath: lookup.sourcePath!,
+      );
+
+      if (fetchedCountType != null && fetchedCountType.isNotEmpty) {
+        controller.countTypeController.text = fetchedCountType;
+        controller.selectedBillType = '정기';
+        controller.selectedBill = fetchedCountType;
+      }
+      _monthlyDocExists = false;
+      _resolvedMonthlyDocId = null;
+    });
+
+    if (shouldResolveMonthly) {
+      await _handleMonthlySelectedFetchAndApply();
+      return;
+    }
+
+    final dialogKey = _plateDocId(plateNumber, area);
+    if (_plateStatusDialogShowing) return;
+    if (_lastPlateStatusDialogKey == dialogKey) return;
+
+    _plateStatusDialogShowing = true;
+    _lastPlateStatusDialogKey = dialogKey;
+
+    try {
+      await _showPlateStatusLoadedDialog(
+        plateNumber: plateNumber,
+        area: area,
+        customStatus: fetchedStatus,
+      );
+    } finally {
+      _plateStatusDialogShowing = false;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -460,56 +602,9 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       controller.selectedBillType = '변동';
     }
 
-    controller.controllerBackDigit.addListener(() async {
-      final text = controller.controllerBackDigit.text;
-      if (text.length == 4 && controller.isInputValid()) {
-        final plateNumber = controller.buildPlateNumber();
-        final area = context.read<AreaState>().currentArea;
-
-        final data = await _fetchPlateStatus(plateNumber, area);
-        if (!mounted || data == null) return;
-
-        final fetchedStatus = data.customStatus;
-        final fetchedList = data.statusList;
-        final String? fetchedCountType = data.countType;
-
-        setState(() {
-          controller.fetchedCustomStatus = fetchedStatus;
-          controller.customStatusController.text = fetchedStatus ?? '';
-          selectedStatusNames = fetchedList;
-          statusSectionKey = UniqueKey();
-
-          if (fetchedCountType != null && fetchedCountType.isNotEmpty) {
-            controller.countTypeController.text = fetchedCountType;
-            controller.selectedBillType = '정기';
-            controller.selectedBill = fetchedCountType;
-
-            _monthlyDocExists = false;
-            _resolvedMonthlyDocId = null;
-          } else {
-            _monthlyDocExists = false;
-            _resolvedMonthlyDocId = null;
-          }
-        });
-
-        final dialogKey = _plateDocId(plateNumber, area);
-        if (_plateStatusDialogShowing) return;
-        if (_lastPlateStatusDialogKey == dialogKey) return;
-
-        _plateStatusDialogShowing = true;
-        _lastPlateStatusDialogKey = dialogKey;
-
-        try {
-          await _showPlateStatusLoadedDialog(
-            plateNumber: plateNumber,
-            area: area,
-            customStatus: fetchedStatus,
-          );
-        } finally {
-          _plateStatusDialogShowing = false;
-        }
-      }
-    });
+    controller.controllerBackDigit.addListener(
+      _lookupGeneralStatusForCurrentPlate,
+    );
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final billState = context.read<BillState>();
@@ -541,7 +636,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     super.dispose();
   }
 
-  Future<PlateStatusRecord?> _fetchPlateStatus(
+  Future<PlateStatusLookupResult> _fetchPlateStatus(
       String plateNumber, String area) async {
     final safeArea = _safeArea(area);
     final docId = _plateDocId(plateNumber, safeArea);
@@ -550,54 +645,54 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       '[InputPlateScreen][PlateStatusLookup] start docId=$docId area=$safeArea',
     );
 
-    try {
-      return await _plateRepo.fetchLatestPlateStatus(
-        plateNumber: plateNumber,
-        area: safeArea,
-      );
-    } on PlateStatusReadException catch (e) {
-      debugPrint('[_fetchPlateStatus] repository error: $e');
-      return null;
-    } catch (e) {
-      debugPrint('[_fetchPlateStatus] error: $e');
-      return null;
-    }
+    final result = await _plateRepo.lookupPlateStatus(
+      plateNumber: plateNumber,
+      area: safeArea,
+      scope: PlateStatusScope.history,
+    );
+    debugPrint(
+      '[InputPlateScreen][PlateStatusLookup] result=${result.state.name} '
+      'sourcePath=${result.sourcePath ?? ''}',
+    );
+    return result;
   }
 
   Future<_MonthlyFetchResult> _fetchMonthlyPlateStatus(
       String plateNumber, String area) async {
     final safeArea = _safeArea(area);
-    final docId = _plateDocId(plateNumber, safeArea);
-
-    try {
-      final data = await _plateRepo.fetchMonthlyPlateStatus(
-        plateNumber: plateNumber,
-        area: safeArea,
+    final result = await _plateRepo.lookupPlateStatus(
+      plateNumber: plateNumber,
+      area: safeArea,
+      scope: PlateStatusScope.monthly,
+    );
+    if (result.isFound) {
+      return _MonthlyFetchResult.success(
+        data: result.record,
+        sourcePath: result.sourcePath,
       );
-      if (data != null) {
-        _resolvedMonthlyDocId = docId;
-        return _MonthlyFetchResult.success(data);
-      }
+    }
+    if (result.isInactive) {
+      return const _MonthlyFetchResult.failure(
+        _MonthlyFetchFailureType.inactive,
+      );
+    }
+    if (result.isNotFound) {
       return const _MonthlyFetchResult.failure(
         _MonthlyFetchFailureType.notFound,
       );
-    } on MonthlyPlateStatusReadException catch (e) {
-      debugPrint('[_fetchMonthlyPlateStatus] repository error: $e');
-      return const _MonthlyFetchResult.failure(
-        _MonthlyFetchFailureType.readError,
-      );
-    } catch (e) {
-      debugPrint('[_fetchMonthlyPlateStatus] error: $e');
-      return const _MonthlyFetchResult.failure(
-        _MonthlyFetchFailureType.readError,
-      );
     }
+    return _MonthlyFetchResult.failure(
+      _MonthlyFetchFailureType.readError,
+      error: result.error,
+    );
   }
 
   Future<void> _handleMonthlySelectedFetchAndApply() async {
     if (!controller.isInputValid()) {
       if (!mounted) return;
       setState(() {
+        _monthlyLookupGeneration++;
+        _monthlyLookupInProgress = false;
         _monthlyDocExists = false;
         _resolvedMonthlyDocId = null;
       });
@@ -610,55 +705,154 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     }
 
     final plateNumber = controller.buildPlateNumber();
-    final area = context.read<AreaState>().currentArea;
-
-    final result = await _fetchMonthlyPlateStatus(plateNumber, area);
-    if (!mounted) return;
-
-    if (!result.isSuccess) {
-      setState(() {
-        _monthlyDocExists = false;
-        _resolvedMonthlyDocId = null;
-      });
-
-      if (result.failure == _MonthlyFetchFailureType.notFound) {
-        await StatusDialog.showFailure(
-          context,
-          title: StatusDialog.monthlyDocNotFound,
-          usePromptUi: true,
-        );
-      } else if (result.failure == _MonthlyFetchFailureType.readError) {
-        _showFloatingMessage('정기 주차 정보를 불러오지 못했습니다.');
-      }
-      return;
-    }
-
-    final data = result.data!;
-    final fetchedStatus = data.customStatus;
-    final fetchedList = data.statusList;
-    final fetchedCountType = data.countType;
+    final area = _safeArea(context.read<AreaState>().currentArea);
+    final lookupGeneration = ++_monthlyLookupGeneration;
+    DeveloperOperationTrace? trace;
 
     setState(() {
-      _monthlyDocExists = true;
-
-      controller.fetchedCustomStatus = fetchedStatus;
-      controller.customStatusController.text = fetchedStatus ?? '';
-      selectedStatusNames = fetchedList;
-      statusSectionKey = UniqueKey();
-
-      if (fetchedCountType != null && fetchedCountType.isNotEmpty) {
-        controller.countTypeController.text = fetchedCountType;
-        controller.selectedBill = fetchedCountType;
-      }
+      controller.beginStatusLookup();
+      _monthlyLookupInProgress = true;
+      _monthlyDocExists = false;
+      _resolvedMonthlyDocId = null;
     });
 
-    if (!_sheetOpen) {
-      await _animateSheet(
-        open: true,
-        pageIndex: _dockPageBill,
-        source: 'monthly_data_loaded',
-        showDeveloperStatus: false,
+    try {
+      trace = await DeveloperOperationTrace.start(
+        context: context,
+        title: '정기 상태 정보 조회',
+        initialMessage: '정기 차량의 상태 정보와 유효기간을 확인하고 있습니다.',
+        usePromptUi: true,
+        developerModeMessage:
+            '개발자 모드 ON: 정기 상태 조회 로그를 복사할 수 있습니다.',
+        standardModeMessage:
+            '개발자 모드 OFF: 정기 상태 조회 로그를 콘솔에 기록합니다.',
       );
+      trace.log(
+        'plate=$plateNumber area=$area generation=$lookupGeneration '
+        'billType=${controller.selectedBillType}',
+        progress: .24,
+      );
+
+      final result = await _fetchMonthlyPlateStatus(plateNumber, area);
+      if (!mounted) return;
+
+      final currentPlate = controller.isInputValid()
+          ? controller.buildPlateNumber()
+          : '';
+      final currentArea = _safeArea(context.read<AreaState>().currentArea);
+      final stale = lookupGeneration != _monthlyLookupGeneration ||
+          currentPlate != plateNumber ||
+          currentArea != area ||
+          controller.selectedBillType != '정기';
+      if (stale) {
+        debugPrint(
+          '[InputPlateScreen][MonthlyLookup] discarded '
+          'requestedPlate=$plateNumber currentPlate=$currentPlate '
+          'requestedArea=$area currentArea=$currentArea '
+          'requestedGeneration=$lookupGeneration '
+          'currentGeneration=$_monthlyLookupGeneration '
+          'billType=${controller.selectedBillType}',
+        );
+        trace.log(
+          'discarded=true requestedPlate=$plateNumber currentPlate=$currentPlate '
+          'requestedArea=$area currentArea=$currentArea '
+          'requestedGeneration=$lookupGeneration '
+          'currentGeneration=$_monthlyLookupGeneration',
+          progress: .88,
+        );
+        await trace.succeed('이전 정기 차량 조회 결과를 안전하게 폐기했습니다.');
+        return;
+      }
+
+      if (!result.isSuccess) {
+        setState(() {
+          _monthlyDocExists = false;
+          _resolvedMonthlyDocId = null;
+          if (result.failure == _MonthlyFetchFailureType.readError) {
+            controller.applyStatusLookupFailed();
+          } else if (result.failure == _MonthlyFetchFailureType.inactive) {
+            controller.applyStatusInactive();
+          } else {
+            controller.applyStatusNotFound();
+          }
+        });
+
+        if (result.failure == _MonthlyFetchFailureType.inactive) {
+          trace.log('result=inactive apply=false', progress: .76);
+          await trace.fail('정기 주차 기간이 만료되어 상태 정보를 적용하지 않았습니다.');
+          await StatusDialog.showFailure(
+            context,
+            title: '정기 주차 기간이 만료되었습니다.',
+            usePromptUi: true,
+          );
+        } else if (result.failure == _MonthlyFetchFailureType.notFound) {
+          trace.log('result=notFound apply=false', progress: .76);
+          await trace.fail('정기 주차 문서를 찾지 못했습니다.');
+          await StatusDialog.showFailure(
+            context,
+            title: StatusDialog.monthlyDocNotFound,
+            usePromptUi: true,
+          );
+        } else {
+          trace.log('result=readError apply=false', progress: .76);
+          await trace.fail(
+            '정기 주차 정보를 불러오지 못했습니다.',
+            error: result.error,
+          );
+          _showFloatingMessage('정기 주차 정보를 불러오지 못했습니다.');
+        }
+        return;
+      }
+
+      final data = result.data!;
+      final fetchedStatus = data.customStatus;
+        final fetchedCountType = data.countType;
+      final sourcePath = result.sourcePath!;
+
+      setState(() {
+        _monthlyDocExists = true;
+        _resolvedMonthlyDocId = _plateDocId(plateNumber, area);
+        controller.applyFetchedStatus(
+          customStatus: fetchedStatus,
+            sourcePath: sourcePath,
+        );
+        if (fetchedCountType != null && fetchedCountType.isNotEmpty) {
+          controller.countTypeController.text = fetchedCountType;
+          controller.selectedBill = fetchedCountType;
+        }
+      });
+
+      trace.log(
+        'result=found sourcePath=$sourcePath '
+        'memoLength=${(fetchedStatus ?? '').trim().length} apply=true',
+        progress: .86,
+      );
+      await trace.succeed('정기 차량 상태 정보를 안전하게 적용했습니다.');
+
+      if (!_sheetOpen) {
+        await _animateSheet(
+          open: true,
+          pageIndex: _dockPageBill,
+          source: 'monthly_data_loaded',
+          showDeveloperStatus: false,
+        );
+      }
+    } catch (error, stackTrace) {
+      debugPrint('[InputPlateScreen][MonthlyLookup] error=$error');
+      if (trace != null) {
+        await trace.fail(
+          '정기 상태 정보 조회에 실패했습니다.',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }
+      if (mounted) {
+        _showFloatingMessage('정기 주차 정보를 불러오지 못했습니다.');
+      }
+    } finally {
+      if (mounted && lookupGeneration == _monthlyLookupGeneration) {
+        setState(() => _monthlyLookupInProgress = false);
+      }
     }
   }
 
@@ -681,26 +875,76 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     }
 
     final plateNumber = controller.buildPlateNumber();
-    final area = context.read<AreaState>().currentArea;
+    final area = _safeArea(context.read<AreaState>().currentArea);
+    final currentDocId = _plateDocId(plateNumber, area);
+    if (_resolvedMonthlyDocId != currentDocId ||
+        controller.selectedBillType != '정기') {
+      debugPrint(
+        '[InputPlateScreen][MonthlyApply] blocked '
+        'resolvedDocId=${_resolvedMonthlyDocId ?? ''} currentDocId=$currentDocId '
+        'billType=${controller.selectedBillType}',
+      );
+      setState(() {
+        _monthlyLookupGeneration++;
+        _monthlyLookupInProgress = false;
+        _monthlyDocExists = false;
+        _resolvedMonthlyDocId = null;
+      });
+      _showFloatingMessage('차량 정보가 변경되어 정기 상태를 다시 확인해야 합니다.');
+      return;
+    }
 
     final customStatus = controller.customStatusController.text.trim();
-    final statusList = List<String>.from(selectedStatusNames);
 
     setState(() => _monthlyApplying = true);
+    DeveloperOperationTrace? trace;
 
     try {
+      trace = await DeveloperOperationTrace.start(
+        context: context,
+        title: '정기 상태 메모 반영',
+        initialMessage: '정기 차량의 상태 메모를 반영하고 있습니다.',
+        usePromptUi: true,
+        developerModeMessage:
+            '개발자 모드 ON: 상태 메모 저장 로그를 복사할 수 있습니다.',
+        standardModeMessage:
+            '개발자 모드 OFF: 상태 메모 저장 로그를 콘솔에 기록합니다.',
+      );
+      trace.log(
+        'plate=$plateNumber area=$area scope=monthly '
+        'memoLength=${customStatus.length}',
+        progress: .34,
+      );
+      final actorName = context.read<UserState>().name.trim();
       await _plateRepo.setMonthlyMemoAndStatusOnly(
         plateNumber: plateNumber,
         area: area,
-        createdBy: 'system',
+        createdBy: actorName.isEmpty ? 'unknown' : actorName,
         customStatus: customStatus,
-        statusList: statusList,
         skipIfDocMissing: false,
       );
-    } on MonthlyPlateStatusWriteException catch (e) {
+      if (mounted) {
+        setState(controller.markStatusDraftPersisted);
+      }
+      await trace.succeed('정기 상태 메모를 반영했습니다.');
+    } on MonthlyPlateStatusWriteException catch (e, stackTrace) {
+      if (trace != null) {
+        await trace.fail(
+          '정기 상태 메모 반영에 실패했습니다.',
+          error: e,
+          stackTrace: stackTrace,
+        );
+      }
       debugPrint('[_applyMonthlyMemoAndStatusOnly] repository error: $e');
       _showFloatingMessage('정기 메모 반영에 실패했습니다.');
-    } catch (e) {
+    } catch (e, stackTrace) {
+      if (trace != null) {
+        await trace.fail(
+          '정기 상태 메모 반영에 실패했습니다.',
+          error: e,
+          stackTrace: stackTrace,
+        );
+      }
       debugPrint('[_applyMonthlyMemoAndStatusOnly] error: $e');
       _showFloatingMessage('정기 메모 반영에 실패했습니다.');
     } finally {
@@ -716,8 +960,13 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     }
 
     final enabled = !_monthlyApplying &&
+        !_monthlyLookupInProgress &&
         _monthlyDocExists &&
         (_resolvedMonthlyDocId != null);
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final duration =
+        reduceMotion ? Duration.zero : const Duration(milliseconds: 220);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -739,26 +988,40 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                     : cs.outlineVariant.withOpacity(0.85),
               ),
             ),
-            child: _monthlyApplying
-                ? SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                          enabled ? cs.onPrimary : cs.onSurfaceVariant),
+            child: AnimatedSwitcher(
+              duration: duration,
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              child: (_monthlyApplying || _monthlyLookupInProgress)
+                  ? SizedBox(
+                      key: const ValueKey<String>('monthly-status-loading'),
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          enabled ? cs.onPrimary : cs.onSurfaceVariant,
+                        ),
+                      ),
+                    )
+                  : const Text(
+                      '반영',
+                      key: ValueKey<String>('monthly-status-ready'),
+                      style: TextStyle(fontWeight: FontWeight.w900),
                     ),
-                  )
-                : const Text(
-                    '반영',
-                    style: TextStyle(fontWeight: FontWeight.w900),
-                  ),
+            ),
           ),
         ),
-        if (!_monthlyDocExists) ...[
+        if (_monthlyLookupInProgress) ...[
           const SizedBox(height: 8),
           Text(
-            '정기(월정기) 문서를 불러온 경우에만 반영할 수 있습니다.',
+            '정기 주차 상태와 유효기간을 확인하고 있습니다.',
+            style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+          ),
+        ] else if (!_monthlyDocExists) ...[
+          const SizedBox(height: 8),
+          Text(
+            '활성 정기 주차 문서를 불러온 경우에만 반영할 수 있습니다.',
             style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
           ),
         ],
@@ -911,12 +1174,16 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   }) {
     controller.suppressOcrEditCount(true);
     setState(() {
+      _statusLookupGeneration++;
+      controller.resetStatusLookupToIdle();
       controller.isThreeDigit = front.length == 3;
       controller.controllerFrontDigit.text = front;
       controller.controllerMidDigit.text = mid;
       controller.controllerBackDigit.text = back;
 
       _midBeforeEdit = '';
+      _monthlyLookupGeneration++;
+      _monthlyLookupInProgress = false;
       _monthlyDocExists = false;
       _resolvedMonthlyDocId = null;
       _lastPlateStatusDialogKey = null;
@@ -1204,8 +1471,12 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       _dockEditing = field;
       _singleFieldDockEdit = wasPlateComplete;
 
+      _statusLookupGeneration++;
+      _monthlyLookupGeneration++;
+      _monthlyLookupInProgress = false;
       _monthlyDocExists = false;
       _resolvedMonthlyDocId = null;
+      controller.resetStatusLookupToIdle();
 
       _lastPlateStatusDialogKey = null;
 
@@ -1262,6 +1533,17 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     _dockEditing = null;
     _singleFieldDockEdit = false;
     _midBeforeEdit = '';
+    if (controller.isInputValid() &&
+        controller.statusLookupState == PlateStatusLookupState.idle) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted ||
+            !controller.isInputValid() ||
+            controller.statusLookupState != PlateStatusLookupState.idle) {
+          return;
+        }
+        _lookupGeneralStatusForCurrentPlate();
+      });
+    }
   }
 
   void _activateNextIncompleteFieldOrFinish() {
@@ -1340,8 +1622,12 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
           _dockEditing = null;
           _singleFieldDockEdit = false;
           _midBeforeEdit = '';
+          _statusLookupGeneration++;
+          _monthlyLookupGeneration++;
+          _monthlyLookupInProgress = false;
           _monthlyDocExists = false;
           _resolvedMonthlyDocId = null;
+          controller.resetStatusLookupToIdle();
           _lastPlateStatusDialogKey = null;
         });
       },
@@ -1502,12 +1788,18 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
                   setState(() {
                     controller.selectedBillType = newType;
+                    _statusLookupGeneration++;
+                    _monthlyLookupGeneration++;
+                    _monthlyLookupInProgress = false;
                     _monthlyDocExists = false;
                     _resolvedMonthlyDocId = null;
+                    controller.resetStatusLookupToIdle();
                   });
 
                   if (newType == '정기') {
                     _handleMonthlySelectedFetchAndApply();
+                  } else if (controller.isInputValid()) {
+                    _lookupGeneralStatusForCurrentPlate();
                   }
                 },
                 countTypeController: controller.countTypeController,
@@ -1519,20 +1811,11 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
             children: [
               InputCustomStatusSection(
                 controller: controller,
-                fetchedCustomStatus: controller.fetchedCustomStatus,
-                selectedStatusNames: selectedStatusNames,
-                statusSectionKey: statusSectionKey,
-                onDeleted: () {
-                  setState(() {
-                    controller.fetchedCustomStatus = null;
-                    controller.customStatusController.clear();
-                  });
+                onChanged: () {
+                  if (mounted) setState(() {});
                 },
-                onStatusCleared: () {
-                  setState(() {
-                    selectedStatusNames = [];
-                    statusSectionKey = UniqueKey();
-                  });
+                onStoredStatusDeleted: () {
+                  if (mounted) setState(() {});
                 },
               ),
               _buildMonthlyApplyButton(),

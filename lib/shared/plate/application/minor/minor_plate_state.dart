@@ -320,7 +320,6 @@ class MinorPlateState extends ChangeNotifier {
                   area: '',
                   userName: '',
                   isSelected: false,
-                  statusList: const [],
                 ),
               );
 

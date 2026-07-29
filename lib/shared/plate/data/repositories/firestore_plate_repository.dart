@@ -1,12 +1,16 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../../../app/utils/dev_firebase_debug_dialog.dart';
 import '../../application/common/view_doc_rows_store.dart';
 import '../../domain/enums/plate_type.dart';
 import '../../domain/models/plate_log_model.dart';
 import '../../domain/models/plate_model.dart';
+import '../../domain/models/plate_status_draft.dart';
+import '../../domain/models/plate_status_lookup_result.dart';
+import '../../domain/models/plate_status_scope.dart';
 import '../../domain/models/plate_out_log_search_result.dart';
 import '../../domain/repositories/plate_repository.dart';
 import '../../domain/services/plate_creation_service.dart';
@@ -206,6 +210,45 @@ class FirestorePlateRepository implements PlateRepository {
     return '${canonical}_$safeArea';
   }
 
+  String _normalizedPlateKey(String plateNumber) {
+    return plateNumber.replaceAll('-', '').replaceAll(' ', '').trim();
+  }
+
+  String _plateFourDigit(String plateNumber) {
+    final key = _normalizedPlateKey(plateNumber);
+    if (key.length <= 4) return key;
+    return key.substring(key.length - 4);
+  }
+
+  DateTime _nextMonthStartUtc(DateTime date) {
+    return DateTime.utc(date.year, date.month + 1, 1);
+  }
+
+  DocumentReference<Map<String, dynamic>> _statusHistoryRef({
+    required String plateNumber,
+    required String area,
+    required DateTime date,
+  }) {
+    final safeArea = _safeArea(area);
+    final monthKey = _monthKey(date);
+    return _firestore
+        .collection('plate_status')
+        .doc(safeArea)
+        .collection('months')
+        .doc(monthKey)
+        .collection('plates')
+        .doc(_plateDocId(plateNumber, safeArea));
+  }
+
+  DocumentReference<Map<String, dynamic>> _monthlyStatusRef({
+    required String plateNumber,
+    required String area,
+  }) {
+    return _firestore
+        .collection(_monthlyPlateStatusCollection)
+        .doc(_plateDocId(plateNumber, area));
+  }
+
   int _intValue(dynamic value) {
     if (value is int) return value;
     if (value is num) return value.toInt();
@@ -214,11 +257,6 @@ class FirestorePlateRepository implements PlateRepository {
 
   String _textValue(dynamic value) {
     return value?.toString().trim() ?? '';
-  }
-
-  List<String> _stringListValue(dynamic value) {
-    if (value is! List) return const <String>[];
-    return value.map((e) => e.toString()).toList(growable: false);
   }
 
   int _paymentCountFromData(Map<String, dynamic> data) {
@@ -231,14 +269,11 @@ class FirestorePlateRepository implements PlateRepository {
 
   bool _hasMonthlyMemo(Map<String, dynamic> data) {
     final customStatus = _textValue(data['customStatus']);
-    if (customStatus.isNotEmpty && customStatus != '없음') return true;
-    final statusList = data['statusList'];
-    return statusList is List && statusList.isNotEmpty;
+    return customStatus.isNotEmpty && customStatus != '없음';
   }
 
   bool _isEmptyMonthlyPayload({
     required String customStatus,
-    required List<String> statusList,
     required String countType,
     required int regularAmount,
     required int regularDurationValue,
@@ -250,7 +285,6 @@ class FirestorePlateRepository implements PlateRepository {
     bool? isExtended,
   }) {
     return customStatus.trim().isEmpty &&
-        statusList.isEmpty &&
         countType.trim().isEmpty &&
         regularAmount == 0 &&
         regularDurationValue == 0 &&
@@ -271,7 +305,6 @@ class FirestorePlateRepository implements PlateRepository {
         ? _textValue(data['plateNumber'])
         : _fallbackPlateNumberFromDocId(docId);
     final duration = _intValue(data['regularDurationValue'] ?? data['regularDurationHours']);
-    final statusList = _stringListValue(data['statusList']);
     final merged = <String, dynamic>{
       'docId': docId,
       'plateNumber': plateNumber,
@@ -287,7 +320,6 @@ class FirestorePlateRepository implements PlateRepository {
       'startDate': _textValue(data['startDate']),
       'endDate': _textValue(data['endDate']),
       'customStatus': _textValue(data['customStatus']),
-      'statusList': statusList,
       'hasMemo': _hasMonthlyMemo(data),
       'paymentCount': _paymentCountFromData(data),
       'updatedAt': updatedAt ?? data['updatedAt'] ?? FieldValue.serverTimestamp(),
@@ -301,7 +333,6 @@ class FirestorePlateRepository implements PlateRepository {
     required String area,
     required String region,
     required String customStatus,
-    required List<String> statusList,
     required String countType,
     required int regularAmount,
     required int regularDurationValue,
@@ -326,8 +357,7 @@ class FirestorePlateRepository implements PlateRepository {
       'startDate': startDate,
       'endDate': endDate,
       'customStatus': customStatus.trim(),
-      'statusList': statusList,
-      'hasMemo': customStatus.trim().isNotEmpty || statusList.isNotEmpty,
+      'hasMemo': customStatus.trim().isNotEmpty,
       'paymentCount': paymentCount,
       'updatedAt': FieldValue.serverTimestamp(),
     };
@@ -470,6 +500,181 @@ class FirestorePlateRepository implements PlateRepository {
   }
 
   @override
+  Future<void> updatePlateWithStatus(
+    String documentId,
+    Map<String, dynamic> updatedFields, {
+    PlateLogModel? log,
+    required String plateNumber,
+    required String area,
+    required PlateStatusScope statusScope,
+    required bool statusChanged,
+    required PlateStatusDraft expectedOriginalStatus,
+    String? expectedStatusSourcePath,
+    required String customStatus,
+    required String updatedByName,
+    String? updatedById,
+  }) async {
+    final draft = PlateStatusDraft(customStatus: customStatus);
+    final safeArea = _safeArea(area);
+    final canonicalPlate = _canonicalPlateNumber(plateNumber);
+    final actorName = updatedByName.trim().isEmpty
+        ? 'unknown'
+        : updatedByName.trim();
+    final actorId = updatedById?.trim() ?? '';
+    final now = DateTime.now();
+    final currentHistoryRef = _statusHistoryRef(
+      plateNumber: canonicalPlate,
+      area: safeArea,
+      date: now,
+    );
+    final previousHistoryRef = _statusHistoryRef(
+      plateNumber: canonicalPlate,
+      area: safeArea,
+      date: DateTime(now.year, now.month - 1, 1),
+    );
+    final monthlyRef = _monthlyStatusRef(
+      plateNumber: canonicalPlate,
+      area: safeArea,
+    );
+    final fields = Map<String, dynamic>.from(updatedFields);
+
+    if (!statusChanged) {
+      fields.remove(PlateFields.customStatus);
+    }
+
+    debugPrint(
+      '[FirestorePlateRepository][StatusTransaction] documentId=$documentId '
+      'plate=$canonicalPlate area=$safeArea '
+      'scope=${statusScope.storageLabel} changed=$statusChanged '
+      'memoLength=${draft.customStatus.length} '
+      'empty=${draft.isEmpty} '
+      'actorIdLength=${actorId.length} actorNameLength=${actorName.length} '
+      'sourcePath=${expectedStatusSourcePath ?? ''}',
+    );
+
+    await _writeService.updatePlate(
+      documentId,
+      fields,
+      log: log,
+      transactionExtension: statusChanged
+          ? (transaction, _) async {
+              final targetRef = statusScope == PlateStatusScope.monthly
+                  ? monthlyRef
+                  : currentHistoryRef;
+              final sourcePath = expectedStatusSourcePath?.trim() ?? '';
+              final sourceRef = sourcePath.isEmpty
+                  ? targetRef
+                  : _firestore.doc(sourcePath);
+              final sourceSnapshot = await transaction.get(sourceRef);
+              final latestDraft = PlateStatusDraft.fromMap(
+                sourceSnapshot.data(),
+              );
+
+              if (!latestDraft.sameAs(expectedOriginalStatus)) {
+                throw const PlateStatusConflictException(
+                  '다른 사용자가 상태 메모를 먼저 수정했습니다. 최신 정보를 다시 불러온 뒤 저장해 주세요.',
+                );
+              }
+
+              if (statusScope == PlateStatusScope.monthly) {
+                final monthlySnapshot = sourceRef.path == monthlyRef.path
+                    ? sourceSnapshot
+                    : await transaction.get(monthlyRef);
+                final monthlyData = monthlySnapshot.data();
+                if (!monthlySnapshot.exists || monthlyData == null) {
+                  throw const PlateStatusScopeException(
+                    '정기 상태 문서를 찾지 못해 상태 메모를 저장하지 않았습니다.',
+                  );
+                }
+                final monthlyRecord = PlateStatusRecord.fromMap(
+                  monthlyData,
+                  docId: monthlySnapshot.id,
+                );
+                if (!monthlyRecord.isActiveAt(DateTime.now())) {
+                  throw const PlateStatusScopeException(
+                    '정기 주차 기간이 만료되어 정기 상태 문서에 저장하지 않았습니다.',
+                  );
+                }
+                transaction.set(
+                  monthlyRef,
+                  <String, dynamic>{
+                    'customStatus': draft.customStatus,
+                    'updatedAt': FieldValue.serverTimestamp(),
+                    'createdBy': actorName,
+                    'lastMemoUpdatedBy': actorName,
+                    if (actorId.isNotEmpty) 'lastMemoUpdatedByUid': actorId,
+                    'area': safeArea,
+                  },
+                  SetOptions(merge: true),
+                );
+                return;
+              }
+
+              final monthlySnapshot = await transaction.get(monthlyRef);
+              final monthlyData = monthlySnapshot.data();
+              if (monthlySnapshot.exists && monthlyData != null) {
+                final monthlyRecord = PlateStatusRecord.fromMap(
+                  monthlyData,
+                  docId: monthlySnapshot.id,
+                );
+                if (monthlyRecord.isActiveAt(DateTime.now())) {
+                  throw const PlateStatusScopeException(
+                    '활성 정기 상태 문서가 생성되어 저장 범위가 변경되었습니다. 최신 정보를 다시 불러온 뒤 저장해 주세요.',
+                  );
+                }
+              }
+
+              final currentSnapshot = sourceRef.path == currentHistoryRef.path
+                  ? sourceSnapshot
+                  : await transaction.get(currentHistoryRef);
+              if (sourceRef.path != currentHistoryRef.path &&
+                  currentSnapshot.exists) {
+                final currentDraft = PlateStatusDraft.fromMap(
+                  currentSnapshot.data(),
+                );
+                if (!currentDraft.sameAs(expectedOriginalStatus)) {
+                  throw const PlateStatusConflictException(
+                    '다른 사용자가 상태 메모를 먼저 수정했습니다. 최신 정보를 다시 불러온 뒤 저장해 주세요.',
+                  );
+                }
+              }
+
+              if (draft.isEmpty) {
+                transaction.delete(currentHistoryRef);
+                transaction.delete(previousHistoryRef);
+                if (sourceRef.path != currentHistoryRef.path &&
+                    sourceRef.path != previousHistoryRef.path) {
+                  transaction.delete(sourceRef);
+                }
+                return;
+              }
+
+              transaction.set(
+                currentHistoryRef,
+                <String, dynamic>{
+                  'plateNumber': canonicalPlate,
+                  'plateDocId': _plateDocId(canonicalPlate, safeArea),
+                  'plateKey': _normalizedPlateKey(canonicalPlate),
+                  'plate_four_digit': _plateFourDigit(canonicalPlate),
+                  'statusScope': 'plate_status',
+                  'monthKey': _monthKey(now),
+                  'customStatus': draft.customStatus,
+                  'updatedAt': FieldValue.serverTimestamp(),
+                  'createdBy': actorName,
+                  if (actorId.isNotEmpty) 'updatedByUid': actorId,
+                  'area': safeArea,
+                  'expireAt': Timestamp.fromDate(_nextMonthStartUtc(now)),
+                  if (!currentSnapshot.exists)
+                    'createdAt': FieldValue.serverTimestamp(),
+                },
+                SetOptions(merge: true),
+              );
+            }
+          : null,
+    );
+  }
+
+  @override
   Future<void> deletePlate(
     String documentId, {
     String? area,
@@ -506,7 +711,11 @@ class FirestorePlateRepository implements PlateRepository {
     required PlateType plateType,
     required String userName,
     String? billingType,
-    List<String>? statusList,
+    required bool statusWriteRequested,
+    required PlateStatusLookupState statusLookupState,
+    required bool statusEditedByUser,
+    required PlateStatusDraft expectedOriginalStatus,
+    String? expectedStatusSourcePath,
     int? basicStandard,
     int? basicAmount,
     int? addStandard,
@@ -536,7 +745,11 @@ class FirestorePlateRepository implements PlateRepository {
       plateType: plateType,
       userName: userName,
       billingType: billingType,
-      statusList: statusList,
+      statusWriteRequested: statusWriteRequested,
+      statusLookupState: statusLookupState,
+      statusEditedByUser: statusEditedByUser,
+      expectedOriginalStatus: expectedOriginalStatus,
+      expectedStatusSourcePath: expectedStatusSourcePath,
       basicStandard: basicStandard,
       basicAmount: basicAmount,
       addStandard: addStandard,
@@ -858,12 +1071,47 @@ class FirestorePlateRepository implements PlateRepository {
   }
 
   @override
-  Future<PlateStatusRecord?> fetchLatestPlateStatus({
+  Future<PlateStatusLookupResult> lookupPlateStatus({
     required String plateNumber,
     required String area,
+    required PlateStatusScope scope,
   }) async {
     final safeArea = _safeArea(area);
     final docId = _plateDocId(plateNumber, safeArea);
+
+    if (scope == PlateStatusScope.monthly) {
+      final ref = _firestore.collection('monthly_plate_status').doc(docId);
+      try {
+        final doc = await ref.get();
+        final data = doc.data();
+        if (!doc.exists || data == null) {
+          return const PlateStatusLookupResult.notFound();
+        }
+        final record = PlateStatusRecord.fromMap(data, docId: docId);
+        if (!record.isActiveAt(DateTime.now())) {
+          debugPrint(
+            '[FirestorePlateRepository][StatusLookup] scope=monthly '
+            'plate=$plateNumber area=$safeArea state=inactive '
+            'start=${record.startDate ?? ''} end=${record.endDate ?? ''}',
+          );
+          return PlateStatusLookupResult.inactive(
+            record: record,
+            sourcePath: ref.path,
+          );
+        }
+        return PlateStatusLookupResult.found(
+          record: record,
+          sourcePath: ref.path,
+        );
+      } catch (error) {
+        debugPrint(
+          '[FirestorePlateRepository][StatusLookup] scope=monthly '
+          'plate=$plateNumber area=$safeArea error=$error',
+        );
+        return PlateStatusLookupResult.failed(error);
+      }
+    }
+
     final now = DateTime.now();
     final monthsToTry = <DateTime>[
       DateTime(now.year, now.month, 1),
@@ -873,16 +1121,20 @@ class FirestorePlateRepository implements PlateRepository {
     try {
       for (final month in monthsToTry) {
         final monthKey = _monthKey(month);
-        final doc = await _firestore
+        final ref = _firestore
             .collection('plate_status')
             .doc(safeArea)
             .collection('months')
             .doc(monthKey)
             .collection('plates')
-            .doc(docId)
-            .get();
-        if (doc.exists) {
-          return PlateStatusRecord.fromMap(doc.data()!);
+            .doc(docId);
+        final doc = await ref.get();
+        final data = doc.data();
+        if (doc.exists && data != null) {
+          return PlateStatusLookupResult.found(
+            record: PlateStatusRecord.fromMap(data, docId: doc.id),
+            sourcePath: ref.path,
+          );
         }
       }
 
@@ -894,9 +1146,18 @@ class FirestorePlateRepository implements PlateRepository {
             .limit(1)
             .get();
         if (primary.docs.isNotEmpty) {
-          return PlateStatusRecord.fromMap(primary.docs.first.data());
+          final doc = primary.docs.first;
+          return PlateStatusLookupResult.found(
+            record: PlateStatusRecord.fromMap(doc.data(), docId: doc.id),
+            sourcePath: doc.reference.path,
+          );
         }
-      } on FirebaseException {}
+      } on FirebaseException catch (error) {
+        debugPrint(
+          '[FirestorePlateRepository][StatusLookup] primaryIndexFallback '
+          'plate=$plateNumber area=$safeArea code=${error.code}',
+        );
+      }
 
       final secondary = await _firestore
           .collectionGroup('plates')
@@ -904,12 +1165,11 @@ class FirestorePlateRepository implements PlateRepository {
           .limit(12)
           .get();
       if (secondary.docs.isEmpty) {
-        return null;
+        return const PlateStatusLookupResult.notFound();
       }
 
       QueryDocumentSnapshot<Map<String, dynamic>>? best;
       var bestMonth = -1;
-
       for (final doc in secondary.docs) {
         final data = doc.data();
         var monthInt = -1;
@@ -929,24 +1189,85 @@ class FirestorePlateRepository implements PlateRepository {
         }
       }
 
-      final selected = best?.data() ?? secondary.docs.first.data();
-      return PlateStatusRecord.fromMap(selected);
-    } on FirebaseException catch (e) {
-      throw PlateStatusReadException(
-        'plate_status 조회에 실패했습니다.',
-        cause: e,
+      final selected = best ?? secondary.docs.first;
+      return PlateStatusLookupResult.found(
+        record: PlateStatusRecord.fromMap(
+          selected.data(),
+          docId: selected.id,
+        ),
+        sourcePath: selected.reference.path,
       );
-    } on TimeoutException catch (e) {
-      throw PlateStatusReadException(
-        'plate_status 조회 중 시간이 초과되었습니다.',
-        cause: e,
+    } catch (error) {
+      debugPrint(
+        '[FirestorePlateRepository][StatusLookup] scope=history '
+        'plate=$plateNumber area=$safeArea error=$error',
       );
-    } catch (e) {
+      return PlateStatusLookupResult.failed(error);
+    }
+  }
+
+  @override
+  Future<PlateStatusScope> resolvePlateStatusScope({
+    required String plateNumber,
+    required String area,
+    required String? billingType,
+    required int regularAmount,
+  }) async {
+    final safeArea = _safeArea(area);
+    final canonicalPlate = _canonicalPlateNumber(plateNumber);
+    final monthlyRef = _monthlyStatusRef(
+      plateNumber: canonicalPlate,
+      area: safeArea,
+    );
+    try {
+      final monthlySnapshot = await monthlyRef.get();
+      final monthlyData = monthlySnapshot.data();
+      if (monthlySnapshot.exists && monthlyData != null) {
+        final record = PlateStatusRecord.fromMap(
+          monthlyData,
+          docId: monthlySnapshot.id,
+        );
+        if (record.isActiveAt(DateTime.now())) {
+          return PlateStatusScope.monthly;
+        }
+        debugPrint(
+          '[FirestorePlateRepository][StatusScope] plate=$canonicalPlate '
+          'area=$safeArea monthlyState=inactive '
+          'start=${record.startDate ?? ''} end=${record.endDate ?? ''} '
+          'resolved=history',
+        );
+        return PlateStatusScope.history;
+      }
+      final normalizedBillingType = billingType?.trim() ?? '';
+      if (regularAmount > 0 || normalizedBillingType.contains('정기')) {
+        return PlateStatusScope.monthly;
+      }
+      return PlateStatusScope.history;
+    } catch (error) {
       throw PlateStatusReadException(
-        'plate_status 조회 중 알 수 없는 오류가 발생했습니다.',
-        cause: e,
+        '상태 메모 저장 범위를 확인하지 못했습니다.',
+        cause: error,
       );
     }
+  }
+
+  @override
+  Future<PlateStatusRecord?> fetchLatestPlateStatus({
+    required String plateNumber,
+    required String area,
+  }) async {
+    final result = await lookupPlateStatus(
+      plateNumber: plateNumber,
+      area: area,
+      scope: PlateStatusScope.history,
+    );
+    if (result.isFailed) {
+      throw PlateStatusReadException(
+        'plate_status 조회에 실패했습니다.',
+        cause: result.error,
+      );
+    }
+    return result.record;
   }
 
   @override
@@ -954,72 +1275,19 @@ class FirestorePlateRepository implements PlateRepository {
     required String plateNumber,
     required String area,
   }) async {
-    final safeArea = _safeArea(area);
-    final docId = _plateDocId(plateNumber, safeArea);
-
-    try {
-      final doc =
-          await _firestore.collection('monthly_plate_status').doc(docId).get();
-      if (!doc.exists) {
-        return null;
-      }
-      final data = doc.data();
-      if (data == null) {
-        return null;
-      }
-      return PlateStatusRecord.fromMap(data, docId: docId);
-    } on FirebaseException catch (e, st) {
-      await _showMonthlyFirebaseDebug(
-        operation: 'monthly.fetchMonthlyPlateStatus',
-        error: e,
-        stackTrace: st,
-        details: <String, Object?>{
-          'collection': 'monthly_plate_status',
-          'docId': docId,
-          'plateNumber': plateNumber,
-          'area': safeArea,
-          'query': 'monthly_plate_status/$docId',
-        },
-      );
+    final result = await lookupPlateStatus(
+      plateNumber: plateNumber,
+      area: area,
+      scope: PlateStatusScope.monthly,
+    );
+    if (result.isFailed) {
       throw MonthlyPlateStatusReadException(
         'monthly_plate_status 조회에 실패했습니다.',
-        cause: e,
-      );
-    } on TimeoutException catch (e, st) {
-      await _showMonthlyFirebaseDebug(
-        operation: 'monthly.fetchMonthlyPlateStatus.timeout',
-        error: e,
-        stackTrace: st,
-        details: <String, Object?>{
-          'collection': 'monthly_plate_status',
-          'docId': docId,
-          'plateNumber': plateNumber,
-          'area': safeArea,
-          'query': 'monthly_plate_status/$docId',
-        },
-      );
-      throw MonthlyPlateStatusReadException(
-        'monthly_plate_status 조회 중 시간이 초과되었습니다.',
-        cause: e,
-      );
-    } catch (e, st) {
-      await _showMonthlyFirebaseDebug(
-        operation: 'monthly.fetchMonthlyPlateStatus.unknown',
-        error: e,
-        stackTrace: st,
-        details: <String, Object?>{
-          'collection': 'monthly_plate_status',
-          'docId': docId,
-          'plateNumber': plateNumber,
-          'area': safeArea,
-          'query': 'monthly_plate_status/$docId',
-        },
-      );
-      throw MonthlyPlateStatusReadException(
-        'monthly_plate_status 조회 중 알 수 없는 오류가 발생했습니다.',
-        cause: e,
+        cause: result.error,
       );
     }
+    if (result.isInactive) return null;
+    return result.record;
   }
 
   @override
@@ -1028,7 +1296,6 @@ class FirestorePlateRepository implements PlateRepository {
     required String area,
     required String createdBy,
     required String customStatus,
-    required List<String> statusList,
     String? countType,
   }) async {
     try {
@@ -1037,7 +1304,6 @@ class FirestorePlateRepository implements PlateRepository {
         area: area,
         createdBy: createdBy,
         customStatus: customStatus,
-        statusList: statusList,
         countType: countType,
       );
       await _syncMonthlyViewItemFromSource(plateNumber: plateNumber, area: area);
@@ -1053,7 +1319,6 @@ class FirestorePlateRepository implements PlateRepository {
           'area': area,
           'createdBy': createdBy,
           'customStatus': customStatus,
-          'statusList': statusList,
           'countType': countType,
           'writePath': 'PlateStatusService.upsertMonthlyMemoAndStatus',
         },
@@ -1074,7 +1339,6 @@ class FirestorePlateRepository implements PlateRepository {
           'area': area,
           'createdBy': createdBy,
           'customStatus': customStatus,
-          'statusList': statusList,
           'countType': countType,
           'writePath': 'PlateStatusService.upsertMonthlyMemoAndStatus',
         },
@@ -1095,7 +1359,6 @@ class FirestorePlateRepository implements PlateRepository {
           'area': area,
           'createdBy': createdBy,
           'customStatus': customStatus,
-          'statusList': statusList,
           'countType': countType,
           'writePath': 'PlateStatusService.upsertMonthlyMemoAndStatus',
         },
@@ -1775,7 +2038,6 @@ class FirestorePlateRepository implements PlateRepository {
         final existing = snap.data() ?? <String, dynamic>{};
         final payload = <String, dynamic>{
           'customStatus': '',
-          'statusList': <String>[],
           'updatedAt': FieldValue.serverTimestamp(),
           'clearedAt': FieldValue.serverTimestamp(),
           'clearedBy': clearedBy,
@@ -1785,7 +2047,6 @@ class FirestorePlateRepository implements PlateRepository {
         viewData['plateNumber'] = canonicalPlate;
         viewData['area'] = safeArea;
         viewData['customStatus'] = '';
-        viewData['statusList'] = <String>[];
         viewData['hasMemo'] = false;
         viewData['updatedAt'] = FieldValue.serverTimestamp();
         tx.set(
@@ -1947,14 +2208,12 @@ class FirestorePlateRepository implements PlateRepository {
     required String plateNumber,
     required String area,
     required String customStatus,
-    required List<String> statusList,
     required String createdBy,
   }) {
     return _statusService.setPlateStatus(
       plateNumber: plateNumber,
       area: area,
       customStatus: customStatus,
-      statusList: statusList,
       createdBy: createdBy,
     );
   }
@@ -1966,7 +2225,6 @@ class FirestorePlateRepository implements PlateRepository {
     required String region,
     required String createdBy,
     required String customStatus,
-    required List<String> statusList,
     required String countType,
     required int regularAmount,
     required int regularDurationValue,
@@ -1986,7 +2244,6 @@ class FirestorePlateRepository implements PlateRepository {
     try {
       final emptyMonthly = _isEmptyMonthlyPayload(
         customStatus: customStatus,
-        statusList: statusList,
         countType: countType,
         regularAmount: regularAmount,
         regularDurationValue: regularDurationValue,
@@ -2022,7 +2279,6 @@ class FirestorePlateRepository implements PlateRepository {
 
         final base = <String, dynamic>{
           'customStatus': customStatus.trim(),
-          'statusList': statusList,
           'updatedAt': FieldValue.serverTimestamp(),
           'createdBy': createdBy,
           'type': '정기',
@@ -2055,7 +2311,6 @@ class FirestorePlateRepository implements PlateRepository {
                 area: safeArea,
                 region: region,
                 customStatus: customStatus,
-                statusList: statusList,
                 countType: countType,
                 regularAmount: regularAmount,
                 regularDurationValue: regularDurationValue,
@@ -2084,7 +2339,6 @@ class FirestorePlateRepository implements PlateRepository {
           'region': region,
           'createdBy': createdBy,
           'customStatus': customStatus,
-          'statusList': statusList,
           'countType': countType,
           'regularAmount': regularAmount,
           'regularDurationValue': regularDurationValue,
@@ -2115,7 +2369,6 @@ class FirestorePlateRepository implements PlateRepository {
           'region': region,
           'createdBy': createdBy,
           'customStatus': customStatus,
-          'statusList': statusList,
           'countType': countType,
           'regularAmount': regularAmount,
           'regularDurationValue': regularDurationValue,
@@ -2146,7 +2399,6 @@ class FirestorePlateRepository implements PlateRepository {
           'region': region,
           'createdBy': createdBy,
           'customStatus': customStatus,
-          'statusList': statusList,
           'countType': countType,
           'regularAmount': regularAmount,
           'regularDurationValue': regularDurationValue,
@@ -2172,7 +2424,6 @@ class FirestorePlateRepository implements PlateRepository {
     required String area,
     required String createdBy,
     required String customStatus,
-    required List<String> statusList,
     bool skipIfDocMissing = true,
   }) async {
     try {
@@ -2181,7 +2432,6 @@ class FirestorePlateRepository implements PlateRepository {
         area: area,
         createdBy: createdBy,
         customStatus: customStatus,
-        statusList: statusList,
         skipIfDocMissing: skipIfDocMissing,
       );
       await _syncMonthlyViewItemFromSource(plateNumber: plateNumber, area: area);
@@ -2197,7 +2447,6 @@ class FirestorePlateRepository implements PlateRepository {
           'area': area,
           'createdBy': createdBy,
           'customStatus': customStatus,
-          'statusList': statusList,
           'skipIfDocMissing': skipIfDocMissing,
           'writePath': 'PlateStatusService.setMonthlyMemoAndStatusOnly',
         },
@@ -2218,7 +2467,6 @@ class FirestorePlateRepository implements PlateRepository {
           'area': area,
           'createdBy': createdBy,
           'customStatus': customStatus,
-          'statusList': statusList,
           'skipIfDocMissing': skipIfDocMissing,
           'writePath': 'PlateStatusService.setMonthlyMemoAndStatusOnly',
         },
@@ -2239,7 +2487,6 @@ class FirestorePlateRepository implements PlateRepository {
           'area': area,
           'createdBy': createdBy,
           'customStatus': customStatus,
-          'statusList': statusList,
           'skipIfDocMissing': skipIfDocMissing,
           'writePath': 'PlateStatusService.setMonthlyMemoAndStatusOnly',
         },

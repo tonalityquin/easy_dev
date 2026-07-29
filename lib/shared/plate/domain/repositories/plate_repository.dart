@@ -3,6 +3,9 @@ import '../enums/plate_type.dart';
 import '../models/plate_log_model.dart';
 import '../models/plate_model.dart';
 import '../models/plate_out_log_search_result.dart';
+import '../models/plate_status_draft.dart';
+import '../models/plate_status_lookup_result.dart';
+import '../models/plate_status_scope.dart';
 import '../services/plate_status_record.dart';
 
 class PlateLogReadException implements Exception {
@@ -136,6 +139,19 @@ abstract class PlateRepository {
     required PlateLogModel log,
   });
 
+  Future<PlateStatusLookupResult> lookupPlateStatus({
+    required String plateNumber,
+    required String area,
+    required PlateStatusScope scope,
+  });
+
+  Future<PlateStatusScope> resolvePlateStatusScope({
+    required String plateNumber,
+    required String area,
+    required String? billingType,
+    required int regularAmount,
+  });
+
   Future<PlateStatusRecord?> fetchLatestPlateStatus({
     required String plateNumber,
     required String area,
@@ -151,7 +167,6 @@ abstract class PlateRepository {
     required String area,
     required String createdBy,
     required String customStatus,
-    required List<String> statusList,
     String? countType,
   });
 
@@ -225,6 +240,21 @@ abstract class PlateRepository {
     PlateLogModel? log,
   });
 
+  Future<void> updatePlateWithStatus(
+    String documentId,
+    Map<String, dynamic> updatedFields, {
+    PlateLogModel? log,
+    required String plateNumber,
+    required String area,
+    required PlateStatusScope statusScope,
+    required bool statusChanged,
+    required PlateStatusDraft expectedOriginalStatus,
+    String? expectedStatusSourcePath,
+    required String customStatus,
+    required String updatedByName,
+    String? updatedById,
+  });
+
   Future<void> deletePlate(
     String documentId, {
     String? area,
@@ -246,7 +276,11 @@ abstract class PlateRepository {
     required PlateType plateType,
     required String userName,
     String? billingType,
-    List<String>? statusList,
+    required bool statusWriteRequested,
+    required PlateStatusLookupState statusLookupState,
+    required bool statusEditedByUser,
+    required PlateStatusDraft expectedOriginalStatus,
+    String? expectedStatusSourcePath,
     int? basicStandard,
     int? basicAmount,
     int? addStandard,
@@ -273,7 +307,6 @@ abstract class PlateRepository {
     required String plateNumber,
     required String area,
     required String customStatus,
-    required List<String> statusList,
     required String createdBy,
   });
 
@@ -283,7 +316,6 @@ abstract class PlateRepository {
     required String region,
     required String createdBy,
     required String customStatus,
-    required List<String> statusList,
     required String countType,
     required int regularAmount,
     required int regularDurationValue,
@@ -300,7 +332,6 @@ abstract class PlateRepository {
     required String area,
     required String createdBy,
     required String customStatus,
-    required List<String> statusList,
     bool skipIfDocMissing = true,
   });
 

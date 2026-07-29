@@ -334,6 +334,10 @@ class PlateWriteService {
     String documentId,
     Map<String, dynamic> updatedFields, {
     PlateLogModel? log,
+    FutureOr<void> Function(
+      Transaction transaction,
+      Map<String, dynamic> before,
+    )? transactionExtension,
   }) async {
     final docRef = _firestore.collection('plates').doc(documentId);
 
@@ -370,6 +374,9 @@ class PlateWriteService {
 
         fields['updatedAt'] = FieldValue.serverTimestamp();
 
+        if (transactionExtension != null) {
+          await transactionExtension(tx, before);
+        }
         tx.update(docRef, fields);
 
         final String beforeType =
@@ -420,19 +427,39 @@ class PlateWriteService {
           return beforeSelectedBy;
         })();
 
+        final String beforeSectorId =
+            (before[PlateFields.sectorId]?.toString() ?? '').trim();
+        final String beforeSectorName =
+            (before[PlateFields.sectorName]?.toString() ?? '').trim();
+        final String afterSectorId = (() {
+          if (!fields.containsKey(PlateFields.sectorId)) return beforeSectorId;
+          final raw = fields[PlateFields.sectorId];
+          return raw is String ? raw.trim() : '';
+        })();
+        final String afterSectorName = (() {
+          if (!fields.containsKey(PlateFields.sectorName)) {
+            return beforeSectorName;
+          }
+          final raw = fields[PlateFields.sectorName];
+          return raw is String ? raw.trim() : '';
+        })();
+
         final bool typeChanged = beforeType != afterType;
         final bool areaChanged = beforeArea != afterArea;
         final bool locationChanged = beforeLocation != afterLocation;
         final bool plateNumberChanged = beforePlateNumber != afterPlateNumber;
         final bool selectedChanged = beforeSelected != afterSelected;
         final bool selectedByChanged = beforeSelectedBy != afterSelectedBy;
+        final bool sectorChanged = beforeSectorId != afterSectorId ||
+            beforeSectorName != afterSectorName;
 
         final bool affectsViews = typeChanged ||
             areaChanged ||
             locationChanged ||
             plateNumberChanged ||
             selectedChanged ||
-            selectedByChanged;
+            selectedByChanged ||
+            sectorChanged;
 
         if (!affectsViews) {
           return;
@@ -476,6 +503,8 @@ class PlateWriteService {
           bool includeSelectionState = false,
           bool isSelected = false,
           String? selectedBy,
+          String? sectorId,
+          String? sectorName,
         }) {
           if (area.trim().isEmpty) return;
 
@@ -486,6 +515,14 @@ class PlateWriteService {
             'plateNumber': plateNumber,
             PlateFields.plateNumber: plateNumber,
             'location': location,
+            PlateFields.sectorId:
+                sectorId == null || sectorId.trim().isEmpty
+                    ? null
+                    : sectorId.trim(),
+            PlateFields.sectorName:
+                sectorName == null || sectorName.trim().isEmpty
+                    ? null
+                    : sectorName.trim(),
             'updatedAt': FieldValue.serverTimestamp(),
             if (primaryTimeField != null)
               primaryTimeField:
@@ -544,7 +581,8 @@ class PlateWriteService {
                 selectedChanged ||
                 selectedByChanged ||
                 locationChanged ||
-                plateNumberChanged) {
+                plateNumberChanged ||
+                sectorChanged) {
               final reqAt = _extractTimestampForAny(
                 before: before,
                 fields: fields,
@@ -557,6 +595,8 @@ class PlateWriteService {
                 plateDocId: documentId,
                 plateNumber: afterPlateNumber,
                 location: afterLocation,
+                sectorId: afterSectorId,
+                sectorName: afterSectorName,
                 primaryTimeField: 'parkingRequestedAt',
                 primaryTimeValue: reqAt,
                 includeSelectionState: true,
@@ -580,7 +620,8 @@ class PlateWriteService {
             if (typeChanged ||
                 areaChanged ||
                 locationChanged ||
-                plateNumberChanged) {
+                plateNumberChanged ||
+                sectorChanged) {
               final pcAt = _extractTimestampForAny(
                 before: before,
                 fields: fields,
@@ -593,6 +634,8 @@ class PlateWriteService {
                 plateDocId: documentId,
                 plateNumber: afterPlateNumber,
                 location: afterLocation,
+                sectorId: afterSectorId,
+                sectorName: afterSectorName,
                 primaryTimeField: 'parkingCompletedAt',
                 primaryTimeValue: pcAt,
               );
@@ -615,7 +658,8 @@ class PlateWriteService {
                 selectedChanged ||
                 selectedByChanged ||
                 locationChanged ||
-                plateNumberChanged) {
+                plateNumberChanged ||
+                sectorChanged) {
               final depAt = _extractTimestampForAny(
                 before: before,
                 fields: fields,
@@ -628,6 +672,8 @@ class PlateWriteService {
                 plateDocId: documentId,
                 plateNumber: afterPlateNumber,
                 location: afterLocation,
+                sectorId: afterSectorId,
+                sectorName: afterSectorName,
                 primaryTimeField: 'departureRequestedAt',
                 primaryTimeValue: depAt,
                 includeSelectionState: true,
@@ -652,6 +698,7 @@ class PlateWriteService {
             'documentId': documentId,
             'updatedFields': updatedFields.keys.toList(growable: false),
             'hasLog': log != null,
+            'hasTransactionExtension': transactionExtension != null,
           },
         ),
       );
@@ -668,6 +715,7 @@ class PlateWriteService {
             'documentId': documentId,
             'updatedFields': updatedFields.keys.toList(growable: false),
             'hasLog': log != null,
+            'hasTransactionExtension': transactionExtension != null,
           },
         ),
       );

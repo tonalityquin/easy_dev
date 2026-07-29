@@ -1,12 +1,12 @@
-import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../../../app/utils/dev_firebase_debug_dialog.dart';
 import '../enums/plate_type.dart';
 import '../models/plate_model.dart';
+import '../models/plate_status_draft.dart';
+import '../models/plate_status_lookup_result.dart';
+import 'plate_status_record.dart';
 import 'plate_billing_count_service.dart';
-import 'plate_status_service.dart';
 
 const String _kLocSep = ' - ';
 const String _kLocUnknown = '미지정';
@@ -129,13 +129,117 @@ class _ParkingRequestsViewWriteGate {
 class PlateCreationService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  final PlateStatusService _plateStatusService = PlateStatusService();
 
   static const String _parkingCompletedViewCollection =
       'parking_completed_view';
   static const String _parkingRequestsViewCollection = 'parking_requests_view';
 
   static const String _monthlyPlateStatusCollection = 'monthly_plate_status';
+
+  String _monthKey(DateTime date) {
+    return '${date.year}${date.month.toString().padLeft(2, '0')}';
+  }
+
+  String _normalizedPlateKey(String plateNumber) {
+    return plateNumber.replaceAll('-', '').replaceAll(' ', '').trim();
+  }
+
+  String _plateFourDigitValue(String plateNumber) {
+    final key = _normalizedPlateKey(plateNumber);
+    if (key.length <= 4) return key;
+    return key.substring(key.length - 4);
+  }
+
+  DocumentReference<Map<String, dynamic>> _historyStatusRef({
+    required String plateNumber,
+    required String area,
+    required DateTime date,
+  }) {
+    final monthKey = _monthKey(date);
+    return _firestore
+        .collection('plate_status')
+        .doc(area)
+        .collection('months')
+        .doc(monthKey)
+        .collection('plates')
+        .doc('${plateNumber}_$area');
+  }
+
+  void _writeStatusInTransaction({
+    required Transaction transaction,
+    required String plateNumber,
+    required String area,
+    required String userName,
+    required String memo,
+    required bool monthlyStatusScope,
+    required bool monthlyStatusExists,
+    required String expectedStatusSourcePath,
+    required DateTime now,
+  }) {
+    if (monthlyStatusScope) {
+      if (!monthlyStatusExists) return;
+      final monthlyRef = _firestore
+          .collection(_monthlyPlateStatusCollection)
+          .doc('${plateNumber}_$area');
+      transaction.set(
+        monthlyRef,
+        <String, dynamic>{
+          'customStatus': memo,
+          'updatedAt': FieldValue.serverTimestamp(),
+          'createdBy': userName,
+          'lastMemoUpdatedBy': userName,
+          'lastMemoSource': 'PlateCreationService.addPlate',
+          'area': area,
+        },
+        SetOptions(merge: true),
+      );
+      return;
+    }
+
+    final currentRef = _historyStatusRef(
+      plateNumber: plateNumber,
+      area: area,
+      date: now,
+    );
+    final previousRef = _historyStatusRef(
+      plateNumber: plateNumber,
+      area: area,
+      date: DateTime(now.year, now.month - 1, 1),
+    );
+    if (memo.isEmpty) {
+      transaction.delete(currentRef);
+      transaction.delete(previousRef);
+      final sourcePath = expectedStatusSourcePath.trim();
+      if (sourcePath.isNotEmpty &&
+          sourcePath != currentRef.path &&
+          sourcePath != previousRef.path) {
+        transaction.delete(_firestore.doc(sourcePath));
+      }
+      return;
+    }
+
+    transaction.set(
+      currentRef,
+      <String, dynamic>{
+        'plateNumber': plateNumber,
+        'plateDocId': '${plateNumber}_$area',
+        'plateKey': _normalizedPlateKey(plateNumber),
+        'plate_four_digit': _plateFourDigitValue(plateNumber),
+        'source': 'PlateCreationService.addPlate',
+        'platesDocId': '${plateNumber}_$area',
+        'statusScope': 'plate_status',
+        'monthKey': _monthKey(now),
+        'customStatus': memo,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'createdBy': userName,
+        'area': area,
+        'expireAt': Timestamp.fromDate(
+          DateTime.utc(now.year, now.month + 1, 1),
+        ),
+      },
+      SetOptions(merge: true),
+    );
+  }
 
   static final Map<String, Map<String, dynamic>> _billCache = {};
   static final Map<String, DateTime> _billCacheExpiry = {};
@@ -221,7 +325,11 @@ class PlateCreationService {
     required PlateType plateType,
     required String userName,
     String? billingType,
-    List<String>? statusList,
+    required bool statusWriteRequested,
+    required PlateStatusLookupState statusLookupState,
+    required bool statusEditedByUser,
+    required PlateStatusDraft expectedOriginalStatus,
+    String? expectedStatusSourcePath,
     int? basicStandard,
     int? basicAmount,
     int? addStandard,
@@ -244,6 +352,62 @@ class PlateCreationService {
     String? sectorName,
   }) async {
     final String plateDocId = '${plateNumber}_$area';
+    final String statusActorName =
+        userName.trim().isEmpty ? 'unknown' : userName.trim();
+    final String statusMemo = (customStatus ?? '').trim();
+    final bool monthlyStatusScope = selectedBillType.trim() == '정기';
+    final monthlyStatusRef = _firestore
+        .collection(_monthlyPlateStatusCollection)
+        .doc(plateDocId);
+    final DateTime statusWriteTime = DateTime.now();
+    final currentHistoryStatusRef = _historyStatusRef(
+      plateNumber: plateNumber,
+      area: area,
+      date: statusWriteTime,
+    );
+    final previousHistoryStatusRef = _historyStatusRef(
+      plateNumber: plateNumber,
+      area: area,
+      date: DateTime(
+        statusWriteTime.year,
+        statusWriteTime.month - 1,
+        1,
+      ),
+    );
+    final expectedSourcePath = expectedStatusSourcePath?.trim() ?? '';
+    final expectedSourceRef = expectedSourcePath.isEmpty
+        ? null
+        : _firestore.doc(expectedSourcePath);
+    final bool hasResolvedStatusSnapshot =
+        statusLookupState == PlateStatusLookupState.found ||
+        statusLookupState == PlateStatusLookupState.notFound;
+    final bool shouldApplyPlateStatusFields =
+        statusEditedByUser || hasResolvedStatusSnapshot;
+    final bool shouldValidateStatusSnapshot =
+        shouldApplyPlateStatusFields || statusWriteRequested;
+
+    if (statusLookupState == PlateStatusLookupState.idle ||
+        statusLookupState == PlateStatusLookupState.loading) {
+      throw const PlateStatusConflictException(
+        '상태 정보 확인이 완료되지 않아 입차 정보를 저장하지 않았습니다.',
+      );
+    }
+    if (statusLookupState == PlateStatusLookupState.inactive) {
+      throw const PlateStatusScopeException(
+        '상태 정보의 유효기간이 확인되지 않아 입차 정보를 저장하지 않았습니다.',
+      );
+    }
+
+    debugPrint(
+      '[PlateCreationService][Status] plate=$plateNumber area=$area '
+      'scope=${monthlyStatusScope ? 'monthly' : 'history'} '
+      'memoLength=${statusMemo.length} '
+      'writeRequested=$statusWriteRequested '
+      'lookupState=${statusLookupState.name} edited=$statusEditedByUser '
+      'sourcePath=$expectedSourcePath '
+      'applyPlateFields=$shouldApplyPlateStatusFields '
+      'validateSnapshot=$shouldValidateStatusSnapshot saveMode=transaction',
+    );
 
     final bool canWriteCompletedView =
         await _ParkingCompletedViewWriteGate.canWrite();
@@ -324,7 +488,6 @@ class PlateCreationService {
       area: area,
       userName: userName,
       billingType: billingType,
-      statusList: statusList ?? [],
       basicStandard: basicStandard ?? 0,
       basicAmount: basicAmount ?? 0,
       addStandard: addStandard ?? 0,
@@ -339,7 +502,7 @@ class PlateCreationService {
       lockedAtTimeInSeconds: lockedAtTimeInSeconds,
       lockedFeeAmount: lockedFeeAmount,
       paymentMethod: paymentMethod,
-      customStatus: customStatus,
+      customStatus: statusMemo,
       regularAmount: regularAmount,
       regularDurationHours: regularDurationHours,
       manufacturerName: manufacturerName?.trim(),
@@ -372,6 +535,125 @@ class PlateCreationService {
     try {
       await _firestore.runTransaction((tx) async {
         final snap = await tx.get(docRef);
+        final monthlyStatusSnapshot =
+            (monthlyStatusScope || shouldValidateStatusSnapshot)
+                ? await tx.get(monthlyStatusRef)
+                : null;
+        if (monthlyStatusScope) {
+          final monthlyData = monthlyStatusSnapshot?.data();
+          if (!(monthlyStatusSnapshot?.exists ?? false) || monthlyData == null) {
+            throw const PlateStatusScopeException(
+              '정기 상태 문서를 찾지 못해 입차 정보를 저장하지 않았습니다.',
+            );
+          }
+          final monthlyRecord = PlateStatusRecord.fromMap(
+            monthlyData,
+            docId: monthlyStatusSnapshot!.id,
+          );
+          if (!monthlyRecord.isActiveAt(statusWriteTime)) {
+            throw const PlateStatusScopeException(
+              '정기 주차 기간이 만료되어 입차 정보를 저장하지 않았습니다.',
+            );
+          }
+        }
+
+        if (shouldValidateStatusSnapshot) {
+          if (statusLookupState == PlateStatusLookupState.failed) {
+            throw const PlateStatusConflictException(
+              '기존 상태 정보를 확인하지 못해 최신 상태를 보호했습니다. 다시 조회한 뒤 저장해 주세요.',
+            );
+          }
+
+          if (monthlyStatusScope) {
+            if (expectedSourcePath.isNotEmpty &&
+                expectedSourcePath != monthlyStatusRef.path) {
+              throw const PlateStatusConflictException(
+                '조회한 정기 상태 문서와 저장 대상이 달라 입차 정보를 저장하지 않았습니다.',
+              );
+            }
+            final latestMonthlyDraft = PlateStatusDraft.fromMap(
+              monthlyStatusSnapshot?.data(),
+            );
+            if (statusLookupState == PlateStatusLookupState.found &&
+                !latestMonthlyDraft.sameAs(expectedOriginalStatus)) {
+              throw const PlateStatusConflictException(
+                '다른 사용자가 정기 상태 메모를 먼저 수정했습니다. 최신 정보를 다시 불러온 뒤 저장해 주세요.',
+              );
+            }
+            if (statusLookupState != PlateStatusLookupState.found) {
+              throw const PlateStatusConflictException(
+                '정기 상태 원본이 변경되어 입차 정보를 저장하지 않았습니다. 최신 정보를 다시 불러와 주세요.',
+              );
+            }
+          } else {
+            final monthlyData = monthlyStatusSnapshot?.data();
+            if ((monthlyStatusSnapshot?.exists ?? false) &&
+                monthlyData != null) {
+              final monthlyRecord = PlateStatusRecord.fromMap(
+                monthlyData,
+                docId: monthlyStatusSnapshot!.id,
+              );
+              if (monthlyRecord.isActiveAt(statusWriteTime)) {
+                throw const PlateStatusScopeException(
+                  '활성 정기 상태 문서가 확인되어 일반 상태 문서에 저장하지 않았습니다.',
+                );
+              }
+            }
+            final currentStatusSnapshot =
+                await tx.get(currentHistoryStatusRef);
+            final previousStatusSnapshot =
+                await tx.get(previousHistoryStatusRef);
+            DocumentSnapshot<Map<String, dynamic>>? sourceStatusSnapshot;
+            if (expectedSourceRef != null) {
+              if (expectedSourceRef.path == currentHistoryStatusRef.path) {
+                sourceStatusSnapshot = currentStatusSnapshot;
+              } else if (expectedSourceRef.path ==
+                  previousHistoryStatusRef.path) {
+                sourceStatusSnapshot = previousStatusSnapshot;
+              } else {
+                sourceStatusSnapshot = await tx.get(expectedSourceRef);
+              }
+            }
+
+            if (statusLookupState == PlateStatusLookupState.found) {
+              if (sourceStatusSnapshot == null ||
+                  !sourceStatusSnapshot.exists) {
+                throw const PlateStatusConflictException(
+                  '조회했던 상태 문서가 변경되어 입차 정보를 저장하지 않았습니다. 최신 정보를 다시 불러와 주세요.',
+                );
+              }
+              final sourceDraft = PlateStatusDraft.fromMap(
+                sourceStatusSnapshot.data(),
+              );
+              if (!sourceDraft.sameAs(expectedOriginalStatus)) {
+                throw const PlateStatusConflictException(
+                  '다른 사용자가 상태 메모를 먼저 수정했습니다. 최신 정보를 다시 불러온 뒤 저장해 주세요.',
+                );
+              }
+              for (final snapshot in <DocumentSnapshot<Map<String, dynamic>>>[
+                currentStatusSnapshot,
+                previousStatusSnapshot,
+              ]) {
+                if (!snapshot.exists ||
+                    snapshot.reference.path == sourceStatusSnapshot.reference.path) {
+                  continue;
+                }
+                final draft = PlateStatusDraft.fromMap(snapshot.data());
+                if (!draft.sameAs(expectedOriginalStatus)) {
+                  throw const PlateStatusConflictException(
+                    '다른 사용자가 최신 월 상태 메모를 먼저 수정했습니다. 최신 정보를 다시 불러온 뒤 저장해 주세요.',
+                  );
+                }
+              }
+            } else if (statusLookupState == PlateStatusLookupState.notFound) {
+              if (currentStatusSnapshot.exists || previousStatusSnapshot.exists) {
+                throw const PlateStatusConflictException(
+                  '상태 조회 이후 새 상태 메모가 등록되었습니다. 최신 정보를 다시 불러온 뒤 저장해 주세요.',
+                );
+              }
+            }
+          }
+        }
 
         final completedViewRef =
             _firestore.collection(_parkingCompletedViewCollection).doc(area);
@@ -416,6 +698,8 @@ class PlateCreationService {
               PlateFields.type: plateType.firestoreValue,
               PlateFields.company: normalizedDivision,
               PlateFields.division: normalizedDivision,
+              if (shouldApplyPlateStatusFields)
+                PlateFields.customStatus: statusMemo,
               PlateFields.updatedAt: FieldValue.serverTimestamp(),
               if (base.location.isNotEmpty)
                 PlateFields.location: _locationToMap(base.location),
@@ -655,95 +939,24 @@ class PlateCreationService {
             );
           }
         }
+
+        if (statusWriteRequested) {
+          _writeStatusInTransaction(
+            transaction: tx,
+            plateNumber: plateNumber,
+            area: area,
+            userName: statusActorName,
+            memo: statusMemo,
+            monthlyStatusScope: monthlyStatusScope,
+            monthlyStatusExists: monthlyStatusSnapshot?.exists ?? false,
+            expectedStatusSourcePath: expectedSourcePath,
+            now: statusWriteTime,
+          );
+        }
       });
     } on DuplicatePlateException {
       rethrow;
     } catch (_) {
-      rethrow;
-    }
-
-    final String memo = (customStatus ?? '').trim();
-    final List<String> statuses = (statusList ?? const <String>[])
-        .map((e) => e.toString().trim())
-        .where((e) => e.isNotEmpty)
-        .toList();
-
-    final bool hasMemoOrStatus = memo.isNotEmpty || statuses.isNotEmpty;
-    if (!hasMemoOrStatus) return;
-
-    final bool isMonthly = selectedBillType.trim() == '정기';
-
-    if (!isMonthly) {
-      await _plateStatusService.setPlateStatus(
-        plateNumber: plateNumber,
-        area: area,
-        customStatus: memo,
-        statusList: statuses,
-        createdBy: userName,
-        deleteWhenEmpty: false,
-        extra: <String, dynamic>{
-          'source': 'PlateCreationService.addPlate',
-          'platesDocId': plateDocId,
-        },
-        forDate: DateTime.now(),
-      );
-      return;
-    }
-
-    final statusDocRef =
-        _firestore.collection(_monthlyPlateStatusCollection).doc(plateDocId);
-
-    final payload = <String, dynamic>{
-      'customStatus': memo,
-      'statusList': statuses,
-      'updatedAt': FieldValue.serverTimestamp(),
-      'lastMemoUpdatedBy': userName,
-      'lastMemoSource': 'PlateCreationService.addPlate',
-    };
-
-    try {
-      await _firestore.runTransaction((tx) async {
-        final statusSnap = await tx.get(statusDocRef);
-        if (!statusSnap.exists) return;
-        tx.set(statusDocRef, payload, SetOptions(merge: true));
-      });
-    } on FirebaseException catch (e, st) {
-      await DevFirebaseDebugDialog.show(
-        operation: 'monthly.plateCreation.memoStatus.updateExisting',
-        error: e,
-        stackTrace: st,
-        details: <String, Object?>{
-          'collection': _monthlyPlateStatusCollection,
-          'docId': plateDocId,
-          'plateNumber': plateNumber,
-          'area': area,
-          'selectedBillType': selectedBillType,
-          'billingType': billingType,
-          'createdBy': userName,
-          'customStatus': memo,
-          'statusList': statuses,
-          'writePath': 'PlateCreationService.addPlate monthly_plate_status existing-doc update',
-        },
-      );
-      rethrow;
-    } catch (e, st) {
-      await DevFirebaseDebugDialog.show(
-        operation: 'monthly.plateCreation.memoStatus.updateExisting.unknown',
-        error: e,
-        stackTrace: st,
-        details: <String, Object?>{
-          'collection': _monthlyPlateStatusCollection,
-          'docId': plateDocId,
-          'plateNumber': plateNumber,
-          'area': area,
-          'selectedBillType': selectedBillType,
-          'billingType': billingType,
-          'createdBy': userName,
-          'customStatus': memo,
-          'statusList': statuses,
-          'writePath': 'PlateCreationService.addPlate monthly_plate_status existing-doc update',
-        },
-      );
       rethrow;
     }
   }

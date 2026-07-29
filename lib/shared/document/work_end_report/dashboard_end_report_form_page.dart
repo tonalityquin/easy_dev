@@ -17,12 +17,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../app/auth/gcs_uploader.dart';
 import '../../../app/config/email_config.dart';
+import '../../../app/models/capability.dart';
 import '../../utils/gmail_pdf_mailer.dart';
+import '../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../app/utils/status_dialog.dart';
 import '../../../features/account/applications/user_state.dart';
 import '../../../features/dashboard/data/repositories/end_work_report_firestore_repository.dart';
+import '../../../features/dashboard/domain/models/end_work_sector_metrics.dart';
 import '../../../features/dev/application/area_state.dart';
 import '../../../features/dev/debug/debug_api_logger.dart';
+import '../../../shared/plate/domain/models/plate_model.dart';
 import '../../../shared/plate/domain/services/plate_count_service.dart';
 
 class EndReportButtonStyles {
@@ -105,12 +109,16 @@ class SimpleEndWorkReportResult {
   final int vehicleOutputManual;
   final int snapshotLockedVehicleCount;
   final num snapshotTotalLockedFee;
+  final bool sectorEnabled;
+  final EndWorkSectorMetrics? sectorMetrics;
 
   final bool cleanupOk;
   final bool firestoreSaveOk;
   final bool plateOutLogOk;
 
   final bool gcsLogsUploadOk;
+  final bool gcsObjectVerified;
+  final bool cleanupSkipped;
 
   final String? logsUrl;
 
@@ -120,10 +128,14 @@ class SimpleEndWorkReportResult {
     required this.vehicleOutputManual,
     required this.snapshotLockedVehicleCount,
     required this.snapshotTotalLockedFee,
+    required this.sectorEnabled,
+    required this.sectorMetrics,
     required this.cleanupOk,
     required this.firestoreSaveOk,
     required this.plateOutLogOk,
     required this.gcsLogsUploadOk,
+    required this.gcsObjectVerified,
+    required this.cleanupSkipped,
     required this.logsUrl,
   });
 }
@@ -163,15 +175,37 @@ class SimpleEndWorkReportService {
     } catch (_) {}
   }
 
+  Map<String, dynamic> _csvPlateData(
+    Map<String, dynamic> source, {
+    required bool sectorEnabled,
+  }) {
+    final data = Map<String, dynamic>.from(source);
+    if (sectorEnabled) {
+      data.putIfAbsent(PlateFields.sectorId, () => '');
+      data.putIfAbsent(PlateFields.sectorName, () => '');
+    } else {
+      data.remove(PlateFields.sectorId);
+      data.remove(PlateFields.sectorName);
+    }
+    return EndWorkReportFirestoreRepository.jsonSafe(data);
+  }
+
   Future<SimpleEndWorkReportResult> submitEndReport({
     required String division,
     required String area,
     required String userName,
     required int vehicleOutputManual,
+    required bool sectorEnabled,
+    DeveloperOperationTrace? trace,
   }) async {
     dev.log(
-      '[END] submitEndReport start: division=$division, area=$area, user=$userName',
+      '[END] submitEndReport start: division=$division, area=$area, user=$userName, sectorEnabled=$sectorEnabled',
       name: 'SimpleEndWorkReportService',
+    );
+    trace?.log(
+      'service=start division=$division area=$area user=$userName '
+      'sectorEnabled=$sectorEnabled',
+      progress: .16,
     );
 
     List<LockedPlateRecord> plates;
@@ -202,12 +236,25 @@ class SimpleEndWorkReportService {
     }
 
     final int snapshotLockedVehicleCount = plates.length;
+    trace?.log(
+      'plates=fetched count=$snapshotLockedVehicleCount',
+      progress: .28,
+    );
 
     num snapshotTotalLockedFee = 0;
+    EndWorkSectorMetrics? sectorMetrics;
     try {
+      final grouped = <String, _MutableEndWorkSectorMetric>{};
+      var assignedVehicleCount = 0;
+      num assignedLockedFee = 0;
+      var unassignedVehicleCount = 0;
+      num unassignedLockedFee = 0;
+      var invalidSectorVehicleCount = 0;
+      num invalidSectorLockedFee = 0;
+
       for (final p in plates) {
         final data = p.data;
-        num? fee = (data['lockedFeeAmount'] is num)
+        num? fee = data['lockedFeeAmount'] is num
             ? data['lockedFeeAmount'] as num
             : null;
 
@@ -222,11 +269,81 @@ class SimpleEndWorkReportService {
           }
         }
 
-        snapshotTotalLockedFee += (fee ?? 0);
+        final resolvedFee = fee ?? 0;
+        snapshotTotalLockedFee += resolvedFee;
+
+        if (!sectorEnabled) continue;
+
+        final sectorId = data[PlateFields.sectorId]?.toString().trim() ?? '';
+        final sectorName = data[PlateFields.sectorName]?.toString().trim() ?? '';
+        final hasId = sectorId.isNotEmpty;
+        final hasName = sectorName.isNotEmpty;
+        if (!hasId && !hasName) {
+          unassignedVehicleCount++;
+          unassignedLockedFee += resolvedFee;
+          continue;
+        }
+
+        if (hasId != hasName) {
+          invalidSectorVehicleCount++;
+          invalidSectorLockedFee += resolvedFee;
+          trace?.log(
+            'sector=invalid plateDocId=${p.docId} sectorId=$sectorId '
+            'sectorName=$sectorName fee=$resolvedFee',
+            progress: .34,
+          );
+          continue;
+        }
+
+        assignedVehicleCount++;
+        assignedLockedFee += resolvedFee;
+        final key = '$sectorId\u0000$sectorName';
+        final target = grouped.putIfAbsent(
+          key,
+          () => _MutableEndWorkSectorMetric(
+            sectorId: sectorId,
+            sectorName: sectorName,
+          ),
+        );
+        target.vehicleCount++;
+        target.totalLockedFee += resolvedFee;
+      }
+
+      if (sectorEnabled) {
+        final items = grouped.values
+            .map(
+              (item) => EndWorkSectorMetricItem(
+                sectorId: item.sectorId,
+                sectorName: item.sectorName,
+                vehicleCount: item.vehicleCount,
+                totalLockedFee: item.totalLockedFee,
+              ),
+            )
+            .toList()
+          ..sort((a, b) {
+            final byCount = b.vehicleCount.compareTo(a.vehicleCount);
+            if (byCount != 0) return byCount;
+            final byName = a.sectorName.compareTo(b.sectorName);
+            if (byName != 0) return byName;
+            return a.sectorId.compareTo(b.sectorId);
+          });
+
+        sectorMetrics = EndWorkSectorMetrics(
+          enabled: true,
+          sectorCount: items.length,
+          assignedVehicleCount: assignedVehicleCount,
+          assignedLockedFee: assignedLockedFee,
+          unassignedVehicleCount: unassignedVehicleCount,
+          unassignedLockedFee: unassignedLockedFee,
+          invalidSectorVehicleCount: invalidSectorVehicleCount,
+          invalidSectorLockedFee: invalidSectorLockedFee,
+          legacyFeeClassification: false,
+          items: List<EndWorkSectorMetricItem>.unmodifiable(items),
+        );
       }
     } catch (e, st) {
       dev.log(
-        '[END] fee sum failed',
+        '[END] fee and sector aggregation failed',
         name: 'SimpleEndWorkReportService',
         error: e,
         stackTrace: st,
@@ -234,18 +351,30 @@ class SimpleEndWorkReportService {
 
       await _logApiError(
         tag: 'SimpleEndWorkReportService.submitEndReport',
-        message: '요금 합계 계산 실패',
+        message: '요금 및 방문 구역 집계 실패',
         error: e,
         extra: <String, dynamic>{
           'division': division,
           'area': area,
           'platesCount': plates.length,
+          'sectorEnabled': sectorEnabled,
         },
         tags: const <String>[_tEndService, _tEnd],
       );
 
-      throw Exception('요금 합계 계산 실패: $e');
+      throw Exception('요금 및 방문 구역 집계 실패: $e');
     }
+
+    trace?.log(
+      'aggregate lockedVehicles=$snapshotLockedVehicleCount '
+      'lockedFee=$snapshotTotalLockedFee '
+      'sectorCount=${sectorMetrics?.sectorCount ?? 0} '
+      'assigned=${sectorMetrics?.assignedVehicleCount ?? 0} '
+      'unassigned=${sectorMetrics?.unassignedVehicleCount ?? 0} '
+      'invalid=${sectorMetrics?.invalidSectorVehicleCount ?? 0} '
+      'invalidFee=${sectorMetrics?.invalidSectorLockedFee ?? 0}',
+      progress: .42,
+    );
 
     final now = DateTime.now();
     final dateStr = DateFormat('yyyy-MM-dd').format(now);
@@ -260,13 +389,16 @@ class SimpleEndWorkReportService {
       'metrics': <String, dynamic>{
         'snapshot_lockedVehicleCount': snapshotLockedVehicleCount,
         'snapshot_totalLockedFee': snapshotTotalLockedFee,
+        if (sectorMetrics != null) 'sector': sectorMetrics.toMap(),
       },
       'createdAt': now.toIso8601String(),
       'uploadedBy': userName,
     };
 
     String? logsUrl;
+    GcsCsvUploadReceipt? logsReceipt;
     bool gcsLogsUploadOk = true;
+    bool gcsObjectVerified = false;
     try {
       dev.log('[END] upload logs...', name: 'SimpleEndWorkReportService');
 
@@ -274,40 +406,73 @@ class SimpleEndWorkReportService {
         for (final p in plates)
           <String, dynamic>{
             'docId': p.docId,
-            'data': EndWorkReportFirestoreRepository.jsonSafe(p.data),
+            'data': _csvPlateData(
+              p.data,
+              sectorEnabled: sectorEnabled,
+            ),
           },
       ];
+      trace?.log(
+        'csv=prepare items=${items.length} sectorColumns=$sectorEnabled',
+        progress: .5,
+      );
 
-      logsUrl = await uploadEndLogCsv(
+      logsReceipt = await uploadEndLogCsvWithReceipt(
         report: <String, dynamic>{
           'division': division,
           'area': area,
+          'sectorEnabled': sectorEnabled,
           'items': items,
         },
         division: division,
         area: area,
         userName: userName,
       );
+      logsUrl = logsReceipt.url;
+      gcsObjectVerified = logsReceipt.verified;
+      gcsLogsUploadOk = logsReceipt.verified &&
+          logsReceipt.sourceVehicleCount == plates.length &&
+          logsReceipt.uniqueDocumentCount == plates.length;
 
-      if (logsUrl == null) {
-        gcsLogsUploadOk = false;
-        dev.log('[END] upload logs returned null',
-            name: 'SimpleEndWorkReportService');
+      trace?.log(
+        'csv=uploaded object=${logsReceipt.objectName} '
+        'bytes=${logsReceipt.remoteByteSize}/${logsReceipt.byteSize} '
+        'vehicles=${logsReceipt.uniqueDocumentCount}/${plates.length} '
+        'rows=${logsReceipt.csvDataRowCount} '
+        'sectorColumns=${logsReceipt.sectorColumnsVerified}/${logsReceipt.sectorColumnsRequired} '
+        'verified=${logsReceipt.verified}',
+        progress: .58,
+      );
+
+      if (!gcsLogsUploadOk) {
+        dev.log(
+          '[END] upload logs verification failed',
+          name: 'SimpleEndWorkReportService',
+        );
 
         await _logApiError(
           tag: 'SimpleEndWorkReportService.submitEndReport',
-          message: 'GCS(/logs) 업로드 결과가 null',
-          error: Exception('logsUrl is null'),
+          message: 'GCS(/logs) 업로드 무결성 검증 실패',
+          error: Exception('gcs receipt verification failed'),
           extra: <String, dynamic>{
             'division': division,
             'area': area,
             'itemsCount': plates.length,
+            'objectName': logsReceipt.objectName,
+            'byteSize': logsReceipt.byteSize,
+            'remoteByteSize': logsReceipt.remoteByteSize,
+            'uniqueDocumentCount': logsReceipt.uniqueDocumentCount,
+            'csvDataRowCount': logsReceipt.csvDataRowCount,
+            'sectorColumnsRequired': logsReceipt.sectorColumnsRequired,
+            'sectorColumnsVerified': logsReceipt.sectorColumnsVerified,
+            'verified': logsReceipt.verified,
           },
           tags: const <String>[_tEndService, _tEndGcsLogs, _tEnd],
         );
       }
     } catch (e, st) {
       gcsLogsUploadOk = false;
+      gcsObjectVerified = false;
       dev.log(
         '[END] upload logs exception',
         name: 'SimpleEndWorkReportService',
@@ -335,6 +500,10 @@ class SimpleEndWorkReportService {
         name: 'SimpleEndWorkReportService',
       );
 
+      trace?.log(
+        'firestore=end_work_reports start sectorMetrics=${sectorMetrics != null}',
+        progress: .62,
+      );
       await _repo.saveMonthlyEndWorkReport(
         division: division,
         area: area,
@@ -345,6 +514,10 @@ class SimpleEndWorkReportService {
         createdAtIso: reportLog['createdAt'] as String,
         uploadedBy: userName,
         logsUrl: logsUrl,
+      );
+      trace?.log(
+        'firestore=end_work_reports saved',
+        progress: .68,
       );
     } catch (e, st) {
       firestoreSaveOk = false;
@@ -374,9 +547,21 @@ class SimpleEndWorkReportService {
     try {
       dev.log('[END] append plate_out_log...', name: 'SimpleEndWorkReportService');
 
+      trace?.log(
+        'plate_out_log=start count=${plates.length} sectorEnabled=$sectorEnabled',
+        progress: .72,
+      );
       await _repo.appendPlateOutLogs(
         area: area,
         plates: plates,
+        sectorEnabled: sectorEnabled,
+        onLog: (message) {
+          trace?.log(message, progress: .8);
+        },
+      );
+      trace?.log(
+        'plate_out_log=completed count=${plates.length}',
+        progress: .82,
       );
     } catch (e, st) {
       plateOutLogOk = false;
@@ -400,15 +585,34 @@ class SimpleEndWorkReportService {
       );
     }
 
+    final canCleanup = gcsLogsUploadOk &&
+        gcsObjectVerified &&
+        firestoreSaveOk &&
+        plateOutLogOk;
     bool cleanupOk = true;
-    if (plateOutLogOk) {
+    bool cleanupSkipped = false;
+    trace?.log(
+      'cleanupGate gcs=$gcsLogsUploadOk verified=$gcsObjectVerified '
+      'firestore=$firestoreSaveOk plateOutLog=$plateOutLogOk '
+      'canCleanup=$canCleanup',
+      progress: .84,
+    );
+    if (canCleanup) {
       try {
         dev.log('[END] cleanup plates & plate_counters...',
             name: 'SimpleEndWorkReportService');
 
+        trace?.log(
+          'cleanup=start plates=${plates.length} counter=departureCompletedEvents',
+          progress: .86,
+        );
         await _repo.cleanupLockedDepartureCompletedPlates(
           area: area,
           plateDocIds: plates.map((e) => e.docId).toList(),
+        );
+        trace?.log(
+          'cleanup=completed plates=${plates.length} counterReset=true',
+          progress: .94,
         );
       } catch (e, st) {
         cleanupOk = false;
@@ -433,6 +637,15 @@ class SimpleEndWorkReportService {
       }
     } else {
       cleanupOk = false;
+      cleanupSkipped = true;
+      trace?.log(
+        'cleanup=skipped 원본 보호를 위해 필수 저장 단계가 모두 성공하지 않았습니다.',
+        progress: .94,
+      );
+      dev.log(
+        '[END] cleanup skipped for source protection',
+        name: 'SimpleEndWorkReportService',
+      );
     }
     dev.log('[END] submitEndReport done', name: 'SimpleEndWorkReportService');
 
@@ -442,13 +655,29 @@ class SimpleEndWorkReportService {
       vehicleOutputManual: vehicleOutputManual,
       snapshotLockedVehicleCount: snapshotLockedVehicleCount,
       snapshotTotalLockedFee: snapshotTotalLockedFee,
+      sectorEnabled: sectorEnabled,
+      sectorMetrics: sectorMetrics,
       cleanupOk: cleanupOk,
       firestoreSaveOk: firestoreSaveOk,
       plateOutLogOk: plateOutLogOk,
       gcsLogsUploadOk: gcsLogsUploadOk,
+      gcsObjectVerified: gcsObjectVerified,
+      cleanupSkipped: cleanupSkipped,
       logsUrl: logsUrl,
     );
   }
+}
+
+class _MutableEndWorkSectorMetric {
+  final String sectorId;
+  final String sectorName;
+  int vehicleCount = 0;
+  num totalLockedFee = 0;
+
+  _MutableEndWorkSectorMetric({
+    required this.sectorId,
+    required this.sectorName,
+  });
 }
 
 class DashboardEndReportFormPage extends StatefulWidget {
@@ -484,6 +713,7 @@ class _DashboardEndReportFormPageState
   bool _sending = false;
   bool _firstSubmitting = false;
   bool _firstSubmittedCompleted = false;
+  SimpleEndWorkReportResult? _firstSubmitResult;
 
   bool _isVehicleCountValid = false;
 
@@ -1222,6 +1452,9 @@ class _DashboardEndReportFormPageState
     final area = areaState.currentArea.trim();
     final division = areaState.currentDivision.trim();
     final userName = userState.name.trim();
+    final sectorEnabled = areaState.capabilitiesOfCurrentArea.contains(
+      Capability.sector,
+    );
 
     if (area.isEmpty || division.isEmpty || userName.isEmpty) {
       await _logApiError(
@@ -1232,6 +1465,7 @@ class _DashboardEndReportFormPageState
           'area': area,
           'division': division,
           'userNameLen': userName.length,
+          'sectorEnabled': sectorEnabled,
         },
         tags: const <String>[_tEndFirst, _tEndUi, _tEnd],
       );
@@ -1239,14 +1473,38 @@ class _DashboardEndReportFormPageState
     }
 
     setState(() => _firstSubmitting = true);
+    DeveloperOperationTrace? trace;
 
     try {
+      trace = await DeveloperOperationTrace.start(
+        context: context,
+        title: '업무 종료 보고 1차 제출',
+        initialMessage: '출차 마감 데이터와 방문 구역 집계를 준비하고 있습니다.',
+        usePromptUi: true,
+        developerModeMessage:
+            '개발자 모드 ON: 단계별 로그를 debugPrint 코드로 복사할 수 있습니다.',
+        standardModeMessage:
+            '개발자 모드 OFF: 단계별 로그를 콘솔에 기록합니다.',
+      );
+
       final vehicleOutputManual = _sysDepartureTotal;
+
+      trace.log(
+        'context area=$area division=$division user=$userName '
+        'capability.sector=$sectorEnabled',
+        progress: .06,
+      );
+      trace.log(
+        'counts departure=$_sysVehicleOutput extra=$_sysDepartureExtra '
+        'vehicleOutput=$vehicleOutputManual',
+        progress: .1,
+      );
 
       dev.log(
         '[END][Dashboard] first submit counts (area=$area, division=$division, user=$userName) '
-            'sysDeparture=$_sysVehicleOutput, sysExtra=$_sysDepartureExtra, '
-            'vehicleOutput(departure+extra)=$vehicleOutputManual',
+        'sysDeparture=$_sysVehicleOutput, sysExtra=$_sysDepartureExtra, '
+        'vehicleOutput(departure+extra)=$vehicleOutputManual, '
+        'sectorEnabled=$sectorEnabled',
         name: 'DashboardEndReportFormPage',
       );
 
@@ -1256,21 +1514,56 @@ class _DashboardEndReportFormPageState
         area: area,
         userName: userName,
         vehicleOutputManual: vehicleOutputManual,
+        sectorEnabled: sectorEnabled,
+        trace: trace,
       );
 
-      if (!mounted) return;
-
       final r = result;
-      if (!r.cleanupOk || !r.firestoreSaveOk || !r.plateOutLogOk || !r.gcsLogsUploadOk) {
+      trace.log(
+        'result cleanupOk=${r.cleanupOk} cleanupSkipped=${r.cleanupSkipped} '
+        'firestoreSaveOk=${r.firestoreSaveOk} plateOutLogOk=${r.plateOutLogOk} '
+        'gcsLogsUploadOk=${r.gcsLogsUploadOk} '
+        'gcsObjectVerified=${r.gcsObjectVerified}',
+        progress: .97,
+      );
+      trace.log(
+        'sector enabled=${r.sectorEnabled} '
+        'sectorCount=${r.sectorMetrics?.sectorCount ?? 0} '
+        'assigned=${r.sectorMetrics?.assignedVehicleCount ?? 0} '
+        'unassigned=${r.sectorMetrics?.unassignedVehicleCount ?? 0} '
+        'invalid=${r.sectorMetrics?.invalidSectorVehicleCount ?? 0}',
+        progress: .98,
+      );
+
+      final partialFailure = !r.cleanupOk ||
+          !r.firestoreSaveOk ||
+          !r.plateOutLogOk ||
+          !r.gcsLogsUploadOk;
+      if (partialFailure) {
         dev.log(
           '[END][Dashboard] first submit partial failure '
-              '(cleanupOk=${r.cleanupOk}, firestoreSaveOk=${r.firestoreSaveOk}, plateOutLogOk=${r.plateOutLogOk}, gcsLogsUploadOk=${r.gcsLogsUploadOk}, logsUrl=${r.logsUrl})',
+          '(cleanupOk=${r.cleanupOk}, cleanupSkipped=${r.cleanupSkipped}, '
+          'firestoreSaveOk=${r.firestoreSaveOk}, '
+          'plateOutLogOk=${r.plateOutLogOk}, '
+          'gcsLogsUploadOk=${r.gcsLogsUploadOk}, '
+          'gcsObjectVerified=${r.gcsObjectVerified}, logsUrl=${r.logsUrl})',
           name: 'DashboardEndReportFormPage',
+        );
+        await trace.fail(
+          '1차 제출이 부분 완료되었습니다. 단계별 성공 여부를 확인해 주세요.',
+        );
+      } else {
+        await trace.succeed(
+          sectorEnabled
+              ? '방문 구역 집계를 포함한 1차 제출과 마감 정리가 완료되었습니다.'
+              : '방문 구역 기능이 없는 지역의 1차 제출과 마감 정리가 완료되었습니다.',
         );
       }
 
+      if (!mounted) return;
       setState(() {
         _firstSubmittedCompleted = true;
+        _firstSubmitResult = result;
       });
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1296,9 +1589,18 @@ class _DashboardEndReportFormPageState
         extra: <String, dynamic>{
           'area': context.read<AreaState>().currentArea.trim(),
           'division': context.read<AreaState>().currentDivision.trim(),
+          'sectorEnabled': sectorEnabled,
         },
         tags: const <String>[_tEndFirst, _tEndUi, _tEnd],
       );
+
+      if (trace != null) {
+        await trace.fail(
+          '업무 종료 보고 1차 제출에 실패했습니다.',
+          error: e,
+          stackTrace: st,
+        );
+      }
     } finally {
       if (mounted) setState(() => _firstSubmitting = false);
     }
@@ -1435,9 +1737,16 @@ class _DashboardEndReportFormPageState
       final specialText =
       _hasSpecialNote == null ? '미선택' : (_hasSpecialNote! ? '있음' : '없음');
 
+      final sectorMetrics = _firstSubmitResult?.sectorMetrics;
       final fields = <MapEntry<String, String>>[
         MapEntry('특이사항', specialText),
         MapEntry('출차 대수', '${_sysDepartureTotal}대'),
+        if (_firstSubmitResult?.sectorEnabled == true && sectorMetrics != null)
+          MapEntry('방문 구역 수', '${sectorMetrics.sectorCount}개'),
+        if (_firstSubmitResult?.sectorEnabled == true && sectorMetrics != null)
+          MapEntry('방문 구역 지정 차량', '${sectorMetrics.assignedVehicleCount}대'),
+        if (_firstSubmitResult?.sectorEnabled == true && sectorMetrics != null)
+          MapEntry('방문 구역 미지정 차량', '${sectorMetrics.unassignedVehicleCount}대'),
       ];
 
       pw.Widget buildFieldTable() => pw.Table(
@@ -1500,6 +1809,53 @@ class _DashboardEndReportFormPageState
             ),
             pw.SizedBox(height: 12),
             buildFieldTable(),
+            if (_firstSubmitResult?.sectorEnabled == true && sectorMetrics != null) ...[
+              pw.SizedBox(height: 12),
+              pw.Text(
+                '방문 구역별 집계',
+                style: pw.TextStyle(
+                  fontSize: 13,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              pw.SizedBox(height: 6),
+              pw.Table.fromTextArray(
+                headers: const ['방문 구역', '차량 수', '잠금 금액'],
+                data: <List<String>>[
+                  for (final item in sectorMetrics.items)
+                    <String>[
+                      item.sectorName,
+                      '${item.vehicleCount}대',
+                      '₩${NumberFormat('#,###').format(item.totalLockedFee)}',
+                    ],
+                  if (sectorMetrics.unassignedVehicleCount > 0)
+                    <String>[
+                      '미지정',
+                      '${sectorMetrics.unassignedVehicleCount}대',
+                      '₩${NumberFormat('#,###').format(sectorMetrics.unassignedLockedFee)}',
+                    ],
+                  if (sectorMetrics.invalidSectorVehicleCount > 0)
+                    <String>[
+                      '데이터 확인 필요',
+                      '${sectorMetrics.invalidSectorVehicleCount}대',
+                      '₩${NumberFormat('#,###').format(sectorMetrics.invalidSectorLockedFee)}',
+                    ],
+                ],
+                border: pw.TableBorder.all(
+                  color: PdfColors.grey400,
+                  width: .5,
+                ),
+                headerDecoration: const pw.BoxDecoration(
+                  color: PdfColors.grey200,
+                ),
+                headerStyle: pw.TextStyle(
+                  fontSize: 10,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+                cellStyle: const pw.TextStyle(fontSize: 10),
+                cellPadding: const pw.EdgeInsets.all(6),
+              ),
+            ],
             buildSection('[업무 내용]', _contentCtrl.text),
           ],
           footer: (context) => pw.Align(
@@ -1717,6 +2073,85 @@ class _DashboardEndReportFormPageState
     );
   }
 
+  Widget _buildSectorSubmitSummary() {
+    final result = _firstSubmitResult;
+    final metrics = result?.sectorMetrics;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final duration = reduceMotion ? Duration.zero : const Duration(milliseconds: 260);
+
+    return AnimatedSwitcher(
+      duration: duration,
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      transitionBuilder: (child, animation) {
+        final offset = Tween<Offset>(
+          begin: const Offset(0, .08),
+          end: Offset.zero,
+        ).animate(animation);
+        return FadeTransition(
+          opacity: animation,
+          child: SlideTransition(position: offset, child: child),
+        );
+      },
+      child: result == null || !result.sectorEnabled || metrics == null
+          ? const SizedBox.shrink(key: ValueKey<String>('sector-summary-empty'))
+          : Container(
+              key: ValueKey<String>(
+                'sector-summary-${metrics.sectorCount}-${metrics.assignedVehicleCount}-${metrics.unassignedVehicleCount}-${metrics.invalidSectorVehicleCount}-${metrics.totalLockedFee}',
+              ),
+              width: double.infinity,
+              margin: const EdgeInsets.only(top: 12),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.secondaryContainer.withOpacity(.5),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.outlineVariant,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.grid_view_rounded,
+                        size: 18,
+                        color: Theme.of(context).colorScheme.onSecondaryContainer,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '방문 구역 마감 집계',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w900,
+                              color: Theme.of(context).colorScheme.onSecondaryContainer,
+                            ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  _buildMetricRow('구역 수', '${metrics.sectorCount}개'),
+                  const SizedBox(height: 4),
+                  _buildMetricRow('지정 차량', '${metrics.assignedVehicleCount}대'),
+                  const SizedBox(height: 4),
+                  _buildMetricRow(
+                    '미지정 차량',
+                    '${metrics.unassignedVehicleCount}대 · ₩${NumberFormat('#,###').format(metrics.unassignedLockedFee)}',
+                  ),
+                  if (metrics.invalidSectorVehicleCount > 0) ...[
+                    const SizedBox(height: 4),
+                    _buildMetricRow(
+                      '데이터 확인 필요',
+                      '${metrics.invalidSectorVehicleCount}대 · ₩${NumberFormat('#,###').format(metrics.invalidSectorLockedFee)}',
+                    ),
+                  ],
+                ],
+              ),
+            ),
+    );
+  }
+
   Widget _buildVehicleBody() {
     final cs = Theme.of(context).colorScheme;
     final t = Theme.of(context).textTheme;
@@ -1806,6 +2241,7 @@ class _DashboardEndReportFormPageState
             ),
           ),
         ),
+        _buildSectorSubmitSummary(),
         const SizedBox(height: 4),
       ],
     );

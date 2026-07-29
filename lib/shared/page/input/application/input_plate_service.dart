@@ -11,6 +11,8 @@ import '../../../../features/account/applications/user_state.dart';
 import '../../../../features/dev/application/area_state.dart';
 import '../../../../features/dev/debug/debug_api_logger.dart';
 import '../../../plate/application/common/input_plate.dart';
+import '../../../plate/domain/models/plate_status_draft.dart';
+import '../../../plate/domain/models/plate_status_lookup_result.dart';
 
 class PhotoUploadResult {
   final List<String> uploadedUrls;
@@ -271,7 +273,11 @@ class InputPlateService {
     required bool isLocationSelected,
     required List<String> imageUrls,
     required String? selectedBill,
-    required List<String> selectedStatuses,
+    required bool statusWriteRequested,
+    required PlateStatusLookupState statusLookupState,
+    required bool statusEditedByUser,
+    required PlateStatusDraft expectedOriginalStatus,
+    String? expectedStatusSourcePath,
     required int basicStandard,
     required int basicAmount,
     required int addStandard,
@@ -312,7 +318,11 @@ class InputPlateService {
         areaState: areaState,
         userState: userState,
         billingType: selectedBill,
-        statusList: selectedStatuses,
+        statusWriteRequested: statusWriteRequested,
+        statusLookupState: statusLookupState,
+        statusEditedByUser: statusEditedByUser,
+        expectedOriginalStatus: expectedOriginalStatus,
+        expectedStatusSourcePath: expectedStatusSourcePath,
         basicStandard: finalBasicStandard,
         basicAmount: finalBasicAmount,
         addStandard: finalAddStandard,
@@ -340,7 +350,9 @@ class InputPlateService {
           'isLocationSelected': isLocationSelected,
           'imageUrlsCount': imageUrls.length,
           'selectedBillType': selectedBillType,
-          'statusCount': selectedStatuses.length,
+          'statusWriteRequested': statusWriteRequested,
+          'statusLookupState': statusLookupState.name,
+          'statusEditedByUser': statusEditedByUser,
           'regionLen': region.trim().length,
           'customStatusLen': (customStatus ?? '').trim().length,
           'manufacturerNameLen': (manufacturerName ?? '').trim().length,

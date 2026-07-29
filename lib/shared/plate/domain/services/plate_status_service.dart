@@ -1,5 +1,8 @@
 import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+
+import 'plate_status_record.dart';
 
 class PlateStatusService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -34,9 +37,7 @@ class PlateStatusService {
   }) {
     final dt = forDate ?? DateTime.now();
     final month = _monthKey(dt);
-
     final safeArea = _safeArea(area);
-
     final docId = _plateDocId(plateNumber, safeArea);
 
     return _firestore
@@ -49,15 +50,13 @@ class PlateStatusService {
   }
 
   DocumentReference<Map<String, dynamic>> _monthlyDocRef(
-          String plateNumber, String area) =>
+    String plateNumber,
+    String area,
+  ) =>
       _firestore.collection('monthly_plate_status').doc('${plateNumber}_$area');
-
-  bool _isEmptyInput(String customStatus, List<String> statusList) =>
-      customStatus.trim().isEmpty && statusList.isEmpty;
 
   bool _isEmptyMonthlyPayload({
     required String customStatus,
-    required List<String> statusList,
     required String countType,
     required int regularAmount,
     required int regularDurationValue,
@@ -68,38 +67,22 @@ class PlateStatusService {
     String? specialNote,
     bool? isExtended,
   }) {
-    final memoEmpty = customStatus.trim().isEmpty;
-    final statusesEmpty = statusList.isEmpty;
-
-    final countTypeEmpty = countType.trim().isEmpty;
-    final amountEmpty = regularAmount == 0;
-    final durationEmpty = regularDurationValue == 0;
-
-    final regularTypeEmpty = regularType.trim().isEmpty;
-    final startEmpty = startDate.trim().isEmpty;
-    final endEmpty = endDate.trim().isEmpty;
-    final periodUnitEmpty = periodUnit.trim().isEmpty;
-
-    final specialNoteEmpty = (specialNote ?? '').trim().isEmpty;
-    final extendedEmpty = isExtended == null;
-
-    return memoEmpty &&
-        statusesEmpty &&
-        countTypeEmpty &&
-        amountEmpty &&
-        durationEmpty &&
-        regularTypeEmpty &&
-        startEmpty &&
-        endEmpty &&
-        periodUnitEmpty &&
-        specialNoteEmpty &&
-        extendedEmpty;
+    return customStatus.trim().isEmpty &&
+        countType.trim().isEmpty &&
+        regularAmount == 0 &&
+        regularDurationValue == 0 &&
+        regularType.trim().isEmpty &&
+        startDate.trim().isEmpty &&
+        endDate.trim().isEmpty &&
+        periodUnit.trim().isEmpty &&
+        (specialNote ?? '').trim().isEmpty &&
+        isExtended == null;
   }
 
   List<DateTime> _candidateMonths(DateTime base, {int lookbackMonths = 1}) {
     final out = <DateTime>[];
-    for (int i = 0; i <= lookbackMonths; i++) {
-      out.add(DateTime(base.year, base.month - i, 1));
+    for (var index = 0; index <= lookbackMonths; index++) {
+      out.add(DateTime(base.year, base.month - index, 1));
     }
     return out;
   }
@@ -108,7 +91,6 @@ class PlateStatusService {
     required String plateNumber,
     required String area,
     required String customStatus,
-    required List<String> statusList,
     required String createdBy,
     bool deleteWhenEmpty = true,
     Map<String, dynamic>? extra,
@@ -120,43 +102,40 @@ class PlateStatusService {
     final ref = _docRef(plateNumber, safeArea, forDate: dt);
 
     try {
-      if (_isEmptyInput(customStatus, statusList)) {
+      if (customStatus.trim().isEmpty) {
         if (deleteWhenEmpty) {
           final months =
               _candidateMonths(dt, lookbackMonths: deleteLookbackMonths);
-          for (final m in months) {
-            final r = _docRef(plateNumber, safeArea, forDate: m);
-            await r.delete().timeout(const Duration(seconds: 10));
+          for (final month in months) {
+            final candidate = _docRef(plateNumber, safeArea, forDate: month);
+            await candidate.delete().timeout(const Duration(seconds: 10));
           }
         }
         return;
       }
 
-      final plateDocId = _plateDocId(plateNumber, safeArea);
-      final normalizedKey = _normalizedPlateKey(plateNumber);
-      final fourDigit = _plateFourDigit(plateNumber);
-      final monthKey = _monthKey(dt);
-
       final data = <String, dynamic>{
         ...?extra,
         'plateNumber': plateNumber,
-        'plateDocId': plateDocId,
-        'plateKey': normalizedKey,
-        'plate_four_digit': fourDigit,
+        'plateDocId': _plateDocId(plateNumber, safeArea),
+        'plateKey': _normalizedPlateKey(plateNumber),
+        'plate_four_digit': _plateFourDigit(plateNumber),
         'statusScope': _plateStatusRoot,
-        'monthKey': monthKey,
+        'monthKey': _monthKey(dt),
         'customStatus': customStatus.trim(),
-        'statusList': statusList,
         'updatedAt': FieldValue.serverTimestamp(),
         'createdBy': createdBy,
         'area': safeArea,
         'expireAt': Timestamp.fromDate(_nextMonthStartUtc(dt)),
       };
 
-      await _firestore.runTransaction((tx) async {
-        final snap = await tx.get(ref).timeout(const Duration(seconds: 10));
-        if (!snap.exists) data['createdAt'] = FieldValue.serverTimestamp();
-        tx.set(ref, data, SetOptions(merge: true));
+      await _firestore.runTransaction((transaction) async {
+        final snapshot =
+            await transaction.get(ref).timeout(const Duration(seconds: 10));
+        if (!snapshot.exists) {
+          data['createdAt'] = FieldValue.serverTimestamp();
+        }
+        transaction.set(ref, data, SetOptions(merge: true));
       }).timeout(const Duration(seconds: 10));
     } on FirebaseException {
       rethrow;
@@ -173,7 +152,6 @@ class PlateStatusService {
     required String region,
     required String createdBy,
     required String customStatus,
-    required List<String> statusList,
     required String countType,
     required int regularAmount,
     required int regularDurationValue,
@@ -186,10 +164,10 @@ class PlateStatusService {
     bool deleteWhenEmpty = true,
   }) async {
     final ref = _monthlyDocRef(plateNumber, area);
+
     try {
       final emptyMonthly = _isEmptyMonthlyPayload(
         customStatus: customStatus,
-        statusList: statusList,
         countType: countType,
         regularAmount: regularAmount,
         regularDurationValue: regularDurationValue,
@@ -208,9 +186,8 @@ class PlateStatusService {
         return;
       }
 
-      final base = <String, dynamic>{
+      final data = <String, dynamic>{
         'customStatus': customStatus.trim(),
-        'statusList': statusList,
         'updatedAt': FieldValue.serverTimestamp(),
         'createdBy': createdBy,
         'type': '정기',
@@ -228,10 +205,13 @@ class PlateStatusService {
         if (isExtended != null) 'isExtended': isExtended,
       };
 
-      await _firestore.runTransaction((tx) async {
-        final snap = await tx.get(ref).timeout(const Duration(seconds: 10));
-        if (!snap.exists) base['createdAt'] = FieldValue.serverTimestamp();
-        tx.set(ref, base, SetOptions(merge: true));
+      await _firestore.runTransaction((transaction) async {
+        final snapshot =
+            await transaction.get(ref).timeout(const Duration(seconds: 10));
+        if (!snapshot.exists) {
+          data['createdAt'] = FieldValue.serverTimestamp();
+        }
+        transaction.set(ref, data, SetOptions(merge: true));
       }).timeout(const Duration(seconds: 10));
     } on FirebaseException {
       rethrow;
@@ -247,26 +227,39 @@ class PlateStatusService {
     required String area,
     required String createdBy,
     required String customStatus,
-    required List<String> statusList,
     bool skipIfDocMissing = true,
   }) async {
     final ref = _monthlyDocRef(plateNumber, area);
-
     final data = <String, dynamic>{
       'customStatus': customStatus.trim(),
-      'statusList': statusList,
       'updatedAt': FieldValue.serverTimestamp(),
       'createdBy': createdBy,
       'area': area,
     };
 
     try {
-      await ref.update(data).timeout(const Duration(seconds: 10));
-    } on FirebaseException catch (e) {
-      if (skipIfDocMissing && e.code == 'not-found') {
-        return;
-      }
-
+      await _firestore.runTransaction((transaction) async {
+        final snapshot = await transaction.get(ref);
+        final source = snapshot.data();
+        if (!snapshot.exists || source == null) {
+          if (skipIfDocMissing) return;
+          throw const MonthlyPlateStatusWriteException(
+            '정기 상태 문서를 찾지 못했습니다.',
+          );
+        }
+        final record = PlateStatusRecord.fromMap(
+          source,
+          docId: snapshot.id,
+        );
+        if (!record.isActiveAt(DateTime.now())) {
+          throw const MonthlyPlateStatusWriteException(
+            '정기 주차 기간이 만료되어 상태 메모를 반영하지 않았습니다.',
+          );
+        }
+        transaction.update(ref, data);
+      }).timeout(const Duration(seconds: 10));
+    } on FirebaseException catch (error) {
+      if (skipIfDocMissing && error.code == 'not-found') return;
       rethrow;
     } on TimeoutException {
       rethrow;
@@ -280,24 +273,22 @@ class PlateStatusService {
     required String area,
     required String createdBy,
     required String customStatus,
-    required List<String> statusList,
     String? countType,
   }) async {
     final ref = _monthlyDocRef(plateNumber, area);
-
     final data = <String, dynamic>{
       'customStatus': customStatus.trim(),
-      'statusList': statusList,
       'updatedAt': FieldValue.serverTimestamp(),
       'lastMemoUpdatedBy': createdBy,
       if ((countType ?? '').trim().isNotEmpty) 'countType': countType!.trim(),
     };
 
     try {
-      await _firestore.runTransaction((tx) async {
-        final snap = await tx.get(ref).timeout(const Duration(seconds: 10));
-        if (!snap.exists) return;
-        tx.set(ref, data, SetOptions(merge: true));
+      await _firestore.runTransaction((transaction) async {
+        final snapshot =
+            await transaction.get(ref).timeout(const Duration(seconds: 10));
+        if (!snapshot.exists) return;
+        transaction.set(ref, data, SetOptions(merge: true));
       }).timeout(const Duration(seconds: 10));
     } on FirebaseException {
       rethrow;
@@ -318,12 +309,11 @@ class PlateStatusService {
       await ref.update(
         <String, dynamic>{
           'customStatus': '',
-          'statusList': <String>[],
           'updatedAt': FieldValue.serverTimestamp(),
         },
       ).timeout(const Duration(seconds: 10));
-    } on FirebaseException catch (e) {
-      if (e.code == 'not-found') return;
+    } on FirebaseException catch (error) {
+      if (error.code == 'not-found') return;
       rethrow;
     } on TimeoutException {
       rethrow;
@@ -343,9 +333,9 @@ class PlateStatusService {
 
     try {
       final months = _candidateMonths(dt, lookbackMonths: lookbackMonths);
-      for (final m in months) {
-        final r = _docRef(plateNumber, safeArea, forDate: m);
-        await r.delete();
+      for (final month in months) {
+        final candidate = _docRef(plateNumber, safeArea, forDate: month);
+        await candidate.delete();
       }
     } on FirebaseException {
       rethrow;

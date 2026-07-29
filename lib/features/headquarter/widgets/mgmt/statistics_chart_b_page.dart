@@ -7,13 +7,21 @@ import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
 
 import 'statistics_deep_model.dart';
 import 'statistics_report_design.dart';
+import 'statistics_sector_area_comparison_page.dart';
+import 'statistics_sector_dashboard.dart';
 
 class StatisticsChartBPage extends StatefulWidget {
   final StatisticsDeepReport report;
+  final List<String> availableAreas;
+  final Map<String, bool> areaSectorEnabled;
+  final bool usePromptUi;
 
   const StatisticsChartBPage({
     super.key,
     required this.report,
+    this.availableAreas = const <String>[],
+    this.areaSectorEnabled = const <String, bool>{},
+    this.usePromptUi = false,
   });
 
   @override
@@ -32,6 +40,7 @@ class _StatisticsChartBPageState extends State<StatisticsChartBPage> {
     _sectionKeys = <String, GlobalKey>{
       'cover': GlobalKey(),
       'summary': GlobalKey(),
+      if (widget.report.sectorEnabled) 'sector': GlobalKey(),
       for (final section in widget.report.sections) section.id: GlobalKey(),
     };
   }
@@ -63,6 +72,12 @@ class _StatisticsChartBPageState extends State<StatisticsChartBPage> {
           surfaceTintColor: cs.surfaceTint,
           elevation: 0,
           actions: [
+            if (_eligibleComparisonAreas.length >= 2)
+              IconButton(
+                tooltip: 'Area 방문 구역 비교',
+                onPressed: _openAreaComparison,
+                icon: const Icon(Icons.compare_arrows_rounded),
+              ),
             IconButton(
               tooltip: _tocOpen ? '목차 닫기' : '목차 열기',
               onPressed: () => setState(() => _tocOpen = !_tocOpen),
@@ -93,10 +108,18 @@ class _StatisticsChartBPageState extends State<StatisticsChartBPage> {
                             key: _sectionKeys['summary'],
                             report: widget.report,
                           ),
+                          if (widget.report.sectorEnabled) ...[
+                            const SizedBox(height: 14),
+                            StatisticsSectorDashboard(
+                              key: _sectionKeys['sector'],
+                              report: widget.report,
+                            ),
+                          ],
                           const SizedBox(height: 14),
                           _DeepSectionView(
                             key: _sectionKeys[widget.report.overallSection.id],
                             section: widget.report.overallSection,
+                            sectorEnabled: widget.report.sectorEnabled,
                           ),
                           const SizedBox(height: 14),
                           _GroupTitle(
@@ -109,6 +132,7 @@ class _StatisticsChartBPageState extends State<StatisticsChartBPage> {
                             _DeepSectionView(
                               key: _sectionKeys[section.id],
                               section: section,
+                              sectorEnabled: widget.report.sectorEnabled,
                             ),
                             const SizedBox(height: 14),
                           ],
@@ -127,6 +151,7 @@ class _StatisticsChartBPageState extends State<StatisticsChartBPage> {
                               _DeepSectionView(
                                 key: _sectionKeys[section.id],
                                 section: section,
+                                sectorEnabled: widget.report.sectorEnabled,
                               ),
                               const SizedBox(height: 14),
                             ],
@@ -150,6 +175,62 @@ class _StatisticsChartBPageState extends State<StatisticsChartBPage> {
         ),
       ),
     );
+  }
+
+  List<String> get _eligibleComparisonAreas {
+    final result = widget.availableAreas
+        .where((area) => widget.areaSectorEnabled[area] == true)
+        .toSet()
+        .toList()
+      ..sort();
+    return result;
+  }
+
+  Future<void> _openAreaComparison() async {
+    final areas = _eligibleComparisonAreas;
+    if (areas.length < 2) return;
+    final dates = widget.report.dateStrs
+        .map(DateTime.tryParse)
+        .whereType<DateTime>()
+        .toList()
+      ..sort((a, b) => a.compareTo(b));
+    if (dates.isEmpty) return;
+    final page = StatisticsSectorAreaComparisonPage(
+      division: widget.report.division,
+      areas: areas,
+      dates: dates,
+      usePromptUi: widget.usePromptUi,
+    );
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final route = widget.usePromptUi
+        ? PageRouteBuilder<void>(
+            transitionDuration:
+                reduceMotion ? Duration.zero : PromptUiMotion.overlay,
+            reverseTransitionDuration:
+                reduceMotion ? Duration.zero : PromptUiMotion.overlay,
+            pageBuilder: (_, __, ___) => PromptUiScope(child: page),
+            transitionsBuilder: (_, animation, __, child) {
+              if (reduceMotion) return child;
+              final curved = CurvedAnimation(
+                parent: animation,
+                curve: PromptUiMotion.enter,
+                reverseCurve: PromptUiMotion.exit,
+              );
+              return FadeTransition(
+                opacity: curved,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0.025, 0),
+                    end: Offset.zero,
+                  ).animate(curved),
+                  child: child,
+                ),
+              );
+            },
+          )
+        : MaterialPageRoute<void>(builder: (_) => page);
+    await Navigator.of(context).push<void>(route);
   }
 
   Future<void> _scrollTo(String id) async {
@@ -437,8 +518,13 @@ class _ReportTocPanel extends StatelessWidget {
 
 class _DeepSectionView extends StatelessWidget {
   final StatisticsDeepSection section;
+  final bool sectorEnabled;
 
-  const _DeepSectionView({super.key, required this.section});
+  const _DeepSectionView({
+    super.key,
+    required this.section,
+    required this.sectorEnabled,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -470,7 +556,7 @@ class _DeepSectionView extends StatelessWidget {
           const SizedBox(height: 14),
           _ChartGrid(section: section),
           const SizedBox(height: 14),
-          _VehicleTableCard(rows: section.rows),
+          _VehicleTableCard(rows: section.rows, sectorEnabled: sectorEnabled),
         ],
       ),
     );
@@ -741,8 +827,12 @@ class _HourlyChartCard extends StatelessWidget {
 
 class _VehicleTableCard extends StatelessWidget {
   final List<StatisticsDeepVehicleRow> rows;
+  final bool sectorEnabled;
 
-  const _VehicleTableCard({required this.rows});
+  const _VehicleTableCard({
+    required this.rows,
+    required this.sectorEnabled,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -780,14 +870,16 @@ class _VehicleTableCard extends StatelessWidget {
               physics: const BouncingScrollPhysics(),
               child: DataTable(
                 headingRowColor: WidgetStatePropertyAll(cs.surfaceContainerHighest),
-                columns: const [
-                  DataColumn(label: Text('넘버링')),
-                  DataColumn(label: Text('날짜')),
-                  DataColumn(label: Text('차량 번호')),
-                  DataColumn(label: Text('생성 시간')),
-                  DataColumn(label: Text('출차 시간')),
-                  DataColumn(label: Text('정산액')),
-                  DataColumn(label: Text('결제수단')),
+                columns: [
+                  const DataColumn(label: Text('넘버링')),
+                  const DataColumn(label: Text('날짜')),
+                  const DataColumn(label: Text('차량 번호')),
+                  if (sectorEnabled)
+                    const DataColumn(label: Text('방문 구역')),
+                  const DataColumn(label: Text('입차 시간')),
+                  const DataColumn(label: Text('출차 시간')),
+                  const DataColumn(label: Text('정산액')),
+                  const DataColumn(label: Text('결제수단')),
                 ],
                 rows: [
                   for (final row in rows)
@@ -796,8 +888,13 @@ class _VehicleTableCard extends StatelessWidget {
                         DataCell(Text(row.no.toString())),
                         DataCell(Text(row.dateStr)),
                         DataCell(Text(row.plateNumber)),
+                        if (sectorEnabled) DataCell(Text(row.sectorLabel)),
                         DataCell(Text(_fmtTime(row.createdAt))),
-                        DataCell(Text(_fmtTime(row.departureAt))),
+                        DataCell(Text(
+                          row.departureTimeEstimated
+                              ? '${_fmtTime(row.departureAt)} · 추정'
+                              : _fmtTime(row.departureAt),
+                        )),
                         DataCell(Text(row.fee == null ? '-' : '₩${_fmt(row.fee!)}')),
                         DataCell(Text(row.paymentMethodLabel)),
                       ],

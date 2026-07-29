@@ -171,6 +171,23 @@ class _PlateOutLogSearchResultsState extends State<PlateOutLogSearchResults> {
     final customStatus = _stringValue(log, const ['customStatus']) ??
         _stringValue(data, const ['lastCustomStatus', 'customStatus']);
 
+    final sectorEnabled = _boolValue(log, const ['sectorEnabled']) ??
+        _boolValue(data, const ['sectorEnabled']) ??
+        (log.containsKey('sectorId') ||
+            log.containsKey('sectorName') ||
+            data.containsKey('lastSectorId') ||
+            data.containsKey('lastSectorName'));
+    final sectorId = _stringValue(log, const ['sectorId']) ??
+        _stringValue(data, const ['lastSectorId', 'sectorId']);
+    final sectorName = _stringValue(log, const ['sectorName']) ??
+        _stringValue(data, const ['lastSectorName', 'sectorName']);
+    final sectorAssigned = _boolValue(log, const ['sectorAssigned']) ??
+        _boolValue(data, const ['lastSectorAssigned']) ??
+        ((sectorId?.isNotEmpty ?? false) && (sectorName?.isNotEmpty ?? false));
+    final sectorDataValid = _boolValue(log, const ['sectorDataValid']) ??
+        _boolValue(data, const ['lastSectorDataValid']) ??
+        true;
+
     final logKey = _stringValue(log, const ['logKey']) ??
         '${item.path}|${_safeToken(completedAt)}|${paymentMethod ?? ''}|${lockedFeeAmount ?? ''}';
 
@@ -185,6 +202,11 @@ class _PlateOutLogSearchResultsState extends State<PlateOutLogSearchResults> {
       lockedFeeAmount: lockedFeeAmount,
       reason: reason,
       customStatus: customStatus,
+      sectorEnabled: sectorEnabled,
+      sectorId: sectorId,
+      sectorName: sectorName,
+      sectorAssigned: sectorAssigned,
+      sectorDataValid: sectorDataValid,
     );
   }
 
@@ -208,6 +230,20 @@ class _PlateOutLogSearchResultsState extends State<PlateOutLogSearchResults> {
       if (value is String) {
         final parsed = int.tryParse(value.replaceAll(',', '').trim());
         if (parsed != null) return parsed;
+      }
+    }
+    return null;
+  }
+
+  bool? _boolValue(Map<dynamic, dynamic> data, List<String> keys) {
+    for (final key in keys) {
+      final value = data[key];
+      if (value is bool) return value;
+      if (value is num) return value != 0;
+      if (value is String) {
+        final normalized = value.trim().toLowerCase();
+        if (normalized == 'true' || normalized == '1') return true;
+        if (normalized == 'false' || normalized == '0') return false;
       }
     }
     return null;
@@ -282,6 +318,11 @@ class _PlateOutLogEntry {
   final int? lockedFeeAmount;
   final String? reason;
   final String? customStatus;
+  final bool sectorEnabled;
+  final String? sectorId;
+  final String? sectorName;
+  final bool sectorAssigned;
+  final bool sectorDataValid;
 
   const _PlateOutLogEntry({
     required this.logKey,
@@ -292,6 +333,11 @@ class _PlateOutLogEntry {
     required this.lockedFeeAmount,
     required this.reason,
     required this.customStatus,
+    required this.sectorEnabled,
+    required this.sectorId,
+    required this.sectorName,
+    required this.sectorAssigned,
+    required this.sectorDataValid,
   });
 }
 
@@ -557,6 +603,10 @@ class _OutLogEntryCard extends StatelessWidget {
               ),
             ],
           ),
+          if (entry.sectorEnabled) ...[
+            const SizedBox(height: 13),
+            _SectorPriorityCard(entry: entry),
+          ],
           const SizedBox(height: 13),
           Container(
             width: double.infinity,
@@ -634,6 +684,115 @@ class _OutLogEntryCard extends StatelessWidget {
     final value = text?.trim();
     if (value == null || value.isEmpty) return '-';
     return value;
+  }
+}
+
+class _SectorPriorityCard extends StatelessWidget {
+  final _PlateOutLogEntry entry;
+
+  const _SectorPriorityCard({required this.entry});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final value = !entry.sectorDataValid
+        ? '데이터 확인 필요'
+        : entry.sectorAssigned
+            ? entry.sectorName?.trim().isNotEmpty == true
+                ? entry.sectorName!.trim()
+                : '미지정'
+            : '미지정';
+
+    return AnimatedContainer(
+      duration: reduceMotion ? Duration.zero : const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+      decoration: BoxDecoration(
+        color: entry.sectorDataValid
+            ? cs.primaryContainer.withOpacity(.62)
+            : cs.errorContainer.withOpacity(.62),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: entry.sectorDataValid
+              ? cs.primary.withOpacity(.34)
+              : cs.error.withOpacity(.42),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.grid_view_rounded,
+            size: 19,
+            color: entry.sectorDataValid
+                ? cs.onPrimaryContainer
+                : cs.onErrorContainer,
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '방문 구역',
+                  style: TextStyle(
+                    color: entry.sectorDataValid
+                        ? cs.onPrimaryContainer.withOpacity(.78)
+                        : cs.onErrorContainer.withOpacity(.78),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                AnimatedSwitcher(
+                  duration: reduceMotion
+                      ? Duration.zero
+                      : const Duration(milliseconds: 210),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  transitionBuilder: (child, animation) {
+                    final offset = Tween<Offset>(
+                      begin: const Offset(0, .12),
+                      end: Offset.zero,
+                    ).animate(animation);
+                    return FadeTransition(
+                      opacity: animation,
+                      child: SlideTransition(position: offset, child: child),
+                    );
+                  },
+                  child: Text(
+                    value,
+                    key: ValueKey<String>(value),
+                    style: TextStyle(
+                      color: entry.sectorDataValid
+                          ? cs.onPrimaryContainer
+                          : cs.onErrorContainer,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (entry.sectorId?.trim().isNotEmpty == true)
+            Text(
+              entry.sectorId!.trim(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: entry.sectorDataValid
+                    ? cs.onPrimaryContainer.withOpacity(.68)
+                    : cs.onErrorContainer.withOpacity(.68),
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }
 

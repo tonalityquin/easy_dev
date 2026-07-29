@@ -10,6 +10,34 @@ import 'google_auth_session.dart';
 
 const String kBucketName = AuthConfig.gcsBucketName;
 
+class GcsCsvUploadReceipt {
+  final String objectName;
+  final String url;
+  final int byteSize;
+  final int remoteByteSize;
+  final int sourceVehicleCount;
+  final int csvDataRowCount;
+  final int uniqueDocumentCount;
+  final String? md5Hash;
+  final bool sectorColumnsRequired;
+  final bool sectorColumnsVerified;
+  final bool verified;
+
+  const GcsCsvUploadReceipt({
+    required this.objectName,
+    required this.url,
+    required this.byteSize,
+    required this.remoteByteSize,
+    required this.sourceVehicleCount,
+    required this.csvDataRowCount,
+    required this.uniqueDocumentCount,
+    required this.md5Hash,
+    required this.sectorColumnsRequired,
+    required this.sectorColumnsVerified,
+    required this.verified,
+  });
+}
+
 String _sanitizeFileComponent(String input) {
   final s = input
       .replaceAll(RegExp(r'[^0-9A-Za-z가-힣_.-]'), '_')
@@ -362,7 +390,7 @@ Future<gcs.Object> _uploadCsvToGcs({
   }
 }
 
-Future<String?> uploadEndLogCsv({
+Future<GcsCsvUploadReceipt> uploadEndLogCsvWithReceipt({
   required Map<String, dynamic> report,
   required String division,
   required String area,
@@ -384,14 +412,90 @@ Future<String?> uploadEndLogCsv({
     monthKey: monthKey,
   );
   final csv = _toCsv(rows);
+  final byteSize = utf8.encode(csv).length;
+  final sectorHeaderPresent = rows.isEmpty ||
+      rows.every(
+        (row) =>
+            row.containsKey('meta.sectorId') &&
+            row.containsKey('meta.sectorName'),
+      );
+  final sectorEnabled = report['sectorEnabled'] == true ||
+      _asMap(report['metrics'])?.containsKey('sector') == true;
+  if (sectorEnabled && !sectorHeaderPresent) {
+    throw StateError('Sector 지원 업무 종료 CSV에 방문 구역 열이 누락되었습니다.');
+  }
+  final itemsRaw = report['items'] ?? report['data'];
+  final items = itemsRaw is List ? itemsRaw : const <dynamic>[];
+  final uniqueDocuments = rows
+      .map((row) => (row['docId'] ?? '').toString().trim())
+      .where((value) => value.isNotEmpty)
+      .toSet();
 
-  final res = await _uploadCsvToGcs(
+  final inserted = await _uploadCsvToGcs(
     csv: csv,
     destinationPath: path,
     purpose: '업무 종료 로그(logs) CSV',
   );
+  final objectName = (inserted.name ?? '').trim();
+  if (objectName.isEmpty) {
+    throw StateError('GCS 업로드 응답에 객체 이름이 없습니다.');
+  }
 
-  return res.name != null
-      ? 'https://storage.googleapis.com/$kBucketName/${res.name}'
-      : null;
+  final client = await GoogleAuthSession.instance.safeClient();
+  final storage = gcs.StorageApi(client);
+  final verifiedResponse = await storage.objects.get(
+    kBucketName,
+    objectName,
+  );
+  if (verifiedResponse is! gcs.Object) {
+    throw StateError('GCS 객체 메타데이터 응답 형식이 올바르지 않습니다.');
+  }
+  final verifiedObject = verifiedResponse;
+  final remoteByteSize = int.tryParse(verifiedObject.size ?? '') ?? 0;
+  final insertedMd5 = (inserted.md5Hash ?? '').trim();
+  final verifiedMd5 = (verifiedObject.md5Hash ?? '').trim();
+  final md5Matched =
+      insertedMd5.isEmpty || verifiedMd5.isEmpty || insertedMd5 == verifiedMd5;
+  final verified = verifiedObject.name == objectName &&
+      remoteByteSize == byteSize &&
+      remoteByteSize > 0 &&
+      md5Matched &&
+      uniqueDocuments.length == items.length;
+  final url = 'https://storage.googleapis.com/$kBucketName/$objectName';
+
+  debugPrint(
+    '[GCS_END_LOG] object=$objectName bytes=$remoteByteSize/$byteSize '
+    'vehicles=${items.length} uniqueDocs=${uniqueDocuments.length} '
+    'csvRows=${rows.length} sectorEnabled=$sectorEnabled '
+    'sectorHeaders=$sectorHeaderPresent md5Matched=$md5Matched verified=$verified',
+  );
+
+  return GcsCsvUploadReceipt(
+    objectName: objectName,
+    url: url,
+    byteSize: byteSize,
+    remoteByteSize: remoteByteSize,
+    sourceVehicleCount: items.length,
+    csvDataRowCount: rows.length,
+    uniqueDocumentCount: uniqueDocuments.length,
+    md5Hash: verifiedMd5.isNotEmpty ? verifiedMd5 : insertedMd5,
+    sectorColumnsRequired: sectorEnabled,
+    sectorColumnsVerified: sectorHeaderPresent,
+    verified: verified,
+  );
+}
+
+Future<String?> uploadEndLogCsv({
+  required Map<String, dynamic> report,
+  required String division,
+  required String area,
+  required String userName,
+}) async {
+  final receipt = await uploadEndLogCsvWithReceipt(
+    report: report,
+    division: division,
+    area: area,
+    userName: userName,
+  );
+  return receipt.verified ? receipt.url : null;
 }

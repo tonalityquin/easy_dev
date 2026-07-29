@@ -109,7 +109,6 @@ Future<Map<String, dynamic>?> inputCustomStatusBottomSheet(
   if (data == null || !context.mounted) return null;
 
   final customStatus = data.customStatus;
-  final statusList = data.statusList;
   final countType = data.countType;
   final type = data.type;
   final periodUnit = data.periodUnit;
@@ -188,49 +187,6 @@ Future<Map<String, dynamic>?> inputCustomStatusBottomSheet(
                     ],
                   ),
                 ),
-                if (statusList.isNotEmpty) ...[
-                  const SizedBox(height: 18),
-                  Text(
-                    '저장된 상태',
-                    style: Theme.of(sheetContext).textTheme.titleSmall?.copyWith(
-                          color: tokens.textPrimary,
-                          fontWeight: FontWeight.w800,
-                        ),
-                  ),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: statusList
-                        .map(
-                          (value) => Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 11,
-                              vertical: 7,
-                            ),
-                            decoration: BoxDecoration(
-                              color: tokens.accentContainer,
-                              borderRadius:
-                                  BorderRadius.circular(PromptUiShapes.pill),
-                              border: Border.all(
-                                color: tokens.accent.withOpacity(.36),
-                              ),
-                            ),
-                            child: Text(
-                              value,
-                              style: Theme.of(sheetContext)
-                                  .textTheme
-                                  .labelMedium
-                                  ?.copyWith(
-                                    color: tokens.onAccentContainer,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                            ),
-                          ),
-                        )
-                        .toList(),
-                  ),
-                ],
                 const SizedBox(height: 20),
                 Text(
                   '상세 정보',
@@ -365,7 +321,6 @@ Future<Map<String, dynamic>?> inputCustomStatusBottomSheet(
 
   return {
     'customStatus': customStatus ?? '',
-    'statusList': statusList,
     'type': type,
     'countType': countType,
     'regularType': regularType,

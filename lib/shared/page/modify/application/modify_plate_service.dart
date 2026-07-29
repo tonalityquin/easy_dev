@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:camera/camera.dart';
@@ -15,6 +15,8 @@ import '../../../../features/dev/debug/debug_api_logger.dart';
 import '../../../plate/domain/enums/plate_type.dart';
 import '../../../plate/domain/models/plate_log_model.dart';
 import '../../../plate/domain/models/plate_model.dart';
+import '../../../plate/domain/models/plate_status_draft.dart';
+import '../../../plate/domain/models/plate_status_scope.dart';
 import '../../../plate/domain/repositories/plate_repository.dart';
 
 class ModifyPlateService {
@@ -29,7 +31,6 @@ class ModifyPlateService {
   final TextEditingController controllerBackDigit;
   final TextEditingController locationController;
 
-  final List<String> selectedStatuses;
   final int selectedBasicStandard;
   final int selectedBasicAmount;
   final int selectedAddStandard;
@@ -44,6 +45,14 @@ class ModifyPlateService {
   final String? priority1SlotKey;
   final String? priority2SlotKey;
   final String? priority3SlotKey;
+  final String? selectedSectorId;
+  final String? selectedSectorName;
+  final PlateStatusScope statusScope;
+  final bool statusChanged;
+  final PlateStatusDraft expectedOriginalStatus;
+  final String? expectedStatusSourcePath;
+  final String statusActorId;
+  final String statusActorName;
 
   ModifyPlateService({
     required this.context,
@@ -55,7 +64,6 @@ class ModifyPlateService {
     required this.controllerMidDigit,
     required this.controllerBackDigit,
     required this.locationController,
-    required this.selectedStatuses,
     required this.selectedBasicStandard,
     required this.selectedBasicAmount,
     required this.selectedAddStandard,
@@ -69,6 +77,14 @@ class ModifyPlateService {
     required this.priority1SlotKey,
     required this.priority2SlotKey,
     required this.priority3SlotKey,
+    required this.selectedSectorId,
+    required this.selectedSectorName,
+    required this.statusScope,
+    required this.statusChanged,
+    required this.expectedOriginalStatus,
+    required this.expectedStatusSourcePath,
+    required this.statusActorId,
+    required this.statusActorName,
   });
 
   static const String _tPlate = 'plate';
@@ -343,12 +359,31 @@ class ModifyPlateService {
     required String newLocation,
     required String? newBillingType,
     required String updatedCustomStatus,
-    required List<String> updatedStatusList,
   }) async {
     final areaState = context.read<AreaState>();
     final userState = context.read<UserState>();
     final repo = context.read<PlateRepository>();
+    final normalizedSectorId = selectedSectorId?.trim() ?? '';
+    final normalizedSectorName = selectedSectorName?.trim() ?? '';
 
+    if (normalizedSectorId.isEmpty != normalizedSectorName.isEmpty) {
+      throw ArgumentError('sectorId와 sectorName은 함께 전달되어야 합니다.');
+    }
+
+    final hasSector =
+        normalizedSectorId.isNotEmpty && normalizedSectorName.isNotEmpty;
+
+    debugPrint(
+      '[ModifyPlateService][Sector] plate=$plateNumber area=${originalPlate.area} '
+      'previousSectorId=${originalPlate.sectorId ?? ''} '
+      'previousSectorName=${originalPlate.sectorName ?? ''} '
+      'selectedSectorId=$normalizedSectorId '
+      'selectedSectorName=$normalizedSectorName hasSector=$hasSector',
+    );
+
+    final effectiveCustomStatus = statusChanged
+        ? updatedCustomStatus
+        : originalPlate.customStatus;
     final updatedPlate = PlateModel(
       id: originalPlate.id,
       addAmount: selectedAddAmount,
@@ -357,7 +392,7 @@ class ModifyPlateService {
       basicAmount: selectedBasicAmount,
       basicStandard: selectedBasicStandard,
       billingType: newBillingType,
-      customStatus: updatedCustomStatus,
+      customStatus: effectiveCustomStatus,
       endTime: originalPlate.endTime,
       imageUrls: imageUrls,
       isLockedFee: originalPlate.isLockedFee,
@@ -379,12 +414,13 @@ class ModifyPlateService {
       regularDurationValue: selectedRegularDurationHours,
       requestTime: originalPlate.requestTime,
       selectedBy: originalPlate.selectedBy,
-      statusList: updatedStatusList,
       type: originalPlate.type,
       updatedAt: originalPlate.updatedAt,
       userAdjustment: originalPlate.userAdjustment,
       userName: originalPlate.userName,
       feeMode: originalPlate.feeMode,
+      sectorId: hasSector ? normalizedSectorId : null,
+      sectorName: hasSector ? normalizedSectorName : null,
     );
 
     final changes = originalPlate.diff(updatedPlate);
@@ -406,7 +442,7 @@ class ModifyPlateService {
     }
 
     try {
-      await repo.updatePlate(
+      await repo.updatePlateWithStatus(
         '${originalPlate.plateNumber}_${originalPlate.area}',
         <String, dynamic>{
           if (originalPlate.location != newLocation) 'location': newLocation,
@@ -414,8 +450,7 @@ class ModifyPlateService {
             'billingType': newBillingType,
           if (originalPlate.plateNumber != plateNumber)
             'plate_number': plateNumber,
-          'statusList': updatedStatusList,
-          'customStatus': updatedCustomStatus,
+          if (statusChanged) 'customStatus': updatedCustomStatus,
           'imageUrls': imageUrls,
           'region': dropdownValue,
           'basicStandard': selectedBasicStandard,
@@ -430,17 +465,30 @@ class ModifyPlateService {
           PlateFields.parkingPriority1SlotKey: priority1SlotKey,
           PlateFields.parkingPriority2SlotKey: priority2SlotKey,
           PlateFields.parkingPriority3SlotKey: priority3SlotKey,
+          PlateFields.sectorId:
+              hasSector ? normalizedSectorId : FieldValue.delete(),
+          PlateFields.sectorName:
+              hasSector ? normalizedSectorName : FieldValue.delete(),
           'isSelected': false,
           'selectedBy': null,
           'updatedAt': DateTime.now().toUtc(),
         },
         log: log,
+        plateNumber: plateNumber,
+        area: originalPlate.area,
+        statusScope: statusScope,
+        statusChanged: statusChanged,
+        expectedOriginalStatus: expectedOriginalStatus,
+        expectedStatusSourcePath: expectedStatusSourcePath,
+        customStatus: updatedCustomStatus,
+        updatedByName: statusActorName,
+        updatedById: statusActorId,
       );
       return true;
     } catch (e) {
       await _logApiError(
         tag: 'DoubleModifyPlateService.updatePlateInfo',
-        message: 'PlateRepository.updatePlate 실패',
+        message: 'PlateRepository.updatePlateWithStatus 실패',
         error: e,
         extra: <String, dynamic>{
           'docId': '${originalPlate.plateNumber}_${originalPlate.area}',
@@ -450,9 +498,14 @@ class ModifyPlateService {
           'originalPlateNumber': originalPlate.plateNumber,
           'newPlateNumber': plateNumber,
           'imageUrlsCount': imageUrls.length,
-          'statusCount': updatedStatusList.length,
+          'statusChanged': statusChanged,
+          'statusScope': statusScope.storageLabel,
           'hasLog': log != null,
           'changedFieldsCount': changes.length,
+          'previousSectorId': originalPlate.sectorId,
+          'previousSectorName': originalPlate.sectorName,
+          'selectedSectorId': hasSector ? normalizedSectorId : null,
+          'selectedSectorName': hasSector ? normalizedSectorName : null,
         },
         tags: const <String>[
           _tPlate,

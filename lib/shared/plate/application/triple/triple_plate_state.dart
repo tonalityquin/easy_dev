@@ -320,7 +320,6 @@ class TriplePlateState extends ChangeNotifier {
                   area: '',
                   userName: '',
                   isSelected: false,
-                  statusList: const [],
                 ),
               );
 

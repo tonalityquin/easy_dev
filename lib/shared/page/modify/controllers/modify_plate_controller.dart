@@ -1,15 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:provider/provider.dart';
+import '../../../../app/models/capability.dart';
 import '../../../../app/utils/snackbar_helper.dart';
+import '../../../../features/account/applications/user_state.dart';
 import '../../../../features/dev/application/area_state.dart';
 import '../../../../features/payment/applications/bill_state.dart';
 import '../../../../features/payment/domain/models/bill_model.dart';
 import '../../../../features/payment/domain/models/regular_bill_model.dart';
 import '../../../plate/application/double/double_plate_state.dart';
-import '../../../plate/data/repositories/firestore_plate_repository.dart';
 import '../../../plate/domain/enums/plate_type.dart';
 import '../../../plate/domain/models/plate_model.dart';
+import '../../../plate/domain/models/plate_status_draft.dart';
+import '../../../plate/domain/models/plate_status_lookup_result.dart';
+import '../../../plate/domain/models/plate_status_scope.dart';
+import '../../../plate/domain/repositories/plate_repository.dart';
+import '../../../plate/domain/services/plate_status_record.dart';
 import '../../../plate/widgets/action_trace_dialog.dart';
 import '../application/modify_plate_service.dart';
 
@@ -27,7 +33,6 @@ class ModifyPlateController {
   final List<XFile> capturedImages;
   final List<String> existingImageUrls;
 
-  final FirestorePlateRepository _plateRepo = FirestorePlateRepository();
 
   CameraController? cameraController;
   bool isCameraInitialized = false;
@@ -51,11 +56,38 @@ class ModifyPlateController {
   String? priority1SlotKey;
   String? priority2SlotKey;
   String? priority3SlotKey;
+  String? selectedSectorId;
+  String? selectedSectorName;
 
   bool isLocationSelected = false;
 
-  String? fetchedCustomStatus;
-  List<String> initialSelectedStatuses = [];
+  late PlateStatusDraft originalStatusDraft;
+  late PlateStatusDraft expectedPersistedStatusDraft;
+  bool statusMarkedForDeletion = false;
+  bool statusContextResolved = false;
+  PlateStatusScope? statusScope;
+  String? expectedStatusSourcePath;
+
+  PlateStatusDraft get statusDraft => PlateStatusDraft(
+        customStatus: customStatusController.text,
+      );
+
+  bool get hasStatusChanges => !originalStatusDraft.sameAs(statusDraft);
+
+  bool get hasOriginalStatus => !originalStatusDraft.isEmpty;
+
+  void handleStatusTextChanged() {
+    statusMarkedForDeletion = statusDraft.isEmpty && hasOriginalStatus;
+  }
+
+  void clearStatusDraft() {
+    customStatusController.clear();
+    statusMarkedForDeletion = hasOriginalStatus;
+    debugPrint(
+      '[ModifyPlateController][Status] localClear=true '
+      'plate=${plate.plateNumber} deletePending=$statusMarkedForDeletion',
+    );
+  }
 
   final List<String> _regions = [
     '전국',
@@ -161,6 +193,8 @@ class ModifyPlateController {
     priority1SlotKey = plate.parkingPriority1SlotKey;
     priority2SlotKey = plate.parkingPriority2SlotKey;
     priority3SlotKey = plate.parkingPriority3SlotKey;
+    selectedSectorId = plate.sectorId;
+    selectedSectorName = plate.sectorName;
 
     selectedBasicStandard = plate.basicStandard ?? 0;
     selectedBasicAmount = plate.basicAmount ?? 0;
@@ -170,9 +204,12 @@ class ModifyPlateController {
     selectedRegularDurationHours = plate.regularDurationValue ?? 0;
 
     isLocationSelected = locationController.text.isNotEmpty;
-    fetchedCustomStatus = plate.customStatus;
-    customStatusController.text = plate.customStatus ?? '';
-    initialSelectedStatuses = List<String>.from(plate.statusList);
+    originalStatusDraft = PlateStatusDraft(
+      customStatus: plate.customStatus ?? '',
+    );
+    expectedPersistedStatusDraft = originalStatusDraft;
+    customStatusController.text = originalStatusDraft.customStatus;
+    statusMarkedForDeletion = false;
   }
 
   String _determineBillType(String? billingType) {
@@ -180,6 +217,63 @@ class ModifyPlateController {
     if (billingType.contains('고정')) return '고정';
     if ((plate.regularAmount ?? 0) > 0) return '고정';
     return '변동';
+  }
+
+  Future<void> resolveStatusContext() async {
+    final repo = context.read<PlateRepository>();
+    final scope = await repo.resolvePlateStatusScope(
+      plateNumber: plate.plateNumber,
+      area: plate.area,
+      billingType: plate.billingType,
+      regularAmount: plate.regularAmount ?? 0,
+    );
+    final lookup = await repo.lookupPlateStatus(
+      plateNumber: plate.plateNumber,
+      area: plate.area,
+      scope: scope,
+    );
+    if (lookup.isFailed) {
+      throw PlateStatusReadException(
+        '상태 메모 최신 정보를 확인하지 못했습니다.',
+        cause: lookup.error,
+      );
+    }
+    if (lookup.isInactive) {
+      throw const PlateStatusScopeException(
+        '월정기 이용 기간이 만료되어 일반 상태 범위를 다시 확인해야 합니다.',
+      );
+    }
+
+    final draftBeforeResolution = statusDraft;
+    final editedBeforeResolution =
+        !originalStatusDraft.sameAs(draftBeforeResolution);
+    final authoritativeDraft = lookup.isFound
+        ? PlateStatusDraft(
+            customStatus: lookup.record?.customStatus ?? '',
+          )
+        : PlateStatusDraft(
+            customStatus: plate.customStatus ?? '',
+          );
+
+    statusScope = scope;
+    expectedStatusSourcePath = lookup.sourcePath;
+    expectedPersistedStatusDraft = lookup.isFound
+        ? authoritativeDraft
+        : PlateStatusDraft(customStatus: '');
+    originalStatusDraft = authoritativeDraft;
+    if (!editedBeforeResolution) {
+      customStatusController.text = authoritativeDraft.customStatus;
+    }
+    statusMarkedForDeletion =
+        statusDraft.isEmpty && !originalStatusDraft.isEmpty;
+    statusContextResolved = true;
+
+    debugPrint(
+      '[ModifyPlateController][StatusContext] plate=${plate.plateNumber} '
+      'scope=${scope.storageLabel} lookup=${lookup.state.name} '
+      'sourcePath=${lookup.sourcePath ?? ''} '
+      'memoLength=${authoritativeDraft.customStatus.length}',
+    );
   }
 
   void onBillTypeChanged(String type) {
@@ -219,21 +313,7 @@ class ModifyPlateController {
     }
   }
 
-  Future<void> deleteCustomStatusFromFirestore(BuildContext context) async {
-    final plateNumber = plate.plateNumber.replaceAll('-', '');
-    final area = context.read<AreaState>().currentArea;
-
-    try {
-      await _plateRepo.deletePlateStatus(plateNumber, area);
-      fetchedCustomStatus = null;
-    } catch (e) {
-      debugPrint('❌ customStatus 삭제 실패: $e');
-      rethrow;
-    }
-  }
-
-  Future<bool> handleAction(
-    List<String> selectedStatuses, {
+  Future<bool> handleAction({
     ActionTraceController? trace,
   }) async {
     trace?.add('수정 처리 시작');
@@ -265,6 +345,51 @@ class ModifyPlateController {
       return false;
     }
 
+    final areaState = context.read<AreaState>();
+    final canUseSector = areaState.capabilitiesOfCurrentArea.contains(
+      Capability.sector,
+    );
+    final effectiveSectorId = canUseSector ? selectedSectorId : plate.sectorId;
+    final effectiveSectorName =
+        canUseSector ? selectedSectorName : plate.sectorName;
+    if (!statusContextResolved) {
+      try {
+        await resolveStatusContext();
+      } catch (error) {
+        trace?.add('중단: 상태 저장 범위 확인 실패 error=$error');
+        if (context.mounted) {
+          showFailedSnackbar(
+            context,
+            '상태 메모 최신 정보를 확인하지 못해 저장하지 않았습니다.',
+            usePromptUi: true,
+          );
+        }
+        return false;
+      }
+    }
+
+    final resolvedScope = statusScope;
+    if (resolvedScope == null) {
+      trace?.add('중단: 상태 저장 범위 없음');
+      return false;
+    }
+
+    final draft = statusDraft;
+    final statusChanged = hasStatusChanges;
+    final userState = context.read<UserState>();
+
+    trace?.add(
+      'status memoLength=${draft.customStatus.length} '
+      'changed=$statusChanged deletePending=$statusMarkedForDeletion '
+      'scope=${resolvedScope.storageLabel}',
+    );
+    debugPrint(
+      '[ModifyPlateController][Status] plate=${plate.plateNumber} '
+      'memoLength=${draft.customStatus.length} '
+      'changed=$statusChanged deletePending=$statusMarkedForDeletion '
+      'scope=${resolvedScope.storageLabel}',
+    );
+
     final service = ModifyPlateService(
       context: context,
       capturedImages: capturedImages,
@@ -275,7 +400,6 @@ class ModifyPlateController {
       controllerMidDigit: controllerMidDigit,
       controllerBackDigit: controllerBackDigit,
       locationController: locationController,
-      selectedStatuses: selectedStatuses,
       selectedBasicStandard: selectedBasicStandard,
       selectedBasicAmount: selectedBasicAmount,
       selectedAddStandard: selectedAddStandard,
@@ -289,15 +413,34 @@ class ModifyPlateController {
       priority1SlotKey: priority1SlotKey,
       priority2SlotKey: priority2SlotKey,
       priority3SlotKey: priority3SlotKey,
+      selectedSectorId: effectiveSectorId,
+      selectedSectorName: effectiveSectorName,
+      statusScope: resolvedScope,
+      statusChanged: statusChanged,
+      expectedOriginalStatus: expectedPersistedStatusDraft,
+      expectedStatusSourcePath: expectedStatusSourcePath,
+      statusActorId: userState.session?.id ?? '',
+      statusActorName: userState.name.trim(),
     );
 
     final plateNumber = service.composePlateNumber();
     final newLocation = locationController.text.trim();
     final newBillingType = selectedBill;
-    final updatedCustomStatus = customStatusController.text.trim();
+    final updatedCustomStatus = draft.customStatus;
 
     trace?.add('plateNumber=$plateNumber');
     trace?.add('newLocation="$newLocation"');
+    trace?.add(
+      'capability.sector=$canUseSector '
+      'sectorId=${effectiveSectorId ?? ''} '
+      'sectorName=${effectiveSectorName ?? ''}',
+    );
+    debugPrint(
+      '[ModifyPlateController][Sector] plate=$plateNumber area=${plate.area} '
+      'capability.sector=$canUseSector '
+      'sectorId=${effectiveSectorId ?? ''} '
+      'sectorName=${effectiveSectorName ?? ''}',
+    );
 
     try {
       trace?.add('사진 병합 업로드 시작');
@@ -311,7 +454,6 @@ class ModifyPlateController {
         newLocation: newLocation,
         newBillingType: newBillingType,
         updatedCustomStatus: updatedCustomStatus,
-        updatedStatusList: selectedStatuses,
       );
       trace?.add('차량 정보 업데이트 결과=$success');
 
@@ -320,17 +462,7 @@ class ModifyPlateController {
         return false;
       }
 
-      final area = context.read<AreaState>().currentArea;
-      trace?.add('plate_status 저장 시작 area=$area');
-
-      await _plateRepo.setPlateStatus(
-        plateNumber: plateNumber,
-        area: area,
-        customStatus: updatedCustomStatus,
-        statusList: selectedStatuses,
-        createdBy: 'devAdmin020',
-      );
-      trace?.add('plate_status 저장 완료');
+      trace?.add('차량 문서와 상태 문서 transaction 저장 완료');
 
       final updatedPlate = PlateModel(
         id: plate.id,
@@ -362,12 +494,13 @@ class ModifyPlateController {
         regularDurationValue: selectedRegularDurationHours,
         requestTime: plate.requestTime,
         selectedBy: null,
-        statusList: selectedStatuses,
         type: plate.type,
         updatedAt: plate.updatedAt,
         userAdjustment: plate.userAdjustment,
         userName: plate.userName,
         feeMode: plate.feeMode,
+        sectorId: effectiveSectorId,
+        sectorName: effectiveSectorName,
       );
 
       final plateState = context.read<DoublePlateState>();

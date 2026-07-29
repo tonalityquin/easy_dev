@@ -1,5 +1,4 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart';
 import '../enums/plate_type.dart';
 import 'plate_log_model.dart';
 
@@ -135,7 +134,6 @@ class PlateFields {
   static const String selectedBy = 'selectedBy';
   static const String sectorId = 'sectorId';
   static const String sectorName = 'sectorName';
-  static const String statusList = 'statusList';
   static const String type = 'type';
   static const String updatedAt = 'updatedAt';
   static const String userAdjustment = 'userAdjustment';
@@ -179,7 +177,6 @@ class PlateModel {
   final String? selectedBy;
   final String? sectorId;
   final String? sectorName;
-  final List<String> statusList;
   final String type;
   final DateTime? updatedAt;
   final int? userAdjustment;
@@ -220,7 +217,6 @@ class PlateModel {
     this.selectedBy,
     this.sectorId,
     this.sectorName,
-    this.statusList = const [],
     required this.type,
     this.updatedAt,
     this.userAdjustment,
@@ -272,7 +268,6 @@ class PlateModel {
       selectedBy: data[PlateFields.selectedBy],
       sectorId: data[PlateFields.sectorId]?.toString().trim(),
       sectorName: data[PlateFields.sectorName]?.toString().trim(),
-      statusList: List<String>.from(data[PlateFields.statusList] ?? []),
       type: normalizePlateTypeFirestoreValue(data[PlateFields.type]),
       updatedAt:
           (updatedTimestamp is Timestamp) ? updatedTimestamp.toDate() : null,
@@ -328,7 +323,6 @@ class PlateModel {
         PlateFields.sectorId: sectorId!.trim(),
       if (sectorName != null && sectorName!.trim().isNotEmpty)
         PlateFields.sectorName: sectorName!.trim(),
-      PlateFields.statusList: statusList,
       PlateFields.type: type,
       if (updatedAt != null)
         PlateFields.updatedAt: Timestamp.fromDate(updatedAt!),
@@ -380,7 +374,6 @@ class PlateModel {
     String? selectedBy,
     String? sectorId,
     String? sectorName,
-    List<String>? statusList,
     String? type,
     DateTime? updatedAt,
     int? userAdjustment,
@@ -423,7 +416,6 @@ class PlateModel {
       selectedBy: selectedBy ?? this.selectedBy,
       sectorId: sectorId ?? this.sectorId,
       sectorName: sectorName ?? this.sectorName,
-      statusList: statusList ?? this.statusList,
       type: type ?? this.type,
       updatedAt: updatedAt ?? this.updatedAt,
       userAdjustment: userAdjustment ?? this.userAdjustment,
@@ -560,10 +552,6 @@ class PlateModel {
         'after': other.sectorName
       };
     }
-    if (!listEquals(statusList, other.statusList)) {
-      changes['statusList'] = {'before': statusList, 'after': other.statusList};
-    }
-
     if (userAdjustment != other.userAdjustment) {
       changes['userAdjustment'] = {
         'before': userAdjustment,

@@ -1,16 +1,21 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 
+import '../../../../app/models/capability.dart';
 import '../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../app/utils/snackbar_helper.dart';
 import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
 import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
 import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../features/dev/application/area_state.dart';
+import '../../../../features/sector/applications/sector_state.dart';
 import '../../../plate/domain/enums/plate_type.dart';
 import '../../../plate/domain/models/plate_model.dart';
 import '../../../plate/widgets/action_trace_dialog.dart';
 import '../../input/pages/sheets/input_location_bottom_sheet.dart';
+import '../../input/pages/sheets/input_sector_selection_sheet.dart';
 import '../controllers/modify_plate_controller.dart';
 import 'prompt_modify_ui.dart';
 import 'sheets/modify_bottom_navigation.dart';
@@ -21,6 +26,7 @@ import 'widgets/buttons/modify_animated_photo_button.dart';
 import 'widgets/modify_location_section.dart';
 import 'widgets/modify_photo_section.dart';
 import 'widgets/modify_status_custom_section.dart';
+import 'widgets/modify_sector_section.dart';
 
 double _contrastRatio(Color a, Color b) {
   final la = a.computeLuminance();
@@ -109,7 +115,9 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
   bool isLoading = false;
   bool _sheetOpen = false;
   bool _sheetAnimating = false;
-  late List<String> selectedStatusNames;
+  bool _sectorSelecting = false;
+  bool _statusContextResolving = true;
+  String? _statusContextError;
 
   @override
   void initState() {
@@ -127,7 +135,55 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
     );
     _controller.initializePlate();
     _controller.initializeFieldValues();
-    selectedStatusNames = List<String>.from(widget.plate.statusList);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _resolveStatusContext();
+    });
+  }
+
+  Future<void> _resolveStatusContext() async {
+    if (!mounted) return;
+    setState(() {
+      _statusContextResolving = true;
+      _statusContextError = null;
+    });
+    try {
+      await _controller.resolveStatusContext();
+      if (!mounted) return;
+      setState(() {
+        _statusContextResolving = false;
+        _statusContextError = null;
+      });
+    } catch (error, stackTrace) {
+      debugPrint(
+        '[ModifyPlateScreen][StatusContext] plate=${widget.plate.plateNumber} '
+        'resolved=false error=$error',
+      );
+      if (!mounted) return;
+      setState(() {
+        _statusContextResolving = false;
+        _statusContextError = error.toString();
+      });
+      final trace = await DeveloperOperationTrace.start(
+        context: context,
+        title: '상태 저장 범위 확인',
+        initialMessage: '상태 메모의 최신 정보와 저장 범위를 확인하고 있습니다.',
+        usePromptUi: true,
+        developerModeMessage:
+            '개발자 모드 ON: 범위 확인 실패 로그를 복사할 수 있습니다.',
+        standardModeMessage:
+            '개발자 모드 OFF: 범위 확인 실패 로그를 콘솔에 기록합니다.',
+      );
+      trace.log(
+        'plate=${widget.plate.plateNumber} area=${widget.plate.area} '
+        'resolved=false',
+        progress: .62,
+      );
+      await trace.fail(
+        '상태 메모 저장 범위를 확인하지 못했습니다.',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
   }
 
   Future<void> _animateSheet({
@@ -174,10 +230,28 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
           'plate=${widget.plate.plateNumber}',
           progress: .24,
         );
+        final areaState = context.read<AreaState>();
+        final sectorVisible = areaState.capabilitiesOfCurrentArea.contains(
+          Capability.sector,
+        );
+        trace.log(
+          'sectorCardVisible=$sectorVisible area=${areaState.currentArea.trim()} '
+          'sectorId=${_controller.selectedSectorId ?? ''} '
+          'sectorName=${_controller.selectedSectorName ?? ''} '
+          'layout=정산유형상단 firebaseRead=false',
+          progress: .42,
+        );
       } else {
+        final areaState = context.read<AreaState>();
+        final sectorVisible = areaState.capabilitiesOfCurrentArea.contains(
+          Capability.sector,
+        );
         debugPrint(
           '[ModifyPlateScreen][TouchSheet] source=$source '
-          'target=${open ? 'open' : 'closed'}',
+          'target=${open ? 'open' : 'closed'} '
+          'sectorCardVisible=$sectorVisible area=${areaState.currentArea.trim()} '
+          'sectorId=${_controller.selectedSectorId ?? ''} '
+          'sectorName=${_controller.selectedSectorName ?? ''} firebaseRead=false',
         );
       }
 
@@ -240,8 +314,18 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
   }
 
   Future<void> _handleModifyAction() async {
-    if (isLoading) return;
+    if (_statusContextResolving || isLoading) return;
+    if (_statusContextError != null ||
+        !_controller.statusContextResolved) {
+      await _resolveStatusContext();
+      if (!mounted ||
+          _statusContextError != null ||
+          !_controller.statusContextResolved) {
+        return;
+      }
+    }
     setState(() => isLoading = true);
+    DeveloperOperationTrace? developerTrace;
     try {
       if (_kShowActionTrace) {
         await ActionTraceDialog.showAndRun(
@@ -249,7 +333,6 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
           title: '수정 버튼 실행 로그',
           task: (trace) async {
             final success = await _controller.handleAction(
-              selectedStatusNames,
               trace: trace,
             );
             trace.add('handleAction result=$success');
@@ -257,11 +340,70 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
         );
         return;
       }
-      final success = await _controller.handleAction(selectedStatusNames);
+
+      final areaState = context.read<AreaState>();
+      final canUseSector = areaState.capabilitiesOfCurrentArea.contains(
+        Capability.sector,
+      );
+      developerTrace = await DeveloperOperationTrace.start(
+        context: context,
+        title: '번호판 수정 저장',
+        initialMessage: '번호판 수정 정보를 저장하고 있습니다.',
+        usePromptUi: true,
+        developerModeMessage:
+            '개발자 모드 ON: 저장 로그를 debugPrint 코드로 복사할 수 있습니다.',
+        standardModeMessage:
+            '개발자 모드 OFF: 저장 로그를 콘솔에 기록합니다.',
+      );
+      developerTrace.log(
+        'screen=ModifyPlateScreen plate=${widget.plate.plateNumber} '
+        'area=${areaState.currentArea.trim()}',
+        progress: .14,
+      );
+      developerTrace.log(
+        'capability.sector=$canUseSector '
+        'sectorCardVisible=$canUseSector '
+        'sectorId=${_controller.selectedSectorId ?? ''} '
+        'sectorName=${_controller.selectedSectorName ?? ''}',
+        progress: .3,
+      );
+      developerTrace.log(
+        'sectorSource=local-ui firebaseRead=false firebaseWrite=submit-with-plate',
+        progress: .44,
+      );
+      final statusDraft = _controller.statusDraft;
+      developerTrace.log(
+        'statusMemoLength=${statusDraft.customStatus.length} '
+        'statusChanged=${_controller.hasStatusChanges} '
+        'statusDeletePending=${_controller.statusMarkedForDeletion} '
+        'statusContextResolved=${_controller.statusContextResolved} '
+        'statusScope=${_controller.statusScope?.name ?? 'unresolved'}',
+        progress: .58,
+      );
+
+      final success = await _controller.handleAction();
+      developerTrace.log('handleAction result=$success', progress: .88);
+      if (success) {
+        await developerTrace.succeed(
+          canUseSector
+              ? '방문 구역을 포함한 차량 수정 저장이 완료되었습니다.'
+              : '방문 구역 기능이 숨겨진 상태로 차량 수정 저장이 완료되었습니다.',
+        );
+      } else {
+        await developerTrace.fail('차량 수정 저장이 완료되지 않았습니다.');
+      }
+
       if (success && mounted) {
         Navigator.pop(context);
       }
-    } catch (error) {
+    } catch (error, stackTrace) {
+      if (developerTrace != null) {
+        await developerTrace.fail(
+          '차량 수정 저장에 실패했습니다.',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }
       if (mounted) {
         showFailedSnackbar(
           context,
@@ -311,6 +453,258 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
       preferredParkingAreas: _platePreferredParkingAreas(),
       usePromptUi: true,
     );
+  }
+
+  Future<void> _showSectorOperationStatus({
+    required String result,
+    required bool success,
+    required String area,
+    required bool canUseSector,
+    required String previousSectorId,
+    required String previousSectorName,
+    required String selectedSectorId,
+    required String selectedSectorName,
+    Object? error,
+    StackTrace? stackTrace,
+  }) async {
+    if (!mounted) {
+      debugPrint(
+        '[ModifyPlateScreen][Sector] result=$result area=$area '
+        'canUseSector=$canUseSector previousSectorId=$previousSectorId '
+        'previousSectorName=$previousSectorName selectedSectorId=$selectedSectorId '
+        'selectedSectorName=$selectedSectorName firebaseRead=false',
+      );
+      return;
+    }
+
+    final trace = await DeveloperOperationTrace.start(
+      context: context,
+      title: '번호판 수정 방문 구역',
+      initialMessage: result,
+      usePromptUi: true,
+      developerModeMessage:
+          '개발자 모드 ON: 방문 구역 변경 로그를 복사할 수 있습니다.',
+      standardModeMessage:
+          '개발자 모드 OFF: 방문 구역 변경 로그를 콘솔에 기록합니다.',
+    );
+    trace.log(
+      'screen=ModifyPlateScreen plate=${widget.plate.plateNumber} area=$area',
+      progress: .18,
+    );
+    trace.log(
+      'capability.sector=$canUseSector source=AreaState firebaseRead=false',
+      progress: .34,
+    );
+    trace.log(
+      'previousSectorId=$previousSectorId previousSectorName=$previousSectorName',
+      progress: .52,
+    );
+    trace.log(
+      'selectedSectorId=$selectedSectorId selectedSectorName=$selectedSectorName',
+      progress: .7,
+    );
+    trace.log(
+      'source=SectorState layout=정산상태시트-정산유형상단 firebaseWrite=false',
+      progress: .86,
+    );
+
+    if (success) {
+      await trace.succeed(result);
+      return;
+    }
+
+    await trace.fail(
+      result,
+      error: error,
+      stackTrace: stackTrace,
+    );
+  }
+
+  Future<void> _selectSector() async {
+    if (_sectorSelecting || !mounted) return;
+
+    final areaState = context.read<AreaState>();
+    final area = areaState.currentArea.trim();
+    final canUseSector = areaState.capabilitiesOfCurrentArea.contains(
+      Capability.sector,
+    );
+    final previousSectorId = _controller.selectedSectorId?.trim() ?? '';
+    final previousSectorName = _controller.selectedSectorName?.trim() ?? '';
+
+    setState(() => _sectorSelecting = true);
+
+    try {
+      debugPrint(
+        '[ModifyPlateScreen][Sector] open plate=${widget.plate.plateNumber} '
+        'area=$area canUseSector=$canUseSector previousSectorId=$previousSectorId '
+        'previousSectorName=$previousSectorName',
+      );
+
+      if (!canUseSector) {
+        await _showSectorOperationStatus(
+          result: '현재 지역은 방문 구역 기능을 사용하지 않아 선택 영역을 숨깁니다.',
+          success: true,
+          area: area,
+          canUseSector: false,
+          previousSectorId: previousSectorId,
+          previousSectorName: previousSectorName,
+          selectedSectorId: previousSectorId,
+          selectedSectorName: previousSectorName,
+        );
+        return;
+      }
+
+      final sectorState = context.read<SectorState>();
+      if (sectorState.isBusy) {
+        if (mounted) {
+          showFailedSnackbar(
+            context,
+            '방문 구역 정보를 준비하고 있습니다.',
+            usePromptUi: true,
+          );
+        }
+        await _showSectorOperationStatus(
+          result: '방문 구역 로컬 데이터가 준비 중이어서 변경을 중단했습니다.',
+          success: false,
+          area: area,
+          canUseSector: true,
+          previousSectorId: previousSectorId,
+          previousSectorName: previousSectorName,
+          selectedSectorId: previousSectorId,
+          selectedSectorName: previousSectorName,
+        );
+        return;
+      }
+
+      final rawSectors = sectorState.sectors;
+      final validSectors = rawSectors
+          .where(
+            (sector) =>
+                sector.id.trim().isNotEmpty &&
+                sector.name.trim().isNotEmpty &&
+                sector.area.trim() == area,
+          )
+          .toList(growable: false);
+
+      debugPrint(
+        '[ModifyPlateScreen][Sector] cacheKey=${SectorState.cacheKeyForArea(area)} '
+        'raw=${rawSectors.length} valid=${validSectors.length} firebaseRead=false',
+      );
+
+      if (rawSectors.length != validSectors.length || validSectors.isEmpty) {
+        if (mounted) {
+          showFailedSnackbar(
+            context,
+            '현재 지역의 방문 구역 정보가 없습니다.',
+            usePromptUi: true,
+          );
+        }
+        await _showSectorOperationStatus(
+          result: '방문 구역 로컬 데이터 무결성 검증에 실패했습니다.',
+          success: false,
+          area: area,
+          canUseSector: true,
+          previousSectorId: previousSectorId,
+          previousSectorName: previousSectorName,
+          selectedSectorId: previousSectorId,
+          selectedSectorName: previousSectorName,
+        );
+        return;
+      }
+
+      final selected = await InputSectorSelectionSheet.show(
+        context: context,
+        area: area,
+        sectors: validSectors,
+        initialSelectedId: previousSectorId.isEmpty ? null : previousSectorId,
+      );
+
+      if (!mounted) return;
+
+      if (selected == null) {
+        await _showSectorOperationStatus(
+          result: '방문 구역 변경을 취소했습니다.',
+          success: true,
+          area: area,
+          canUseSector: true,
+          previousSectorId: previousSectorId,
+          previousSectorName: previousSectorName,
+          selectedSectorId: previousSectorId,
+          selectedSectorName: previousSectorName,
+        );
+        return;
+      }
+
+      final currentArea = context.read<AreaState>().currentArea.trim();
+      final currentSectors = context.read<SectorState>().sectors;
+      final confirmed = currentSectors.where((item) {
+        return item.id == selected.id &&
+            item.area.trim() == currentArea &&
+            item.name.trim() == selected.name.trim();
+      }).toList(growable: false);
+
+      if (currentArea != area || confirmed.length != 1) {
+        showFailedSnackbar(
+          context,
+          '방문 구역 정보가 변경되어 다시 선택해야 합니다.',
+          usePromptUi: true,
+        );
+        await _showSectorOperationStatus(
+          result: '선택 결과 재검증에 실패했습니다.',
+          success: false,
+          area: currentArea,
+          canUseSector: true,
+          previousSectorId: previousSectorId,
+          previousSectorName: previousSectorName,
+          selectedSectorId: selected.id.trim(),
+          selectedSectorName: selected.name.trim(),
+        );
+        return;
+      }
+
+      final resolved = confirmed.single;
+      _controller.selectedSectorId = resolved.id.trim();
+      _controller.selectedSectorName = resolved.name.trim();
+      await HapticFeedback.mediumImpact();
+      if (mounted) {
+        setState(() {});
+      }
+
+      await _showSectorOperationStatus(
+        result: '방문 구역 변경값을 수정 화면에 반영했습니다.',
+        success: true,
+        area: currentArea,
+        canUseSector: true,
+        previousSectorId: previousSectorId,
+        previousSectorName: previousSectorName,
+        selectedSectorId: resolved.id.trim(),
+        selectedSectorName: resolved.name.trim(),
+      );
+    } catch (error, stackTrace) {
+      if (mounted) {
+        showFailedSnackbar(
+          context,
+          '방문 구역 변경 실패: $error',
+          usePromptUi: true,
+        );
+      }
+      await _showSectorOperationStatus(
+        result: '방문 구역 변경 처리에 실패했습니다.',
+        success: false,
+        area: area,
+        canUseSector: canUseSector,
+        previousSectorId: previousSectorId,
+        previousSectorName: previousSectorName,
+        selectedSectorId: _controller.selectedSectorId?.trim() ?? '',
+        selectedSectorName: _controller.selectedSectorName?.trim() ?? '',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _sectorSelecting = false);
+      }
+    }
   }
 
   @override
@@ -377,6 +771,10 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
         _controller.selectedBill ??
         widget.plate.billingType ??
         '-';
+    final canUseSector = context
+        .watch<AreaState>()
+        .capabilitiesOfCurrentArea
+        .contains(Capability.sector);
 
     return PopScope(
       canPop: !_sheetOpen && !_sheetAnimating,
@@ -648,16 +1046,32 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
                               ),
                             ),
                             const SizedBox(height: 10),
+                            if (canUseSector) ...[
+                              ModifySectorSection(
+                                sectorName: _controller.selectedSectorName,
+                                isBusy: _sectorSelecting,
+                                onPressed: _selectSector,
+                              ),
+                              const SizedBox(height: 16),
+                            ],
                             _ReadOnlyBillSection(
                               billTypeLabel: _controller.selectedBillType,
                               countTypeLabel: readOnlyCountType,
                             ),
                             const SizedBox(height: 16),
-                            PromptModifySectionCard(
-                              padding: const EdgeInsets.all(14),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
+                            AnimatedOpacity(
+                              duration: mediaQuery.disableAnimations
+                                  ? Duration.zero
+                                  : PromptUiMotion.selection,
+                              opacity: _statusContextResolving ? .62 : 1,
+                              child: AbsorbPointer(
+                                absorbing: _statusContextResolving ||
+                                    _statusContextError != null,
+                                child: PromptModifySectionCard(
+                                  padding: const EdgeInsets.all(14),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                                    children: [
                                   const PromptModifySectionTitle(
                                     icon: Icons.edit_note_rounded,
                                     title: '추가 상태 메모',
@@ -675,38 +1089,74 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
                                       prefixIcon:
                                           Icon(Icons.notes_rounded),
                                     ),
+                                    onChanged: (_) {
+                                      _controller.handleStatusTextChanged();
+                                      if (mounted) setState(() {});
+                                    },
                                   ),
-                                  if (_controller.fetchedCustomStatus != null)
-                                    ModifyStatusCustomSection(
-                                      customStatus:
-                                          _controller.fetchedCustomStatus!,
-                                      onDelete: () async {
-                                        try {
-                                          await _controller
-                                              .deleteCustomStatusFromFirestore(
-                                            context,
-                                          );
-                                          if (!mounted) return;
-                                          setState(() {
-                                            _controller.fetchedCustomStatus =
-                                                null;
-                                            _controller.customStatusController
-                                                .clear();
-                                            selectedStatusNames = <String>[];
-                                          });
-                                        } catch (error) {
-                                          if (mounted) {
-                                            showFailedSnackbar(
-                                              context,
-                                              '상태 메모 삭제 실패: $error',
-                                              usePromptUi: true,
-                                            );
-                                          }
-                                        }
-                                      },
-                                    ),
-                                ],
+                                  const SizedBox(height: 4),
+                                      ModifyStatusCustomSection(
+                                        originalCustomStatus: _controller
+                                            .originalStatusDraft.customStatus,
+                                        changed: _controller.hasStatusChanges,
+                                        deletionPending:
+                                            _controller.statusMarkedForDeletion,
+                                        onClear: () {
+                                          setState(_controller.clearStatusDraft);
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
+                            ),
+                            AnimatedSwitcher(
+                              duration: mediaQuery.disableAnimations
+                                  ? Duration.zero
+                                  : PromptUiMotion.selection,
+                              child: _statusContextResolving
+                                  ? const Padding(
+                                      key: ValueKey<String>('status-resolving'),
+                                      padding: EdgeInsets.only(top: 10),
+                                      child: Row(
+                                        children: [
+                                          SizedBox(
+                                            width: 18,
+                                            height: 18,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          ),
+                                          SizedBox(width: 10),
+                                          Expanded(
+                                            child: Text('최신 상태 정보와 저장 범위를 확인하고 있습니다.'),
+                                          ),
+                                        ],
+                                      ),
+                                    )
+                                  : _statusContextError != null
+                                      ? Padding(
+                                          key: const ValueKey<String>('status-error'),
+                                          padding: const EdgeInsets.only(top: 10),
+                                          child: Row(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Icon(
+                                                Icons.warning_amber_rounded,
+                                                color: tokens.warning,
+                                              ),
+                                              const SizedBox(width: 10),
+                                              const Expanded(
+                                                child: Text(
+                                                  '최신 상태 정보를 확인하지 못했습니다. 수정 완료 시 다시 확인하며, 확인에 실패하면 저장하지 않습니다.',
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        )
+                                      : const SizedBox.shrink(
+                                          key: ValueKey<String>('status-ready'),
+                                        ),
                             ),
                           ],
                         ),
@@ -746,7 +1196,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
                   ),
                   const SizedBox(height: 12),
                   ModifyAnimatedActionButton(
-                    isLoading: isLoading,
+                    isLoading: isLoading || _statusContextResolving,
                     isLocationSelected: _controller.isLocationSelected,
                     buttonLabel: '수정 완료',
                     onPressed: _handleModifyAction,
