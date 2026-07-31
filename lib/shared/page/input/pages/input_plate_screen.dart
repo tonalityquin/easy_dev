@@ -1407,6 +1407,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     final sessionId = const Uuid().v4();
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    debugPrint('[LIVE-OCR][INPUT] open sessionId=$sessionId');
     final result = await Navigator.of(context).push<LiveOcrSessionResult>(
       PageRouteBuilder<LiveOcrSessionResult>(
         pageBuilder: (_, animation, secondaryAnimation) =>
@@ -1428,24 +1429,30 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                 begin: const Offset(0, .025),
                 end: Offset.zero,
               ).animate(curved),
-              child: child,
+              child: ScaleTransition(
+                scale: Tween<double>(begin: 0.985, end: 1).animate(curved),
+                child: child,
+              ),
             ),
           );
         },
       ),
     );
-    if (!mounted || result == null) return;
+    if (!mounted || result == null) {
+      debugPrint('[LIVE-OCR][INPUT] result=null sessionId=$sessionId');
+      return;
+    }
 
     setState(() {
       _lastOcrSessionResult = result;
     });
 
+    var applicationResult = 'no_field_change';
+
     if (result.plate != null && result.plate!.isNotEmpty) {
       _applyPlateWithFallback(result.plate!, sessionId: result.sessionId);
-      return;
-    }
-
-    if (result.requiresMidCompletion &&
+      applicationResult = 'plate_applied';
+    } else if (result.requiresMidCompletion &&
         result.weakFront != null &&
         result.weakBack != null) {
       _applyToFields(
@@ -1455,12 +1462,95 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
         commonMid: true,
         sessionId: result.sessionId,
       );
-      return;
+      applicationResult = 'weak_plate_applied_mid_required';
+    } else if (result.exitType == LiveOcrExitType.userAborted) {
+      applicationResult = 'user_aborted';
+    } else if (result.exitType == LiveOcrExitType.permissionDenied) {
+      applicationResult = 'permission_denied';
+    } else if (result.exitType == LiveOcrExitType.cameraInitFailed) {
+      applicationResult = 'camera_init_failed';
     }
 
-    if (result.exitType == LiveOcrExitType.userAborted) {
-      return;
+    debugPrint(
+      '[LIVE-OCR][INPUT] result sessionId=${result.sessionId} '
+      'exitType=${result.exitType.name} application=$applicationResult '
+      'plate=${result.plate ?? '-'} attempts=${result.attemptCount}',
+    );
+
+    await _showLiveOcrDeveloperStatus(
+      result: result,
+      applicationResult: applicationResult,
+    );
+  }
+
+  Future<void> _showLiveOcrDeveloperStatus({
+    required LiveOcrSessionResult result,
+    required String applicationResult,
+  }) async {
+    if (!mounted) return;
+
+    final trace = await DeveloperOperationTrace.start(
+      context: context,
+      title: 'Live OCR 번호판 인식',
+      initialMessage: 'OCR 세션 결과를 확인합니다.',
+      useCommonUi: true,
+      developerModeMessage:
+          '개발자 모드 ON: OCR 진단 로그와 입력 적용 결과를 표시합니다.',
+      standardModeMessage:
+          '개발자 모드 OFF: OCR 진단 Status Dialog를 표시하지 않습니다.',
+    );
+
+    trace.log(
+      'sessionId=${result.sessionId} exitType=${result.exitType.name} '
+      'attemptCount=${result.attemptCount}',
+      progress: 0.08,
+    );
+    trace.log(
+      'plate=${result.plate ?? '-'} selectedChip=${result.selectedChipLabel ?? '-'} '
+      'failure=${result.lastFailureReason ?? '-'}',
+      progress: 0.14,
+    );
+    trace.log(
+      'candidates=${result.candidateValues.isEmpty ? '-' : result.candidateValues.join('|')} '
+      'learningMid=${result.usedLearningMid} learningRank=${result.usedLearningRank}',
+      progress: 0.2,
+    );
+    trace.log(
+      'weakFront=${result.weakFront ?? '-'} weakBack=${result.weakBack ?? '-'} '
+      'weakObserved=${result.weakObservedValue ?? '-'} '
+      'requiresMidCompletion=${result.requiresMidCompletion} '
+      'midSuggestions=${result.weakMidSuggestions.isEmpty ? '-' : result.weakMidSuggestions.join('|')}',
+      progress: 0.26,
+    );
+
+    if (trace.developerMode && result.logs.isNotEmpty) {
+      const chunkSize = 20;
+      final chunkCount = (result.logs.length / chunkSize).ceil();
+      for (var chunkIndex = 0; chunkIndex < chunkCount; chunkIndex++) {
+        final start = chunkIndex * chunkSize;
+        final end = (start + chunkSize).clamp(0, result.logs.length).toInt();
+        final chunk = result.logs.sublist(start, end).join('\n');
+        final ratio = (chunkIndex + 1) / chunkCount;
+        trace.log(
+          'OCR 세션 로그 ${chunkIndex + 1}/$chunkCount\n$chunk',
+          progress: 0.26 + (0.48 * ratio),
+        );
+      }
     }
+
+    trace.log(
+      'inputApplication=$applicationResult '
+      'front=${controller.controllerFrontDigit.text} '
+      'mid=${controller.controllerMidDigit.text} '
+      'back=${controller.controllerBackDigit.text} '
+      'valid=${controller.isInputValid()} keypad=${controller.showKeypad}',
+      progress: 0.86,
+    );
+    trace.log(
+      'lastOcrText=${result.lastOcrText ?? '-'}',
+      progress: 0.93,
+    );
+    await trace.succeed('Live OCR 결과 처리와 진단 기록이 완료되었습니다.');
   }
 
   void _beginDockEdit(_DockField field) {

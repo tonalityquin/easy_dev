@@ -925,8 +925,10 @@ class _ScheduleTimeline extends StatelessWidget {
               'received=${report.receivedCount} inserted=${report.insertedCount} '
               'updated=${report.updatedCount} deleted=${report.deletedCount} '
               'unlinkedTasks=${report.unlinkedTaskCount} '
-              'tokenReset=${report.tokenReset} success=${report.success} '
-              'error=${report.error ?? ''}',
+              'tokenReset=${report.tokenReset} '
+              'periodicVerification=${report.periodicVerification} '
+              'fullReason=${report.fullSyncReason?.name ?? ''} '
+              'success=${report.success} error=${report.error ?? ''}',
               progress: 0.76,
             );
           }

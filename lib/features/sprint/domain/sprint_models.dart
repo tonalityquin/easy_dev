@@ -48,6 +48,13 @@ enum SprintCalendarSyncMode {
   incremental,
 }
 
+enum SprintCalendarFullSyncReason {
+  initial,
+  scopeChanged,
+  tokenExpired,
+  periodicVerification,
+}
+
 enum SprintPostponeType {
   tomorrow,
   nextWeek,
@@ -210,7 +217,9 @@ class SprintCalendarSyncReport {
     required this.deletedCount,
     required this.unlinkedTaskCount,
     required this.tokenReset,
+    required this.periodicVerification,
     required this.success,
+    this.fullSyncReason,
     this.error,
   });
 
@@ -224,7 +233,9 @@ class SprintCalendarSyncReport {
   final int deletedCount;
   final int unlinkedTaskCount;
   final bool tokenReset;
+  final bool periodicVerification;
   final bool success;
+  final SprintCalendarFullSyncReason? fullSyncReason;
   final String? error;
 }
 

@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/di/routes.dart';
+import '../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../app/utils/snackbar_helper.dart';
 import '../../../design_system/common_ui/common_ui_components.dart';
 import '../../../design_system/common_ui/common_ui_theme.dart';
+import '../../../shared/secondary/pages/secondary_page.dart';
 import '../../dev/debug/debug_action_recorder.dart';
+import '../../selector/application/dev_auth.dart';
 
 @immutable
 class HeadquarterModeSwitchButton extends StatelessWidget {
@@ -18,6 +21,8 @@ class HeadquarterModeSwitchButton extends StatelessWidget {
   final String currentModeKey;
   final String currentScreen;
   final VoidCallback onBeforeSwitch;
+
+  static const String _secondaryRouteName = 'secondary_page';
 
   static const List<_HeadquarterModeTarget> _allTargets =
       <_HeadquarterModeTarget>[
@@ -46,21 +51,31 @@ class HeadquarterModeSwitchButton extends StatelessWidget {
       modeKey: 'sprint',
       isSprint: true,
     ),
+    _HeadquarterModeTarget(
+      title: 'Secondary Page',
+      routeName: _secondaryRouteName,
+      icon: Icons.developer_mode_rounded,
+      modeKey: 'secondary',
+      isSecondary: true,
+    ),
   ];
 
-  List<_HeadquarterModeTarget> get _targets {
+  List<_HeadquarterModeTarget> _targets(bool developerMode) {
     return _allTargets
         .where((target) => target.modeKey != currentModeKey)
+        .where((target) => developerMode || !target.isSecondary)
         .toList(growable: false);
   }
 
   void _trace(BuildContext context, _HeadquarterModeTarget target) {
     DebugActionRecorder.instance.recordAction(
-      '헤드쿼터 모드 전환',
+      target.isSecondary ? 'Secondary Page 이동' : '헤드쿼터 모드 전환',
       route: ModalRoute.of(context)?.settings.name,
       meta: <String, dynamic>{
         'screen': currentScreen,
-        'action': 'switch_headquarter_mode',
+        'action': target.isSecondary
+            ? 'open_secondary_page'
+            : 'switch_headquarter_mode',
         'from': currentModeKey,
         'to': target.modeKey,
         'toRoute': target.routeName,
@@ -68,7 +83,14 @@ class HeadquarterModeSwitchButton extends StatelessWidget {
     );
   }
 
-  Future<_HeadquarterModeTarget?> _pickTarget(BuildContext context) {
+  Future<_HeadquarterModeTarget?> _pickTarget(BuildContext context) async {
+    final developerMode = await DevAuth.isDeveloperLoggedIn();
+    debugPrint(
+      '[HQ-MODE-SWITCH] sheet_open screen=$currentScreen mode=$currentModeKey developerMode=$developerMode',
+    );
+    if (!context.mounted) return null;
+
+    final targets = _targets(developerMode);
     return showCommonDialog<_HeadquarterModeTarget>(
       context: context,
       builder: (dialogContext) {
@@ -117,7 +139,7 @@ class HeadquarterModeSwitchButton extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 14),
-              ..._targets.asMap().entries.map(
+              ...targets.asMap().entries.map(
                     (entry) => Padding(
                       padding: const EdgeInsets.only(bottom: 10),
                       child: CommonAnimatedReveal(
@@ -148,6 +170,11 @@ class HeadquarterModeSwitchButton extends StatelessWidget {
     final target = await _pickTarget(context);
     if (target == null || !context.mounted) return;
 
+    if (target.isSecondary) {
+      await _openSecondaryPage(context, target);
+      return;
+    }
+
     final builder = appRoutes[target.routeName];
     if (builder == null) {
       showFailedSnackbar(
@@ -176,6 +203,58 @@ class HeadquarterModeSwitchButton extends StatelessWidget {
             ? null
             : <String, String>{'returnRouteName': returnRouteName},
       ),
+    );
+  }
+
+  Future<void> _openSecondaryPage(
+    BuildContext context,
+    _HeadquarterModeTarget target,
+  ) async {
+    final developerMode = await DevAuth.isDeveloperLoggedIn();
+    debugPrint(
+      '[HQ-MODE-SWITCH][SECONDARY] request screen=$currentScreen mode=$currentModeKey developerMode=$developerMode',
+    );
+    if (!context.mounted) return;
+
+    if (!developerMode) {
+      debugPrint(
+        '[HQ-MODE-SWITCH][SECONDARY] blocked developerMode=false screen=$currentScreen mode=$currentModeKey',
+      );
+      showFailedSnackbar(
+        context,
+        '개발자 모드가 꺼져 있어 Secondary Page를 열 수 없습니다.',
+        useCommonUi: true,
+      );
+      return;
+    }
+
+    _trace(context, target);
+    final trace = await DeveloperOperationTrace.start(
+      context: context,
+      title: 'Secondary Page 이동',
+      initialMessage: '본사 대시보드에서 Secondary Page 이동 요청을 확인합니다.',
+      useCommonUi: true,
+      developerModeMessage: '개발자 모드 ON: 이동 진단 로그를 표시합니다.',
+      standardModeMessage: '개발자 모드 OFF: Secondary Page 이동을 차단합니다.',
+    );
+    trace.log(
+      'screen=$currentScreen currentMode=$currentModeKey target=${target.routeName}',
+      progress: 0.45,
+    );
+    trace.log('Secondary Page 전환 애니메이션을 준비합니다.', progress: 0.78);
+    await trace.succeed('Secondary Page 이동 준비가 완료되었습니다.');
+    if (!context.mounted) return;
+
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    debugPrint(
+      '[HQ-MODE-SWITCH][SECONDARY] navigate screen=$currentScreen mode=$currentModeKey reduceMotion=$reduceMotion',
+    );
+    await Navigator.of(context).push(
+      _buildSecondaryRoute(reduceMotion: reduceMotion),
+    );
+    debugPrint(
+      '[HQ-MODE-SWITCH][SECONDARY] returned screen=$currentScreen mode=$currentModeKey',
     );
   }
 
@@ -237,6 +316,38 @@ class HeadquarterModeSwitchButton extends StatelessWidget {
     );
   }
 
+  PageRouteBuilder<void> _buildSecondaryRoute({required bool reduceMotion}) {
+    final duration = reduceMotion ? Duration.zero : const Duration(milliseconds: 360);
+    return PageRouteBuilder<void>(
+      settings: const RouteSettings(name: _secondaryRouteName),
+      transitionDuration: duration,
+      reverseTransitionDuration: duration,
+      pageBuilder: (context, animation, secondaryAnimation) =>
+          const SecondaryPage(),
+      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        if (reduceMotion) return child;
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: CommonUiMotion.enter,
+          reverseCurve: CommonUiMotion.exit,
+        );
+        return FadeTransition(
+          opacity: curved,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0.035, 0.012),
+              end: Offset.zero,
+            ).animate(curved),
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 0.985, end: 1).animate(curved),
+              child: child,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -261,6 +372,7 @@ class _HeadquarterModeTarget {
     required this.icon,
     required this.modeKey,
     this.isSprint = false,
+    this.isSecondary = false,
   });
 
   final String title;
@@ -268,4 +380,5 @@ class _HeadquarterModeTarget {
   final IconData icon;
   final String modeKey;
   final bool isSprint;
+  final bool isSecondary;
 }

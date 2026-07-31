@@ -14,6 +14,8 @@ import '../domain/sprint_models.dart';
 import '../domain/sprint_scheduling_engine.dart';
 
 class SprintModeStore extends ChangeNotifier {
+  static const Duration _calendarFullVerificationInterval = Duration(days: 7);
+
   SprintModeStore({
     GoogleCalendarService? calendarService,
     SprintDatabase? database,
@@ -157,6 +159,18 @@ class SprintModeStore extends ChangeNotifier {
       List<SprintCalendarProfile>.unmodifiable(_activeCalendarSlots());
   List<SprintCalendarSyncReport> get lastCalendarSyncReports =>
       List<SprintCalendarSyncReport>.unmodifiable(_lastCalendarSyncReports);
+  Duration get calendarFullVerificationInterval =>
+      _calendarFullVerificationInterval;
+
+  bool isPeriodicFullVerificationDue(SprintCalendarProfile profile) {
+    return _periodicFullVerificationDue(profile, DateTime.now());
+  }
+
+  DateTime? nextFullVerificationAt(SprintCalendarProfile profile) {
+    final last = profile.lastFullSyncAt;
+    if (last == null) return null;
+    return last.add(_calendarFullVerificationInterval);
+  }
   SprintCalendarProfile? get personalCalendarProfile {
     for (final profile in _activeCalendarSlots()) {
       if (profile.googlePrimary) return profile;
@@ -2470,6 +2484,7 @@ class SprintModeStore extends ChangeNotifier {
               deletedCount: 0,
               unlinkedTaskCount: 0,
               tokenReset: false,
+              periodicVerification: false,
               success: false,
               error: _calendarErrorsByProfile[profile.id],
             ),
@@ -2492,7 +2507,7 @@ class SprintModeStore extends ChangeNotifier {
     }
   }
 
-  Future<void> syncCalendarProfile(
+  Future<SprintCalendarSyncReport> syncCalendarProfile(
     String profileId, {
     bool interactive = true,
   }) async {
@@ -2507,11 +2522,25 @@ class SprintModeStore extends ChangeNotifier {
         _calendarErrorsByProfile[profileId] = '현재 앱 사용자 계정의 Calendar 권한 갱신이 필요합니다.';
         _recomputeCalendarState();
         notifyListeners();
-        return;
+        return SprintCalendarSyncReport(
+          profileId: profile.id,
+          calendarId: profile.calendarId,
+          mode: SprintCalendarSyncMode.full,
+          pageCount: 0,
+          receivedCount: 0,
+          insertedCount: 0,
+          updatedCount: 0,
+          deletedCount: 0,
+          unlinkedTaskCount: 0,
+          tokenReset: false,
+          periodicVerification: false,
+          success: false,
+          error: _calendarErrorsByProfile[profileId],
+        );
       }
       await authenticateCalendarProfile(profileId);
     }
-    await _syncCalendarProfileInternal(
+    return _syncCalendarProfileInternal(
       profile: profile,
       anchor: _selectedDate,
       replace: true,
@@ -2854,6 +2883,7 @@ class SprintModeStore extends ChangeNotifier {
         deletedCount: 0,
         unlinkedTaskCount: 0,
         tokenReset: false,
+        periodicVerification: false,
         success: false,
         error: 'calendar_profile_not_connected',
       );
@@ -2877,6 +2907,7 @@ class SprintModeStore extends ChangeNotifier {
         deletedCount: 0,
         unlinkedTaskCount: 0,
         tokenReset: false,
+        periodicVerification: false,
         success: false,
         error: _calendarErrorsByProfile[profile.id],
       );
@@ -2893,6 +2924,8 @@ class SprintModeStore extends ChangeNotifier {
     notifyListeners();
     var mode = SprintCalendarSyncMode.full;
     var tokenReset = false;
+    var periodicVerification = false;
+    SprintCalendarFullSyncReason? fullSyncReason;
     var pageCount = 0;
     var receivedCount = 0;
     var insertedCount = 0;
@@ -2905,12 +2938,30 @@ class SprintModeStore extends ChangeNotifier {
         calendarId: profile.calendarId,
       );
       profile.accessRole = accessRole;
+      final tokenCoversRange = _syncTokenCoversRange(
+        profile,
+        rangeStart: rangeStart,
+        rangeEnd: rangeEnd,
+      );
+      periodicVerification = replace &&
+          tokenCoversRange &&
+          _periodicFullVerificationDue(profile, DateTime.now());
       final canIncremental = replace &&
-          _syncTokenCoversRange(
-            profile,
-            rangeStart: rangeStart,
-            rangeEnd: rangeEnd,
-          );
+          tokenCoversRange &&
+          !periodicVerification;
+      if (periodicVerification) {
+        fullSyncReason = SprintCalendarFullSyncReason.periodicVerification;
+        debugPrint(
+          '[SprintCalendarSync] periodic-full-verification profile=${profile.id} '
+          'calendar=${profile.calendarId} lastFull=${profile.lastFullSyncAt?.toIso8601String() ?? ''} '
+          'intervalDays=${_calendarFullVerificationInterval.inDays}',
+        );
+      } else if (!tokenCoversRange) {
+        final hasToken = profile.syncToken?.trim().isNotEmpty == true;
+        fullSyncReason = hasToken
+            ? SprintCalendarFullSyncReason.scopeChanged
+            : SprintCalendarFullSyncReason.initial;
+      }
       GoogleCalendarEventSyncResult syncResult;
       if (canIncremental) {
         mode = SprintCalendarSyncMode.incremental;
@@ -2924,6 +2975,7 @@ class SprintModeStore extends ChangeNotifier {
         } on GoogleCalendarSyncTokenExpiredException {
           tokenReset = true;
           mode = SprintCalendarSyncMode.full;
+          fullSyncReason = SprintCalendarFullSyncReason.tokenExpired;
           _clearProfileSyncToken(profile);
           syncResult = await _calendarService.listEventsSnapshot(
             accountEmail: account.email,
@@ -2954,7 +3006,9 @@ class SprintModeStore extends ChangeNotifier {
           deletedCount: 0,
           unlinkedTaskCount: 0,
           tokenReset: tokenReset,
+          periodicVerification: periodicVerification,
           success: false,
+          fullSyncReason: fullSyncReason,
           error: 'calendar_sync_stale',
         );
       }
@@ -3037,7 +3091,9 @@ class SprintModeStore extends ChangeNotifier {
         '[SprintCalendarSync] success profile=${profile.id} '
         'mode=${mode.name} pages=$pageCount received=$receivedCount '
         'inserted=$insertedCount updated=$updatedCount deleted=$deletedCount '
-        'unlinkedTasks=$unlinkedTaskCount tokenReset=$tokenReset',
+        'unlinkedTasks=$unlinkedTaskCount tokenReset=$tokenReset '
+        'periodicVerification=$periodicVerification '
+        'fullReason=${fullSyncReason?.name ?? ''}',
       );
       _retryPendingTaskSyncs(profile.id);
       return SprintCalendarSyncReport(
@@ -3051,7 +3107,9 @@ class SprintModeStore extends ChangeNotifier {
         deletedCount: deletedCount,
         unlinkedTaskCount: unlinkedTaskCount,
         tokenReset: tokenReset,
+        periodicVerification: periodicVerification,
         success: true,
+        fullSyncReason: fullSyncReason,
       );
     } catch (error) {
       if (_calendarSyncIsStale(generation, profile.id)) {
@@ -3066,7 +3124,9 @@ class SprintModeStore extends ChangeNotifier {
           deletedCount: deletedCount,
           unlinkedTaskCount: unlinkedTaskCount,
           tokenReset: tokenReset,
+          periodicVerification: periodicVerification,
           success: false,
+          fullSyncReason: fullSyncReason,
           error: 'calendar_sync_stale',
         );
       }
@@ -3086,7 +3146,9 @@ class SprintModeStore extends ChangeNotifier {
       _calendarErrorsByProfile[profile.id] = error.toString();
       debugPrint(
         '[SprintCalendarSync] failure profile=${profile.id} '
-        'calendar=${profile.calendarId} mode=${mode.name} error=$error',
+        'calendar=${profile.calendarId} mode=${mode.name} '
+        'periodicVerification=$periodicVerification '
+        'fullReason=${fullSyncReason?.name ?? ''} error=$error',
       );
       _recomputeCalendarState();
       notifyListeners();
@@ -3102,10 +3164,22 @@ class SprintModeStore extends ChangeNotifier {
         deletedCount: deletedCount,
         unlinkedTaskCount: unlinkedTaskCount,
         tokenReset: tokenReset,
+        periodicVerification: periodicVerification,
         success: false,
+        fullSyncReason: fullSyncReason,
         error: error.toString(),
       );
     }
+  }
+
+  bool _periodicFullVerificationDue(
+    SprintCalendarProfile profile,
+    DateTime now,
+  ) {
+    final last = profile.lastFullSyncAt;
+    if (last == null) return false;
+    if (now.isBefore(last)) return true;
+    return now.difference(last) >= _calendarFullVerificationInterval;
   }
 
   bool _syncTokenCoversRange(

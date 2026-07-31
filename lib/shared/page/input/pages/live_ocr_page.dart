@@ -711,10 +711,12 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
     final now = DateTime.now();
     final ts =
         '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}.${now.millisecond.toString().padLeft(3, '0')}';
-    _sessionLogs.add('[$ts] $message');
+    final line = '[$ts] $message';
+    _sessionLogs.add(line);
     if (_sessionLogs.length > _maxSessionLogLines) {
       _sessionLogs.removeAt(0);
     }
+    debugPrint('[LIVE-OCR][${widget.sessionId}] $message');
   }
 
   String _joinForLog(List<String> values) {
@@ -1928,6 +1930,14 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
     final hasLearning =
         (_learningSummary?.committedCount ?? 0) > 0 || _dynMidMap.isNotEmpty;
     final usedLearningNow = _usedLearningMidLast || _usedLearningRankLast;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final candidateAnimationKey = _displayChips.isEmpty
+        ? 'empty:${_currentFailureReason ?? '-'}'
+        : _displayChips
+            .map((chip) =>
+                '${chip.tier.name}:${chip.value}:${chip.requiresMidCompletion}')
+            .join('|');
 
     return PopScope(
       canPop: false,
@@ -2090,7 +2100,33 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
                   width: double.infinity,
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
                   color: tokens.scrim,
-                  child: _buildCandidates(),
+                  child: AnimatedSwitcher(
+                    duration:
+                        reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                    reverseDuration:
+                        reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                    switchInCurve: CommonUiMotion.enter,
+                    switchOutCurve: CommonUiMotion.exit,
+                    transitionBuilder: (child, animation) {
+                      final scale = Tween<double>(begin: 0.97, end: 1).animate(
+                        CurvedAnimation(
+                          parent: animation,
+                          curve: CommonUiMotion.enter,
+                        ),
+                      );
+                      return FadeTransition(
+                        opacity: animation,
+                        child: ScaleTransition(
+                          scale: scale,
+                          child: child,
+                        ),
+                      );
+                    },
+                    child: KeyedSubtree(
+                      key: ValueKey<String>(candidateAnimationKey),
+                      child: _buildCandidates(),
+                    ),
+                  ),
                 ),
               ),
             ),

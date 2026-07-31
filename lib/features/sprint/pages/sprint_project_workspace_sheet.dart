@@ -1570,7 +1570,17 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
       progress: 0.22,
     );
     try {
-      await widget.store.syncCalendarProfile(profile.id);
+      final report = await widget.store.syncCalendarProfile(profile.id);
+      trace.log(
+        'mode=${report.mode.name} pages=${report.pageCount} '
+        'received=${report.receivedCount} inserted=${report.insertedCount} '
+        'updated=${report.updatedCount} deleted=${report.deletedCount} '
+        'unlinkedTasks=${report.unlinkedTaskCount} '
+        'tokenReset=${report.tokenReset} '
+        'periodicVerification=${report.periodicVerification} '
+        'fullReason=${report.fullSyncReason?.name ?? ''}',
+        progress: 0.78,
+      );
       final state = widget.store.calendarStateForProfile(profile.id);
       final success = state == SprintCalendarConnectionState.connected;
       final refreshed = widget.store.calendarProfileById(profile.id);
@@ -1632,9 +1642,19 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
     try {
       await widget.store.authenticateCalendarProfile(profile.id);
       trace.log('권한 확인을 완료하고 일정을 내려받고 있습니다.', progress: 0.58);
-      await widget.store.syncCalendarProfile(
+      final report = await widget.store.syncCalendarProfile(
         profile.id,
         interactive: false,
+      );
+      trace.log(
+        'mode=${report.mode.name} pages=${report.pageCount} '
+        'received=${report.receivedCount} inserted=${report.insertedCount} '
+        'updated=${report.updatedCount} deleted=${report.deletedCount} '
+        'unlinkedTasks=${report.unlinkedTaskCount} '
+        'tokenReset=${report.tokenReset} '
+        'periodicVerification=${report.periodicVerification} '
+        'fullReason=${report.fullSyncReason?.name ?? ''}',
+        progress: 0.82,
       );
       final refreshed = widget.store.calendarProfileById(profile.id);
       trace.log(
@@ -1831,8 +1851,10 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
           'received=${report.receivedCount} inserted=${report.insertedCount} '
           'updated=${report.updatedCount} deleted=${report.deletedCount} '
           'unlinkedTasks=${report.unlinkedTaskCount} '
-          'tokenReset=${report.tokenReset} success=${report.success} '
-          'error=${report.error ?? ''}',
+          'tokenReset=${report.tokenReset} '
+          'periodicVerification=${report.periodicVerification} '
+          'fullReason=${report.fullSyncReason?.name ?? ''} '
+          'success=${report.success} error=${report.error ?? ''}',
           progress: 0.76,
         );
       }
@@ -1896,6 +1918,9 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
         final activeAccount = widget.store.accountForProfile(active?.id);
         final activeEmail = activeAccount?.email.trim() ?? '';
         final calendarState = widget.store.calendarState;
+        final fullVerificationDueProfiles = profiles
+            .where(widget.store.isPeriodicFullVerificationDue)
+            .toList(growable: false);
         String? verificationMessage;
         IconData? verificationIcon;
         Color? verificationBackground;
@@ -1916,6 +1941,13 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
           verificationIcon = Icons.error_outline_rounded;
           verificationBackground = colors.errorContainer;
           verificationForeground = colors.onErrorContainer;
+        } else if (fullVerificationDueProfiles.isNotEmpty) {
+          verificationMessage = fullVerificationDueProfiles.length == 1
+              ? '다음 동기화에서 Google Calendar 전체 정합성 검증을 실행합니다.'
+              : '다음 동기화에서 ${fullVerificationDueProfiles.length}개 Calendar 전체 정합성 검증을 실행합니다.';
+          verificationIcon = Icons.fact_check_outlined;
+          verificationBackground = colors.primaryContainer;
+          verificationForeground = colors.onPrimaryContainer;
         }
         return Material(
           color: colors.surface,
@@ -2122,6 +2154,10 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
                           busy: _busyProfileId == profile.id ||
                               widget.store.accountBusy,
                           duration: duration,
+                          fullVerificationDue:
+                              widget.store.isPeriodicFullVerificationDue(profile),
+                          nextFullVerificationAt:
+                              widget.store.nextFullVerificationAt(profile),
                           connectionState: state,
                           error: widget.store.calendarErrorForProfile(profile.id),
                           onSetDefault:
@@ -2519,6 +2555,8 @@ class _SprintCalendarProfileCard extends StatelessWidget {
     required this.active,
     required this.busy,
     required this.duration,
+    required this.fullVerificationDue,
+    required this.nextFullVerificationAt,
     required this.connectionState,
     required this.error,
     required this.onSetDefault,
@@ -2533,6 +2571,8 @@ class _SprintCalendarProfileCard extends StatelessWidget {
   final bool active;
   final bool busy;
   final Duration duration;
+  final bool fullVerificationDue;
+  final DateTime? nextFullVerificationAt;
   final SprintCalendarConnectionState connectionState;
   final String? error;
   final VoidCallback? onSetDefault;
@@ -2699,6 +2739,105 @@ class _SprintCalendarProfileCard extends StatelessWidget {
                           ),
                         ],
                       ),
+                    ),
+                    const SizedBox(height: 7),
+                    AnimatedSwitcher(
+                      duration: duration,
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      transitionBuilder: (child, animation) {
+                        return FadeTransition(
+                          opacity: animation,
+                          child: ScaleTransition(
+                            scale: Tween<double>(begin: 0.96, end: 1).animate(
+                              CurvedAnimation(
+                                parent: animation,
+                                curve: Curves.easeOutCubic,
+                              ),
+                            ),
+                            child: child,
+                          ),
+                        );
+                      },
+                      child: fullVerificationDue
+                          ? Container(
+                              key: ValueKey<String>(
+                                'full-verification-due-${profile.id}',
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 9,
+                                vertical: 5,
+                              ),
+                              decoration: BoxDecoration(
+                                color: colors.primaryContainer,
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.fact_check_outlined,
+                                    size: 15,
+                                    color: colors.onPrimaryContainer,
+                                  ),
+                                  const SizedBox(width: 5),
+                                  Flexible(
+                                    child: Text(
+                                      '전체 정합성 검증 예정',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: colors.onPrimaryContainer,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : nextFullVerificationAt == null
+                              ? const SizedBox.shrink(
+                                  key: ValueKey<String>(
+                                    'full-verification-uninitialized',
+                                  ),
+                                )
+                              : Container(
+                                  key: ValueKey<String>(
+                                    'full-verification-ready-${profile.id}',
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 9,
+                                    vertical: 5,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: colors.surfaceContainerHighest,
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.verified_outlined,
+                                        size: 15,
+                                        color: colors.onSurfaceVariant,
+                                      ),
+                                      const SizedBox(width: 5),
+                                      Flexible(
+                                        child: Text(
+                                          '전체 검증 ${nextFullVerificationAt!.month}/${nextFullVerificationAt!.day} 예정',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            color: colors.onSurfaceVariant,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                     ),
                   ],
                 ),

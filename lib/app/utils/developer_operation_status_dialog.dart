@@ -171,6 +171,8 @@ class _DeveloperOperationStatusDialogState
   late final Animation<double> _entryScale;
   Timer? _copyTimer;
   bool _copied = false;
+  bool _motionConfigured = false;
+  bool _reduceMotion = false;
 
   @override
   void initState() {
@@ -196,8 +198,29 @@ class _DeveloperOperationStatusDialogState
       ),
     );
     widget.trace.addListener(_handleTraceChanged);
-    _entryController.forward();
-    _pulseController.repeat(reverse: true);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (_motionConfigured && reduceMotion == _reduceMotion) return;
+    _motionConfigured = true;
+    _reduceMotion = reduceMotion;
+    if (_reduceMotion) {
+      _entryController.stop();
+      _entryController.value = 1;
+      _pulseController.stop();
+      _pulseController.value = 1;
+      return;
+    }
+    if (_entryController.value < 1) {
+      _entryController.forward();
+    }
+    if (!widget.trace.isDone && !_pulseController.isAnimating) {
+      _pulseController.repeat(reverse: true);
+    }
   }
 
   @override
@@ -274,6 +297,12 @@ class _DeveloperOperationStatusDialogState
     final visibleLogs = logs.length > 12
         ? logs.sublist(logs.length - 12)
         : logs;
+    final fastMotion =
+        _reduceMotion ? Duration.zero : const Duration(milliseconds: 220);
+    final standardMotion =
+        _reduceMotion ? Duration.zero : const Duration(milliseconds: 260);
+    final progressMotion =
+        _reduceMotion ? Duration.zero : const Duration(milliseconds: 360);
 
     return PopScope(
       canPop: widget.trace.isDone,
@@ -292,11 +321,12 @@ class _DeveloperOperationStatusDialogState
             title: Row(
               children: [
                 ScaleTransition(
-                  scale: widget.trace.state == DeveloperOperationState.running
+                  scale: widget.trace.state == DeveloperOperationState.running &&
+                          !_reduceMotion
                       ? _pulseController
                       : const AlwaysStoppedAnimation<double>(1),
                   child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 260),
+                    duration: standardMotion,
                     curve: Curves.easeOutCubic,
                     width: 44,
                     height: 44,
@@ -308,7 +338,7 @@ class _DeveloperOperationStatusDialogState
                       ),
                     ),
                     child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 240),
+                      duration: standardMotion,
                       transitionBuilder: (child, animation) {
                         return FadeTransition(
                           opacity: animation,
@@ -341,7 +371,7 @@ class _DeveloperOperationStatusDialogState
                       ),
                       const SizedBox(height: 3),
                       AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 220),
+                        duration: fastMotion,
                         child: Text(
                           _stateLabel(),
                           key: ValueKey<DeveloperOperationState>(
@@ -369,7 +399,7 @@ class _DeveloperOperationStatusDialogState
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     AnimatedContainer(
-                      duration: const Duration(milliseconds: 260),
+                      duration: standardMotion,
                       curve: Curves.easeOutCubic,
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
@@ -380,7 +410,7 @@ class _DeveloperOperationStatusDialogState
                         ),
                       ),
                       child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 260),
+                        duration: standardMotion,
                         transitionBuilder: (child, animation) {
                           final offset = Tween<Offset>(
                             begin: const Offset(0.03, 0),
@@ -406,7 +436,7 @@ class _DeveloperOperationStatusDialogState
                     ),
                     const SizedBox(height: 14),
                     TweenAnimationBuilder<double>(
-                      duration: const Duration(milliseconds: 360),
+                      duration: progressMotion,
                       curve: Curves.easeOutCubic,
                       tween: Tween<double>(
                         begin: 0,
@@ -463,7 +493,7 @@ class _DeveloperOperationStatusDialogState
                     ),
                     const SizedBox(height: 8),
                     AnimatedSize(
-                      duration: const Duration(milliseconds: 260),
+                      duration: standardMotion,
                       curve: Curves.easeOutCubic,
                       child: Container(
                         width: double.infinity,
@@ -499,14 +529,14 @@ class _DeveloperOperationStatusDialogState
               OutlinedButton.icon(
                 onPressed: _copyDebugPrintCode,
                 icon: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 220),
+                  duration: fastMotion,
                   child: Icon(
                     _copied ? Icons.check_rounded : Icons.copy_all_rounded,
                     key: ValueKey<bool>(_copied),
                   ),
                 ),
                 label: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 220),
+                  duration: fastMotion,
                   child: Text(
                     _copied ? '복사 완료' : 'debugPrint 코드 복사',
                     key: ValueKey<bool>(_copied),
@@ -514,7 +544,7 @@ class _DeveloperOperationStatusDialogState
                 ),
               ),
               AnimatedSwitcher(
-                duration: const Duration(milliseconds: 260),
+                duration: standardMotion,
                 transitionBuilder: (child, animation) {
                   return FadeTransition(
                     opacity: animation,
