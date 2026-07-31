@@ -7,7 +7,7 @@ import '../../../../features/account/applications/user_state.dart';
 import '../../../../features/dev/application/area_state.dart';
 
 import '../../../../features/headquarter/application/area/area_master_cache.dart';
-import 'prompt_area_picker_sheet.dart';
+import 'common_area_picker_sheet.dart';
 import '../../../plate/application/minor/minor_plate_state.dart';
 
 const String _modeKey = 'minor';
@@ -16,7 +16,7 @@ void minorAreaPickerBottomSheet({
   required BuildContext context,
   required AreaState areaState,
   required MinorPlateState plateState,
-  bool usePromptUi = false,
+  bool useCommonUi = false,
 }) {
   final userState = context.read<UserState>();
   final userAreas = userState.session?.areas ?? const <String>[];
@@ -40,8 +40,8 @@ void minorAreaPickerBottomSheet({
     modeKey: _modeKey,
   );
 
-  if (usePromptUi) {
-    showPromptAreaPickerSheet(
+  if (useCommonUi) {
+    showCommonAreaPickerSheet(
       context: context,
       future: future,
       currentArea: areaState.currentArea,

@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../dev/application/area_state.dart';
-import 'personal_prompt_components.dart';
+import 'personal_common_components.dart';
 
 class PersonalTopNavigation extends StatefulWidget {
   const PersonalTopNavigation({
@@ -40,7 +40,7 @@ class _PersonalTopNavigationState extends State<PersonalTopNavigation> {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final area = context.select<AreaState, String>(
       (state) => state.currentArea,
@@ -54,7 +54,7 @@ class _PersonalTopNavigationState extends State<PersonalTopNavigation> {
       child: SafeArea(
         bottom: false,
         child: AnimatedContainer(
-          duration: personalPromptDuration(context),
+          duration: personalCommonDuration(context),
           height: 62,
           padding: const EdgeInsets.fromLTRB(16, 7, 10, 7),
           decoration: BoxDecoration(
@@ -72,14 +72,14 @@ class _PersonalTopNavigationState extends State<PersonalTopNavigation> {
           ),
           child: Row(
             children: <Widget>[
-              PromptAnimatedReveal(
+              CommonAnimatedReveal(
                 child: Container(
                   width: 40,
                   height: 40,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: tokens.accentContainer,
-                    borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                    borderRadius: BorderRadius.circular(CommonUiShapes.control),
                     border: Border.all(
                       color: tokens.accent.withOpacity(.24),
                     ),
@@ -109,9 +109,9 @@ class _PersonalTopNavigationState extends State<PersonalTopNavigation> {
                     ),
                     const SizedBox(height: 1),
                     AnimatedSwitcher(
-                      duration: personalPromptDuration(
+                      duration: personalCommonDuration(
                         context,
-                        PromptUiMotion.selection,
+                        CommonUiMotion.selection,
                       ),
                       child: Text(
                         '$displayName님 · $displayArea',
@@ -128,14 +128,14 @@ class _PersonalTopNavigationState extends State<PersonalTopNavigation> {
                   ],
                 ),
               ),
-              PromptIconButton(
+              CommonIconButton(
                 icon: widget.menuOpen
                     ? Icons.close_rounded
                     : Icons.menu_rounded,
                 tooltip: widget.menuOpen ? '메뉴 닫기' : '메뉴',
                 onPressed: widget.enabled ? widget.onMenuPressed : null,
                 selected: widget.menuOpen,
-                haptic: PromptHaptic.selection,
+                haptic: CommonHaptic.selection,
               ),
             ],
           ),

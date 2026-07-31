@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../app/di/routes.dart';
 import '../../../app/utils/snackbar_helper.dart';
-import '../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../design_system/common_ui/common_ui_components.dart';
+import '../../../design_system/common_ui/common_ui_theme.dart';
 import '../../dev/debug/debug_action_recorder.dart';
 
 @immutable
@@ -69,10 +69,10 @@ class HeadquarterModeSwitchButton extends StatelessWidget {
   }
 
   Future<_HeadquarterModeTarget?> _pickTarget(BuildContext context) {
-    return showPromptDialog<_HeadquarterModeTarget>(
+    return showCommonDialog<_HeadquarterModeTarget>(
       context: context,
       builder: (dialogContext) {
-        final tokens = PromptUiTheme.of(dialogContext);
+        final tokens = CommonUiTheme.of(dialogContext);
         return ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 420),
           child: Column(
@@ -87,7 +87,7 @@ class HeadquarterModeSwitchButton extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: tokens.accentContainer,
                       borderRadius:
-                          BorderRadius.circular(PromptUiShapes.control),
+                          BorderRadius.circular(CommonUiShapes.control),
                       border: Border.all(color: tokens.borderSubtle),
                     ),
                     child: Icon(
@@ -108,11 +108,11 @@ class HeadquarterModeSwitchButton extends StatelessWidget {
                           ),
                     ),
                   ),
-                  PromptIconButton(
+                  CommonIconButton(
                     icon: Icons.close_rounded,
                     tooltip: '닫기',
                     onPressed: () => Navigator.of(dialogContext).pop(),
-                    haptic: PromptHaptic.selection,
+                    haptic: CommonHaptic.selection,
                   ),
                 ],
               ),
@@ -120,19 +120,19 @@ class HeadquarterModeSwitchButton extends StatelessWidget {
               ..._targets.asMap().entries.map(
                     (entry) => Padding(
                       padding: const EdgeInsets.only(bottom: 10),
-                      child: PromptAnimatedReveal(
+                      child: CommonAnimatedReveal(
                         delay: Duration(milliseconds: 45 * entry.key),
                         offset: const Offset(0, 0.025),
-                        child: PromptButton(
+                        child: CommonButton(
                           label: entry.value.title,
                           icon: entry.value.icon,
                           onPressed: () => Navigator.of(dialogContext)
                               .pop(entry.value),
                           expand: true,
                           variant: entry.value.isSprint
-                              ? PromptButtonVariant.primary
-                              : PromptButtonVariant.secondary,
-                          haptic: PromptHaptic.selection,
+                              ? CommonButtonVariant.primary
+                              : CommonButtonVariant.secondary,
+                          haptic: CommonHaptic.selection,
                         ),
                       ),
                     ),
@@ -153,7 +153,7 @@ class HeadquarterModeSwitchButton extends StatelessWidget {
       showFailedSnackbar(
         context,
         '이동할 화면을 찾을 수 없습니다.',
-        usePromptUi: true,
+        useCommonUi: true,
       );
       return;
     }
@@ -212,8 +212,8 @@ class HeadquarterModeSwitchButton extends StatelessWidget {
         if (reduceMotion) return child;
         final curved = CurvedAnimation(
           parent: animation,
-          curve: PromptUiMotion.enter,
-          reverseCurve: PromptUiMotion.exit,
+          curve: CommonUiMotion.enter,
+          reverseCurve: CommonUiMotion.exit,
         );
         return FadeTransition(
           opacity: curved,
@@ -241,13 +241,13 @@ class HeadquarterModeSwitchButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
-      child: PromptButton(
+      child: CommonButton(
         label: '헤드쿼터 모드 전환',
         icon: Icons.swap_horiz_rounded,
         onPressed: () => _switchMode(context),
         expand: true,
-        variant: PromptButtonVariant.secondary,
-        haptic: PromptHaptic.selection,
+        variant: CommonButtonVariant.secondary,
+        haptic: CommonHaptic.selection,
       ),
     );
   }

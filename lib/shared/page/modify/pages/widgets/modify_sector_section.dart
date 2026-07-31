@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
-import '../prompt_modify_ui.dart';
+import '../../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../../design_system/common_ui/common_ui_theme.dart';
+import '../common_modify_ui.dart';
 
 class ModifySectorSection extends StatelessWidget {
   const ModifySectorSection({
@@ -18,7 +18,7 @@ class ModifySectorSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final displayName = sectorName?.trim().isNotEmpty == true
@@ -26,13 +26,13 @@ class ModifySectorSection extends StatelessWidget {
         : '선택되지 않음';
     final selected = sectorName?.trim().isNotEmpty == true;
 
-    return PromptAnimatedReveal(
-      child: PromptModifySectionCard(
+    return CommonAnimatedReveal(
+      child: CommonModifySectionCard(
         padding: const EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const PromptModifySectionTitle(
+            const CommonModifySectionTitle(
               icon: Icons.location_city_rounded,
               title: '방문 구역',
               subtitle: '현재 차량의 방문 구역을 확인하고 변경합니다.',
@@ -40,14 +40,14 @@ class ModifySectorSection extends StatelessWidget {
             const SizedBox(height: 12),
             Material(
               color: tokens.transparent,
-              borderRadius: BorderRadius.circular(PromptUiShapes.control),
+              borderRadius: BorderRadius.circular(CommonUiShapes.control),
               clipBehavior: Clip.antiAlias,
               child: InkWell(
                 onTap: isBusy ? null : onPressed,
                 child: AnimatedContainer(
                   duration:
-                      reduceMotion ? Duration.zero : PromptUiMotion.selection,
-                  curve: PromptUiMotion.standard,
+                      reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                  curve: CommonUiMotion.standard,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 14,
                     vertical: 13,
@@ -57,7 +57,7 @@ class ModifySectorSection extends StatelessWidget {
                         ? tokens.surfaceSelected
                         : tokens.surfaceOverlay,
                     borderRadius:
-                        BorderRadius.circular(PromptUiShapes.control),
+                        BorderRadius.circular(CommonUiShapes.control),
                     border: Border.all(
                       color: selected ? tokens.accent : tokens.borderSubtle,
                       width: selected ? 1.5 : 1,
@@ -79,8 +79,8 @@ class ModifySectorSection extends StatelessWidget {
                       AnimatedContainer(
                         duration: reduceMotion
                             ? Duration.zero
-                            : PromptUiMotion.selection,
-                        curve: PromptUiMotion.standard,
+                            : CommonUiMotion.selection,
+                        curve: CommonUiMotion.standard,
                         width: 42,
                         height: 42,
                         decoration: BoxDecoration(
@@ -88,7 +88,7 @@ class ModifySectorSection extends StatelessWidget {
                               ? tokens.accentContainer
                               : tokens.surfaceRaised,
                           borderRadius:
-                              BorderRadius.circular(PromptUiShapes.control),
+                              BorderRadius.circular(CommonUiShapes.control),
                           border: Border.all(
                             color: selected
                                 ? tokens.accent.withOpacity(
@@ -101,7 +101,7 @@ class ModifySectorSection extends StatelessWidget {
                         child: AnimatedSwitcher(
                           duration: reduceMotion
                               ? Duration.zero
-                              : PromptUiMotion.selection,
+                              : CommonUiMotion.selection,
                           child: isBusy
                               ? SizedBox(
                                   key: const ValueKey('sector_busy'),
@@ -142,9 +142,9 @@ class ModifySectorSection extends StatelessWidget {
                             AnimatedSwitcher(
                               duration: reduceMotion
                                   ? Duration.zero
-                                  : PromptUiMotion.selection,
-                              switchInCurve: PromptUiMotion.enter,
-                              switchOutCurve: PromptUiMotion.exit,
+                                  : CommonUiMotion.selection,
+                              switchInCurve: CommonUiMotion.enter,
+                              switchOutCurve: CommonUiMotion.exit,
                               transitionBuilder: (child, animation) {
                                 final offset = Tween<Offset>(
                                   begin: const Offset(0, .12),
@@ -180,8 +180,8 @@ class ModifySectorSection extends StatelessWidget {
                         turns: isBusy ? .5 : 0,
                         duration: reduceMotion
                             ? Duration.zero
-                            : PromptUiMotion.selection,
-                        curve: PromptUiMotion.standard,
+                            : CommonUiMotion.selection,
+                        curve: CommonUiMotion.standard,
                         child: Icon(
                           isBusy
                               ? Icons.sync_rounded

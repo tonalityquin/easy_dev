@@ -13,9 +13,9 @@ import '../../../../app/init/app_navigator.dart';
 import '../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../app/utils/ops_delayed_refresh_gate.dart';
 import '../../../../app/utils/snackbar_helper.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../account/applications/user_state.dart';
 import '../../../chat/application/chat_area_key.dart';
 import '../../../chat/presentation/area_chat_panel.dart';
@@ -168,7 +168,7 @@ class HeadHubActions {
         showFailedSnackbar(
           ctx,
           '문의하기 화면을 열 수 없습니다.',
-          usePromptUi: true,
+          useCommonUi: true,
         );
       }
     }
@@ -186,7 +186,7 @@ class HeadHubActions {
         return AreaChatPanel.showSheet(
           context: sheetContext,
           areaName: headquarterChatAreaName,
-          usePromptUi: true,
+          useCommonUi: true,
         );
       },
       context: ctx,
@@ -204,7 +204,7 @@ class HeadHubActions {
       context: ctx,
       title: '지역 마스터 갱신',
       initialMessage: '지역 마스터 갱신 요청을 확인하고 있습니다.',
-      usePromptUi: true,
+      useCommonUi: true,
     );
 
     if (division.isEmpty) {
@@ -214,7 +214,7 @@ class HeadHubActions {
         showFailedSnackbar(
           ctx,
           failureMessage,
-          usePromptUi: true,
+          useCommonUi: true,
         );
       }
       return;
@@ -227,7 +227,7 @@ class HeadHubActions {
       context: ctx,
       title: '지역 마스터 갱신',
       message: '지역 마스터를 갱신하기 전 요청을 준비하고 있습니다.',
-      usePromptUi: true,
+      useCommonUi: true,
     );
     if (!shouldRefresh) {
       trace.log('사용자가 지역 마스터 갱신을 취소했습니다.');
@@ -253,11 +253,11 @@ class HeadHubActions {
       await trace.succeed('지역 마스터 갱신이 완료되었습니다.');
       if (!ctx.mounted) return;
 
-      await showPromptDialog<void>(
+      await showCommonDialog<void>(
         context: ctx,
         barrierDismissible: false,
         builder: (dialogContext) {
-          final tokens = PromptUiTheme.of(dialogContext);
+          final tokens = CommonUiTheme.of(dialogContext);
           final text = Theme.of(dialogContext).textTheme;
           return ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 420),
@@ -273,7 +273,7 @@ class HeadHubActions {
                       decoration: BoxDecoration(
                         color: tokens.successContainer,
                         borderRadius:
-                            BorderRadius.circular(PromptUiShapes.control),
+                            BorderRadius.circular(CommonUiShapes.control),
                       ),
                       child: Icon(
                         Icons.cloud_done_rounded,
@@ -298,7 +298,7 @@ class HeadHubActions {
                   decoration: BoxDecoration(
                     color: tokens.surfaceOverlay,
                     borderRadius:
-                        BorderRadius.circular(PromptUiShapes.control),
+                        BorderRadius.circular(CommonUiShapes.control),
                     border: Border.all(color: tokens.borderSubtle),
                   ),
                   child: Text(
@@ -313,11 +313,11 @@ class HeadHubActions {
                   ),
                 ),
                 const SizedBox(height: 16),
-                PromptButton(
+                CommonButton(
                   label: '확인 및 종료',
                   icon: Icons.power_settings_new_rounded,
                   expand: true,
-                  haptic: PromptHaptic.selection,
+                  haptic: CommonHaptic.selection,
                   onPressed: () => Navigator.of(dialogContext).pop(),
                 ),
               ],
@@ -328,7 +328,7 @@ class HeadHubActions {
 
       final exitContext = _bestContext();
       if (exitContext == null || !exitContext.mounted) return;
-      await AppExitService.exitApp(exitContext, usePromptUi: true);
+      await AppExitService.exitApp(exitContext, useCommonUi: true);
     } catch (error, stackTrace) {
       const failureMessage = '지역 마스터 갱신에 실패했습니다.';
       await trace.fail(
@@ -340,7 +340,7 @@ class HeadHubActions {
         showFailedSnackbar(
           ctx,
           failureMessage,
-          usePromptUi: true,
+          useCommonUi: true,
         );
       }
     }
@@ -366,7 +366,7 @@ class HeadHubActions {
       return;
     }
     _entry = OverlayEntry(
-      builder: (context) => PromptUiScope(
+      builder: (context) => CommonUiScope(
         child: Material(
           type: MaterialType.transparency,
           child: _HubBubble(
@@ -481,7 +481,7 @@ class _HubBubbleState extends State<_HubBubble>
 
   List<_DockAction> _buildActions(
     BuildContext actionContext,
-    PromptUiTokens tokens,
+    CommonUiTokens tokens,
   ) {
     Future<void> closeMenu() async {
       if (!_expanded) return;
@@ -495,7 +495,7 @@ class _HubBubbleState extends State<_HubBubble>
       }
     }
 
-    Future<T?> openPromptSheet<T>(
+    Future<T?> openCommonSheet<T>(
       Future<T?> Function(BuildContext context) open,
     ) {
       return HeadHubActions.openSheetExclusively<T>(
@@ -526,10 +526,10 @@ class _HubBubbleState extends State<_HubBubble>
         foreground: tokens.onInfoContainer,
         onTap: () async {
           await closeMenu();
-          await openPromptSheet<void>(
+          await openCommonSheet<void>(
             (sheetContext) => HeadMemo.openPanel(
               context: sheetContext,
-              usePromptUi: true,
+              useCommonUi: true,
             ),
           );
         },
@@ -543,10 +543,10 @@ class _HubBubbleState extends State<_HubBubble>
         foreground: tokens.onSuccessContainer,
         onTap: () async {
           await closeMenu();
-          await openPromptSheet<dynamic>(
+          await openCommonSheet<dynamic>(
             (sheetContext) => CompanyCalendarPage.showAsBottomSheet(
               sheetContext,
-              usePromptUi: true,
+              useCommonUi: true,
             ),
           );
         },
@@ -560,10 +560,10 @@ class _HubBubbleState extends State<_HubBubble>
         foreground: tokens.onInfoContainer,
         onTap: () async {
           await closeMenu();
-          await openPromptSheet<dynamic>(
+          await openCommonSheet<dynamic>(
             (sheetContext) => hr_att.AttendanceCalendar.showAsBottomSheet(
               sheetContext,
-              usePromptUi: true,
+              useCommonUi: true,
             ),
           );
         },
@@ -577,10 +577,10 @@ class _HubBubbleState extends State<_HubBubble>
         foreground: tokens.onWarningContainer,
         onTap: () async {
           await closeMenu();
-          await openPromptSheet<dynamic>(
+          await openCommonSheet<dynamic>(
             (sheetContext) => hr_break.BreakCalendar.showAsBottomSheet(
               sheetContext,
-              usePromptUi: true,
+              useCommonUi: true,
             ),
           );
         },
@@ -594,10 +594,10 @@ class _HubBubbleState extends State<_HubBubble>
         foreground: tokens.onAccentContainer,
         onTap: () async {
           await closeMenu();
-          await openPromptSheet<dynamic>(
+          await openCommonSheet<dynamic>(
             (sheetContext) => mgmt.Field.showAsBottomSheet(
               sheetContext,
-              usePromptUi: true,
+              useCommonUi: true,
             ),
           );
         },
@@ -639,10 +639,10 @@ class _HubBubbleState extends State<_HubBubble>
         foreground: tokens.onAccentContainer,
         onTap: () async {
           await closeMenu();
-          await openPromptSheet<dynamic>(
+          await openCommonSheet<dynamic>(
             (sheetContext) => mgmt_stats.Statistics.showAsBottomSheet(
               sheetContext,
-              usePromptUi: true,
+              useCommonUi: true,
             ),
           );
         },
@@ -656,8 +656,8 @@ class _HubBubbleState extends State<_HubBubble>
         foreground: tokens.onWarningContainer,
         onTap: () async {
           await closeMenu();
-          await openPromptSheet<dynamic>(
-            (sheetContext) => showPromptOverlayBottomSheet<dynamic>(
+          await openCommonSheet<dynamic>(
+            (sheetContext) => showCommonOverlayBottomSheet<dynamic>(
               context: sheetContext,
               isScrollControlled: true,
               useSafeArea: true,
@@ -675,10 +675,10 @@ class _HubBubbleState extends State<_HubBubble>
         foreground: tokens.onSuccessContainer,
         onTap: () async {
           await closeMenu();
-          final selected = await openPromptSheet<TutorialItem>(
+          final selected = await openCommonSheet<TutorialItem>(
             (sheetContext) => HeadTutorials.showPickerBottomSheet(
               sheetContext,
-              usePromptUi: true,
+              useCommonUi: true,
             ),
           );
           final viewerContext = HeadHubActions.currentContext();
@@ -686,7 +686,7 @@ class _HubBubbleState extends State<_HubBubble>
             await TutorialPdfViewer.open(
               viewerContext,
               selected,
-              usePromptUi: true,
+              useCommonUi: true,
             );
           }
         },
@@ -728,7 +728,7 @@ class _HubBubbleState extends State<_HubBubble>
     final screen = media?.size ?? Size.zero;
     final bottomInset = media?.padding.bottom ?? 0;
     final keyboardInset = media?.viewInsets.bottom ?? 0;
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion = media?.disableAnimations ?? false;
 
     if (!_clampedOnce && screen != Size.zero) {
@@ -774,7 +774,7 @@ class _HubBubbleState extends State<_HubBubble>
               child: AnimatedOpacity(
                 opacity: 0.22 * _t.value,
                 duration:
-                    reduceMotion ? Duration.zero : PromptUiMotion.instant,
+                    reduceMotion ? Duration.zero : CommonUiMotion.instant,
                 child: ColoredBox(color: tokens.scrim),
               ),
             ),
@@ -1069,7 +1069,7 @@ class _PaletteTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final text = Theme.of(context).textTheme;
 
     final border = tokens.borderSubtle;
@@ -1298,7 +1298,7 @@ class _GlassDock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
 
     return ClipRRect(
       borderRadius: borderRadius,

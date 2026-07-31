@@ -48,7 +48,7 @@ class _SprintModeLoadingPageState extends State<SprintModeLoadingPage>
           reverseTransitionDuration: reduceMotion
               ? Duration.zero
               : const Duration(milliseconds: 240),
-          pageBuilder: (_, __, ___) => SprintPromptScope(
+          pageBuilder: (_, __, ___) => SprintCommonScope(
             child: SprintWorkspaceHomePage(
               store: _store,
               returnRouteName: widget.returnRouteName,

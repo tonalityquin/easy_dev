@@ -3,9 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 
 import '../../../location/applications/location_state.dart';
 import '../../../location/domain/models/location_model.dart';
@@ -16,7 +16,7 @@ import '../../../tablet/domain/models/two_d/tablet_grid_2d_preview.dart'
         TabletGrid2dPreview,
         parkingOverlayCanonicalChildKey;
 import '../../../../shared/plate/domain/models/plate_model.dart';
-import '../widgets/personal_prompt_components.dart';
+import '../widgets/personal_common_components.dart';
 
 @immutable
 class PersonalParkingLocationDetails {
@@ -47,7 +47,7 @@ Future<void> showPersonalDepartureRequestedSuccessDialog(
 ) async {
   final details = parsePersonalParkingLocation(plate.location);
 
-  await showPromptOverlayDialog<void>(
+  await showCommonOverlayDialog<void>(
     context: context,
     useRootNavigator: true,
     barrierDismissible: true,
@@ -177,7 +177,7 @@ class _PersonalDepartureRequestSuccessDialogState
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final mediaQuery = MediaQuery.of(context);
     final isPhone = mediaQuery.size.shortestSide < 600;
@@ -196,7 +196,7 @@ class _PersonalDepartureRequestSuccessDialogState
       backgroundColor: tokens.surfaceRaised,
       surfaceTintColor: tokens.transparent,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(PromptUiShapes.dialog),
+        borderRadius: BorderRadius.circular(CommonUiShapes.dialog),
         side: BorderSide(color: tokens.borderSubtle),
       ),
       child: SizedBox(
@@ -216,7 +216,7 @@ class _PersonalDepartureRequestSuccessDialogState
                     decoration: BoxDecoration(
                       color: tokens.statusDepartureRequestedContainer,
                       borderRadius: BorderRadius.circular(
-                        PromptUiShapes.control,
+                        CommonUiShapes.control,
                       ),
                     ),
                     child: Icon(
@@ -247,20 +247,20 @@ class _PersonalDepartureRequestSuccessDialogState
                       ],
                     ),
                   ),
-                  PromptIconButton(
+                  CommonIconButton(
                     icon: Icons.close_rounded,
                     tooltip: '닫기',
                     onPressed: _closeDialog,
-                    haptic: PromptHaptic.selection,
+                    haptic: CommonHaptic.selection,
                   ),
                 ],
               ),
               const SizedBox(height: 14),
               Expanded(
-                child: PersonalPromptPanel(
+                child: PersonalCommonPanel(
                   padding: EdgeInsets.zero,
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(PromptUiShapes.card),
+                    borderRadius: BorderRadius.circular(CommonUiShapes.card),
                     child: PersonalDepartureRequestFocusedGrid(
                       area: widget.plate.area,
                       details: widget.details,
@@ -279,10 +279,10 @@ class _PersonalDepartureRequestSuccessDialogState
                 ),
               ),
               const SizedBox(height: 14),
-              PersonalPromptAnimatedSwap(
+              PersonalCommonAnimatedSwap(
                 stateKey: _reduceMotion,
                 child: _reduceMotion
-                    ? PersonalPromptStatusPill(
+                    ? PersonalCommonStatusPill(
                         label: '잠시 후 자동으로 닫힙니다.',
                         foreground: tokens.statusSynchronized,
                         background: tokens.statusSynchronizedContainer,
@@ -295,7 +295,7 @@ class _PersonalDepartureRequestSuccessDialogState
                           builder: (context, _) {
                             return ClipRRect(
                               borderRadius: BorderRadius.circular(
-                                PromptUiShapes.pill,
+                                CommonUiShapes.pill,
                               ),
                               child: LinearProgressIndicator(
                                 minHeight: 8,
@@ -313,10 +313,10 @@ class _PersonalDepartureRequestSuccessDialogState
                 alignment: Alignment.center,
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(minWidth: 160),
-                  child: PromptButton(
+                  child: CommonButton(
                     label: '닫기',
                     icon: Icons.close_rounded,
-                    haptic: PromptHaptic.selection,
+                    haptic: CommonHaptic.selection,
                     onPressed: _closeDialog,
                   ),
                 ),

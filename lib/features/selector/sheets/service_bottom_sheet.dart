@@ -9,9 +9,9 @@ import '../../../app/config/overlay_edge_side_config.dart';
 import '../../../app/config/overlay_mode_config.dart';
 import '../../../app/theme/brand_theme.dart';
 import '../../../app/theme/theme_prefs_controller.dart';
-import '../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../design_system/common_ui/common_ui_components.dart';
+import '../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../design_system/common_ui/common_ui_theme.dart';
 import '../../dev/page/sheets/dev_quick_actions.dart';
 import '../application/dev_auth.dart';
 
@@ -39,7 +39,7 @@ class ServiceBottomSheet {
   static Future<void> show({
     required BuildContext context,
   }) async {
-    await showPromptOverlayBottomSheet<void>(
+    await showCommonOverlayBottomSheet<void>(
       context: context,
       useSafeArea: true,
       builder: (sheetContext) {
@@ -255,7 +255,7 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
   }
 
   Widget _buildThemeModeChips(BuildContext context) {
-    final t = PromptUiTheme.of(context);
+    final t = CommonUiTheme.of(context);
     final text = Theme.of(context).textTheme;
     final modes = themeModeSpecs();
 
@@ -299,7 +299,7 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
   }
 
   Widget _buildPresetChips(BuildContext context) {
-    final t = PromptUiTheme.of(context);
+    final t = CommonUiTheme.of(context);
     final text = Theme.of(context).textTheme;
 
     final presets = _brandPresetsForSelectedArea(_themeModeId);
@@ -403,16 +403,16 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
     required Widget child,
     Widget? trailing,
   }) {
-    final t = PromptUiTheme.of(context);
+    final t = CommonUiTheme.of(context);
     final text = Theme.of(context).textTheme;
 
-    return PromptAnimatedReveal(
+    return CommonAnimatedReveal(
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
         decoration: BoxDecoration(
           color: t.surfaceOverlay,
-          borderRadius: BorderRadius.circular(PromptUiShapes.card),
+          borderRadius: BorderRadius.circular(CommonUiShapes.card),
           border: Border.all(color: t.borderSubtle),
         ),
         child: Column(
@@ -425,7 +425,7 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
                   height: 38,
                   decoration: BoxDecoration(
                     color: t.accentContainer,
-                    borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                    borderRadius: BorderRadius.circular(CommonUiShapes.control),
                     border: Border.all(
                       color: t.accent.withOpacity(t.isDark ? 0.48 : 0.30),
                     ),
@@ -454,7 +454,7 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
   }
 
   Widget _buildOverlayEdgeSideSection(BuildContext context) {
-    final t = PromptUiTheme.of(context);
+    final t = CommonUiTheme.of(context);
     final text = Theme.of(context).textTheme;
 
     String labelFor(OverlayEdgeSide side) {
@@ -519,7 +519,7 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
   }
 
   Widget _buildPrivateGateSection(BuildContext context) {
-    final t = PromptUiTheme.of(context);
+    final t = CommonUiTheme.of(context);
     final text = Theme.of(context).textTheme;
 
     final adminStatus = _adminUnlocked ? 'ON' : 'OFF';
@@ -533,12 +533,12 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (_adminUnlocked)
-            PromptIconButton(
+            CommonIconButton(
               icon: Icons.lock_rounded,
               tooltip: '앱설정 잠그기',
               onPressed: _lockAdmin,
               destructive: true,
-              haptic: PromptHaptic.selection,
+              haptic: CommonHaptic.selection,
             ),
         ],
       ),
@@ -568,7 +568,7 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
               labelText: '코드 입력',
               border: const OutlineInputBorder(),
               prefixIcon: const Icon(Icons.password_rounded),
-              suffixIcon: PromptIconButton(
+              suffixIcon: CommonIconButton(
                 icon: _privateCodeObscure
                     ? Icons.visibility_off_rounded
                     : Icons.visibility_rounded,
@@ -584,24 +584,24 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
           Row(
             children: [
               Expanded(
-                child: PromptButton(
+                child: CommonButton(
                   label: '적용',
                   icon: Icons.check_rounded,
                   onPressed: _applyPrivateCode,
                   expand: true,
-                  haptic: PromptHaptic.medium,
+                  haptic: CommonHaptic.medium,
                 ),
               ),
               if (_devModeEnabled) ...[
                 const SizedBox(width: 8),
                 Expanded(
-                  child: PromptButton(
+                  child: CommonButton(
                     label: '개발자 모드 OFF',
                     icon: Icons.power_settings_new,
                     onPressed: _disableDevMode,
-                    variant: PromptButtonVariant.destructive,
+                    variant: CommonButtonVariant.destructive,
                     expand: true,
-                    haptic: PromptHaptic.heavy,
+                    haptic: CommonHaptic.heavy,
                   ),
                 ),
               ],
@@ -613,7 +613,7 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
   }
 
   Widget _buildOverlayModeSection(BuildContext context) {
-    final t = PromptUiTheme.of(context);
+    final t = CommonUiTheme.of(context);
     final text = Theme.of(context).textTheme;
 
     String labelFor(OverlayMode mode) {
@@ -695,18 +695,18 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
   }
 
   Widget _buildGmailSection(BuildContext context) {
-    final t = PromptUiTheme.of(context);
+    final t = CommonUiTheme.of(context);
     final text = Theme.of(context).textTheme;
 
     return _sectionBox(
       context: context,
       icon: Icons.mail_outline,
       title: '메일 전송 설정 (수신자만)',
-      trailing: PromptIconButton(
+      trailing: CommonIconButton(
         icon: Icons.restore,
         tooltip: '기본값으로 초기화',
         destructive: true,
-        haptic: PromptHaptic.selection,
+        haptic: CommonHaptic.selection,
         onPressed: () async {
           await EmailConfig.clear();
           final cfg = await EmailConfig.load();
@@ -733,12 +733,12 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
           Row(
             children: [
               Expanded(
-                child: PromptButton(
+                child: CommonButton(
                   label: '저장',
                   icon: Icons.check_circle_outline,
-                  variant: PromptButtonVariant.secondary,
+                  variant: CommonButtonVariant.secondary,
                   expand: true,
-                  haptic: PromptHaptic.medium,
+                  haptic: CommonHaptic.medium,
                   onPressed: () async {
                     final to = _mailToCtrl.text.trim();
                     if (!EmailConfig.isValidToList(to)) {
@@ -753,12 +753,12 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: PromptButton(
+                child: CommonButton(
                   label: '설정 복사',
                   icon: Icons.copy_all_outlined,
-                  variant: PromptButtonVariant.tertiary,
+                  variant: CommonButtonVariant.tertiary,
                   expand: true,
-                  haptic: PromptHaptic.selection,
+                  haptic: CommonHaptic.selection,
                   onPressed: () async {
                     final raw = 'To: ${_mailToCtrl.text}';
                     await Clipboard.setData(ClipboardData(text: raw));
@@ -795,12 +795,12 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
     return AnimatedTheme(
-      data: PromptUiTheme.scoped(themed),
-      duration: reduceMotion ? Duration.zero : PromptUiMotion.component,
-      curve: PromptUiMotion.standard,
+      data: CommonUiTheme.scoped(themed),
+      duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
+      curve: CommonUiMotion.standard,
       child: Builder(
         builder: (context) {
-          final tokens = PromptUiTheme.of(context);
+          final tokens = CommonUiTheme.of(context);
           return DraggableScrollableSheet(
             expand: false,
             initialChildSize: 1,
@@ -810,14 +810,14 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
               final keyboardBottom =
                   MediaQuery.of(sheetContext).viewInsets.bottom;
 
-              return PromptSheetScaffold(
+              return CommonSheetScaffold(
                 title: '서비스 설정',
                 icon: Icons.tune_rounded,
                 onClose: () => Navigator.pop(sheetContext),
                 body: AnimatedPadding(
                   duration:
-                      reduceMotion ? Duration.zero : PromptUiMotion.component,
-                  curve: PromptUiMotion.standard,
+                      reduceMotion ? Duration.zero : CommonUiMotion.component,
+                  curve: CommonUiMotion.standard,
                   padding: EdgeInsets.only(bottom: keyboardBottom),
                   child: SingleChildScrollView(
                     controller: scrollController,
@@ -848,9 +848,9 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
                         AnimatedSwitcher(
                           duration: reduceMotion
                               ? Duration.zero
-                              : PromptUiMotion.component,
-                          switchInCurve: PromptUiMotion.enter,
-                          switchOutCurve: PromptUiMotion.exit,
+                              : CommonUiMotion.component,
+                          switchInCurve: CommonUiMotion.enter,
+                          switchOutCurve: CommonUiMotion.exit,
                           transitionBuilder: (child, animation) {
                             return FadeTransition(
                               opacity: animation,
@@ -907,7 +907,7 @@ class _PresetPreviewDots extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dots = colors.take(3).toList();
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: List.generate(dots.length, (i) {
@@ -937,18 +937,18 @@ class _StatusPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final isOn = value == 'ON';
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
     return AnimatedContainer(
-      duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
-      curve: PromptUiMotion.standard,
+      duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+      curve: CommonUiMotion.standard,
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: isOn ? tokens.accentContainer : tokens.surfaceOverlay,
-        borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+        borderRadius: BorderRadius.circular(CommonUiShapes.pill),
         border: Border.all(
           color: isOn ? tokens.accent : tokens.borderSubtle,
         ),

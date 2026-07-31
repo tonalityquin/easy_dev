@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../../app/utils/status_dialog.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../../../design_system/common_ui/common_ui_overlays.dart';
 import '../../../widgets/ops_console_widgets.dart';
 
 
@@ -222,7 +222,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
         title: activeTitle,
         description:
             '선택한 지역의 활성 계정 한도에 도달했습니다. 활성 계정은 최대 ${activeLimit}개까지만 사용할 수 있습니다. 기존 활성 계정을 비활성화하거나 리밋 설정에서 활성 한도를 늘린 뒤 다시 시도하세요.',
-        usePromptUi: true,
+        useCommonUi: true,
       );
       return;
     }
@@ -234,7 +234,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
         title: totalTitle,
         description:
             '선택한 지역의 전체 계정 생성 한도에 도달했습니다. 활성 계정과 비활성 계정을 합쳐 최대 ${totalLimit}개까지만 생성할 수 있습니다. 기존 계정을 삭제하거나 리밋 설정에서 전체 한도를 늘린 뒤 다시 시도하세요.',
-        usePromptUi: true,
+        useCommonUi: true,
       );
       return;
     }
@@ -243,7 +243,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
       context,
       title: fallbackTitle,
       description: '계정 정보를 저장하는 중 문제가 발생했습니다. 입력값과 네트워크 상태를 확인한 뒤 다시 시도하세요.',
-      usePromptUi: true,
+      useCommonUi: true,
     );
   }
 
@@ -538,7 +538,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
       await StatusDialog.showSuccess(
         context,
         title: StatusDialog.userAccountSaveSuccess,
-        usePromptUi: true,
+        useCommonUi: true,
       );
 
       if (!mounted) return;
@@ -563,7 +563,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
   Future<void> _openCreateDialog(List<String> divisionList) async {
     if (_creating) return;
 
-    final draft = await showPromptOverlayDialog<_CreateUserAccountDraft>(
+    final draft = await showCommonOverlayDialog<_CreateUserAccountDraft>(
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) => _CreateUserAccountDialog(
@@ -656,7 +656,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
       await StatusDialog.showSuccess(
         context,
         title: StatusDialog.userAccountSaveSuccess,
-        usePromptUi: true,
+        useCommonUi: true,
       );
 
       if (!mounted) return;
@@ -752,7 +752,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
                                 ActionChip(
                                   label: const Text('+ 추가'),
                                   onPressed: () async {
-                                    final toAdd = await showPromptOverlayDialog<String>(
+                                    final toAdd = await showCommonOverlayDialog<String>(
                                       context: context,
                                       builder: (_) => SimpleDialog(
                                         title: const Text('Division 추가'),
@@ -805,7 +805,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
                                       List<String>.from(updated['divisions']),
                                     );
                                     if (!mounted) return;
-                                    final toAdd = await showPromptOverlayDialog<String>(
+                                    final toAdd = await showCommonOverlayDialog<String>(
                                       context: context,
                                       builder: (_) => SimpleDialog(
                                         title: const Text('Area 추가'),
@@ -1180,7 +1180,7 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
   Future<void> _pickTime(String day, {required bool isStart}) async {
     final current = isStart ? _startByDay[day] : _endByDay[day];
     final initial = current ?? (isStart ? const TimeOfDay(hour: 9, minute: 0) : const TimeOfDay(hour: 18, minute: 0));
-    final picked = await showPromptTimePicker(
+    final picked = await showCommonTimePicker(
       context: context,
       initialTime: initial,
       builder: (ctx, child) {

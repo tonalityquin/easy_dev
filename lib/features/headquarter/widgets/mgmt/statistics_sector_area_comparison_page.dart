@@ -10,7 +10,7 @@ import 'package:pdf/widgets.dart' as pw;
 import '../../../../app/config/email_config.dart';
 import '../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../shared/utils/gmail_pdf_mailer.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 import 'statistics_deep_log_service.dart';
 import 'statistics_deep_model.dart';
 import 'statistics_report_design.dart';
@@ -19,14 +19,14 @@ class StatisticsSectorAreaComparisonPage extends StatefulWidget {
   final String division;
   final List<String> areas;
   final List<DateTime> dates;
-  final bool usePromptUi;
+  final bool useCommonUi;
 
   const StatisticsSectorAreaComparisonPage({
     super.key,
     required this.division,
     required this.areas,
     required this.dates,
-    required this.usePromptUi,
+    required this.useCommonUi,
   });
 
   @override
@@ -62,7 +62,7 @@ class _StatisticsSectorAreaComparisonPageState
     final cs = Theme.of(context).colorScheme;
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    final duration = reduceMotion ? Duration.zero : PromptUiMotion.layout;
+    final duration = reduceMotion ? Duration.zero : CommonUiMotion.layout;
     return Scaffold(
       backgroundColor: cs.surface,
       appBar: AppBar(
@@ -77,8 +77,8 @@ class _StatisticsSectorAreaComparisonPageState
                 : _openMailDialog,
             icon: AnimatedSwitcher(
               duration: duration,
-              switchInCurve: PromptUiMotion.enter,
-              switchOutCurve: PromptUiMotion.exit,
+              switchInCurve: CommonUiMotion.enter,
+              switchOutCurve: CommonUiMotion.exit,
               child: _sending
                   ? const SizedBox(
                       key: ValueKey<String>('comparison_pdf_sending'),
@@ -112,8 +112,8 @@ class _StatisticsSectorAreaComparisonPageState
               const SizedBox(height: 12),
               AnimatedSwitcher(
                 duration: duration,
-                switchInCurve: PromptUiMotion.enter,
-                switchOutCurve: PromptUiMotion.exit,
+                switchInCurve: CommonUiMotion.enter,
+                switchOutCurve: CommonUiMotion.exit,
                 child: _loading
                     ? const _LoadingPanel(key: ValueKey<String>('loading'))
                     : _report == null
@@ -204,7 +204,7 @@ class _StatisticsSectorAreaComparisonPageState
         context: context,
         title: 'Area 방문 구역 비교 PDF',
         initialMessage: 'Area 비교 PDF를 생성하고 Gmail 첨부파일을 준비합니다.',
-        usePromptUi: widget.usePromptUi,
+        useCommonUi: widget.useCommonUi,
         developerModeMessage:
             '개발자 모드 ON: 비교 PDF 생성과 Gmail 발신 로그를 복사할 수 있습니다.',
         standardModeMessage:
@@ -735,7 +735,7 @@ class _StatisticsSectorAreaComparisonPageState
         context: context,
         title: 'Area 방문 구역 비교',
         initialMessage: '선택한 Area의 완료 업무 로그를 비교하고 있습니다.',
-        usePromptUi: widget.usePromptUi,
+        useCommonUi: widget.useCommonUi,
         developerModeMessage:
             '개발자 모드 ON: Area별 조회 및 무결성 로그를 복사할 수 있습니다.',
         standardModeMessage:
@@ -1007,8 +1007,8 @@ class _AreaSourceCoveragePanel extends StatelessWidget {
     return AnimatedContainer(
       duration: MediaQuery.maybeOf(context)?.disableAnimations == true
           ? Duration.zero
-          : PromptUiMotion.layout,
-      curve: PromptUiMotion.enter,
+          : CommonUiMotion.layout,
+      curve: CommonUiMotion.enter,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: cs.tertiaryContainer,

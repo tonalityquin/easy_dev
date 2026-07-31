@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../../../../app/di/routes.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../dev/debug/debug_action_recorder.dart';
 import '../../controllers/tablet/tablet_login_controller.dart';
-import '../common/prompt_login_ui.dart';
+import '../common/common_login_ui.dart';
 
 class TabletLoginForm extends StatefulWidget {
   const TabletLoginForm({super.key, required this.controller});
@@ -38,7 +38,7 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
     if (!mounted) return;
     setState(() {});
     if (!success) {
-      await showPromptLoginFailure(context);
+      await showCommonLoginFailure(context);
     }
   }
 
@@ -85,12 +85,12 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
   Widget build(BuildContext context) {
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    return PromptLoginScaffold(
-      spec: PromptLoginModeSpec.tablet,
+    return CommonLoginScaffold(
+      spec: CommonLoginModeSpec.tablet,
       onTopLogoPressed: _onTopCompanyLogoTapped,
       onFooterLogoPressed: _onFooterLogoTapped,
       status: const _TabletLoginStatus(),
-      fields: PromptLoginFields(
+      fields: CommonLoginFields(
         nameController: _controller.nameController,
         nameFocus: _controller.nameFocus,
         accountController: _controller.phoneController,
@@ -108,12 +108,12 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
         onSubmit: _onLoginButtonPressed,
         enabled: !_controller.isLoading,
       ),
-      actions: PromptAnimatedReveal(
+      actions: CommonAnimatedReveal(
         delay: const Duration(milliseconds: 240),
         child: AnimatedSwitcher(
-          duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
-          switchInCurve: PromptUiMotion.enter,
-          switchOutCurve: PromptUiMotion.exit,
+          duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+          switchInCurve: CommonUiMotion.enter,
+          switchOutCurve: CommonUiMotion.exit,
           transitionBuilder: (child, animation) {
             return FadeTransition(
               opacity: animation,
@@ -123,14 +123,14 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
               ),
             );
           },
-          child: PromptButton(
+          child: CommonButton(
             key: ValueKey<bool>(_controller.isLoading),
             label: _controller.isLoading ? '로그인 중' : '로그인',
             icon: Icons.login_rounded,
             expand: true,
             loading: _controller.isLoading,
             onPressed: _controller.isLoading ? null : _onLoginButtonPressed,
-            haptic: PromptHaptic.light,
+            haptic: CommonHaptic.light,
           ),
         ),
       ),
@@ -143,19 +143,19 @@ class _TabletLoginStatus extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     return Semantics(
       label: '태블릿 운영 계정',
       value: '현장 운영 화면 연결',
       child: AnimatedContainer(
         duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false
             ? Duration.zero
-            : PromptUiMotion.selection,
-        curve: PromptUiMotion.standard,
+            : CommonUiMotion.selection,
+        curve: CommonUiMotion.standard,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           color: tokens.statusSynchronizedContainer,
-          borderRadius: BorderRadius.circular(PromptUiShapes.control),
+          borderRadius: BorderRadius.circular(CommonUiShapes.control),
           border: Border.all(color: tokens.statusSynchronized),
         ),
         child: Row(

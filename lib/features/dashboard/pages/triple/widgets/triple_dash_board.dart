@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../../app/init/db_connection_status_section.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../../shared/page/widget/navigation/triple_top_navigation.dart';
 import '../../../sheets/triple/triple_hq_dash_board_page.dart';
 
@@ -15,7 +15,7 @@ class TripleDashBoard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final overlayStyle = tokens.isDark
         ? SystemUiOverlayStyle.light
         : SystemUiOverlayStyle.dark;
@@ -31,7 +31,7 @@ class TripleDashBoard extends StatelessWidget {
         child: Scaffold(
           backgroundColor: tokens.canvas,
           appBar: AppBar(
-            title: const TripleTopNavigation(usePromptUi: true),
+            title: const TripleTopNavigation(useCommonUi: true),
             centerTitle: true,
             backgroundColor: tokens.surface,
             foregroundColor: tokens.textPrimary,
@@ -49,7 +49,7 @@ class TripleDashBoard extends StatelessWidget {
                       alignment: Alignment.topLeft,
                       child: Padding(
                         padding: const EdgeInsets.only(left: 12, top: 5),
-                        child: PromptAnimatedReveal(
+                        child: CommonAnimatedReveal(
                           offset: const Offset(-0.04, 0),
                           child: SizedBox(
                             width: _screenTagSize.width,
@@ -83,7 +83,7 @@ class TripleDashBoard extends StatelessWidget {
                                 liveLabel: 'live DB',
                                 storageLabel: '스토리지 DB',
                                 spacing: 4,
-                                usePromptUi: true,
+                                useCommonUi: true,
                               ),
                             ),
                           ),

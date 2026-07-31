@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../design_system/common_ui/common_ui_components.dart';
+import '../../../design_system/common_ui/common_ui_theme.dart';
 import '../../di/routes.dart';
 import '../../init/app_start_flow_prefs.dart';
 import 'policy_documents.dart';
@@ -117,17 +117,17 @@ class _PolicyConsentScreenState extends State<PolicyConsentScreen> {
   }
 
   Widget _buildFlowProgress(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final progress = _spec.step / _spec.totalSteps;
 
     return Row(
       children: [
         Expanded(
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+            borderRadius: BorderRadius.circular(CommonUiShapes.pill),
             child: TweenAnimationBuilder<double>(
-              duration: _reduceMotion ? Duration.zero : PromptUiMotion.layout,
-              curve: PromptUiMotion.standard,
+              duration: _reduceMotion ? Duration.zero : CommonUiMotion.layout,
+              curve: CommonUiMotion.standard,
               tween: Tween<double>(begin: 0, end: progress),
               builder: (context, value, child) {
                 return LinearProgressIndicator(
@@ -145,7 +145,7 @@ class _PolicyConsentScreenState extends State<PolicyConsentScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
           decoration: BoxDecoration(
             color: tokens.accentContainer,
-            borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+            borderRadius: BorderRadius.circular(CommonUiShapes.pill),
             border: Border.all(
               color: tokens.accent.withOpacity(tokens.isDark ? 0.56 : 0.34),
             ),
@@ -163,7 +163,7 @@ class _PolicyConsentScreenState extends State<PolicyConsentScreen> {
   }
 
   Widget _buildHeader(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
 
     return _PolicyEntrance(
@@ -219,7 +219,7 @@ class _PolicyConsentScreenState extends State<PolicyConsentScreen> {
   }
 
   Widget _buildDocument(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
 
     return _PolicyEntrance(
@@ -227,7 +227,7 @@ class _PolicyConsentScreenState extends State<PolicyConsentScreen> {
       child: Container(
         decoration: BoxDecoration(
           color: tokens.surfaceRaised,
-          borderRadius: BorderRadius.circular(PromptUiShapes.card),
+          borderRadius: BorderRadius.circular(CommonUiShapes.card),
           border: Border.all(color: tokens.borderSubtle),
           boxShadow: [
             BoxShadow(
@@ -262,7 +262,7 @@ class _PolicyConsentScreenState extends State<PolicyConsentScreen> {
                   ),
                   AnimatedSwitcher(
                     duration:
-                        _reduceMotion ? Duration.zero : PromptUiMotion.component,
+                        _reduceMotion ? Duration.zero : CommonUiMotion.component,
                     child: _readToEnd
                         ? _PolicyReadPill(
                             key: const ValueKey('read'),
@@ -288,8 +288,8 @@ class _PolicyConsentScreenState extends State<PolicyConsentScreen> {
               height: 4,
               child: TweenAnimationBuilder<double>(
                 duration:
-                    _reduceMotion ? Duration.zero : PromptUiMotion.selection,
-                curve: PromptUiMotion.standard,
+                    _reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                curve: CommonUiMotion.standard,
                 tween: Tween<double>(begin: 0, end: _scrollProgress),
                 builder: (context, value, child) {
                   return LinearProgressIndicator(
@@ -324,7 +324,7 @@ class _PolicyConsentScreenState extends State<PolicyConsentScreen> {
   }
 
   Widget _buildAgreement(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final enabled = _readToEnd && !_busy;
 
@@ -334,7 +334,7 @@ class _PolicyConsentScreenState extends State<PolicyConsentScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           AnimatedSwitcher(
-            duration: _reduceMotion ? Duration.zero : PromptUiMotion.component,
+            duration: _reduceMotion ? Duration.zero : CommonUiMotion.component,
             child: _readToEnd
                 ? const SizedBox.shrink(key: ValueKey('ready'))
                 : Padding(
@@ -363,11 +363,11 @@ class _PolicyConsentScreenState extends State<PolicyConsentScreen> {
                   ),
           ),
           AnimatedContainer(
-            duration: _reduceMotion ? Duration.zero : PromptUiMotion.selection,
-            curve: PromptUiMotion.standard,
+            duration: _reduceMotion ? Duration.zero : CommonUiMotion.selection,
+            curve: CommonUiMotion.standard,
             decoration: BoxDecoration(
               color: _agreed ? tokens.surfaceSelected : tokens.surfaceRaised,
-              borderRadius: BorderRadius.circular(PromptUiShapes.card),
+              borderRadius: BorderRadius.circular(CommonUiShapes.card),
               border: Border.all(
                 color: _agreed ? tokens.accent : tokens.borderSubtle,
               ),
@@ -393,7 +393,7 @@ class _PolicyConsentScreenState extends State<PolicyConsentScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          PromptButton(
+          CommonButton(
             label: _busy ? '저장 중' : _spec.actionLabel,
             icon: widget.kind == PolicyConsentKind.accountDeletion
                 ? Icons.check_rounded
@@ -401,7 +401,7 @@ class _PolicyConsentScreenState extends State<PolicyConsentScreen> {
             onPressed: _agreed && !_busy ? _complete : null,
             loading: _busy,
             expand: true,
-            haptic: PromptHaptic.selection,
+            haptic: CommonHaptic.selection,
           ),
         ],
       ),
@@ -417,10 +417,10 @@ class _PolicyConsentScreenState extends State<PolicyConsentScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return PromptUiScope(
+    return CommonUiScope(
       child: Builder(
         builder: (context) {
-          final tokens = PromptUiTheme.of(context);
+          final tokens = CommonUiTheme.of(context);
           final iconBrightness =
               tokens.isDark ? Brightness.light : Brightness.dark;
 
@@ -496,7 +496,7 @@ class _PolicyReadPill extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+        borderRadius: BorderRadius.circular(CommonUiShapes.pill),
         border: Border.all(color: border.withOpacity(0.58)),
       ),
       child: Row(
@@ -530,17 +530,17 @@ class _PolicyEntrance extends StatelessWidget {
   Widget build(BuildContext context) {
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     if (reduceMotion) return child;
-    final duration = PromptUiMotion.layout + delay;
+    final duration = CommonUiMotion.layout + delay;
 
     return TweenAnimationBuilder<double>(
       tween: Tween<double>(begin: 0, end: 1),
       duration: duration,
-      curve: PromptUiMotion.enter,
+      curve: CommonUiMotion.enter,
       builder: (context, value, child) {
         final adjusted = delay == Duration.zero
             ? value
             : ((value * duration.inMilliseconds - delay.inMilliseconds) /
-                    PromptUiMotion.layout.inMilliseconds)
+                    CommonUiMotion.layout.inMilliseconds)
                 .clamp(0.0, 1.0).toDouble();
         return Opacity(
           opacity: adjusted,

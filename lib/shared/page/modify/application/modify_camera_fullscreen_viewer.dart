@@ -3,9 +3,9 @@ import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 
 void modifyShowFullScreenImageViewer(
   BuildContext context,
@@ -15,17 +15,17 @@ void modifyShowFullScreenImageViewer(
 }) {
   if (images.isEmpty) return;
   final safeIndex = initialIndex.clamp(0, images.length - 1).toInt();
-  showPromptOverlayDialog<void>(
+  showCommonOverlayDialog<void>(
     context: context,
-    builder: (dialogContext) => _ModifyPromptImageViewer(
+    builder: (dialogContext) => _ModifyCommonImageViewer(
       images: images,
       initialIndex: safeIndex,
     ),
   );
 }
 
-class _ModifyPromptImageViewer extends StatefulWidget {
-  const _ModifyPromptImageViewer({
+class _ModifyCommonImageViewer extends StatefulWidget {
+  const _ModifyCommonImageViewer({
     required this.images,
     required this.initialIndex,
   });
@@ -34,12 +34,12 @@ class _ModifyPromptImageViewer extends StatefulWidget {
   final int initialIndex;
 
   @override
-  State<_ModifyPromptImageViewer> createState() =>
-      _ModifyPromptImageViewerState();
+  State<_ModifyCommonImageViewer> createState() =>
+      _ModifyCommonImageViewerState();
 }
 
-class _ModifyPromptImageViewerState
-    extends State<_ModifyPromptImageViewer> {
+class _ModifyCommonImageViewerState
+    extends State<_ModifyCommonImageViewer> {
   late final PageController _pageController;
   late int _currentIndex;
 
@@ -81,7 +81,7 @@ class _ModifyPromptImageViewerState
   }
 
   Widget _buildImage(BuildContext context, dynamic image) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     if (_isNetwork(image)) {
       return Image.network(
         image.toString(),
@@ -127,7 +127,7 @@ class _ModifyPromptImageViewerState
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     return SizedBox.expand(
       child: Material(
         color: tokens.canvas,
@@ -157,7 +157,7 @@ class _ModifyPromptImageViewerState
                         left: 18,
                         right: 18,
                         bottom: 24,
-                        child: PromptAnimatedReveal(
+                        child: CommonAnimatedReveal(
                           child: Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 14,
@@ -166,7 +166,7 @@ class _ModifyPromptImageViewerState
                             decoration: BoxDecoration(
                               color: tokens.surfaceRaised,
                               borderRadius: BorderRadius.circular(
-                                PromptUiShapes.control,
+                                CommonUiShapes.control,
                               ),
                               border: Border.all(color: tokens.borderSubtle),
                               boxShadow: [
@@ -205,7 +205,7 @@ class _ModifyPromptImageViewerState
                 ),
                 decoration: BoxDecoration(
                   color: tokens.surfaceRaised,
-                  borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+                  borderRadius: BorderRadius.circular(CommonUiShapes.pill),
                   border: Border.all(color: tokens.borderSubtle),
                 ),
                 child: Text(
@@ -220,10 +220,10 @@ class _ModifyPromptImageViewerState
             Positioned(
               top: 8,
               right: 8,
-              child: PromptIconButton(
+              child: CommonIconButton(
                 icon: Icons.close_rounded,
                 tooltip: '닫기',
-                haptic: PromptHaptic.selection,
+                haptic: CommonHaptic.selection,
                 onPressed: () => Navigator.of(context).pop(),
               ),
             ),

@@ -3,8 +3,8 @@ import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
-import '../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../design_system/common_ui/common_ui_theme.dart';
 
 import '../../account/applications/user_state.dart';
 import '../../account/domain/models/session_account.dart';
@@ -21,18 +21,18 @@ class AreaChatPanel extends StatefulWidget {
     this.areaName,
     this.showCloseButton = false,
     this.onClose,
-    this.usePromptUi = false,
+    this.useCommonUi = false,
   });
 
   final String? areaName;
   final bool showCloseButton;
   final VoidCallback? onClose;
-  final bool usePromptUi;
+  final bool useCommonUi;
 
   static Future<void> showSheet({
     required BuildContext context,
     required String areaName,
-    bool usePromptUi = false,
+    bool useCommonUi = false,
   }) async {
     final area = areaName.trim();
     if (area.isEmpty) return;
@@ -59,7 +59,7 @@ class AreaChatPanel extends StatefulWidget {
                   child: AreaChatPanel(
                     areaName: area,
                     showCloseButton: true,
-                    usePromptUi: usePromptUi,
+                    useCommonUi: useCommonUi,
                     onClose: () => Navigator.of(sheetContext).pop(),
                   ),
                 ),
@@ -70,8 +70,8 @@ class AreaChatPanel extends StatefulWidget {
       );
     }
 
-    if (usePromptUi) {
-      await showPromptOverlayBottomSheet<void>(
+    if (useCommonUi) {
+      await showCommonOverlayBottomSheet<void>(
         context: context,
         isScrollControlled: true,
         useSafeArea: true,
@@ -238,8 +238,8 @@ class _AreaChatPanelState extends State<AreaChatPanel> {
     required WidgetBuilder builder,
     bool barrierDismissible = true,
   }) {
-    if (widget.usePromptUi) {
-      return showPromptOverlayDialog<T>(
+    if (widget.useCommonUi) {
+      return showCommonOverlayDialog<T>(
         context: context,
         barrierDismissible: barrierDismissible,
         builder: builder,
@@ -256,8 +256,8 @@ class _AreaChatPanelState extends State<AreaChatPanel> {
     required WidgetBuilder builder,
     bool showDragHandle = false,
   }) {
-    if (widget.usePromptUi) {
-      return showPromptOverlayBottomSheet<T>(
+    if (widget.useCommonUi) {
+      return showCommonOverlayBottomSheet<T>(
         context: context,
         showDragHandle: showDragHandle,
         builder: builder,
@@ -427,9 +427,9 @@ class _AreaChatPanelState extends State<AreaChatPanel> {
         ? headquarterChatAreaName
         : requestedArea.trim();
 
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     return Material(
-      color: widget.usePromptUi
+      color: widget.useCommonUi
           ? tokens.surfaceRaised
           : Theme.of(context).colorScheme.surface,
       child: SafeArea(

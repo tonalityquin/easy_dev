@@ -4,10 +4,10 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
-import '../prompt_document_overlays.dart';
+import '../../../design_system/common_ui/common_ui_components.dart';
+import '../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../design_system/common_ui/common_ui_theme.dart';
+import '../common_document_overlays.dart';
 
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -351,7 +351,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
       );
     }
 
-    await showPromptOverlayDialog<void>(
+    await showCommonOverlayDialog<void>(
       context: context,
       barrierDismissible: true,
       builder: (ctx) {
@@ -359,7 +359,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
         final cs = theme.colorScheme;
 
         return Dialog(
-          backgroundColor: PromptUiTheme.of(context).transparent,
+          backgroundColor: CommonUiTheme.of(context).transparent,
           insetPadding:
               const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
           child: LayoutBuilder(
@@ -819,7 +819,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
       context,
       title: StatusDialog.leaveApplicationSubmitSuccess,
       closeCurrentPageAfter: true,
-      usePromptUi: true,
+      useCommonUi: true,
     );
   }
 
@@ -829,7 +829,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
     await StatusDialog.showFailure(
       context,
       title: StatusDialog.leaveApplicationSubmitFailed,
-      usePromptUi: true,
+      useCommonUi: true,
     );
   }
 
@@ -845,8 +845,8 @@ class _BackupFormPageState extends State<BackupFormPage> {
       } else {
         await _pageController.animateToPage(
           0,
-          duration: PromptUiMotion.component,
-          curve: PromptUiMotion.enter,
+          duration: CommonUiMotion.component,
+          curve: CommonUiMotion.enter,
         );
       }
       await _showSubmitFailureDialog();
@@ -1213,28 +1213,28 @@ class _BackupFormPageState extends State<BackupFormPage> {
   InputDecoration _inputDec({
     required String labelText,
   }) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     return InputDecoration(
       labelText: labelText,
       filled: true,
       fillColor: tokens.surfaceOverlay,
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(PromptUiShapes.control),
+        borderRadius: BorderRadius.circular(CommonUiShapes.control),
         borderSide: BorderSide(color: tokens.borderSubtle),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(PromptUiShapes.control),
+        borderRadius: BorderRadius.circular(CommonUiShapes.control),
         borderSide: BorderSide(color: tokens.borderSubtle),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(PromptUiShapes.control),
+        borderRadius: BorderRadius.circular(CommonUiShapes.control),
         borderSide: BorderSide(
           color: tokens.focusRing,
           width: 2,
         ),
       ),
       disabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(PromptUiShapes.control),
+        borderRadius: BorderRadius.circular(CommonUiShapes.control),
         borderSide: BorderSide(color: tokens.borderSubtle),
       ),
       contentPadding: const EdgeInsets.symmetric(
@@ -1250,21 +1250,21 @@ class _BackupFormPageState extends State<BackupFormPage> {
     EdgeInsetsGeometry padding = const EdgeInsets.all(16),
     EdgeInsetsGeometry? margin,
   }) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
 
-    return PromptAnimatedReveal(
+    return CommonAnimatedReveal(
       delay: const Duration(milliseconds: 40),
       offset: const Offset(0, .025),
       child: AnimatedContainer(
         duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false
             ? Duration.zero
-            : PromptUiMotion.selection,
-        curve: PromptUiMotion.standard,
+            : CommonUiMotion.selection,
+        curve: CommonUiMotion.standard,
         margin: margin ?? const EdgeInsets.only(bottom: 16),
         decoration: BoxDecoration(
           color: tokens.surfaceRaised,
-          borderRadius: BorderRadius.circular(PromptUiShapes.card),
+          borderRadius: BorderRadius.circular(CommonUiShapes.card),
           border: Border.all(color: tokens.borderSubtle),
           boxShadow: [
             BoxShadow(
@@ -1297,7 +1297,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
 
   Future<void> _openSignatureDialog() async {
     try {
-      final result = await showPromptFullscreenDocument<SignatureResult>(
+      final result = await showCommonFullscreenDocument<SignatureResult>(
         context: context,
         barrierLabel: '전자서명',
         child: SignatureFullScreenDialog(
@@ -1328,14 +1328,14 @@ class _BackupFormPageState extends State<BackupFormPage> {
 
     Widget buildChoice(ContractType type, String label) {
       final selected = _contractType == type;
-      return PromptButton(
+      return CommonButton(
         label: label,
         selected: selected,
         variant: selected
-            ? PromptButtonVariant.primary
-            : PromptButtonVariant.secondary,
+            ? CommonButtonVariant.primary
+            : CommonButtonVariant.secondary,
         expand: true,
-        haptic: PromptHaptic.selection,
+        haptic: CommonHaptic.selection,
         onPressed: () async {
           setState(() {
             _contractType = type;
@@ -1347,8 +1347,8 @@ class _BackupFormPageState extends State<BackupFormPage> {
             _pageController.jumpToPage(1);
           } else {
             await _pageController.nextPage(
-              duration: PromptUiMotion.component,
-              curve: PromptUiMotion.enter,
+              duration: CommonUiMotion.component,
+              curve: CommonUiMotion.enter,
             );
           }
         },
@@ -1856,7 +1856,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
@@ -1890,7 +1890,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
           ? SafeArea(
               top: false,
               child: AnimatedContainer(
-                duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
+                duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
                 curve: Curves.easeOut,
                 padding: EdgeInsets.only(
                   left: 16,

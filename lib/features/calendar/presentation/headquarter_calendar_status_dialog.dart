@@ -13,7 +13,7 @@ class HeadquarterCalendarStatusDialog {
     Object? error,
     StackTrace? stackTrace,
     Map<String, Object?> details = const <String, Object?>{},
-    bool usePromptUi = false,
+    bool useCommonUi = false,
   }) async {
     if (!context.mounted) return;
     final developerMode = await DevAuth.isDeveloperLoggedIn();
@@ -33,7 +33,7 @@ class HeadquarterCalendarStatusDialog {
       visibleDuration: developerMode
           ? const Duration(seconds: 60)
           : const Duration(seconds: 5),
-      usePromptUi: usePromptUi,
+      useCommonUi: useCommonUi,
     );
   }
 

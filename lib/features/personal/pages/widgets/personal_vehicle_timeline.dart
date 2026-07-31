@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../shared/plate/domain/enums/plate_type.dart';
 import '../../../../shared/plate/domain/models/plate_log_model.dart';
 import '../../../../shared/plate/domain/models/plate_model.dart';
-import 'personal_prompt_components.dart';
+import 'personal_common_components.dart';
 
 class PersonalVehicleTimeline extends StatelessWidget {
   const PersonalVehicleTimeline({
@@ -17,7 +17,7 @@ class PersonalVehicleTimeline extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final steps = _steps(plate);
     final logs = List<PlateLogModel>.of(
@@ -38,7 +38,7 @@ class PersonalVehicleTimeline extends StatelessWidget {
                 ),
               ),
             ),
-            PersonalPromptStatusPill(
+            PersonalCommonStatusPill(
               label: _statusLabel(plate.typeEnum),
               foreground: _statusForeground(tokens, plate.typeEnum),
               background: _statusBackground(tokens, plate.typeEnum),
@@ -46,13 +46,13 @@ class PersonalVehicleTimeline extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 10),
-        PersonalPromptPanel(
+        PersonalCommonPanel(
           child: Column(
             children: steps
                 .asMap()
                 .entries
                 .map(
-                  (entry) => PromptAnimatedReveal(
+                  (entry) => CommonAnimatedReveal(
                     key: ValueKey<String>(entry.value.title),
                     delay: Duration(milliseconds: entry.key * 32),
                     child: _TimelineStepRow(step: entry.value),
@@ -72,7 +72,7 @@ class PersonalVehicleTimeline extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           ...logs.take(4).toList().asMap().entries.map(
-                (entry) => PromptAnimatedReveal(
+                (entry) => CommonAnimatedReveal(
                   key: ValueKey<String>(
                     '${entry.value.timestamp.microsecondsSinceEpoch}-${entry.key}',
                   ),
@@ -107,7 +107,7 @@ class _TimelineStepRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final color = step.done || step.active
         ? tokens.statusSynchronized
@@ -121,9 +121,9 @@ class _TimelineStepRow extends StatelessWidget {
       child: Row(
         children: <Widget>[
           AnimatedContainer(
-            duration: personalPromptDuration(
+            duration: personalCommonDuration(
               context,
-              PromptUiMotion.selection,
+              CommonUiMotion.selection,
             ),
             width: 30,
             height: 30,
@@ -133,9 +133,9 @@ class _TimelineStepRow extends StatelessWidget {
               border: Border.all(color: color.withOpacity(.26)),
             ),
             child: AnimatedSwitcher(
-              duration: personalPromptDuration(
+              duration: personalCommonDuration(
                 context,
-                PromptUiMotion.selection,
+                CommonUiMotion.selection,
               ),
               child: Icon(
                 step.done
@@ -182,13 +182,13 @@ class _LogRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final title = log.action.trim().isEmpty
         ? '${log.from} → ${log.to}'
         : log.action.trim();
 
-    return PersonalPromptPanel(
+    return PersonalCommonPanel(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
       child: Row(
@@ -297,7 +297,7 @@ String _statusLabel(PlateType? type) {
   }
 }
 
-Color _statusForeground(PromptUiTokens tokens, PlateType? type) {
+Color _statusForeground(CommonUiTokens tokens, PlateType? type) {
   switch (type) {
     case PlateType.parkingRequests:
       return tokens.statusSettlementPending;
@@ -312,7 +312,7 @@ Color _statusForeground(PromptUiTokens tokens, PlateType? type) {
   }
 }
 
-Color _statusBackground(PromptUiTokens tokens, PlateType? type) {
+Color _statusBackground(CommonUiTokens tokens, PlateType? type) {
   switch (type) {
     case PlateType.parkingRequests:
       return tokens.statusSettlementPendingContainer;

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../application/description_models.dart';
 
 class DescriptionNavigationPanel extends StatelessWidget {
@@ -19,7 +19,7 @@ class DescriptionNavigationPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
@@ -46,7 +46,7 @@ class DescriptionNavigationPanel extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: tokens.accentContainer,
                       borderRadius:
-                          BorderRadius.circular(PromptUiShapes.control),
+                          BorderRadius.circular(CommonUiShapes.control),
                       border: Border.all(
                         color: tokens.accent.withOpacity(
                           tokens.isDark ? 0.58 : 0.38,
@@ -105,7 +105,7 @@ class DescriptionNavigationPanel extends StatelessWidget {
                     for (var index = 0;
                         index < book.chapters.length;
                         index++)
-                      PromptAnimatedReveal(
+                      CommonAnimatedReveal(
                         delay: reduceMotion
                             ? Duration.zero
                             : Duration(milliseconds: 28 * index),
@@ -135,13 +135,13 @@ class _TopChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         color: tokens.surfaceOverlay,
-        borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+        borderRadius: BorderRadius.circular(CommonUiShapes.pill),
         border: Border.all(color: tokens.borderSubtle),
       ),
       child: Text(
@@ -239,7 +239,7 @@ class _ChapterHeaderState extends State<_ChapterHeader> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final active = widget.selected;
@@ -259,30 +259,30 @@ class _ChapterHeaderState extends State<_ChapterHeader> {
       selected: active,
       label: widget.chapter.title,
       child: AnimatedContainer(
-        duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
-        curve: PromptUiMotion.standard,
+        duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+        curve: CommonUiMotion.standard,
         decoration: BoxDecoration(
           color: background,
-          borderRadius: BorderRadius.circular(PromptUiShapes.card),
+          borderRadius: BorderRadius.circular(CommonUiShapes.card),
           border: Border.all(color: border),
         ),
         child: Material(
           color: tokens.transparent,
-          borderRadius: BorderRadius.circular(PromptUiShapes.card),
+          borderRadius: BorderRadius.circular(CommonUiShapes.card),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: widget.onTap,
             onHover: (value) => setState(() => _hovered = value),
             onFocusChange: (value) => setState(() => _focused = value),
             onHighlightChanged: (value) => setState(() => _pressed = value),
-            borderRadius: BorderRadius.circular(PromptUiShapes.card),
+            borderRadius: BorderRadius.circular(CommonUiShapes.card),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
               child: AnimatedScale(
                 scale: _pressed ? 0.985 : 1,
                 duration:
-                    reduceMotion ? Duration.zero : PromptUiMotion.press,
-                curve: PromptUiMotion.enter,
+                    reduceMotion ? Duration.zero : CommonUiMotion.press,
+                curve: CommonUiMotion.enter,
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -358,7 +358,7 @@ class _NavTileState extends State<_NavTile> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final background = widget.selected
@@ -377,19 +377,19 @@ class _NavTileState extends State<_NavTile> {
       selected: widget.selected,
       label: widget.label,
       child: AnimatedContainer(
-        duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
-        curve: PromptUiMotion.standard,
+        duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+        curve: CommonUiMotion.standard,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(PromptUiShapes.button),
+          borderRadius: BorderRadius.circular(CommonUiShapes.button),
           color: background,
           border: Border.all(color: border),
         ),
         child: Material(
           color: tokens.transparent,
-          borderRadius: BorderRadius.circular(PromptUiShapes.button),
+          borderRadius: BorderRadius.circular(CommonUiShapes.button),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
-            borderRadius: BorderRadius.circular(PromptUiShapes.button),
+            borderRadius: BorderRadius.circular(CommonUiShapes.button),
             onTap: widget.onTap,
             onHover: (value) => setState(() => _hovered = value),
             onFocusChange: (value) => setState(() => _focused = value),
@@ -402,8 +402,8 @@ class _NavTileState extends State<_NavTile> {
               child: AnimatedScale(
                 scale: _pressed ? 0.985 : 1,
                 duration:
-                    reduceMotion ? Duration.zero : PromptUiMotion.press,
-                curve: PromptUiMotion.enter,
+                    reduceMotion ? Duration.zero : CommonUiMotion.press,
+                curve: CommonUiMotion.enter,
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -481,15 +481,15 @@ class _CountBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
     return AnimatedContainer(
-      duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
+      duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+        borderRadius: BorderRadius.circular(CommonUiShapes.pill),
         color: selected ? tokens.accent : tokens.surfaceOverlay,
         border: Border.all(
           color: selected ? tokens.accent : tokens.borderSubtle,

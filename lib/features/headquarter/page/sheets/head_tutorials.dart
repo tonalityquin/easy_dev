@@ -4,9 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:pdfx/pdfx.dart';
 
 import '../../../../app/utils/snackbar_helper.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 
 class HeadTutorials {
   HeadTutorials._();
@@ -36,10 +36,10 @@ class HeadTutorials {
 
   static Future<TutorialItem?> showPickerBottomSheet(
     BuildContext context, {
-    bool usePromptUi = false,
+    bool useCommonUi = false,
   }) {
-    if (usePromptUi) {
-      return showPromptOverlayBottomSheet<TutorialItem>(
+    if (useCommonUi) {
+      return showCommonOverlayBottomSheet<TutorialItem>(
         context: context,
         isScrollControlled: true,
         useSafeArea: true,
@@ -57,17 +57,17 @@ class HeadTutorials {
 
   static Future<void> open(
     BuildContext context, {
-    bool usePromptUi = false,
+    bool useCommonUi = false,
   }) async {
     final selected = await showPickerBottomSheet(
       context,
-      usePromptUi: usePromptUi,
+      useCommonUi: useCommonUi,
     );
     if (selected == null || !context.mounted) return;
     await TutorialPdfViewer.open(
       context,
       selected,
-      usePromptUi: usePromptUi,
+      useCommonUi: useCommonUi,
     );
   }
 }
@@ -98,7 +98,7 @@ class TutorialPickerBottomSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
 
     return SafeArea(
@@ -113,7 +113,7 @@ class TutorialPickerBottomSheet extends StatelessWidget {
             decoration: BoxDecoration(
               color: tokens.surfaceRaised,
               borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(PromptUiShapes.sheet),
+                top: Radius.circular(CommonUiShapes.sheet),
               ),
               border: Border.all(color: tokens.borderSubtle),
               boxShadow: <BoxShadow>[
@@ -132,7 +132,7 @@ class TutorialPickerBottomSheet extends StatelessWidget {
                   height: 4,
                   decoration: BoxDecoration(
                     color: tokens.handle,
-                    borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+                    borderRadius: BorderRadius.circular(CommonUiShapes.pill),
                   ),
                 ),
                 Padding(
@@ -145,7 +145,7 @@ class TutorialPickerBottomSheet extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: tokens.dangerContainer,
                           borderRadius:
-                              BorderRadius.circular(PromptUiShapes.control),
+                              BorderRadius.circular(CommonUiShapes.control),
                           border: Border.all(color: tokens.borderSubtle),
                         ),
                         child: Icon(
@@ -175,11 +175,11 @@ class TutorialPickerBottomSheet extends StatelessWidget {
                           ],
                         ),
                       ),
-                      PromptIconButton(
+                      CommonIconButton(
                         icon: Icons.close_rounded,
                         tooltip: '닫기',
                         onPressed: () => Navigator.of(context).maybePop(),
-                        haptic: PromptHaptic.selection,
+                        haptic: CommonHaptic.selection,
                       ),
                     ],
                   ),
@@ -193,22 +193,22 @@ class TutorialPickerBottomSheet extends StatelessWidget {
                     separatorBuilder: (_, __) => const SizedBox(height: 8),
                     itemBuilder: (context, index) {
                       final item = items[index];
-                      return PromptAnimatedReveal(
+                      return CommonAnimatedReveal(
                         delay: Duration(milliseconds: index * 40),
                         offset: const Offset(0, 0.035),
                         child: Material(
                           color: tokens.surface,
                           borderRadius:
-                              BorderRadius.circular(PromptUiShapes.control),
+                              BorderRadius.circular(CommonUiShapes.control),
                           child: InkWell(
                             borderRadius:
-                                BorderRadius.circular(PromptUiShapes.control),
+                                BorderRadius.circular(CommonUiShapes.control),
                             onTap: () => Navigator.of(context).pop(item),
                             child: Ink(
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(
-                                  PromptUiShapes.control,
+                                  CommonUiShapes.control,
                                 ),
                                 border:
                                     Border.all(color: tokens.borderSubtle),
@@ -279,17 +279,17 @@ class TutorialPdfViewer extends StatefulWidget {
     super.key,
     required this.title,
     required this.controller,
-    this.usePromptUi = false,
+    this.useCommonUi = false,
   });
 
   final String title;
   final PdfControllerPinch controller;
-  final bool usePromptUi;
+  final bool useCommonUi;
 
   static Future<void> open(
     BuildContext context,
     TutorialItem item, {
-    bool usePromptUi = false,
+    bool useCommonUi = false,
   }) async {
     final Future<PdfDocument> document;
 
@@ -301,7 +301,7 @@ class TutorialPdfViewer extends StatefulWidget {
         showFailedSnackbar(
           context,
           'PDF 파일을 찾을 수 없습니다.',
-          usePromptUi: usePromptUi,
+          useCommonUi: useCommonUi,
         );
         return;
       }
@@ -310,7 +310,7 @@ class TutorialPdfViewer extends StatefulWidget {
       showFailedSnackbar(
         context,
         '열 수 있는 PDF 경로가 없습니다.',
-        usePromptUi: usePromptUi,
+        useCommonUi: useCommonUi,
       );
       return;
     }
@@ -318,7 +318,7 @@ class TutorialPdfViewer extends StatefulWidget {
     final controller = PdfControllerPinch(document: document);
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    final duration = reduceMotion ? Duration.zero : PromptUiMotion.overlay;
+    final duration = reduceMotion ? Duration.zero : CommonUiMotion.overlay;
 
     final route = PageRouteBuilder<void>(
       transitionDuration: duration,
@@ -328,16 +328,16 @@ class TutorialPdfViewer extends StatefulWidget {
         final page = TutorialPdfViewer(
           title: item.title,
           controller: controller,
-          usePromptUi: usePromptUi,
+          useCommonUi: useCommonUi,
         );
-        return usePromptUi ? PromptUiScope(child: page) : page;
+        return useCommonUi ? CommonUiScope(child: page) : page;
       },
       transitionsBuilder: (_, animation, __, child) {
         if (reduceMotion) return child;
         final curved = CurvedAnimation(
           parent: animation,
-          curve: PromptUiMotion.enter,
-          reverseCurve: PromptUiMotion.exit,
+          curve: CommonUiMotion.enter,
+          reverseCurve: CommonUiMotion.exit,
         );
         return FadeTransition(
           opacity: curved,
@@ -368,7 +368,7 @@ class _TutorialPdfViewerState extends State<TutorialPdfViewer> {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
 
     return Scaffold(
       backgroundColor: tokens.canvas,
@@ -383,11 +383,11 @@ class _TutorialPdfViewerState extends State<TutorialPdfViewer> {
           bottom: BorderSide(color: tokens.borderSubtle),
         ),
         actions: <Widget>[
-          PromptIconButton(
+          CommonIconButton(
             icon: Icons.first_page_rounded,
             tooltip: '첫 페이지',
             onPressed: () => widget.controller.jumpToPage(1),
-            haptic: PromptHaptic.selection,
+            haptic: CommonHaptic.selection,
           ),
           const SizedBox(width: 6),
         ],
@@ -400,7 +400,7 @@ class _TutorialPdfViewerState extends State<TutorialPdfViewer> {
             showFailedSnackbar(
               context,
               'PDF 오류: $error',
-              usePromptUi: widget.usePromptUi,
+              useCommonUi: widget.useCommonUi,
             );
           },
         ),

@@ -8,8 +8,8 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:googleapis/gmail/v1.dart' as gmail;
 
-import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../app/auth/google_auth_v7.dart';
 import '../../../../app/config/email_config.dart';
 import '../../../../app/utils/developer_operation_status_dialog.dart';
@@ -26,7 +26,7 @@ class StatisticsChartPage extends StatefulWidget {
     required this.reportDataMap,
     this.division = '',
     this.area = '',
-    this.usePromptUi = false,
+    this.useCommonUi = false,
     this.availableAreas = const <String>[],
     this.areaSectorEnabled = const <String, bool>{},
   });
@@ -34,7 +34,7 @@ class StatisticsChartPage extends StatefulWidget {
   final Map<DateTime, Map<String, dynamic>> reportDataMap;
   final String division;
   final String area;
-  final bool usePromptUi;
+  final bool useCommonUi;
   final List<String> availableAreas;
   final Map<String, bool> areaSectorEnabled;
 
@@ -59,8 +59,8 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
     required WidgetBuilder builder,
     bool barrierDismissible = true,
   }) {
-    if (widget.usePromptUi) {
-      return showPromptOverlayDialog<T>(
+    if (widget.useCommonUi) {
+      return showCommonOverlayDialog<T>(
         context: context,
         barrierDismissible: barrierDismissible,
         builder: builder,
@@ -79,8 +79,8 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
     required DateTime lastDate,
     required DateTimeRange initialDateRange,
   }) {
-    if (widget.usePromptUi) {
-      return showPromptDateRangePicker(
+    if (widget.useCommonUi) {
+      return showCommonDateRangePicker(
         context: anchorContext,
         firstDate: firstDate,
         lastDate: lastDate,
@@ -134,8 +134,8 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
         MediaQuery.maybeOf(this.context)?.disableAnimations ?? false;
     await Scrollable.ensureVisible(
       context,
-      duration: reduceMotion ? Duration.zero : PromptUiMotion.layout,
-      curve: PromptUiMotion.enter,
+      duration: reduceMotion ? Duration.zero : CommonUiMotion.layout,
+      curve: CommonUiMotion.enter,
       alignment: 0.02,
     );
   }
@@ -236,7 +236,7 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
         context: context,
         title: '통계 PDF 방문 구역 집계',
         initialMessage: '방문 구역 통계를 포함한 PDF를 준비하고 있습니다.',
-        usePromptUi: widget.usePromptUi,
+        useCommonUi: widget.useCommonUi,
         developerModeMessage:
             '개발자 모드 ON: PDF 생성 및 발신 로그를 복사할 수 있습니다.',
         standardModeMessage:
@@ -1459,7 +1459,7 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
         context: context,
         title: '심화 통계 조회',
         initialMessage: 'GCS 완료 업무 로그를 조회하고 통계를 구성하고 있습니다.',
-        usePromptUi: widget.usePromptUi,
+        useCommonUi: widget.useCommonUi,
         developerModeMessage:
             '개발자 모드 ON: CSV·Sector·무결성 로그를 복사할 수 있습니다.',
         standardModeMessage:
@@ -1575,23 +1575,23 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
         report: deep,
         availableAreas: widget.availableAreas,
         areaSectorEnabled: widget.areaSectorEnabled,
-        usePromptUi: widget.usePromptUi,
+        useCommonUi: widget.useCommonUi,
       );
       final reduceMotion =
           MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-      final route = widget.usePromptUi
+      final route = widget.useCommonUi
           ? PageRouteBuilder<StatisticsDeepReport>(
               transitionDuration:
-                  reduceMotion ? Duration.zero : PromptUiMotion.overlay,
+                  reduceMotion ? Duration.zero : CommonUiMotion.overlay,
               reverseTransitionDuration:
-                  reduceMotion ? Duration.zero : PromptUiMotion.overlay,
-              pageBuilder: (_, __, ___) => PromptUiScope(child: chartPage),
+                  reduceMotion ? Duration.zero : CommonUiMotion.overlay,
+              pageBuilder: (_, __, ___) => CommonUiScope(child: chartPage),
               transitionsBuilder: (_, animation, __, child) {
                 if (reduceMotion) return child;
                 final curved = CurvedAnimation(
                   parent: animation,
-                  curve: PromptUiMotion.enter,
-                  reverseCurve: PromptUiMotion.exit,
+                  curve: CommonUiMotion.enter,
+                  reverseCurve: CommonUiMotion.exit,
                 );
                 return FadeTransition(
                   opacity: curved,
@@ -1696,7 +1696,7 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
   Widget _buildSendActionButton(_ChartAReport report) {
     final cs = Theme.of(context).colorScheme;
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    final duration = reduceMotion ? Duration.zero : PromptUiMotion.selection;
+    final duration = reduceMotion ? Duration.zero : CommonUiMotion.selection;
     return Padding(
       padding: const EdgeInsets.only(right: 8),
       child: FilledButton.icon(
@@ -1705,8 +1705,8 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
             : () => _openMailDialogAndSend(report),
         icon: AnimatedSwitcher(
           duration: duration,
-          switchInCurve: PromptUiMotion.enter,
-          switchOutCurve: PromptUiMotion.exit,
+          switchInCurve: CommonUiMotion.enter,
+          switchOutCurve: CommonUiMotion.exit,
           child: _sending
               ? SizedBox(
                   key: const ValueKey<String>('statistics_pdf_sending'),
@@ -2044,8 +2044,8 @@ class _ASectionView extends StatelessWidget {
               AnimatedContainer(
                 duration: MediaQuery.maybeOf(context)?.disableAnimations == true
                     ? Duration.zero
-                    : PromptUiMotion.layout,
-                curve: PromptUiMotion.enter,
+                    : CommonUiMotion.layout,
+                curve: CommonUiMotion.enter,
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
                   color: Theme.of(context).colorScheme.tertiaryContainer,
@@ -2160,8 +2160,8 @@ class _ASectorBreakdownCard extends StatelessWidget {
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
     return AnimatedSize(
-      duration: reduceMotion ? Duration.zero : PromptUiMotion.component,
-      curve: PromptUiMotion.enter,
+      duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
+      curve: CommonUiMotion.enter,
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.all(16),
@@ -2588,7 +2588,7 @@ class _AReportTocOverlay extends StatelessWidget {
           GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: onClose,
-            child: Container(color: PromptUiTheme.of(context).scrim),
+            child: Container(color: CommonUiTheme.of(context).scrim),
           ),
           Align(
             alignment: Alignment.centerRight,
@@ -2670,7 +2670,7 @@ class _AReportTocPanel extends StatelessWidget {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
                       decoration: BoxDecoration(
-                        color: selected ? cs.primaryContainer : item.isGroup ? cs.surfaceContainerHighest : PromptUiTheme.of(context).transparent,
+                        color: selected ? cs.primaryContainer : item.isGroup ? cs.surfaceContainerHighest : CommonUiTheme.of(context).transparent,
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
                           color: selected ? cs.primary.withOpacity(0.45) : cs.outlineVariant.withOpacity(0.45),

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import '../../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../../app/utils/snackbar_helper.dart';
 import '../../../widgets/ops_console_dialogs.dart';
 import '../../../widgets/ops_console_widgets.dart';
@@ -120,7 +120,7 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
       await _loadAreas();
     } catch (e) {
       if (!mounted) return;
-      showFailedSnackbar(context, '회사 목록 로드 실패: $e', usePromptUi: true);
+      showFailedSnackbar(context, '회사 목록 로드 실패: $e', useCommonUi: true);
     }
   }
 
@@ -155,7 +155,7 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
       });
     } catch (e) {
       if (!mounted) return;
-      showFailedSnackbar(context, '지역 목록 로드 실패: $e', usePromptUi: true);
+      showFailedSnackbar(context, '지역 목록 로드 실패: $e', useCommonUi: true);
     }
   }
 
@@ -266,10 +266,10 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
       }
 
       if (!mounted) return;
-      showSuccessSnackbar(context, '회사 "$division" 계정 수 리빌드 완료', usePromptUi: true);
+      showSuccessSnackbar(context, '회사 "$division" 계정 수 리빌드 완료', useCommonUi: true);
     } catch (e) {
       if (!mounted) return;
-      showFailedSnackbar(context, '회사 전체 리빌드 실패: $e', usePromptUi: true);
+      showFailedSnackbar(context, '회사 전체 리빌드 실패: $e', useCommonUi: true);
     } finally {
       if (!mounted) return;
       setState(() {
@@ -283,7 +283,7 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final division = _selectedDivision;
@@ -515,7 +515,7 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
                                   showFailedSnackbar(
                                     context,
                                     '활성 계정 제한값이 올바르지 않습니다.',
-                                    usePromptUi: true,
+                                    useCommonUi: true,
                                   );
                                   return;
                                 }
@@ -523,7 +523,7 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
                                   showFailedSnackbar(
                                     context,
                                     '전체 계정 제한값이 올바르지 않습니다.',
-                                    usePromptUi: true,
+                                    useCommonUi: true,
                                   );
                                   return;
                                 }
@@ -531,7 +531,7 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
                                   showFailedSnackbar(
                                     context,
                                     '활성 계정 제한은 전체 계정 제한보다 클 수 없습니다.',
-                                    usePromptUi: true,
+                                    useCommonUi: true,
                                   );
                                   return;
                                 }
@@ -548,14 +548,14 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
                                   showSuccessSnackbar(
                                     context,
                                     '리밋 저장을 완료했습니다.',
-                                    usePromptUi: true,
+                                    useCommonUi: true,
                                   );
                                 } catch (error) {
                                   if (!mounted) return;
                                   showFailedSnackbar(
                                     context,
                                     '저장 실패: $error',
-                                    usePromptUi: true,
+                                    useCommonUi: true,
                                   );
                                 } finally {
                                   if (mounted) setState(() => _busy = false);
@@ -579,14 +579,14 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
                                   showSuccessSnackbar(
                                     context,
                                     '리빌드 완료: 활성 ${rebuilt.activeCount}, 비활성 ${rebuilt.inactiveCount}, 전체 ${rebuilt.totalCount}',
-                                    usePromptUi: true,
+                                    useCommonUi: true,
                                   );
                                 } catch (error) {
                                   if (!mounted) return;
                                   showFailedSnackbar(
                                     context,
                                     '리빌드 실패: $error',
-                                    usePromptUi: true,
+                                    useCommonUi: true,
                                   );
                                 } finally {
                                   if (mounted) setState(() => _busy = false);
@@ -652,7 +652,7 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
               24 + MediaQuery.viewPaddingOf(context).bottom,
             ),
             children: [
-              PromptAnimatedReveal(
+              CommonAnimatedReveal(
                 child: OpsConsoleHeader(
                   title: '계정 리밋 설정',
                   subtitle: '회사와 지역별 계정 생성 제한과 집계 상태를 관리합니다.',
@@ -660,7 +660,7 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
                 ),
               ),
               const SizedBox(height: 12),
-              PromptAnimatedReveal(
+              CommonAnimatedReveal(
                 delay: reduceMotion
                     ? Duration.zero
                     : const Duration(milliseconds: 45),
@@ -697,7 +697,7 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
               ),
               if (_progressLabel != null) ...[
                 const SizedBox(height: 12),
-                PromptAnimatedReveal(
+                CommonAnimatedReveal(
                   child: OpsPanel(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -724,7 +724,7 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
                 ),
               ],
               const SizedBox(height: 12),
-              PromptAnimatedReveal(
+              CommonAnimatedReveal(
                 delay: reduceMotion
                     ? Duration.zero
                     : const Duration(milliseconds: 90),
@@ -739,7 +739,7 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
                 opacity: _busy ? 1 : 0,
                 duration: reduceMotion
                     ? Duration.zero
-                    : PromptUiMotion.selection,
+                    : CommonUiMotion.selection,
                 child: ColoredBox(
                   color: tokens.scrim.withOpacity(.1),
                 ),

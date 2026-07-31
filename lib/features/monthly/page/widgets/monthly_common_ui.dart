@@ -1,37 +1,37 @@
 import 'package:flutter/material.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 
-enum MonthlyPromptMessageTone { info, success, warning, danger }
+enum MonthlyCommonMessageTone { info, success, warning, danger }
 
-void showMonthlyPromptMessage(
+void showMonthlyCommonMessage(
   BuildContext context,
   String message, {
-  MonthlyPromptMessageTone tone = MonthlyPromptMessageTone.info,
+  MonthlyCommonMessageTone tone = MonthlyCommonMessageTone.info,
 }) {
   if (!context.mounted) return;
-  final tokens = PromptUiTheme.of(context);
+  final tokens = CommonUiTheme.of(context);
   final messenger = ScaffoldMessenger.maybeOf(context);
   if (messenger == null) return;
   final background = switch (tone) {
-    MonthlyPromptMessageTone.info => tokens.infoContainer,
-    MonthlyPromptMessageTone.success => tokens.successContainer,
-    MonthlyPromptMessageTone.warning => tokens.warningContainer,
-    MonthlyPromptMessageTone.danger => tokens.dangerContainer,
+    MonthlyCommonMessageTone.info => tokens.infoContainer,
+    MonthlyCommonMessageTone.success => tokens.successContainer,
+    MonthlyCommonMessageTone.warning => tokens.warningContainer,
+    MonthlyCommonMessageTone.danger => tokens.dangerContainer,
   };
   final foreground = switch (tone) {
-    MonthlyPromptMessageTone.info => tokens.onInfoContainer,
-    MonthlyPromptMessageTone.success => tokens.onSuccessContainer,
-    MonthlyPromptMessageTone.warning => tokens.onWarningContainer,
-    MonthlyPromptMessageTone.danger => tokens.onDangerContainer,
+    MonthlyCommonMessageTone.info => tokens.onInfoContainer,
+    MonthlyCommonMessageTone.success => tokens.onSuccessContainer,
+    MonthlyCommonMessageTone.warning => tokens.onWarningContainer,
+    MonthlyCommonMessageTone.danger => tokens.onDangerContainer,
   };
   final icon = switch (tone) {
-    MonthlyPromptMessageTone.info => Icons.info_outline_rounded,
-    MonthlyPromptMessageTone.success => Icons.check_circle_outline_rounded,
-    MonthlyPromptMessageTone.warning => Icons.warning_amber_rounded,
-    MonthlyPromptMessageTone.danger => Icons.error_outline_rounded,
+    MonthlyCommonMessageTone.info => Icons.info_outline_rounded,
+    MonthlyCommonMessageTone.success => Icons.check_circle_outline_rounded,
+    MonthlyCommonMessageTone.warning => Icons.warning_amber_rounded,
+    MonthlyCommonMessageTone.danger => Icons.error_outline_rounded,
   };
 
   messenger
@@ -43,7 +43,7 @@ void showMonthlyPromptMessage(
         elevation: 0,
         margin: const EdgeInsets.fromLTRB(16, 0, 16, 18),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(PromptUiShapes.card),
+          borderRadius: BorderRadius.circular(CommonUiShapes.card),
           side: BorderSide(color: foreground.withOpacity(0.24)),
         ),
         content: Row(
@@ -65,7 +65,7 @@ void showMonthlyPromptMessage(
     );
 }
 
-Future<bool> showMonthlyPromptConfirmation({
+Future<bool> showMonthlyCommonConfirmation({
   required BuildContext context,
   required String title,
   required String message,
@@ -74,11 +74,11 @@ Future<bool> showMonthlyPromptConfirmation({
   bool destructive = false,
   IconData icon = Icons.help_outline_rounded,
 }) async {
-  final result = await showPromptOverlayDialog<bool>(
+  final result = await showCommonOverlayDialog<bool>(
     context: context,
     barrierDismissible: true,
     builder: (dialogContext) {
-      final tokens = PromptUiTheme.of(dialogContext);
+      final tokens = CommonUiTheme.of(dialogContext);
       final textTheme = Theme.of(dialogContext).textTheme;
       final tone = destructive ? tokens.danger : tokens.accent;
       final containerTone = destructive
@@ -94,7 +94,7 @@ Future<bool> showMonthlyPromptConfirmation({
           color: tokens.surfaceRaised,
           surfaceTintColor: tokens.transparent,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(PromptUiShapes.dialog),
+            borderRadius: BorderRadius.circular(CommonUiShapes.dialog),
             side: BorderSide(color: tokens.borderSubtle),
           ),
           clipBehavior: Clip.antiAlias,
@@ -110,7 +110,7 @@ Future<bool> showMonthlyPromptConfirmation({
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: containerTone,
-                    borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                    borderRadius: BorderRadius.circular(CommonUiShapes.control),
                     border: Border.all(color: tone.withOpacity(0.34)),
                   ),
                   child: Icon(icon, color: onContainerTone, size: 26),
@@ -135,23 +135,23 @@ Future<bool> showMonthlyPromptConfirmation({
                 Row(
                   children: [
                     Expanded(
-                      child: PromptButton(
+                      child: CommonButton(
                         label: cancelLabel,
-                        variant: PromptButtonVariant.tertiary,
-                        haptic: PromptHaptic.selection,
+                        variant: CommonButtonVariant.tertiary,
+                        haptic: CommonHaptic.selection,
                         onPressed: () => Navigator.of(dialogContext).pop(false),
                       ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: PromptButton(
+                      child: CommonButton(
                         label: confirmLabel,
                         variant: destructive
-                            ? PromptButtonVariant.destructive
-                            : PromptButtonVariant.primary,
+                            ? CommonButtonVariant.destructive
+                            : CommonButtonVariant.primary,
                         haptic: destructive
-                            ? PromptHaptic.heavy
-                            : PromptHaptic.medium,
+                            ? CommonHaptic.heavy
+                            : CommonHaptic.medium,
                         onPressed: () => Navigator.of(dialogContext).pop(true),
                       ),
                     ),
@@ -167,16 +167,16 @@ Future<bool> showMonthlyPromptConfirmation({
   return result ?? false;
 }
 
-Future<void> showMonthlyPromptProgress({
+Future<void> showMonthlyCommonProgress({
   required BuildContext context,
   required String title,
   required String message,
 }) {
-  return showPromptOverlayDialog<void>(
+  return showCommonOverlayDialog<void>(
     context: context,
     barrierDismissible: false,
     builder: (dialogContext) {
-      final tokens = PromptUiTheme.of(dialogContext);
+      final tokens = CommonUiTheme.of(dialogContext);
       final textTheme = Theme.of(dialogContext).textTheme;
       return ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 380),
@@ -184,7 +184,7 @@ Future<void> showMonthlyPromptProgress({
           color: tokens.surfaceRaised,
           surfaceTintColor: tokens.transparent,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(PromptUiShapes.dialog),
+            borderRadius: BorderRadius.circular(CommonUiShapes.dialog),
             side: BorderSide(color: tokens.borderSubtle),
           ),
           child: Padding(
@@ -231,7 +231,7 @@ Future<void> showMonthlyPromptProgress({
   );
 }
 
-InputDecoration monthlyPromptInputDecoration(
+InputDecoration monthlyCommonInputDecoration(
   BuildContext context, {
   required String label,
   Widget? prefixIcon,
@@ -240,7 +240,7 @@ InputDecoration monthlyPromptInputDecoration(
   bool enabled = true,
   String? errorText,
 }) {
-  final tokens = PromptUiTheme.of(context);
+  final tokens = CommonUiTheme.of(context);
   return InputDecoration(
     labelText: label,
     prefixIcon: prefixIcon,
@@ -260,33 +260,33 @@ InputDecoration monthlyPromptInputDecoration(
     isDense: true,
     contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
     enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(PromptUiShapes.control),
+      borderRadius: BorderRadius.circular(CommonUiShapes.control),
       borderSide: BorderSide(color: tokens.borderSubtle),
     ),
     disabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(PromptUiShapes.control),
+      borderRadius: BorderRadius.circular(CommonUiShapes.control),
       borderSide: BorderSide(color: tokens.borderSubtle),
     ),
     focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(PromptUiShapes.control),
+      borderRadius: BorderRadius.circular(CommonUiShapes.control),
       borderSide: BorderSide(color: tokens.focusRing, width: 1.5),
     ),
     errorBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(PromptUiShapes.control),
+      borderRadius: BorderRadius.circular(CommonUiShapes.control),
       borderSide: BorderSide(color: tokens.danger),
     ),
     focusedErrorBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(PromptUiShapes.control),
+      borderRadius: BorderRadius.circular(CommonUiShapes.control),
       borderSide: BorderSide(color: tokens.danger, width: 1.5),
     ),
     border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(PromptUiShapes.control),
+      borderRadius: BorderRadius.circular(CommonUiShapes.control),
     ),
   );
 }
 
-class MonthlyPromptSection extends StatelessWidget {
-  const MonthlyPromptSection({
+class MonthlyCommonSection extends StatelessWidget {
+  const MonthlyCommonSection({
     super.key,
     required this.title,
     required this.subtitle,
@@ -307,19 +307,19 @@ class MonthlyPromptSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
-    return PromptAnimatedReveal(
+    return CommonAnimatedReveal(
       delay: reduceMotion ? Duration.zero : delay,
       child: AnimatedContainer(
-        duration: reduceMotion ? Duration.zero : PromptUiMotion.component,
-        curve: PromptUiMotion.standard,
+        duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
+        curve: CommonUiMotion.standard,
         padding: padding,
         decoration: BoxDecoration(
           color: tokens.surfaceRaised,
-          borderRadius: BorderRadius.circular(PromptUiShapes.card),
+          borderRadius: BorderRadius.circular(CommonUiShapes.card),
           border: Border.all(color: tokens.borderSubtle),
           boxShadow: [
             BoxShadow(
@@ -340,7 +340,7 @@ class MonthlyPromptSection extends StatelessWidget {
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: tokens.accentContainer,
-                    borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                    borderRadius: BorderRadius.circular(CommonUiShapes.control),
                     border: Border.all(
                       color: tokens.accent.withOpacity(tokens.isDark ? 0.56 : 0.34),
                     ),
@@ -385,39 +385,39 @@ class MonthlyPromptSection extends StatelessWidget {
   }
 }
 
-class MonthlyPromptBadge extends StatelessWidget {
-  const MonthlyPromptBadge({
+class MonthlyCommonBadge extends StatelessWidget {
+  const MonthlyCommonBadge({
     super.key,
     required this.label,
     this.icon,
-    this.tone = MonthlyPromptMessageTone.info,
+    this.tone = MonthlyCommonMessageTone.info,
   });
 
   final String label;
   final IconData? icon;
-  final MonthlyPromptMessageTone tone;
+  final MonthlyCommonMessageTone tone;
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final background = switch (tone) {
-      MonthlyPromptMessageTone.info => tokens.infoContainer,
-      MonthlyPromptMessageTone.success => tokens.successContainer,
-      MonthlyPromptMessageTone.warning => tokens.warningContainer,
-      MonthlyPromptMessageTone.danger => tokens.dangerContainer,
+      MonthlyCommonMessageTone.info => tokens.infoContainer,
+      MonthlyCommonMessageTone.success => tokens.successContainer,
+      MonthlyCommonMessageTone.warning => tokens.warningContainer,
+      MonthlyCommonMessageTone.danger => tokens.dangerContainer,
     };
     final foreground = switch (tone) {
-      MonthlyPromptMessageTone.info => tokens.onInfoContainer,
-      MonthlyPromptMessageTone.success => tokens.onSuccessContainer,
-      MonthlyPromptMessageTone.warning => tokens.onWarningContainer,
-      MonthlyPromptMessageTone.danger => tokens.onDangerContainer,
+      MonthlyCommonMessageTone.info => tokens.onInfoContainer,
+      MonthlyCommonMessageTone.success => tokens.onSuccessContainer,
+      MonthlyCommonMessageTone.warning => tokens.onWarningContainer,
+      MonthlyCommonMessageTone.danger => tokens.onDangerContainer,
     };
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+        borderRadius: BorderRadius.circular(CommonUiShapes.pill),
         border: Border.all(color: foreground.withOpacity(0.22)),
       ),
       child: Row(

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../design_system/common_ui/common_ui_components.dart';
+import '../../design_system/common_ui/common_ui_theme.dart';
 
 enum StatusDialogTone {
   success,
@@ -53,7 +53,7 @@ class StatusDialog {
     String? description,
     String? copyText,
     String copyButtonLabel = '전문 복사',
-    bool usePromptUi = false,
+    bool useCommonUi = false,
   }) async {
     if (!context.mounted) return;
 
@@ -63,14 +63,14 @@ class StatusDialog {
     final trimmedCopyText = copyText?.trim() ?? '';
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    final tokens = usePromptUi ? PromptUiTheme.of(context) : null;
+    final tokens = useCommonUi ? CommonUiTheme.of(context) : null;
     final effectiveTransition =
         reduceMotion ? Duration.zero : transitionDuration;
 
     final route = RawDialogRoute<void>(
       barrierDismissible: false,
       barrierLabel: barrierLabel ?? title,
-      barrierColor: usePromptUi ? tokens!.scrim : Colors.black54,
+      barrierColor: useCommonUi ? tokens!.scrim : Colors.black54,
       transitionDuration: effectiveTransition,
       pageBuilder: (dialogContext, _, __) {
         final content = _StatusDialogSurface(
@@ -79,7 +79,7 @@ class StatusDialog {
           description: trimmedDescription,
           copyText: trimmedCopyText,
           copyButtonLabel: copyButtonLabel,
-          usePromptUi: usePromptUi,
+          useCommonUi: useCommonUi,
           onClose: () {
             final navigator = Navigator.of(
               dialogContext,
@@ -91,8 +91,8 @@ class StatusDialog {
           },
         );
 
-        return usePromptUi
-            ? PromptUiScope(child: content)
+        return useCommonUi
+            ? CommonUiScope(child: content)
             : content;
       },
       transitionBuilder: (_, animation, __, child) {
@@ -102,8 +102,8 @@ class StatusDialog {
             scale: Tween<double>(begin: 0.96, end: 1).animate(
               CurvedAnimation(
                 parent: animation,
-                curve: PromptUiMotion.enter,
-                reverseCurve: PromptUiMotion.exit,
+                curve: CommonUiMotion.enter,
+                reverseCurve: CommonUiMotion.exit,
               ),
             ),
             child: child,
@@ -145,7 +145,7 @@ class StatusDialog {
     String? copyText,
     String copyButtonLabel = '전문 복사',
     Duration? visibleDuration,
-    bool usePromptUi = false,
+    bool useCommonUi = false,
   }) {
     final hasCopyText = copyText != null && copyText.trim().isNotEmpty;
 
@@ -163,7 +163,7 @@ class StatusDialog {
               : description == null || description.trim().isEmpty
                   ? const Duration(milliseconds: 1200)
                   : const Duration(milliseconds: 2600)),
-      usePromptUi: usePromptUi,
+      useCommonUi: useCommonUi,
     );
   }
 
@@ -175,7 +175,7 @@ class StatusDialog {
     String? copyText,
     String copyButtonLabel = '전문 복사',
     Duration? visibleDuration,
-    bool usePromptUi = false,
+    bool useCommonUi = false,
   }) {
     final hasCopyText = copyText != null && copyText.trim().isNotEmpty;
 
@@ -193,7 +193,7 @@ class StatusDialog {
               : description == null || description.trim().isEmpty
                   ? const Duration(milliseconds: 1200)
                   : const Duration(milliseconds: 3200)),
-      usePromptUi: usePromptUi,
+      useCommonUi: useCommonUi,
     );
   }
 
@@ -214,7 +214,7 @@ class _StatusDialogSurface extends StatefulWidget {
     required this.description,
     required this.copyText,
     required this.copyButtonLabel,
-    required this.usePromptUi,
+    required this.useCommonUi,
     required this.onClose,
   });
 
@@ -223,7 +223,7 @@ class _StatusDialogSurface extends StatefulWidget {
   final String description;
   final String copyText;
   final String copyButtonLabel;
-  final bool usePromptUi;
+  final bool useCommonUi;
   final VoidCallback onClose;
 
   @override
@@ -244,15 +244,15 @@ class _StatusDialogSurfaceState extends State<_StatusDialogSurface> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final tokens = widget.usePromptUi ? PromptUiTheme.of(context) : null;
+    final tokens = widget.useCommonUi ? CommonUiTheme.of(context) : null;
     final screenHeight = MediaQuery.of(context).size.height;
-    final surface = widget.usePromptUi
+    final surface = widget.useCommonUi
         ? tokens!.surfaceRaised
         : colorScheme.surface;
-    final border = widget.usePromptUi
+    final border = widget.useCommonUi
         ? tokens!.borderSubtle
         : Colors.transparent;
-    final shadow = widget.usePromptUi
+    final shadow = widget.useCommonUi
         ? tokens!.shadow
         : const Color(0x33000000);
 
@@ -274,8 +274,8 @@ class _StatusDialogSurfaceState extends State<_StatusDialogSurface> {
               decoration: BoxDecoration(
                 color: surface,
                 borderRadius: BorderRadius.circular(
-                  widget.usePromptUi
-                      ? PromptUiShapes.dialog
+                  widget.useCommonUi
+                      ? CommonUiShapes.dialog
                       : 20,
                 ),
                 border: Border.all(color: border),
@@ -297,7 +297,7 @@ class _StatusDialogSurfaceState extends State<_StatusDialogSurface> {
                     _copied ? '복사 완료' : widget.copyButtonLabel,
                 onCopy: widget.copyText.isNotEmpty ? _copy : null,
                 onClose: widget.onClose,
-                usePromptUi: widget.usePromptUi,
+                useCommonUi: widget.useCommonUi,
               ),
             ),
           ),
@@ -317,7 +317,7 @@ class _StatusDialogContent extends StatelessWidget {
     required this.copyButtonLabel,
     required this.onCopy,
     required this.onClose,
-    required this.usePromptUi,
+    required this.useCommonUi,
   });
 
   final String title;
@@ -328,29 +328,29 @@ class _StatusDialogContent extends StatelessWidget {
   final String copyButtonLabel;
   final VoidCallback? onCopy;
   final VoidCallback onClose;
-  final bool usePromptUi;
+  final bool useCommonUi;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final textTheme = theme.textTheme;
-    final tokens = usePromptUi ? PromptUiTheme.of(context) : null;
+    final tokens = useCommonUi ? CommonUiTheme.of(context) : null;
     final success = tone == StatusDialogTone.success;
-    final accent = usePromptUi
+    final accent = useCommonUi
         ? success
             ? tokens!.success
             : tokens!.danger
         : success
             ? colorScheme.tertiary
             : colorScheme.error;
-    final accentContainer = usePromptUi
+    final accentContainer = useCommonUi
         ? success
             ? tokens!.successContainer
             : tokens!.dangerContainer
         : accent.withAlpha(31);
-    final titleColor = usePromptUi ? tokens!.textPrimary : colorScheme.onSurface;
-    final descriptionColor = usePromptUi
+    final titleColor = useCommonUi ? tokens!.textPrimary : colorScheme.onSurface;
+    final descriptionColor = useCommonUi
         ? tokens!.textSecondary
         : colorScheme.onSurfaceVariant;
     final reduceMotion =
@@ -361,8 +361,8 @@ class _StatusDialogContent extends StatelessWidget {
       children: [
         TweenAnimationBuilder<double>(
           tween: Tween<double>(begin: 0.88, end: 1),
-          duration: reduceMotion ? Duration.zero : PromptUiMotion.component,
-          curve: PromptUiMotion.enter,
+          duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
+          curve: CommonUiMotion.enter,
           builder: (context, value, child) {
             return Transform.scale(scale: value, child: child);
           },
@@ -373,7 +373,7 @@ class _StatusDialogContent extends StatelessWidget {
             decoration: BoxDecoration(
               color: accentContainer,
               shape: BoxShape.circle,
-              border: usePromptUi
+              border: useCommonUi
                   ? Border.all(
                       color: accent.withOpacity(
                         tokens!.isDark ? 0.58 : 0.34,
@@ -413,24 +413,24 @@ class _StatusDialogContent extends StatelessWidget {
         ],
         if (hasCopyText) ...[
           const SizedBox(height: 18),
-          if (usePromptUi)
+          if (useCommonUi)
             Wrap(
               alignment: WrapAlignment.center,
               spacing: 8,
               runSpacing: 8,
               children: [
-                PromptButton(
+                CommonButton(
                   label: copyButtonLabel,
                   icon: Icons.copy_rounded,
                   onPressed: onCopy,
-                  haptic: PromptHaptic.selection,
+                  haptic: CommonHaptic.selection,
                 ),
-                PromptButton(
+                CommonButton(
                   label: '닫기',
                   icon: Icons.close_rounded,
-                  variant: PromptButtonVariant.tertiary,
+                  variant: CommonButtonVariant.tertiary,
                   onPressed: onClose,
-                  haptic: PromptHaptic.selection,
+                  haptic: CommonHaptic.selection,
                 ),
               ],
             )

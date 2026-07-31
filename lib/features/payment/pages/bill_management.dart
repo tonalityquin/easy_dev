@@ -3,8 +3,8 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../../app/utils/snackbar_helper.dart';
-import '../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../design_system/common_ui/common_ui_components.dart';
+import '../../../design_system/common_ui/common_ui_overlays.dart';
 import '../../../shared/secondary/widgets/ops_console_dialogs.dart';
 import '../../../shared/secondary/widgets/ops_console_widgets.dart';
 import '../../dev/application/area_state.dart';
@@ -34,7 +34,7 @@ class _BillManagementState extends State<BillManagement> {
   }
 
   void _showBillSettingBottomSheet(BuildContext context) {
-    showPromptOverlayBottomSheet<void>(
+    showCommonOverlayBottomSheet<void>(
       context: context,
       useSafeArea: true,
       builder: (sheetContext) {
@@ -48,14 +48,14 @@ class _BillManagementState extends State<BillManagement> {
                 showSuccessSnackbar(
                   context,
                   '정산 유형을 저장했습니다.',
-                  usePromptUi: true,
+                  useCommonUi: true,
                 );
               } catch (_) {
                 if (!context.mounted) return;
                 showFailedSnackbar(
                   context,
                   '정산 유형 저장에 실패했습니다.',
-                  usePromptUi: true,
+                  useCommonUi: true,
                 );
               }
             },
@@ -91,14 +91,14 @@ class _BillManagementState extends State<BillManagement> {
       showSuccessSnackbar(
         context,
         '정산 유형을 삭제했습니다.',
-        usePromptUi: true,
+        useCommonUi: true,
       );
     } catch (_) {
       if (!context.mounted) return;
       showFailedSnackbar(
         context,
         '정산 유형 삭제에 실패했습니다.',
-        usePromptUi: true,
+        useCommonUi: true,
       );
     }
   }
@@ -264,11 +264,11 @@ class _BillManagementState extends State<BillManagement> {
             OpsFilterChip(label: '변동', selected: _typeFilter == BillType.general, icon: Icons.receipt_long_rounded, onSelected: () => setState(() => _typeFilter = BillType.general)),
             OpsFilterChip(label: '정기', selected: _typeFilter == BillType.regular, icon: Icons.event_repeat_rounded, onSelected: () => setState(() => _typeFilter = BillType.regular)),
             OpsFilterChip(label: '$visible/$total', selected: false, icon: Icons.filter_alt_rounded, onSelected: () {}),
-            PromptIconButton(
+            CommonIconButton(
               icon: Icons.refresh_rounded,
               tooltip: '새로고침',
               onPressed: () => _refresh(context),
-              haptic: PromptHaptic.selection,
+              haptic: CommonHaptic.selection,
             ),
           ],
         ),
@@ -342,11 +342,11 @@ class _BillManagementState extends State<BillManagement> {
                       icon: Icons.receipt_long_rounded,
                       title: total == 0 ? '정산 유형이 없습니다' : '검색 결과가 없습니다',
                       message: total == 0 ? '운영 지점에 맞는 요금 기준을 등록하세요.' : '검색어와 유형 필터를 조정하세요.',
-                      action: PromptButton(
+                      action: CommonButton(
                         label: '정산 유형 등록',
                         icon: Icons.add_card_rounded,
                         onPressed: () => _showBillSettingBottomSheet(context),
-                        haptic: PromptHaptic.selection,
+                        haptic: CommonHaptic.selection,
                       ),
                     )
                   : ListView(

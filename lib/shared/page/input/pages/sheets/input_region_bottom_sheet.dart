@@ -1,27 +1,27 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
-import '../../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../../design_system/common_ui/common_ui_theme.dart';
 
 Future<void> inputRegionPickerBottomSheet({
   required BuildContext context,
   required String selectedRegion,
   required List<String> regions,
   required Function(String selected) onConfirm,
-  bool usePromptUi = false,
+  bool useCommonUi = false,
 }) async {
   var tempSelected = selectedRegion;
 
   Widget builder(BuildContext sheetContext) {
-    final tokens = PromptUiTheme.of(sheetContext);
+    final tokens = CommonUiTheme.of(sheetContext);
     final initialIndex = regions.isEmpty
         ? 0
         : regions.indexOf(selectedRegion).clamp(0, regions.length - 1);
     return SizedBox(
       height: MediaQuery.sizeOf(sheetContext).height * .58,
-      child: PromptSheetScaffold(
+      child: CommonSheetScaffold(
         title: '지역 선택',
         icon: Icons.location_on_rounded,
         onClose: () => Navigator.of(sheetContext).pop(),
@@ -78,7 +78,7 @@ Future<void> inputRegionPickerBottomSheet({
                       ),
               ),
               const SizedBox(height: 12),
-              PromptButton(
+              CommonButton(
                 label: '확인',
                 icon: Icons.check_rounded,
                 expand: true,
@@ -96,8 +96,8 @@ Future<void> inputRegionPickerBottomSheet({
     );
   }
 
-  if (usePromptUi) {
-    await showPromptOverlayBottomSheet<void>(
+  if (useCommonUi) {
+    await showCommonOverlayBottomSheet<void>(
       context: context,
       useSafeArea: false,
       builder: builder,

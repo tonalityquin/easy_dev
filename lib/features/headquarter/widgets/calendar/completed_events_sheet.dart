@@ -5,7 +5,7 @@ import 'package:googleapis/sheets/v4.dart' as sheets;
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../app/auth/google_auth_session.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../../design_system/common_ui/common_ui_overlays.dart';
 import '../../../dev/debug/debug_api_logger.dart';
 
 const String _kSheetIdKey = 'gsheet_spreadsheet_id';
@@ -101,13 +101,13 @@ int _extractProgress(String? description) {
 
 Future<T?> _showCompletedBottomSheet<T>({
   required BuildContext context,
-  required bool usePromptUi,
+  required bool useCommonUi,
   required WidgetBuilder builder,
   bool isScrollControlled = true,
   bool useSafeArea = true,
 }) {
-  if (usePromptUi) {
-    return showPromptOverlayBottomSheet<T>(
+  if (useCommonUi) {
+    return showCommonOverlayBottomSheet<T>(
       context: context,
       isScrollControlled: isScrollControlled,
       useSafeArea: useSafeArea,
@@ -130,7 +130,7 @@ Future<void> openCompletedEventsSheet({
   required BuildContext context,
   required List<gcal.Event> allEvents,
   void Function(BuildContext, gcal.Event)? onEdit,
-  bool usePromptUi = false,
+  bool useCommonUi = false,
 }) async {
   final completed =
       allEvents.where((e) => _extractProgress(e.description) == 100).toList();
@@ -148,7 +148,7 @@ Future<void> openCompletedEventsSheet({
   try {
     await _showCompletedBottomSheet<void>(
       context: context,
-      usePromptUi: usePromptUi,
+      useCommonUi: useCommonUi,
       useSafeArea: true,
       isScrollControlled: true,
       builder: (sheetCtx) {
@@ -201,7 +201,7 @@ Future<void> openCompletedEventsSheet({
                                 await _deleteCompletedEventsFromGoogleCalendar(
                                   ctx,
                                   completed,
-                                  usePromptUi: usePromptUi,
+                                  useCommonUi: useCommonUi,
                                 );
                               } catch (e) {
                                 await _logApiError(
@@ -230,7 +230,7 @@ Future<void> openCompletedEventsSheet({
                                 await _saveCompletedEventsToGoogleSheet(
                                   ctx,
                                   completed,
-                                  usePromptUi: usePromptUi,
+                                  useCommonUi: useCommonUi,
                                 );
                               } catch (e) {
                                 await _logApiError(
@@ -258,7 +258,7 @@ Future<void> openCompletedEventsSheet({
                               try {
                                 await _openSpreadsheetConfigSheet(
                                   ctx,
-                                  usePromptUi: usePromptUi,
+                                  useCommonUi: useCommonUi,
                                 );
                               } catch (e) {
                                 await _logApiError(
@@ -407,7 +407,7 @@ class _FullSheetFrame extends StatelessWidget {
 
 Future<void> _openSpreadsheetConfigSheet(
   BuildContext context, {
-  bool usePromptUi = false,
+  bool useCommonUi = false,
 }) async {
 
   SharedPreferences prefs;
@@ -457,7 +457,7 @@ Future<void> _openSpreadsheetConfigSheet(
   try {
     await _showCompletedBottomSheet<void>(
       context: context,
-      usePromptUi: usePromptUi,
+      useCommonUi: useCommonUi,
       isScrollControlled: true,
       builder: (ctx) {
         final t = _CompletedTokens.of(ctx);
@@ -644,7 +644,7 @@ Future<void> _openSpreadsheetConfigSheet(
 Future<void> _saveCompletedEventsToGoogleSheet(
   BuildContext context,
   List<gcal.Event> completed, {
-  bool usePromptUi = false,
+  bool useCommonUi = false,
 }) async {
   if (completed.isEmpty) {
     return;
@@ -669,7 +669,7 @@ Future<void> _saveCompletedEventsToGoogleSheet(
   if (spreadsheetId.trim().isEmpty) {
     await _openSpreadsheetConfigSheet(
       context,
-      usePromptUi: usePromptUi,
+      useCommonUi: useCommonUi,
     );
     spreadsheetId = prefs.getString(_kSheetIdKey) ?? '';
     range = prefs.getString(_kSheetRangeKey) ?? '완료!A2';
@@ -680,7 +680,7 @@ Future<void> _saveCompletedEventsToGoogleSheet(
 
   final ok = await _showCompletedBottomSheet<bool>(
         context: context,
-        usePromptUi: usePromptUi,
+        useCommonUi: useCommonUi,
         isScrollControlled: false,
         builder: (ctx) {
           final t = _CompletedTokens.of(ctx);
@@ -741,7 +741,7 @@ Future<void> _deleteCompletedEventsFromGoogleCalendar(
   BuildContext context,
   List<gcal.Event> completed, {
   String? calendarId,
-  bool usePromptUi = false,
+  bool useCommonUi = false,
 }) async {
   if (completed.isEmpty) {
     return;
@@ -766,7 +766,7 @@ Future<void> _deleteCompletedEventsFromGoogleCalendar(
 
   final ok = await _showCompletedBottomSheet<bool>(
         context: context,
-        usePromptUi: usePromptUi,
+        useCommonUi: useCommonUi,
         isScrollControlled: false,
         builder: (ctx) {
           final t = _CompletedTokens.of(ctx);

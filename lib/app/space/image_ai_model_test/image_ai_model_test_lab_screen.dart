@@ -325,7 +325,7 @@ class _ImageAiModelTestLabScreenState extends State<ImageAiModelTestLabScreen> {
         front: result.weakFront!,
         mid: '',
         back: result.weakBack!,
-        promptMid: true,
+        commonMid: true,
         sessionId: result.sessionId,
       );
       setState(() {
@@ -410,7 +410,7 @@ class _ImageAiModelTestLabScreenState extends State<ImageAiModelTestLabScreen> {
         front: raw.substring(0, 3),
         mid: '',
         back: raw.substring(3, 7),
-        promptMid: true,
+        commonMid: true,
         sessionId: sessionId,
       );
       return true;
@@ -421,7 +421,7 @@ class _ImageAiModelTestLabScreenState extends State<ImageAiModelTestLabScreen> {
         front: raw.substring(0, 2),
         mid: '',
         back: raw.substring(2, 6),
-        promptMid: true,
+        commonMid: true,
         sessionId: sessionId,
       );
       return true;
@@ -434,7 +434,7 @@ class _ImageAiModelTestLabScreenState extends State<ImageAiModelTestLabScreen> {
     required String front,
     required String mid,
     required String back,
-    bool promptMid = false,
+    bool commonMid = false,
     String? sessionId,
   }) {
     setState(() {
@@ -442,7 +442,7 @@ class _ImageAiModelTestLabScreenState extends State<ImageAiModelTestLabScreen> {
       _midController.text = mid;
       _backController.text = back;
       _lastSessionId = sessionId ?? _lastSessionId;
-      _requiresMidCompletion = promptMid || mid.isEmpty;
+      _requiresMidCompletion = commonMid || mid.isEmpty;
     });
   }
 

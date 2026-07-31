@@ -3,9 +3,9 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../../features/dev/application/area_state.dart';
 import '../../../../../features/location/applications/location_state.dart';
 import '../../../../../features/location/domain/models/grid_rect.dart';
@@ -253,7 +253,7 @@ class InputLocationBottomSheet extends StatefulWidget {
     TextEditingController controller,
     Function(String) onSelected, {
     List<String> preferredParkingAreas = const <String>[],
-    bool usePromptUi = false,
+    bool useCommonUi = false,
   }) async {
     String area = '';
     try {
@@ -271,8 +271,8 @@ class InputLocationBottomSheet extends StatefulWidget {
       );
     }
 
-    if (usePromptUi) {
-      await showPromptOverlayBottomSheet<void>(
+    if (useCommonUi) {
+      await showCommonOverlayBottomSheet<void>(
         context: context,
         useSafeArea: false,
         transparentBackground: true,
@@ -284,7 +284,7 @@ class InputLocationBottomSheet extends StatefulWidget {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: PromptUiTheme.of(context).transparent,
+      backgroundColor: CommonUiTheme.of(context).transparent,
       builder: buildSheet,
     );
   }
@@ -317,7 +317,7 @@ class _InputLocationBottomSheetState extends State<InputLocationBottomSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final cs = Theme.of(context).colorScheme;
     final currentArea =
         context.select<AreaState, String>((s) => s.currentArea.trim());
@@ -330,7 +330,7 @@ class _InputLocationBottomSheetState extends State<InputLocationBottomSheet> {
         }
         return true;
       },
-      child: PromptAnimatedReveal(
+      child: CommonAnimatedReveal(
         offset: const Offset(0, .03),
         child: SafeArea(
           child: Material(

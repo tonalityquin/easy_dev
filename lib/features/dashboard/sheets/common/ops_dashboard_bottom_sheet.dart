@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 
 import '../../../../app/di/routes.dart';
 import '../../../account/applications/user_state.dart';
@@ -114,18 +114,18 @@ class _OpsDashboardBottomSheetState extends State<OpsDashboardBottomSheet> {
     if (nav.canPop()) nav.pop();
     rootNav.push(
       PageRouteBuilder<void>(
-        transitionDuration: reduceMotion ? Duration.zero : PromptUiMotion.overlay,
+        transitionDuration: reduceMotion ? Duration.zero : CommonUiMotion.overlay,
         reverseTransitionDuration:
-            reduceMotion ? Duration.zero : PromptUiMotion.component,
-        pageBuilder: (_, __, ___) => const PromptUiScope(
+            reduceMotion ? Duration.zero : CommonUiMotion.component,
+        pageBuilder: (_, __, ___) => const CommonUiScope(
           child: PhotoTransferMailPage(),
         ),
         transitionsBuilder: (_, animation, __, child) {
           if (reduceMotion) return child;
           final curved = CurvedAnimation(
             parent: animation,
-            curve: PromptUiMotion.enter,
-            reverseCurve: PromptUiMotion.exit,
+            curve: CommonUiMotion.enter,
+            reverseCurve: CommonUiMotion.exit,
           );
           return FadeTransition(
             opacity: curved,
@@ -416,7 +416,7 @@ class _OpsDashboardBottomSheetState extends State<OpsDashboardBottomSheet> {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     return Material(
-      color: PromptUiTheme.of(context).transparent,
+      color: CommonUiTheme.of(context).transparent,
       child: InkWell(
         onTap: _openActionsMode,
         borderRadius: BorderRadius.circular(16),
@@ -641,11 +641,11 @@ class _OpsDashboardBottomSheetState extends State<OpsDashboardBottomSheet> {
       controller: scrollController,
       padding: const EdgeInsets.fromLTRB(0, 0, 0, 18),
       child: AnimatedSwitcher(
-        duration: reduceMotion ? Duration.zero : PromptUiMotion.component,
+        duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
         reverseDuration:
-            reduceMotion ? Duration.zero : PromptUiMotion.selection,
-        switchInCurve: PromptUiMotion.enter,
-        switchOutCurve: PromptUiMotion.exit,
+            reduceMotion ? Duration.zero : CommonUiMotion.selection,
+        switchInCurve: CommonUiMotion.enter,
+        switchOutCurve: CommonUiMotion.exit,
         transitionBuilder: (child, animation) {
           final position = Tween<Offset>(
             begin: const Offset(.07, 0),
@@ -666,7 +666,7 @@ class _OpsDashboardBottomSheetState extends State<OpsDashboardBottomSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     return PopScope(
       canPop: !_actionsMode,
       onPopInvoked: (didPop) {
@@ -683,7 +683,7 @@ class _OpsDashboardBottomSheetState extends State<OpsDashboardBottomSheet> {
             decoration: BoxDecoration(
               color: tokens.surfaceRaised,
               borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(PromptUiShapes.sheet),
+                top: Radius.circular(CommonUiShapes.sheet),
               ),
               border: Border(top: BorderSide(color: tokens.borderSubtle)),
             ),
@@ -742,7 +742,7 @@ class _DashboardActionTile extends StatelessWidget {
     final backgroundColor = action.emphasized ? action.color.withOpacity(.10) : cs.surface;
 
     return Material(
-      color: PromptUiTheme.of(context).transparent,
+      color: CommonUiTheme.of(context).transparent,
       child: InkWell(
         onTap: action.onPressed,
         borderRadius: BorderRadius.circular(17),

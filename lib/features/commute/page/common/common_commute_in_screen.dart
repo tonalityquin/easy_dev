@@ -8,8 +8,8 @@ import '../../../../app/init/app_exit_service.dart';
 import '../../../../app/init/db_connection_status_section.dart';
 import '../../../../app/init/logout_helper.dart';
 import '../../../../app/utils/status_dialog.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../account/applications/user_state.dart';
 import '../../../dashboard/applications/common/endtime_reminder_service.dart';
 import '../../controllers/common_commute_in_controller.dart';
@@ -77,12 +77,12 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen> {
       context,
       checkWorking: false,
       delay: const Duration(milliseconds: 500),
-      usePromptUi: true,
+      useCommonUi: true,
     );
   }
 
   Future<void> _handleAppExit(BuildContext context) async {
-    await AppExitService.exitApp(context, usePromptUi: true);
+    await AppExitService.exitApp(context, useCommonUi: true);
   }
 
   Future<void> _goToSelector(BuildContext context) async {
@@ -99,7 +99,7 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen> {
     await StatusDialog.showSuccess(
       context,
       title: '출근 이슈 해결 완료',
-      usePromptUi: true,
+      useCommonUi: true,
     );
   }
 
@@ -111,7 +111,7 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen> {
     return compact ? 58 : 76;
   }
 
-  SystemUiOverlayStyle _systemUiStyle(PromptUiTokens tokens) {
+  SystemUiOverlayStyle _systemUiStyle(CommonUiTokens tokens) {
     final brightness = tokens.isDark ? Brightness.light : Brightness.dark;
     return SystemUiOverlayStyle(
       statusBarColor: tokens.canvas,
@@ -125,7 +125,7 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen> {
     );
   }
 
-  Widget _buildBackground(PromptUiTokens tokens) {
+  Widget _buildBackground(CommonUiTokens tokens) {
     return Positioned.fill(
       child: IgnorePointer(
         child: DecoratedBox(
@@ -167,7 +167,7 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen> {
     );
   }
 
-  Widget _buildScreenTag(BuildContext context, PromptUiTokens tokens) {
+  Widget _buildScreenTag(BuildContext context, CommonUiTokens tokens) {
     return Semantics(
       label: widget.spec.screenTagLabel,
       image: true,
@@ -175,13 +175,13 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen> {
         child: AnimatedContainer(
           duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false
               ? Duration.zero
-              : PromptUiMotion.selection,
+              : CommonUiMotion.selection,
           width: 116,
           height: 44,
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
           decoration: BoxDecoration(
             color: tokens.surface,
-            borderRadius: BorderRadius.circular(PromptUiShapes.control),
+            borderRadius: BorderRadius.circular(CommonUiShapes.control),
             border: Border.all(color: tokens.borderSubtle),
           ),
           child: CommonBrandTintedLogo(
@@ -197,7 +197,7 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen> {
   }
 
   PopupMenuItem<String> _menuItem({
-    required PromptUiTokens tokens,
+    required CommonUiTokens tokens,
     required String value,
     required IconData icon,
     required String label,
@@ -217,7 +217,7 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen> {
               color: destructive
                   ? tokens.dangerContainer
                   : tokens.accentContainer,
-              borderRadius: BorderRadius.circular(PromptUiShapes.control),
+              borderRadius: BorderRadius.circular(CommonUiShapes.control),
             ),
             child: Icon(icon, size: 18, color: iconColor),
           ),
@@ -236,14 +236,14 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen> {
     );
   }
 
-  Widget _buildMenu(BuildContext context, PromptUiTokens tokens) {
+  Widget _buildMenu(BuildContext context, CommonUiTokens tokens) {
     return PopupMenuButton<String>(
       tooltip: '메뉴',
       color: tokens.surfaceRaised,
       elevation: 0,
       offset: const Offset(0, 8),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(PromptUiShapes.card),
+        borderRadius: BorderRadius.circular(CommonUiShapes.card),
         side: BorderSide(color: tokens.borderSubtle),
       ),
       onSelected: (value) {
@@ -298,12 +298,12 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen> {
         child: AnimatedContainer(
           duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false
               ? Duration.zero
-              : PromptUiMotion.selection,
+              : CommonUiMotion.selection,
           width: 46,
           height: 46,
           decoration: BoxDecoration(
             color: tokens.surface,
-            borderRadius: BorderRadius.circular(PromptUiShapes.control),
+            borderRadius: BorderRadius.circular(CommonUiShapes.control),
             border: Border.all(color: tokens.borderSubtle),
           ),
           child: Icon(
@@ -316,9 +316,9 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen> {
     );
   }
 
-  Widget _buildTopBar(BuildContext context, PromptUiTokens tokens) {
-    return PromptAnimatedReveal(
-      duration: PromptUiMotion.component,
+  Widget _buildTopBar(BuildContext context, CommonUiTokens tokens) {
+    return CommonAnimatedReveal(
+      duration: CommonUiMotion.component,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -331,39 +331,39 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen> {
 
   Widget _buildConnectionPanel(
     BuildContext context,
-    PromptUiTokens tokens,
+    CommonUiTokens tokens,
   ) {
-    return PromptAnimatedReveal(
+    return CommonAnimatedReveal(
       delay: const Duration(milliseconds: 80),
       child: AnimatedContainer(
         duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false
             ? Duration.zero
-            : PromptUiMotion.component,
+            : CommonUiMotion.component,
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
           color: tokens.surface,
-          borderRadius: BorderRadius.circular(PromptUiShapes.card),
+          borderRadius: BorderRadius.circular(CommonUiShapes.card),
           border: Border.all(color: tokens.borderSubtle),
         ),
-        child: const DbConnectionStatusSection(usePromptUi: true),
+        child: const DbConnectionStatusSection(useCommonUi: true),
       ),
     );
   }
 
   Widget _buildFooterLogo(
     BuildContext context,
-    PromptUiTokens tokens,
+    CommonUiTokens tokens,
     double footerHeight,
   ) {
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     return AnimatedSize(
-      duration: reduceMotion ? Duration.zero : PromptUiMotion.layout,
-      curve: PromptUiMotion.standard,
+      duration: reduceMotion ? Duration.zero : CommonUiMotion.layout,
+      curve: CommonUiMotion.standard,
       child: footerHeight == 0
           ? const SizedBox.shrink()
-          : PromptAnimatedReveal(
+          : CommonAnimatedReveal(
               delay: const Duration(milliseconds: 260),
               child: SizedBox(
                 height: footerHeight,
@@ -382,7 +382,7 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen> {
 
   Widget _buildContent(
     BuildContext context,
-    PromptUiTokens tokens,
+    CommonUiTokens tokens,
     double footerHeight,
   ) {
     final media = MediaQuery.of(context);
@@ -409,12 +409,12 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen> {
                 const SizedBox(height: 12),
                 _buildConnectionPanel(context, tokens),
                 const SizedBox(height: 14),
-                const PromptAnimatedReveal(
+                const CommonAnimatedReveal(
                   delay: Duration(milliseconds: 140),
                   child: CommonCommuteInInfoCardWidget(),
                 ),
                 const SizedBox(height: 14),
-                PromptAnimatedReveal(
+                CommonAnimatedReveal(
                   delay: const Duration(milliseconds: 200),
                   child: CommonCommuteInWorkButtonWidget(
                     controller: controller,
@@ -441,7 +441,7 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen> {
 
   Widget _buildBlockingOverlay(
     BuildContext context,
-    PromptUiTokens tokens,
+    CommonUiTokens tokens,
     bool isBlocking,
   ) {
     final reduceMotion =
@@ -449,9 +449,9 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen> {
 
     return Positioned.fill(
       child: AnimatedSwitcher(
-        duration: reduceMotion ? Duration.zero : PromptUiMotion.overlay,
-        switchInCurve: PromptUiMotion.enter,
-        switchOutCurve: PromptUiMotion.exit,
+        duration: reduceMotion ? Duration.zero : CommonUiMotion.overlay,
+        switchInCurve: CommonUiMotion.enter,
+        switchOutCurve: CommonUiMotion.exit,
         transitionBuilder: (child, animation) {
           return FadeTransition(
             opacity: animation,
@@ -475,7 +475,7 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen> {
                       decoration: BoxDecoration(
                         color: tokens.surfaceRaised,
                         borderRadius:
-                            BorderRadius.circular(PromptUiShapes.dialog),
+                            BorderRadius.circular(CommonUiShapes.dialog),
                         border: Border.all(color: tokens.borderSubtle),
                         boxShadow: [
                           BoxShadow(
@@ -494,7 +494,7 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen> {
                             decoration: BoxDecoration(
                               color: tokens.accentContainer,
                               borderRadius: BorderRadius.circular(
-                                PromptUiShapes.control,
+                                CommonUiShapes.control,
                               ),
                             ),
                             child: Center(
@@ -536,10 +536,10 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return PromptUiScope(
+    return CommonUiScope(
       child: Builder(
         builder: (context) {
-          final tokens = PromptUiTheme.of(context);
+          final tokens = CommonUiTheme.of(context);
           return AnnotatedRegion<SystemUiOverlayStyle>(
             value: _systemUiStyle(tokens),
             child: PopScope(

@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
 
-import '../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../design_system/common_ui/common_ui_components.dart';
+import '../../../design_system/common_ui/common_ui_theme.dart';
 import '../../init/app_navigator.dart';
 
 Future<T> runWithBlockingDialog<T>({
   required BuildContext context,
   required Future<T> Function() task,
   String message = '처리 중입니다...',
-  bool usePromptUi = false,
+  bool useCommonUi = false,
 }) async {
-  if (usePromptUi) {
-    final tokens = PromptUiTheme.of(context);
+  if (useCommonUi) {
+    final tokens = CommonUiTheme.of(context);
     showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -19,9 +19,9 @@ Future<T> runWithBlockingDialog<T>({
       builder: (dialogContext) {
         return PopScope(
           canPop: false,
-          child: PromptUiScope(
-            child: PromptDialogFrame(
-              child: _PromptBlockingContent(message: message),
+          child: CommonUiScope(
+            child: CommonDialogFrame(
+              child: _CommonBlockingContent(message: message),
             ),
           ),
         );
@@ -79,14 +79,14 @@ Future<T> runWithBlockingDialog<T>({
   }
 }
 
-class _PromptBlockingContent extends StatelessWidget {
-  const _PromptBlockingContent({required this.message});
+class _CommonBlockingContent extends StatelessWidget {
+  const _CommonBlockingContent({required this.message});
 
   final String message;
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final text = Theme.of(context).textTheme;
 
     return ConstrainedBox(
@@ -99,7 +99,7 @@ class _PromptBlockingContent extends StatelessWidget {
             height: 48,
             decoration: BoxDecoration(
               color: tokens.accentContainer,
-              borderRadius: BorderRadius.circular(PromptUiShapes.control),
+              borderRadius: BorderRadius.circular(CommonUiShapes.control),
               border: Border.all(
                 color: tokens.accent.withOpacity(
                   tokens.isDark ? 0.58 : 0.36,

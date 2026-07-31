@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../controllers/monthly_plate_controller.dart';
 import '../../domain/monthly_parking_options.dart';
 import '../widgets/monthly_animated_action_button.dart';
 import '../widgets/monthly_bottom_navigation.dart';
-import '../widgets/monthly_prompt_ui.dart';
+import '../widgets/monthly_common_ui.dart';
 import 'monthly_plate_payment_bottom_sheet.dart';
 import 'widgets/keypad/kor_keypad.dart';
 import 'widgets/keypad/num_keypad.dart';
@@ -119,7 +119,7 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
 
   Future<void> _openPaymentSheet() async {
     FocusScope.of(context).unfocus();
-    await showPromptOverlayBottomSheet<void>(
+    await showCommonOverlayBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
@@ -174,13 +174,13 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
   }
 
   Widget _buildTopBar(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: tokens.surfaceRaised,
-        borderRadius: BorderRadius.circular(PromptUiShapes.card),
+        borderRadius: BorderRadius.circular(CommonUiShapes.card),
         border: Border.all(color: tokens.borderSubtle),
       ),
       child: Row(
@@ -191,7 +191,7 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: tokens.accentContainer,
-              borderRadius: BorderRadius.circular(PromptUiShapes.control),
+              borderRadius: BorderRadius.circular(CommonUiShapes.control),
               border: Border.all(
                 color: tokens.accent.withOpacity(
                   tokens.isDark ? 0.56 : 0.34,
@@ -227,10 +227,10 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
               ],
             ),
           ),
-          PromptIconButton(
+          CommonIconButton(
             icon: Icons.close_rounded,
             tooltip: '닫기',
-            haptic: PromptHaptic.selection,
+            haptic: CommonHaptic.selection,
             onPressed: () {
               final navigator = Navigator.of(context, rootNavigator: true);
               if (navigator.canPop()) navigator.pop();
@@ -242,19 +242,19 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
   }
 
   Widget _buildSettlementType() {
-    return const MonthlyPromptSection(
+    return const MonthlyCommonSection(
       title: '정산 유형',
       subtitle: '정기 주차 등록에는 정기 정산 유형이 적용됩니다.',
       icon: Icons.confirmation_number_outlined,
       delay: Duration(milliseconds: 30),
-      trailing: MonthlyPromptBadge(
+      trailing: MonthlyCommonBadge(
         label: '고정',
         icon: Icons.lock_outline_rounded,
       ),
-      child: MonthlyPromptBadge(
+      child: MonthlyCommonBadge(
         label: '정기',
         icon: Icons.verified_outlined,
-        tone: MonthlyPromptMessageTone.success,
+        tone: MonthlyCommonMessageTone.success,
       ),
     );
   }
@@ -296,20 +296,20 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
     final dialogHeight = availableHeight < 460
         ? availableHeight
         : availableHeight.clamp(460.0, 900.0).toDouble();
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
 
     return SafeArea(
       child: Padding(
         padding: EdgeInsets.fromLTRB(12, 12, 12, bottomInset + 12),
         child: Center(
           child: AnimatedContainer(
-            duration: reduceMotion ? Duration.zero : PromptUiMotion.layout,
-            curve: PromptUiMotion.standard,
+            duration: reduceMotion ? Duration.zero : CommonUiMotion.layout,
+            curve: CommonUiMotion.standard,
             width: dialogWidth,
             height: dialogHeight,
             decoration: BoxDecoration(
               color: tokens.canvas,
-              borderRadius: BorderRadius.circular(PromptUiShapes.sheet),
+              borderRadius: BorderRadius.circular(CommonUiShapes.sheet),
               border: Border.all(color: tokens.borderSubtle),
               boxShadow: [
                 BoxShadow(
@@ -324,7 +324,7 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
-                  child: PromptAnimatedReveal(
+                  child: CommonAnimatedReveal(
                     child: _buildTopBar(context),
                   ),
                 ),

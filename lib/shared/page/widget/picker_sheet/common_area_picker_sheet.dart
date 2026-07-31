@@ -1,12 +1,12 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../features/headquarter/application/area/area_master_cache.dart';
 
-Future<void> showPromptAreaPickerSheet({
+Future<void> showCommonAreaPickerSheet({
   required BuildContext context,
   required Future<AreaMasterSelectableData> future,
   required String currentArea,
@@ -15,18 +15,18 @@ Future<void> showPromptAreaPickerSheet({
     AreaMasterSelectableData data,
   ) onConfirm,
 }) async {
-  await showPromptOverlayBottomSheet<void>(
+  await showCommonOverlayBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
     builder: (sheetContext) {
       return FractionallySizedBox(
         heightFactor: 0.94,
-        child: PromptSheetScaffold(
+        child: CommonSheetScaffold(
           title: '지역 선택',
           icon: Icons.location_on_rounded,
           onClose: () => Navigator.of(sheetContext).pop(),
-          body: _PromptAreaPickerBody(
+          body: _CommonAreaPickerBody(
             future: future,
             currentArea: currentArea,
             onConfirm: onConfirm,
@@ -37,8 +37,8 @@ Future<void> showPromptAreaPickerSheet({
   );
 }
 
-class _PromptAreaPickerBody extends StatelessWidget {
-  const _PromptAreaPickerBody({
+class _CommonAreaPickerBody extends StatelessWidget {
+  const _CommonAreaPickerBody({
     required this.future,
     required this.currentArea,
     required this.onConfirm,
@@ -57,7 +57,7 @@ class _PromptAreaPickerBody extends StatelessWidget {
       future: future,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return const _PromptAreaPickerState(
+          return const _CommonAreaPickerState(
             icon: Icons.sync_rounded,
             title: '지역 목록을 불러오는 중입니다.',
             loading: true,
@@ -65,7 +65,7 @@ class _PromptAreaPickerBody extends StatelessWidget {
         }
 
         if (snapshot.hasError || snapshot.data == null) {
-          return const _PromptAreaPickerState(
+          return const _CommonAreaPickerState(
             icon: Icons.error_outline_rounded,
             title: '지역 목록을 불러오지 못했습니다.',
             description: '잠시 후 다시 시도해 주세요.',
@@ -74,14 +74,14 @@ class _PromptAreaPickerBody extends StatelessWidget {
 
         final data = snapshot.data!;
         if (!data.hasCache) {
-          return _PromptAreaPickerState(
+          return _CommonAreaPickerState(
             icon: Icons.cloud_download_outlined,
             title: '지역 마스터가 없습니다.',
             description: '업무 메뉴에서 지역 마스터 갱신을 먼저 실행하세요.',
-            action: PromptButton(
+            action: CommonButton(
               label: '닫기',
               icon: Icons.close_rounded,
-              variant: PromptButtonVariant.secondary,
+              variant: CommonButtonVariant.secondary,
               expand: true,
               onPressed: () => Navigator.of(context).pop(),
             ),
@@ -89,14 +89,14 @@ class _PromptAreaPickerBody extends StatelessWidget {
         }
 
         if (data.selectableAreas.isEmpty) {
-          return _PromptAreaPickerState(
+          return _CommonAreaPickerState(
             icon: Icons.location_off_rounded,
             title: '선택 가능한 지역이 없습니다.',
             description: '현재 모드에서 사용할 수 있는 지역을 확인하세요.',
-            action: PromptButton(
+            action: CommonButton(
               label: '닫기',
               icon: Icons.close_rounded,
-              variant: PromptButtonVariant.secondary,
+              variant: CommonButtonVariant.secondary,
               expand: true,
               onPressed: () => Navigator.of(context).pop(),
             ),
@@ -107,7 +107,7 @@ class _PromptAreaPickerBody extends StatelessWidget {
             ? currentArea.trim()
             : data.selectableAreas.first;
 
-        return _PromptAreaPickerSelection(
+        return _CommonAreaPickerSelection(
           data: data,
           initialSelected: initial,
           onConfirm: onConfirm,
@@ -117,8 +117,8 @@ class _PromptAreaPickerBody extends StatelessWidget {
   }
 }
 
-class _PromptAreaPickerState extends StatelessWidget {
-  const _PromptAreaPickerState({
+class _CommonAreaPickerState extends StatelessWidget {
+  const _CommonAreaPickerState({
     required this.icon,
     required this.title,
     this.description,
@@ -134,19 +134,19 @@ class _PromptAreaPickerState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final text = Theme.of(context).textTheme;
     return Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
-        child: PromptAnimatedReveal(
+        child: CommonAnimatedReveal(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 420),
             child: Container(
               padding: const EdgeInsets.all(22),
               decoration: BoxDecoration(
                 color: tokens.surfaceOverlay,
-                borderRadius: BorderRadius.circular(PromptUiShapes.card),
+                borderRadius: BorderRadius.circular(CommonUiShapes.card),
                 border: Border.all(color: tokens.borderSubtle),
               ),
               child: Column(
@@ -157,7 +157,7 @@ class _PromptAreaPickerState extends StatelessWidget {
                     height: 58,
                     decoration: BoxDecoration(
                       color: tokens.accentContainer,
-                      borderRadius: BorderRadius.circular(PromptUiShapes.card),
+                      borderRadius: BorderRadius.circular(CommonUiShapes.card),
                     ),
                     child: loading
                         ? Padding(
@@ -202,8 +202,8 @@ class _PromptAreaPickerState extends StatelessWidget {
   }
 }
 
-class _PromptAreaPickerSelection extends StatefulWidget {
-  const _PromptAreaPickerSelection({
+class _CommonAreaPickerSelection extends StatefulWidget {
+  const _CommonAreaPickerSelection({
     required this.data,
     required this.initialSelected,
     required this.onConfirm,
@@ -217,12 +217,12 @@ class _PromptAreaPickerSelection extends StatefulWidget {
   ) onConfirm;
 
   @override
-  State<_PromptAreaPickerSelection> createState() =>
-      _PromptAreaPickerSelectionState();
+  State<_CommonAreaPickerSelection> createState() =>
+      _CommonAreaPickerSelectionState();
 }
 
-class _PromptAreaPickerSelectionState
-    extends State<_PromptAreaPickerSelection> {
+class _CommonAreaPickerSelectionState
+    extends State<_CommonAreaPickerSelection> {
   late String _selected;
   bool _submitting = false;
 
@@ -244,7 +244,7 @@ class _PromptAreaPickerSelectionState
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final text = Theme.of(context).textTheme;
     final initialIndex = widget.data.selectableAreas.indexOf(_selected);
     final headquarter = widget.data.isHeadquarterByName[_selected] == true;
@@ -254,14 +254,14 @@ class _PromptAreaPickerSelectionState
       padding: const EdgeInsets.fromLTRB(18, 12, 18, 12),
       child: Column(
         children: [
-          PromptAnimatedReveal(
+          CommonAnimatedReveal(
             child: AnimatedContainer(
-              duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
-              curve: PromptUiMotion.standard,
+              duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+              curve: CommonUiMotion.standard,
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               decoration: BoxDecoration(
                 color: tokens.surfaceOverlay,
-                borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                borderRadius: BorderRadius.circular(CommonUiShapes.control),
                 border: Border.all(color: tokens.borderSubtle),
               ),
               child: Row(
@@ -276,7 +276,7 @@ class _PromptAreaPickerSelectionState
                   Expanded(
                     child: AnimatedSwitcher(
                       duration:
-                          reduceMotion ? Duration.zero : PromptUiMotion.selection,
+                          reduceMotion ? Duration.zero : CommonUiMotion.selection,
                       child: Text(
                         _selected,
                         key: ValueKey<String>(_selected),
@@ -296,7 +296,7 @@ class _PromptAreaPickerSelectionState
                       color: headquarter
                           ? tokens.infoContainer
                           : tokens.accentContainer,
-                      borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+                      borderRadius: BorderRadius.circular(CommonUiShapes.pill),
                     ),
                     child: Text(
                       headquarter ? '본사' : '지사',
@@ -317,7 +317,7 @@ class _PromptAreaPickerSelectionState
             child: Container(
               decoration: BoxDecoration(
                 color: tokens.surface,
-                borderRadius: BorderRadius.circular(PromptUiShapes.card),
+                borderRadius: BorderRadius.circular(CommonUiShapes.card),
                 border: Border.all(color: tokens.borderSubtle),
               ),
               child: CupertinoTheme(
@@ -344,7 +344,7 @@ class _PromptAreaPickerSelectionState
                     decoration: BoxDecoration(
                       color: tokens.surfaceSelected,
                       borderRadius:
-                          BorderRadius.circular(PromptUiShapes.control),
+                          BorderRadius.circular(CommonUiShapes.control),
                       border: Border.all(color: tokens.accent),
                     ),
                   ),
@@ -373,12 +373,12 @@ class _PromptAreaPickerSelectionState
             ),
           ),
           const SizedBox(height: 14),
-          PromptButton(
+          CommonButton(
             label: '선택 적용',
             icon: Icons.check_rounded,
             expand: true,
             loading: _submitting,
-            haptic: PromptHaptic.selection,
+            haptic: CommonHaptic.selection,
             onPressed: _submitting ? null : _confirm,
           ),
         ],

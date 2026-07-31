@@ -2,8 +2,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../shared/google_calendar/google_event_colors.dart';
 
 @immutable
@@ -81,7 +81,7 @@ Future<EditResult?> showEventEditorBottomSheet(
   int initialProgress = 0,
   bool isEditMode = false,
   List<EventTemplate>? templates,
-  bool usePromptUi = false,
+  bool useCommonUi = false,
 }) {
   Widget buildEditor(BuildContext sheetContext) {
     return EventEditorBottomSheet(
@@ -95,12 +95,12 @@ Future<EditResult?> showEventEditorBottomSheet(
       initialProgress: initialProgress,
       isEditMode: isEditMode,
       templates: templates,
-      usePromptUi: usePromptUi,
+      useCommonUi: useCommonUi,
     );
   }
 
-  if (usePromptUi) {
-    return showPromptOverlayBottomSheet<EditResult>(
+  if (useCommonUi) {
+    return showCommonOverlayBottomSheet<EditResult>(
       context: context,
       useSafeArea: true,
       isScrollControlled: true,
@@ -132,7 +132,7 @@ class EventEditorBottomSheet extends StatefulWidget {
     this.initialProgress = 0,
     this.isEditMode = false,
     this.templates,
-    this.usePromptUi = false,
+    this.useCommonUi = false,
   });
 
   final String title;
@@ -145,7 +145,7 @@ class EventEditorBottomSheet extends StatefulWidget {
   final int initialProgress;
   final bool isEditMode;
   final List<EventTemplate>? templates;
-  final bool usePromptUi;
+  final bool useCommonUi;
 
   @override
   State<EventEditorBottomSheet> createState() => _EventEditorBottomSheetState();
@@ -291,8 +291,8 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
       child: AnimatedPadding(
         duration: MediaQuery.maybeOf(context)?.disableAnimations == true
             ? Duration.zero
-            : PromptUiMotion.component,
-        curve: PromptUiMotion.enter,
+            : CommonUiMotion.component,
+        curve: CommonUiMotion.enter,
         padding: EdgeInsets.only(bottom: viewInsets.bottom),
         child: DraggableScrollableSheet(
           expand: false,
@@ -306,7 +306,7 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
               decoration: BoxDecoration(
                 color: tt.surface,
                 borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(PromptUiShapes.sheet),
+                  top: Radius.circular(CommonUiShapes.sheet),
                 ),
               ),
               child: Column(
@@ -412,8 +412,8 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
                                 label: '시작 날짜',
                                 valueText: fmtDate.format(_start),
                                 onPick: () async {
-                                  final picked = widget.usePromptUi
-                                      ? await showPromptDatePicker(
+                                  final picked = widget.useCommonUi
+                                      ? await showCommonDatePicker(
                                           context: context,
                                           initialDate: _start,
                                           firstDate: DateTime(2000),
@@ -452,8 +452,8 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
                                 label: '종료 날짜(포함 안 됨)',
                                 valueText: fmtDate.format(_end),
                                 onPick: () async {
-                                  final picked = widget.usePromptUi
-                                      ? await showPromptDatePicker(
+                                  final picked = widget.useCommonUi
+                                      ? await showCommonDatePicker(
                                           context: context,
                                           initialDate: _end,
                                           firstDate: DateTime(2000),

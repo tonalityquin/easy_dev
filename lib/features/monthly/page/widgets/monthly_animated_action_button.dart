@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_components.dart';
 
 class MonthlyAnimatedActionButton extends StatelessWidget {
   const MonthlyAnimatedActionButton({
@@ -21,15 +21,15 @@ class MonthlyAnimatedActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final secondary = buttonLabel.contains('결제 화면');
-    return PromptButton(
+    return CommonButton(
       label: isLoading ? '처리 중' : buttonLabel,
       icon: leadingIcon,
       loading: isLoading,
       expand: true,
       variant: secondary
-          ? PromptButtonVariant.secondary
-          : PromptButtonVariant.primary,
-      haptic: secondary ? PromptHaptic.selection : PromptHaptic.medium,
+          ? CommonButtonVariant.secondary
+          : CommonButtonVariant.primary,
+      haptic: secondary ? CommonHaptic.selection : CommonHaptic.medium,
       onPressed: enabled && !isLoading ? onPressed : null,
     );
   }

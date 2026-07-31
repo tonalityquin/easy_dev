@@ -3,9 +3,9 @@ import 'package:provider/provider.dart';
 
 import '../../../app/init/app_navigator.dart';
 import '../../../app/models/capability.dart';
-import '../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../design_system/common_ui/common_ui_components.dart';
+import '../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../design_system/common_ui/common_ui_theme.dart';
 import '../../account/applications/user_state.dart';
 import '../../dev/application/area_state.dart';
 import '../../monthly/application/monthly_area_resolver.dart';
@@ -72,7 +72,7 @@ class ProductivitySheet {
     if (_isPanelOpen || _panelFuture != null) return;
 
     _isPanelOpen = true;
-    _panelFuture = showPromptOverlayBottomSheet<void>(
+    _panelFuture = showCommonOverlayBottomSheet<void>(
       context: context,
       useSafeArea: true,
       isScrollControlled: true,
@@ -95,7 +95,7 @@ class _ProductivitySheetBody extends StatelessWidget {
   Widget build(BuildContext context) {
     return FractionallySizedBox(
       heightFactor: 1,
-      child: PromptSheetScaffold(
+      child: CommonSheetScaffold(
         title: '정기 주차',
         icon: Icons.dashboard_customize_rounded,
         onClose: () => Navigator.of(context).maybePop(),
@@ -127,9 +127,9 @@ class _MonthlyProductivityBody extends StatelessWidget {
     return AnimatedSwitcher(
       duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false
           ? Duration.zero
-          : PromptUiMotion.component,
-      switchInCurve: PromptUiMotion.enter,
-      switchOutCurve: PromptUiMotion.exit,
+          : CommonUiMotion.component,
+      switchInCurve: CommonUiMotion.enter,
+      switchOutCurve: CommonUiMotion.exit,
       child: area.isEmpty
           ? const _MonthlyAccessNotice(
               key: ValueKey<String>('area-empty'),
@@ -165,10 +165,10 @@ class _MonthlyAccessNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
 
-    return PromptAnimatedReveal(
+    return CommonAnimatedReveal(
       child: Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -177,7 +177,7 @@ class _MonthlyAccessNotice extends StatelessWidget {
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
               color: tokens.surfaceOverlay,
-              borderRadius: BorderRadius.circular(PromptUiShapes.card),
+              borderRadius: BorderRadius.circular(CommonUiShapes.card),
               border: Border.all(color: tokens.borderSubtle),
             ),
             child: Column(
@@ -189,7 +189,7 @@ class _MonthlyAccessNotice extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: tokens.warningContainer,
                     borderRadius:
-                        BorderRadius.circular(PromptUiShapes.control),
+                        BorderRadius.circular(CommonUiShapes.control),
                   ),
                   alignment: Alignment.center,
                   child: Icon(icon, size: 30, color: tokens.warning),

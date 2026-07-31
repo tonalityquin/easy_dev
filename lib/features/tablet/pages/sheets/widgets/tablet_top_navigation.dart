@@ -4,9 +4,9 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../../design_system/common_ui/common_ui_theme.dart';
 
 import '../../../../../app/init/app_exit_service.dart';
 import '../../../../../app/init/logout_helper.dart';
@@ -18,7 +18,7 @@ import '../../../../sector/applications/sector_state.dart';
 import '../../../applications/tablet_pad_mode_state.dart';
 import '../../../applications/tablet_parking_completed_view_toggle_state.dart';
 import '../../../applications/tablet_work_session_state.dart';
-import '../../widgets/tablet_prompt_components.dart';
+import '../../widgets/tablet_common_components.dart';
 
 class TabletTopNavigation extends StatefulWidget {
   final bool isAreaSelectable;
@@ -121,7 +121,7 @@ class _TabletTopNavigationState extends State<TabletTopNavigation> {
         context: context,
         title: '데이터 새로고침',
         message: '주차 구역, 섹터, 정산 데이터, 월정기 사용 여부를 새로고침하기 전 요청을 준비하고 있습니다.',
-        usePromptUi: true,
+        useCommonUi: true,
       );
       if (result == OperationalDataSyncResult.completed && mounted) {
         await _loadSyncSnapshot();
@@ -135,7 +135,7 @@ class _TabletTopNavigationState extends State<TabletTopNavigation> {
   }
 
   Future<void> _openThemeSettingsDialog(BuildContext context) async {
-    await showPromptOverlayDialog<void>(
+    await showCommonOverlayDialog<void>(
       context: context,
       barrierDismissible: true,
       builder: (dialogContext) {
@@ -280,9 +280,9 @@ class _TabletTopNavigationState extends State<TabletTopNavigation> {
                 ),
               ),
               actions: <Widget>[
-                PromptButton(
+                CommonButton(
                   label: '닫기',
-                  variant: PromptButtonVariant.tertiary,
+                  variant: CommonButtonVariant.tertiary,
                   minHeight: 44,
                   onPressed: () => Navigator.of(ctx).pop(),
                 ),
@@ -351,13 +351,13 @@ class _TabletTopNavigationState extends State<TabletTopNavigation> {
     final area = context.read<AreaState>().currentArea;
     final padMode = context.read<TabletPadModeState>().mode;
 
-    await showPromptOverlayDialog<void>(
+    await showCommonOverlayDialog<void>(
       context: context,
       barrierDismissible: true,
       builder: (dialogCtx) {
         final cs = Theme.of(dialogCtx).colorScheme;
         final text = Theme.of(dialogCtx).textTheme;
-        final tokens = PromptUiTheme.of(dialogCtx);
+        final tokens = CommonUiTheme.of(dialogCtx);
 
         Color tint(double opacity) => _tintOnSurface(cs, opacity);
 
@@ -391,15 +391,15 @@ class _TabletTopNavigationState extends State<TabletTopNavigation> {
             selected: selected,
             label: '$title, $subtitle',
             child: AnimatedContainer(
-              duration: tabletPromptDuration(
+              duration: tabletCommonDuration(
                 dialogCtx,
-                PromptUiMotion.selection,
+                CommonUiMotion.selection,
               ),
-              curve: PromptUiMotion.standard,
+              curve: CommonUiMotion.standard,
               width: double.infinity,
               decoration: BoxDecoration(
                 color: selected ? tokens.surfaceSelected : bgForMode(target),
-                borderRadius: BorderRadius.circular(PromptUiShapes.button),
+                borderRadius: BorderRadius.circular(CommonUiShapes.button),
                 border: Border.all(
                   color: selected ? tokens.accent : tokens.borderSubtle,
                   width: selected ? 2 : 1,
@@ -407,7 +407,7 @@ class _TabletTopNavigationState extends State<TabletTopNavigation> {
               ),
               child: Material(
                 color: tokens.transparent,
-                borderRadius: BorderRadius.circular(PromptUiShapes.button),
+                borderRadius: BorderRadius.circular(CommonUiShapes.button),
                 clipBehavior: Clip.antiAlias,
                 child: InkWell(
                   onTap: () {
@@ -415,7 +415,7 @@ class _TabletTopNavigationState extends State<TabletTopNavigation> {
                     dialogCtx.read<TabletPadModeState>().setMode(target);
                     Navigator.of(dialogCtx, rootNavigator: true).pop();
                   },
-                  borderRadius: BorderRadius.circular(PromptUiShapes.button),
+                  borderRadius: BorderRadius.circular(CommonUiShapes.button),
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(minHeight: 58),
                     child: Padding(
@@ -452,9 +452,9 @@ class _TabletTopNavigationState extends State<TabletTopNavigation> {
                             ),
                           ),
                           AnimatedSwitcher(
-                            duration: tabletPromptDuration(
+                            duration: tabletCommonDuration(
                               dialogCtx,
-                              PromptUiMotion.selection,
+                              CommonUiMotion.selection,
                             ),
                             child: selected
                                 ? Icon(
@@ -539,7 +539,7 @@ class _TabletTopNavigationState extends State<TabletTopNavigation> {
                             ),
                           ),
                           const Spacer(),
-                          PromptIconButton(
+                          CommonIconButton(
                             icon: Icons.close_rounded,
                             tooltip: '닫기',
                             onPressed: () => Navigator.of(dialogCtx).pop(),
@@ -604,7 +604,7 @@ class _TabletTopNavigationState extends State<TabletTopNavigation> {
                                     if (!context.mounted) return;
                                     await AppExitService.exitApp(
                                       context,
-                                      usePromptUi: true,
+                                      useCommonUi: true,
                                     );
                                   },
                                   icon: const Icon(Icons.power_settings_new),
@@ -945,9 +945,9 @@ class _TabletTopNavigationState extends State<TabletTopNavigation> {
                       const SizedBox(height: 8),
                       Align(
                         alignment: Alignment.centerRight,
-                        child: PromptButton(
+                        child: CommonButton(
                           label: '닫기',
-                          variant: PromptButtonVariant.tertiary,
+                          variant: CommonButtonVariant.tertiary,
                           minHeight: 44,
                           onPressed: () => Navigator.of(dialogCtx).pop(),
                         ),
@@ -968,7 +968,7 @@ class _TabletTopNavigationState extends State<TabletTopNavigation> {
       context,
       checkWorking: true,
       delay: const Duration(seconds: 1),
-      usePromptUi: true,
+      useCommonUi: true,
     );
   }
 }

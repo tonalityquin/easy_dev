@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../application/monthly_plate_field.dart';
-import '../../widgets/monthly_prompt_ui.dart';
+import '../../widgets/monthly_common_ui.dart';
 import '../monthly_region_bottom_sheet.dart';
 
 class MonthlyPlateSection extends StatelessWidget {
@@ -34,18 +34,18 @@ class MonthlyPlateSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
 
-    return MonthlyPromptSection(
+    return MonthlyCommonSection(
       title: '차량 식별',
       subtitle: '번호판 지역과 차량번호를 입력합니다.',
       icon: Icons.directions_car_filled_outlined,
       trailing: isEditMode
-          ? const MonthlyPromptBadge(
+          ? const MonthlyCommonBadge(
               label: '잠김',
               icon: Icons.lock_outline_rounded,
-              tone: MonthlyPromptMessageTone.warning,
+              tone: MonthlyCommonMessageTone.warning,
             )
           : null,
       child: Column(
@@ -56,11 +56,11 @@ class MonthlyPlateSection extends StatelessWidget {
             children: [
               SizedBox(
                 width: 116,
-                child: PromptButton(
+                child: CommonButton(
                   label: dropdownValue,
                   icon: Icons.place_outlined,
-                  variant: PromptButtonVariant.secondary,
-                  haptic: PromptHaptic.selection,
+                  variant: CommonButtonVariant.secondary,
+                  haptic: CommonHaptic.selection,
                   minHeight: 54,
                   onPressed: isEditMode
                       ? null

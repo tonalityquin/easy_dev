@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../design_system/common_ui/common_ui_overlays.dart';
 import '../models/capability.dart';
 import '../../features/dev/application/area_state.dart';
 import '../../features/location/applications/location_state.dart';
@@ -30,7 +30,7 @@ class OperationalDataSyncWorkflow {
     String title = '운영 데이터 동기화',
     String message =
         '주차 구역, 섹터, 정산 타입, 월정기 사용 여부를 새로고침하기 전 요청을 준비하고 있습니다.',
-    bool usePromptUi = false,
+    bool useCommonUi = false,
   }) async {
     if (_running) {
       debugPrint('[$title] 이미 운영 데이터 동기화가 진행 중입니다.');
@@ -52,7 +52,7 @@ class OperationalDataSyncWorkflow {
         context: rootContext,
         title: title,
         initialMessage: '운영 데이터 동기화 요청을 확인하고 있습니다.',
-        usePromptUi: usePromptUi,
+        useCommonUi: useCommonUi,
       );
 
       if (area.isEmpty) {
@@ -62,7 +62,7 @@ class OperationalDataSyncWorkflow {
           _showFailure(
             rootContext,
             failureMessage,
-            usePromptUi: usePromptUi,
+            useCommonUi: useCommonUi,
           );
         }
         return OperationalDataSyncResult.failed;
@@ -77,7 +77,7 @@ class OperationalDataSyncWorkflow {
           context: context,
           title: title,
           message: message,
-          usePromptUi: usePromptUi,
+          useCommonUi: useCommonUi,
         );
         if (!shouldRefresh) {
           trace.log('사용자가 운영 데이터 동기화를 취소했습니다.');
@@ -181,8 +181,8 @@ class OperationalDataSyncWorkflow {
           );
         }
 
-        if (usePromptUi) {
-          await showPromptOverlayDialog<void>(
+        if (useCommonUi) {
+          await showCommonOverlayDialog<void>(
             context: rootContext,
             barrierDismissible: false,
             builder: completionDialog,
@@ -198,7 +198,7 @@ class OperationalDataSyncWorkflow {
         if (rootContext.mounted) {
           await AppExitService.exitApp(
             rootContext,
-            usePromptUi: usePromptUi,
+            useCommonUi: useCommonUi,
           );
         }
         return OperationalDataSyncResult.completed;
@@ -244,7 +244,7 @@ class OperationalDataSyncWorkflow {
           _showFailure(
             rootContext,
             failureMessage,
-            usePromptUi: usePromptUi,
+            useCommonUi: useCommonUi,
           );
         }
         return OperationalDataSyncResult.failed;
@@ -288,10 +288,10 @@ class OperationalDataSyncWorkflow {
   static void _showFailure(
     BuildContext context,
     String message, {
-    required bool usePromptUi,
+    required bool useCommonUi,
   }) {
-    if (usePromptUi) {
-      showFailedSnackbar(context, message, usePromptUi: true);
+    if (useCommonUi) {
+      showFailedSnackbar(context, message, useCommonUi: true);
       return;
     }
     ScaffoldMessenger.maybeOf(context)?.showSnackBar(

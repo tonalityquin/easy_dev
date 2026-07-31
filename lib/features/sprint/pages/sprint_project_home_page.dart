@@ -102,7 +102,7 @@ class _SprintProjectHomePageState extends State<SprintProjectHomePage> {
           reduceMotion ? Duration.zero : const Duration(milliseconds: 260),
       reverseTransitionDuration:
           reduceMotion ? Duration.zero : const Duration(milliseconds: 210),
-      pageBuilder: (_, __, ___) => SprintPromptScope(child: page),
+      pageBuilder: (_, __, ___) => SprintCommonScope(child: page),
       transitionsBuilder: (_, animation, __, child) {
         if (reduceMotion) return child;
         final curved = CurvedAnimation(

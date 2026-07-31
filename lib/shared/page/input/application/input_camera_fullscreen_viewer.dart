@@ -3,18 +3,18 @@ import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 
 Future<void> inputShowFullScreenImageViewer(
   BuildContext context,
   List<XFile> images,
   int initialIndex,
 ) {
-  return showPromptOverlayDialog<void>(
+  return showCommonOverlayDialog<void>(
     context: context,
-    builder: (dialogContext) => _PromptImageViewer(
+    builder: (dialogContext) => _CommonImageViewer(
       itemCount: images.length,
       initialIndex: initialIndex,
       imageBuilder: (index) => Image.file(
@@ -35,9 +35,9 @@ Future<void> showFullScreenImageViewerFromUrls(
   List<String> imageUrls,
   int initialIndex,
 ) {
-  return showPromptOverlayDialog<void>(
+  return showCommonOverlayDialog<void>(
     context: context,
-    builder: (dialogContext) => _PromptImageViewer(
+    builder: (dialogContext) => _CommonImageViewer(
       itemCount: imageUrls.length,
       initialIndex: initialIndex,
       imageBuilder: (index) => Image.network(
@@ -47,14 +47,14 @@ Future<void> showFullScreenImageViewerFromUrls(
           if (progress == null) return child;
           return Center(
             child: CircularProgressIndicator(
-              color: PromptUiTheme.of(context).accent,
+              color: CommonUiTheme.of(context).accent,
             ),
           );
         },
         errorBuilder: (_, __, ___) => Center(
           child: Icon(
             Icons.broken_image_rounded,
-            color: PromptUiTheme.of(dialogContext).danger,
+            color: CommonUiTheme.of(dialogContext).danger,
             size: 42,
           ),
         ),
@@ -67,8 +67,8 @@ Future<void> showFullScreenImageViewerFromUrls(
   );
 }
 
-class _PromptImageViewer extends StatefulWidget {
-  const _PromptImageViewer({
+class _CommonImageViewer extends StatefulWidget {
+  const _CommonImageViewer({
     required this.itemCount,
     required this.initialIndex,
     required this.imageBuilder,
@@ -85,10 +85,10 @@ class _PromptImageViewer extends StatefulWidget {
   final Future<bool> Function(int index)? fileExistenceCheck;
 
   @override
-  State<_PromptImageViewer> createState() => _PromptImageViewerState();
+  State<_CommonImageViewer> createState() => _CommonImageViewerState();
 }
 
-class _PromptImageViewerState extends State<_PromptImageViewer> {
+class _CommonImageViewerState extends State<_CommonImageViewer> {
   late final PageController _controller;
   late int _index;
 
@@ -107,7 +107,7 @@ class _PromptImageViewerState extends State<_PromptImageViewer> {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final size = MediaQuery.sizeOf(context);
     return SizedBox(
       width: size.width,
@@ -164,7 +164,7 @@ class _PromptImageViewerState extends State<_PromptImageViewer> {
                         left: 18,
                         right: 18,
                         bottom: 24,
-                        child: PromptAnimatedReveal(
+                        child: CommonAnimatedReveal(
                           child: Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 14,
@@ -173,7 +173,7 @@ class _PromptImageViewerState extends State<_PromptImageViewer> {
                             decoration: BoxDecoration(
                               color: tokens.surfaceRaised,
                               borderRadius:
-                                  BorderRadius.circular(PromptUiShapes.control),
+                                  BorderRadius.circular(CommonUiShapes.control),
                               border: Border.all(color: tokens.borderSubtle),
                               boxShadow: [
                                 BoxShadow(
@@ -209,7 +209,7 @@ class _PromptImageViewerState extends State<_PromptImageViewer> {
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                   color: tokens.surfaceRaised,
-                  borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+                  borderRadius: BorderRadius.circular(CommonUiShapes.pill),
                   border: Border.all(color: tokens.borderSubtle),
                 ),
                 child: Text(
@@ -224,7 +224,7 @@ class _PromptImageViewerState extends State<_PromptImageViewer> {
             Positioned(
               top: 8,
               right: 8,
-              child: PromptIconButton(
+              child: CommonIconButton(
                 icon: Icons.close_rounded,
                 tooltip: '닫기',
                 onPressed: () => Navigator.of(context).pop(),

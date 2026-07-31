@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../../design_system/common_ui/common_ui_theme.dart';
 
 class ModifyStatusCustomSection extends StatelessWidget {
   const ModifyStatusCustomSection({
@@ -19,7 +19,7 @@ class ModifyStatusCustomSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final duration =
@@ -53,7 +53,7 @@ class ModifyStatusCustomSection extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(PromptUiShapes.control),
+        borderRadius: BorderRadius.circular(CommonUiShapes.control),
         border: Border.all(color: accent.withOpacity(.4)),
       ),
       child: Row(
@@ -106,11 +106,11 @@ class ModifyStatusCustomSection extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          PromptIconButton(
+          CommonIconButton(
             icon: Icons.clear_rounded,
             tooltip: '상태 메모 비우기',
             destructive: true,
-            haptic: PromptHaptic.selection,
+            haptic: CommonHaptic.selection,
             onPressed: onClear,
           ),
         ],

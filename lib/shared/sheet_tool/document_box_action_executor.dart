@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../design_system/common_ui/common_ui_theme.dart';
 import '../../app/utils/block_dialog/break_duration_blocking_dialog.dart';
 import '../document/backup/backup_form_page.dart';
 import '../document/user_statement/user_statement_form_page.dart';
@@ -10,23 +10,23 @@ import 'document_box_action.dart';
 import 'fielder_document_box_sheet.dart';
 import 'leader_document_box_sheet.dart';
 
-Route<void> _promptDocumentRoute(
+Route<void> _commonDocumentRoute(
   BuildContext context,
   Widget page,
 ) {
   final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
   return PageRouteBuilder<void>(
     fullscreenDialog: true,
-    transitionDuration: reduceMotion ? Duration.zero : PromptUiMotion.overlay,
+    transitionDuration: reduceMotion ? Duration.zero : CommonUiMotion.overlay,
     reverseTransitionDuration:
-        reduceMotion ? Duration.zero : PromptUiMotion.component,
-    pageBuilder: (_, __, ___) => PromptUiScope(child: page),
+        reduceMotion ? Duration.zero : CommonUiMotion.component,
+    pageBuilder: (_, __, ___) => CommonUiScope(child: page),
     transitionsBuilder: (_, animation, __, child) {
       if (reduceMotion) return child;
       final curved = CurvedAnimation(
         parent: animation,
-        curve: PromptUiMotion.enter,
-        reverseCurve: PromptUiMotion.exit,
+        curve: CommonUiMotion.enter,
+        reverseCurve: CommonUiMotion.exit,
       );
       return FadeTransition(
         opacity: curved,
@@ -43,7 +43,7 @@ Future<void> executeDocumentBoxAction(
   switch (action) {
     case DocumentBoxAction.openUserStatementForm:
       await Navigator.of(context, rootNavigator: true).push(
-        _promptDocumentRoute(
+        _commonDocumentRoute(
           context,
           const UserStatementFormPage(),
         ),
@@ -51,7 +51,7 @@ Future<void> executeDocumentBoxAction(
       return;
     case DocumentBoxAction.openWorkEndReportForm:
       await Navigator.of(context, rootNavigator: true).push(
-        _promptDocumentRoute(
+        _commonDocumentRoute(
           context,
           const DashboardEndReportFormPage(),
         ),
@@ -59,7 +59,7 @@ Future<void> executeDocumentBoxAction(
       return;
     case DocumentBoxAction.openWorkStartReportForm:
       await Navigator.of(context, rootNavigator: true).push(
-        _promptDocumentRoute(
+        _commonDocumentRoute(
           context,
           const DashboardStartReportFormPage(),
         ),
@@ -67,7 +67,7 @@ Future<void> executeDocumentBoxAction(
       return;
     case DocumentBoxAction.openBackupForm:
       await Navigator.of(context, rootNavigator: true).push(
-        _promptDocumentRoute(
+        _commonDocumentRoute(
           context,
           const BackupFormPage(),
         ),

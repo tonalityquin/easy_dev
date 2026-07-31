@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 
-import '../../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../../design_system/common_ui/common_ui_overlays.dart';
 import '../../../../plate/widgets/action_trace_dialog.dart';
 import '../../application/input_camera_helper.dart';
 import '../../controllers/input_plate_controller.dart';
 import '../sheets/input_camera_preview_dialog.dart';
 import '../sheets/input_location_bottom_sheet.dart';
-import '../prompt_input_ui.dart';
+import '../common_input_ui.dart';
 import 'buttons/input_animated_action_button.dart';
 import 'buttons/input_animated_parking_button.dart';
 import 'buttons/input_animated_photo_button.dart';
@@ -44,7 +44,7 @@ class _InputBottomActionSectionState extends State<InputBottomActionSection> {
   Future<void> _showCameraPreviewDialog() async {
     await _cameraHelper.initializeInputCamera();
     if (!widget.mountedContext || !mounted) return;
-    await showPromptOverlayDialog<void>(
+    await showCommonOverlayDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) => InputCameraPreviewDialog(
@@ -75,7 +75,7 @@ class _InputBottomActionSectionState extends State<InputBottomActionSection> {
         widget.onStateRefresh();
       },
       preferredParkingAreas: widget.controller.selectedParkingPriorities,
-      usePromptUi: true,
+      useCommonUi: true,
     );
   }
 
@@ -130,9 +130,9 @@ class _InputBottomActionSectionState extends State<InputBottomActionSection> {
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final transitionDuration =
         reduceMotion ? Duration.zero : const Duration(milliseconds: 220);
-    return PromptAnimatedReveal(
+    return CommonAnimatedReveal(
       delay: const Duration(milliseconds: 120),
-      child: PromptInputSectionCard(
+      child: CommonInputSectionCard(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [

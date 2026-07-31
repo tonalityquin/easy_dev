@@ -3,10 +3,10 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
-import '../../../pages/widgets/tablet_prompt_components.dart';
+import '../../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../../design_system/common_ui/common_ui_theme.dart';
+import '../../../pages/widgets/tablet_common_components.dart';
 
 enum ParkingGridPreviewPickerItemKind { structured, text }
 
@@ -60,12 +60,12 @@ Future<int?> showTabletGrid2DViewPickerDialog({
         : Icons.text_fields_rounded;
   }
 
-  return showPromptOverlayDialog<int>(
+  return showCommonOverlayDialog<int>(
     context: context,
     builder: (dialogContext) {
       return StatefulBuilder(
         builder: (context, setLocalState) {
-          final tokens = PromptUiTheme.of(context);
+          final tokens = CommonUiTheme.of(context);
           final text = Theme.of(context).textTheme;
           final visible = visibleIndexes();
           final hasStructured = items.any(
@@ -124,9 +124,9 @@ Future<int?> showTabletGrid2DViewPickerDialog({
                 item.kind == ParkingGridPreviewPickerItemKind.structured
                     ? tokens.info
                     : tokens.warning;
-            return PromptAnimatedReveal(
+            return CommonAnimatedReveal(
               key: ValueKey<String>('picker-item-$index-${filter?.name}-$query'),
-              duration: PromptUiMotion.component,
+              duration: CommonUiMotion.component,
               child: Semantics(
                 button: true,
                 selected: active,
@@ -134,17 +134,17 @@ Future<int?> showTabletGrid2DViewPickerDialog({
                     ? '${item.title}, ${kindLabel(item.kind)}'
                     : '${item.title}, ${kindLabel(item.kind)}, $subtitle',
                 child: AnimatedContainer(
-                  duration: tabletPromptDuration(
+                  duration: tabletCommonDuration(
                     context,
-                    PromptUiMotion.selection,
+                    CommonUiMotion.selection,
                   ),
-                  curve: PromptUiMotion.standard,
+                  curve: CommonUiMotion.standard,
                   decoration: BoxDecoration(
                     color: active
                         ? tokens.surfaceSelected
                         : tokens.surfaceRaised,
                     borderRadius:
-                        BorderRadius.circular(PromptUiShapes.control),
+                        BorderRadius.circular(CommonUiShapes.control),
                     border: Border.all(
                       color: active ? tokens.accent : tokens.borderSubtle,
                       width: active ? 1.5 : 1,
@@ -153,7 +153,7 @@ Future<int?> showTabletGrid2DViewPickerDialog({
                   child: Material(
                     color: tokens.transparent,
                     borderRadius:
-                        BorderRadius.circular(PromptUiShapes.control),
+                        BorderRadius.circular(CommonUiShapes.control),
                     clipBehavior: Clip.antiAlias,
                     child: InkWell(
                       onTap: () {
@@ -161,7 +161,7 @@ Future<int?> showTabletGrid2DViewPickerDialog({
                         setLocalState(() => selected = index);
                       },
                       borderRadius:
-                          BorderRadius.circular(PromptUiShapes.control),
+                          BorderRadius.circular(CommonUiShapes.control),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 14,
@@ -171,9 +171,9 @@ Future<int?> showTabletGrid2DViewPickerDialog({
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: <Widget>[
                             AnimatedContainer(
-                              duration: tabletPromptDuration(
+                              duration: tabletCommonDuration(
                                 context,
-                                PromptUiMotion.selection,
+                                CommonUiMotion.selection,
                               ),
                               width: 38,
                               height: 38,
@@ -182,7 +182,7 @@ Future<int?> showTabletGrid2DViewPickerDialog({
                                     ? tokens.accentContainer
                                     : tokens.surfaceOverlay,
                                 borderRadius: BorderRadius.circular(
-                                  PromptUiShapes.control,
+                                  CommonUiShapes.control,
                                 ),
                                 border: Border.all(
                                   color: active
@@ -219,7 +219,7 @@ Future<int?> showTabletGrid2DViewPickerDialog({
                                     crossAxisAlignment:
                                         WrapCrossAlignment.center,
                                     children: <Widget>[
-                                      TabletPromptStatusPill(
+                                      TabletCommonStatusPill(
                                         label: kindLabel(item.kind),
                                         icon: kindIcon(item.kind),
                                         tone: kindTone,
@@ -241,9 +241,9 @@ Future<int?> showTabletGrid2DViewPickerDialog({
                             ),
                             const SizedBox(width: 8),
                             AnimatedSwitcher(
-                              duration: tabletPromptDuration(
+                              duration: tabletCommonDuration(
                                 context,
-                                PromptUiMotion.selection,
+                                CommonUiMotion.selection,
                               ),
                               child: active
                                   ? Icon(
@@ -267,7 +267,7 @@ Future<int?> showTabletGrid2DViewPickerDialog({
             );
           }
 
-          return PromptDialogFrame(
+          return CommonDialogFrame(
             child: ConstrainedBox(
               constraints: BoxConstraints(
                 maxWidth: 620,
@@ -285,7 +285,7 @@ Future<int?> showTabletGrid2DViewPickerDialog({
                         decoration: BoxDecoration(
                           color: tokens.accentContainer,
                           borderRadius:
-                              BorderRadius.circular(PromptUiShapes.control),
+                              BorderRadius.circular(CommonUiShapes.control),
                           border: Border.all(
                             color: tokens.accent.withOpacity(
                               tokens.isDark ? 0.56 : 0.38,
@@ -310,11 +310,11 @@ Future<int?> showTabletGrid2DViewPickerDialog({
                           ),
                         ),
                       ),
-                      PromptIconButton(
+                      CommonIconButton(
                         icon: Icons.close_rounded,
                         tooltip: '닫기',
                         onPressed: () => Navigator.of(context).pop(),
-                        haptic: PromptHaptic.selection,
+                        haptic: CommonHaptic.selection,
                       ),
                     ],
                   ),
@@ -364,9 +364,9 @@ Future<int?> showTabletGrid2DViewPickerDialog({
                     const SizedBox(height: 12),
                   ],
                   Flexible(
-                    child: TabletPromptAnimatedSwap(
+                    child: TabletCommonAnimatedSwap(
                       child: visible.isEmpty
-                          ? const TabletPromptEmptyState(
+                          ? const TabletCommonEmptyState(
                               key: ValueKey<String>('empty-picker'),
                               title: '검색 결과가 없습니다',
                               message: '검색어 또는 유형 필터를 변경하세요.',
@@ -392,19 +392,19 @@ Future<int?> showTabletGrid2DViewPickerDialog({
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: <Widget>[
-                      PromptButton(
+                      CommonButton(
                         label: '취소',
-                        variant: PromptButtonVariant.tertiary,
+                        variant: CommonButtonVariant.tertiary,
                         onPressed: () => Navigator.of(context).pop(),
                       ),
                       const SizedBox(width: 8),
-                      PromptButton(
+                      CommonButton(
                         label: '열기',
                         icon: Icons.open_in_new_rounded,
                         onPressed: items.isEmpty
                             ? null
                             : () => Navigator.of(context).pop(selected),
-                        haptic: PromptHaptic.light,
+                        haptic: CommonHaptic.light,
                       ),
                     ],
                   ),

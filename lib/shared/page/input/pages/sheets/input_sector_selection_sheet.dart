@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../../features/sector/domain/models/sector_model.dart';
 
 class InputSectorSelectionSheet extends StatefulWidget {
@@ -30,7 +30,7 @@ class InputSectorSelectionSheet extends StatefulWidget {
       '[InputSectorSelectionSheet] open area=${area.trim()} count=${sorted.length} '
       'initialSelectedId=${initialSelectedId?.trim() ?? ''}',
     );
-    final result = await showPromptOverlayBottomSheet<SectorModel>(
+    final result = await showCommonOverlayBottomSheet<SectorModel>(
       context: context,
       useSafeArea: false,
       enableDrag: false,
@@ -102,12 +102,12 @@ class _InputSectorSelectionSheetState
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final reduceMotion = MediaQuery.of(context).disableAnimations;
     final selected = _selectedSector;
 
-    return PromptSheetScaffold(
+    return CommonSheetScaffold(
       title: '어디에 왔나요?',
       icon: Icons.place_rounded,
       onClose: () => Navigator.of(context).pop(),
@@ -116,15 +116,15 @@ class _InputSectorSelectionSheetState
         child: Column(
           children: [
             AnimatedContainer(
-              duration: reduceMotion ? Duration.zero : PromptUiMotion.component,
-              curve: PromptUiMotion.standard,
+              duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
+              curve: CommonUiMotion.standard,
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               decoration: BoxDecoration(
                 color: selected == null
                     ? tokens.surfaceOverlay
                     : tokens.accentContainer,
-                borderRadius: BorderRadius.circular(PromptUiShapes.card),
+                borderRadius: BorderRadius.circular(CommonUiShapes.card),
                 border: Border.all(
                   color: selected == null
                       ? tokens.borderSubtle
@@ -136,7 +136,7 @@ class _InputSectorSelectionSheetState
                   AnimatedSwitcher(
                     duration: reduceMotion
                         ? Duration.zero
-                        : PromptUiMotion.selection,
+                        : CommonUiMotion.selection,
                     child: Icon(
                       selected == null
                           ? Icons.touch_app_rounded
@@ -152,7 +152,7 @@ class _InputSectorSelectionSheetState
                     child: AnimatedSwitcher(
                       duration: reduceMotion
                           ? Duration.zero
-                          : PromptUiMotion.selection,
+                          : CommonUiMotion.selection,
                       transitionBuilder: (child, animation) => FadeTransition(
                         opacity: animation,
                         child: SlideTransition(
@@ -192,13 +192,13 @@ class _InputSectorSelectionSheetState
                   return AnimatedContainer(
                     duration: reduceMotion
                         ? Duration.zero
-                        : PromptUiMotion.selection,
-                    curve: PromptUiMotion.standard,
+                        : CommonUiMotion.selection,
+                    curve: CommonUiMotion.standard,
                     decoration: BoxDecoration(
                       color: isSelected
                           ? tokens.surfaceSelected
                           : tokens.surfaceRaised,
-                      borderRadius: BorderRadius.circular(PromptUiShapes.card),
+                      borderRadius: BorderRadius.circular(CommonUiShapes.card),
                       border: Border.all(
                         color: isSelected
                             ? tokens.accent
@@ -219,7 +219,7 @@ class _InputSectorSelectionSheetState
                       color: tokens.transparent,
                       child: InkWell(
                         borderRadius:
-                            BorderRadius.circular(PromptUiShapes.card),
+                            BorderRadius.circular(CommonUiShapes.card),
                         onTap: () => _select(sector),
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
@@ -231,7 +231,7 @@ class _InputSectorSelectionSheetState
                               AnimatedContainer(
                                 duration: reduceMotion
                                     ? Duration.zero
-                                    : PromptUiMotion.selection,
+                                    : CommonUiMotion.selection,
                                 width: 40,
                                 height: 40,
                                 decoration: BoxDecoration(
@@ -239,7 +239,7 @@ class _InputSectorSelectionSheetState
                                       ? tokens.accent
                                       : tokens.surfaceOverlay,
                                   borderRadius: BorderRadius.circular(
-                                    PromptUiShapes.control,
+                                    CommonUiShapes.control,
                                   ),
                                 ),
                                 child: Icon(
@@ -262,7 +262,7 @@ class _InputSectorSelectionSheetState
                               AnimatedSwitcher(
                                 duration: reduceMotion
                                     ? Duration.zero
-                                    : PromptUiMotion.selection,
+                                    : CommonUiMotion.selection,
                                 child: Icon(
                                   isSelected
                                       ? Icons.check_circle_rounded
@@ -283,11 +283,11 @@ class _InputSectorSelectionSheetState
               ),
             ),
             const SizedBox(height: 12),
-            PromptButton(
+            CommonButton(
               label: '선택 완료',
               icon: Icons.arrow_forward_rounded,
               expand: true,
-              haptic: PromptHaptic.medium,
+              haptic: CommonHaptic.medium,
               onPressed: selected == null ? null : _confirm,
             ),
           ],

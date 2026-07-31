@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../application/monthly_date_range_calculator.dart';
 import '../../controllers/monthly_plate_controller.dart';
 import '../../domain/monthly_parking_options.dart';
-import '../widgets/monthly_prompt_ui.dart';
+import '../widgets/monthly_common_ui.dart';
 import 'widgets/monthly_payment_section.dart';
 
 class MonthlyPaymentBottomSheet extends StatefulWidget {
@@ -34,14 +34,14 @@ class _MonthlyPaymentBottomSheetState
   Widget build(BuildContext context) {
     return FractionallySizedBox(
       heightFactor: 1,
-      child: PromptSheetScaffold(
+      child: CommonSheetScaffold(
         title: '결제 처리',
         icon: Icons.payments_outlined,
         onClose: () => Navigator.of(context).maybePop(),
         body: ListView(
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
           children: [
-            PromptAnimatedReveal(child: _buildSummaryCard(context)),
+            CommonAnimatedReveal(child: _buildSummaryCard(context)),
             const SizedBox(height: 14),
             MonthlyPaymentSection(
               controller: widget.controller,
@@ -59,7 +59,7 @@ class _MonthlyPaymentBottomSheetState
   }
 
   Widget _buildSummaryCard(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final controller = widget.controller;
     final plate = controller.buildPlateNumber();
@@ -85,7 +85,7 @@ class _MonthlyPaymentBottomSheetState
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: tokens.surfaceRaised,
-        borderRadius: BorderRadius.circular(PromptUiShapes.card),
+        borderRadius: BorderRadius.circular(CommonUiShapes.card),
         border: Border.all(color: tokens.borderSubtle),
         boxShadow: [
           BoxShadow(
@@ -106,7 +106,7 @@ class _MonthlyPaymentBottomSheetState
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: tokens.accentContainer,
-                  borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                  borderRadius: BorderRadius.circular(CommonUiShapes.control),
                   border: Border.all(
                     color: tokens.accent.withOpacity(
                       tokens.isDark ? 0.56 : 0.34,
@@ -142,7 +142,7 @@ class _MonthlyPaymentBottomSheetState
                   ],
                 ),
               ),
-              const MonthlyPromptBadge(
+              const MonthlyCommonBadge(
                 label: '결제 대상',
                 icon: Icons.verified_outlined,
               ),
@@ -154,7 +154,7 @@ class _MonthlyPaymentBottomSheetState
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: tokens.accentContainer,
-              borderRadius: BorderRadius.circular(PromptUiShapes.card),
+              borderRadius: BorderRadius.circular(CommonUiShapes.card),
               border: Border.all(
                 color: tokens.accent.withOpacity(
                   tokens.isDark ? 0.56 : 0.34,
@@ -176,7 +176,7 @@ class _MonthlyPaymentBottomSheetState
                   duration: MediaQuery.maybeOf(context)?.disableAnimations ??
                           false
                       ? Duration.zero
-                      : PromptUiMotion.component,
+                      : CommonUiMotion.component,
                   child: Text(
                     _won(amount),
                     key: ValueKey<String>(amount),
@@ -205,12 +205,12 @@ class _MonthlyPaymentBottomSheetState
             AnimatedContainer(
               duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false
                   ? Duration.zero
-                  : PromptUiMotion.selection,
+                  : CommonUiMotion.selection,
               width: double.infinity,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: tokens.successContainer,
-                borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                borderRadius: BorderRadius.circular(CommonUiShapes.control),
                 border: Border.all(
                   color: tokens.success.withOpacity(0.3),
                 ),
@@ -241,7 +241,7 @@ class _PaymentSummaryRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     return Padding(
       padding: const EdgeInsets.only(bottom: 9),

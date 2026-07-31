@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../../app/utils/location_debug_status.dart';
 import '../../../app/utils/snackbar_helper.dart';
-import '../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../design_system/common_ui/common_ui_overlays.dart';
 
 import '../../dev/application/area_state.dart';
 import '../applications/location_state.dart';
@@ -218,13 +218,13 @@ class _LocationManagementState extends State<LocationManagement> {
       showSuccessSnackbar(
         context,
         '기존 자식 슬롯을 최신 주차면적으로 재계산했습니다.',
-        usePromptUi: true,
+        useCommonUi: true,
       );
     } else {
       showFailedSnackbar(
         context,
         errorMessage ?? '자식 슬롯 재계산에 실패했습니다.',
-        usePromptUi: true,
+        useCommonUi: true,
       );
     }
   }
@@ -250,7 +250,7 @@ class _LocationManagementState extends State<LocationManagement> {
         showFailedSnackbar(
           context,
           errorMessage ?? '주차 구역 작업에 실패했습니다.',
-          usePromptUi: true,
+          useCommonUi: true,
         );
       }
 
@@ -272,7 +272,7 @@ class _LocationManagementState extends State<LocationManagement> {
         showFailedSnackbar(
           context,
           errorMessage ?? '주차 구역 작업에 실패했습니다.',
-          usePromptUi: true,
+          useCommonUi: true,
         );
       }
 
@@ -289,7 +289,7 @@ class _LocationManagementState extends State<LocationManagement> {
     final existingNameKeysInArea =
         allInArea.map((location) => _nameKey(location.locationName)).toSet();
 
-    await showPromptOverlayBottomSheet<void>(
+    await showCommonOverlayBottomSheet<void>(
       context: context,
       useSafeArea: true,
       builder: (_) {
@@ -363,7 +363,7 @@ class _LocationManagementState extends State<LocationManagement> {
       }
     }
 
-    await showPromptOverlayBottomSheet<void>(
+    await showCommonOverlayBottomSheet<void>(
       context: context,
       useSafeArea: true,
       enableDrag: false,
@@ -483,7 +483,7 @@ class _LocationManagementState extends State<LocationManagement> {
           .add(cr.normalized());
     }
 
-    await showPromptOverlayBottomSheet<void>(
+    await showCommonOverlayBottomSheet<void>(
       context: context,
       useSafeArea: true,
       builder: (_) {
@@ -611,7 +611,7 @@ class _LocationManagementState extends State<LocationManagement> {
           .add(cr.normalized());
     }
 
-    await showPromptOverlayBottomSheet<void>(
+    await showCommonOverlayBottomSheet<void>(
       context: context,
       useSafeArea: true,
       enableDrag: false,
@@ -727,7 +727,7 @@ class _LocationManagementState extends State<LocationManagement> {
           .add(cr.normalized());
     }
 
-    await showPromptOverlayBottomSheet<void>(
+    await showCommonOverlayBottomSheet<void>(
       context: context,
       useSafeArea: true,
       builder: (_) {

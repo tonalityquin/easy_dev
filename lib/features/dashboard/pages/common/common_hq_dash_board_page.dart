@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 
 import '../../../../app/init/app_exit_service.dart';
 import '../../../../app/init/logout_helper.dart';
@@ -91,7 +91,7 @@ class _CommonHqDashBoardPageState extends State<CommonHqDashBoardPage> {
         'action': 'logout',
       },
     );
-    await LogoutHelper.logoutAndGoToLogin(context, usePromptUi: true);
+    await LogoutHelper.logoutAndGoToLogin(context, useCommonUi: true);
   }
 
   Future<void> _openServiceSettings(BuildContext context) async {
@@ -118,7 +118,7 @@ class _CommonHqDashBoardPageState extends State<CommonHqDashBoardPage> {
       }
     } catch (_) {}
 
-    await AppExitService.exitApp(context, usePromptUi: true);
+    await AppExitService.exitApp(context, useCommonUi: true);
   }
 
   Future<void> _handleClockOutFlow(
@@ -227,7 +227,7 @@ class _CommonHqDashBoardPageState extends State<CommonHqDashBoardPage> {
     required IconData icon,
     required Widget child,
   }) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
 
     return ConstrainedBox(
@@ -243,7 +243,7 @@ class _CommonHqDashBoardPageState extends State<CommonHqDashBoardPage> {
                 height: 40,
                 decoration: BoxDecoration(
                   color: tokens.accentContainer,
-                  borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                  borderRadius: BorderRadius.circular(CommonUiShapes.control),
                   border: Border.all(color: tokens.borderSubtle),
                 ),
                 child: Icon(icon, color: tokens.onAccentContainer),
@@ -261,11 +261,11 @@ class _CommonHqDashBoardPageState extends State<CommonHqDashBoardPage> {
                   ),
                 ),
               ),
-              PromptIconButton(
+              CommonIconButton(
                 icon: Icons.close_rounded,
                 tooltip: '닫기',
                 onPressed: () => Navigator.of(context).pop(),
-                haptic: PromptHaptic.selection,
+                haptic: CommonHaptic.selection,
               ),
             ],
           ),
@@ -280,9 +280,9 @@ class _CommonHqDashBoardPageState extends State<CommonHqDashBoardPage> {
     BuildContext context,
     UserState userState,
   ) async {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
 
-    await showPromptDialog<void>(
+    await showCommonDialog<void>(
       context: context,
       barrierDismissible: true,
       builder: (dialogContext) {
@@ -375,7 +375,7 @@ class _CommonHqDashBoardPageState extends State<CommonHqDashBoardPage> {
     UserState userState,
     int page,
   ) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
 
     switch (page) {
       case 0:
@@ -487,7 +487,7 @@ class _CommonHqDashBoardPageState extends State<CommonHqDashBoardPage> {
     BuildContext context,
     UserState userState,
   ) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final name = _safe(userState.name);
     final position = _safe(userState.position);
@@ -585,7 +585,7 @@ class _CommonHqDashBoardPageState extends State<CommonHqDashBoardPage> {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
 
     return Scaffold(
@@ -602,11 +602,11 @@ class _CommonHqDashBoardPageState extends State<CommonHqDashBoardPage> {
                   sliver: SliverList(
                     delegate: SliverChildListDelegate(
                       [
-                        PromptAnimatedReveal(
+                        CommonAnimatedReveal(
                           child: _buildOpsHeader(context, userState),
                         ),
                         const SizedBox(height: 12),
-                        PromptAnimatedReveal(
+                        CommonAnimatedReveal(
                           delay: const Duration(milliseconds: 70),
                           child: _buildMenuPanel(context, userState),
                         ),
@@ -633,7 +633,7 @@ class _HeadquarterChatFloatingButton extends StatelessWidget {
     await _AreaChatReadOpenHelper.open(
       context: context,
       areaName: headquarterChatAreaName,
-      usePromptUi: true,
+      useCommonUi: true,
     );
   }
 
@@ -666,7 +666,7 @@ class _HeadquarterChatFabVisual extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final active = unreadCount > 0;
     final color = tokens.accent;
 
@@ -797,13 +797,13 @@ class _OpsHqHeaderPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     return Container(
       constraints: const BoxConstraints(maxWidth: 170),
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
         color: tokens.surfaceOverlay,
-        borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+        borderRadius: BorderRadius.circular(CommonUiShapes.pill),
         border: Border.all(color: tokens.borderSubtle),
       ),
       child: Row(
@@ -895,7 +895,7 @@ class _OpsHqQuickButtonIndicatorState extends State<_OpsHqQuickButtonIndicator>
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
@@ -906,8 +906,8 @@ class _OpsHqQuickButtonIndicatorState extends State<_OpsHqQuickButtonIndicator>
         final color = widget.enabled ? tokens.warning : tokens.iconDisabled;
 
         return AnimatedContainer(
-          duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
-          curve: PromptUiMotion.standard,
+          duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+          curve: CommonUiMotion.standard,
           width: 34,
           height: 34,
           decoration: BoxDecoration(
@@ -934,11 +934,11 @@ class _OpsHqQuickButtonIndicatorState extends State<_OpsHqQuickButtonIndicator>
             child: AnimatedScale(
               scale: widget.enabled ? 1 + (value * .08) : 1,
               duration:
-                  reduceMotion ? Duration.zero : PromptUiMotion.selection,
-              curve: PromptUiMotion.enter,
+                  reduceMotion ? Duration.zero : CommonUiMotion.selection,
+              curve: CommonUiMotion.enter,
               child: AnimatedSwitcher(
                 duration:
-                    reduceMotion ? Duration.zero : PromptUiMotion.selection,
+                    reduceMotion ? Duration.zero : CommonUiMotion.selection,
                 transitionBuilder: (child, animation) {
                   return ScaleTransition(
                     scale: animation,
@@ -988,7 +988,7 @@ class _OpsHqCarouselButtonState extends State<_OpsHqCarouselButton> {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final enabled = widget.onTap != null;
@@ -1005,12 +1005,12 @@ class _OpsHqCarouselButtonState extends State<_OpsHqCarouselButton> {
       enabled: enabled,
       label: widget.label,
       child: AnimatedContainer(
-        duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
-        curve: PromptUiMotion.standard,
+        duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+        curve: CommonUiMotion.standard,
         height: 60,
         decoration: BoxDecoration(
           color: background,
-          borderRadius: BorderRadius.circular(PromptUiShapes.button),
+          borderRadius: BorderRadius.circular(CommonUiShapes.button),
           border: Border.all(
             color: _focused ? tokens.focusRing : tokens.borderSubtle,
             width: _focused ? 2 : 1,
@@ -1027,7 +1027,7 @@ class _OpsHqCarouselButtonState extends State<_OpsHqCarouselButton> {
         ),
         child: Material(
           color: tokens.transparent,
-          borderRadius: BorderRadius.circular(PromptUiShapes.button),
+          borderRadius: BorderRadius.circular(CommonUiShapes.button),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: widget.onTap,
@@ -1043,7 +1043,7 @@ class _OpsHqCarouselButtonState extends State<_OpsHqCarouselButton> {
               if (_focused == value) return;
               setState(() => _focused = value);
             },
-            borderRadius: BorderRadius.circular(PromptUiShapes.button),
+            borderRadius: BorderRadius.circular(CommonUiShapes.button),
             overlayColor: WidgetStatePropertyAll(
               tokens.accent.withOpacity(_pressed ? .12 : .06),
             ),
@@ -1051,8 +1051,8 @@ class _OpsHqCarouselButtonState extends State<_OpsHqCarouselButton> {
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               child: AnimatedScale(
                 scale: _pressed && enabled ? .98 : 1,
-                duration: reduceMotion ? Duration.zero : PromptUiMotion.press,
-                curve: PromptUiMotion.enter,
+                duration: reduceMotion ? Duration.zero : CommonUiMotion.press,
+                curve: CommonUiMotion.enter,
                 child: Row(
                   children: [
                     widget.leading ??
@@ -1117,7 +1117,7 @@ class _OpsHqPageDots extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
@@ -1126,8 +1126,8 @@ class _OpsHqPageDots extends StatelessWidget {
       children: List.generate(count, (index) {
         final active = index == currentIndex;
         return AnimatedContainer(
-          duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
-          curve: PromptUiMotion.enter,
+          duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+          curve: CommonUiMotion.enter,
           width: active ? 8 : 6,
           height: active ? 8 : 6,
           margin: const EdgeInsets.symmetric(horizontal: 4),
@@ -1154,7 +1154,7 @@ class _OpsHqPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -1233,7 +1233,7 @@ class _OpsHqActionTileState extends State<_OpsHqActionTile> {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final enabled = widget.onTap != null;
@@ -1254,11 +1254,11 @@ class _OpsHqActionTileState extends State<_OpsHqActionTile> {
       enabled: enabled,
       label: widget.label,
       child: AnimatedContainer(
-        duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
-        curve: PromptUiMotion.standard,
+        duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+        curve: CommonUiMotion.standard,
         decoration: BoxDecoration(
           color: background,
-          borderRadius: BorderRadius.circular(PromptUiShapes.button),
+          borderRadius: BorderRadius.circular(CommonUiShapes.button),
           border: Border.all(
             color: _focused
                 ? tokens.focusRing
@@ -1279,7 +1279,7 @@ class _OpsHqActionTileState extends State<_OpsHqActionTile> {
         ),
         child: Material(
           color: tokens.transparent,
-          borderRadius: BorderRadius.circular(PromptUiShapes.button),
+          borderRadius: BorderRadius.circular(CommonUiShapes.button),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: widget.onTap,
@@ -1298,13 +1298,13 @@ class _OpsHqActionTileState extends State<_OpsHqActionTile> {
             overlayColor: WidgetStatePropertyAll(
               effectiveColor.withOpacity(_pressed ? .12 : .06),
             ),
-            borderRadius: BorderRadius.circular(PromptUiShapes.button),
+            borderRadius: BorderRadius.circular(CommonUiShapes.button),
             child: SizedBox(
               height: 58,
               child: AnimatedScale(
                 scale: _pressed && enabled ? .98 : 1,
-                duration: reduceMotion ? Duration.zero : PromptUiMotion.press,
-                curve: PromptUiMotion.enter,
+                duration: reduceMotion ? Duration.zero : CommonUiMotion.press,
+                curve: CommonUiMotion.enter,
                 child: Row(
                   children: [
                     Container(
@@ -1312,7 +1312,7 @@ class _OpsHqActionTileState extends State<_OpsHqActionTile> {
                       decoration: BoxDecoration(
                         color: effectiveColor,
                         borderRadius: const BorderRadius.horizontal(
-                          left: Radius.circular(PromptUiShapes.button),
+                          left: Radius.circular(CommonUiShapes.button),
                         ),
                       ),
                     ),
@@ -1819,7 +1819,7 @@ class _BranchWorkStatusInlinePanelState
   }
 
   Widget _buildTopBar(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
@@ -1832,22 +1832,22 @@ class _BranchWorkStatusInlinePanelState
       button: true,
       label: '지사 별 업무 현황 $statusLabel',
       child: AnimatedContainer(
-        duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
-        curve: PromptUiMotion.standard,
+        duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+        curve: CommonUiMotion.standard,
         decoration: BoxDecoration(
           color: _expanded ? tokens.surfaceSelected : tokens.surfaceOverlay,
-          borderRadius: BorderRadius.circular(PromptUiShapes.card),
+          borderRadius: BorderRadius.circular(CommonUiShapes.card),
           border: Border.all(
             color: _expanded ? tokens.accent : tokens.borderSubtle,
           ),
         ),
         child: Material(
           color: tokens.transparent,
-          borderRadius: BorderRadius.circular(PromptUiShapes.card),
+          borderRadius: BorderRadius.circular(CommonUiShapes.card),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: _toggleExpanded,
-            borderRadius: BorderRadius.circular(PromptUiShapes.card),
+            borderRadius: BorderRadius.circular(CommonUiShapes.card),
             overlayColor: WidgetStatePropertyAll(
               tokens.accent.withOpacity(.08),
             ),
@@ -1858,7 +1858,7 @@ class _BranchWorkStatusInlinePanelState
                   AnimatedContainer(
                     duration: reduceMotion
                         ? Duration.zero
-                        : PromptUiMotion.selection,
+                        : CommonUiMotion.selection,
                     width: 42,
                     height: 42,
                     decoration: BoxDecoration(
@@ -1916,13 +1916,13 @@ class _BranchWorkStatusInlinePanelState
                     decoration: BoxDecoration(
                       color: tokens.surface,
                       borderRadius:
-                          BorderRadius.circular(PromptUiShapes.pill),
+                          BorderRadius.circular(CommonUiShapes.pill),
                       border: Border.all(color: tokens.borderSubtle),
                     ),
                     child: AnimatedSwitcher(
                       duration: reduceMotion
                           ? Duration.zero
-                          : PromptUiMotion.selection,
+                          : CommonUiMotion.selection,
                       transitionBuilder: (child, animation) {
                         return ScaleTransition(
                           scale: animation,
@@ -2156,7 +2156,7 @@ class _BranchWorkStatusInlinePanelState
         _buildTopBar(context),
         _buildExpandedContent(context),
         const SizedBox(height: 12),
-        const HeadquarterCalendarCard(usePromptUi: true),
+        const HeadquarterCalendarCard(useCommonUi: true),
       ],
     );
   }
@@ -2170,13 +2170,13 @@ class _BranchHeaderPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     return Container(
       height: 34,
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
         color: tokens.surface,
-        borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+        borderRadius: BorderRadius.circular(CommonUiShapes.pill),
         border: Border.all(color: tokens.borderSubtle),
       ),
       child: Row(
@@ -2356,7 +2356,7 @@ class _BranchCapabilityStateLegend extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final color = allowed ? tokens.success : tokens.danger;
     final background =
         allowed ? tokens.successContainer : tokens.dangerContainer;
@@ -2542,14 +2542,14 @@ class _AreaChatReadOpenHelper {
   static Future<void> open({
     required BuildContext context,
     required String areaName,
-    bool usePromptUi = true,
+    bool useCommonUi = true,
   }) async {
     final area = areaName.trim();
     if (area.isEmpty) return;
     await AreaChatPanel.showSheet(
       context: context,
       areaName: area,
-      usePromptUi: usePromptUi,
+      useCommonUi: useCommonUi,
     );
   }
 }
@@ -2624,7 +2624,7 @@ class _BranchAreaMiniCard extends StatelessWidget {
     await _AreaChatReadOpenHelper.open(
       context: context,
       areaName: area,
-      usePromptUi: true,
+      useCommonUi: true,
     );
   }
 
@@ -2799,7 +2799,7 @@ class _CapabilityStatusIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final color = allowed ? tokens.success : tokens.danger;
     final background =
         allowed ? tokens.successContainer : tokens.dangerContainer;

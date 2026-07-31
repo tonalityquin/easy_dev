@@ -3,8 +3,8 @@ import 'dart:developer' as dev;
 
 import 'package:flutter/material.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -20,15 +20,15 @@ class Statistics extends StatefulWidget {
   const Statistics({
     super.key,
     this.asBottomSheet = false,
-    this.usePromptUi = false,
+    this.useCommonUi = false,
   });
 
   final bool asBottomSheet;
-  final bool usePromptUi;
+  final bool useCommonUi;
 
   static Future<T?> showAsBottomSheet<T>(
     BuildContext context, {
-    bool usePromptUi = false,
+    bool useCommonUi = false,
   }) {
     Widget buildSheet(BuildContext sheetContext) {
       final insets = MediaQuery.of(sheetContext).viewInsets;
@@ -37,14 +37,14 @@ class Statistics extends StatefulWidget {
         child: _NinetyTwoPercentBottomSheetFrame(
           child: Statistics(
             asBottomSheet: true,
-            usePromptUi: usePromptUi,
+            useCommonUi: useCommonUi,
           ),
         ),
       );
     }
 
-    if (usePromptUi) {
-      return showPromptOverlayBottomSheet<T>(
+    if (useCommonUi) {
+      return showCommonOverlayBottomSheet<T>(
         context: context,
         isScrollControlled: true,
         useSafeArea: true,
@@ -80,8 +80,8 @@ class _StatisticsState extends State<Statistics> {
     required WidgetBuilder builder,
     bool barrierDismissible = true,
   }) {
-    if (widget.usePromptUi) {
-      return showPromptOverlayDialog<T>(
+    if (widget.useCommonUi) {
+      return showCommonOverlayDialog<T>(
         context: context,
         barrierDismissible: barrierDismissible,
         builder: builder,
@@ -685,11 +685,11 @@ class _StatisticsState extends State<Statistics> {
       reportDataMap: parsedData,
       division: (_division ?? '').trim(),
       area: (_selectedArea ?? '').trim(),
-      usePromptUi: widget.usePromptUi,
+      useCommonUi: widget.useCommonUi,
       availableAreas: List<String>.unmodifiable(_areaOptions),
       areaSectorEnabled: Map<String, bool>.unmodifiable(areaSectorEnabled),
     );
-    if (!widget.usePromptUi) {
+    if (!widget.useCommonUi) {
       Navigator.of(context).push(
         MaterialPageRoute<void>(builder: (_) => page),
       );
@@ -697,18 +697,18 @@ class _StatisticsState extends State<Statistics> {
     }
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    final duration = reduceMotion ? Duration.zero : PromptUiMotion.overlay;
+    final duration = reduceMotion ? Duration.zero : CommonUiMotion.overlay;
     Navigator.of(context).push(
       PageRouteBuilder<void>(
         transitionDuration: duration,
         reverseTransitionDuration: duration,
-        pageBuilder: (_, __, ___) => PromptUiScope(child: page),
+        pageBuilder: (_, __, ___) => CommonUiScope(child: page),
         transitionsBuilder: (_, animation, __, child) {
           if (reduceMotion) return child;
           final curved = CurvedAnimation(
             parent: animation,
-            curve: PromptUiMotion.enter,
-            reverseCurve: PromptUiMotion.exit,
+            curve: CommonUiMotion.enter,
+            reverseCurve: CommonUiMotion.exit,
           );
           return FadeTransition(
             opacity: curved,
@@ -727,7 +727,7 @@ class _StatisticsState extends State<Statistics> {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final division = _division;
 
     final body = Padding(
@@ -780,7 +780,7 @@ class _StatisticsState extends State<Statistics> {
   }
 
   Widget _buildControls(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final canPickArea = _areaOptions.isNotEmpty;
     final visibleCards = _buildVisibleCards();
 
@@ -1014,7 +1014,7 @@ class _StatisticsState extends State<Statistics> {
   }
 
   Widget _buildCardsArea(BuildContext context, String? division) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     if (division == null) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -1143,7 +1143,7 @@ class _StatisticsState extends State<Statistics> {
   }
 
   Widget _buildReportCard(Map<String, dynamic> day) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final vc = _asMap(day['vehicleCount']);
     final metrics = _asMap(day['metrics']);
 
@@ -1294,14 +1294,14 @@ class _StatisticsSectorMetricsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final currency = NumberFormat('#,###');
 
     return AnimatedSize(
-      duration: reduceMotion ? Duration.zero : PromptUiMotion.component,
-      curve: PromptUiMotion.enter,
+      duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
+      curve: CommonUiMotion.enter,
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.all(12),
@@ -1388,7 +1388,7 @@ class _StatisticsSectorMetricLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final currency = NumberFormat('#,###');
     return Row(
       children: [
@@ -1464,7 +1464,7 @@ class _MultiDatePickerDialogState extends State<_MultiDatePickerDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final first = _normalize(widget.firstDate);
     final last = _normalize(widget.lastDate);
 
@@ -1755,7 +1755,7 @@ class _RangePickerDialogState extends State<_RangePickerDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final first = _normalize(widget.firstDate);
     final last = _normalize(widget.lastDate);
 
@@ -1999,7 +1999,7 @@ class _CalendarDayCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final bool isStrong = !disabled && (selected || rangeStart || rangeEnd);
     final bool isSoftRange = !disabled && !isStrong && inRange;
 
@@ -2053,7 +2053,7 @@ class _InfoBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
@@ -2110,7 +2110,7 @@ class _TopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     String subLine = '$today입니다.';
     if (refreshLoading) subLine = '데이터 갱신 중...';
     if (refreshError != null) subLine = '갱신 오류';
@@ -2195,7 +2195,7 @@ class _NinetyTwoPercentBottomSheetFrame extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     return FractionallySizedBox(
       heightFactor: 0.92,
       widthFactor: 1.0,
@@ -2242,7 +2242,7 @@ class _SheetScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     return Column(
       children: [
         const SizedBox(height: 8),

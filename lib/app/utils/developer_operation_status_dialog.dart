@@ -4,7 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../design_system/common_ui/common_ui_overlays.dart';
 import '../../features/selector/application/dev_auth.dart';
 
 enum DeveloperOperationState {
@@ -17,12 +17,12 @@ class DeveloperOperationTrace extends ChangeNotifier {
   DeveloperOperationTrace._({
     required this.title,
     required this.developerMode,
-    required this.usePromptUi,
+    required this.useCommonUi,
   });
 
   final String title;
   final bool developerMode;
-  final bool usePromptUi;
+  final bool useCommonUi;
 
   final List<String> _lines = <String>[];
   Future<void>? _dialogFuture;
@@ -46,7 +46,7 @@ class DeveloperOperationTrace extends ChangeNotifier {
     required BuildContext context,
     required String title,
     required String initialMessage,
-    required bool usePromptUi,
+    required bool useCommonUi,
     String? developerModeMessage,
     String? standardModeMessage,
   }) async {
@@ -54,7 +54,7 @@ class DeveloperOperationTrace extends ChangeNotifier {
     final trace = DeveloperOperationTrace._(
       title: title,
       developerMode: developerMode,
-      usePromptUi: usePromptUi,
+      useCommonUi: useCommonUi,
     );
     trace.log(initialMessage, progress: 0);
     trace.log(
@@ -129,8 +129,8 @@ class DeveloperOperationTrace extends ChangeNotifier {
       return _DeveloperOperationStatusDialog(trace: this);
     }
 
-    if (usePromptUi) {
-      await showPromptOverlayDialog<void>(
+    if (useCommonUi) {
+      await showCommonOverlayDialog<void>(
         context: context,
         barrierDismissible: false,
         builder: builder,

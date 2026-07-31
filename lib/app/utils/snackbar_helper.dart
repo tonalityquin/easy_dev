@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../design_system/common_ui/common_ui_theme.dart';
 
 void showCustomSnackBar({
   required BuildContext context,
@@ -14,15 +14,15 @@ void showCustomSnackBar({
   Color? borderColor,
   Duration duration = const Duration(seconds: 5),
   VoidCallback? onTap,
-  bool usePromptUi = false,
+  bool useCommonUi = false,
 }) {
   final overlay = Overlay.of(context, rootOverlay: true);
 
   late final OverlayEntry overlayEntry;
 
-  if (usePromptUi) {
+  if (useCommonUi) {
     overlayEntry = OverlayEntry(
-      builder: (context) => _PromptSnackbarOverlay(
+      builder: (context) => _CommonSnackbarOverlay(
         backgroundColor: backgroundColor,
         borderColor: borderColor ?? backgroundColor,
         icon: icon,
@@ -62,7 +62,7 @@ void showCustomSnackBar({
 
   overlay.insert(overlayEntry);
 
-  if (!usePromptUi) {
+  if (!useCommonUi) {
     Future.delayed(duration, () {
       if (overlayEntry.mounted) overlayEntry.remove();
     });
@@ -72,10 +72,10 @@ void showCustomSnackBar({
 void showSuccessSnackbar(
   BuildContext context,
   String message, {
-  bool usePromptUi = false,
+  bool useCommonUi = false,
 }) {
-  if (usePromptUi) {
-    final tokens = PromptUiTheme.of(context);
+  if (useCommonUi) {
+    final tokens = CommonUiTheme.of(context);
     showCustomSnackBar(
       context: context,
       message: message,
@@ -84,7 +84,7 @@ void showSuccessSnackbar(
       icon: Icons.check_circle_outline_rounded,
       iconColor: tokens.success,
       textColor: tokens.onSuccessContainer,
-      usePromptUi: true,
+      useCommonUi: true,
     );
     return;
   }
@@ -100,10 +100,10 @@ void showSuccessSnackbar(
 void showFailedSnackbar(
   BuildContext context,
   String message, {
-  bool usePromptUi = false,
+  bool useCommonUi = false,
 }) {
-  if (usePromptUi) {
-    final tokens = PromptUiTheme.of(context);
+  if (useCommonUi) {
+    final tokens = CommonUiTheme.of(context);
     showCustomSnackBar(
       context: context,
       message: message,
@@ -112,7 +112,7 @@ void showFailedSnackbar(
       icon: Icons.error_outline_rounded,
       iconColor: tokens.danger,
       textColor: tokens.onDangerContainer,
-      usePromptUi: true,
+      useCommonUi: true,
     );
     return;
   }
@@ -128,10 +128,10 @@ void showFailedSnackbar(
 void showSelectedSnackbar(
   BuildContext context,
   String message, {
-  bool usePromptUi = false,
+  bool useCommonUi = false,
 }) {
-  if (usePromptUi) {
-    final tokens = PromptUiTheme.of(context);
+  if (useCommonUi) {
+    final tokens = CommonUiTheme.of(context);
     showCustomSnackBar(
       context: context,
       message: message,
@@ -140,7 +140,7 @@ void showSelectedSnackbar(
       icon: Icons.warning_amber_rounded,
       iconColor: tokens.warning,
       textColor: tokens.onWarningContainer,
-      usePromptUi: true,
+      useCommonUi: true,
     );
     return;
   }
@@ -154,8 +154,8 @@ void showSelectedSnackbar(
   );
 }
 
-class _PromptSnackbarOverlay extends StatefulWidget {
-  const _PromptSnackbarOverlay({
+class _CommonSnackbarOverlay extends StatefulWidget {
+  const _CommonSnackbarOverlay({
     required this.backgroundColor,
     required this.borderColor,
     required this.icon,
@@ -178,11 +178,11 @@ class _PromptSnackbarOverlay extends StatefulWidget {
   final VoidCallback? onTap;
 
   @override
-  State<_PromptSnackbarOverlay> createState() =>
-      _PromptSnackbarOverlayState();
+  State<_CommonSnackbarOverlay> createState() =>
+      _CommonSnackbarOverlayState();
 }
 
-class _PromptSnackbarOverlayState extends State<_PromptSnackbarOverlay>
+class _CommonSnackbarOverlayState extends State<_CommonSnackbarOverlay>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<double> _opacity;
@@ -196,13 +196,13 @@ class _PromptSnackbarOverlayState extends State<_PromptSnackbarOverlay>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: PromptUiMotion.component,
-      reverseDuration: PromptUiMotion.selection,
+      duration: CommonUiMotion.component,
+      reverseDuration: CommonUiMotion.selection,
     );
     final curve = CurvedAnimation(
       parent: _controller,
-      curve: PromptUiMotion.enter,
-      reverseCurve: PromptUiMotion.exit,
+      curve: CommonUiMotion.enter,
+      reverseCurve: CommonUiMotion.exit,
     );
     _opacity = Tween<double>(begin: 0, end: 1).animate(curve);
     _position = Tween<Offset>(
@@ -247,7 +247,7 @@ class _PromptSnackbarOverlayState extends State<_PromptSnackbarOverlay>
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final text = Theme.of(context).textTheme;
 
     return Positioned(
@@ -277,7 +277,7 @@ class _PromptSnackbarOverlayState extends State<_PromptSnackbarOverlay>
                   ),
                   decoration: BoxDecoration(
                     color: widget.backgroundColor,
-                    borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                    borderRadius: BorderRadius.circular(CommonUiShapes.control),
                     border: Border.all(color: widget.borderColor),
                     boxShadow: [
                       BoxShadow(

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../controllers/voice_runtime_controller.dart';
 
 class VoiceParkingCompletedAppbarPanel extends StatelessWidget {
@@ -14,7 +14,7 @@ class VoiceParkingCompletedAppbarPanel extends StatelessWidget {
     VoiceRuntimeController controller,
   ) async {
     if (controller.messages.isEmpty || controller.isUploading) return;
-    await showPromptOverlayDialog<void>(
+    await showCommonOverlayDialog<void>(
       context: context,
       builder: (_) => _VoiceReplayDialog(controller: controller),
     );
@@ -27,7 +27,7 @@ class VoiceParkingCompletedAppbarPanel extends StatelessWidget {
     return AnimatedBuilder(
       animation: controller,
       builder: (context, _) {
-        final tokens = PromptUiTheme.of(context);
+        final tokens = CommonUiTheme.of(context);
         final canOpenReplay = controller.messages.isNotEmpty;
 
         return Padding(
@@ -35,10 +35,10 @@ class VoiceParkingCompletedAppbarPanel extends StatelessWidget {
           child: AnimatedContainer(
             duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false
                 ? Duration.zero
-                : PromptUiMotion.selection,
+                : CommonUiMotion.selection,
             decoration: BoxDecoration(
               color: tokens.surfaceRaised,
-              borderRadius: BorderRadius.circular(PromptUiShapes.control),
+              borderRadius: BorderRadius.circular(CommonUiShapes.control),
               border: Border.all(
                 color: controller.active
                     ? tokens.accent
@@ -52,7 +52,7 @@ class VoiceParkingCompletedAppbarPanel extends StatelessWidget {
                   duration:
                       MediaQuery.maybeOf(context)?.disableAnimations ?? false
                           ? Duration.zero
-                          : PromptUiMotion.selection,
+                          : CommonUiMotion.selection,
                   child: Icon(
                     controller.active
                         ? Icons.campaign_rounded
@@ -66,7 +66,7 @@ class VoiceParkingCompletedAppbarPanel extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: PromptButton(
+                  child: CommonButton(
                     label: controller.currentlyPlayingMessageId == null
                         ? '코멘트 다시 듣기'
                         : '재생 중',
@@ -76,10 +76,10 @@ class VoiceParkingCompletedAppbarPanel extends StatelessWidget {
                     onPressed: canOpenReplay && !controller.isUploading
                         ? () => _openReplayDialog(context, controller)
                         : null,
-                    variant: PromptButtonVariant.secondary,
+                    variant: CommonButtonVariant.secondary,
                     expand: true,
                     minHeight: 36,
-                    haptic: PromptHaptic.selection,
+                    haptic: CommonHaptic.selection,
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -108,12 +108,12 @@ class _VoiceReplayDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final hasLatest = controller.messages.isNotEmpty;
     final hasPrevious = controller.messages.length > 1;
 
-    return PromptDialogFrame(
+    return CommonDialogFrame(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 420),
         child: Column(
@@ -128,7 +128,7 @@ class _VoiceReplayDialog extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: tokens.accentContainer,
                     borderRadius:
-                        BorderRadius.circular(PromptUiShapes.control),
+                        BorderRadius.circular(CommonUiShapes.control),
                     border: Border.all(color: tokens.borderSubtle),
                   ),
                   alignment: Alignment.center,
@@ -187,12 +187,12 @@ class _VoiceReplayDialog extends StatelessWidget {
               },
             ),
             const SizedBox(height: 14),
-            PromptButton(
+            CommonButton(
               label: '닫기',
               onPressed: () => Navigator.of(context).pop(),
-              variant: PromptButtonVariant.tertiary,
+              variant: CommonButtonVariant.tertiary,
               expand: true,
-              haptic: PromptHaptic.selection,
+              haptic: CommonHaptic.selection,
             ),
           ],
         ),
@@ -220,7 +220,7 @@ class _VoiceReplayActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final background = primary ? tokens.accent : tokens.surfaceOverlay;
     final foreground = primary ? tokens.onAccent : tokens.textPrimary;
@@ -239,12 +239,12 @@ class _VoiceReplayActionButton extends StatelessWidget {
                   await onPressed();
                 }
               : null,
-          borderRadius: BorderRadius.circular(PromptUiShapes.control),
+          borderRadius: BorderRadius.circular(CommonUiShapes.control),
           child: Ink(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
             decoration: BoxDecoration(
               color: background,
-              borderRadius: BorderRadius.circular(PromptUiShapes.control),
+              borderRadius: BorderRadius.circular(CommonUiShapes.control),
               border: Border.all(
                 color: primary ? tokens.accent : tokens.borderSubtle,
               ),
@@ -312,7 +312,7 @@ class _VoiceCompactHoldToTalkButtonState
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final label = widget.isUploading
@@ -336,10 +336,10 @@ class _VoiceCompactHoldToTalkButtonState
       enabled: !widget.isUploading,
       label: label,
       child: AnimatedContainer(
-        duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
+        duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
         decoration: BoxDecoration(
           color: background,
-          borderRadius: BorderRadius.circular(PromptUiShapes.control),
+          borderRadius: BorderRadius.circular(CommonUiShapes.control),
           border: Border.all(
             color: widget.isRecording ? tokens.accent : tokens.transparent,
           ),
@@ -375,8 +375,8 @@ class _VoiceCompactHoldToTalkButtonState
             child: Center(
               child: AnimatedScale(
                 scale: _pressed ? 0.96 : 1,
-                duration: reduceMotion ? Duration.zero : PromptUiMotion.press,
-                curve: PromptUiMotion.enter,
+                duration: reduceMotion ? Duration.zero : CommonUiMotion.press,
+                curve: CommonUiMotion.enter,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [

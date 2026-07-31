@@ -15,7 +15,7 @@ class LogoutHelper {
     String? route,
     bool checkWorking = false,
     Duration delay = const Duration(milliseconds: 500),
-    bool usePromptUi = false,
+    bool useCommonUi = false,
   }) async {
     final target = route ?? AppRoutes.selector;
 
@@ -23,7 +23,7 @@ class LogoutHelper {
       await runWithBlockingDialog(
         context: context,
         message: '로그아웃 중입니다...',
-        usePromptUi: usePromptUi,
+        useCommonUi: useCommonUi,
         task: () async {
           final userState = Provider.of<UserState>(context, listen: false);
           await FlutterForegroundTask.stopService();
@@ -56,14 +56,14 @@ class LogoutHelper {
       showSuccessSnackbar(
         context,
         '로그아웃 되었습니다.',
-        usePromptUi: usePromptUi,
+        useCommonUi: useCommonUi,
       );
     } catch (e) {
       if (context.mounted) {
         showFailedSnackbar(
           context,
           '로그아웃 실패: $e',
-          usePromptUi: usePromptUi,
+          useCommonUi: useCommonUi,
         );
       }
     }

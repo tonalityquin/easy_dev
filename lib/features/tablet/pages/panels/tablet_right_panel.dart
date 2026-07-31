@@ -3,9 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../app/utils/dev_firebase_debug_dialog.dart';
 import '../../../../shared/plate/application/common/movement_plate.dart';
 import '../../../../shared/plate/data/repositories/firestore_plate_repository.dart';
@@ -24,7 +24,7 @@ import '../sheets/widgets/keypad/tablet_animated_keypad.dart';
 import '../widgets/tablet_plate_number_display_section.dart';
 import '../widgets/tablet_plate_search_header_section.dart';
 import '../widgets/tablet_plate_search_result_section.dart';
-import '../widgets/tablet_prompt_components.dart';
+import '../widgets/tablet_common_components.dart';
 
 enum _UnifiedDialogCloseReason {
   reset,
@@ -67,17 +67,17 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
     super.initState();
     _keypadController = AnimationController(
       vsync: this,
-      duration: PromptUiMotion.overlay,
+      duration: CommonUiMotion.overlay,
     );
     _slideAnimation = Tween<Offset>(
       begin: const Offset(0, 0.2),
       end: Offset.zero,
     ).animate(
-      CurvedAnimation(parent: _keypadController, curve: PromptUiMotion.enter),
+      CurvedAnimation(parent: _keypadController, curve: CommonUiMotion.enter),
     );
     _fadeAnimation = CurvedAnimation(
       parent: _keypadController,
-      curve: PromptUiMotion.enter,
+      curve: CommonUiMotion.enter,
     );
   }
 
@@ -85,7 +85,7 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     _keypadController.duration =
-        reduceMotion ? Duration.zero : PromptUiMotion.overlay;
+        reduceMotion ? Duration.zero : CommonUiMotion.overlay;
     if (reduceMotion) {
       _keypadController.value = 1;
       return;
@@ -101,7 +101,7 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
     final changed = _reduceMotion != reduceMotion;
     _reduceMotion = reduceMotion;
     _keypadController.duration =
-        reduceMotion ? Duration.zero : PromptUiMotion.overlay;
+        reduceMotion ? Duration.zero : CommonUiMotion.overlay;
     if (!_didRunKeypadEntrance) {
       _didRunKeypadEntrance = true;
       _runKeypadEntrance();
@@ -188,7 +188,7 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
   ) async {
     final details = _parseParkingLocation(plate.location);
 
-    await showPromptOverlayDialog<void>(
+    await showCommonOverlayDialog<void>(
       context: dialogCtx,
       useRootNavigator: true,
       barrierDismissible: true,
@@ -253,7 +253,7 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
           ],
           'widget': 'RightPaneSearchPanel',
         },
-        usePromptUi: true,
+        useCommonUi: true,
       );
     }
   }
@@ -262,7 +262,7 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
     if (!mounted || _dialogOpen) return;
     _dialogOpen = true;
 
-    final closeReason = await showPromptOverlayDialog<_UnifiedDialogCloseReason>(
+    final closeReason = await showCommonOverlayDialog<_UnifiedDialogCloseReason>(
       context: context,
       useRootNavigator: true,
       barrierDismissible: true,
@@ -336,7 +336,7 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
                 'forceViewSync': true,
                 'widget': 'RightPaneSearchPanel.confirmDepartureRequested',
               },
-              usePromptUi: true,
+              useCommonUi: true,
             );
             setStateSB(() => busy = false);
           }
@@ -880,7 +880,7 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
   }
 
   Widget _panelCard({required Widget child}) {
-    return TabletPromptPanel(child: child);
+    return TabletCommonPanel(child: child);
   }
 
   Widget _buildHeaderCard({required EdgeInsets padding}) {
@@ -908,7 +908,7 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
 
   Widget _buildSearchProgressBar(ColorScheme cs) {
     return AnimatedSwitcher(
-      duration: tabletPromptDuration(context, PromptUiMotion.selection),
+      duration: tabletCommonDuration(context, CommonUiMotion.selection),
       child: _isLoading
           ? ClipRRect(
               borderRadius: BorderRadius.circular(999),
@@ -1261,7 +1261,7 @@ class _AutoCloseDepartureRequestDialogState
                   constraints: const BoxConstraints(maxWidth: 320),
                   child: Builder(
                     builder: (context) {
-                      final tokens = PromptUiTheme.of(context);
+                      final tokens = CommonUiTheme.of(context);
                       final reduceMotion =
                           MediaQuery.maybeOf(context)?.disableAnimations ?? false;
                       if (reduceMotion) {
@@ -1277,7 +1277,7 @@ class _AutoCloseDepartureRequestDialogState
                             decoration: BoxDecoration(
                               color: tokens.statusSynchronizedContainer,
                               borderRadius: BorderRadius.circular(
-                                PromptUiShapes.pill,
+                                CommonUiShapes.pill,
                               ),
                               border: Border.all(
                                 color: tokens.statusSynchronized,
@@ -1315,7 +1315,7 @@ class _AutoCloseDepartureRequestDialogState
                           builder: (context, _) {
                             return ClipRRect(
                               borderRadius: BorderRadius.circular(
-                                PromptUiShapes.pill,
+                                CommonUiShapes.pill,
                               ),
                               child: LinearProgressIndicator(
                                 minHeight: 8,
@@ -1339,11 +1339,11 @@ class _AutoCloseDepartureRequestDialogState
                 alignment: Alignment.center,
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(minWidth: 160),
-                  child: PromptButton(
+                  child: CommonButton(
                     label: '닫기',
                     icon: Icons.close_rounded,
                     onPressed: _closeDialog,
-                    haptic: PromptHaptic.selection,
+                    haptic: CommonHaptic.selection,
                   ),
                 ),
               ),

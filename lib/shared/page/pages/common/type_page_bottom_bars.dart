@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../features/voice/application/voice_appbar_ui_state.dart';
 import '../../application/common/type_view_mode_state.dart';
 
@@ -11,7 +11,7 @@ class TypePageBottomBars extends StatelessWidget {
     required this.tableTop,
     required this.tableMiddle,
     required this.modeSwitch,
-    this.duration = PromptUiMotion.component,
+    this.duration = CommonUiMotion.component,
   });
 
   final Widget tableTop;
@@ -21,7 +21,7 @@ class TypePageBottomBars extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final mode = context.watch<TypeViewModeState>().mode;
@@ -55,18 +55,18 @@ class TypePageBottomBars extends StatelessWidget {
       surfaceTintColor: tokens.transparent,
       elevation: 0,
       child: AnimatedSize(
-        duration: reduceMotion ? Duration.zero : PromptUiMotion.layout,
-        curve: PromptUiMotion.standard,
+        duration: reduceMotion ? Duration.zero : CommonUiMotion.layout,
+        curve: CommonUiMotion.standard,
         alignment: Alignment.bottomCenter,
         child: AnimatedSwitcher(
           duration: reduceMotion ? Duration.zero : duration,
-          switchInCurve: PromptUiMotion.enter,
-          switchOutCurve: PromptUiMotion.exit,
+          switchInCurve: CommonUiMotion.enter,
+          switchOutCurve: CommonUiMotion.exit,
           transitionBuilder: (current, animation) {
             final curved = CurvedAnimation(
               parent: animation,
-              curve: PromptUiMotion.enter,
-              reverseCurve: PromptUiMotion.exit,
+              curve: CommonUiMotion.enter,
+              reverseCurve: CommonUiMotion.exit,
             );
             final offset = Tween<Offset>(
               begin: const Offset(0, 0.045),

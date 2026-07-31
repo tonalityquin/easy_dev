@@ -1,26 +1,26 @@
 import 'package:flutter/material.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 
-Duration personalPromptDuration(
+Duration personalCommonDuration(
   BuildContext context, [
-  Duration duration = PromptUiMotion.component,
+  Duration duration = CommonUiMotion.component,
 ]) {
   return MediaQuery.maybeOf(context)?.disableAnimations ?? false
       ? Duration.zero
       : duration;
 }
 
-class PersonalPromptPanel extends StatelessWidget {
-  const PersonalPromptPanel({
+class PersonalCommonPanel extends StatelessWidget {
+  const PersonalCommonPanel({
     super.key,
     required this.child,
     this.padding = const EdgeInsets.all(18),
     this.margin,
     this.selected = false,
     this.accented = false,
-    this.borderRadius = PromptUiShapes.card,
+    this.borderRadius = CommonUiShapes.card,
   });
 
   final Widget child;
@@ -32,11 +32,11 @@ class PersonalPromptPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
-    final duration = personalPromptDuration(context);
+    final tokens = CommonUiTheme.of(context);
+    final duration = personalCommonDuration(context);
     return AnimatedContainer(
       duration: duration,
-      curve: PromptUiMotion.standard,
+      curve: CommonUiMotion.standard,
       margin: margin,
       padding: padding,
       decoration: BoxDecoration(
@@ -62,8 +62,8 @@ class PersonalPromptPanel extends StatelessWidget {
   }
 }
 
-class PersonalPromptStatusPill extends StatelessWidget {
-  const PersonalPromptStatusPill({
+class PersonalCommonStatusPill extends StatelessWidget {
+  const PersonalCommonStatusPill({
     super.key,
     required this.label,
     required this.foreground,
@@ -80,12 +80,12 @@ class PersonalPromptStatusPill extends StatelessWidget {
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     return AnimatedContainer(
-      duration: personalPromptDuration(context, PromptUiMotion.selection),
-      curve: PromptUiMotion.standard,
+      duration: personalCommonDuration(context, CommonUiMotion.selection),
+      curve: CommonUiMotion.standard,
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+        borderRadius: BorderRadius.circular(CommonUiShapes.pill),
         border: Border.all(color: foreground.withOpacity(.26)),
       ),
       child: Row(
@@ -113,8 +113,8 @@ class PersonalPromptStatusPill extends StatelessWidget {
   }
 }
 
-class PersonalPromptAnimatedSwap extends StatelessWidget {
-  const PersonalPromptAnimatedSwap({
+class PersonalCommonAnimatedSwap extends StatelessWidget {
+  const PersonalCommonAnimatedSwap({
     super.key,
     required this.child,
     required this.stateKey,
@@ -127,12 +127,12 @@ class PersonalPromptAnimatedSwap extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final duration = personalPromptDuration(context);
+    final duration = personalCommonDuration(context);
     return AnimatedSwitcher(
       duration: duration,
       reverseDuration: duration,
-      switchInCurve: PromptUiMotion.enter,
-      switchOutCurve: PromptUiMotion.exit,
+      switchInCurve: CommonUiMotion.enter,
+      switchOutCurve: CommonUiMotion.exit,
       layoutBuilder: (currentChild, previousChildren) {
         return Stack(
           alignment: alignment,
@@ -145,8 +145,8 @@ class PersonalPromptAnimatedSwap extends StatelessWidget {
       transitionBuilder: (child, animation) {
         final curved = CurvedAnimation(
           parent: animation,
-          curve: PromptUiMotion.enter,
-          reverseCurve: PromptUiMotion.exit,
+          curve: CommonUiMotion.enter,
+          reverseCurve: CommonUiMotion.exit,
         );
         return FadeTransition(
           opacity: curved,
@@ -167,8 +167,8 @@ class PersonalPromptAnimatedSwap extends StatelessWidget {
   }
 }
 
-class PersonalPromptLoadingState extends StatelessWidget {
-  const PersonalPromptLoadingState({
+class PersonalCommonLoadingState extends StatelessWidget {
+  const PersonalCommonLoadingState({
     super.key,
     required this.label,
     this.compact = false,
@@ -179,10 +179,10 @@ class PersonalPromptLoadingState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    return PersonalPromptPanel(
+    return PersonalCommonPanel(
       padding: EdgeInsets.symmetric(
         horizontal: compact ? 14 : 20,
         vertical: compact ? 14 : 22,
@@ -223,8 +223,8 @@ class PersonalPromptLoadingState extends StatelessWidget {
   }
 }
 
-class PersonalPromptEmptyState extends StatelessWidget {
-  const PersonalPromptEmptyState({
+class PersonalCommonEmptyState extends StatelessWidget {
+  const PersonalCommonEmptyState({
     super.key,
     required this.icon,
     required this.title,
@@ -241,9 +241,9 @@ class PersonalPromptEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
-    return PersonalPromptPanel(
+    return PersonalCommonPanel(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
@@ -253,7 +253,7 @@ class PersonalPromptEmptyState extends StatelessWidget {
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: tokens.surfaceOverlay,
-              borderRadius: BorderRadius.circular(PromptUiShapes.control),
+              borderRadius: BorderRadius.circular(CommonUiShapes.control),
               border: Border.all(color: tokens.borderSubtle),
             ),
             child: Icon(icon, color: tokens.iconSecondary, size: 24),
@@ -280,11 +280,11 @@ class PersonalPromptEmptyState extends StatelessWidget {
           ],
           if (actionLabel != null && onAction != null) ...<Widget>[
             const SizedBox(height: 14),
-            PromptButton(
+            CommonButton(
               label: actionLabel!,
               onPressed: onAction,
-              variant: PromptButtonVariant.secondary,
-              haptic: PromptHaptic.selection,
+              variant: CommonButtonVariant.secondary,
+              haptic: CommonHaptic.selection,
             ),
           ],
         ],

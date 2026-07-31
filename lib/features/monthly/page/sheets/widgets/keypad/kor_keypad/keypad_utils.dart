@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../../../../design_system/common_ui/common_ui_theme.dart';
 
 class KorKeypadUtils {
   static Widget buildSubLayout(
@@ -23,7 +23,7 @@ class KorKeypadUtils {
                   padding: const EdgeInsets.all(4),
                   child: label.isEmpty
                       ? const SizedBox.shrink()
-                      : _PromptKoreanSubKey(
+                      : _CommonKoreanSubKey(
                           label: label,
                           entranceDelay: Duration(
                             milliseconds: (rowIndex * 3 + columnIndex) * 18,
@@ -40,8 +40,8 @@ class KorKeypadUtils {
   }
 }
 
-class _PromptKoreanSubKey extends StatefulWidget {
-  const _PromptKoreanSubKey({
+class _CommonKoreanSubKey extends StatefulWidget {
+  const _CommonKoreanSubKey({
     required this.label,
     required this.entranceDelay,
     required this.onTap,
@@ -52,10 +52,10 @@ class _PromptKoreanSubKey extends StatefulWidget {
   final VoidCallback onTap;
 
   @override
-  State<_PromptKoreanSubKey> createState() => _PromptKoreanSubKeyState();
+  State<_CommonKoreanSubKey> createState() => _CommonKoreanSubKeyState();
 }
 
-class _PromptKoreanSubKeyState extends State<_PromptKoreanSubKey> {
+class _CommonKoreanSubKeyState extends State<_CommonKoreanSubKey> {
   bool _pressed = false;
   bool _hovered = false;
   bool _focused = false;
@@ -100,7 +100,7 @@ class _PromptKoreanSubKeyState extends State<_PromptKoreanSubKey> {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final baseBackground = _isBack ? tokens.accentContainer : tokens.surfaceRaised;
@@ -124,11 +124,11 @@ class _PromptKoreanSubKeyState extends State<_PromptKoreanSubKey> {
       button: true,
       label: displayLabel,
       child: AnimatedContainer(
-        duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
-        curve: PromptUiMotion.standard,
+        duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+        curve: CommonUiMotion.standard,
         decoration: BoxDecoration(
           color: background,
-          borderRadius: BorderRadius.circular(PromptUiShapes.button),
+          borderRadius: BorderRadius.circular(CommonUiShapes.button),
           border: Border.all(
             color: borderColor,
             width: _focused ? 2 : 1,
@@ -144,7 +144,7 @@ class _PromptKoreanSubKeyState extends State<_PromptKoreanSubKey> {
         ),
         child: Material(
           color: tokens.transparent,
-          borderRadius: BorderRadius.circular(PromptUiShapes.button),
+          borderRadius: BorderRadius.circular(CommonUiShapes.button),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: widget.onTap,
@@ -156,8 +156,8 @@ class _PromptKoreanSubKeyState extends State<_PromptKoreanSubKey> {
                 tween: Tween<double>(begin: reduceMotion ? 1 : 0, end: 1),
                 duration: reduceMotion
                     ? Duration.zero
-                    : PromptUiMotion.component + widget.entranceDelay,
-                curve: PromptUiMotion.enter,
+                    : CommonUiMotion.component + widget.entranceDelay,
+                curve: CommonUiMotion.enter,
                 builder: (context, progress, child) {
                   return Opacity(
                     opacity: progress,
@@ -169,8 +169,8 @@ class _PromptKoreanSubKeyState extends State<_PromptKoreanSubKey> {
                 },
                 child: AnimatedScale(
                   scale: _pressed ? 0.92 : 1,
-                  duration: reduceMotion ? Duration.zero : PromptUiMotion.press,
-                  curve: PromptUiMotion.enter,
+                  duration: reduceMotion ? Duration.zero : CommonUiMotion.press,
+                  curve: CommonUiMotion.enter,
                   child: Text(
                     displayLabel,
                     style: (_isBack ? textTheme.labelLarge : textTheme.titleLarge)

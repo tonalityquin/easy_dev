@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../plate/domain/repositories/plate_repository.dart';
 import '../../../../plate/domain/services/plate_status_record.dart';
 
@@ -43,13 +43,13 @@ String _paymentExtendedLabel(String? value) {
 Widget _infoRow(BuildContext context, String label, String? value) {
   final text = value?.trim() ?? '';
   if (text.isEmpty) return const SizedBox.shrink();
-  final tokens = PromptUiTheme.of(context);
+  final tokens = CommonUiTheme.of(context);
   return Container(
     margin: const EdgeInsets.only(bottom: 8),
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
     decoration: BoxDecoration(
       color: tokens.surfaceOverlay,
-      borderRadius: BorderRadius.circular(PromptUiShapes.control),
+      borderRadius: BorderRadius.circular(CommonUiShapes.control),
       border: Border.all(color: tokens.borderSubtle),
     ),
     child: Row(
@@ -122,17 +122,17 @@ Future<Map<String, dynamic>?> inputCustomStatusBottomSheet(
   final formattedUpdatedAt = _formatDate(data.updatedAt, data.updatedAtRaw);
   final hasWarning = customStatus != null && customStatus.trim().isNotEmpty;
 
-  await showPromptOverlayBottomSheet<void>(
+  await showCommonOverlayBottomSheet<void>(
     context: context,
     useSafeArea: false,
     builder: (sheetContext) {
-      final tokens = PromptUiTheme.of(sheetContext);
+      final tokens = CommonUiTheme.of(sheetContext);
       return DraggableScrollableSheet(
         initialChildSize: .68,
         minChildSize: .42,
         maxChildSize: .95,
         builder: (sheetContext, scrollController) {
-          return PromptSheetScaffold(
+          return CommonSheetScaffold(
             title: hasWarning ? '차량 주의사항' : '차량 상세 정보',
             icon: hasWarning
                 ? Icons.warning_amber_rounded
@@ -148,7 +148,7 @@ Future<Map<String, dynamic>?> inputCustomStatusBottomSheet(
                     color: hasWarning
                         ? tokens.warningContainer
                         : tokens.infoContainer,
-                    borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                    borderRadius: BorderRadius.circular(CommonUiShapes.control),
                     border: Border.all(
                       color: (hasWarning ? tokens.warning : tokens.info)
                           .withOpacity(.36),
@@ -265,7 +265,7 @@ Future<Map<String, dynamic>?> inputCustomStatusBottomSheet(
                       decoration: BoxDecoration(
                         color: tokens.surfaceOverlay,
                         borderRadius:
-                            BorderRadius.circular(PromptUiShapes.control),
+                            BorderRadius.circular(CommonUiShapes.control),
                         border: Border.all(color: tokens.borderSubtle),
                       ),
                       child: Column(
@@ -305,7 +305,7 @@ Future<Map<String, dynamic>?> inputCustomStatusBottomSheet(
                   }),
                 ],
                 const SizedBox(height: 14),
-                PromptButton(
+                CommonButton(
                   label: '확인',
                   icon: Icons.check_rounded,
                   expand: true,

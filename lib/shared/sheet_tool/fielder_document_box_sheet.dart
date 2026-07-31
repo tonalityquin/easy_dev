@@ -2,24 +2,24 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
-import '../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../design_system/common_ui/common_ui_overlays.dart';
 import '../../features/account/applications/user_state.dart';
 import '../../features/commute/domain/repositories/commute_log_repository.dart';
 import '../../features/dev/application/area_state.dart';
 import '../../features/mode_single/application/att_brk_mode_db.dart';
 import 'document_box_action.dart';
-import 'document_box_prompt_sheet.dart';
+import 'document_box_common_sheet.dart';
 import 'fielder_document_inventory_repository.dart';
 import 'document_item.dart';
 
 Future<DocumentBoxAction?> openFielderDocumentBox(BuildContext context) {
-  return showPromptOverlayBottomSheet<DocumentBoxAction>(
+  return showCommonOverlayBottomSheet<DocumentBoxAction>(
     context: context,
     useRootNavigator: false,
     builder: (sheetContext) {
       final userState = sheetContext.watch<UserState>();
       final repo = FielderDocumentInventoryRepository.instance;
-      return PromptDocumentBoxSheet(
+      return CommonDocumentBoxSheet(
         title: '현장 공통 서류함',
         description: '보고서와 기록 제출 양식을 확인합니다.',
         stream: repo.streamForUser(userState),

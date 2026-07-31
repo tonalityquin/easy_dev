@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../utils/common_brand_tinted_logo.dart';
 
 class CommonCommuteInHeaderWidget extends StatelessWidget {
@@ -9,28 +9,28 @@ class CommonCommuteInHeaderWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final logoSize = constraints.maxWidth >= 560 ? 204.0 : 178.0;
-        return PromptAnimatedReveal(
+        return CommonAnimatedReveal(
           delay: const Duration(milliseconds: 30),
-          duration: PromptUiMotion.layout,
+          duration: CommonUiMotion.layout,
           offset: const Offset(0, 0.025),
           child: Semantics(
             image: true,
             label: 'Parkin Workin',
             child: AnimatedContainer(
-              duration: reduceMotion ? Duration.zero : PromptUiMotion.layout,
-              curve: PromptUiMotion.standard,
+              duration: reduceMotion ? Duration.zero : CommonUiMotion.layout,
+              curve: CommonUiMotion.standard,
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
               decoration: BoxDecoration(
                 color: tokens.surfaceRaised,
-                borderRadius: BorderRadius.circular(PromptUiShapes.card),
+                borderRadius: BorderRadius.circular(CommonUiShapes.card),
                 border: Border.all(color: tokens.borderSubtle),
                 boxShadow: [
                   BoxShadow(

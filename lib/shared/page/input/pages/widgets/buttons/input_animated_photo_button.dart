@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../../../../design_system/common_ui/common_ui_components.dart';
 
 class InputAnimatedPhotoButton extends StatelessWidget {
   final VoidCallback onPressed;
@@ -9,12 +9,12 @@ class InputAnimatedPhotoButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PromptButton(
+    return CommonButton(
       label: '사진 촬영',
       icon: Icons.photo_camera_rounded,
-      variant: PromptButtonVariant.secondary,
+      variant: CommonButtonVariant.secondary,
       expand: true,
-      haptic: PromptHaptic.selection,
+      haptic: CommonHaptic.selection,
       onPressed: onPressed,
     );
   }

@@ -2,9 +2,9 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 
 Future<void> monthlyRegionPickerBottomSheet({
   required BuildContext context,
@@ -13,20 +13,20 @@ Future<void> monthlyRegionPickerBottomSheet({
   required ValueChanged<String> onConfirm,
 }) async {
   if (regions.isEmpty) {
-    await showPromptOverlayBottomSheet<void>(
+    await showCommonOverlayBottomSheet<void>(
       context: context,
       useSafeArea: true,
       isScrollControlled: true,
       transparentBackground: true,
       builder: (sheetContext) {
-        final tokens = PromptUiTheme.of(sheetContext);
+        final tokens = CommonUiTheme.of(sheetContext);
         final textTheme = Theme.of(sheetContext).textTheme;
         return Material(
           color: tokens.surfaceRaised,
           surfaceTintColor: tokens.transparent,
           shape: RoundedRectangleBorder(
             borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(PromptUiShapes.sheet),
+              top: Radius.circular(CommonUiShapes.sheet),
             ),
             side: BorderSide(color: tokens.borderSubtle),
           ),
@@ -42,7 +42,7 @@ Future<void> monthlyRegionPickerBottomSheet({
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: tokens.warningContainer,
-                    borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                    borderRadius: BorderRadius.circular(CommonUiShapes.control),
                   ),
                   child: Icon(
                     Icons.info_outline_rounded,
@@ -60,10 +60,10 @@ Future<void> monthlyRegionPickerBottomSheet({
                   ),
                 ),
                 const SizedBox(height: 16),
-                PromptButton(
+                CommonButton(
                   label: '닫기',
                   expand: true,
-                  haptic: PromptHaptic.selection,
+                  haptic: CommonHaptic.selection,
                   onPressed: () => Navigator.of(sheetContext).pop(),
                 ),
               ],
@@ -79,7 +79,7 @@ Future<void> monthlyRegionPickerBottomSheet({
   final currentIndex = regions.indexOf(selectedRegion);
   final initialIndex = currentIndex >= 0 ? currentIndex : 0;
 
-  await showPromptOverlayBottomSheet<void>(
+  await showCommonOverlayBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
@@ -90,14 +90,14 @@ Future<void> monthlyRegionPickerBottomSheet({
         minChildSize: 0.48,
         maxChildSize: 0.88,
         builder: (context, scrollController) {
-          final tokens = PromptUiTheme.of(context);
+          final tokens = CommonUiTheme.of(context);
           final textTheme = Theme.of(context).textTheme;
           return Material(
             color: tokens.surfaceRaised,
             surfaceTintColor: tokens.transparent,
             shape: RoundedRectangleBorder(
               borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(PromptUiShapes.sheet),
+                top: Radius.circular(CommonUiShapes.sheet),
               ),
               side: BorderSide(color: tokens.borderSubtle),
             ),
@@ -115,7 +115,7 @@ Future<void> monthlyRegionPickerBottomSheet({
                       decoration: BoxDecoration(
                         color: tokens.handle,
                         borderRadius:
-                            BorderRadius.circular(PromptUiShapes.pill),
+                            BorderRadius.circular(CommonUiShapes.pill),
                       ),
                     ),
                   ),
@@ -129,7 +129,7 @@ Future<void> monthlyRegionPickerBottomSheet({
                         decoration: BoxDecoration(
                           color: tokens.accentContainer,
                           borderRadius:
-                              BorderRadius.circular(PromptUiShapes.control),
+                              BorderRadius.circular(CommonUiShapes.control),
                           border: Border.all(
                             color: tokens.accent.withOpacity(
                               tokens.isDark ? 0.56 : 0.34,
@@ -163,10 +163,10 @@ Future<void> monthlyRegionPickerBottomSheet({
                           ],
                         ),
                       ),
-                      PromptIconButton(
+                      CommonIconButton(
                         icon: Icons.close_rounded,
                         tooltip: '닫기',
-                        haptic: PromptHaptic.selection,
+                        haptic: CommonHaptic.selection,
                         onPressed: () => Navigator.of(sheetContext).pop(),
                       ),
                     ],
@@ -177,7 +177,7 @@ Future<void> monthlyRegionPickerBottomSheet({
                     decoration: BoxDecoration(
                       color: tokens.surfaceOverlay,
                       borderRadius:
-                          BorderRadius.circular(PromptUiShapes.control),
+                          BorderRadius.circular(CommonUiShapes.control),
                       border: Border.all(color: tokens.borderSubtle),
                     ),
                     child: Text(
@@ -193,7 +193,7 @@ Future<void> monthlyRegionPickerBottomSheet({
                     height: 220,
                     decoration: BoxDecoration(
                       color: tokens.surfaceOverlay,
-                      borderRadius: BorderRadius.circular(PromptUiShapes.card),
+                      borderRadius: BorderRadius.circular(CommonUiShapes.card),
                       border: Border.all(color: tokens.borderSubtle),
                     ),
                     child: CupertinoTheme(
@@ -237,19 +237,19 @@ Future<void> monthlyRegionPickerBottomSheet({
                   Row(
                     children: [
                       Expanded(
-                        child: PromptButton(
+                        child: CommonButton(
                           label: '취소',
-                          variant: PromptButtonVariant.tertiary,
-                          haptic: PromptHaptic.selection,
+                          variant: CommonButtonVariant.tertiary,
+                          haptic: CommonHaptic.selection,
                           onPressed: () => Navigator.of(sheetContext).pop(),
                         ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: PromptButton(
+                        child: CommonButton(
                           label: '확인',
                           icon: Icons.check_rounded,
-                          haptic: PromptHaptic.medium,
+                          haptic: CommonHaptic.medium,
                           onPressed: () {
                             Navigator.of(sheetContext).pop();
                             onConfirm(selected);

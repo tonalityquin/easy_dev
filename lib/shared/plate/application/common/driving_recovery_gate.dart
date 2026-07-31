@@ -37,7 +37,7 @@ class _DrivingRecoveryGateState extends State<DrivingRecoveryGate> {
       final route = ModalRoute.of(context);
       if (route != null && route.isCurrent != true) return;
 
-      await DrivingRecoveryService.maybePrompt(context, mode: widget.mode);
+      await DrivingRecoveryService.maybeShowCommonRecoveryDialog(context, mode: widget.mode);
     });
   }
 
@@ -46,18 +46,18 @@ class _DrivingRecoveryGateState extends State<DrivingRecoveryGate> {
 }
 
 class DrivingRecoveryService {
-  static bool _promptedInThisSession = false;
+  static bool _commonRecoveryShownInThisSession = false;
 
   static const List<PlateType> _targetTypes = <PlateType>[
     PlateType.parkingRequests,
     PlateType.departureRequests,
   ];
 
-  static Future<void> maybePrompt(
+  static Future<void> maybeShowCommonRecoveryDialog(
     BuildContext context, {
     required DrivingRecoveryMode mode,
   }) async {
-    if (_promptedInThisSession) return;
+    if (_commonRecoveryShownInThisSession) return;
 
     final userState = context.read<UserState>();
     if (!userState.isLoggedIn) return;
@@ -65,7 +65,7 @@ class DrivingRecoveryService {
     final userName = (userState.name).trim();
     if (userName.isEmpty) return;
 
-    _promptedInThisSession = true;
+    _commonRecoveryShownInThisSession = true;
 
     final repo = context.read<PlateRepository>();
     final plates = await _fetchMyDrivingPlates(

@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../../../app/init/missing_weekday_end_time_dialog.dart';
 import '../../../../app/utils/status_dialog.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../account/applications/user_state.dart';
 import '../../../dev/debug/debug_action_recorder.dart';
 import '../../controllers/common_commute_in_controller.dart';
@@ -41,16 +41,16 @@ class CommonCommuteInWorkButtonWidget extends StatelessWidget {
     final label = isWorking ? '출근 중' : '출근하기';
     final screenId = spec.traceScreenId ?? '${spec.modeKey}_commute_inside';
 
-    return PromptButton(
+    return CommonButton(
       label: label,
       icon: isWorking ? Icons.task_alt_rounded : Icons.access_time_rounded,
       variant: isWorking
-          ? PromptButtonVariant.secondary
-          : PromptButtonVariant.primary,
+          ? CommonButtonVariant.secondary
+          : CommonButtonVariant.primary,
       selected: isWorking,
       expand: true,
       minHeight: 58,
-      haptic: PromptHaptic.medium,
+      haptic: CommonHaptic.medium,
       semanticsLabel: isWorking ? '현재 출근 중' : '출근하기',
       onPressed: isWorking
           ? null
@@ -95,7 +95,7 @@ class CommonCommuteInWorkButtonWidget extends StatelessWidget {
                   await StatusDialog.showFailure(
                     context,
                     title: '출근 실패',
-                    usePromptUi: true,
+                    useCommonUi: true,
                   );
                   return;
                 }
@@ -108,7 +108,7 @@ class CommonCommuteInWorkButtonWidget extends StatelessWidget {
                   await showMissingWeekdayEndTimeDialogIfNeeded(
                     context,
                     clockInAt: DateTime.now(),
-                    usePromptUi: true,
+                    useCommonUi: true,
                   );
                   if (!context.mounted) return;
                 }

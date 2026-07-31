@@ -2,15 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../design_system/common_ui/common_ui_components.dart';
+import '../../design_system/common_ui/common_ui_theme.dart';
 import '../../features/account/applications/user_state.dart';
 import 'work_schedule_prefs.dart';
 
 Future<void> showMissingWeekdayEndTimeDialogIfNeeded(
   BuildContext context, {
   DateTime? clockInAt,
-  bool usePromptUi = false,
+  bool useCommonUi = false,
 }) async {
   if (!context.mounted) return;
 
@@ -31,14 +31,14 @@ Future<void> showMissingWeekdayEndTimeDialogIfNeeded(
 
   if (!context.mounted) return;
 
-  final picked = usePromptUi
-      ? await showPromptDialog<TimeOfDay>(
+  final picked = useCommonUi
+      ? await showCommonDialog<TimeOfDay>(
           context: context,
           barrierDismissible: false,
           builder: (dialogContext) {
             return _MissingWeekdayEndTimeDialog(
               day: day,
-              usePromptUi: true,
+              useCommonUi: true,
             );
           },
         )
@@ -48,7 +48,7 @@ Future<void> showMissingWeekdayEndTimeDialogIfNeeded(
           builder: (dialogContext) {
             return _MissingWeekdayEndTimeDialog(
               day: day,
-              usePromptUi: false,
+              useCommonUi: false,
             );
           },
         );
@@ -67,8 +67,8 @@ Future<void> showMissingWeekdayEndTimeDialogIfNeeded(
       ? '$day요일 정규 퇴근 시간이 ${WorkSchedulePrefs.formatTime(picked)}로 저장되었습니다.'
       : '퇴근 시간 저장에 실패했습니다. 사용자 정보를 확인해 주세요.';
 
-  if (usePromptUi) {
-    _showPromptSaveSnackBar(
+  if (useCommonUi) {
+    _showCommonSaveSnackBar(
       context,
       message: message,
       success: saved,
@@ -83,7 +83,7 @@ Future<void> showMissingWeekdayEndTimeDialogIfNeeded(
   messenger.showSnackBar(SnackBar(content: Text(message)));
 }
 
-void _showPromptSaveSnackBar(
+void _showCommonSaveSnackBar(
   BuildContext context, {
   required String message,
   required bool success,
@@ -91,7 +91,7 @@ void _showPromptSaveSnackBar(
   final messenger = ScaffoldMessenger.maybeOf(context);
   if (messenger == null) return;
 
-  final tokens = PromptUiTheme.of(context);
+  final tokens = CommonUiTheme.of(context);
   final text = Theme.of(context).textTheme;
   final accent = success ? tokens.success : tokens.danger;
   final background =
@@ -106,7 +106,7 @@ void _showPromptSaveSnackBar(
       elevation: 0,
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(PromptUiShapes.control),
+        borderRadius: BorderRadius.circular(CommonUiShapes.control),
         side: BorderSide(
           color: accent.withOpacity(tokens.isDark ? 0.58 : 0.36),
         ),
@@ -144,11 +144,11 @@ bool _isSameDate(DateTime a, DateTime b) {
 class _MissingWeekdayEndTimeDialog extends StatefulWidget {
   const _MissingWeekdayEndTimeDialog({
     required this.day,
-    required this.usePromptUi,
+    required this.useCommonUi,
   });
 
   final String day;
-  final bool usePromptUi;
+  final bool useCommonUi;
 
   @override
   State<_MissingWeekdayEndTimeDialog> createState() =>
@@ -165,9 +165,9 @@ class _MissingWeekdayEndTimeDialogState
       initialTime: _selected,
       confirmText: '선택',
       cancelText: '취소',
-      builder: widget.usePromptUi
+      builder: widget.useCommonUi
           ? (context, child) {
-              return PromptUiScope(child: child ?? const SizedBox.shrink());
+              return CommonUiScope(child: child ?? const SizedBox.shrink());
             }
           : null,
     );
@@ -180,11 +180,11 @@ class _MissingWeekdayEndTimeDialogState
 
   @override
   Widget build(BuildContext context) {
-    return widget.usePromptUi ? _buildPromptDialog() : _buildLegacyDialog();
+    return widget.useCommonUi ? _buildCommonDialog() : _buildLegacyDialog();
   }
 
-  Widget _buildPromptDialog() {
-    final tokens = PromptUiTheme.of(context);
+  Widget _buildCommonDialog() {
+    final tokens = CommonUiTheme.of(context);
     final text = Theme.of(context).textTheme;
     final timeText = WorkSchedulePrefs.formatTime(_selected) ?? '18:00';
 
@@ -202,7 +202,7 @@ class _MissingWeekdayEndTimeDialogState
                 height: 44,
                 decoration: BoxDecoration(
                   color: tokens.warningContainer,
-                  borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                  borderRadius: BorderRadius.circular(CommonUiShapes.control),
                   border: Border.all(
                     color: tokens.warning.withOpacity(
                       tokens.isDark ? 0.58 : 0.36,
@@ -240,7 +240,7 @@ class _MissingWeekdayEndTimeDialogState
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               color: tokens.surfaceOverlay,
-              borderRadius: BorderRadius.circular(PromptUiShapes.card),
+              borderRadius: BorderRadius.circular(CommonUiShapes.card),
               border: Border.all(color: tokens.borderSubtle),
             ),
             child: Column(
@@ -254,7 +254,7 @@ class _MissingWeekdayEndTimeDialogState
                   ),
                 ),
                 const SizedBox(height: 10),
-                _PromptTimeSelector(
+                _CommonTimeSelector(
                   timeText: timeText,
                   onPressed: _pickTime,
                 ),
@@ -272,22 +272,22 @@ class _MissingWeekdayEndTimeDialogState
           Row(
             children: [
               Expanded(
-                child: PromptButton(
+                child: CommonButton(
                   label: '넘기기',
                   icon: Icons.skip_next_rounded,
-                  variant: PromptButtonVariant.tertiary,
+                  variant: CommonButtonVariant.tertiary,
                   onPressed: () => Navigator.of(context).pop(),
-                  haptic: PromptHaptic.selection,
+                  haptic: CommonHaptic.selection,
                   expand: true,
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: PromptButton(
+                child: CommonButton(
                   label: '저장하기',
                   icon: Icons.save_rounded,
                   onPressed: () => Navigator.of(context).pop(_selected),
-                  haptic: PromptHaptic.medium,
+                  haptic: CommonHaptic.medium,
                   expand: true,
                 ),
               ),
@@ -425,8 +425,8 @@ class _MissingWeekdayEndTimeDialogState
   }
 }
 
-class _PromptTimeSelector extends StatefulWidget {
-  const _PromptTimeSelector({
+class _CommonTimeSelector extends StatefulWidget {
+  const _CommonTimeSelector({
     required this.timeText,
     required this.onPressed,
   });
@@ -435,17 +435,17 @@ class _PromptTimeSelector extends StatefulWidget {
   final VoidCallback onPressed;
 
   @override
-  State<_PromptTimeSelector> createState() => _PromptTimeSelectorState();
+  State<_CommonTimeSelector> createState() => _CommonTimeSelectorState();
 }
 
-class _PromptTimeSelectorState extends State<_PromptTimeSelector> {
+class _CommonTimeSelectorState extends State<_CommonTimeSelector> {
   bool _pressed = false;
   bool _hovered = false;
   bool _focused = false;
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final text = Theme.of(context).textTheme;
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
@@ -458,12 +458,12 @@ class _PromptTimeSelectorState extends State<_PromptTimeSelector> {
       button: true,
       label: '퇴근 예정 시간 ${widget.timeText}',
       child: AnimatedContainer(
-        duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
-        curve: PromptUiMotion.standard,
+        duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+        curve: CommonUiMotion.standard,
         width: double.infinity,
         decoration: BoxDecoration(
           color: background,
-          borderRadius: BorderRadius.circular(PromptUiShapes.button),
+          borderRadius: BorderRadius.circular(CommonUiShapes.button),
           border: Border.all(color: border, width: _focused ? 2 : 1),
           boxShadow: [
             if (_focused)
@@ -476,7 +476,7 @@ class _PromptTimeSelectorState extends State<_PromptTimeSelector> {
         ),
         child: Material(
           color: tokens.transparent,
-          borderRadius: BorderRadius.circular(PromptUiShapes.button),
+          borderRadius: BorderRadius.circular(CommonUiShapes.button),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: widget.onPressed,
@@ -492,13 +492,13 @@ class _PromptTimeSelectorState extends State<_PromptTimeSelector> {
               if (_focused == value) return;
               setState(() => _focused = value);
             },
-            borderRadius: BorderRadius.circular(PromptUiShapes.button),
+            borderRadius: BorderRadius.circular(CommonUiShapes.button),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
               child: AnimatedScale(
                 scale: _pressed ? 0.98 : 1,
-                duration: reduceMotion ? Duration.zero : PromptUiMotion.press,
-                curve: PromptUiMotion.enter,
+                duration: reduceMotion ? Duration.zero : CommonUiMotion.press,
+                curve: CommonUiMotion.enter,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -511,9 +511,9 @@ class _PromptTimeSelectorState extends State<_PromptTimeSelector> {
                     AnimatedSwitcher(
                       duration: reduceMotion
                           ? Duration.zero
-                          : PromptUiMotion.selection,
-                      switchInCurve: PromptUiMotion.enter,
-                      switchOutCurve: PromptUiMotion.exit,
+                          : CommonUiMotion.selection,
+                      switchInCurve: CommonUiMotion.enter,
+                      switchOutCurve: CommonUiMotion.exit,
                       transitionBuilder: (child, animation) {
                         return FadeTransition(
                           opacity: animation,

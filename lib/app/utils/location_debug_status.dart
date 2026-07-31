@@ -85,7 +85,7 @@ class LocationDebugStatus {
         copyText: log,
         copyButtonLabel: '로그 복사',
         visibleDuration: const Duration(seconds: 60),
-        usePromptUi: true,
+        useCommonUi: true,
       );
     } finally {
       _showing = false;

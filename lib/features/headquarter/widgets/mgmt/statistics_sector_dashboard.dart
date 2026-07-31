@@ -4,7 +4,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 import 'statistics_deep_model.dart';
 import 'statistics_report_design.dart';
 
@@ -51,12 +51,12 @@ class _StatisticsSectorDashboardState
 
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    final duration = reduceMotion ? Duration.zero : PromptUiMotion.layout;
+    final duration = reduceMotion ? Duration.zero : CommonUiMotion.layout;
 
     if (!sectorReport.hasAnalyzableData || sectorReport.groups.isEmpty) {
       return TweenAnimationBuilder<double>(
         duration: duration,
-        curve: PromptUiMotion.enter,
+        curve: CommonUiMotion.enter,
         tween: Tween<double>(begin: reduceMotion ? 1 : 0, end: 1),
         builder: (context, value, child) => Opacity(
           opacity: value,
@@ -122,7 +122,7 @@ class _StatisticsSectorDashboardState
 
     return TweenAnimationBuilder<double>(
       duration: duration,
-      curve: PromptUiMotion.enter,
+      curve: CommonUiMotion.enter,
       tween: Tween<double>(begin: reduceMotion ? 1 : 0, end: 1),
       builder: (context, value, child) {
         return Opacity(
@@ -155,8 +155,8 @@ class _StatisticsSectorDashboardState
           const SizedBox(height: 12),
           AnimatedSwitcher(
             duration: duration,
-            switchInCurve: PromptUiMotion.enter,
-            switchOutCurve: PromptUiMotion.exit,
+            switchInCurve: CommonUiMotion.enter,
+            switchOutCurve: CommonUiMotion.exit,
             transitionBuilder: (child, animation) {
               if (reduceMotion) return child;
               return FadeTransition(
@@ -363,8 +363,8 @@ class _SectorSourceCoverageCard extends StatelessWidget {
     return AnimatedContainer(
       duration: MediaQuery.maybeOf(context)?.disableAnimations == true
           ? Duration.zero
-          : PromptUiMotion.layout,
-      curve: PromptUiMotion.enter,
+          : CommonUiMotion.layout,
+      curve: CommonUiMotion.enter,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: complete ? cs.primaryContainer : cs.tertiaryContainer,

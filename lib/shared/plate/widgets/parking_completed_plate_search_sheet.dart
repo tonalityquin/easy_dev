@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../app/utils/snackbar_helper.dart';
-import '../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../design_system/common_ui/common_ui_theme.dart';
 
 import '../../../features/account/applications/user_state.dart';
 import '../../../features/mode_double/parking_completed_package/widgets/double_parking_completed_plate_search_results.dart';
@@ -193,7 +193,7 @@ class _ParkingCompletedPlateSearchSheetState
       showFailedSnackbar(
         context,
         '검색 중 오류가 발생했습니다.',
-        usePromptUi: true,
+        useCommonUi: true,
       );
     }
   }
@@ -204,7 +204,7 @@ class _ParkingCompletedPlateSearchSheetState
       ) async {
     final deleter = rootContext.read<DeletePlate>();
 
-    final confirmed = await showPromptOverlayDialog<bool>(
+    final confirmed = await showCommonOverlayDialog<bool>(
       context: rootContext,
       useRootNavigator: true,
       builder: (dialogContext) => PlateRemoveDialog(
@@ -355,7 +355,7 @@ class _ParkingCompletedPlateSearchSheetState
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final rootContext = Navigator.of(context, rootNavigator: true).context;
     final mediaQuery = MediaQuery.of(context);
     final topInset = mediaQuery.padding.top;

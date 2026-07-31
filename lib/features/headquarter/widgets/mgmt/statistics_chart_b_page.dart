@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 
 import 'statistics_deep_model.dart';
 import 'statistics_report_design.dart';
@@ -14,14 +14,14 @@ class StatisticsChartBPage extends StatefulWidget {
   final StatisticsDeepReport report;
   final List<String> availableAreas;
   final Map<String, bool> areaSectorEnabled;
-  final bool usePromptUi;
+  final bool useCommonUi;
 
   const StatisticsChartBPage({
     super.key,
     required this.report,
     this.availableAreas = const <String>[],
     this.areaSectorEnabled = const <String, bool>{},
-    this.usePromptUi = false,
+    this.useCommonUi = false,
   });
 
   @override
@@ -199,23 +199,23 @@ class _StatisticsChartBPageState extends State<StatisticsChartBPage> {
       division: widget.report.division,
       areas: areas,
       dates: dates,
-      usePromptUi: widget.usePromptUi,
+      useCommonUi: widget.useCommonUi,
     );
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    final route = widget.usePromptUi
+    final route = widget.useCommonUi
         ? PageRouteBuilder<void>(
             transitionDuration:
-                reduceMotion ? Duration.zero : PromptUiMotion.overlay,
+                reduceMotion ? Duration.zero : CommonUiMotion.overlay,
             reverseTransitionDuration:
-                reduceMotion ? Duration.zero : PromptUiMotion.overlay,
-            pageBuilder: (_, __, ___) => PromptUiScope(child: page),
+                reduceMotion ? Duration.zero : CommonUiMotion.overlay,
+            pageBuilder: (_, __, ___) => CommonUiScope(child: page),
             transitionsBuilder: (_, animation, __, child) {
               if (reduceMotion) return child;
               final curved = CurvedAnimation(
                 parent: animation,
-                curve: PromptUiMotion.enter,
-                reverseCurve: PromptUiMotion.exit,
+                curve: CommonUiMotion.enter,
+                reverseCurve: CommonUiMotion.exit,
               );
               return FadeTransition(
                 opacity: curved,
@@ -246,8 +246,8 @@ class _StatisticsChartBPageState extends State<StatisticsChartBPage> {
         MediaQuery.maybeOf(this.context)?.disableAnimations ?? false;
     await Scrollable.ensureVisible(
       context,
-      duration: reduceMotion ? Duration.zero : PromptUiMotion.layout,
-      curve: PromptUiMotion.enter,
+      duration: reduceMotion ? Duration.zero : CommonUiMotion.layout,
+      curve: CommonUiMotion.enter,
       alignment: 0.02,
     );
   }
@@ -276,7 +276,7 @@ class _ReportTocOverlay extends StatelessWidget {
           GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: onClose,
-            child: Container(color: PromptUiTheme.of(context).scrim),
+            child: Container(color: CommonUiTheme.of(context).scrim),
           ),
           Align(
             alignment: Alignment.centerRight,
@@ -487,7 +487,7 @@ class _ReportTocPanel extends StatelessWidget {
                   child: Material(
                     color: selected
                             ? cs.primaryContainer
-                            : PromptUiTheme.of(context).transparent,
+                            : CommonUiTheme.of(context).transparent,
                     borderRadius: BorderRadius.circular(16),
                     child: InkWell(
                       borderRadius: BorderRadius.circular(16),

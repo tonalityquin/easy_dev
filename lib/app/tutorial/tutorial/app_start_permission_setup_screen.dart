@@ -10,9 +10,9 @@ import '../../../app/di/routes.dart';
 import '../../../app/init/app_start_flow_prefs.dart';
 import '../../../app/utils/snackbar_helper.dart';
 import '../../../app/utils/status_dialog.dart';
-import '../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../design_system/common_ui/common_ui_components.dart';
+import '../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../design_system/common_ui/common_ui_theme.dart';
 
 class AppStartPermissionSetupScreen extends StatefulWidget {
   const AppStartPermissionSetupScreen({super.key});
@@ -239,12 +239,12 @@ class _AppStartPermissionSetupScreenState
 
   Future<void> _showNeedPermissionDialog(String permissionName) async {
     if (!mounted) return;
-    await showPromptOverlayDialog<void>(
+    await showCommonOverlayDialog<void>(
       context: context,
       barrierDismissible: false,
       barrierLabel: '$permissionName 권한 안내',
       builder: (dialogContext) {
-        return _PermissionPromptDialog(
+        return _CommonPermissionDialog(
           icon: Icons.settings_suggest_rounded,
           title: '$permissionName 권한 필요',
           message: '설정에서 권한을 허용한 뒤 앱으로 돌아와 설정 재확인 버튼을 눌러주세요.',
@@ -264,12 +264,12 @@ class _AppStartPermissionSetupScreenState
 
   Future<void> _showNeedOverlayPermissionDialog() async {
     if (!mounted) return;
-    await showPromptOverlayDialog<void>(
+    await showCommonOverlayDialog<void>(
       context: context,
       barrierDismissible: false,
       barrierLabel: '다른 앱 위 사용 허용 안내',
       builder: (dialogContext) {
-        return _PermissionPromptDialog(
+        return _CommonPermissionDialog(
           icon: Icons.picture_in_picture_alt_rounded,
           title: '다른 앱 위 사용 허용 필요',
           message:
@@ -288,12 +288,12 @@ class _AppStartPermissionSetupScreenState
 
   Future<void> _showNeedMailRecipientDialog() async {
     if (!mounted) return;
-    await showPromptOverlayDialog<void>(
+    await showCommonOverlayDialog<void>(
       context: context,
       barrierDismissible: false,
       barrierLabel: '지메일 수신자 입력 안내',
       builder: (dialogContext) {
-        return _PermissionPromptDialog(
+        return _CommonPermissionDialog(
           icon: Icons.mail_outline_rounded,
           title: '지메일 수신자 입력 필요',
           message: '수신자(To)를 지메일 주소로 입력하고 저장해 주세요.',
@@ -310,7 +310,7 @@ class _AppStartPermissionSetupScreenState
     showSelectedSnackbar(
       context,
       '설정에서 허용한 뒤 앱으로 돌아와 설정 재확인을 눌러주세요.',
-      usePromptUi: true,
+      useCommonUi: true,
     );
   }
 
@@ -322,7 +322,7 @@ class _AppStartPermissionSetupScreenState
     showSelectedSnackbar(
       context,
       '시스템 설정에서 허용한 뒤 앱으로 돌아오면 상태가 반영됩니다.',
-      usePromptUi: true,
+      useCommonUi: true,
     );
   }
 
@@ -426,7 +426,7 @@ class _AppStartPermissionSetupScreenState
       await StatusDialog.showSuccess(
         context,
         title: StatusDialog.gmailRecipientSaveSuccess,
-        usePromptUi: true,
+        useCommonUi: true,
       );
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -451,8 +451,8 @@ class _AppStartPermissionSetupScreenState
     }
     _pageController.animateToPage(
       page,
-      duration: PromptUiMotion.layout,
-      curve: PromptUiMotion.enter,
+      duration: CommonUiMotion.layout,
+      curve: CommonUiMotion.enter,
     );
   }
 
@@ -487,10 +487,10 @@ class _AppStartPermissionSetupScreenState
     String title,
     String description,
   ) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
 
-    return _PromptEntrance(
+    return _CommonEntrance(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -547,10 +547,10 @@ class _AppStartPermissionSetupScreenState
     required Future<void> Function() onRequest,
     Future<void> Function()? onOpenSettings,
   }) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
 
-    return _PromptEntrance(
+    return _CommonEntrance(
       delay: const Duration(milliseconds: 70),
       child: Container(
         width: double.infinity,
@@ -558,7 +558,7 @@ class _AppStartPermissionSetupScreenState
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           color: tokens.surfaceRaised,
-          borderRadius: BorderRadius.circular(PromptUiShapes.card),
+          borderRadius: BorderRadius.circular(CommonUiShapes.card),
           border: Border.all(color: tokens.borderSubtle),
           boxShadow: [
             BoxShadow(
@@ -587,31 +587,31 @@ class _AppStartPermissionSetupScreenState
               ],
             ),
             const SizedBox(height: 16),
-            PromptButton(
+            CommonButton(
               label: _busy ? '처리 중' : '허용 요청',
               icon: Icons.verified_user_rounded,
               onPressed: _busy ? null : onRequest,
               loading: _busy,
               expand: true,
-              haptic: PromptHaptic.selection,
+              haptic: CommonHaptic.selection,
             ),
             const SizedBox(height: 10),
             LayoutBuilder(
               builder: (context, constraints) {
                 final stacked = constraints.maxWidth < 420;
-                final settingsButton = PromptButton(
+                final settingsButton = CommonButton(
                   label: '설정 열기',
                   icon: Icons.settings_rounded,
-                  variant: PromptButtonVariant.secondary,
+                  variant: CommonButtonVariant.secondary,
                   onPressed: _busy
                       ? null
                       : onOpenSettings ?? _openSettingsHint,
                   expand: true,
                 );
-                final recheckButton = PromptButton(
+                final recheckButton = CommonButton(
                   label: '설정 재확인',
                   icon: Icons.refresh_rounded,
-                  variant: PromptButtonVariant.tertiary,
+                  variant: CommonButtonVariant.tertiary,
                   onPressed: _busy ? null : _recheckCurrent,
                   expand: true,
                 );
@@ -642,10 +642,10 @@ class _AppStartPermissionSetupScreenState
   }
 
   Widget _buildMailRecipientCard(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
 
-    return _PromptEntrance(
+    return _CommonEntrance(
       delay: const Duration(milliseconds: 70),
       child: Container(
         width: double.infinity,
@@ -653,7 +653,7 @@ class _AppStartPermissionSetupScreenState
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           color: tokens.surfaceRaised,
-          borderRadius: BorderRadius.circular(PromptUiShapes.card),
+          borderRadius: BorderRadius.circular(CommonUiShapes.card),
           border: Border.all(color: tokens.borderSubtle),
           boxShadow: [
             BoxShadow(
@@ -698,19 +698,19 @@ class _AppStartPermissionSetupScreenState
               onSubmitted: (_) => _saveMailRecipient(),
             ),
             const SizedBox(height: 14),
-            PromptButton(
+            CommonButton(
               label: _busy ? '처리 중' : '지메일 수신자 저장',
               icon: Icons.save_rounded,
               onPressed: _busy ? null : _saveMailRecipient,
               loading: _busy,
               expand: true,
-              haptic: PromptHaptic.selection,
+              haptic: CommonHaptic.selection,
             ),
             const SizedBox(height: 10),
-            PromptButton(
+            CommonButton(
               label: '저장값 다시 불러오기',
               icon: Icons.restore_rounded,
-              variant: PromptButtonVariant.secondary,
+              variant: CommonButtonVariant.secondary,
               onPressed: _busy ? null : _loadSavedMailRecipient,
               expand: true,
             ),
@@ -884,17 +884,17 @@ class _AppStartPermissionSetupScreenState
   }
 
   Widget _buildProgress(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final progress = (_index + 1) / _steps.length;
 
     return Row(
       children: [
         Expanded(
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+            borderRadius: BorderRadius.circular(CommonUiShapes.pill),
             child: TweenAnimationBuilder<double>(
-              duration: _reduceMotion ? Duration.zero : PromptUiMotion.component,
-              curve: PromptUiMotion.standard,
+              duration: _reduceMotion ? Duration.zero : CommonUiMotion.component,
+              curve: CommonUiMotion.standard,
               tween: Tween<double>(begin: 0, end: progress),
               builder: (context, value, child) {
                 return LinearProgressIndicator(
@@ -909,11 +909,11 @@ class _AppStartPermissionSetupScreenState
         ),
         const SizedBox(width: 12),
         AnimatedContainer(
-          duration: _reduceMotion ? Duration.zero : PromptUiMotion.selection,
+          duration: _reduceMotion ? Duration.zero : CommonUiMotion.selection,
           padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
           decoration: BoxDecoration(
             color: tokens.accentContainer,
-            borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+            borderRadius: BorderRadius.circular(CommonUiShapes.pill),
             border: Border.all(
               color: tokens.accent.withOpacity(tokens.isDark ? 0.56 : 0.34),
             ),
@@ -935,14 +935,14 @@ class _AppStartPermissionSetupScreenState
     required bool isLast,
     required bool canNext,
   }) {
-    final previous = PromptButton(
+    final previous = CommonButton(
       label: '이전',
       icon: Icons.arrow_back_rounded,
-      variant: PromptButtonVariant.tertiary,
+      variant: CommonButtonVariant.tertiary,
       onPressed: _index == 0 || _busy ? null : _goPrev,
       expand: true,
     );
-    final next = PromptButton(
+    final next = CommonButton(
       label: isLast ? (_busy ? '저장 중' : '정책 확인으로') : '다음',
       icon: isLast ? Icons.policy_rounded : Icons.arrow_forward_rounded,
       onPressed: !_busy && canNext
@@ -952,7 +952,7 @@ class _AppStartPermissionSetupScreenState
           : null,
       loading: isLast && _busy,
       expand: true,
-      haptic: PromptHaptic.selection,
+      haptic: CommonHaptic.selection,
     );
 
     return LayoutBuilder(
@@ -988,10 +988,10 @@ class _AppStartPermissionSetupScreenState
 
   @override
   Widget build(BuildContext context) {
-    return PromptUiScope(
+    return CommonUiScope(
       child: Builder(
         builder: (context) {
-          final tokens = PromptUiTheme.of(context);
+          final tokens = CommonUiTheme.of(context);
           final kind = _steps[_index];
           final isLast = _index == _steps.length - 1;
           final canNext = _canProceed(kind);
@@ -1033,7 +1033,7 @@ class _AppStartPermissionSetupScreenState
                                 decoration: BoxDecoration(
                                   color: tokens.surface,
                                   borderRadius: BorderRadius.circular(
-                                    PromptUiShapes.dialog,
+                                    CommonUiShapes.dialog,
                                   ),
                                   border: Border.all(color: tokens.borderSubtle),
                                 ),
@@ -1065,7 +1065,7 @@ class _AppStartPermissionSetupScreenState
                               decoration: BoxDecoration(
                                 color: tokens.surfaceRaised,
                                 borderRadius: BorderRadius.circular(
-                                  PromptUiShapes.card,
+                                  CommonUiShapes.card,
                                 ),
                                 border:
                                     Border.all(color: tokens.borderSubtle),
@@ -1096,10 +1096,10 @@ class _PermissionWelcomePanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
 
-    return _PromptEntrance(
+    return _CommonEntrance(
       delay: const Duration(milliseconds: 70),
       child: Container(
         width: double.infinity,
@@ -1107,7 +1107,7 @@ class _PermissionWelcomePanel extends StatelessWidget {
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           color: tokens.surfaceRaised,
-          borderRadius: BorderRadius.circular(PromptUiShapes.card),
+          borderRadius: BorderRadius.circular(CommonUiShapes.card),
           border: Border.all(color: tokens.borderSubtle),
         ),
         child: Column(
@@ -1154,7 +1154,7 @@ class _WelcomeRow extends StatelessWidget {
   final IconData icon;
   final String title;
   final String description;
-  final PromptUiTokens tokens;
+  final CommonUiTokens tokens;
   final TextTheme textTheme;
 
   @override
@@ -1167,7 +1167,7 @@ class _WelcomeRow extends StatelessWidget {
           height: 42,
           decoration: BoxDecoration(
             color: tokens.surfaceOverlay,
-            borderRadius: BorderRadius.circular(PromptUiShapes.control),
+            borderRadius: BorderRadius.circular(CommonUiShapes.control),
           ),
           child: Icon(icon, color: tokens.accent, size: 22),
         ),
@@ -1210,7 +1210,7 @@ class _PermissionStatusPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final colors = switch (tone) {
       _PermissionStatusTone.success => (
@@ -1240,12 +1240,12 @@ class _PermissionStatusPill extends StatelessWidget {
     };
 
     return AnimatedContainer(
-      duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
-      curve: PromptUiMotion.standard,
+      duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+      curve: CommonUiMotion.standard,
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
         color: colors.background,
-        borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+        borderRadius: BorderRadius.circular(CommonUiShapes.pill),
         border: Border.all(color: colors.border.withOpacity(0.58)),
       ),
       child: Row(
@@ -1266,8 +1266,8 @@ class _PermissionStatusPill extends StatelessWidget {
   }
 }
 
-class _PermissionPromptDialog extends StatelessWidget {
-  const _PermissionPromptDialog({
+class _CommonPermissionDialog extends StatelessWidget {
+  const _CommonPermissionDialog({
     required this.icon,
     required this.title,
     required this.message,
@@ -1281,13 +1281,13 @@ class _PermissionPromptDialog extends StatelessWidget {
   final String title;
   final String message;
   final String primaryLabel;
-  final PromptAction onPrimary;
+  final CommonAction onPrimary;
   final String? secondaryLabel;
-  final PromptAction? onSecondary;
+  final CommonAction? onSecondary;
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
 
     return ConstrainedBox(
@@ -1297,7 +1297,7 @@ class _PermissionPromptDialog extends StatelessWidget {
         padding: const EdgeInsets.all(22),
         decoration: BoxDecoration(
           color: tokens.surfaceRaised,
-          borderRadius: BorderRadius.circular(PromptUiShapes.dialog),
+          borderRadius: BorderRadius.circular(CommonUiShapes.dialog),
           border: Border.all(color: tokens.borderSubtle),
           boxShadow: [
             BoxShadow(
@@ -1342,19 +1342,19 @@ class _PermissionPromptDialog extends StatelessWidget {
             const SizedBox(height: 22),
             LayoutBuilder(
               builder: (context, constraints) {
-                final primary = PromptButton(
+                final primary = CommonButton(
                   label: primaryLabel,
                   icon: Icons.arrow_forward_rounded,
                   onPressed: onPrimary,
                   expand: true,
-                  haptic: PromptHaptic.selection,
+                  haptic: CommonHaptic.selection,
                 );
                 if (secondaryLabel == null || onSecondary == null) {
                   return primary;
                 }
-                final secondary = PromptButton(
+                final secondary = CommonButton(
                   label: secondaryLabel!,
-                  variant: PromptButtonVariant.tertiary,
+                  variant: CommonButtonVariant.tertiary,
                   onPressed: onSecondary,
                   expand: true,
                 );
@@ -1383,8 +1383,8 @@ class _PermissionPromptDialog extends StatelessWidget {
   }
 }
 
-class _PromptEntrance extends StatelessWidget {
-  const _PromptEntrance({
+class _CommonEntrance extends StatelessWidget {
+  const _CommonEntrance({
     required this.child,
     this.delay = Duration.zero,
   });
@@ -1396,17 +1396,17 @@ class _PromptEntrance extends StatelessWidget {
   Widget build(BuildContext context) {
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     if (reduceMotion) return child;
-    final duration = PromptUiMotion.layout + delay;
+    final duration = CommonUiMotion.layout + delay;
 
     return TweenAnimationBuilder<double>(
       tween: Tween<double>(begin: 0, end: 1),
       duration: duration,
-      curve: PromptUiMotion.enter,
+      curve: CommonUiMotion.enter,
       builder: (context, value, child) {
         final adjusted = delay == Duration.zero
             ? value
             : ((value * duration.inMilliseconds - delay.inMilliseconds) /
-                    PromptUiMotion.layout.inMilliseconds)
+                    CommonUiMotion.layout.inMilliseconds)
                 .clamp(0.0, 1.0).toDouble();
         return Opacity(
           opacity: adjusted,

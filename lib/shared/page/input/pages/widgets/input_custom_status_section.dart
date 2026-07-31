@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../controllers/input_plate_controller.dart';
-import '../prompt_input_ui.dart';
+import '../common_input_ui.dart';
 
 class InputCustomStatusSection extends StatelessWidget {
   const InputCustomStatusSection({
@@ -19,18 +19,18 @@ class InputCustomStatusSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final fetchedMemo = controller.fetchedCustomStatus?.trim() ?? '';
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    final duration = reduceMotion ? Duration.zero : PromptUiMotion.selection;
+    final duration = reduceMotion ? Duration.zero : CommonUiMotion.selection;
     final lookupInProgress = controller.statusLookupInProgress;
 
-    return PromptInputSectionCard(
+    return CommonInputSectionCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const PromptInputSectionTitle(
+          const CommonInputSectionTitle(
             icon: Icons.note_alt_rounded,
             title: '상태 메모',
             subtitle: '차량별 자유형 상태 메모를 관리합니다.',
@@ -51,7 +51,7 @@ class InputCustomStatusSection extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: tokens.infoContainer,
                       borderRadius: BorderRadius.circular(
-                        PromptUiShapes.control,
+                        CommonUiShapes.control,
                       ),
                       border: Border.all(
                         color: tokens.info.withOpacity(.32),
@@ -110,7 +110,7 @@ class InputCustomStatusSection extends StatelessWidget {
                         color: tokens.info.withOpacity(.36),
                       ),
                       borderRadius: BorderRadius.circular(
-                        PromptUiShapes.control,
+                        CommonUiShapes.control,
                       ),
                     ),
                     child: Row(
@@ -152,7 +152,7 @@ class InputCustomStatusSection extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        PromptIconButton(
+                        CommonIconButton(
                           icon: Icons.delete_outline_rounded,
                           tooltip: '저장된 상태 메모 삭제',
                           destructive: true,

@@ -339,7 +339,7 @@ class ModifyPlateController {
         showFailedSnackbar(
           context,
           '정산 유형 정보가 비어 있습니다.',
-          usePromptUi: true,
+          useCommonUi: true,
         );
       }
       return false;
@@ -361,7 +361,7 @@ class ModifyPlateController {
           showFailedSnackbar(
             context,
             '상태 메모 최신 정보를 확인하지 못해 저장하지 않았습니다.',
-            usePromptUi: true,
+            useCommonUi: true,
           );
         }
         return false;
@@ -524,7 +524,7 @@ class ModifyPlateController {
         showFailedSnackbar(
           context,
           '수정 처리 실패: $e',
-          usePromptUi: true,
+          useCommonUi: true,
         );
       }
       return false;

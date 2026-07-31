@@ -2,16 +2,16 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../design_system/common_ui/common_ui_components.dart';
+import '../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../design_system/common_ui/common_ui_theme.dart';
 
 Future<bool> showBreakDurationBlockingDialog(
   BuildContext context, {
   required String message,
   Duration duration = const Duration(seconds: 5),
 }) async {
-  final result = await showPromptOverlayDialog<bool>(
+  final result = await showCommonOverlayDialog<bool>(
     context: context,
     barrierDismissible: false,
     builder: (_) => _BreakCancelableBlockingDialog(
@@ -70,7 +70,7 @@ class _BreakCancelableBlockingDialogState
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final totalSeconds = widget.duration.inSeconds <= 0
@@ -78,7 +78,7 @@ class _BreakCancelableBlockingDialogState
         : widget.duration.inSeconds;
     final progress = (_remainingSeconds / totalSeconds).clamp(0.0, 1.0);
 
-    return PromptDialogFrame(
+    return CommonDialogFrame(
       child: ConstrainedBox(
         constraints: const BoxConstraints(minWidth: 260, maxWidth: 380),
         child: Column(
@@ -93,8 +93,8 @@ class _BreakCancelableBlockingDialogState
                   TweenAnimationBuilder<double>(
                     tween: Tween<double>(end: progress),
                     duration:
-                        reduceMotion ? Duration.zero : PromptUiMotion.selection,
-                    curve: PromptUiMotion.standard,
+                        reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                    curve: CommonUiMotion.standard,
                     builder: (_, value, __) => CircularProgressIndicator(
                       value: value,
                       strokeWidth: 4,
@@ -129,16 +129,16 @@ class _BreakCancelableBlockingDialogState
             ),
             const SizedBox(height: 14),
             AnimatedContainer(
-              duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
-              curve: PromptUiMotion.standard,
+              duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+              curve: CommonUiMotion.standard,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
               decoration: BoxDecoration(
                 color: tokens.surfaceOverlay,
-                borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+                borderRadius: BorderRadius.circular(CommonUiShapes.pill),
                 border: Border.all(color: tokens.borderSubtle),
               ),
               child: AnimatedSwitcher(
-                duration: reduceMotion ? Duration.zero : PromptUiMotion.instant,
+                duration: reduceMotion ? Duration.zero : CommonUiMotion.instant,
                 child: Text(
                   '자동 진행까지 약 $_remainingSeconds초',
                   key: ValueKey<int>(_remainingSeconds),
@@ -150,13 +150,13 @@ class _BreakCancelableBlockingDialogState
               ),
             ),
             const SizedBox(height: 18),
-            PromptButton(
+            CommonButton(
               label: '취소',
               icon: Icons.close_rounded,
               onPressed: _cancel,
-              variant: PromptButtonVariant.tertiary,
+              variant: CommonButtonVariant.tertiary,
               expand: true,
-              haptic: PromptHaptic.selection,
+              haptic: CommonHaptic.selection,
             ),
           ],
         ),

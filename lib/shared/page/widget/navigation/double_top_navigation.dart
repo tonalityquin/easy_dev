@@ -2,7 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../features/dev/application/area_state.dart';
 import '../../../plate/application/double/double_plate_state.dart';
 import '../picker_sheet/double_area_picker_bottom_sheet.dart';
@@ -11,16 +11,16 @@ class DoubleTopNavigation extends StatelessWidget {
   const DoubleTopNavigation({
     super.key,
     this.isAreaSelectable = true,
-    this.usePromptUi = false,
+    this.useCommonUi = false,
   });
 
   final bool isAreaSelectable;
-  final bool usePromptUi;
+  final bool useCommonUi;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final areaState = context.watch<AreaState>();
     final plateState = context.read<DoublePlateState>();
     final selectedArea = areaState.currentArea.trim().isNotEmpty
@@ -29,14 +29,14 @@ class DoubleTopNavigation extends StatelessWidget {
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
     return Material(
-      color: usePromptUi ? tokens.transparent : Colors.transparent,
+      color: useCommonUi ? tokens.transparent : Colors.transparent,
       child: InkWell(
         onTap: isAreaSelectable
             ? () => doubleAreaPickerBottomSheet(
                   context: context,
                   areaState: areaState,
                   litePlateState: plateState,
-                  usePromptUi: usePromptUi,
+                  useCommonUi: useCommonUi,
                 )
             : null,
         overlayColor: WidgetStateProperty.resolveWith<Color?>((states) {
@@ -60,9 +60,9 @@ class DoubleTopNavigation extends StatelessWidget {
               const SizedBox(width: 6),
               Flexible(
                 child: AnimatedSwitcher(
-                  duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
-                  switchInCurve: PromptUiMotion.enter,
-                  switchOutCurve: PromptUiMotion.exit,
+                  duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                  switchInCurve: CommonUiMotion.enter,
+                  switchOutCurve: CommonUiMotion.exit,
                   transitionBuilder: (child, animation) {
                     return FadeTransition(
                       opacity: animation,

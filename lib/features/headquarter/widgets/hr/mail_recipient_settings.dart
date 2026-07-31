@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 
 import '../../../../app/config/email_config.dart';
 
@@ -9,15 +9,15 @@ class MailRecipientSettings extends StatefulWidget {
   const MailRecipientSettings({
     super.key,
     this.asBottomSheet = false,
-    this.usePromptUi = false,
+    this.useCommonUi = false,
   });
 
   final bool asBottomSheet;
-  final bool usePromptUi;
+  final bool useCommonUi;
 
   static Future<T?> showAsBottomSheet<T>(
     BuildContext context, {
-    bool usePromptUi = false,
+    bool useCommonUi = false,
   }) {
     Widget buildSheet(BuildContext sheetContext) {
       final insets = MediaQuery.of(sheetContext).viewInsets;
@@ -27,14 +27,14 @@ class MailRecipientSettings extends StatefulWidget {
           heightFactor: 1,
           child: MailRecipientSettings(
             asBottomSheet: true,
-            usePromptUi: usePromptUi,
+            useCommonUi: useCommonUi,
           ),
         ),
       );
     }
 
-    if (usePromptUi) {
-      return showPromptOverlayBottomSheet<T>(
+    if (useCommonUi) {
+      return showCommonOverlayBottomSheet<T>(
         context: context,
         useRootNavigator: true,
         isScrollControlled: true,
@@ -65,7 +65,7 @@ class MailRecipientSettings extends StatefulWidget {
 }
 
 class _MailRecipientSettingsState extends State<MailRecipientSettings> {
-  PromptUiTokens get _tokens => PromptUiTheme.of(context);
+  CommonUiTokens get _tokens => CommonUiTheme.of(context);
   Color get _base => _tokens.accent;
   Color get _dark => _tokens.accentPressed;
   Color get _light => _tokens.accentContainer;
@@ -365,7 +365,7 @@ class _InfoCard extends StatelessWidget {
         children: [
           CircleAvatar(
             backgroundColor: base,
-            foregroundColor: PromptUiTheme.of(context).onAccent,
+            foregroundColor: CommonUiTheme.of(context).onAccent,
             child: const Icon(Icons.mail_outline_rounded),
           ),
           const SizedBox(width: 10),
@@ -392,7 +392,7 @@ class _GuideCard extends StatelessWidget {
   Widget build(BuildContext context) {
     Text t(String s) => Text(
       s,
-      style: TextStyle(color: PromptUiTheme.of(context).textSecondary),
+      style: TextStyle(color: CommonUiTheme.of(context).textSecondary),
     );
 
     return Container(
@@ -443,7 +443,7 @@ class _BottomSheetFrame extends StatelessWidget {
                 BoxShadow(
                   blurRadius: 24,
                   spreadRadius: 8,
-                  color: PromptUiTheme.of(context).shadow,
+                  color: CommonUiTheme.of(context).shadow,
                   offset: const Offset(0, 8),
                 ),
               ],
@@ -451,7 +451,7 @@ class _BottomSheetFrame extends StatelessWidget {
             child: ClipRRect(
               borderRadius: BorderRadius.circular(16),
               child: Material(
-                color: PromptUiTheme.of(context).surfaceRaised,
+                color: CommonUiTheme.of(context).surfaceRaised,
                 child: child,
               ),
             ),
@@ -484,7 +484,7 @@ class _SheetScaffold extends StatelessWidget {
           width: 36,
           height: 4,
           decoration: BoxDecoration(
-            color: PromptUiTheme.of(context).handle,
+            color: CommonUiTheme.of(context).handle,
             borderRadius: BorderRadius.circular(2),
           ),
         ),

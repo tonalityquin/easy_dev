@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../design_system/common_ui/common_ui_components.dart';
+import '../../../design_system/common_ui/common_ui_theme.dart';
 
 class PlateRemoveDialog extends StatelessWidget {
   const PlateRemoveDialog({
@@ -13,10 +13,10 @@ class PlateRemoveDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
 
-    return PromptDialogFrame(
+    return CommonDialogFrame(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 380),
         child: Column(
@@ -31,7 +31,7 @@ class PlateRemoveDialog extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: tokens.dangerContainer,
                     borderRadius:
-                        BorderRadius.circular(PromptUiShapes.control),
+                        BorderRadius.circular(CommonUiShapes.control),
                     border: Border.all(
                       color: tokens.danger.withOpacity(
                         tokens.isDark ? 0.58 : 0.36,
@@ -62,7 +62,7 @@ class PlateRemoveDialog extends StatelessWidget {
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: tokens.surfaceOverlay,
-                borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                borderRadius: BorderRadius.circular(CommonUiShapes.control),
                 border: Border.all(color: tokens.borderSubtle),
               ),
               child: Text(
@@ -77,23 +77,23 @@ class PlateRemoveDialog extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: PromptButton(
+                  child: CommonButton(
                     label: '취소',
                     onPressed: () => Navigator.of(context).pop(false),
-                    variant: PromptButtonVariant.tertiary,
+                    variant: CommonButtonVariant.tertiary,
                     expand: true,
-                    haptic: PromptHaptic.selection,
+                    haptic: CommonHaptic.selection,
                   ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: PromptButton(
+                  child: CommonButton(
                     label: '삭제',
                     icon: Icons.delete_outline_rounded,
                     onPressed: onConfirm,
-                    variant: PromptButtonVariant.destructive,
+                    variant: CommonButtonVariant.destructive,
                     expand: true,
-                    haptic: PromptHaptic.medium,
+                    haptic: CommonHaptic.medium,
                   ),
                 ),
               ],

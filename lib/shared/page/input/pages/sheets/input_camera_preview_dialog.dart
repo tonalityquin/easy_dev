@@ -2,8 +2,8 @@ import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import '../../../../../app/utils/status_dialog.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../application/input_camera_helper.dart';
 
 class InputCameraPreviewDialog extends StatefulWidget {
@@ -111,7 +111,7 @@ class _InputCameraPreviewDialogState extends State<InputCameraPreviewDialog> {
     await StatusDialog.showFailure(
       context,
       title: StatusDialog.photoSaveFailed,
-      usePromptUi: true,
+      useCommonUi: true,
     );
   }
 
@@ -142,7 +142,7 @@ class _InputCameraPreviewDialogState extends State<InputCameraPreviewDialog> {
   }
 
   Widget _buildPreview() {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final cs = Theme.of(context).colorScheme;
     final ctrl = _cameraHelper.cameraController;
 
@@ -161,7 +161,7 @@ class _InputCameraPreviewDialogState extends State<InputCameraPreviewDialog> {
                 style: TextStyle(color: tokens.onAccent),
               ),
               const SizedBox(height: 12),
-              PromptButton(
+              CommonButton(
                 label: '다시 시도',
                 icon: Icons.refresh_rounded,
                 onPressed: _initializeCamera,
@@ -257,13 +257,13 @@ class _InputCameraPreviewDialogState extends State<InputCameraPreviewDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return PromptUiScope(
-      child: Builder(builder: _buildPromptCameraPreview),
+    return CommonUiScope(
+      child: Builder(builder: _buildCommonCameraPreview),
     );
   }
 
-  Widget _buildPromptCameraPreview(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+  Widget _buildCommonCameraPreview(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
     final ctrl = _cameraHelper.cameraController;
 
     return WillPopScope(
@@ -280,7 +280,7 @@ class _InputCameraPreviewDialogState extends State<InputCameraPreviewDialog> {
         child: Scaffold(
           backgroundColor: tokens.scrim,
           body: _buildPreview(),
-          bottomNavigationBar: PromptAnimatedReveal(
+          bottomNavigationBar: CommonAnimatedReveal(
             delay: const Duration(milliseconds: 80),
             offset: const Offset(0, .04),
             child: SafeArea(
@@ -289,13 +289,13 @@ class _InputCameraPreviewDialogState extends State<InputCameraPreviewDialog> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  PromptIconButton(
+                  CommonIconButton(
                     icon: Icons.camera_alt_rounded,
                     tooltip: '사진 촬영',
                     size: 68,
                     iconSize: 30,
                     selected: true,
-                    haptic: PromptHaptic.medium,
+                    haptic: CommonHaptic.medium,
                     onPressed: (!_isCameraReady ||
                             ctrl == null ||
                             !(ctrl.value.isInitialized) ||
@@ -307,10 +307,10 @@ class _InputCameraPreviewDialogState extends State<InputCameraPreviewDialog> {
                   ),
                   if (_capturedImages.isNotEmpty) ...[
                     const SizedBox(width: 12),
-                    PromptButton(
+                    CommonButton(
                       label: '갤러리 ${_capturedImages.length}',
                       icon: Icons.photo_library_rounded,
-                      variant: PromptButtonVariant.secondary,
+                      variant: CommonButtonVariant.secondary,
                       onPressed: _openGalleryView,
                     ),
                   ],
@@ -336,13 +336,13 @@ class GalleryView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PromptUiScope(
-      child: Builder(builder: _buildPromptGallery),
+    return CommonUiScope(
+      child: Builder(builder: _buildCommonGallery),
     );
   }
 
-  Widget _buildPromptGallery(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+  Widget _buildCommonGallery(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
 
     return Scaffold(
       appBar: AppBar(
@@ -427,13 +427,13 @@ class _FullScreenGalleryViewState extends State<FullScreenGalleryView> {
 
   @override
   Widget build(BuildContext context) {
-    return PromptUiScope(
-      child: Builder(builder: _buildPromptFullScreenGallery),
+    return CommonUiScope(
+      child: Builder(builder: _buildCommonFullScreenGallery),
     );
   }
 
-  Widget _buildPromptFullScreenGallery(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+  Widget _buildCommonFullScreenGallery(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
 
     return Scaffold(
       backgroundColor: tokens.scrim,

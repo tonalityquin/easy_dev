@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../../design_system/common_ui/common_ui_overlays.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -12,15 +12,15 @@ class Field extends StatefulWidget {
   const Field({
     super.key,
     this.asBottomSheet = false,
-    this.usePromptUi = false,
+    this.useCommonUi = false,
   });
 
   final bool asBottomSheet;
-  final bool usePromptUi;
+  final bool useCommonUi;
 
   static Future<T?> showAsBottomSheet<T>(
     BuildContext context, {
-    bool usePromptUi = false,
+    bool useCommonUi = false,
   }) {
     Widget buildSheet(BuildContext sheetContext) {
       final insets = MediaQuery.of(sheetContext).viewInsets;
@@ -29,14 +29,14 @@ class Field extends StatefulWidget {
         child: _NinetyTwoPercentBottomSheetFrame(
           child: Field(
             asBottomSheet: true,
-            usePromptUi: usePromptUi,
+            useCommonUi: useCommonUi,
           ),
         ),
       );
     }
 
-    if (usePromptUi) {
-      return showPromptOverlayBottomSheet<T>(
+    if (useCommonUi) {
+      return showCommonOverlayBottomSheet<T>(
         context: context,
         isScrollControlled: true,
         useSafeArea: true,
@@ -85,8 +85,8 @@ class _FieldState extends State<Field> {
     required WidgetBuilder builder,
     bool barrierDismissible = true,
   }) {
-    if (widget.usePromptUi) {
-      return showPromptOverlayDialog<T>(
+    if (widget.useCommonUi) {
+      return showCommonOverlayDialog<T>(
         context: context,
         barrierDismissible: barrierDismissible,
         builder: builder,
@@ -102,8 +102,8 @@ class _FieldState extends State<Field> {
   Future<T?> _showFieldBottomSheet<T>({
     required WidgetBuilder builder,
   }) {
-    if (widget.usePromptUi) {
-      return showPromptOverlayBottomSheet<T>(
+    if (widget.useCommonUi) {
+      return showCommonOverlayBottomSheet<T>(
         context: context,
         isScrollControlled: true,
         useSafeArea: true,

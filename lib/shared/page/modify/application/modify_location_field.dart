@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 
 class ModifyLocationField extends StatelessWidget {
   const ModifyLocationField({
@@ -14,7 +14,7 @@ class ModifyLocationField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final screenWidth = MediaQuery.sizeOf(context).width;
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
@@ -27,12 +27,12 @@ class ModifyLocationField extends StatelessWidget {
           final text = value.text.trim();
           final isEmpty = text.isEmpty;
           return AnimatedContainer(
-            duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
-            curve: PromptUiMotion.standard,
+            duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+            curve: CommonUiMotion.standard,
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
             decoration: BoxDecoration(
               color: isEmpty ? tokens.surfaceOverlay : tokens.surfaceSelected,
-              borderRadius: BorderRadius.circular(PromptUiShapes.control),
+              borderRadius: BorderRadius.circular(CommonUiShapes.control),
               border: Border.all(
                 color: isEmpty ? tokens.borderSubtle : tokens.accent,
               ),
@@ -49,9 +49,9 @@ class ModifyLocationField extends StatelessWidget {
                   child: AnimatedSwitcher(
                     duration: reduceMotion
                         ? Duration.zero
-                        : PromptUiMotion.selection,
-                    switchInCurve: PromptUiMotion.enter,
-                    switchOutCurve: PromptUiMotion.exit,
+                        : CommonUiMotion.selection,
+                    switchInCurve: CommonUiMotion.enter,
+                    switchOutCurve: CommonUiMotion.exit,
                     child: Text(
                       isEmpty ? '선택되지 않음' : text,
                       key: ValueKey(text),

@@ -18,7 +18,7 @@ class DevFirebaseDebugDialog {
     StackTrace? stackTrace,
     Map<String, Object?> details = const <String, Object?>{},
     String title = 'Firebase 디버그',
-    bool usePromptUi = false,
+    bool useCommonUi = false,
   }) async {
     final fullText = _buildFullText(
       operation: operation,
@@ -45,7 +45,7 @@ class DevFirebaseDebugDialog {
         description: fullText,
         copyText: fullText,
         copyButtonLabel: '전문 복사',
-        usePromptUi: usePromptUi,
+        useCommonUi: useCommonUi,
       );
     } finally {
       _showing = false;

@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../app/utils/status_dialog.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_overlays.dart';
 import '../../../../shared/secondary/widgets/ops_console_dialogs.dart';
 import '../../../../shared/secondary/widgets/ops_console_widgets.dart';
 import '../../../dev/application/area_state.dart';
@@ -99,7 +99,7 @@ class _UserManagementState extends State<UserManagement> {
       context,
       title: title,
       description: description,
-      usePromptUi: true,
+      useCommonUi: true,
     );
   }
 
@@ -228,7 +228,7 @@ class _UserManagementState extends State<UserManagement> {
     final currentArea = areaState.currentArea;
     final currentDivision = areaState.currentDivision;
 
-    showPromptOverlayBottomSheet<void>(
+    showCommonOverlayBottomSheet<void>(
       context: context,
       useSafeArea: true,
       builder: (sheetContext) => FractionallySizedBox(
@@ -647,11 +647,11 @@ class _UserManagementState extends State<UserManagement> {
               icon: Icons.filter_alt_rounded,
               onSelected: () {},
             ),
-            PromptIconButton(
+            CommonIconButton(
               icon: Icons.refresh_rounded,
               tooltip: '새로고침',
               onPressed: () => _refreshUsersForCurrentArea(context),
-              haptic: PromptHaptic.selection,
+              haptic: CommonHaptic.selection,
             ),
           ],
         ),
@@ -755,11 +755,11 @@ class _UserManagementState extends State<UserManagement> {
                   icon: Icons.person_search_rounded,
                   title: scopedUsers.isEmpty ? '현재 범위에 계정이 없습니다' : '검색 결과가 없습니다',
                   message: scopedUsers.isEmpty ? '신규 계정을 등록하거나 지점/사업소 범위를 확인하세요.' : '검색어와 활성 상태 필터를 조정하세요.',
-                  action: PromptButton(
+                  action: CommonButton(
                     label: '신규 계정 등록',
                     icon: Icons.person_add_alt_1_rounded,
                     onPressed: () => _handlePrimaryAction(context),
-                    haptic: PromptHaptic.selection,
+                    haptic: CommonHaptic.selection,
                   ),
                 )
               : ListView.builder(

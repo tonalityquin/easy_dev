@@ -1,24 +1,24 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/init/logout_helper.dart';
-import '../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
-import '../pages/widgets/tablet_prompt_components.dart';
+import '../../../design_system/common_ui/common_ui_components.dart';
+import '../../../design_system/common_ui/common_ui_theme.dart';
+import '../pages/widgets/tablet_common_components.dart';
 
 class TabletPageController extends StatelessWidget {
   const TabletPageController({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return PromptUiScope(
+    return CommonUiScope(
       child: Builder(
         builder: (context) {
-          final tokens = PromptUiTheme.of(context);
+          final tokens = CommonUiTheme.of(context);
           final text = Theme.of(context).textTheme;
           return SafeArea(
             child: Padding(
               padding: const EdgeInsets.all(16),
-              child: TabletPromptPanel(
+              child: TabletCommonPanel(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: <Widget>[
@@ -29,23 +29,23 @@ class TabletPageController extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: tokens.handle,
                           borderRadius:
-                              BorderRadius.circular(PromptUiShapes.pill),
+                              BorderRadius.circular(CommonUiShapes.pill),
                         ),
                       ),
                     ),
                     const SizedBox(height: 20),
-                    PromptAnimatedReveal(
-                      child: PromptButton(
+                    CommonAnimatedReveal(
+                      child: CommonButton(
                         label: '로그아웃',
                         icon: Icons.logout_rounded,
-                        variant: PromptButtonVariant.destructive,
+                        variant: CommonButtonVariant.destructive,
                         expand: true,
-                        haptic: PromptHaptic.medium,
+                        haptic: CommonHaptic.medium,
                         onPressed: () => _logout(context),
                       ),
                     ),
                     const Spacer(),
-                    PromptAnimatedReveal(
+                    CommonAnimatedReveal(
                       delay: const Duration(milliseconds: 70),
                       child: Container(
                         padding: const EdgeInsets.symmetric(
@@ -55,7 +55,7 @@ class TabletPageController extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: tokens.surfaceOverlay,
                           borderRadius:
-                              BorderRadius.circular(PromptUiShapes.card),
+                              BorderRadius.circular(CommonUiShapes.card),
                           border: Border.all(color: tokens.borderSubtle),
                         ),
                         child: Row(
@@ -96,7 +96,7 @@ class TabletPageController extends StatelessWidget {
       context,
       checkWorking: true,
       delay: const Duration(seconds: 1),
-      usePromptUi: true,
+      useCommonUi: true,
     );
   }
 }

@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../app/di/routes.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../dev/debug/debug_action_recorder.dart';
 import '../../controllers/personal/personal_login_controller.dart';
-import '../common/prompt_login_ui.dart';
+import '../common/common_login_ui.dart';
 import 'personal_sign_up_dialog.dart';
 
 class PersonalLoginForm extends StatefulWidget {
@@ -41,7 +41,7 @@ class _PersonalLoginFormState extends State<PersonalLoginForm> {
     setState(() {});
 
     if (result.success) {
-      showPromptLoginSnack(
+      showCommonLoginSnack(
         context,
         message: result.message,
         success: true,
@@ -50,7 +50,7 @@ class _PersonalLoginFormState extends State<PersonalLoginForm> {
       return;
     }
 
-    await showPromptLoginFailure(
+    await showCommonLoginFailure(
       context,
       title: '로그인 실패',
       description: result.message,
@@ -88,7 +88,7 @@ class _PersonalLoginFormState extends State<PersonalLoginForm> {
     if (!mounted) return;
 
     if (developerMode) {
-      final created = await showPromptDialog<bool>(
+      final created = await showCommonDialog<bool>(
         context: context,
         barrierDismissible: !_controller.isLoading,
         builder: (_) => PersonalSignUpDialog(controller: _controller),
@@ -96,7 +96,7 @@ class _PersonalLoginFormState extends State<PersonalLoginForm> {
       if (!mounted) return;
       if (created == true) {
         setState(() {});
-        showPromptLoginSnack(
+        showCommonLoginSnack(
           context,
           message: '개인형 계정을 생성했습니다.',
           success: true,
@@ -107,7 +107,7 @@ class _PersonalLoginFormState extends State<PersonalLoginForm> {
 
     await _controller.openExternalSignUpForm();
     if (!mounted) return;
-    showPromptLoginSnack(
+    showCommonLoginSnack(
       context,
       message: '개발자 모드가 아니어서 회원가입 Google Form을 열었습니다.',
       success: true,
@@ -125,7 +125,7 @@ class _PersonalLoginFormState extends State<PersonalLoginForm> {
 
     HapticFeedback.selectionClick();
     if (!_controller.isLoggedIn) {
-      showPromptLoginSnack(
+      showCommonLoginSnack(
         context,
         message: '로그인된 개인형 계정이 없습니다.',
         success: false,
@@ -136,7 +136,7 @@ class _PersonalLoginFormState extends State<PersonalLoginForm> {
     final result = await _controller.logout(setState);
     if (!mounted) return;
     setState(() {});
-    showPromptLoginSnack(
+    showCommonLoginSnack(
       context,
       message: result.message,
       success: result.success,
@@ -171,13 +171,13 @@ class _PersonalLoginFormState extends State<PersonalLoginForm> {
   }
 
   Widget _buildMoreMenu(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     return Container(
       width: 44,
       height: 44,
       decoration: BoxDecoration(
         color: tokens.surface,
-        borderRadius: BorderRadius.circular(PromptUiShapes.control),
+        borderRadius: BorderRadius.circular(CommonUiShapes.control),
         border: Border.all(color: tokens.borderSubtle),
       ),
       child: PopupMenuButton<String>(
@@ -215,18 +215,18 @@ class _PersonalLoginFormState extends State<PersonalLoginForm> {
   @override
   Widget build(BuildContext context) {
     final statusName = _controller.loggedInName ?? '개인형 계정';
-    return PromptLoginScaffold(
-      spec: PromptLoginModeSpec.personal,
+    return CommonLoginScaffold(
+      spec: CommonLoginModeSpec.personal,
       onTopLogoPressed: _onTopCompanyLogoTapped,
       onFooterLogoPressed: _onFooterLogoTapped,
       topTrailing: _buildMoreMenu(context),
       status: _controller.isLoggedIn
-          ? PromptLoginStatusBanner(
+          ? CommonLoginStatusBanner(
               visible: true,
               message: '$statusName 로그인 상태',
             )
           : null,
-      fields: PromptLoginFields(
+      fields: CommonLoginFields(
         nameController: _controller.nameController,
         nameFocus: _controller.nameFocus,
         accountController: _controller.phoneController,
@@ -253,24 +253,24 @@ class _PersonalLoginFormState extends State<PersonalLoginForm> {
       actions: LayoutBuilder(
         builder: (context, constraints) {
           final compact = constraints.maxWidth < 390;
-          final loginButton = PromptButton(
+          final loginButton = CommonButton(
             label: _controller.isLoading ? '로그인 중' : '로그인',
             icon: Icons.login_rounded,
             expand: true,
             loading: _controller.isLoading,
             onPressed: _controller.isLoading ? null : _onLoginButtonPressed,
-            haptic: PromptHaptic.light,
+            haptic: CommonHaptic.light,
           );
-          final signUpButton = PromptButton(
+          final signUpButton = CommonButton(
             label: '회원가입',
             icon: Icons.person_add_alt_1_rounded,
-            variant: PromptButtonVariant.secondary,
+            variant: CommonButtonVariant.secondary,
             expand: true,
             onPressed: _controller.isLoading ? null : _onSignUpButtonPressed,
-            haptic: PromptHaptic.selection,
+            haptic: CommonHaptic.selection,
           );
 
-          return PromptAnimatedReveal(
+          return CommonAnimatedReveal(
             delay: const Duration(milliseconds: 240),
             child: compact
                 ? Column(

@@ -6,9 +6,9 @@ import 'package:provider/provider.dart';
 import '../../../../app/models/capability.dart';
 import '../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../app/utils/snackbar_helper.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../features/dev/application/area_state.dart';
 import '../../../../features/sector/applications/sector_state.dart';
 import '../../../plate/domain/enums/plate_type.dart';
@@ -17,7 +17,7 @@ import '../../../plate/widgets/action_trace_dialog.dart';
 import '../../input/pages/sheets/input_location_bottom_sheet.dart';
 import '../../input/pages/sheets/input_sector_selection_sheet.dart';
 import '../controllers/modify_plate_controller.dart';
-import 'prompt_modify_ui.dart';
+import 'common_modify_ui.dart';
 import 'sheets/modify_bottom_navigation.dart';
 import 'sheets/modify_camera_preview_dialog.dart';
 import 'widgets/buttons/modify_animated_action_button.dart';
@@ -167,7 +167,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
         context: context,
         title: '상태 저장 범위 확인',
         initialMessage: '상태 메모의 최신 정보와 저장 범위를 확인하고 있습니다.',
-        usePromptUi: true,
+        useCommonUi: true,
         developerModeMessage:
             '개발자 모드 ON: 범위 확인 실패 로그를 복사할 수 있습니다.',
         standardModeMessage:
@@ -218,7 +218,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
           initialMessage: open
               ? '터치로 정산 및 상태 카드를 열고 있습니다.'
               : '터치로 정산 및 상태 카드를 닫고 있습니다.',
-          usePromptUi: true,
+          useCommonUi: true,
           developerModeMessage:
               '개발자 모드 ON: 카드 제어 로그를 복사할 수 있습니다.',
           standardModeMessage:
@@ -264,7 +264,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
       final reduceMotion =
           MediaQuery.maybeOf(context)?.disableAnimations ?? false;
       if (!reduceMotion) {
-        await Future<void>.delayed(PromptUiMotion.layout);
+        await Future<void>.delayed(CommonUiMotion.layout);
       }
 
       trace?.log(
@@ -349,7 +349,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
         context: context,
         title: '번호판 수정 저장',
         initialMessage: '번호판 수정 정보를 저장하고 있습니다.',
-        usePromptUi: true,
+        useCommonUi: true,
         developerModeMessage:
             '개발자 모드 ON: 저장 로그를 debugPrint 코드로 복사할 수 있습니다.',
         standardModeMessage:
@@ -408,7 +408,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
         showFailedSnackbar(
           context,
           '수정 실패: $error',
-          usePromptUi: true,
+          useCommonUi: true,
         );
       }
     } finally {
@@ -420,7 +420,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
 
   Future<void> _showCameraPreviewDialog() async {
     if (!mounted) return;
-    await showPromptOverlayDialog<void>(
+    await showCommonOverlayDialog<void>(
       context: context,
       builder: (dialogContext) {
         return SizedBox.expand(
@@ -451,7 +451,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
         });
       },
       preferredParkingAreas: _platePreferredParkingAreas(),
-      usePromptUi: true,
+      useCommonUi: true,
     );
   }
 
@@ -481,7 +481,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
       context: context,
       title: '번호판 수정 방문 구역',
       initialMessage: result,
-      usePromptUi: true,
+      useCommonUi: true,
       developerModeMessage:
           '개발자 모드 ON: 방문 구역 변경 로그를 복사할 수 있습니다.',
       standardModeMessage:
@@ -560,7 +560,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
           showFailedSnackbar(
             context,
             '방문 구역 정보를 준비하고 있습니다.',
-            usePromptUi: true,
+            useCommonUi: true,
           );
         }
         await _showSectorOperationStatus(
@@ -596,7 +596,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
           showFailedSnackbar(
             context,
             '현재 지역의 방문 구역 정보가 없습니다.',
-            usePromptUi: true,
+            useCommonUi: true,
           );
         }
         await _showSectorOperationStatus(
@@ -647,7 +647,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
         showFailedSnackbar(
           context,
           '방문 구역 정보가 변경되어 다시 선택해야 합니다.',
-          usePromptUi: true,
+          useCommonUi: true,
         );
         await _showSectorOperationStatus(
           result: '선택 결과 재검증에 실패했습니다.',
@@ -685,7 +685,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
         showFailedSnackbar(
           context,
           '방문 구역 변경 실패: $error',
-          usePromptUi: true,
+          useCommonUi: true,
         );
       }
       await _showSectorOperationStatus(
@@ -715,7 +715,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
   }
 
   Widget _buildScreenTag(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     return SafeArea(
       child: IgnorePointer(
         child: Align(
@@ -740,7 +740,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
   }
 
   Widget _buildBottomBrandLogo(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     return Semantics(
       label: 'brand_logo: ParkinWorkin',
       child: ExcludeSemantics(
@@ -756,13 +756,13 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return PromptUiScope(
-      child: Builder(builder: _buildPromptScreen),
+    return CommonUiScope(
+      child: Builder(builder: _buildCommonScreen),
     );
   }
 
-  Widget _buildPromptScreen(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+  Widget _buildCommonScreen(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
     final mediaQuery = MediaQuery.of(context);
     final viewInset = mediaQuery.viewInsets.bottom;
     final bottomSafePadding = 140 + viewInset;
@@ -848,8 +848,8 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
                 AnimatedPositioned(
                   duration: MediaQuery.of(context).disableAnimations
                       ? Duration.zero
-                      : PromptUiMotion.layout,
-                  curve: PromptUiMotion.standard,
+                      : CommonUiMotion.layout,
+                  curve: CommonUiMotion.standard,
                   left: 0,
                   right: 0,
                   bottom: 0,
@@ -860,12 +860,12 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
                     return AnimatedContainer(
                       duration: mediaQuery.disableAnimations
                           ? Duration.zero
-                          : PromptUiMotion.selection,
-                      curve: PromptUiMotion.standard,
+                          : CommonUiMotion.selection,
+                      curve: CommonUiMotion.standard,
                       decoration: BoxDecoration(
                         color: tokens.surfaceRaised,
                         borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(PromptUiShapes.sheet),
+                          top: Radius.circular(CommonUiShapes.sheet),
                         ),
                         border: Border.all(
                           color: _sheetOpen
@@ -899,7 +899,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
                               color: tokens.transparent,
                               child: InkWell(
                                 borderRadius: BorderRadius.circular(
-                                  PromptUiShapes.control,
+                                  CommonUiShapes.control,
                                 ),
                                 onTap: _sheetAnimating
                                     ? null
@@ -913,8 +913,8 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
                                       AnimatedContainer(
                                         duration: mediaQuery.disableAnimations
                                             ? Duration.zero
-                                            : PromptUiMotion.selection,
-                                        curve: PromptUiMotion.standard,
+                                            : CommonUiMotion.selection,
+                                        curve: CommonUiMotion.standard,
                                         width: 40,
                                         height: 40,
                                         decoration: BoxDecoration(
@@ -922,7 +922,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
                                               ? tokens.accentContainer
                                               : tokens.surfaceOverlay,
                                           borderRadius: BorderRadius.circular(
-                                            PromptUiShapes.control,
+                                            CommonUiShapes.control,
                                           ),
                                           border: Border.all(
                                             color: _sheetOpen
@@ -936,7 +936,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
                                         child: AnimatedSwitcher(
                                           duration: mediaQuery.disableAnimations
                                               ? Duration.zero
-                                              : PromptUiMotion.selection,
+                                              : CommonUiMotion.selection,
                                           child: _sheetAnimating
                                               ? SizedBox(
                                                   key: const ValueKey(
@@ -968,7 +968,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
                                         child: AnimatedSwitcher(
                                           duration: mediaQuery.disableAnimations
                                               ? Duration.zero
-                                              : PromptUiMotion.selection,
+                                              : CommonUiMotion.selection,
                                           child: Column(
                                             key: ValueKey(
                                               '${_sheetOpen}_$_sheetAnimating',
@@ -1033,8 +1033,8 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
                                         turns: _sheetOpen ? .5 : 0,
                                         duration: mediaQuery.disableAnimations
                                             ? Duration.zero
-                                            : PromptUiMotion.selection,
-                                        curve: PromptUiMotion.standard,
+                                            : CommonUiMotion.selection,
+                                        curve: CommonUiMotion.standard,
                                         child: Icon(
                                           Icons.expand_less_rounded,
                                           color: tokens.iconSecondary,
@@ -1062,17 +1062,17 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
                             AnimatedOpacity(
                               duration: mediaQuery.disableAnimations
                                   ? Duration.zero
-                                  : PromptUiMotion.selection,
+                                  : CommonUiMotion.selection,
                               opacity: _statusContextResolving ? .62 : 1,
                               child: AbsorbPointer(
                                 absorbing: _statusContextResolving ||
                                     _statusContextError != null,
-                                child: PromptModifySectionCard(
+                                child: CommonModifySectionCard(
                                   padding: const EdgeInsets.all(14),
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.stretch,
                                     children: [
-                                  const PromptModifySectionTitle(
+                                  const CommonModifySectionTitle(
                                     icon: Icons.edit_note_rounded,
                                     title: '추가 상태 메모',
                                     subtitle: '최대 20자까지 차량 상태를 기록합니다.',
@@ -1113,7 +1113,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
                             AnimatedSwitcher(
                               duration: mediaQuery.disableAnimations
                                   ? Duration.zero
-                                  : PromptUiMotion.selection,
+                                  : CommonUiMotion.selection,
                               child: _statusContextResolving
                                   ? const Padding(
                                       key: ValueKey<String>('status-resolving'),
@@ -1204,7 +1204,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
                 ],
               ),
             ),
-            PromptAnimatedReveal(
+            CommonAnimatedReveal(
               delay: const Duration(milliseconds: 120),
               offset: const Offset(0, .02),
               child: Container(
@@ -1238,13 +1238,13 @@ class _ReadOnlyBillSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
-    return PromptModifySectionCard(
+    final tokens = CommonUiTheme.of(context);
+    return CommonModifySectionCard(
       padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const PromptModifySectionTitle(
+          const CommonModifySectionTitle(
             icon: Icons.receipt_long_rounded,
             title: '정산 유형',
             subtitle: '현재 적용 중인 정산 정보이며 이 화면에서는 변경하지 않습니다.',
@@ -1254,7 +1254,7 @@ class _ReadOnlyBillSection extends StatelessWidget {
             padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 14),
             decoration: BoxDecoration(
               color: tokens.surfaceOverlay,
-              borderRadius: BorderRadius.circular(PromptUiShapes.control),
+              borderRadius: BorderRadius.circular(CommonUiShapes.control),
               border: Border.all(color: tokens.borderSubtle),
             ),
             child: Row(
@@ -1277,7 +1277,7 @@ class _ReadOnlyBillSection extends StatelessWidget {
                   ),
                   decoration: BoxDecoration(
                     color: tokens.accentContainer,
-                    borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+                    borderRadius: BorderRadius.circular(CommonUiShapes.pill),
                     border: Border.all(
                       color: tokens.accent.withOpacity(
                         tokens.isDark ? .54 : .36,

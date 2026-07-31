@@ -5,8 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../app/di/routes.dart';
 import '../../../app/theme/theme_prefs_controller.dart';
-import '../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../design_system/common_ui/common_ui_components.dart';
+import '../../../design_system/common_ui/common_ui_theme.dart';
 import '../application/dev_auth.dart';
 import '../sheets/update_bottom_sheet.dart';
 import '../widgets/cards.dart';
@@ -44,7 +44,7 @@ class _BrandTintedLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final tint = _resolveLogoTint(
       background: tokens.canvas,
       preferred: tokens.accent,
@@ -92,7 +92,7 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
   }
 
   Future<void> _handleUpdateTap(BuildContext context) async {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -100,7 +100,7 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
       backgroundColor: tokens.transparent,
       barrierColor: tokens.scrim,
       builder: (sheetContext) {
-        return const PromptUiScope(
+        return const CommonUiScope(
           child: FractionallySizedBox(
             heightFactor: 1,
             child: UpdateBottomSheet(),
@@ -143,10 +143,10 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
   Widget build(BuildContext context) {
     return Consumer<ThemePrefsController>(
       builder: (context, _, __) {
-        return PromptUiScope(
+        return CommonUiScope(
           child: Builder(
             builder: (context) {
-              final tokens = PromptUiTheme.of(context);
+              final tokens = CommonUiTheme.of(context);
               final isDark = tokens.isDark;
               final mode = _normalizeMode(_savedMode);
 
@@ -259,18 +259,18 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const PromptAnimatedReveal(
+                              const CommonAnimatedReveal(
                                 child: Header(),
                               ),
                               const SizedBox(height: 24),
-                              PromptAnimatedReveal(
+                              CommonAnimatedReveal(
                                 delay: reduceMotion
                                     ? Duration.zero
                                     : const Duration(milliseconds: 50),
                                 child: CardsPager(pages: pages),
                               ),
                               const SizedBox(height: 16),
-                              PromptAnimatedReveal(
+                              CommonAnimatedReveal(
                                 delay: reduceMotion
                                     ? Duration.zero
                                     : const Duration(milliseconds: 90),
@@ -289,13 +289,13 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
                     child: AnimatedSlide(
                       offset: keyboardOpen ? const Offset(0, 0.25) : Offset.zero,
                       duration:
-                          reduceMotion ? Duration.zero : PromptUiMotion.component,
-                      curve: PromptUiMotion.enter,
+                          reduceMotion ? Duration.zero : CommonUiMotion.component,
+                      curve: CommonUiMotion.enter,
                       child: AnimatedOpacity(
                         opacity: keyboardOpen ? 0 : 1,
                         duration: reduceMotion
                             ? Duration.zero
-                            : PromptUiMotion.selection,
+                            : CommonUiMotion.selection,
                         child: DecoratedBox(
                           decoration: BoxDecoration(
                             color: tokens.surface,

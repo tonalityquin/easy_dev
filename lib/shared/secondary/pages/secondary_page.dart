@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
-import '../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../design_system/common_ui/common_ui_components.dart';
+import '../../../design_system/common_ui/common_ui_theme.dart';
 import '../application/secondary_info.dart';
 import '../application/secondary_state.dart';
 
@@ -26,7 +26,7 @@ class _SecondaryPageState extends State<SecondaryPage> {
 
   @override
   Widget build(BuildContext context) {
-    return const PromptUiScope(
+    return const CommonUiScope(
       child: _SecondaryConsoleRoot(
         key: ValueKey<String>('secondary_console_root'),
       ),
@@ -39,7 +39,7 @@ class _SecondaryConsoleRoot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final brightness = Theme.of(context).brightness;
@@ -60,7 +60,7 @@ class _SecondaryConsoleRoot extends StatelessWidget {
               backgroundColor: tokens.canvas,
               body: SafeArea(
                 child: Center(
-                  child: PromptAnimatedReveal(
+                  child: CommonAnimatedReveal(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -70,7 +70,7 @@ class _SecondaryConsoleRoot extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: tokens.surfaceOverlay,
                             borderRadius: BorderRadius.circular(
-                              PromptUiShapes.card,
+                              CommonUiShapes.card,
                             ),
                             border: Border.all(color: tokens.borderSubtle),
                           ),
@@ -122,14 +122,14 @@ class _SecondaryConsoleRoot extends StatelessWidget {
                       AnimatedSwitcher(
                         duration: reduceMotion
                             ? Duration.zero
-                            : PromptUiMotion.component,
-                        switchInCurve: PromptUiMotion.enter,
-                        switchOutCurve: PromptUiMotion.exit,
+                            : CommonUiMotion.component,
+                        switchInCurve: CommonUiMotion.enter,
+                        switchOutCurve: CommonUiMotion.exit,
                         transitionBuilder: (child, animation) {
                           final curved = CurvedAnimation(
                             parent: animation,
-                            curve: PromptUiMotion.enter,
-                            reverseCurve: PromptUiMotion.exit,
+                            curve: CommonUiMotion.enter,
+                            reverseCurve: CommonUiMotion.exit,
                           );
                           return FadeTransition(
                             opacity: curved,
@@ -160,7 +160,7 @@ class _SecondaryConsoleRoot extends StatelessWidget {
                             opacity: state.isLoading ? 1 : 0,
                             duration: reduceMotion
                                 ? Duration.zero
-                                : PromptUiMotion.selection,
+                                : CommonUiMotion.selection,
                             child: ColoredBox(
                               color: tokens.scrim.withOpacity(.12),
                               child: Center(
@@ -170,7 +170,7 @@ class _SecondaryConsoleRoot extends StatelessWidget {
                                   decoration: BoxDecoration(
                                     color: tokens.surfaceRaised,
                                     borderRadius: BorderRadius.circular(
-                                      PromptUiShapes.control,
+                                      CommonUiShapes.control,
                                     ),
                                     border: Border.all(
                                       color: tokens.borderSubtle,
@@ -225,7 +225,7 @@ class _SecondaryNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     return Container(
       width: double.infinity,
@@ -244,7 +244,7 @@ class _SecondaryNavBar extends StatelessWidget {
                 height: 40,
                 decoration: BoxDecoration(
                   color: tokens.accentContainer,
-                  borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                  borderRadius: BorderRadius.circular(CommonUiShapes.control),
                   border: Border.all(color: tokens.borderSubtle),
                 ),
                 alignment: Alignment.center,
@@ -280,7 +280,7 @@ class _SecondaryNavBar extends StatelessWidget {
               AnimatedSwitcher(
                 duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false
                     ? Duration.zero
-                    : PromptUiMotion.selection,
+                    : CommonUiMotion.selection,
                 child: isLoading
                     ? SizedBox(
                         key: const ValueKey<String>('secondary_loading'),
@@ -338,7 +338,7 @@ class _NavChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final foreground = selected ? tokens.onAccentContainer : tokens.textSecondary;
@@ -347,23 +347,23 @@ class _NavChip extends StatelessWidget {
       selected: selected,
       label: title,
       child: AnimatedContainer(
-        duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
+        duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
         decoration: BoxDecoration(
           color: selected ? tokens.accentContainer : tokens.surfaceOverlay,
-          borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+          borderRadius: BorderRadius.circular(CommonUiShapes.pill),
           border: Border.all(
             color: selected ? tokens.accent : tokens.borderSubtle,
           ),
         ),
         child: Material(
           color: tokens.transparent,
-          borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+          borderRadius: BorderRadius.circular(CommonUiShapes.pill),
           child: InkWell(
             onTap: () {
               HapticFeedback.selectionClick();
               onTap();
             },
-            borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+            borderRadius: BorderRadius.circular(CommonUiShapes.pill),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               child: Row(

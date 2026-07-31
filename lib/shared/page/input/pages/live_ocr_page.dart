@@ -8,9 +8,9 @@ import 'package:flutter/services.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 
 import '../domain/repositories/ocr_learning_repository.dart';
 
@@ -1698,10 +1698,10 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
         ? '없음'
         : DateTime.fromMillisecondsSinceEpoch(lastMs).toLocal().toString();
 
-    showPromptOverlayDialog<void>(
+    showCommonOverlayDialog<void>(
       context: context,
       builder: (dialogContext) {
-        final tokens = PromptUiTheme.of(dialogContext);
+        final tokens = CommonUiTheme.of(dialogContext);
         final textTheme = Theme.of(dialogContext).textTheme;
         Widget row(String label, String value) {
           return Container(
@@ -1709,7 +1709,7 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
               color: tokens.surfaceOverlay,
-              borderRadius: BorderRadius.circular(PromptUiShapes.control),
+              borderRadius: BorderRadius.circular(CommonUiShapes.control),
               border: Border.all(color: tokens.borderSubtle),
             ),
             child: Row(
@@ -1735,7 +1735,7 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
           );
         }
 
-        return PromptDialogFrame(
+        return CommonDialogFrame(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 480),
             child: Column(
@@ -1749,7 +1749,7 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
                       height: 42,
                       decoration: BoxDecoration(
                         color: tokens.infoContainer,
-                        borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                        borderRadius: BorderRadius.circular(CommonUiShapes.control),
                         border: Border.all(color: tokens.info.withOpacity(.36)),
                       ),
                       alignment: Alignment.center,
@@ -1783,7 +1783,7 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                PromptButton(
+                CommonButton(
                   label: '닫기',
                   expand: true,
                   onPressed: () => Navigator.of(dialogContext).pop(),
@@ -1798,11 +1798,11 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
 
   void _showLogsDialog() {
     final logText = _sessionLogs.join('\n');
-    showPromptOverlayDialog<void>(
+    showCommonOverlayDialog<void>(
       context: context,
       builder: (dialogContext) {
-        final tokens = PromptUiTheme.of(dialogContext);
-        return PromptDialogFrame(
+        final tokens = CommonUiTheme.of(dialogContext);
+        return CommonDialogFrame(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 620, maxHeight: 720),
             child: Column(
@@ -1816,7 +1816,7 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
                       height: 42,
                       decoration: BoxDecoration(
                         color: tokens.infoContainer,
-                        borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                        borderRadius: BorderRadius.circular(CommonUiShapes.control),
                         border: Border.all(color: tokens.info.withOpacity(.36)),
                       ),
                       alignment: Alignment.center,
@@ -1841,7 +1841,7 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: tokens.surfaceOverlay,
-                      borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                      borderRadius: BorderRadius.circular(CommonUiShapes.control),
                       border: Border.all(color: tokens.borderSubtle),
                     ),
                     child: SingleChildScrollView(
@@ -1860,10 +1860,10 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
                 Row(
                   children: [
                     Expanded(
-                      child: PromptButton(
+                      child: CommonButton(
                         label: '복사',
                         icon: Icons.copy_rounded,
-                        variant: PromptButtonVariant.secondary,
+                        variant: CommonButtonVariant.secondary,
                         onPressed: () async {
                           await Clipboard.setData(ClipboardData(text: logText));
                           if (!dialogContext.mounted) return;
@@ -1873,7 +1873,7 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
                     ),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: PromptButton(
+                      child: CommonButton(
                         label: '닫기',
                         onPressed: () => Navigator.of(dialogContext).pop(),
                       ),
@@ -1890,13 +1890,13 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
 
   @override
   Widget build(BuildContext context) {
-    return PromptUiScope(
-      child: Builder(builder: _buildPromptOcrPage),
+    return CommonUiScope(
+      child: Builder(builder: _buildCommonOcrPage),
     );
   }
 
-  Widget _buildPromptOcrPage(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+  Widget _buildCommonOcrPage(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
     final cameraForeground =
         tokens.isDark ? tokens.textPrimary : tokens.onAccent;
 
@@ -2077,7 +2077,7 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
                   ],
                 ),
               ),
-            PromptAnimatedReveal(
+            CommonAnimatedReveal(
               delay: const Duration(milliseconds: 80),
               offset: const Offset(0, .035),
               child: SafeArea(
@@ -2104,14 +2104,14 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
     required IconData icon,
     required String text,
   }) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final foreground = tokens.isDark ? tokens.textPrimary : tokens.onAccent;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: tokens.surfaceRaised.withOpacity(tokens.isDark ? .72 : .16),
         border: Border.all(color: foreground.withOpacity(.28)),
-        borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+        borderRadius: BorderRadius.circular(CommonUiShapes.pill),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -2132,7 +2132,7 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
   }
 
   Widget _buildCandidates() {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final cameraForeground =
         tokens.isDark ? tokens.textPrimary : tokens.onAccent;
 

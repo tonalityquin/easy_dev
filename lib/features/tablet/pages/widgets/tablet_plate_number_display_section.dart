@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
-import 'tablet_prompt_components.dart';
+import '../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
+import 'tablet_common_components.dart';
 
 class TabletPlateNumberDisplaySection extends StatelessWidget {
   const TabletPlateNumberDisplaySection({
@@ -43,7 +43,7 @@ class TabletPlateNumberDisplaySection extends StatelessWidget {
   Widget build(BuildContext context) {
     final shortestSide = MediaQuery.sizeOf(context).shortestSide;
     final isTablet = shortestSide >= 600;
-    final duration = tabletPromptDuration(context, PromptUiMotion.selection);
+    final duration = tabletCommonDuration(context, CommonUiMotion.selection);
     return LayoutBuilder(
       builder: (context, constraints) {
         final digitBoxSize = _digitBoxSize(
@@ -72,8 +72,8 @@ class TabletPlateNumberDisplaySection extends StatelessWidget {
               child: AnimatedSwitcher(
                 duration: duration,
                 reverseDuration: duration,
-                switchInCurve: PromptUiMotion.enter,
-                switchOutCurve: PromptUiMotion.exit,
+                switchInCurve: CommonUiMotion.enter,
+                switchOutCurve: CommonUiMotion.exit,
                 transitionBuilder: (child, animation) {
                   return FadeTransition(
                     opacity: animation,
@@ -135,10 +135,10 @@ class _DigitWrapDisplay extends StatelessWidget {
       runSpacing: spacing,
       children: <Widget>[
         for (var index = 0; index < chars.length; index++)
-          PromptAnimatedReveal(
+          CommonAnimatedReveal(
             key: ValueKey<String>('digit-$index-${chars[index]}'),
             delay: Duration(milliseconds: index * 24),
-            duration: PromptUiMotion.selection,
+            duration: CommonUiMotion.selection,
             offset: const Offset(0, 0.08),
             child: _DigitTile(
               digit: chars[index],
@@ -164,20 +164,20 @@ class _DigitTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final tone = valid ? tokens.accent : tokens.danger;
     final background = valid ? tokens.accentContainer : tokens.dangerContainer;
     final foreground = valid ? tokens.onAccentContainer : tokens.onDangerContainer;
     final fontSize = (boxSize * 0.54).clamp(24.0, 40.0).toDouble();
     return AnimatedContainer(
-      duration: tabletPromptDuration(context, PromptUiMotion.selection),
-      curve: PromptUiMotion.standard,
+      duration: tabletCommonDuration(context, CommonUiMotion.selection),
+      curve: CommonUiMotion.standard,
       width: boxSize,
       height: boxSize,
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(PromptUiShapes.card),
+        borderRadius: BorderRadius.circular(CommonUiShapes.card),
         border: Border.all(color: tone, width: 1.25),
         boxShadow: <BoxShadow>[
           BoxShadow(
@@ -218,16 +218,16 @@ class _EmptyPlateNumberDisplay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     return AnimatedContainer(
-      duration: tabletPromptDuration(context, PromptUiMotion.selection),
-      curve: PromptUiMotion.standard,
+      duration: tabletCommonDuration(context, CommonUiMotion.selection),
+      curve: CommonUiMotion.standard,
       width: width,
       height: height,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
         color: tokens.surfaceOverlay,
-        borderRadius: BorderRadius.circular(PromptUiShapes.card),
+        borderRadius: BorderRadius.circular(CommonUiShapes.card),
         border: Border.all(color: tokens.borderSubtle, width: 1.2),
       ),
       child: Row(

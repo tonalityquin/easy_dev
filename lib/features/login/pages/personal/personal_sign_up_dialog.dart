@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../controllers/personal/personal_login_controller.dart';
-import '../common/prompt_login_ui.dart';
+import '../common/common_login_ui.dart';
 
 class PersonalSignUpDialog extends StatefulWidget {
   const PersonalSignUpDialog({
@@ -112,7 +112,7 @@ class _PersonalSignUpDialogState extends State<PersonalSignUpDialog> {
     if (password.isEmpty) return;
     await Clipboard.setData(ClipboardData(text: password));
     if (!mounted) return;
-    showPromptLoginSnack(
+    showCommonLoginSnack(
       context,
       message: '비밀번호를 복사했습니다.',
       success: true,
@@ -163,7 +163,7 @@ class _PersonalSignUpDialogState extends State<PersonalSignUpDialog> {
     }
 
     setState(() => _errorMessage = result.message);
-    showPromptLoginSnack(
+    showCommonLoginSnack(
       context,
       message: result.message,
       success: false,
@@ -200,7 +200,7 @@ class _PersonalSignUpDialogState extends State<PersonalSignUpDialog> {
       onChanged: onChanged,
       onSubmitted: onSubmitted,
       inputFormatters: inputFormatters,
-      decoration: promptLoginInputDecoration(
+      decoration: commonLoginInputDecoration(
         context,
         label: label,
         icon: icon,
@@ -211,7 +211,7 @@ class _PersonalSignUpDialogState extends State<PersonalSignUpDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
@@ -229,7 +229,7 @@ class _PersonalSignUpDialogState extends State<PersonalSignUpDialog> {
                 height: 48,
                 decoration: BoxDecoration(
                   color: tokens.accentContainer,
-                  borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                  borderRadius: BorderRadius.circular(CommonUiShapes.control),
                   border: Border.all(
                     color: tokens.accent.withOpacity(
                       tokens.isDark ? 0.62 : 0.42,
@@ -263,12 +263,12 @@ class _PersonalSignUpDialogState extends State<PersonalSignUpDialog> {
                   ],
                 ),
               ),
-              PromptIconButton(
+              CommonIconButton(
                 icon: Icons.close_rounded,
                 tooltip: '닫기',
                 onPressed:
                     _isSaving ? null : () => Navigator.of(context).pop(false),
-                haptic: PromptHaptic.selection,
+                haptic: CommonHaptic.selection,
               ),
             ],
           ),
@@ -321,7 +321,7 @@ class _PersonalSignUpDialogState extends State<PersonalSignUpDialog> {
                         FocusScope.of(context).requestFocus(_areaFocus),
                   ),
                   const SizedBox(height: 8),
-                  _PromptSignUpInfo(
+                  _CommonSignUpInfo(
                     icon: Icons.info_outline_rounded,
                     text: '지메일의 local-part 또는 전체 gmail.com 주소를 입력합니다.',
                   ),
@@ -340,19 +340,19 @@ class _PersonalSignUpDialogState extends State<PersonalSignUpDialog> {
                     suffixIcon: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: <Widget>[
-                        PromptIconButton(
+                        CommonIconButton(
                           icon: Icons.refresh_rounded,
                           tooltip: '비밀번호 재생성',
                           onPressed: _isSaving ? null : _regeneratePassword,
-                          haptic: PromptHaptic.selection,
+                          haptic: CommonHaptic.selection,
                           size: 40,
                           iconSize: 20,
                         ),
-                        PromptIconButton(
+                        CommonIconButton(
                           icon: Icons.copy_rounded,
                           tooltip: '비밀번호 복사',
                           onPressed: _isSaving ? null : _copyPassword,
-                          haptic: PromptHaptic.selection,
+                          haptic: CommonHaptic.selection,
                           size: 40,
                           iconSize: 20,
                         ),
@@ -360,7 +360,7 @@ class _PersonalSignUpDialogState extends State<PersonalSignUpDialog> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  _PromptSignUpInfo(
+                  _CommonSignUpInfo(
                     icon: Icons.key_rounded,
                     text: '생성된 5자리 번호는 개인형 로그인 비밀번호로 사용됩니다.',
                   ),
@@ -377,7 +377,7 @@ class _PersonalSignUpDialogState extends State<PersonalSignUpDialog> {
                         FocusScope.of(context).requestFocus(_divisionFocus),
                   ),
                   const SizedBox(height: 8),
-                  _PromptSignUpInfo(
+                  _CommonSignUpInfo(
                     icon: Icons.folder_outlined,
                     text: '계정 문서 ID는 전화번호와 지역을 조합해 생성됩니다.',
                   ),
@@ -398,7 +398,7 @@ class _PersonalSignUpDialogState extends State<PersonalSignUpDialog> {
                   ),
                   AnimatedSwitcher(
                     duration:
-                        reduceMotion ? Duration.zero : PromptUiMotion.component,
+                        reduceMotion ? Duration.zero : CommonUiMotion.component,
                     child: _errorMessage == null
                         ? const SizedBox.shrink(
                             key: ValueKey<String>('signup-error-hidden'),
@@ -411,7 +411,7 @@ class _PersonalSignUpDialogState extends State<PersonalSignUpDialog> {
                               decoration: BoxDecoration(
                                 color: tokens.dangerContainer,
                                 borderRadius: BorderRadius.circular(
-                                  PromptUiShapes.control,
+                                  CommonUiShapes.control,
                                 ),
                                 border: Border.all(
                                   color: tokens.danger.withOpacity(0.42),
@@ -447,21 +447,21 @@ class _PersonalSignUpDialogState extends State<PersonalSignUpDialog> {
           LayoutBuilder(
             builder: (context, constraints) {
               final narrow = constraints.maxWidth < 360;
-              final cancel = PromptButton(
+              final cancel = CommonButton(
                 label: '취소',
                 icon: Icons.close_rounded,
-                variant: PromptButtonVariant.tertiary,
+                variant: CommonButtonVariant.tertiary,
                 expand: true,
                 onPressed:
                     _isSaving ? null : () => Navigator.of(context).pop(false),
               );
-              final create = PromptButton(
+              final create = CommonButton(
                 label: _isSaving ? '생성 중' : '생성',
                 icon: Icons.check_rounded,
                 expand: true,
                 loading: _isSaving,
                 onPressed: _isSaving ? null : _create,
-                haptic: PromptHaptic.light,
+                haptic: CommonHaptic.light,
               );
               return narrow
                   ? Column(
@@ -486,8 +486,8 @@ class _PersonalSignUpDialogState extends State<PersonalSignUpDialog> {
   }
 }
 
-class _PromptSignUpInfo extends StatelessWidget {
-  const _PromptSignUpInfo({
+class _CommonSignUpInfo extends StatelessWidget {
+  const _CommonSignUpInfo({
     required this.icon,
     required this.text,
   });
@@ -497,12 +497,12 @@ class _PromptSignUpInfo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
       decoration: BoxDecoration(
         color: tokens.surfaceOverlay,
-        borderRadius: BorderRadius.circular(PromptUiShapes.control),
+        borderRadius: BorderRadius.circular(CommonUiShapes.control),
         border: Border.all(color: tokens.borderSubtle),
       ),
       child: Row(

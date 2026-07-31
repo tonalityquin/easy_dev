@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../../app/di/routes.dart';
 import '../../../dev/debug/debug_action_recorder.dart';
 import '../../controllers/triple/triple_login_controller.dart';
-import '../common/prompt_login_ui.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../common/common_login_ui.dart';
+import '../../../../design_system/common_ui/common_ui_components.dart';
 
 class TripleLoginForm extends StatefulWidget {
   const TripleLoginForm({super.key, required this.controller});
@@ -37,7 +37,7 @@ class _TripleLoginFormState extends State<TripleLoginForm> {
     if (!mounted) return;
     setState(() {});
     if (!success) {
-      await showPromptLoginFailure(context);
+      await showCommonLoginFailure(context);
     }
   }
 
@@ -82,11 +82,11 @@ class _TripleLoginFormState extends State<TripleLoginForm> {
 
   @override
   Widget build(BuildContext context) {
-    return PromptLoginScaffold(
-      spec: PromptLoginModeSpec.triple,
+    return CommonLoginScaffold(
+      spec: CommonLoginModeSpec.triple,
       onTopLogoPressed: _onTopCompanyLogoTapped,
       onFooterLogoPressed: _onFooterLogoTapped,
-      fields: PromptLoginFields(
+      fields: CommonLoginFields(
         nameController: _controller.nameController,
         nameFocus: _controller.nameFocus,
         accountController: _controller.phoneController,
@@ -104,15 +104,15 @@ class _TripleLoginFormState extends State<TripleLoginForm> {
         onSubmit: _onLoginButtonPressed,
         enabled: !_controller.isLoading,
       ),
-      actions: PromptAnimatedReveal(
+      actions: CommonAnimatedReveal(
         delay: const Duration(milliseconds: 240),
-        child: PromptButton(
+        child: CommonButton(
           label: _controller.isLoading ? '로그인 중' : '로그인',
           icon: Icons.login_rounded,
           expand: true,
           loading: _controller.isLoading,
           onPressed: _controller.isLoading ? null : _onLoginButtonPressed,
-          haptic: PromptHaptic.light,
+          haptic: CommonHaptic.light,
         ),
       ),
     );

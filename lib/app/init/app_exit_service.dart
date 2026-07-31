@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 
-import '../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../design_system/common_ui/common_ui_theme.dart';
 import '../../features/community/application/game/game_quick_actions.dart';
 import '../../features/dashboard/widgets/utils/productivity_tools.dart';
 import 'app_exit_flag.dart';
@@ -15,7 +15,7 @@ class AppExitService {
 
   static Future<void> exitApp(
     BuildContext context, {
-    bool usePromptUi = false,
+    bool useCommonUi = false,
   }) async {
     AppExitFlag.beginExit();
 
@@ -43,14 +43,14 @@ class AppExitService {
               _showFailure(
                 context,
                 '포그라운드 중지 실패(플러그인 반환값 false)',
-                usePromptUi: usePromptUi,
+                useCommonUi: useCommonUi,
               );
             }
           } catch (e) {
             _showFailure(
               context,
               '포그라운드 중지 실패: $e',
-              usePromptUi: usePromptUi,
+              useCommonUi: useCommonUi,
             );
           }
           await Future.delayed(const Duration(milliseconds: 150));
@@ -64,7 +64,7 @@ class AppExitService {
       _showFailure(
         context,
         '앱 종료 실패: $e',
-        usePromptUi: usePromptUi,
+        useCommonUi: useCommonUi,
       );
     }
   }
@@ -72,17 +72,17 @@ class AppExitService {
   static void _showFailure(
     BuildContext context,
     String message, {
-    required bool usePromptUi,
+    required bool useCommonUi,
   }) {
     final messenger = ScaffoldMessenger.maybeOf(context);
     if (messenger == null) return;
 
-    if (!usePromptUi) {
+    if (!useCommonUi) {
       messenger.showSnackBar(SnackBar(content: Text(message)));
       return;
     }
 
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final text = Theme.of(context).textTheme;
 
     messenger.showSnackBar(
@@ -91,7 +91,7 @@ class AppExitService {
         elevation: 0,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(PromptUiShapes.control),
+          borderRadius: BorderRadius.circular(CommonUiShapes.control),
           side: BorderSide(
             color: tokens.danger.withOpacity(tokens.isDark ? 0.58 : 0.36),
           ),

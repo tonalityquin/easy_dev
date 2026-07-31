@@ -50,7 +50,7 @@ class _BackEndControllerState extends State<BackEndController> {
       showSuccessSnackbar(
         context,
         '개발자 모드가 활성화되었습니다.',
-        usePromptUi: true,
+        useCommonUi: true,
       );
     }
   }
@@ -65,7 +65,7 @@ class _BackEndControllerState extends State<BackEndController> {
     showSelectedSnackbar(
       context,
       '개발자 모드가 비활성화되었습니다.',
-      usePromptUi: true,
+      useCommonUi: true,
     );
     final state = context.read<SecondaryState>();
     await state.refreshDeveloperLogin();
@@ -92,14 +92,14 @@ class _BackEndControllerState extends State<BackEndController> {
       showSuccessSnackbar(
         context,
         '정기 주차 View 재생성 완료: 지역 ${result.areaCount}개 / 정기권 ${result.itemCount}건 / 건너뜀 ${result.skippedCount}건 / 삭제 ${result.deletedViewCount}건',
-        usePromptUi: true,
+        useCommonUi: true,
       );
     } catch (error) {
       if (!mounted) return;
       showFailedSnackbar(
         context,
         '정기 주차 View 재생성에 실패했습니다. ${error.toString()}',
-        usePromptUi: true,
+        useCommonUi: true,
       );
     } finally {
       if (mounted) {

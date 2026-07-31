@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../design_system/common_ui/common_ui_components.dart';
+import '../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../design_system/common_ui/common_ui_theme.dart';
 
 enum ParkingCompletedOverrideChoice {
   proceed,
@@ -14,7 +14,7 @@ Future<ParkingCompletedOverrideChoice?> showParkingCompletedOverrideDialog({
   required BuildContext context,
   required String destinationLabel,
 }) {
-  return showPromptOverlayDialog<ParkingCompletedOverrideChoice>(
+  return showCommonOverlayDialog<ParkingCompletedOverrideChoice>(
     context: context,
     barrierDismissible: true,
     builder: (_) => _ParkingCompletedOverrideDialog(
@@ -32,11 +32,11 @@ class _ParkingCompletedOverrideDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
-    return PromptDialogFrame(
+    return CommonDialogFrame(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 430),
         child: Column(
@@ -51,7 +51,7 @@ class _ParkingCompletedOverrideDialog extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: tokens.warningContainer,
                     borderRadius:
-                        BorderRadius.circular(PromptUiShapes.control),
+                        BorderRadius.circular(CommonUiShapes.control),
                     border: Border.all(
                       color: tokens.warning.withOpacity(
                         tokens.isDark ? .58 : .36,
@@ -79,12 +79,12 @@ class _ParkingCompletedOverrideDialog extends StatelessWidget {
             ),
             const SizedBox(height: 18),
             AnimatedContainer(
-              duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
-              curve: PromptUiMotion.standard,
+              duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+              curve: CommonUiMotion.standard,
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: tokens.warningContainer,
-                borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                borderRadius: BorderRadius.circular(CommonUiShapes.control),
                 border: Border.all(
                   color: tokens.warning.withOpacity(
                     tokens.isDark ? .56 : .34,
@@ -113,36 +113,36 @@ class _ParkingCompletedOverrideDialog extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 18),
-            PromptButton(
+            CommonButton(
               label: '정산 화면으로 이동',
               icon: Icons.receipt_long_rounded,
               onPressed: () => Navigator.of(context).pop(
                 ParkingCompletedOverrideChoice.goBilling,
               ),
-              variant: PromptButtonVariant.primary,
+              variant: CommonButtonVariant.primary,
               expand: true,
-              haptic: PromptHaptic.selection,
+              haptic: CommonHaptic.selection,
             ),
             const SizedBox(height: 10),
-            PromptButton(
+            CommonButton(
               label: '정산 없이 $destinationLabel',
               icon: Icons.warning_amber_rounded,
               onPressed: () => Navigator.of(context).pop(
                 ParkingCompletedOverrideChoice.proceed,
               ),
-              variant: PromptButtonVariant.destructive,
+              variant: CommonButtonVariant.destructive,
               expand: true,
-              haptic: PromptHaptic.medium,
+              haptic: CommonHaptic.medium,
             ),
             const SizedBox(height: 8),
-            PromptButton(
+            CommonButton(
               label: '취소',
               onPressed: () => Navigator.of(context).pop(
                 ParkingCompletedOverrideChoice.cancel,
               ),
-              variant: PromptButtonVariant.tertiary,
+              variant: CommonButtonVariant.tertiary,
               expand: true,
-              haptic: PromptHaptic.selection,
+              haptic: CommonHaptic.selection,
             ),
           ],
         ),

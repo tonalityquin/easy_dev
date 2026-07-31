@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 
 @immutable
-class PromptLoginModeSpec {
-  const PromptLoginModeSpec({
+class CommonLoginModeSpec {
+  const CommonLoginModeSpec({
     required this.title,
     required this.subtitle,
     required this.badge,
@@ -18,42 +18,42 @@ class PromptLoginModeSpec {
   final String badge;
   final IconData icon;
 
-  static const PromptLoginModeSpec personal = PromptLoginModeSpec(
+  static const CommonLoginModeSpec personal = CommonLoginModeSpec(
     title: '개인형 로그인',
     subtitle: '모바일에서 직접 출차 요청을 진행하는 계정입니다.',
     badge: '개인형',
     icon: Icons.phone_iphone_rounded,
   );
 
-  static const PromptLoginModeSpec tablet = PromptLoginModeSpec(
+  static const CommonLoginModeSpec tablet = CommonLoginModeSpec(
     title: '태블릿형 로그인',
     subtitle: '태블릿 전용 계정으로 현장 업무 화면에 연결합니다.',
     badge: '태블릿형',
     icon: Icons.tablet_mac_rounded,
   );
 
-  static const PromptLoginModeSpec single = PromptLoginModeSpec(
+  static const CommonLoginModeSpec single = CommonLoginModeSpec(
     title: '출퇴근 기록형 로그인',
     subtitle: '출근, 퇴근과 휴게시간 기록 기능에 연결합니다.',
     badge: '출퇴근 기록형',
     icon: Icons.access_time_filled_rounded,
   );
 
-  static const PromptLoginModeSpec doubleMode = PromptLoginModeSpec(
+  static const CommonLoginModeSpec doubleMode = CommonLoginModeSpec(
     title: '경량형 로그인',
     subtitle: '입차 완료와 출차 완료 중심의 경량 업무에 연결합니다.',
     badge: '경량형',
     icon: Icons.bolt_rounded,
   );
 
-  static const PromptLoginModeSpec triple = PromptLoginModeSpec(
+  static const CommonLoginModeSpec triple = CommonLoginModeSpec(
     title: '기본형 로그인',
     subtitle: '입차 완료, 출차 요청과 출차 완료 업무에 연결합니다.',
     badge: '기본형',
     icon: Icons.apps_rounded,
   );
 
-  static const PromptLoginModeSpec minor = PromptLoginModeSpec(
+  static const CommonLoginModeSpec minor = CommonLoginModeSpec(
     title: '확장형 로그인',
     subtitle: '입차 요청부터 출차 완료까지 전체 업무에 연결합니다.',
     badge: '확장형',
@@ -62,8 +62,8 @@ class PromptLoginModeSpec {
 }
 
 
-class PromptLoginImageMetrics {
-  const PromptLoginImageMetrics._();
+class CommonLoginImageMetrics {
+  const CommonLoginImageMetrics._();
 
   static const Size topLogo = Size(180, 138);
   static const Size footerLogo = Size(160, 52);
@@ -77,8 +77,8 @@ class PromptLoginImageMetrics {
   );
 }
 
-class PromptLoginScaffold extends StatelessWidget {
-  const PromptLoginScaffold({
+class CommonLoginScaffold extends StatelessWidget {
+  const CommonLoginScaffold({
     super.key,
     required this.spec,
     required this.fields,
@@ -89,7 +89,7 @@ class PromptLoginScaffold extends StatelessWidget {
     this.topTrailing,
   });
 
-  final PromptLoginModeSpec spec;
+  final CommonLoginModeSpec spec;
   final Widget fields;
   final Widget actions;
   final VoidCallback onTopLogoPressed;
@@ -99,7 +99,7 @@ class PromptLoginScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final media = MediaQuery.of(context);
     final keyboardOpen = media.viewInsets.bottom > 0;
     final compact = media.size.height < 720;
@@ -125,17 +125,17 @@ class PromptLoginScaffold extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: <Widget>[
-                      PromptAnimatedReveal(
-                        duration: PromptUiMotion.layout,
-                        child: _PromptLoginBrandHeader(
+                      CommonAnimatedReveal(
+                        duration: CommonUiMotion.layout,
+                        child: _CommonLoginBrandHeader(
                           onPressed: onTopLogoPressed,
                         ),
                       ),
                       SizedBox(height: compact ? 14 : 20),
-                      PromptAnimatedReveal(
+                      CommonAnimatedReveal(
                         delay: const Duration(milliseconds: 70),
-                        duration: PromptUiMotion.layout,
-                        child: _PromptLoginCard(
+                        duration: CommonUiMotion.layout,
+                        child: _CommonLoginCard(
                           spec: spec,
                           status: status,
                           topTrailing: topTrailing,
@@ -146,15 +146,15 @@ class PromptLoginScaffold extends StatelessWidget {
                       AnimatedSize(
                         duration: reduceMotion
                             ? Duration.zero
-                            : PromptUiMotion.component,
-                        curve: PromptUiMotion.standard,
+                            : CommonUiMotion.component,
+                        curve: CommonUiMotion.standard,
                         child: keyboardOpen
                             ? const SizedBox(height: 8)
                             : Padding(
                                 padding: const EdgeInsets.only(top: 14),
-                                child: PromptAnimatedReveal(
+                                child: CommonAnimatedReveal(
                                   delay: const Duration(milliseconds: 150),
-                                  child: _PromptLoginFooterLogo(
+                                  child: _CommonLoginFooterLogo(
                                     onPressed: onFooterLogoPressed,
                                   ),
                                 ),
@@ -172,25 +172,25 @@ class PromptLoginScaffold extends StatelessWidget {
   }
 }
 
-class _PromptLoginBrandHeader extends StatelessWidget {
-  const _PromptLoginBrandHeader({required this.onPressed});
+class _CommonLoginBrandHeader extends StatelessWidget {
+  const _CommonLoginBrandHeader({required this.onPressed});
 
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
-    return _PromptLoginImageButton(
+    return _CommonLoginImageButton(
       semanticsLabel: 'ParkinWorkin 로고',
       assetPath: 'assets/images/ParkinWorkin_logo.png',
-      frameSize: PromptLoginImageMetrics.topLogo,
-      touchPadding: PromptLoginImageMetrics.topTouchPadding,
+      frameSize: CommonLoginImageMetrics.topLogo,
+      touchPadding: CommonLoginImageMetrics.topTouchPadding,
       onPressed: onPressed,
     );
   }
 }
 
-class _PromptLoginCard extends StatelessWidget {
-  const _PromptLoginCard({
+class _CommonLoginCard extends StatelessWidget {
+  const _CommonLoginCard({
     required this.spec,
     required this.fields,
     required this.actions,
@@ -198,7 +198,7 @@ class _PromptLoginCard extends StatelessWidget {
     required this.topTrailing,
   });
 
-  final PromptLoginModeSpec spec;
+  final CommonLoginModeSpec spec;
   final Widget fields;
   final Widget actions;
   final Widget? status;
@@ -206,16 +206,16 @@ class _PromptLoginCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
     return AnimatedContainer(
-      duration: reduceMotion ? Duration.zero : PromptUiMotion.component,
-      curve: PromptUiMotion.standard,
+      duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
+      curve: CommonUiMotion.standard,
       decoration: BoxDecoration(
         color: tokens.surfaceRaised,
-        borderRadius: BorderRadius.circular(PromptUiShapes.card),
+        borderRadius: BorderRadius.circular(CommonUiShapes.card),
         border: Border.all(color: tokens.borderSubtle),
         boxShadow: <BoxShadow>[
           BoxShadow(
@@ -226,7 +226,7 @@ class _PromptLoginCard extends StatelessWidget {
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(PromptUiShapes.card),
+        borderRadius: BorderRadius.circular(CommonUiShapes.card),
         child: Stack(
           children: <Widget>[
             Padding(
@@ -243,7 +243,7 @@ class _PromptLoginCard extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: tokens.accentContainer,
                           borderRadius:
-                              BorderRadius.circular(PromptUiShapes.control),
+                              BorderRadius.circular(CommonUiShapes.control),
                           border: Border.all(
                             color: tokens.accent.withOpacity(
                               tokens.isDark ? 0.62 : 0.42,
@@ -261,7 +261,7 @@ class _PromptLoginCard extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: <Widget>[
-                            _PromptLoginBadge(label: spec.badge),
+                            _CommonLoginBadge(label: spec.badge),
                             const SizedBox(height: 8),
                             Text(
                               spec.title,
@@ -306,19 +306,19 @@ class _PromptLoginCard extends StatelessWidget {
   }
 }
 
-class _PromptLoginBadge extends StatelessWidget {
-  const _PromptLoginBadge({required this.label});
+class _CommonLoginBadge extends StatelessWidget {
+  const _CommonLoginBadge({required this.label});
 
   final String label;
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
         color: tokens.surfaceOverlay,
-        borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+        borderRadius: BorderRadius.circular(CommonUiShapes.pill),
         border: Border.all(color: tokens.borderSubtle),
       ),
       child: Row(
@@ -350,25 +350,25 @@ class _PromptLoginBadge extends StatelessWidget {
   }
 }
 
-class _PromptLoginFooterLogo extends StatelessWidget {
-  const _PromptLoginFooterLogo({required this.onPressed});
+class _CommonLoginFooterLogo extends StatelessWidget {
+  const _CommonLoginFooterLogo({required this.onPressed});
 
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
-    return _PromptLoginImageButton(
+    return _CommonLoginImageButton(
       semanticsLabel: '허브로 돌아가기',
       assetPath: 'assets/images/ParkinWorkin_text.png',
-      frameSize: PromptLoginImageMetrics.footerLogo,
-      touchPadding: PromptLoginImageMetrics.footerTouchPadding,
+      frameSize: CommonLoginImageMetrics.footerLogo,
+      touchPadding: CommonLoginImageMetrics.footerTouchPadding,
       onPressed: onPressed,
     );
   }
 }
 
-class _PromptLoginImageButton extends StatefulWidget {
-  const _PromptLoginImageButton({
+class _CommonLoginImageButton extends StatefulWidget {
+  const _CommonLoginImageButton({
     required this.semanticsLabel,
     required this.assetPath,
     required this.frameSize,
@@ -383,21 +383,21 @@ class _PromptLoginImageButton extends StatefulWidget {
   final VoidCallback onPressed;
 
   @override
-  State<_PromptLoginImageButton> createState() =>
-      _PromptLoginImageButtonState();
+  State<_CommonLoginImageButton> createState() =>
+      _CommonLoginImageButtonState();
 }
 
-class _PromptLoginImageButtonState extends State<_PromptLoginImageButton> {
+class _CommonLoginImageButtonState extends State<_CommonLoginImageButton> {
   bool _hovered = false;
   bool _focused = false;
   bool _pressed = false;
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final active = _hovered || _focused;
-    final duration = reduceMotion ? Duration.zero : PromptUiMotion.press;
+    final duration = reduceMotion ? Duration.zero : CommonUiMotion.press;
     final borderColor = _focused ? tokens.focusRing : tokens.transparent;
     final backgroundColor = active ? tokens.surfaceOverlay : tokens.transparent;
 
@@ -407,10 +407,10 @@ class _PromptLoginImageButtonState extends State<_PromptLoginImageButton> {
       child: Center(
         child: AnimatedContainer(
           duration: duration,
-          curve: PromptUiMotion.standard,
+          curve: CommonUiMotion.standard,
           decoration: BoxDecoration(
             color: backgroundColor,
-            borderRadius: BorderRadius.circular(PromptUiShapes.card),
+            borderRadius: BorderRadius.circular(CommonUiShapes.card),
             border: Border.all(
               color: borderColor,
               width: _focused ? 2 : 1,
@@ -418,7 +418,7 @@ class _PromptLoginImageButtonState extends State<_PromptLoginImageButton> {
           ),
           child: Material(
             color: tokens.transparent,
-            borderRadius: BorderRadius.circular(PromptUiShapes.card),
+            borderRadius: BorderRadius.circular(CommonUiShapes.card),
             clipBehavior: Clip.antiAlias,
             child: InkWell(
               onTap: () {
@@ -437,7 +437,7 @@ class _PromptLoginImageButtonState extends State<_PromptLoginImageButton> {
                 if (_pressed == value) return;
                 setState(() => _pressed = value);
               },
-              borderRadius: BorderRadius.circular(PromptUiShapes.card),
+              borderRadius: BorderRadius.circular(CommonUiShapes.card),
               child: Padding(
                 padding: widget.touchPadding,
                 child: SizedBox.fromSize(
@@ -445,9 +445,9 @@ class _PromptLoginImageButtonState extends State<_PromptLoginImageButton> {
                   child: Center(
                     child: AnimatedScale(
                       duration: duration,
-                      curve: PromptUiMotion.standard,
+                      curve: CommonUiMotion.standard,
                       scale: _pressed ? 0.97 : 1,
-                      child: _PromptTintedImage(
+                      child: _CommonTintedImage(
                         assetPath: widget.assetPath,
                         width: widget.frameSize.width,
                         height: widget.frameSize.height,
@@ -467,8 +467,8 @@ class _PromptLoginImageButtonState extends State<_PromptLoginImageButton> {
   }
 }
 
-class _PromptTintedImage extends StatelessWidget {
-  const _PromptTintedImage({
+class _CommonTintedImage extends StatelessWidget {
+  const _CommonTintedImage({
     required this.assetPath,
     required this.width,
     required this.height,
@@ -510,13 +510,13 @@ double _contrastRatio(Color a, Color b) {
   return (lighter + 0.05) / (darker + 0.05);
 }
 
-InputDecoration promptLoginInputDecoration(
+InputDecoration commonLoginInputDecoration(
   BuildContext context, {
   required String label,
   required IconData icon,
   Widget? suffixIcon,
 }) {
-  final tokens = PromptUiTheme.of(context);
+  final tokens = CommonUiTheme.of(context);
   return InputDecoration(
     labelText: label,
     prefixIcon: Icon(icon),
@@ -525,34 +525,34 @@ InputDecoration promptLoginInputDecoration(
     fillColor: tokens.surface,
     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
     border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(PromptUiShapes.control),
+      borderRadius: BorderRadius.circular(CommonUiShapes.control),
       borderSide: BorderSide(color: tokens.borderSubtle),
     ),
     enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(PromptUiShapes.control),
+      borderRadius: BorderRadius.circular(CommonUiShapes.control),
       borderSide: BorderSide(color: tokens.borderSubtle),
     ),
     focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(PromptUiShapes.control),
+      borderRadius: BorderRadius.circular(CommonUiShapes.control),
       borderSide: BorderSide(color: tokens.focusRing, width: 2),
     ),
     disabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(PromptUiShapes.control),
+      borderRadius: BorderRadius.circular(CommonUiShapes.control),
       borderSide: BorderSide(color: tokens.borderSubtle),
     ),
     errorBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(PromptUiShapes.control),
+      borderRadius: BorderRadius.circular(CommonUiShapes.control),
       borderSide: BorderSide(color: tokens.danger),
     ),
     focusedErrorBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(PromptUiShapes.control),
+      borderRadius: BorderRadius.circular(CommonUiShapes.control),
       borderSide: BorderSide(color: tokens.danger, width: 2),
     ),
   );
 }
 
-class PromptLoginFields extends StatelessWidget {
-  const PromptLoginFields({
+class CommonLoginFields extends StatelessWidget {
+  const CommonLoginFields({
     super.key,
     required this.nameController,
     required this.nameFocus,
@@ -602,7 +602,7 @@ class PromptLoginFields extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        PromptAnimatedReveal(
+        CommonAnimatedReveal(
           delay: const Duration(milliseconds: 90),
           child: TextField(
             controller: nameController,
@@ -610,7 +610,7 @@ class PromptLoginFields extends StatelessWidget {
             enabled: enabled,
             textInputAction: TextInputAction.next,
             onSubmitted: (_) => FocusScope.of(context).requestFocus(accountFocus),
-            decoration: promptLoginInputDecoration(
+            decoration: commonLoginInputDecoration(
               context,
               label: '이름',
               icon: Icons.person_rounded,
@@ -618,7 +618,7 @@ class PromptLoginFields extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 14),
-        PromptAnimatedReveal(
+        CommonAnimatedReveal(
           delay: const Duration(milliseconds: 140),
           child: TextField(
             controller: accountController,
@@ -632,7 +632,7 @@ class PromptLoginFields extends StatelessWidget {
             onChanged: onAccountChanged,
             onSubmitted: (_) =>
                 FocusScope.of(context).requestFocus(passwordFocus),
-            decoration: promptLoginInputDecoration(
+            decoration: commonLoginInputDecoration(
               context,
               label: accountLabel,
               icon: accountIcon,
@@ -640,7 +640,7 @@ class PromptLoginFields extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 14),
-        PromptAnimatedReveal(
+        CommonAnimatedReveal(
           delay: const Duration(milliseconds: 190),
           child: TextField(
             controller: passwordController,
@@ -651,19 +651,19 @@ class PromptLoginFields extends StatelessWidget {
             inputFormatters: passwordInputFormatters,
             textInputAction: TextInputAction.done,
             onSubmitted: (_) => onSubmit(),
-            decoration: promptLoginInputDecoration(
+            decoration: commonLoginInputDecoration(
               context,
               label: passwordLabel,
               icon: Icons.lock_rounded,
               suffixIcon: Padding(
                 padding: const EdgeInsets.all(4),
-                child: PromptIconButton(
+                child: CommonIconButton(
                   icon: obscurePassword
                       ? Icons.visibility_off_rounded
                       : Icons.visibility_rounded,
                   tooltip: obscurePassword ? '비밀번호 표시' : '비밀번호 숨기기',
                   onPressed: enabled ? onTogglePassword : null,
-                  haptic: PromptHaptic.selection,
+                  haptic: CommonHaptic.selection,
                   size: 40,
                   iconSize: 20,
                 ),
@@ -676,8 +676,8 @@ class PromptLoginFields extends StatelessWidget {
   }
 }
 
-class PromptLoginStatusBanner extends StatelessWidget {
-  const PromptLoginStatusBanner({
+class CommonLoginStatusBanner extends StatelessWidget {
+  const CommonLoginStatusBanner({
     super.key,
     required this.visible,
     required this.message,
@@ -688,12 +688,12 @@ class PromptLoginStatusBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     return AnimatedSwitcher(
-      duration: reduceMotion ? Duration.zero : PromptUiMotion.component,
-      switchInCurve: PromptUiMotion.enter,
-      switchOutCurve: PromptUiMotion.exit,
+      duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
+      switchInCurve: CommonUiMotion.enter,
+      switchOutCurve: CommonUiMotion.exit,
       transitionBuilder: (child, animation) {
         return FadeTransition(
           opacity: animation,
@@ -707,7 +707,7 @@ class PromptLoginStatusBanner extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               decoration: BoxDecoration(
                 color: tokens.successContainer,
-                borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                borderRadius: BorderRadius.circular(CommonUiShapes.control),
                 border: Border.all(
                   color: tokens.success.withOpacity(tokens.isDark ? 0.62 : 0.38),
                 ),
@@ -739,14 +739,14 @@ class PromptLoginStatusBanner extends StatelessWidget {
   }
 }
 
-void showPromptLoginSnack(
+void showCommonLoginSnack(
   BuildContext context, {
   required String message,
   required bool success,
 }) {
   final messenger = ScaffoldMessenger.maybeOf(context);
   if (messenger == null) return;
-  final tokens = PromptUiTheme.of(context);
+  final tokens = CommonUiTheme.of(context);
   messenger.clearSnackBars();
   messenger.showSnackBar(
     SnackBar(
@@ -774,7 +774,7 @@ void showPromptLoginSnack(
         ],
       ),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(PromptUiShapes.control),
+        borderRadius: BorderRadius.circular(CommonUiShapes.control),
         side: BorderSide(
           color: success
               ? tokens.success.withOpacity(0.42)
@@ -785,7 +785,7 @@ void showPromptLoginSnack(
   );
 }
 
-Future<void> showPromptLoginFailure(
+Future<void> showCommonLoginFailure(
   BuildContext context, {
   String title = '로그인 실패',
   String? description,
@@ -793,7 +793,7 @@ Future<void> showPromptLoginFailure(
   String copyButtonLabel = '실패 내용 복사',
 }) async {
   if (!context.mounted) return;
-  final tokens = PromptUiTheme.of(context);
+  final tokens = CommonUiTheme.of(context);
   final navigator = Navigator.of(context, rootNavigator: true);
   final hasCopy = copyText != null && copyText.trim().isNotEmpty;
   final route = RawDialogRoute<void>(
@@ -802,9 +802,9 @@ Future<void> showPromptLoginFailure(
     barrierColor: tokens.scrim,
     transitionDuration: Duration.zero,
     pageBuilder: (dialogContext, _, __) {
-      return PromptUiScope(
-        child: PromptDialogFrame(
-          child: _PromptLoginFailureContent(
+      return CommonUiScope(
+        child: CommonDialogFrame(
+          child: _CommonLoginFailureContent(
             title: title,
             description: description,
             copyText: copyText,
@@ -824,8 +824,8 @@ Future<void> showPromptLoginFailure(
   }
 }
 
-class _PromptLoginFailureContent extends StatefulWidget {
-  const _PromptLoginFailureContent({
+class _CommonLoginFailureContent extends StatefulWidget {
+  const _CommonLoginFailureContent({
     required this.title,
     required this.description,
     required this.copyText,
@@ -838,17 +838,17 @@ class _PromptLoginFailureContent extends StatefulWidget {
   final String copyButtonLabel;
 
   @override
-  State<_PromptLoginFailureContent> createState() =>
-      _PromptLoginFailureContentState();
+  State<_CommonLoginFailureContent> createState() =>
+      _CommonLoginFailureContentState();
 }
 
-class _PromptLoginFailureContentState
-    extends State<_PromptLoginFailureContent> {
+class _CommonLoginFailureContentState
+    extends State<_CommonLoginFailureContent> {
   bool _copied = false;
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final description = widget.description?.trim() ?? '';
     final copyText = widget.copyText?.trim() ?? '';
@@ -903,24 +903,24 @@ class _PromptLoginFailureContentState
           ],
           const SizedBox(height: 18),
           if (copyText.isNotEmpty) ...<Widget>[
-            PromptButton(
+            CommonButton(
               label: _copied ? '복사 완료' : widget.copyButtonLabel,
               icon: _copied ? Icons.check_rounded : Icons.copy_rounded,
-              variant: PromptButtonVariant.secondary,
+              variant: CommonButtonVariant.secondary,
               expand: true,
               onPressed: () async {
                 await Clipboard.setData(ClipboardData(text: copyText));
                 if (!mounted) return;
                 setState(() => _copied = true);
               },
-              haptic: PromptHaptic.selection,
+              haptic: CommonHaptic.selection,
             ),
             const SizedBox(height: 10),
           ],
-          PromptButton(
+          CommonButton(
             label: '닫기',
             icon: Icons.close_rounded,
-            variant: PromptButtonVariant.tertiary,
+            variant: CommonButtonVariant.tertiary,
             expand: true,
             onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
           ),

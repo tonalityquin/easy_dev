@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../domain/monthly_parking_options.dart';
-import '../../widgets/monthly_prompt_ui.dart';
+import '../../widgets/monthly_common_ui.dart';
 
 class MonthlyBillSection extends StatelessWidget {
   const MonthlyBillSection({
@@ -31,17 +31,17 @@ class MonthlyBillSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final regularTypeOptions = MonthlyParkingOptions.regularTypes;
 
-    return MonthlyPromptSection(
+    return MonthlyCommonSection(
       title: '상품과 정산',
       subtitle: '정기권 이름, 타입, 요금과 적용 기간을 설정합니다.',
       icon: Icons.receipt_long_outlined,
       delay: const Duration(milliseconds: 55),
       trailing: isEditMode
-          ? const MonthlyPromptBadge(
+          ? const MonthlyCommonBadge(
               label: '수정',
               icon: Icons.edit_outlined,
             )
@@ -57,7 +57,7 @@ class MonthlyBillSection extends StatelessWidget {
               color: isEditMode ? tokens.textDisabled : tokens.textPrimary,
               fontWeight: FontWeight.w700,
             ),
-            decoration: monthlyPromptInputDecoration(
+            decoration: monthlyCommonInputDecoration(
               context,
               label: '정기 정산 이름',
               enabled: !isEditMode,
@@ -74,7 +74,7 @@ class MonthlyBillSection extends StatelessWidget {
                   value: regularTypeOptions.contains(selectedType)
                       ? selectedType
                       : null,
-                  decoration: monthlyPromptInputDecoration(
+                  decoration: monthlyCommonInputDecoration(
                     context,
                     label: '주차 타입',
                   ),
@@ -98,7 +98,7 @@ class MonthlyBillSection extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: InputDecorator(
-                  decoration: monthlyPromptInputDecoration(
+                  decoration: monthlyCommonInputDecoration(
                     context,
                     label: '기간 단위',
                     enabled: false,
@@ -132,7 +132,7 @@ class MonthlyBillSection extends StatelessWidget {
                     color: tokens.textPrimary,
                     fontWeight: FontWeight.w700,
                   ),
-                  decoration: monthlyPromptInputDecoration(
+                  decoration: monthlyCommonInputDecoration(
                     context,
                     label: '기간',
                     suffixText: selectedPeriodUnit,
@@ -149,7 +149,7 @@ class MonthlyBillSection extends StatelessWidget {
                     color: tokens.textPrimary,
                     fontWeight: FontWeight.w700,
                   ),
-                  decoration: monthlyPromptInputDecoration(
+                  decoration: monthlyCommonInputDecoration(
                     context,
                     label: '정기 요금',
                     suffixText: '원',

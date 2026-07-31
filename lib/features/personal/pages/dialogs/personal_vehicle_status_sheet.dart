@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 
 import '../../../../app/utils/dev_firebase_debug_dialog.dart';
 import '../../../../shared/plate/application/common/movement_plate.dart';
@@ -12,7 +12,7 @@ import '../../../../shared/plate/domain/models/plate_model.dart';
 import '../../application/personal_saved_vehicle_store.dart';
 import '../../application/personal_vehicle_status_service.dart';
 import '../../domain/models/personal_saved_vehicle.dart';
-import '../widgets/personal_prompt_components.dart';
+import '../widgets/personal_common_components.dart';
 import '../widgets/personal_vehicle_timeline.dart';
 import 'personal_departure_success_dialog.dart';
 
@@ -22,7 +22,7 @@ Future<bool?> showPersonalVehicleStatusSheet({
   required String area,
   PlateModel? initialPlate,
 }) {
-  return showPromptOverlayBottomSheet<bool>(
+  return showCommonOverlayBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
@@ -87,7 +87,7 @@ class _PersonalVehicleStatusSheetState extends State<PersonalVehicleStatusSheet>
         operation: 'personal.vehicleStatusSheet.refresh',
         error: e,
         stackTrace: st,
-        usePromptUi: true,
+        useCommonUi: true,
         details: <String, Object?>{
           'area': widget.area,
           'vehicleId': widget.vehicle.id,
@@ -127,7 +127,7 @@ class _PersonalVehicleStatusSheetState extends State<PersonalVehicleStatusSheet>
         operation: 'personal.departureRequest.submit',
         error: e,
         stackTrace: st,
-        usePromptUi: true,
+        useCommonUi: true,
         details: <String, Object?>{
           'collection': 'plates',
           'plateNumber': plate.plateNumber,
@@ -151,7 +151,7 @@ class _PersonalVehicleStatusSheetState extends State<PersonalVehicleStatusSheet>
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final mediaQuery = MediaQuery.of(context);
     final maxHeight = mediaQuery.size.height * .90;
@@ -161,7 +161,7 @@ class _PersonalVehicleStatusSheetState extends State<PersonalVehicleStatusSheet>
 
     return ConstrainedBox(
       constraints: BoxConstraints(maxHeight: maxHeight),
-      child: PromptSheetScaffold(
+      child: CommonSheetScaffold(
         title: widget.vehicle.displayPlate,
         icon: Icons.directions_car_filled_rounded,
         onClose: _requesting ? () {} : () => Navigator.of(context).pop(false),
@@ -184,7 +184,7 @@ class _PersonalVehicleStatusSheetState extends State<PersonalVehicleStatusSheet>
                             ),
                           ),
                         ),
-                        PersonalPromptStatusPill(
+                        PersonalCommonStatusPill(
                           label: _loading
                               ? '확인 중'
                               : _statusLabel(type),
@@ -201,7 +201,7 @@ class _PersonalVehicleStatusSheetState extends State<PersonalVehicleStatusSheet>
                       ],
                     ),
                     const SizedBox(height: 14),
-                    PersonalPromptAnimatedSwap(
+                    PersonalCommonAnimatedSwap(
                       stateKey: '${_loading}_${_error ?? ''}_${plate?.id ?? ''}',
                       alignment: Alignment.topCenter,
                       child: _StatusHero(
@@ -212,15 +212,15 @@ class _PersonalVehicleStatusSheetState extends State<PersonalVehicleStatusSheet>
                     ),
                     if (plate != null) ...<Widget>[
                       const SizedBox(height: 14),
-                      PromptAnimatedReveal(child: _InfoGrid(plate: plate)),
+                      CommonAnimatedReveal(child: _InfoGrid(plate: plate)),
                       const SizedBox(height: 14),
-                      PersonalPromptPanel(
+                      PersonalCommonPanel(
                         padding: EdgeInsets.zero,
                         child: SizedBox(
                           height: 260,
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(
-                              PromptUiShapes.card,
+                              CommonUiShapes.card,
                             ),
                             child: PersonalDepartureRequestFocusedGrid(
                               area: plate.area,
@@ -232,7 +232,7 @@ class _PersonalVehicleStatusSheetState extends State<PersonalVehicleStatusSheet>
                         ),
                       ),
                       const SizedBox(height: 14),
-                      PromptAnimatedReveal(
+                      CommonAnimatedReveal(
                         delay: const Duration(milliseconds: 40),
                         child: PersonalVehicleTimeline(plate: plate),
                       ),
@@ -260,22 +260,22 @@ class _PersonalVehicleStatusSheetState extends State<PersonalVehicleStatusSheet>
               child: Row(
                 children: <Widget>[
                   Expanded(
-                    child: PromptButton(
+                    child: CommonButton(
                       label: '상태 새로고침',
                       icon: Icons.refresh_rounded,
                       loading: _loading,
-                      variant: PromptButtonVariant.secondary,
-                      haptic: PromptHaptic.selection,
+                      variant: CommonButtonVariant.secondary,
+                      haptic: CommonHaptic.selection,
                       onPressed: _requesting ? null : _refresh,
                     ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: PromptButton(
+                    child: CommonButton(
                       label: _requesting ? '요청 중' : '출차 요청하기',
                       icon: Icons.near_me_rounded,
                       loading: _requesting,
-                      haptic: PromptHaptic.medium,
+                      haptic: CommonHaptic.medium,
                       onPressed: canRequest && !_requesting
                           ? _requestDeparture
                           : null,
@@ -445,11 +445,11 @@ class _EmptyStatusCard extends StatelessWidget {
             style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700, height: 1.35),
           ),
           const SizedBox(height: 12),
-          PromptButton(
+          CommonButton(
             label: '다시 확인',
             icon: Icons.refresh_rounded,
-            variant: PromptButtonVariant.secondary,
-            haptic: PromptHaptic.selection,
+            variant: CommonButtonVariant.secondary,
+            haptic: CommonHaptic.selection,
             onPressed: onRefresh,
           ),
         ],
@@ -508,7 +508,7 @@ IconData _statusIcon(PlateType? type, {required bool loading, required bool erro
 }
 
 Color _statusForeground(
-  PromptUiTokens tokens,
+  CommonUiTokens tokens,
   PlateType? type, {
   required bool loading,
   required bool error,
@@ -530,7 +530,7 @@ Color _statusForeground(
 }
 
 Color _statusBackground(
-  PromptUiTokens tokens,
+  CommonUiTokens tokens,
   PlateType? type, {
   required bool loading,
   required bool error,

@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../application/personal_calendar_store.dart';
 import '../../domain/models/personal_calendar_event.dart';
-import '../widgets/personal_prompt_components.dart';
+import '../widgets/personal_common_components.dart';
 
 Future<bool?> showPersonalCalendarDialog(BuildContext context) {
-  return showPromptOverlayDialog<bool>(
+  return showCommonOverlayDialog<bool>(
     context: context,
     builder: (_) => const PersonalCalendarDialog(),
   );
@@ -49,7 +49,7 @@ class _PersonalCalendarDialogState extends State<PersonalCalendarDialog> {
   }
 
   Future<void> _add() async {
-    final event = await showPromptOverlayDialog<PersonalCalendarEvent>(
+    final event = await showCommonOverlayDialog<PersonalCalendarEvent>(
       context: context,
       builder: (_) => _CalendarEventEditorDialog(initialDate: _selectedDay),
     );
@@ -77,7 +77,7 @@ class _PersonalCalendarDialogState extends State<PersonalCalendarDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final size = MediaQuery.sizeOf(context);
     final selectedEvents = _events
@@ -89,7 +89,7 @@ class _PersonalCalendarDialogState extends State<PersonalCalendarDialog> {
       backgroundColor: tokens.surfaceRaised,
       surfaceTintColor: tokens.transparent,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(PromptUiShapes.dialog),
+        borderRadius: BorderRadius.circular(CommonUiShapes.dialog),
         side: BorderSide(color: tokens.borderSubtle),
       ),
       child: SafeArea(
@@ -112,7 +112,7 @@ class _PersonalCalendarDialogState extends State<PersonalCalendarDialog> {
                     decoration: BoxDecoration(
                       color: tokens.accentContainer,
                       borderRadius: BorderRadius.circular(
-                        PromptUiShapes.control,
+                        CommonUiShapes.control,
                       ),
                     ),
                     child: Icon(
@@ -130,18 +130,18 @@ class _PersonalCalendarDialogState extends State<PersonalCalendarDialog> {
                       ),
                     ),
                   ),
-                  PersonalPromptStatusPill(
+                  PersonalCommonStatusPill(
                     label: '${_events.length}개 일정',
                     foreground: tokens.statusMonthlyParking,
                     background: tokens.statusMonthlyParkingContainer,
                     icon: Icons.event_available_rounded,
                   ),
                   const SizedBox(width: 6),
-                  PromptIconButton(
+                  CommonIconButton(
                     icon: Icons.close_rounded,
                     tooltip: '닫기',
                     onPressed: () => Navigator.of(context).pop(false),
-                    haptic: PromptHaptic.selection,
+                    haptic: CommonHaptic.selection,
                   ),
                 ],
               ),
@@ -149,12 +149,12 @@ class _PersonalCalendarDialogState extends State<PersonalCalendarDialog> {
               Divider(height: 1, color: tokens.borderSubtle),
               const SizedBox(height: 14),
               Flexible(
-                child: PersonalPromptAnimatedSwap(
+                child: PersonalCommonAnimatedSwap(
                   stateKey: _loading ? 'loading' : 'calendar',
                   alignment: Alignment.topCenter,
                   child: _loading
                       ? const Center(
-                          child: PersonalPromptLoadingState(
+                          child: PersonalCommonLoadingState(
                             label: '일정을 불러오는 중입니다.',
                           ),
                         )
@@ -162,24 +162,24 @@ class _PersonalCalendarDialogState extends State<PersonalCalendarDialog> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: <Widget>[
-                              PersonalPromptPanel(
+                              PersonalCommonPanel(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 8,
                                   vertical: 8,
                                 ),
                                 child: Row(
                                   children: <Widget>[
-                                    PromptIconButton(
+                                    CommonIconButton(
                                       icon: Icons.chevron_left_rounded,
                                       tooltip: '이전 달',
                                       onPressed: () => _moveMonth(-1),
-                                      haptic: PromptHaptic.selection,
+                                      haptic: CommonHaptic.selection,
                                     ),
                                     Expanded(
                                       child: AnimatedSwitcher(
-                                        duration: personalPromptDuration(
+                                        duration: personalCommonDuration(
                                           context,
-                                          PromptUiMotion.selection,
+                                          CommonUiMotion.selection,
                                         ),
                                         child: Text(
                                           '${_visibleMonth.year}년 ${_visibleMonth.month}월',
@@ -194,11 +194,11 @@ class _PersonalCalendarDialogState extends State<PersonalCalendarDialog> {
                                         ),
                                       ),
                                     ),
-                                    PromptIconButton(
+                                    CommonIconButton(
                                       icon: Icons.chevron_right_rounded,
                                       tooltip: '다음 달',
                                       onPressed: () => _moveMonth(1),
-                                      haptic: PromptHaptic.selection,
+                                      haptic: CommonHaptic.selection,
                                     ),
                                   ],
                                 ),
@@ -225,7 +225,7 @@ class _PersonalCalendarDialogState extends State<PersonalCalendarDialog> {
                                       ),
                                     ),
                                   ),
-                                  PersonalPromptStatusPill(
+                                  PersonalCommonStatusPill(
                                     label: '${selectedEvents.length}개',
                                     foreground: tokens.statusSynchronized,
                                     background:
@@ -234,12 +234,12 @@ class _PersonalCalendarDialogState extends State<PersonalCalendarDialog> {
                                 ],
                               ),
                               const SizedBox(height: 8),
-                              PersonalPromptAnimatedSwap(
+                              PersonalCommonAnimatedSwap(
                                 stateKey:
                                     '${_selectedDay.millisecondsSinceEpoch}-${selectedEvents.length}',
                                 alignment: Alignment.topCenter,
                                 child: selectedEvents.isEmpty
-                                    ? const PersonalPromptEmptyState(
+                                    ? const PersonalCommonEmptyState(
                                         icon: Icons.event_busy_rounded,
                                         title: '이 날 등록된 일정이 없습니다.',
                                       )
@@ -252,7 +252,7 @@ class _PersonalCalendarDialogState extends State<PersonalCalendarDialog> {
                                                 padding: const EdgeInsets.only(
                                                   bottom: 8,
                                                 ),
-                                                child: PromptAnimatedReveal(
+                                                child: CommonAnimatedReveal(
                                                   key: ValueKey<String>(
                                                     entry.value.id,
                                                   ),
@@ -260,7 +260,7 @@ class _PersonalCalendarDialogState extends State<PersonalCalendarDialog> {
                                                     milliseconds:
                                                         entry.key * 24,
                                                   ),
-                                                  child: PersonalPromptPanel(
+                                                  child: PersonalCommonPanel(
                                                     padding:
                                                         const EdgeInsets.all(4),
                                                     child: ListTile(
@@ -288,14 +288,14 @@ class _PersonalCalendarDialogState extends State<PersonalCalendarDialog> {
                                                               FontWeight.w500,
                                                         ),
                                                       ),
-                                                      trailing: PromptIconButton(
+                                                      trailing: CommonIconButton(
                                                         icon: Icons
                                                             .delete_outline_rounded,
                                                         tooltip: '삭제',
                                                         onPressed: () =>
                                                             _remove(entry.value),
                                                         haptic:
-                                                            PromptHaptic.medium,
+                                                            CommonHaptic.medium,
                                                       ),
                                                     ),
                                                   ),
@@ -311,11 +311,11 @@ class _PersonalCalendarDialogState extends State<PersonalCalendarDialog> {
                 ),
               ),
               const SizedBox(height: 14),
-              PromptButton(
+              CommonButton(
                 label: '일정 추가',
                 icon: Icons.add_rounded,
                 expand: true,
-                haptic: PromptHaptic.light,
+                haptic: CommonHaptic.light,
                 onPressed: _add,
               ),
             ],
@@ -341,7 +341,7 @@ class _CalendarGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final first = DateTime(month.year, month.month, 1);
     final startOffset = first.weekday % 7;
@@ -356,7 +356,7 @@ class _CalendarGrid extends StatelessWidget {
     );
     const weekdayLabels = <String>['일', '월', '화', '수', '목', '금', '토'];
 
-    return PersonalPromptPanel(
+    return PersonalCommonPanel(
       padding: const EdgeInsets.all(10),
       child: Column(
         children: <Widget>[
@@ -400,14 +400,14 @@ class _CalendarGrid extends StatelessWidget {
                 label: '${day.month}월 ${day.day}일',
                 value: hasEvent ? '일정 있음' : '일정 없음',
                 child: InkWell(
-                  borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                  borderRadius: BorderRadius.circular(CommonUiShapes.control),
                   onTap: () => onSelect(
                     DateTime(day.year, day.month, day.day),
                   ),
                   child: AnimatedContainer(
-                    duration: personalPromptDuration(
+                    duration: personalCommonDuration(
                       context,
-                      PromptUiMotion.selection,
+                      CommonUiMotion.selection,
                     ),
                     decoration: BoxDecoration(
                       color: selected
@@ -416,7 +416,7 @@ class _CalendarGrid extends StatelessWidget {
                               ? tokens.surfaceOverlay
                               : tokens.surfaceDisabled,
                       borderRadius: BorderRadius.circular(
-                        PromptUiShapes.control,
+                        CommonUiShapes.control,
                       ),
                       border: Border.all(
                         color: selected
@@ -440,9 +440,9 @@ class _CalendarGrid extends StatelessWidget {
                         ),
                         const SizedBox(height: 3),
                         AnimatedContainer(
-                          duration: personalPromptDuration(
+                          duration: personalCommonDuration(
                             context,
-                            PromptUiMotion.selection,
+                            CommonUiMotion.selection,
                           ),
                           width: 5,
                           height: 5,
@@ -501,7 +501,7 @@ class _CalendarEventEditorDialogState
 
   Future<void> _pickDate() async {
     final now = DateTime.now();
-    final picked = await showPromptDatePicker(
+    final picked = await showCommonDatePicker(
       context: context,
       initialDate: _date,
       firstDate: DateTime(now.year - 1),
@@ -533,13 +533,13 @@ class _CalendarEventEditorDialogState
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     return Dialog(
       backgroundColor: tokens.surfaceRaised,
       surfaceTintColor: tokens.transparent,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(PromptUiShapes.dialog),
+        borderRadius: BorderRadius.circular(CommonUiShapes.dialog),
         side: BorderSide(color: tokens.borderSubtle),
       ),
       child: SafeArea(
@@ -601,30 +601,30 @@ class _CalendarEventEditorDialogState
                   onSubmitted: (_) => _save(),
                 ),
                 const SizedBox(height: 12),
-                PromptButton(
+                CommonButton(
                   label: _formatDate(_date),
                   icon: Icons.event_rounded,
-                  variant: PromptButtonVariant.secondary,
+                  variant: CommonButtonVariant.secondary,
                   expand: true,
-                  haptic: PromptHaptic.selection,
+                  haptic: CommonHaptic.selection,
                   onPressed: _pickDate,
                 ),
                 const SizedBox(height: 18),
                 Row(
                   children: <Widget>[
                     Expanded(
-                      child: PromptButton(
+                      child: CommonButton(
                         label: '취소',
-                        variant: PromptButtonVariant.tertiary,
+                        variant: CommonButtonVariant.tertiary,
                         onPressed: () => Navigator.of(context).pop(),
                       ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: PromptButton(
+                      child: CommonButton(
                         label: '저장',
                         icon: Icons.check_rounded,
-                        haptic: PromptHaptic.light,
+                        haptic: CommonHaptic.light,
                         onPressed: _save,
                       ),
                     ),

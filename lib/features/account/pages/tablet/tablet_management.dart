@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../shared/secondary/widgets/ops_console_dialogs.dart';
 import '../../../../shared/secondary/widgets/ops_console_widgets.dart';
 import '../../../dev/application/area_state.dart';
@@ -64,7 +64,7 @@ class _TabletManagementState extends State<TabletManagement> {
     final currentArea = areaState.currentArea;
     final currentDivision = areaState.currentDivision;
 
-    showPromptOverlayBottomSheet<void>(
+    showCommonOverlayBottomSheet<void>(
       context: context,
       useSafeArea: true,
       builder: (sheetContext) => FractionallySizedBox(
@@ -231,7 +231,7 @@ class _TabletManagementState extends State<TabletManagement> {
     UserState userState,
     TabletModel tablet,
   ) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final tt = Theme.of(context).textTheme;
     final isSelected = userState.selectedUserId == tablet.id;
     final statusTone = tablet.isWorking
@@ -330,11 +330,11 @@ class _TabletManagementState extends State<TabletManagement> {
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             OpsFilterChip(label: '$visible/$total', selected: false, icon: Icons.filter_alt_rounded, onSelected: () {}),
-            PromptIconButton(
+            CommonIconButton(
               icon: Icons.refresh_rounded,
               tooltip: '새로고침',
               onPressed: () => _refresh(context),
-              haptic: PromptHaptic.selection,
+              haptic: CommonHaptic.selection,
             ),
           ],
         ),
@@ -379,9 +379,9 @@ class _TabletManagementState extends State<TabletManagement> {
             ],
           );
     return AnimatedSwitcher(
-      duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
-      switchInCurve: PromptUiMotion.enter,
-      switchOutCurve: PromptUiMotion.exit,
+      duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+      switchInCurve: CommonUiMotion.enter,
+      switchOutCurve: CommonUiMotion.exit,
       transitionBuilder: (child, animation) {
         return FadeTransition(
           opacity: animation,
@@ -403,7 +403,7 @@ class _TabletManagementState extends State<TabletManagement> {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final userState = context.watch<UserState>();
     final areaState = context.watch<AreaState>();
     final currentArea = areaState.currentArea.trim();
@@ -460,11 +460,11 @@ class _TabletManagementState extends State<TabletManagement> {
                   icon: Icons.tablet_mac_rounded,
                   title: scopedTablets.isEmpty ? '등록된 태블릿이 없습니다' : '검색 결과가 없습니다',
                   message: scopedTablets.isEmpty ? '현장 태블릿 계정을 등록해 구역별 운영 단말을 배정하세요.' : '검색어를 조정하세요.',
-                  action: PromptButton(
+                  action: CommonButton(
                     label: '태블릿 등록',
                     icon: Icons.add_to_queue_rounded,
                     onPressed: () => _handlePrimaryAction(context),
-                    haptic: PromptHaptic.selection,
+                    haptic: CommonHaptic.selection,
                   ),
                 )
               : ListView.builder(
@@ -472,7 +472,7 @@ class _TabletManagementState extends State<TabletManagement> {
                   itemCount: visibleTablets.length,
                   itemBuilder: (context, index) {
                     final tablet = visibleTablets[index];
-                    return PromptAnimatedReveal(
+                    return CommonAnimatedReveal(
                       key: ValueKey<String>(tablet.id),
                       delay: Duration(
                         milliseconds: index.clamp(0, 8).toInt() * 28,

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-class PromptUiMotion {
-  const PromptUiMotion._();
+class CommonUiMotion {
+  const CommonUiMotion._();
 
   static const Duration instant = Duration(milliseconds: 100);
   static const Duration press = Duration(milliseconds: 140);
@@ -15,8 +15,8 @@ class PromptUiMotion {
   static const Curve standard = Curves.easeInOutCubic;
 }
 
-class PromptUiShapes {
-  const PromptUiShapes._();
+class CommonUiShapes {
+  const CommonUiShapes._();
 
   static const double control = 12;
   static const double button = 14;
@@ -27,8 +27,8 @@ class PromptUiShapes {
 }
 
 @immutable
-class PromptUiTokens {
-  const PromptUiTokens({
+class CommonUiTokens {
+  const CommonUiTokens({
     required this.brightness,
     required this.canvas,
     required this.surface,
@@ -158,13 +158,13 @@ class PromptUiTokens {
 
   bool get isDark => brightness == Brightness.dark;
 
-  factory PromptUiTokens.fromTheme(ThemeData theme) {
+  factory CommonUiTokens.fromTheme(ThemeData theme) {
     return theme.brightness == Brightness.dark
-        ? const PromptUiTokens.dark()
-        : const PromptUiTokens.light();
+        ? const CommonUiTokens.dark()
+        : const CommonUiTokens.light();
   }
 
-  const PromptUiTokens.light()
+  const CommonUiTokens.light()
       : brightness = Brightness.light,
         canvas = const Color(0xFFF2F6F5),
         surface = const Color(0xFFF8FBFA),
@@ -228,7 +228,7 @@ class PromptUiTokens {
         handle = const Color(0xFF879A95),
         transparent = Colors.transparent;
 
-  const PromptUiTokens.dark()
+  const CommonUiTokens.dark()
       : brightness = Brightness.dark,
         canvas = const Color(0xFF0B1312),
         surface = const Color(0xFF111C1A),
@@ -293,17 +293,17 @@ class PromptUiTokens {
         transparent = Colors.transparent;
 }
 
-class PromptUiTheme {
-  const PromptUiTheme._();
+class CommonUiTheme {
+  const CommonUiTheme._();
 
   static const String fontFamily = 'NotoSansKR';
 
-  static PromptUiTokens of(BuildContext context) {
-    return PromptUiTokens.fromTheme(Theme.of(context));
+  static CommonUiTokens of(BuildContext context) {
+    return CommonUiTokens.fromTheme(Theme.of(context));
   }
 
   static ThemeData scoped(ThemeData base) {
-    final tokens = PromptUiTokens.fromTheme(base);
+    final tokens = CommonUiTokens.fromTheme(base);
     final textTheme = _withFont(base.textTheme).apply(
       bodyColor: tokens.textPrimary,
       displayColor: tokens.textPrimary,
@@ -355,7 +355,7 @@ class PromptUiTheme {
         shadowColor: tokens.shadow,
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(PromptUiShapes.card),
+          borderRadius: BorderRadius.circular(CommonUiShapes.card),
           side: BorderSide(color: tokens.borderSubtle),
         ),
       ),
@@ -379,7 +379,7 @@ class PromptUiTheme {
           color: tokens.textSecondary,
         ),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(PromptUiShapes.dialog),
+          borderRadius: BorderRadius.circular(CommonUiShapes.dialog),
           side: BorderSide(color: tokens.borderSubtle),
         ),
       ),
@@ -392,7 +392,7 @@ class PromptUiTheme {
         selectedShadowColor: tokens.shadow,
         side: BorderSide(color: tokens.borderSubtle),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+          borderRadius: BorderRadius.circular(CommonUiShapes.pill),
         ),
         labelStyle: textTheme.labelMedium?.copyWith(
           color: tokens.textPrimary,
@@ -419,23 +419,23 @@ class PromptUiTheme {
         prefixIconColor: tokens.iconSecondary,
         suffixIconColor: tokens.iconSecondary,
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(PromptUiShapes.control),
+          borderRadius: BorderRadius.circular(CommonUiShapes.control),
           borderSide: BorderSide(color: tokens.borderSubtle),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(PromptUiShapes.control),
+          borderRadius: BorderRadius.circular(CommonUiShapes.control),
           borderSide: BorderSide(color: tokens.focusRing, width: 2),
         ),
         disabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(PromptUiShapes.control),
+          borderRadius: BorderRadius.circular(CommonUiShapes.control),
           borderSide: BorderSide(color: tokens.borderSubtle),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(PromptUiShapes.control),
+          borderRadius: BorderRadius.circular(CommonUiShapes.control),
           borderSide: BorderSide(color: tokens.danger),
         ),
         focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(PromptUiShapes.control),
+          borderRadius: BorderRadius.circular(CommonUiShapes.control),
           borderSide: BorderSide(color: tokens.danger, width: 2),
         ),
       ),
@@ -456,7 +456,7 @@ class PromptUiTheme {
         ),
         decoration: BoxDecoration(
           color: tokens.textPrimary,
-          borderRadius: BorderRadius.circular(PromptUiShapes.control),
+          borderRadius: BorderRadius.circular(CommonUiShapes.control),
           border: Border.all(color: tokens.borderStrong),
         ),
       ),
@@ -471,7 +471,7 @@ class PromptUiTheme {
         elevation: 0,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(PromptUiShapes.control),
+          borderRadius: BorderRadius.circular(CommonUiShapes.control),
           side: BorderSide(color: tokens.borderSubtle),
         ),
       ),
@@ -545,7 +545,7 @@ class PromptUiTheme {
         selectedTileColor: tokens.surfaceSelected,
         tileColor: tokens.transparent,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(PromptUiShapes.control),
+          borderRadius: BorderRadius.circular(CommonUiShapes.control),
         ),
       ),
       filledButtonTheme: FilledButtonThemeData(
@@ -573,7 +573,7 @@ class PromptUiTheme {
           ),
           shape: WidgetStatePropertyAll(
             RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(PromptUiShapes.button),
+              borderRadius: BorderRadius.circular(CommonUiShapes.button),
             ),
           ),
           textStyle: WidgetStatePropertyAll(
@@ -607,7 +607,7 @@ class PromptUiTheme {
           }),
           shape: WidgetStatePropertyAll(
             RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(PromptUiShapes.button),
+              borderRadius: BorderRadius.circular(CommonUiShapes.button),
             ),
           ),
           textStyle: WidgetStatePropertyAll(
@@ -631,7 +631,7 @@ class PromptUiTheme {
           ),
           shape: WidgetStatePropertyAll(
             RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(PromptUiShapes.control),
+              borderRadius: BorderRadius.circular(CommonUiShapes.control),
             ),
           ),
           textStyle: WidgetStatePropertyAll(
@@ -644,7 +644,7 @@ class PromptUiTheme {
 
   static ColorScheme _colorScheme(
     ColorScheme base,
-    PromptUiTokens tokens,
+    CommonUiTokens tokens,
   ) {
     return base.copyWith(
       primary: tokens.accent,
@@ -748,8 +748,8 @@ class PromptUiTheme {
   }
 }
 
-class PromptUiScope extends StatelessWidget {
-  const PromptUiScope({super.key, required this.child});
+class CommonUiScope extends StatelessWidget {
+  const CommonUiScope({super.key, required this.child});
 
   final Widget child;
 
@@ -758,9 +758,9 @@ class PromptUiScope extends StatelessWidget {
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     return AnimatedTheme(
-      data: PromptUiTheme.scoped(Theme.of(context)),
-      duration: reduceMotion ? Duration.zero : PromptUiMotion.component,
-      curve: PromptUiMotion.standard,
+      data: CommonUiTheme.scoped(Theme.of(context)),
+      duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
+      curve: CommonUiMotion.standard,
       child: child,
     );
   }

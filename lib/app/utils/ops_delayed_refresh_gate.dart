@@ -3,7 +3,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
-import '../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../design_system/common_ui/common_ui_overlays.dart';
 
 import '../../features/selector/application/dev_auth.dart';
 
@@ -19,7 +19,7 @@ class OpsDelayedRefreshGate {
     required BuildContext context,
     String title = '운영 데이터 동기화',
     String message = '운영 데이터를 새로고침하기 전 서버 요청을 준비하고 있습니다.',
-    bool usePromptUi = false,
+    bool useCommonUi = false,
   }) async {
     final devMode = await DevAuth.isDeveloperLoggedIn();
     if (devMode) return true;
@@ -27,8 +27,8 @@ class OpsDelayedRefreshGate {
     final duration = _nextDuration();
     if (!context.mounted) return false;
 
-    final completed = usePromptUi
-        ? await showPromptOverlayDialog<bool>(
+    final completed = useCommonUi
+        ? await showCommonOverlayDialog<bool>(
             context: context,
             barrierDismissible: false,
             builder: (_) => _OpsDelayedRefreshDialog(

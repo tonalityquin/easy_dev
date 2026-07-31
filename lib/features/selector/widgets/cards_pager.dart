@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../design_system/common_ui/common_ui_components.dart';
+import '../../../design_system/common_ui/common_ui_theme.dart';
 
 @immutable
 class CardsPagerPage {
@@ -92,8 +92,8 @@ class _CardsPagerState extends State<CardsPager> {
     }
     await _pageController.animateToPage(
       target,
-      duration: PromptUiMotion.component,
-      curve: PromptUiMotion.enter,
+      duration: CommonUiMotion.component,
+      curve: CommonUiMotion.enter,
     );
   }
 
@@ -131,7 +131,7 @@ class _CardsPagerState extends State<CardsPager> {
     final total = widget.pages.length;
     if (total <= 1) return const SizedBox.shrink();
 
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
     return Semantics(
@@ -141,13 +141,13 @@ class _CardsPagerState extends State<CardsPager> {
         children: List<Widget>.generate(total, (index) {
           final active = index == _current;
           return AnimatedContainer(
-            duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
-            curve: PromptUiMotion.standard,
+            duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+            curve: CommonUiMotion.standard,
             width: active ? 20 : 7,
             height: 7,
             decoration: BoxDecoration(
               color: active ? tokens.accent : tokens.borderStrong.withOpacity(0.42),
-              borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+              borderRadius: BorderRadius.circular(CommonUiShapes.pill),
             ),
           );
         }),
@@ -245,7 +245,7 @@ class _CardsPagerState extends State<CardsPager> {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                PromptIconButton(
+                CommonIconButton(
                   icon: Icons.chevron_left_rounded,
                   tooltip: '이전',
                   onPressed: canPrev ? _goPrev : null,
@@ -253,7 +253,7 @@ class _CardsPagerState extends State<CardsPager> {
                 const SizedBox(width: 8),
                 _buildDots(),
                 const SizedBox(width: 8),
-                PromptIconButton(
+                CommonIconButton(
                   icon: Icons.chevron_right_rounded,
                   tooltip: '다음',
                   onPressed: canNext ? _goNext : null,

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../shared/plate/domain/enums/plate_type.dart';
 import '../../../../shared/plate/domain/models/plate_model.dart';
-import 'tablet_prompt_components.dart';
+import 'tablet_common_components.dart';
 
 class TabletPlateSearchResultSection extends StatelessWidget {
   const TabletPlateSearchResultSection({
@@ -28,7 +28,7 @@ class TabletPlateSearchResultSection extends StatelessWidget {
     return '$month-$day $hour:$minute';
   }
 
-  _StatusColors _statusColors(PromptUiTokens tokens, PlateType? type) {
+  _StatusColors _statusColors(CommonUiTokens tokens, PlateType? type) {
     switch (type) {
       case PlateType.parkingRequests:
         return _StatusColors(
@@ -80,7 +80,7 @@ class TabletPlateSearchResultSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final text = Theme.of(context).textTheme;
     final showMultiple = results.length >= 2;
     final extra = showMultiple ? 1 : 0;
@@ -107,7 +107,7 @@ class TabletPlateSearchResultSection extends StatelessWidget {
       separatorBuilder: (_, __) => SizedBox(height: itemGap),
       itemBuilder: (context, index) {
         if (showMultiple && index == 0) {
-          return PromptAnimatedReveal(
+          return CommonAnimatedReveal(
             child: Container(
               padding: EdgeInsets.symmetric(
                 horizontal: compact ? 12 : 14,
@@ -150,7 +150,7 @@ class TabletPlateSearchResultSection extends StatelessWidget {
         final selected = plate.isSelected;
         final meta =
             '${_formatDateTime(plate.requestTime)} · ${plate.location.isEmpty ? '위치 미지정' : plate.location}';
-        return PromptAnimatedReveal(
+        return CommonAnimatedReveal(
           key: ValueKey<String>('plate-${plate.id}-$selected'),
           delay: Duration(milliseconds: (index - extra).clamp(0, 6).toInt() * 28),
           offset: const Offset(0, 0.025),
@@ -159,8 +159,8 @@ class TabletPlateSearchResultSection extends StatelessWidget {
             selected: selected,
             label: '${plate.plateNumber}, $typeLabel, $meta',
             child: AnimatedContainer(
-              duration: tabletPromptDuration(context, PromptUiMotion.selection),
-              curve: PromptUiMotion.standard,
+              duration: tabletCommonDuration(context, CommonUiMotion.selection),
+              curve: CommonUiMotion.standard,
               decoration: BoxDecoration(
                 color: selected ? tokens.surfaceSelected : tokens.surfaceRaised,
                 borderRadius: BorderRadius.circular(cardRadius),
@@ -191,9 +191,9 @@ class TabletPlateSearchResultSection extends StatelessWidget {
                     child: Row(
                       children: <Widget>[
                         AnimatedContainer(
-                          duration: tabletPromptDuration(
+                          duration: tabletCommonDuration(
                             context,
-                            PromptUiMotion.selection,
+                            CommonUiMotion.selection,
                           ),
                           width: iconBox,
                           height: iconBox,
@@ -289,8 +289,8 @@ class _TypeChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AnimatedContainer(
-      duration: tabletPromptDuration(context, PromptUiMotion.selection),
-      curve: PromptUiMotion.standard,
+      duration: tabletCommonDuration(context, CommonUiMotion.selection),
+      curve: CommonUiMotion.standard,
       constraints: BoxConstraints(minHeight: compact ? 32 : 38),
       padding: EdgeInsets.symmetric(
         horizontal: compact ? 10 : 12,
@@ -298,7 +298,7 @@ class _TypeChip extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+        borderRadius: BorderRadius.circular(CommonUiShapes.pill),
         border: Border.all(color: border, width: selected ? 2 : 1),
       ),
       child: Row(

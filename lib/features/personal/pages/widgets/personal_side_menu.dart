@@ -9,16 +9,16 @@ import '../../../../app/init/app_exit_service.dart';
 import '../../../../app/utils/dev_firebase_debug_dialog.dart';
 import '../../../../app/theme/brand_theme.dart';
 import '../../../../app/utils/ops_delayed_refresh_gate.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../app/theme/theme_prefs_controller.dart';
 import '../../../../shared/plate/domain/repositories/plate_repository.dart';
 import '../../../dev/application/area_state.dart';
 import '../../../location/applications/location_state.dart';
 import '../../../payment/applications/bill_state.dart';
 import '../../../tablet/applications/tablet_work_session_state.dart';
-import 'personal_prompt_components.dart';
+import 'personal_common_components.dart';
 
 class PersonalSideMenu extends StatefulWidget {
   const PersonalSideMenu({
@@ -49,7 +49,7 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
   Future<void> _runAfterClose(Future<void> Function() action) async {
     widget.onClose();
     await Future<void>.delayed(
-      personalPromptDuration(context, PromptUiMotion.selection),
+      personalCommonDuration(context, CommonUiMotion.selection),
     );
     await action();
   }
@@ -72,7 +72,7 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
         operation: 'personal.monthly_plate_status.exists',
         error: e,
         stackTrace: st,
-        usePromptUi: true,
+        useCommonUi: true,
         details: <String, Object?>{
           'collection': 'monthly_plate_status',
           'area': area,
@@ -97,7 +97,7 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
         context: context,
         title: '데이터 갱신',
         message: '내 차량, 위치, 정산 데이터를 다시 불러오기 전 요청을 준비하고 있습니다.',
-        usePromptUi: true,
+        useCommonUi: true,
       );
       if (!shouldRefresh || !mounted) return;
 
@@ -114,7 +114,7 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
         operation: 'personal.sideMenu.refreshAll',
         error: e,
         stackTrace: st,
-        usePromptUi: true,
+        useCommonUi: true,
         details: <String, Object?>{
           'area': debugArea,
           'steps': 'locations.manualLocationRefresh, bill.manualBillRefresh, monthly_plate_status.exists, onRefreshContent',
@@ -129,14 +129,14 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
   }
 
   Future<void> _openThemeSettingsDialog() async {
-    await showPromptOverlayDialog<void>(
+    await showCommonOverlayDialog<void>(
       context: context,
       barrierDismissible: true,
       builder: (dialogContext) {
         return Consumer<ThemePrefsController>(
           builder: (ctx, themeCtrl, _) {
             final cs = Theme.of(ctx).colorScheme;
-            final tokens = PromptUiTheme.of(ctx);
+            final tokens = CommonUiTheme.of(ctx);
             final text = Theme.of(ctx).textTheme;
             final modes = themeModeSpecs();
             final presets = brandPresets();
@@ -188,11 +188,11 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
                           final selected = m.id == themeCtrl.themeModeId;
                           return AnimatedScale(
                             scale: selected ? 1.03 : 1,
-                            duration: personalPromptDuration(
+                            duration: personalCommonDuration(
                               ctx,
-                              PromptUiMotion.selection,
+                              CommonUiMotion.selection,
                             ),
-                            curve: PromptUiMotion.standard,
+                            curve: CommonUiMotion.standard,
                             child: ChoiceChip(
                               selected: selected,
                               onSelected: (_) async {
@@ -229,11 +229,11 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
                           final selected = p.id == themeCtrl.presetId;
                           return AnimatedScale(
                             scale: selected ? 1.03 : 1,
-                            duration: personalPromptDuration(
+                            duration: personalCommonDuration(
                               ctx,
-                              PromptUiMotion.selection,
+                              CommonUiMotion.selection,
                             ),
-                            curve: PromptUiMotion.standard,
+                            curve: CommonUiMotion.standard,
                             child: ChoiceChip(
                               selected: selected,
                               onSelected: (_) async {
@@ -257,11 +257,11 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
                 ),
               ),
               actions: [
-                PromptButton(
+                CommonButton(
                   label: '닫기',
-                  variant: PromptButtonVariant.tertiary,
+                  variant: CommonButtonVariant.tertiary,
                   minHeight: 40,
-                  haptic: PromptHaptic.selection,
+                  haptic: CommonHaptic.selection,
                   onPressed: () => Navigator.of(dialogContext).pop(),
                 ),
               ],
@@ -313,7 +313,7 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
         operation: 'personal.sideMenu.logout',
         error: e,
         stackTrace: st,
-        usePromptUi: true,
+        useCommonUi: true,
         details: <String, Object?>{
           'collection': 'personal_accounts',
           'accountId': accountId,
@@ -331,13 +331,13 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
     final work = context.read<TabletWorkSessionState>();
     await work.stopWork();
     if (!mounted) return;
-    await AppExitService.exitApp(context, usePromptUi: true);
+    await AppExitService.exitApp(context, useCommonUi: true);
   }
 
   void _showSnack(String message, {required bool success}) {
     final messenger = ScaffoldMessenger.maybeOf(context);
     if (messenger == null) return;
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     messenger.clearSnackBars();
     messenger.showSnackBar(
       SnackBar(
@@ -356,7 +356,7 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final area = context.select<AreaState, String>(
       (state) => state.currentArea,
@@ -385,7 +385,7 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
                     decoration: BoxDecoration(
                       color: tokens.accentContainer,
                       borderRadius: BorderRadius.circular(
-                        PromptUiShapes.control,
+                        CommonUiShapes.control,
                       ),
                       border: Border.all(
                         color: tokens.accent.withOpacity(.24),
@@ -410,9 +410,9 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
                         ),
                         const SizedBox(height: 2),
                         AnimatedSwitcher(
-                          duration: personalPromptDuration(
+                          duration: personalCommonDuration(
                             context,
-                            PromptUiMotion.selection,
+                            CommonUiMotion.selection,
                           ),
                           child: Text(
                             area.isEmpty ? '이용 지점 확인 중' : area,
@@ -428,11 +428,11 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
                       ],
                     ),
                   ),
-                  PromptIconButton(
+                  CommonIconButton(
                     icon: Icons.close_rounded,
                     tooltip: '메뉴 닫기',
                     onPressed: widget.onClose,
-                    haptic: PromptHaptic.selection,
+                    haptic: CommonHaptic.selection,
                   ),
                 ],
               ),
@@ -442,11 +442,11 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
               child: ListView(
                 padding: EdgeInsets.fromLTRB(14, 14, 14, 18 + bottom),
                 children: <Widget>[
-                  PromptButton(
+                  CommonButton(
                     label: '차량 추가',
                     icon: Icons.add_rounded,
                     expand: true,
-                    haptic: PromptHaptic.light,
+                    haptic: CommonHaptic.light,
                     onPressed: () => _runAfterClose(widget.onAddVehicle),
                   ),
                   const SizedBox(height: 10),
@@ -524,14 +524,14 @@ class _MenuSectionLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final text = Theme.of(context).textTheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
-      child: PromptAnimatedReveal(
-        duration: personalPromptDuration(
+      child: CommonAnimatedReveal(
+        duration: personalCommonDuration(
           context,
-          PromptUiMotion.selection,
+          CommonUiMotion.selection,
         ),
         offset: const Offset(0, 0.08),
         child: Text(
@@ -565,7 +565,7 @@ class _MenuTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final text = Theme.of(context).textTheme;
     final fg = danger ? tokens.danger : tokens.accent;
 
@@ -575,8 +575,8 @@ class _MenuTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         onTap: onTap,
         child: AnimatedContainer(
-          duration: personalPromptDuration(context),
-          curve: PromptUiMotion.standard,
+          duration: personalCommonDuration(context),
+          curve: CommonUiMotion.standard,
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: tokens.surfaceOverlay,

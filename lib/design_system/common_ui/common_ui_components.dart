@@ -3,18 +3,18 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'prompt_ui_theme.dart';
+import 'common_ui_theme.dart';
 
-typedef PromptAction = dynamic Function();
+typedef CommonAction = dynamic Function();
 
-enum PromptButtonVariant {
+enum CommonButtonVariant {
   primary,
   secondary,
   tertiary,
   destructive,
 }
 
-enum PromptHaptic {
+enum CommonHaptic {
   none,
   selection,
   light,
@@ -22,26 +22,26 @@ enum PromptHaptic {
   heavy,
 }
 
-Future<void> _performHaptic(PromptHaptic haptic) async {
+Future<void> _performHaptic(CommonHaptic haptic) async {
   switch (haptic) {
-    case PromptHaptic.none:
+    case CommonHaptic.none:
       return;
-    case PromptHaptic.selection:
+    case CommonHaptic.selection:
       await HapticFeedback.selectionClick();
       return;
-    case PromptHaptic.light:
+    case CommonHaptic.light:
       await HapticFeedback.lightImpact();
       return;
-    case PromptHaptic.medium:
+    case CommonHaptic.medium:
       await HapticFeedback.mediumImpact();
       return;
-    case PromptHaptic.heavy:
+    case CommonHaptic.heavy:
       await HapticFeedback.heavyImpact();
       return;
   }
 }
 
-Future<void> _invokePromptAction(PromptAction? action) async {
+Future<void> _invokeCommonAction(CommonAction? action) async {
   if (action == null) return;
   final result = action();
   if (result is Future) {
@@ -49,39 +49,39 @@ Future<void> _invokePromptAction(PromptAction? action) async {
   }
 }
 
-class PromptButton extends StatefulWidget {
-  const PromptButton({
+class CommonButton extends StatefulWidget {
+  const CommonButton({
     super.key,
     required this.label,
     required this.onPressed,
     this.icon,
-    this.variant = PromptButtonVariant.primary,
+    this.variant = CommonButtonVariant.primary,
     this.loading = false,
     this.selected = false,
     this.expand = false,
     this.tooltip,
     this.semanticsLabel,
-    this.haptic = PromptHaptic.none,
+    this.haptic = CommonHaptic.none,
     this.minHeight,
   });
 
   final String label;
-  final PromptAction? onPressed;
+  final CommonAction? onPressed;
   final IconData? icon;
-  final PromptButtonVariant variant;
+  final CommonButtonVariant variant;
   final bool loading;
   final bool selected;
   final bool expand;
   final String? tooltip;
   final String? semanticsLabel;
-  final PromptHaptic haptic;
+  final CommonHaptic haptic;
   final double? minHeight;
 
   @override
-  State<PromptButton> createState() => _PromptButtonState();
+  State<CommonButton> createState() => _CommonButtonState();
 }
 
-class _PromptButtonState extends State<PromptButton> {
+class _CommonButtonState extends State<CommonButton> {
   bool _pressed = false;
   bool _hovered = false;
   bool _focused = false;
@@ -132,7 +132,7 @@ class _PromptButtonState extends State<PromptButton> {
     try {
       await _performHaptic(widget.haptic);
       if (!mounted) return;
-      await _invokePromptAction(widget.onPressed);
+      await _invokeCommonAction(widget.onPressed);
     } finally {
       if (mounted) {
         setState(() {
@@ -145,11 +145,11 @@ class _PromptButtonState extends State<PromptButton> {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final colors = _buttonColors(tokens);
     final height = widget.minHeight ??
-        (widget.variant == PromptButtonVariant.tertiary ? 46.0 : 52.0);
+        (widget.variant == CommonButtonVariant.tertiary ? 46.0 : 52.0);
     final contentScale = _pressed && _enabled ? 0.98 : 1.0;
     final shadows = <BoxShadow>[
       if (_focused)
@@ -174,12 +174,12 @@ class _PromptButtonState extends State<PromptButton> {
           alignment: Alignment.center,
           children: [
             AnimatedOpacity(
-              duration: reduceMotion ? Duration.zero : PromptUiMotion.instant,
+              duration: reduceMotion ? Duration.zero : CommonUiMotion.instant,
               opacity: widget.loading || _invoking ? 0 : 1,
               child: AnimatedScale(
                 scale: contentScale,
-                duration: reduceMotion ? Duration.zero : PromptUiMotion.press,
-                curve: PromptUiMotion.enter,
+                duration: reduceMotion ? Duration.zero : CommonUiMotion.press,
+                curve: CommonUiMotion.enter,
                 child: Row(
                   mainAxisSize:
                       widget.expand ? MainAxisSize.max : MainAxisSize.min,
@@ -234,18 +234,18 @@ class _PromptButtonState extends State<PromptButton> {
       label: widget.semanticsLabel ?? widget.label,
       value: widget.loading || _invoking ? '처리 중' : null,
       child: AnimatedContainer(
-        duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
-        curve: PromptUiMotion.standard,
+        duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+        curve: CommonUiMotion.standard,
         width: widget.expand ? double.infinity : null,
         decoration: BoxDecoration(
           color: colors.background,
-          borderRadius: BorderRadius.circular(PromptUiShapes.button),
+          borderRadius: BorderRadius.circular(CommonUiShapes.button),
           border: Border.all(color: colors.border, width: 1),
           boxShadow: shadows,
         ),
         child: Material(
           color: tokens.transparent,
-          borderRadius: BorderRadius.circular(PromptUiShapes.button),
+          borderRadius: BorderRadius.circular(CommonUiShapes.button),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: _available ? _activate : null,
@@ -266,7 +266,7 @@ class _PromptButtonState extends State<PromptButton> {
             overlayColor: WidgetStatePropertyAll(
               colors.foreground.withOpacity(_pressed ? 0.10 : 0.05),
             ),
-            borderRadius: BorderRadius.circular(PromptUiShapes.button),
+            borderRadius: BorderRadius.circular(CommonUiShapes.button),
             child: content,
           ),
         ),
@@ -280,22 +280,22 @@ class _PromptButtonState extends State<PromptButton> {
     return button;
   }
 
-  _PromptButtonColors _buttonColors(PromptUiTokens tokens) {
+  _CommonButtonColors _buttonColors(CommonUiTokens tokens) {
     if (!_enabled && !widget.loading && !_invoking) {
-      return _PromptButtonColors(
-        background: widget.variant == PromptButtonVariant.tertiary
+      return _CommonButtonColors(
+        background: widget.variant == CommonButtonVariant.tertiary
             ? tokens.transparent
             : tokens.surfaceDisabled,
         foreground: tokens.textDisabled,
-        border: widget.variant == PromptButtonVariant.tertiary
+        border: widget.variant == CommonButtonVariant.tertiary
             ? tokens.transparent
             : tokens.borderSubtle,
       );
     }
 
     switch (widget.variant) {
-      case PromptButtonVariant.primary:
-        return _PromptButtonColors(
+      case CommonButtonVariant.primary:
+        return _CommonButtonColors(
           background: _pressed
               ? tokens.accentPressed
               : _hovered
@@ -304,8 +304,8 @@ class _PromptButtonState extends State<PromptButton> {
           foreground: tokens.onAccent,
           border: tokens.transparent,
         );
-      case PromptButtonVariant.secondary:
-        return _PromptButtonColors(
+      case CommonButtonVariant.secondary:
+        return _CommonButtonColors(
           background: widget.selected || _pressed || _hovered
               ? tokens.surfaceSelected
               : tokens.accentContainer,
@@ -316,8 +316,8 @@ class _PromptButtonState extends State<PromptButton> {
               ? tokens.accent
               : tokens.accent.withOpacity(tokens.isDark ? 0.62 : 0.46),
         );
-      case PromptButtonVariant.tertiary:
-        return _PromptButtonColors(
+      case CommonButtonVariant.tertiary:
+        return _CommonButtonColors(
           background: _pressed || _hovered || widget.selected
               ? tokens.surfaceSelected
               : tokens.transparent,
@@ -326,8 +326,8 @@ class _PromptButtonState extends State<PromptButton> {
               : tokens.accent,
           border: tokens.transparent,
         );
-      case PromptButtonVariant.destructive:
-        return _PromptButtonColors(
+      case CommonButtonVariant.destructive:
+        return _CommonButtonColors(
           background: _pressed ? tokens.danger : tokens.dangerContainer,
           foreground: _pressed ? tokens.onDanger : tokens.onDangerContainer,
           border: tokens.danger,
@@ -336,8 +336,8 @@ class _PromptButtonState extends State<PromptButton> {
   }
 }
 
-class _PromptButtonColors {
-  const _PromptButtonColors({
+class _CommonButtonColors {
+  const _CommonButtonColors({
     required this.background,
     required this.foreground,
     required this.border,
@@ -348,8 +348,8 @@ class _PromptButtonColors {
   final Color border;
 }
 
-class PromptIconButton extends StatefulWidget {
-  const PromptIconButton({
+class CommonIconButton extends StatefulWidget {
+  const CommonIconButton({
     super.key,
     required this.icon,
     required this.tooltip,
@@ -357,26 +357,26 @@ class PromptIconButton extends StatefulWidget {
     this.selected = false,
     this.loading = false,
     this.destructive = false,
-    this.haptic = PromptHaptic.none,
+    this.haptic = CommonHaptic.none,
     this.size = 46,
     this.iconSize = 22,
   });
 
   final IconData icon;
   final String tooltip;
-  final PromptAction? onPressed;
+  final CommonAction? onPressed;
   final bool selected;
   final bool loading;
   final bool destructive;
-  final PromptHaptic haptic;
+  final CommonHaptic haptic;
   final double size;
   final double iconSize;
 
   @override
-  State<PromptIconButton> createState() => _PromptIconButtonState();
+  State<CommonIconButton> createState() => _CommonIconButtonState();
 }
 
-class _PromptIconButtonState extends State<PromptIconButton> {
+class _CommonIconButtonState extends State<CommonIconButton> {
   bool _pressed = false;
   bool _hovered = false;
   bool _focused = false;
@@ -427,7 +427,7 @@ class _PromptIconButtonState extends State<PromptIconButton> {
     try {
       await _performHaptic(widget.haptic);
       if (!mounted) return;
-      await _invokePromptAction(widget.onPressed);
+      await _invokeCommonAction(widget.onPressed);
     } finally {
       if (mounted) {
         setState(() {
@@ -440,7 +440,7 @@ class _PromptIconButtonState extends State<PromptIconButton> {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final background = !_enabled && !widget.loading && !_invoking
         ? tokens.transparent
@@ -479,18 +479,18 @@ class _PromptIconButtonState extends State<PromptIconButton> {
         label: widget.tooltip,
         value: widget.loading || _invoking ? '처리 중' : null,
         child: AnimatedContainer(
-          duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
+          duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
           width: widget.size,
           height: widget.size,
           decoration: BoxDecoration(
             color: background,
-            borderRadius: BorderRadius.circular(PromptUiShapes.control),
+            borderRadius: BorderRadius.circular(CommonUiShapes.control),
             border: Border.all(color: border, width: 1),
             boxShadow: shadows,
           ),
           child: Material(
             color: tokens.transparent,
-            borderRadius: BorderRadius.circular(PromptUiShapes.control),
+            borderRadius: BorderRadius.circular(CommonUiShapes.control),
             clipBehavior: Clip.antiAlias,
             child: InkWell(
               onTap: _available ? _activate : null,
@@ -508,7 +508,7 @@ class _PromptIconButtonState extends State<PromptIconButton> {
               },
               mouseCursor:
                   _enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
-              borderRadius: BorderRadius.circular(PromptUiShapes.control),
+              borderRadius: BorderRadius.circular(CommonUiShapes.control),
               child: Center(
                 child: widget.loading || _invoking
                     ? SizedBox(
@@ -523,8 +523,8 @@ class _PromptIconButtonState extends State<PromptIconButton> {
                         scale: _pressed && _enabled ? 0.92 : 1,
                         duration: reduceMotion
                             ? Duration.zero
-                            : PromptUiMotion.press,
-                        curve: PromptUiMotion.enter,
+                            : CommonUiMotion.press,
+                        curve: CommonUiMotion.enter,
                         child: Icon(
                           widget.icon,
                           size: widget.iconSize,
@@ -540,13 +540,13 @@ class _PromptIconButtonState extends State<PromptIconButton> {
   }
 }
 
-class PromptAnimatedReveal extends StatefulWidget {
-  const PromptAnimatedReveal({
+class CommonAnimatedReveal extends StatefulWidget {
+  const CommonAnimatedReveal({
     super.key,
     required this.child,
     this.offset = const Offset(0, 0.04),
     this.delay = Duration.zero,
-    this.duration = PromptUiMotion.component,
+    this.duration = CommonUiMotion.component,
   });
 
   final Widget child;
@@ -555,10 +555,10 @@ class PromptAnimatedReveal extends StatefulWidget {
   final Duration duration;
 
   @override
-  State<PromptAnimatedReveal> createState() => _PromptAnimatedRevealState();
+  State<CommonAnimatedReveal> createState() => _CommonAnimatedRevealState();
 }
 
-class _PromptAnimatedRevealState extends State<PromptAnimatedReveal>
+class _CommonAnimatedRevealState extends State<CommonAnimatedReveal>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<double> _opacity;
@@ -571,7 +571,7 @@ class _PromptAnimatedRevealState extends State<PromptAnimatedReveal>
     _controller = AnimationController(vsync: this, duration: widget.duration);
     final curve = CurvedAnimation(
       parent: _controller,
-      curve: PromptUiMotion.enter,
+      curve: CommonUiMotion.enter,
     );
     _opacity = Tween<double>(begin: 0, end: 1).animate(curve);
     _position = Tween<Offset>(
@@ -613,8 +613,8 @@ class _PromptAnimatedRevealState extends State<PromptAnimatedReveal>
   }
 }
 
-class PromptSheetScaffold extends StatefulWidget {
-  const PromptSheetScaffold({
+class CommonSheetScaffold extends StatefulWidget {
+  const CommonSheetScaffold({
     super.key,
     required this.title,
     required this.icon,
@@ -630,10 +630,10 @@ class PromptSheetScaffold extends StatefulWidget {
   final bool bodyExpanded;
 
   @override
-  State<PromptSheetScaffold> createState() => _PromptSheetScaffoldState();
+  State<CommonSheetScaffold> createState() => _CommonSheetScaffoldState();
 }
 
-class _PromptSheetScaffoldState extends State<PromptSheetScaffold>
+class _CommonSheetScaffoldState extends State<CommonSheetScaffold>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<double> _opacity;
@@ -644,12 +644,12 @@ class _PromptSheetScaffoldState extends State<PromptSheetScaffold>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: PromptUiMotion.overlay,
+      duration: CommonUiMotion.overlay,
     );
     final curve = CurvedAnimation(
       parent: _controller,
-      curve: PromptUiMotion.enter,
-      reverseCurve: PromptUiMotion.exit,
+      curve: CommonUiMotion.enter,
+      reverseCurve: CommonUiMotion.exit,
     );
     _opacity = Tween<double>(begin: 0, end: 1).animate(curve);
     _position = Tween<Offset>(
@@ -674,12 +674,12 @@ class _PromptSheetScaffoldState extends State<PromptSheetScaffold>
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final text = Theme.of(context).textTheme;
     final body = widget.bodyExpanded ? Expanded(child: widget.body) : widget.body;
     final shape = RoundedRectangleBorder(
       borderRadius: const BorderRadius.vertical(
-        top: Radius.circular(PromptUiShapes.sheet),
+        top: Radius.circular(CommonUiShapes.sheet),
       ),
       side: BorderSide(color: tokens.borderSubtle),
     );
@@ -706,7 +706,7 @@ class _PromptSheetScaffoldState extends State<PromptSheetScaffold>
                   height: 4,
                   decoration: BoxDecoration(
                     color: tokens.handle,
-                    borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+                    borderRadius: BorderRadius.circular(CommonUiShapes.pill),
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -720,7 +720,7 @@ class _PromptSheetScaffoldState extends State<PromptSheetScaffold>
                         decoration: BoxDecoration(
                           color: tokens.accentContainer,
                           borderRadius:
-                              BorderRadius.circular(PromptUiShapes.control),
+                              BorderRadius.circular(CommonUiShapes.control),
                           border: Border.all(
                             color: tokens.accent.withOpacity(
                               tokens.isDark ? 0.54 : 0.36,
@@ -743,11 +743,11 @@ class _PromptSheetScaffoldState extends State<PromptSheetScaffold>
                           ),
                         ),
                       ),
-                      PromptIconButton(
+                      CommonIconButton(
                         icon: Icons.close_rounded,
                         tooltip: '닫기',
                         onPressed: widget.onClose,
-                        haptic: PromptHaptic.selection,
+                        haptic: CommonHaptic.selection,
                       ),
                     ],
                   ),
@@ -764,8 +764,8 @@ class _PromptSheetScaffoldState extends State<PromptSheetScaffold>
   }
 }
 
-class PromptDialogFrame extends StatefulWidget {
-  const PromptDialogFrame({
+class CommonDialogFrame extends StatefulWidget {
+  const CommonDialogFrame({
     super.key,
     required this.child,
   });
@@ -773,10 +773,10 @@ class PromptDialogFrame extends StatefulWidget {
   final Widget child;
 
   @override
-  State<PromptDialogFrame> createState() => _PromptDialogFrameState();
+  State<CommonDialogFrame> createState() => _CommonDialogFrameState();
 }
 
-class _PromptDialogFrameState extends State<PromptDialogFrame>
+class _CommonDialogFrameState extends State<CommonDialogFrame>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<double> _opacity;
@@ -787,11 +787,11 @@ class _PromptDialogFrameState extends State<PromptDialogFrame>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: PromptUiMotion.component,
+      duration: CommonUiMotion.component,
     );
     final curve = CurvedAnimation(
       parent: _controller,
-      curve: PromptUiMotion.enter,
+      curve: CommonUiMotion.enter,
     );
     _opacity = Tween<double>(begin: 0, end: 1).animate(curve);
     _scale = Tween<double>(begin: 0.96, end: 1).animate(curve);
@@ -813,7 +813,7 @@ class _PromptDialogFrameState extends State<PromptDialogFrame>
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     return FadeTransition(
       opacity: _opacity,
       child: ScaleTransition(
@@ -824,7 +824,7 @@ class _PromptDialogFrameState extends State<PromptDialogFrame>
           shadowColor: tokens.shadow,
           elevation: 0,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(PromptUiShapes.dialog),
+            borderRadius: BorderRadius.circular(CommonUiShapes.dialog),
             side: BorderSide(color: tokens.borderSubtle),
           ),
           child: SafeArea(
@@ -837,19 +837,19 @@ class _PromptDialogFrameState extends State<PromptDialogFrame>
   }
 }
 
-Future<T?> showPromptDialog<T>({
+Future<T?> showCommonDialog<T>({
   required BuildContext context,
   required WidgetBuilder builder,
   bool barrierDismissible = true,
 }) {
-  final tokens = PromptUiTheme.of(context);
+  final tokens = CommonUiTheme.of(context);
   return showDialog<T>(
     context: context,
     barrierDismissible: barrierDismissible,
     barrierColor: tokens.scrim,
     builder: (dialogContext) {
-      return PromptUiScope(
-        child: PromptDialogFrame(child: builder(dialogContext)),
+      return CommonUiScope(
+        child: CommonDialogFrame(child: builder(dialogContext)),
       );
     },
   );

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 
 enum RoadmapStatus { planned, inProgress, done }
 
@@ -62,7 +62,7 @@ const List<RoadmapItem> _roadmapData = <RoadmapItem>[
 class RoadmapBottomSheet extends StatelessWidget {
   const RoadmapBottomSheet({super.key});
 
-  Color _statusColor(PromptUiTokens tokens, RoadmapStatus status) {
+  Color _statusColor(CommonUiTokens tokens, RoadmapStatus status) {
     switch (status) {
       case RoadmapStatus.planned:
         return tokens.info;
@@ -73,7 +73,7 @@ class RoadmapBottomSheet extends StatelessWidget {
     }
   }
 
-  Color _statusContainer(PromptUiTokens tokens, RoadmapStatus status) {
+  Color _statusContainer(CommonUiTokens tokens, RoadmapStatus status) {
     switch (status) {
       case RoadmapStatus.planned:
         return tokens.infoContainer;
@@ -84,7 +84,7 @@ class RoadmapBottomSheet extends StatelessWidget {
     }
   }
 
-  Color _statusForeground(PromptUiTokens tokens, RoadmapStatus status) {
+  Color _statusForeground(CommonUiTokens tokens, RoadmapStatus status) {
     switch (status) {
       case RoadmapStatus.planned:
         return tokens.onInfoContainer;
@@ -106,7 +106,7 @@ class RoadmapBottomSheet extends StatelessWidget {
     }
   }
 
-  Color _loadColor(PromptUiTokens tokens, RoadmapLoad load) {
+  Color _loadColor(CommonUiTokens tokens, RoadmapLoad load) {
     switch (load) {
       case RoadmapLoad.light:
         return tokens.success;
@@ -117,7 +117,7 @@ class RoadmapBottomSheet extends StatelessWidget {
     }
   }
 
-  Color _loadContainer(PromptUiTokens tokens, RoadmapLoad load) {
+  Color _loadContainer(CommonUiTokens tokens, RoadmapLoad load) {
     switch (load) {
       case RoadmapLoad.light:
         return tokens.successContainer;
@@ -128,7 +128,7 @@ class RoadmapBottomSheet extends StatelessWidget {
     }
   }
 
-  Color _loadForeground(PromptUiTokens tokens, RoadmapLoad load) {
+  Color _loadForeground(CommonUiTokens tokens, RoadmapLoad load) {
     switch (load) {
       case RoadmapLoad.light:
         return tokens.onSuccessContainer;
@@ -152,7 +152,7 @@ class RoadmapBottomSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
 
     return DraggableScrollableSheet(
@@ -165,7 +165,7 @@ class RoadmapBottomSheet extends StatelessWidget {
           decoration: BoxDecoration(
             color: tokens.surfaceRaised,
             borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(PromptUiShapes.sheet),
+              top: Radius.circular(CommonUiShapes.sheet),
             ),
             border: Border.all(color: tokens.borderSubtle),
             boxShadow: <BoxShadow>[
@@ -186,7 +186,7 @@ class RoadmapBottomSheet extends StatelessWidget {
                   height: 4,
                   decoration: BoxDecoration(
                     color: tokens.handle,
-                    borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+                    borderRadius: BorderRadius.circular(CommonUiShapes.pill),
                   ),
                 ),
                 Padding(
@@ -199,7 +199,7 @@ class RoadmapBottomSheet extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: tokens.accentContainer,
                           borderRadius:
-                              BorderRadius.circular(PromptUiShapes.control),
+                              BorderRadius.circular(CommonUiShapes.control),
                           border: Border.all(color: tokens.borderSubtle),
                         ),
                         child: Icon(
@@ -230,11 +230,11 @@ class RoadmapBottomSheet extends StatelessWidget {
                           ],
                         ),
                       ),
-                      PromptIconButton(
+                      CommonIconButton(
                         icon: Icons.close_rounded,
                         tooltip: '닫기',
                         onPressed: () => Navigator.of(context).maybePop(),
-                        haptic: PromptHaptic.selection,
+                        haptic: CommonHaptic.selection,
                       ),
                     ],
                   ),
@@ -262,7 +262,7 @@ class RoadmapBottomSheet extends StatelessWidget {
                     itemCount: _roadmapData.length,
                     itemBuilder: (context, index) {
                       final item = _roadmapData[index];
-                      return PromptAnimatedReveal(
+                      return CommonAnimatedReveal(
                         delay: Duration(milliseconds: index * 45),
                         offset: const Offset(0, 0.035),
                         child: _TimelineTile(
@@ -317,7 +317,7 @@ class _LegendChip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+        borderRadius: BorderRadius.circular(CommonUiShapes.pill),
         border: Border.all(color: color.withOpacity(0.4)),
       ),
       child: Row(
@@ -367,7 +367,7 @@ class _TimelineTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
 
     return Padding(
@@ -410,7 +410,7 @@ class _TimelineTile extends StatelessWidget {
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 color: tokens.surface,
-                borderRadius: BorderRadius.circular(PromptUiShapes.card),
+                borderRadius: BorderRadius.circular(CommonUiShapes.card),
                 border: Border.all(color: tokens.borderSubtle),
               ),
               child: Column(
@@ -514,7 +514,7 @@ class _MetaChip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+        borderRadius: BorderRadius.circular(CommonUiShapes.pill),
         border: Border.all(color: border),
       ),
       child: Text(

@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../application/monthly_date_range_calculator.dart';
 import '../../../domain/monthly_parking_options.dart';
-import '../../widgets/monthly_prompt_ui.dart';
+import '../../widgets/monthly_common_ui.dart';
 
 class MonthlyDateRangePickerSection extends StatefulWidget {
   const MonthlyDateRangePickerSection({
@@ -182,7 +182,7 @@ class _MonthlyDateRangePickerSectionState
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final summaryBadge = _summaryBadgeText();
@@ -190,19 +190,19 @@ class _MonthlyDateRangePickerSectionState
         ? '주말권은 토요일부터 시작하며 기간 1은 주말 1회로 계산합니다.'
         : '${widget.duration <= 0 ? 1 : widget.duration}${widget.periodUnit} 기준으로 종료일을 계산합니다.';
 
-    return MonthlyPromptSection(
+    return MonthlyCommonSection(
       title: '정기권 기간',
       subtitle: description,
       icon: Icons.event_available_outlined,
       delay: const Duration(milliseconds: 110),
       trailing: summaryBadge == null
           ? null
-          : MonthlyPromptBadge(
+          : MonthlyCommonBadge(
               label: summaryBadge,
               icon: Icons.date_range_rounded,
               tone: _errorText == null
-                  ? MonthlyPromptMessageTone.success
-                  : MonthlyPromptMessageTone.warning,
+                  ? MonthlyCommonMessageTone.success
+                  : MonthlyCommonMessageTone.warning,
             ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -257,9 +257,9 @@ class _MonthlyDateRangePickerSectionState
             ],
           ),
           AnimatedSwitcher(
-            duration: reduceMotion ? Duration.zero : PromptUiMotion.component,
-            switchInCurve: PromptUiMotion.enter,
-            switchOutCurve: PromptUiMotion.exit,
+            duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
+            switchInCurve: CommonUiMotion.enter,
+            switchOutCurve: CommonUiMotion.exit,
             child: _errorText == null
                 ? const SizedBox.shrink(
                     key: ValueKey<String>('date-range-valid'),
@@ -272,7 +272,7 @@ class _MonthlyDateRangePickerSectionState
                     decoration: BoxDecoration(
                       color: tokens.dangerContainer,
                       borderRadius:
-                          BorderRadius.circular(PromptUiShapes.control),
+                          BorderRadius.circular(CommonUiShapes.control),
                       border: Border.all(
                         color: tokens.danger.withOpacity(0.28),
                       ),
@@ -317,7 +317,7 @@ class _MonthlyDateRangePickerSectionState
     );
     String? localError;
 
-    final result = await showPromptOverlayBottomSheet<DateTime>(
+    final result = await showCommonOverlayBottomSheet<DateTime>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
@@ -325,7 +325,7 @@ class _MonthlyDateRangePickerSectionState
       builder: (sheetContext) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
-            final tokens = PromptUiTheme.of(context);
+            final tokens = CommonUiTheme.of(context);
             final textTheme = Theme.of(context).textTheme;
             return Padding(
               padding: EdgeInsets.only(
@@ -336,7 +336,7 @@ class _MonthlyDateRangePickerSectionState
                 surfaceTintColor: tokens.transparent,
                 shape: RoundedRectangleBorder(
                   borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(PromptUiShapes.sheet),
+                    top: Radius.circular(CommonUiShapes.sheet),
                   ),
                   side: BorderSide(color: tokens.borderSubtle),
                 ),
@@ -356,7 +356,7 @@ class _MonthlyDateRangePickerSectionState
                             decoration: BoxDecoration(
                               color: tokens.handle,
                               borderRadius:
-                                  BorderRadius.circular(PromptUiShapes.pill),
+                                  BorderRadius.circular(CommonUiShapes.pill),
                             ),
                           ),
                         ),
@@ -370,7 +370,7 @@ class _MonthlyDateRangePickerSectionState
                               decoration: BoxDecoration(
                                 color: tokens.accentContainer,
                                 borderRadius: BorderRadius.circular(
-                                  PromptUiShapes.control,
+                                  CommonUiShapes.control,
                                 ),
                               ),
                               child: Icon(
@@ -400,10 +400,10 @@ class _MonthlyDateRangePickerSectionState
                                 ],
                               ),
                             ),
-                            PromptIconButton(
+                            CommonIconButton(
                               icon: Icons.close_rounded,
                               tooltip: '닫기',
-                              haptic: PromptHaptic.selection,
+                              haptic: CommonHaptic.selection,
                               onPressed: () =>
                                   Navigator.of(sheetContext).pop(),
                             ),
@@ -442,7 +442,7 @@ class _MonthlyDateRangePickerSectionState
                                       ?.disableAnimations ??
                                   false
                               ? Duration.zero
-                              : PromptUiMotion.component,
+                              : CommonUiMotion.component,
                           child: localError == null
                               ? const SizedBox.shrink(
                                   key: ValueKey<String>('manual-date-valid'),
@@ -463,20 +463,20 @@ class _MonthlyDateRangePickerSectionState
                         Row(
                           children: [
                             Expanded(
-                              child: PromptButton(
+                              child: CommonButton(
                                 label: '취소',
-                                variant: PromptButtonVariant.tertiary,
-                                haptic: PromptHaptic.selection,
+                                variant: CommonButtonVariant.tertiary,
+                                haptic: CommonHaptic.selection,
                                 onPressed: () =>
                                     Navigator.of(sheetContext).pop(),
                               ),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
-                              child: PromptButton(
+                              child: CommonButton(
                                 label: '적용',
                                 icon: Icons.check_rounded,
-                                haptic: PromptHaptic.medium,
+                                haptic: CommonHaptic.medium,
                                 onPressed: () {
                                   final date =
                                       MonthlyDateRangeCalculator.composeStrict(
@@ -526,11 +526,11 @@ class _QuickDateButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PromptButton(
+    return CommonButton(
       label: label,
-      variant: PromptButtonVariant.tertiary,
+      variant: CommonButtonVariant.tertiary,
       minHeight: 38,
-      haptic: PromptHaptic.selection,
+      haptic: CommonHaptic.selection,
       onPressed: onTap,
     );
   }
@@ -549,7 +549,7 @@ class _DateReadField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     return TextField(
       controller: controller,
       readOnly: true,
@@ -558,7 +558,7 @@ class _DateReadField extends StatelessWidget {
             color: tokens.textPrimary,
             fontWeight: FontWeight.w700,
           ),
-      decoration: monthlyPromptInputDecoration(
+      decoration: monthlyCommonInputDecoration(
         context,
         label: label,
         suffixIcon: Icon(
@@ -583,7 +583,7 @@ class _ManualDateField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     return TextField(
       controller: controller,
       keyboardType: TextInputType.number,
@@ -596,7 +596,7 @@ class _ManualDateField extends StatelessWidget {
             color: tokens.textPrimary,
             fontWeight: FontWeight.w700,
           ),
-      decoration: monthlyPromptInputDecoration(
+      decoration: monthlyCommonInputDecoration(
         context,
         label: label,
       ),

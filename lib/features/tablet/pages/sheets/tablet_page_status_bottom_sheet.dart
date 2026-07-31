@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../shared/plate/application/common/movement_plate.dart';
 import '../../../../shared/plate/domain/models/plate_model.dart';
 
@@ -13,7 +13,7 @@ Future<bool?> showTabletPageStatusBottomSheet({
   required Future<void> Function() onRequestEntry,
   required VoidCallback onDelete,
 }) {
-  return showPromptOverlayBottomSheet<bool>(
+  return showCommonOverlayBottomSheet<bool>(
     context: context,
     useSafeArea: true,
     isScrollControlled: true,
@@ -72,9 +72,9 @@ class _TabletStatusSheetState extends State<_TabletStatusSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final text = Theme.of(context).textTheme;
-    return PromptSheetScaffold(
+    return CommonSheetScaffold(
       title: '출차 요청 확인',
       icon: Icons.directions_car_rounded,
       onClose: _submitting ? () {} : () => Navigator.pop(context),
@@ -82,7 +82,7 @@ class _TabletStatusSheetState extends State<_TabletStatusSheet> {
         controller: widget.scrollController,
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
         children: <Widget>[
-          PromptAnimatedReveal(
+          CommonAnimatedReveal(
             child: Center(
               child: Container(
                 padding: const EdgeInsets.symmetric(
@@ -91,7 +91,7 @@ class _TabletStatusSheetState extends State<_TabletStatusSheet> {
                 ),
                 decoration: BoxDecoration(
                   color: tokens.accentContainer,
-                  borderRadius: BorderRadius.circular(PromptUiShapes.card),
+                  borderRadius: BorderRadius.circular(CommonUiShapes.card),
                   border: Border.all(color: tokens.accent),
                 ),
                 child: Text(
@@ -111,13 +111,13 @@ class _TabletStatusSheetState extends State<_TabletStatusSheet> {
             ),
           ),
           const SizedBox(height: 18),
-          PromptAnimatedReveal(
+          CommonAnimatedReveal(
             delay: const Duration(milliseconds: 70),
             child: Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: tokens.statusDepartureRequestedContainer,
-                borderRadius: BorderRadius.circular(PromptUiShapes.card),
+                borderRadius: BorderRadius.circular(CommonUiShapes.card),
                 border: Border.all(color: tokens.statusDepartureRequested),
               ),
               child: Row(
@@ -149,26 +149,26 @@ class _TabletStatusSheetState extends State<_TabletStatusSheet> {
             child: Row(
               children: <Widget>[
                 Expanded(
-                  child: PromptButton(
+                  child: CommonButton(
                     label: '아니요',
                     icon: Icons.close_rounded,
-                    variant: PromptButtonVariant.secondary,
+                    variant: CommonButtonVariant.secondary,
                     expand: true,
                     onPressed: _submitting
                         ? null
                         : () => Navigator.pop(context, false),
-                    haptic: PromptHaptic.selection,
+                    haptic: CommonHaptic.selection,
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: PromptButton(
+                  child: CommonButton(
                     label: _submitting ? '처리 중' : '네, 출차 요청',
                     icon: Icons.exit_to_app_rounded,
                     expand: true,
                     loading: _submitting,
                     onPressed: _submitting ? null : _confirm,
-                    haptic: PromptHaptic.medium,
+                    haptic: CommonHaptic.medium,
                   ),
                 ),
               ],

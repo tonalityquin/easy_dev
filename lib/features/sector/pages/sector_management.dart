@@ -3,9 +3,9 @@ import 'package:provider/provider.dart';
 
 import '../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../app/utils/snackbar_helper.dart';
-import '../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../design_system/common_ui/common_ui_components.dart';
+import '../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../shared/secondary/widgets/ops_console_dialogs.dart';
 import '../../../shared/secondary/widgets/ops_console_widgets.dart';
 import '../../dev/application/area_state.dart';
@@ -41,7 +41,7 @@ class _SectorManagementState extends State<SectorManagement> {
       context: rootContext,
       title: title,
       initialMessage: initialMessage,
-      usePromptUi: true,
+      useCommonUi: true,
       developerModeMessage:
           '개발자 모드 ON: 상태와 디버그 출력을 확인하고 복사할 수 있습니다.',
       standardModeMessage:
@@ -71,7 +71,7 @@ class _SectorManagementState extends State<SectorManagement> {
       showSuccessSnackbar(
         context,
         '섹터 데이터를 새로고침했습니다.',
-        usePromptUi: true,
+        useCommonUi: true,
       );
     } catch (error, stackTrace) {
       await trace.fail(
@@ -83,7 +83,7 @@ class _SectorManagementState extends State<SectorManagement> {
       showFailedSnackbar(
         context,
         _errorMessage(error, fallback: '섹터 데이터 새로고침에 실패했습니다.'),
-        usePromptUi: true,
+        useCommonUi: true,
       );
     }
   }
@@ -133,7 +133,7 @@ class _SectorManagementState extends State<SectorManagement> {
       showSuccessSnackbar(
         context,
         editing ? '섹터를 수정했습니다.' : '섹터를 등록했습니다.',
-        usePromptUi: true,
+        useCommonUi: true,
       );
       return true;
     } catch (error, stackTrace) {
@@ -149,7 +149,7 @@ class _SectorManagementState extends State<SectorManagement> {
             error,
             fallback: editing ? '섹터 수정에 실패했습니다.' : '섹터 등록에 실패했습니다.',
           ),
-          usePromptUi: true,
+          useCommonUi: true,
         );
       }
       rethrow;
@@ -162,12 +162,12 @@ class _SectorManagementState extends State<SectorManagement> {
       showFailedSnackbar(
         context,
         '현재 지역 정보가 없습니다.',
-        usePromptUi: true,
+        useCommonUi: true,
       );
       return;
     }
 
-    await showPromptOverlayBottomSheet<void>(
+    await showCommonOverlayBottomSheet<void>(
       context: context,
       useSafeArea: true,
       isDismissible: true,
@@ -217,7 +217,7 @@ class _SectorManagementState extends State<SectorManagement> {
       showSuccessSnackbar(
         context,
         '섹터를 삭제했습니다.',
-        usePromptUi: true,
+        useCommonUi: true,
       );
     } catch (error, stackTrace) {
       await trace.fail(
@@ -229,7 +229,7 @@ class _SectorManagementState extends State<SectorManagement> {
       showFailedSnackbar(
         context,
         _errorMessage(error, fallback: '섹터 삭제에 실패했습니다.'),
-        usePromptUi: true,
+        useCommonUi: true,
       );
     }
   }
@@ -277,11 +277,11 @@ class _SectorManagementState extends State<SectorManagement> {
               icon: Icons.filter_alt_rounded,
               onSelected: () {},
             ),
-            PromptIconButton(
+            CommonIconButton(
               icon: Icons.refresh_rounded,
               tooltip: '새로고침',
               onPressed: busy ? null : _manualRefresh,
-              haptic: PromptHaptic.selection,
+              haptic: CommonHaptic.selection,
             ),
           ],
         ),
@@ -298,14 +298,14 @@ class _SectorManagementState extends State<SectorManagement> {
         Expanded(
           child: AnimatedSwitcher(
             duration:
-                reduceMotion ? Duration.zero : PromptUiMotion.component,
-            switchInCurve: PromptUiMotion.enter,
-            switchOutCurve: PromptUiMotion.exit,
+                reduceMotion ? Duration.zero : CommonUiMotion.component,
+            switchInCurve: CommonUiMotion.enter,
+            switchOutCurve: CommonUiMotion.exit,
             transitionBuilder: (child, animation) {
               final curved = CurvedAnimation(
                 parent: animation,
-                curve: PromptUiMotion.enter,
-                reverseCurve: PromptUiMotion.exit,
+                curve: CommonUiMotion.enter,
+                reverseCurve: CommonUiMotion.exit,
               );
               return FadeTransition(
                 opacity: curved,
@@ -379,7 +379,7 @@ class _SectorManagementState extends State<SectorManagement> {
           children: <Widget>[
             AnimatedContainer(
               duration:
-                  reduceMotion ? Duration.zero : PromptUiMotion.selection,
+                  reduceMotion ? Duration.zero : CommonUiMotion.selection,
               width: 6,
               height: 108,
               decoration: BoxDecoration(
@@ -441,7 +441,7 @@ class _SectorManagementState extends State<SectorManagement> {
               padding: const EdgeInsets.only(right: 12),
               child: AnimatedSwitcher(
                 duration:
-                    reduceMotion ? Duration.zero : PromptUiMotion.selection,
+                    reduceMotion ? Duration.zero : CommonUiMotion.selection,
                 child: Icon(
                   selected
                       ? Icons.check_circle_rounded
@@ -458,7 +458,7 @@ class _SectorManagementState extends State<SectorManagement> {
       ),
     );
 
-    return PromptAnimatedReveal(
+    return CommonAnimatedReveal(
       delay: reduceMotion
           ? Duration.zero
           : Duration(milliseconds: index.clamp(0, 8).toInt() * 35),
@@ -545,11 +545,11 @@ class _SectorManagementState extends State<SectorManagement> {
                           : '검색어를 조정하세요.',
                       action: currentArea.isEmpty
                           ? null
-                          : PromptButton(
+                          : CommonButton(
                               label: '섹터 등록',
                               icon: Icons.add_location_alt_rounded,
                               onPressed: () => _openSetting(),
-                              haptic: PromptHaptic.selection,
+                              haptic: CommonHaptic.selection,
                             ),
                     )
                   : ListView.builder(

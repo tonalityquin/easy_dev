@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../../design_system/common_ui/common_ui_overlays.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
@@ -102,15 +102,15 @@ class CompanyCalendarPage extends StatefulWidget {
   const CompanyCalendarPage({
     super.key,
     this.asBottomSheet = false,
-    this.usePromptUi = false,
+    this.useCommonUi = false,
   });
 
   final bool asBottomSheet;
-  final bool usePromptUi;
+  final bool useCommonUi;
 
   static Future<T?> showAsBottomSheet<T>(
     BuildContext context, {
-    bool usePromptUi = false,
+    bool useCommonUi = false,
   }) {
     Widget buildSheet(BuildContext sheetContext) {
       final insets = MediaQuery.of(sheetContext).viewInsets;
@@ -119,14 +119,14 @@ class CompanyCalendarPage extends StatefulWidget {
         child: _FullHeightBottomSheetFrame(
           child: CompanyCalendarPage(
             asBottomSheet: true,
-            usePromptUi: usePromptUi,
+            useCommonUi: useCommonUi,
           ),
         ),
       );
     }
 
-    if (usePromptUi) {
-      return showPromptOverlayBottomSheet<T>(
+    if (useCommonUi) {
+      return showCommonOverlayBottomSheet<T>(
         context: context,
         isScrollControlled: true,
         useSafeArea: true,
@@ -270,7 +270,7 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
                 MonthCalendarView(
                   allEvents: model.events,
                   progressOf: (e) => _extractProgress(e.description),
-                  usePromptUi: widget.usePromptUi,
+                  useCommonUi: widget.useCommonUi,
                   onEdit: _openEditSheet,
                   onDelete: _confirmDelete,
                   onToggleProgress: _toggleProgress,
@@ -284,7 +284,7 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
                 EventList(
                   events: model.events,
                   onEdit: _openEditSheet,
-                  usePromptUi: widget.usePromptUi,
+                  useCommonUi: widget.useCommonUi,
                   onDelete: _confirmDelete,
                   onToggleProgress: _toggleProgress,
                   progressOf: (e) => _extractProgress(e.description),
@@ -330,7 +330,7 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
                 context: context,
                 allEvents: model.events,
                 onEdit: _openEditSheet,
-                usePromptUi: widget.usePromptUi,
+                useCommonUi: widget.useCommonUi,
               ),
             ),
           ],
@@ -352,7 +352,7 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
             context: context,
             allEvents: model.events,
             onEdit: _openEditSheet,
-            usePromptUi: widget.usePromptUi,
+            useCommonUi: widget.useCommonUi,
           ),
         ),
       ],
@@ -432,8 +432,8 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
       );
     }
 
-    if (widget.usePromptUi) {
-      await showPromptOverlayBottomSheet<void>(
+    if (widget.useCommonUi) {
+      await showCommonOverlayBottomSheet<void>(
         context: pageContext,
         isScrollControlled: true,
         useSafeArea: true,
@@ -470,7 +470,7 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
       initialStart: now,
       initialEnd: now.add(const Duration(hours: 1)),
       initialProgress: 0,
-      usePromptUi: widget.usePromptUi,
+      useCommonUi: widget.useCommonUi,
     );
     if (created == null) return;
 
@@ -511,7 +511,7 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
       initialColorId: e.colorId,
       initialProgress: initialProgress,
       isEditMode: true,
-      usePromptUi: widget.usePromptUi,
+      useCommonUi: widget.useCommonUi,
     );
     if (edited == null) return;
 
@@ -547,8 +547,8 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
       );
     }
 
-    final ok = widget.usePromptUi
-        ? await showPromptOverlayDialog<bool>(
+    final ok = widget.useCommonUi
+        ? await showCommonOverlayDialog<bool>(
             context: context,
             builder: buildDialog,
           )

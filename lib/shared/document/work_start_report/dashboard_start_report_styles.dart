@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../design_system/common_ui/common_ui_theme.dart';
 
 class DashboardReportButtonStyles {
   const DashboardReportButtonStyles._();
@@ -9,7 +9,7 @@ class DashboardReportButtonStyles {
     BuildContext context, {
     double minHeight = 55,
   }) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     return ElevatedButton.styleFrom(
       backgroundColor: tokens.accent,
       foregroundColor: tokens.onAccent,
@@ -19,7 +19,7 @@ class DashboardReportButtonStyles {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       side: BorderSide(color: tokens.accentPressed.withOpacity(0.55)),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(PromptUiShapes.button),
+        borderRadius: BorderRadius.circular(CommonUiShapes.button),
       ),
       elevation: 0,
     ).copyWith(
@@ -35,7 +35,7 @@ class DashboardReportButtonStyles {
     BuildContext context, {
     double minHeight = 55,
   }) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     return OutlinedButton.styleFrom(
       foregroundColor: tokens.textPrimary,
       backgroundColor: tokens.surfaceRaised,
@@ -45,7 +45,7 @@ class DashboardReportButtonStyles {
       minimumSize: Size(0, minHeight),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(PromptUiShapes.button),
+        borderRadius: BorderRadius.circular(CommonUiShapes.button),
       ),
     ).copyWith(
       overlayColor: WidgetStateProperty.resolveWith<Color?>(

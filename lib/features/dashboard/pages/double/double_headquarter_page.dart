@@ -2,7 +2,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../shared/page/application/double/double_page_info.dart';
 import '../../../../shared/plate/application/double/double_plate_state.dart';
 import '../../../../shared/secondary/pages/secondary_page.dart';
@@ -19,7 +19,7 @@ class DoubleHeadquarterPage extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => DoubleHqState(pages: doubleHqPage)),
       ],
-      child: const PromptUiScope(
+      child: const CommonUiScope(
         child: _DoubleHeadquarterShell(),
       ),
     );
@@ -31,7 +31,7 @@ class _DoubleHeadquarterShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     return PopScope(
       canPop: false,
       child: Scaffold(
@@ -61,9 +61,9 @@ class _BottomArea extends StatelessWidget {
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: PromptUiTheme.of(context).surface,
+        color: CommonUiTheme.of(context).surface,
         border: Border(
-          top: BorderSide(color: PromptUiTheme.of(context).borderSubtle),
+          top: BorderSide(color: CommonUiTheme.of(context).borderSubtle),
         ),
       ),
       child: Column(
@@ -99,7 +99,7 @@ class _RefreshableBodyState extends State<RefreshableBody> {
   PageRouteBuilder<void> _slidePage(Widget page) {
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    final duration = reduceMotion ? Duration.zero : PromptUiMotion.overlay;
+    final duration = reduceMotion ? Duration.zero : CommonUiMotion.overlay;
     return PageRouteBuilder<void>(
       transitionDuration: duration,
       reverseTransitionDuration: duration,
@@ -108,8 +108,8 @@ class _RefreshableBodyState extends State<RefreshableBody> {
         if (reduceMotion) return child;
         final curved = CurvedAnimation(
           parent: animation,
-          curve: PromptUiMotion.enter,
-          reverseCurve: PromptUiMotion.exit,
+          curve: CommonUiMotion.enter,
+          reverseCurve: CommonUiMotion.exit,
         );
         return FadeTransition(
           opacity: curved,
@@ -146,7 +146,7 @@ class _RefreshableBodyState extends State<RefreshableBody> {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       dragStartBehavior: DragStartBehavior.down,
@@ -171,7 +171,7 @@ class _RefreshableBodyState extends State<RefreshableBody> {
                   opacity: state.isLoading ? 1 : 0,
                   duration: MediaQuery.maybeOf(context)?.disableAnimations == true
                       ? Duration.zero
-                      : PromptUiMotion.component,
+                      : CommonUiMotion.component,
                   child: ColoredBox(
                     color: tokens.scrim.withOpacity(tokens.isDark ? 0.30 : 0.14),
                     child: Center(
@@ -180,7 +180,7 @@ class _RefreshableBodyState extends State<RefreshableBody> {
                         height: 56,
                         decoration: BoxDecoration(
                           color: tokens.surfaceRaised,
-                          borderRadius: BorderRadius.circular(PromptUiShapes.card),
+                          borderRadius: BorderRadius.circular(CommonUiShapes.card),
                           border: Border.all(color: tokens.borderSubtle),
                         ),
                         alignment: Alignment.center,
@@ -210,7 +210,7 @@ class PageBottomNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     return Consumer<DoubleHqState>(
       builder: (context, state, child) {
         final pages = state.pages;

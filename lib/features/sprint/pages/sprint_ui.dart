@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../design_system/common_ui/common_ui_components.dart';
+import '../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../design_system/common_ui/common_ui_theme.dart';
 import '../application/sprint_mode_store.dart';
 import '../domain/sprint_models.dart';
 
@@ -12,7 +12,7 @@ void sprintShowMessage({
   bool danger = false,
 }) {
   final messenger = ScaffoldMessenger.of(context);
-  final tokens = PromptUiTheme.of(context);
+  final tokens = CommonUiTheme.of(context);
   messenger.clearSnackBars();
   messenger.showSnackBar(
     SnackBar(
@@ -22,7 +22,7 @@ void sprintShowMessage({
       backgroundColor:
           danger ? tokens.dangerContainer : tokens.surfaceRaised,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(PromptUiShapes.card),
+        borderRadius: BorderRadius.circular(CommonUiShapes.card),
         side: BorderSide(
           color: danger ? tokens.danger : tokens.borderSubtle,
         ),
@@ -63,7 +63,7 @@ Future<T?> sprintShowBottomSheet<T>({
   bool showDragHandle = true,
   bool useRootNavigator = false,
 }) {
-  return showPromptOverlayBottomSheet<T>(
+  return showCommonOverlayBottomSheet<T>(
     context: context,
     builder: builder,
     isScrollControlled: isScrollControlled,
@@ -82,7 +82,7 @@ Future<T?> sprintShowDialog<T>({
   bool barrierDismissible = true,
   bool useRootNavigator = true,
 }) {
-  return showPromptOverlayDialog<T>(
+  return showCommonOverlayDialog<T>(
     context: context,
     builder: builder,
     barrierDismissible: barrierDismissible,
@@ -106,7 +106,7 @@ Future<DateTime?> sprintShowDatePicker({
     cancelText: cancelText,
     confirmText: confirmText,
     builder: (pickerContext, child) {
-      return PromptUiScope(child: child ?? const SizedBox.shrink());
+      return CommonUiScope(child: child ?? const SizedBox.shrink());
     },
   );
 }
@@ -118,16 +118,16 @@ Route<T> sprintPageRoute<T>({
 }) {
   final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
   return PageRouteBuilder<T>(
-    transitionDuration: reduceMotion ? Duration.zero : PromptUiMotion.overlay,
+    transitionDuration: reduceMotion ? Duration.zero : CommonUiMotion.overlay,
     reverseTransitionDuration:
-        reduceMotion ? Duration.zero : PromptUiMotion.component,
-    pageBuilder: (_, __, ___) => SprintPromptScope(child: page),
+        reduceMotion ? Duration.zero : CommonUiMotion.component,
+    pageBuilder: (_, __, ___) => SprintCommonScope(child: page),
     transitionsBuilder: (_, animation, __, child) {
       if (reduceMotion) return child;
       final curved = CurvedAnimation(
         parent: animation,
-        curve: PromptUiMotion.enter,
-        reverseCurve: PromptUiMotion.exit,
+        curve: CommonUiMotion.enter,
+        reverseCurve: CommonUiMotion.exit,
       );
       return FadeTransition(
         opacity: curved,
@@ -144,7 +144,7 @@ Route<T> sprintPageRoute<T>({
 }
 
 Color sprintTransparent(BuildContext context) {
-  return PromptUiTheme.of(context).transparent;
+  return CommonUiTheme.of(context).transparent;
 }
 
 Future<String?> sprintSelectTaskProject({
@@ -168,12 +168,12 @@ Future<String?> sprintSelectTaskProject({
     builder: (sheetContext) {
       final reduceMotion =
           MediaQuery.maybeOf(sheetContext)?.disableAnimations ?? false;
-      final duration = reduceMotion ? Duration.zero : PromptUiMotion.component;
+      final duration = reduceMotion ? Duration.zero : CommonUiMotion.component;
       return Padding(
         padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
         child: AnimatedSize(
           duration: duration,
-          curve: PromptUiMotion.enter,
+          curve: CommonUiMotion.enter,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -186,7 +186,7 @@ Future<String?> sprintSelectTaskProject({
               ),
               const SizedBox(height: 12),
               ...projects.indexed.map(
-                (entry) => PromptAnimatedReveal(
+                (entry) => CommonAnimatedReveal(
                   delay: reduceMotion
                       ? Duration.zero
                       : Duration(milliseconds: entry.$1 * 45),
@@ -234,12 +234,12 @@ Future<String?> sprintSelectTaskCalendar({
     builder: (sheetContext) {
       final reduceMotion =
           MediaQuery.maybeOf(sheetContext)?.disableAnimations ?? false;
-      final duration = reduceMotion ? Duration.zero : PromptUiMotion.component;
+      final duration = reduceMotion ? Duration.zero : CommonUiMotion.component;
       return Padding(
         padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
         child: AnimatedSize(
           duration: duration,
-          curve: PromptUiMotion.enter,
+          curve: CommonUiMotion.enter,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -256,7 +256,7 @@ Future<String?> sprintSelectTaskCalendar({
                   final profile = entry.$2;
                   final account = store.accountForProfile(profile.id);
                   final selected = profile.id == preferred.id;
-                  return PromptAnimatedReveal(
+                  return CommonAnimatedReveal(
                     delay: reduceMotion
                         ? Duration.zero
                         : Duration(milliseconds: entry.$1 * 45),
@@ -424,8 +424,8 @@ bool sprintSameDay(DateTime a, DateTime b) {
   return a.year == b.year && a.month == b.month && a.day == b.day;
 }
 
-class SprintPromptScope extends StatelessWidget {
-  const SprintPromptScope({
+class SprintCommonScope extends StatelessWidget {
+  const SprintCommonScope({
     super.key,
     required this.child,
   });
@@ -434,7 +434,7 @@ class SprintPromptScope extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PromptUiScope(child: child);
+    return CommonUiScope(child: child);
   }
 }
 
@@ -466,14 +466,14 @@ class SprintScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PromptUiScope(
+    return CommonUiScope(
       child: Builder(
         builder: (scopedContext) {
-          final tokens = PromptUiTheme.of(scopedContext);
+          final tokens = CommonUiTheme.of(scopedContext);
           final pageBody = body == null
               ? null
               : animateBody
-                  ? PromptAnimatedReveal(
+                  ? CommonAnimatedReveal(
                       offset: const Offset(0, 0.025),
                       child: body!,
                     )
@@ -513,15 +513,15 @@ class SprintSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final content = AnimatedContainer(
-      duration: reduceMotion ? Duration.zero : PromptUiMotion.component,
-      curve: PromptUiMotion.standard,
+      duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
+      curve: CommonUiMotion.standard,
       padding: padding,
       decoration: BoxDecoration(
         color: backgroundColor ?? tokens.surfaceRaised,
-        borderRadius: BorderRadius.circular(PromptUiShapes.card),
+        borderRadius: BorderRadius.circular(CommonUiShapes.card),
         border: Border.all(
           color: borderColor ?? tokens.borderSubtle,
         ),
@@ -540,10 +540,10 @@ class SprintSurface extends StatelessWidget {
 
     return Material(
       color: tokens.transparent,
-      borderRadius: BorderRadius.circular(PromptUiShapes.card),
+      borderRadius: BorderRadius.circular(CommonUiShapes.card),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        borderRadius: BorderRadius.circular(PromptUiShapes.card),
+        borderRadius: BorderRadius.circular(CommonUiShapes.card),
         onTap: onTap,
         child: content,
       ),
@@ -576,11 +576,11 @@ class SprintSectionHeader extends StatelessWidget {
           ),
         ),
         if (actionLabel != null && onAction != null)
-          PromptButton(
+          CommonButton(
             label: actionLabel!,
             onPressed: onAction,
-            variant: PromptButtonVariant.tertiary,
-            haptic: PromptHaptic.selection,
+            variant: CommonButtonVariant.tertiary,
+            haptic: CommonHaptic.selection,
             minHeight: 40,
           ),
       ],
@@ -602,14 +602,14 @@ class SprintMetric extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         AnimatedSwitcher(
           duration: (MediaQuery.maybeOf(context)?.disableAnimations ?? false)
               ? Duration.zero
-              : PromptUiMotion.selection,
+              : CommonUiMotion.selection,
           child: Text(
             value,
             key: ValueKey<String>(value),

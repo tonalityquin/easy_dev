@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:googleapis/calendar/v3.dart' as gcal;
 
-import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 
 import '../../../dev/debug/debug_api_logger.dart';
 
@@ -16,7 +16,7 @@ class MonthCalendarView extends StatefulWidget {
     required this.onDelete,
     required this.onToggleProgress,
     this.onMonthRequested,
-    this.usePromptUi = false,
+    this.useCommonUi = false,
   });
 
   final List<gcal.Event> allEvents;
@@ -29,7 +29,7 @@ class MonthCalendarView extends StatefulWidget {
 
   final Future<void> Function(DateTime monthStart, DateTime monthEnd)?
       onMonthRequested;
-  final bool usePromptUi;
+  final bool useCommonUi;
 
   @override
   State<MonthCalendarView> createState() => _MonthCalendarViewState();
@@ -182,9 +182,9 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
 
               return Material(
                 color: cs.surface,
-                surfaceTintColor: PromptUiTheme.of(context).transparent,
+                surfaceTintColor: CommonUiTheme.of(context).transparent,
                 borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(PromptUiShapes.sheet),
+                  top: Radius.circular(CommonUiShapes.sheet),
                 ),
                 child: Column(
                   children: [
@@ -291,8 +291,8 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
           );
         }
 
-      if (widget.usePromptUi) {
-        await showPromptOverlayBottomSheet<void>(
+      if (widget.useCommonUi) {
+        await showCommonOverlayBottomSheet<void>(
           context: context,
           useSafeArea: true,
           isScrollControlled: true,
@@ -412,7 +412,7 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
 
               final bg = isSelected
                   ? cs.primary.withOpacity(isLight ? .12 : .22)
-                  : PromptUiTheme.of(context).transparent;
+                  : CommonUiTheme.of(context).transparent;
 
               final fg = inMonth
                   ? (isSelected ? cs.primary : cs.onSurface)
@@ -430,7 +430,7 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
                     color: bg,
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
-                      color: isSelected ? cs.primary.withOpacity(0.35) : PromptUiTheme.of(context).transparent,
+                      color: isSelected ? cs.primary.withOpacity(0.35) : CommonUiTheme.of(context).transparent,
                       width: 1,
                     ),
                   ),

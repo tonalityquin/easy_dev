@@ -1,8 +1,8 @@
 import 'dart:ui' show FontFeature;
 import 'package:flutter/material.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 import 'package:provider/provider.dart';
 import 'package:table_calendar/table_calendar.dart';
 import '../../../../app/config/email_config.dart';
@@ -19,15 +19,15 @@ class BreakCalendar extends StatefulWidget {
   const BreakCalendar({
     super.key,
     this.asBottomSheet = false,
-    this.usePromptUi = false,
+    this.useCommonUi = false,
   });
 
   final bool asBottomSheet;
-  final bool usePromptUi;
+  final bool useCommonUi;
 
   static Future<T?> showAsBottomSheet<T>(
     BuildContext context, {
-    bool usePromptUi = false,
+    bool useCommonUi = false,
   }) {
     Widget buildSheet(BuildContext sheetContext) {
       final insets = MediaQuery.of(sheetContext).viewInsets;
@@ -37,14 +37,14 @@ class BreakCalendar extends StatefulWidget {
           heightFactor: 1,
           child: BreakCalendar(
             asBottomSheet: true,
-            usePromptUi: usePromptUi,
+            useCommonUi: useCommonUi,
           ),
         ),
       );
     }
 
-    if (usePromptUi) {
-      return showPromptOverlayBottomSheet<T>(
+    if (useCommonUi) {
+      return showCommonOverlayBottomSheet<T>(
         context: context,
         isScrollControlled: true,
         useSafeArea: true,
@@ -67,7 +67,7 @@ class BreakCalendar extends StatefulWidget {
 }
 
 class _BreakCalendarState extends State<BreakCalendar> {
-  PromptUiTokens get _tokens => PromptUiTheme.of(context);
+  CommonUiTokens get _tokens => CommonUiTheme.of(context);
   Color get _base => _tokens.accent;
   Color get _dark => _tokens.accentPressed;
   Color get _light => _tokens.accentContainer;
@@ -183,12 +183,12 @@ class _BreakCalendarState extends State<BreakCalendar> {
       if (!mounted) return null;
 
       Widget buildUserPicker(BuildContext sheetContext) {
-        final tokens = PromptUiTheme.of(sheetContext);
+        final tokens = CommonUiTheme.of(sheetContext);
         return SafeArea(
           child: Material(
             color: tokens.surfaceRaised,
             borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(PromptUiShapes.sheet),
+              top: Radius.circular(CommonUiShapes.sheet),
             ),
             child: ListView.separated(
               shrinkWrap: true,
@@ -217,8 +217,8 @@ class _BreakCalendarState extends State<BreakCalendar> {
         );
       }
 
-      final picked = widget.usePromptUi
-          ? await showPromptOverlayBottomSheet<UserModel>(
+      final picked = widget.useCommonUi
+          ? await showCommonOverlayBottomSheet<UserModel>(
               context: context,
               useSafeArea: true,
               builder: buildUserPicker,
@@ -380,7 +380,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
   Future<void> _openMailRecipientSettings() async {
     await MailRecipientSettings.showAsBottomSheet(
       context,
-      usePromptUi: widget.usePromptUi,
+      useCommonUi: widget.useCommonUi,
     );
   }
 
@@ -809,7 +809,7 @@ class _BottomSheetFrame extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     return FractionallySizedBox(
       heightFactor: heightFactor,
       widthFactor: 1.0,
@@ -875,7 +875,7 @@ class _SheetScaffold extends StatelessWidget {
               width: 36,
               height: 4,
               decoration: BoxDecoration(
-                color: PromptUiTheme.of(context).handle,
+                color: CommonUiTheme.of(context).handle,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -948,7 +948,7 @@ class _LegendRowBreak extends StatelessWidget {
               t,
               style: TextStyle(
                 fontSize: 12,
-                color: PromptUiTheme.of(context).textPrimary,
+                color: CommonUiTheme.of(context).textPrimary,
               ),
             ),
           ],
@@ -970,7 +970,7 @@ class _LegendRowBreak extends StatelessWidget {
               t,
               style: TextStyle(
                 fontSize: 12,
-                color: PromptUiTheme.of(context).textPrimary,
+                color: CommonUiTheme.of(context).textPrimary,
               ),
             ),
           ],
@@ -989,7 +989,7 @@ class _LegendRowBreak extends StatelessWidget {
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           itemDot(base, '휴게 기록 있음'),
-          itemDot(PromptUiTheme.of(context).textDisabled, '기록 없음'),
+          itemDot(CommonUiTheme.of(context).textDisabled, '기록 없음'),
           itemSquare('선택/오늘 강조'),
         ],
       ),
@@ -1142,7 +1142,7 @@ class _SelectedUserRow extends StatelessWidget {
         children: [
           CircleAvatar(
             backgroundColor: base,
-            foregroundColor: PromptUiTheme.of(context).onAccent,
+            foregroundColor: CommonUiTheme.of(context).onAccent,
             child: const Icon(Icons.person),
           ),
           const SizedBox(width: 12),
@@ -1153,10 +1153,10 @@ class _SelectedUserRow extends StatelessWidget {
               child: Row(
                 children: [
                   _chip(context, Icons.badge, user.name,
-                      bg: PromptUiTheme.of(context).surfaceRaised, fg: PromptUiTheme.of(context).textPrimary),
+                      bg: CommonUiTheme.of(context).surfaceRaised, fg: CommonUiTheme.of(context).textPrimary),
                   const SizedBox(width: 8),
                   _chip(context, Icons.phone, user.phone,
-                      bg: PromptUiTheme.of(context).surfaceRaised, fg: PromptUiTheme.of(context).textPrimary),
+                      bg: CommonUiTheme.of(context).surfaceRaised, fg: CommonUiTheme.of(context).textPrimary),
                   if (area.isNotEmpty) ...[
                     const SizedBox(width: 8),
                     _chip(context, Icons.place, area,
@@ -1195,7 +1195,7 @@ class _SelectedUserRow extends StatelessWidget {
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(30),
-        border: Border.all(color: PromptUiTheme.of(context).borderSubtle),
+        border: Border.all(color: CommonUiTheme.of(context).borderSubtle),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

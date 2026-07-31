@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../../../../design_system/common_ui/common_ui_components.dart';
 
 class InputAnimatedActionButton extends StatelessWidget {
   final bool isLoading;
@@ -24,7 +24,7 @@ class InputAnimatedActionButton extends StatelessWidget {
     final disabled = isLoading ||
         isStatusLookupInProgress ||
         (!isMinorMode && !isLocationSelected);
-    return PromptButton(
+    return CommonButton(
       label: isStatusLookupInProgress
           ? '상태 확인 중'
           : requestMode
@@ -37,7 +37,7 @@ class InputAnimatedActionButton extends StatelessWidget {
               : Icons.check_circle_outline_rounded,
       loading: isLoading || isStatusLookupInProgress,
       expand: true,
-      haptic: PromptHaptic.medium,
+      haptic: CommonHaptic.medium,
       onPressed: disabled ? null : onPressed,
     );
   }

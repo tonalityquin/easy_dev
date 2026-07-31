@@ -2,17 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../account/applications/user_state.dart';
 
-class PromptHqUserInfoCard extends StatefulWidget {
-  const PromptHqUserInfoCard({super.key});
+class CommonHqUserInfoCard extends StatefulWidget {
+  const CommonHqUserInfoCard({super.key});
 
   @override
-  State<PromptHqUserInfoCard> createState() => _PromptHqUserInfoCardState();
+  State<CommonHqUserInfoCard> createState() => _CommonHqUserInfoCardState();
 }
 
-class _PromptHqUserInfoCardState extends State<PromptHqUserInfoCard> {
+class _CommonHqUserInfoCardState extends State<CommonHqUserInfoCard> {
   bool _pressed = false;
   bool _hovered = false;
   bool _focused = false;
@@ -20,7 +20,7 @@ class _PromptHqUserInfoCardState extends State<PromptHqUserInfoCard> {
   @override
   Widget build(BuildContext context) {
     final userState = context.watch<UserState>();
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final background = _pressed || _hovered
@@ -31,12 +31,12 @@ class _PromptHqUserInfoCardState extends State<PromptHqUserInfoCard> {
       button: true,
       label: '근무자 정보',
       child: AnimatedContainer(
-        duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
-        curve: PromptUiMotion.standard,
+        duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+        curve: CommonUiMotion.standard,
         margin: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
           color: background,
-          borderRadius: BorderRadius.circular(PromptUiShapes.card),
+          borderRadius: BorderRadius.circular(CommonUiShapes.card),
           border: Border.all(
             color: _focused ? tokens.focusRing : tokens.borderSubtle,
             width: _focused ? 2 : 1,
@@ -52,10 +52,10 @@ class _PromptHqUserInfoCardState extends State<PromptHqUserInfoCard> {
         ),
         child: Material(
           color: tokens.transparent,
-          borderRadius: BorderRadius.circular(PromptUiShapes.card),
+          borderRadius: BorderRadius.circular(CommonUiShapes.card),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
-            borderRadius: BorderRadius.circular(PromptUiShapes.card),
+            borderRadius: BorderRadius.circular(CommonUiShapes.card),
             onTap: HapticFeedback.selectionClick,
             onHighlightChanged: (value) {
               if (_pressed == value) return;
@@ -73,8 +73,8 @@ class _PromptHqUserInfoCardState extends State<PromptHqUserInfoCard> {
               padding: const EdgeInsets.all(20),
               child: AnimatedScale(
                 scale: _pressed ? 0.992 : 1,
-                duration: reduceMotion ? Duration.zero : PromptUiMotion.press,
-                curve: PromptUiMotion.enter,
+                duration: reduceMotion ? Duration.zero : CommonUiMotion.press,
+                curve: CommonUiMotion.enter,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -106,7 +106,7 @@ class _PromptHqUserInfoCardState extends State<PromptHqUserInfoCard> {
                           decoration: BoxDecoration(
                             color: tokens.accentContainer,
                             borderRadius:
-                                BorderRadius.circular(PromptUiShapes.control),
+                                BorderRadius.circular(CommonUiShapes.control),
                             border: Border.all(color: tokens.borderSubtle),
                           ),
                           alignment: Alignment.center,
@@ -149,7 +149,7 @@ class _PromptHqUserInfoCardState extends State<PromptHqUserInfoCard> {
                           decoration: BoxDecoration(
                             color: tokens.surfaceOverlay,
                             borderRadius:
-                                BorderRadius.circular(PromptUiShapes.control),
+                                BorderRadius.circular(CommonUiShapes.control),
                           ),
                           alignment: Alignment.center,
                           child: Icon(
@@ -163,12 +163,12 @@ class _PromptHqUserInfoCardState extends State<PromptHqUserInfoCard> {
                     const SizedBox(height: 16),
                     Divider(color: tokens.borderSubtle, height: 1),
                     const SizedBox(height: 10),
-                    _PromptHqInfoRow(
+                    _CommonHqInfoRow(
                       icon: Icons.phone_rounded,
                       value: _safe(userState.phone),
                     ),
                     const SizedBox(height: 8),
-                    _PromptHqInfoRow(
+                    _CommonHqInfoRow(
                       icon: Icons.location_on_rounded,
                       value: _safe(userState.area),
                     ),
@@ -188,8 +188,8 @@ class _PromptHqUserInfoCardState extends State<PromptHqUserInfoCard> {
   }
 }
 
-class _PromptHqInfoRow extends StatelessWidget {
-  const _PromptHqInfoRow({
+class _CommonHqInfoRow extends StatelessWidget {
+  const _CommonHqInfoRow({
     required this.icon,
     required this.value,
   });
@@ -199,13 +199,13 @@ class _PromptHqInfoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: tokens.surfaceOverlay,
-        borderRadius: BorderRadius.circular(PromptUiShapes.control),
+        borderRadius: BorderRadius.circular(CommonUiShapes.control),
         border: Border.all(color: tokens.borderSubtle),
       ),
       child: Row(

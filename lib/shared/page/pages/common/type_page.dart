@@ -5,9 +5,9 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../app/models/capability.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../features/account/applications/user_state.dart';
 import '../../../../features/dev/application/area_state.dart';
 import '../../../../features/dev/debug/debug_action_recorder.dart';
@@ -320,7 +320,7 @@ class _TypePageShellState<PState, PgState extends ChangeNotifier>
       });
     }
 
-    return PromptUiScope(
+    return CommonUiScope(
       child: MultiProvider(
         providers: [
           ChangeNotifierProvider<TypeViewModeState>(
@@ -338,7 +338,7 @@ class _TypePageShellState<PState, PgState extends ChangeNotifier>
             final plateState = context.read<PState>();
             final pageState = context.read<PgState>();
             final userName = context.read<UserState>().name;
-            final tokens = PromptUiTheme.of(context);
+            final tokens = CommonUiTheme.of(context);
             final isDark = tokens.brightness == Brightness.dark;
 
             final refreshableBody = TypePageRefreshableBody<PState, PgState>(
@@ -422,7 +422,7 @@ class TypePageEntryDashboardBar<PState, PgState extends ChangeNotifier>
   final TypePageConfig<PState, PgState> config;
 
   Future<void> _openDashboard(BuildContext context) async {
-    await showPromptOverlayBottomSheet<void>(
+    await showCommonOverlayBottomSheet<void>(
       context: context,
       useSafeArea: true,
       isScrollControlled: true,
@@ -444,13 +444,13 @@ class TypePageEntryDashboardBar<PState, PgState extends ChangeNotifier>
           const Expanded(child: TypePageToggleTalkAppBarButton()),
           const SizedBox(width: 8),
           Expanded(
-            child: PromptButton(
+            child: CommonButton(
               label: '대시보드',
               icon: Icons.dashboard_rounded,
               onPressed: () => _openDashboard(context),
               expand: true,
               minHeight: 48,
-              haptic: PromptHaptic.selection,
+              haptic: CommonHaptic.selection,
             ),
           ),
         ],
@@ -478,19 +478,19 @@ class TypePageToggleTalkAppBarButton extends StatelessWidget {
             : Icons.toggle_off_rounded
         : Icons.mic_off_rounded;
 
-    return PromptButton(
+    return CommonButton(
       label: label,
       icon: icon,
       onPressed: canUseRecordTalk
           ? () => context.read<VoiceAppbarUiState>().toggle()
           : null,
       variant: enabled && canUseRecordTalk
-          ? PromptButtonVariant.primary
-          : PromptButtonVariant.secondary,
+          ? CommonButtonVariant.primary
+          : CommonButtonVariant.secondary,
       selected: enabled && canUseRecordTalk,
       expand: true,
       minHeight: 48,
-      haptic: PromptHaptic.selection,
+      haptic: CommonHaptic.selection,
     );
   }
 }
@@ -517,7 +517,7 @@ class TypePageOpenEntryButton<PState, PgState extends ChangeNotifier>
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     await Navigator.of(context).push<dynamic>(
       buildTypePageSlideRoute<dynamic>(
-        PromptUiScope(child: config.buildInputScreen()),
+        CommonUiScope(child: config.buildInputScreen()),
         fromLeft: true,
         reduceMotion: reduceMotion,
       ),
@@ -526,17 +526,17 @@ class TypePageOpenEntryButton<PState, PgState extends ChangeNotifier>
 
   @override
   Widget build(BuildContext context) {
-    return PromptButton(
+    return CommonButton(
       label: '입차',
       icon: Icons.add_circle_outline_rounded,
       onPressed: () async {
         _trace(context);
         await _openEntryScreen(context);
       },
-      variant: PromptButtonVariant.secondary,
+      variant: CommonButtonVariant.secondary,
       expand: true,
       minHeight: 48,
-      haptic: PromptHaptic.selection,
+      haptic: CommonHaptic.selection,
     );
   }
 }
@@ -546,7 +546,7 @@ class TypePageModeSwitchBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final mode = context.watch<TypeViewModeState>().mode;
     final isTable = mode == TypeViewMode.table;
     final label = isTable ? '테이블 보기' : '현황 보기';
@@ -560,15 +560,15 @@ class TypePageModeSwitchBar extends StatelessWidget {
       child: SafeArea(
         top: false,
         minimum: const EdgeInsets.fromLTRB(12, 7, 12, 8),
-        child: PromptButton(
+        child: CommonButton(
           label: label,
           icon: icon,
           onPressed: () => context.read<TypeViewModeState>().toggle(),
-          variant: PromptButtonVariant.tertiary,
+          variant: CommonButtonVariant.tertiary,
           selected: isTable,
           expand: true,
           minHeight: 44,
-          haptic: PromptHaptic.selection,
+          haptic: CommonHaptic.selection,
         ),
       ),
     );
@@ -586,7 +586,7 @@ class TypePageRefreshableBody<PState, PgState extends ChangeNotifier>
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
@@ -596,9 +596,9 @@ class TypePageRefreshableBody<PState, PgState extends ChangeNotifier>
         return Stack(
           children: [
             AnimatedSwitcher(
-              duration: reduceMotion ? Duration.zero : PromptUiMotion.component,
-              switchInCurve: PromptUiMotion.enter,
-              switchOutCurve: PromptUiMotion.exit,
+              duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
+              switchInCurve: CommonUiMotion.enter,
+              switchOutCurve: CommonUiMotion.exit,
               child: KeyedSubtree(
                 key: ValueKey<int>(pageState.hashCode),
                 child: config.buildCurrentPage(context, pageState),
@@ -610,8 +610,8 @@ class TypePageRefreshableBody<PState, PgState extends ChangeNotifier>
                 child: AnimatedOpacity(
                   opacity: loading ? 1 : 0,
                   duration:
-                      reduceMotion ? Duration.zero : PromptUiMotion.selection,
-                  curve: PromptUiMotion.standard,
+                      reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                  curve: CommonUiMotion.standard,
                   child: ColoredBox(
                     color: tokens.scrim,
                     child: Center(
@@ -621,7 +621,7 @@ class TypePageRefreshableBody<PState, PgState extends ChangeNotifier>
                         decoration: BoxDecoration(
                           color: tokens.surfaceRaised,
                           borderRadius:
-                              BorderRadius.circular(PromptUiShapes.card),
+                              BorderRadius.circular(CommonUiShapes.card),
                           border: Border.all(color: tokens.borderSubtle),
                           boxShadow: [
                             BoxShadow(
@@ -658,7 +658,7 @@ PageRouteBuilder<T> buildTypePageSlideRoute<T>(
   required bool fromLeft,
   bool reduceMotion = false,
 }) {
-  final duration = reduceMotion ? Duration.zero : PromptUiMotion.layout;
+  final duration = reduceMotion ? Duration.zero : CommonUiMotion.layout;
   return PageRouteBuilder<T>(
     transitionDuration: duration,
     reverseTransitionDuration: duration,
@@ -667,8 +667,8 @@ PageRouteBuilder<T> buildTypePageSlideRoute<T>(
       if (reduceMotion) return child;
       final curved = CurvedAnimation(
         parent: animation,
-        curve: PromptUiMotion.enter,
-        reverseCurve: PromptUiMotion.exit,
+        curve: CommonUiMotion.enter,
+        reverseCurve: CommonUiMotion.exit,
       );
       final position = Tween<Offset>(
         begin: Offset(fromLeft ? -0.08 : 0.08, 0),

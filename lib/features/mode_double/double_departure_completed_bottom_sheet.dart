@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../design_system/common_ui/common_ui_components.dart';
+import '../../design_system/common_ui/common_ui_theme.dart';
 import '../../shared/plate/application/double/double_plate_state.dart';
 import '../../shared/plate/domain/enums/plate_type.dart';
 import '../account/applications/user_state.dart';
@@ -45,7 +45,7 @@ class _DoubleDepartureCompletedBottomSheetState extends State<DoubleDepartureCom
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
@@ -83,7 +83,7 @@ class _DoubleDepartureCompletedBottomSheetState extends State<DoubleDepartureCom
       onWillPop: () => _handleWillPop(userName),
       child: FractionallySizedBox(
         heightFactor: 0.95,
-        child: PromptSheetScaffold(
+        child: CommonSheetScaffold(
           title: '출차 완료',
           icon: Icons.directions_car_filled_rounded,
           onClose: () => Navigator.of(context).maybePop(),
@@ -117,7 +117,7 @@ class _DoubleDepartureCompletedBottomSheetState extends State<DoubleDepartureCom
                               AnimatedSwitcher(
                                 duration: reduceMotion
                                     ? Duration.zero
-                                    : PromptUiMotion.selection,
+                                    : CommonUiMotion.selection,
                                 child: Container(
                                   key: ValueKey<bool>(isSettled),
                                   padding: const EdgeInsets.symmetric(
@@ -129,7 +129,7 @@ class _DoubleDepartureCompletedBottomSheetState extends State<DoubleDepartureCom
                                         ? tokens.successContainer
                                         : tokens.warningContainer,
                                     borderRadius: BorderRadius.circular(
-                                      PromptUiShapes.pill,
+                                      CommonUiShapes.pill,
                                     ),
                                   ),
                                   child: Text(
@@ -152,7 +152,7 @@ class _DoubleDepartureCompletedBottomSheetState extends State<DoubleDepartureCom
                             decoration: BoxDecoration(
                               color: tokens.surfaceOverlay,
                               borderRadius: BorderRadius.circular(
-                                PromptUiShapes.control,
+                                CommonUiShapes.control,
                               ),
                               border: Border.all(color: tokens.borderSubtle),
                             ),
@@ -162,7 +162,7 @@ class _DoubleDepartureCompletedBottomSheetState extends State<DoubleDepartureCom
                               indicator: BoxDecoration(
                                 color: tokens.accentContainer,
                                 borderRadius: BorderRadius.circular(
-                                  PromptUiShapes.control,
+                                  CommonUiShapes.control,
                                 ),
                                 border: Border.all(color: tokens.accent),
                               ),
@@ -179,8 +179,8 @@ class _DoubleDepartureCompletedBottomSheetState extends State<DoubleDepartureCom
                         AnimatedSize(
                           duration: reduceMotion
                               ? Duration.zero
-                              : PromptUiMotion.layout,
-                          curve: PromptUiMotion.standard,
+                              : CommonUiMotion.layout,
+                          curve: CommonUiMotion.standard,
                           child: DoubleDepartureCompletedSelectedDateBar(visible: !isSettled),
                         ),
                         const SizedBox(height: 8),

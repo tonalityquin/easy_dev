@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../../app/utils/snackbar_helper.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../../../design_system/common_ui/common_ui_overlays.dart';
 import '../../../../../shared/auth/five_digit_password_generator.dart';
 import '../../../../../shared/secondary/widgets/ops_console_widgets.dart';
 import '../../../domain/models/user/user_model.dart';
@@ -303,7 +303,7 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
             ? const TimeOfDay(hour: 9, minute: 0)
             : const TimeOfDay(hour: 18, minute: 0));
     final wasHoliday = _isHoliday(day);
-    final picked = await showPromptTimePicker(
+    final picked = await showCommonTimePicker(
       context: context,
       initialTime: initial,
       builder: (pickerContext, child) {
@@ -370,7 +370,7 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
     showSelectedSnackbar(
       context,
       '비밀번호를 복사했습니다.',
-      usePromptUi: true,
+      useCommonUi: true,
     );
   }
 

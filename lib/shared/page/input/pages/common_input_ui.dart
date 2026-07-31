@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 
-class PromptInputSectionCard extends StatelessWidget {
-  const PromptInputSectionCard({
+class CommonInputSectionCard extends StatelessWidget {
+  const CommonInputSectionCard({
     super.key,
     required this.child,
     this.padding = const EdgeInsets.all(16),
@@ -16,17 +16,17 @@ class PromptInputSectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     return AnimatedContainer(
       duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false
           ? Duration.zero
-          : PromptUiMotion.selection,
-      curve: PromptUiMotion.standard,
+          : CommonUiMotion.selection,
+      curve: CommonUiMotion.standard,
       margin: margin,
       padding: padding,
       decoration: BoxDecoration(
         color: tokens.surfaceRaised,
-        borderRadius: BorderRadius.circular(PromptUiShapes.card),
+        borderRadius: BorderRadius.circular(CommonUiShapes.card),
         border: Border.all(color: tokens.borderSubtle),
         boxShadow: [
           BoxShadow(
@@ -41,8 +41,8 @@ class PromptInputSectionCard extends StatelessWidget {
   }
 }
 
-class PromptInputSectionTitle extends StatelessWidget {
-  const PromptInputSectionTitle({
+class CommonInputSectionTitle extends StatelessWidget {
+  const CommonInputSectionTitle({
     super.key,
     required this.icon,
     required this.title,
@@ -57,7 +57,7 @@ class PromptInputSectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -67,7 +67,7 @@ class PromptInputSectionTitle extends StatelessWidget {
           height: 38,
           decoration: BoxDecoration(
             color: tokens.accentContainer,
-            borderRadius: BorderRadius.circular(PromptUiShapes.control),
+            borderRadius: BorderRadius.circular(CommonUiShapes.control),
             border: Border.all(
               color: tokens.accent.withOpacity(tokens.isDark ? 0.54 : 0.36),
             ),
@@ -109,14 +109,14 @@ class PromptInputSectionTitle extends StatelessWidget {
   }
 }
 
-class PromptInputDialogContent extends StatelessWidget {
-  const PromptInputDialogContent({
+class CommonInputDialogContent extends StatelessWidget {
+  const CommonInputDialogContent({
     super.key,
     required this.icon,
     required this.title,
     required this.body,
     required this.actions,
-    this.tone = PromptInputTone.accent,
+    this.tone = CommonInputTone.accent,
     this.maxWidth = 520,
   });
 
@@ -124,14 +124,14 @@ class PromptInputDialogContent extends StatelessWidget {
   final String title;
   final Widget body;
   final List<Widget> actions;
-  final PromptInputTone tone;
+  final CommonInputTone tone;
   final double maxWidth;
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
-    final colors = promptInputToneColors(tokens, tone);
+    final colors = commonInputToneColors(tokens, tone);
     return ConstrainedBox(
       constraints: BoxConstraints(maxWidth: maxWidth),
       child: Column(
@@ -145,7 +145,7 @@ class PromptInputDialogContent extends StatelessWidget {
                 height: 42,
                 decoration: BoxDecoration(
                   color: colors.container,
-                  borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                  borderRadius: BorderRadius.circular(CommonUiShapes.control),
                   border: Border.all(color: colors.foreground.withOpacity(.34)),
                 ),
                 alignment: Alignment.center,
@@ -178,10 +178,10 @@ class PromptInputDialogContent extends StatelessWidget {
   }
 }
 
-enum PromptInputTone { accent, info, success, warning, danger }
+enum CommonInputTone { accent, info, success, warning, danger }
 
-class PromptInputToneColors {
-  const PromptInputToneColors({
+class CommonInputToneColors {
+  const CommonInputToneColors({
     required this.container,
     required this.foreground,
   });
@@ -190,33 +190,33 @@ class PromptInputToneColors {
   final Color foreground;
 }
 
-PromptInputToneColors promptInputToneColors(
-  PromptUiTokens tokens,
-  PromptInputTone tone,
+CommonInputToneColors commonInputToneColors(
+  CommonUiTokens tokens,
+  CommonInputTone tone,
 ) {
   switch (tone) {
-    case PromptInputTone.accent:
-      return PromptInputToneColors(
+    case CommonInputTone.accent:
+      return CommonInputToneColors(
         container: tokens.accentContainer,
         foreground: tokens.onAccentContainer,
       );
-    case PromptInputTone.info:
-      return PromptInputToneColors(
+    case CommonInputTone.info:
+      return CommonInputToneColors(
         container: tokens.infoContainer,
         foreground: tokens.onInfoContainer,
       );
-    case PromptInputTone.success:
-      return PromptInputToneColors(
+    case CommonInputTone.success:
+      return CommonInputToneColors(
         container: tokens.successContainer,
         foreground: tokens.onSuccessContainer,
       );
-    case PromptInputTone.warning:
-      return PromptInputToneColors(
+    case CommonInputTone.warning:
+      return CommonInputToneColors(
         container: tokens.warningContainer,
         foreground: tokens.onWarningContainer,
       );
-    case PromptInputTone.danger:
-      return PromptInputToneColors(
+    case CommonInputTone.danger:
+      return CommonInputToneColors(
         container: tokens.dangerContainer,
         foreground: tokens.onDangerContainer,
       );

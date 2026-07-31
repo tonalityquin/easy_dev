@@ -8,9 +8,9 @@ import 'package:flutter/services.dart';
 import 'package:googleapis/gmail/v1.dart' as gmail;
 import 'package:mime/mime.dart';
 
-import '../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../design_system/common_ui/common_ui_components.dart';
+import '../../design_system/common_ui/common_ui_overlays.dart';
+import '../../design_system/common_ui/common_ui_theme.dart';
 
 import '../../app/auth/google_auth_v7.dart';
 import '../../app/config/email_config.dart';
@@ -84,21 +84,21 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
   InputDecoration _inputDec({
     required String labelText,
   }) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     return InputDecoration(
       labelText: labelText,
       filled: true,
       fillColor: tokens.surfaceOverlay,
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(PromptUiShapes.control),
+        borderRadius: BorderRadius.circular(CommonUiShapes.control),
         borderSide: BorderSide(color: tokens.borderSubtle),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(PromptUiShapes.control),
+        borderRadius: BorderRadius.circular(CommonUiShapes.control),
         borderSide: BorderSide(color: tokens.borderSubtle),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(PromptUiShapes.control),
+        borderRadius: BorderRadius.circular(CommonUiShapes.control),
         borderSide: BorderSide(color: tokens.focusRing, width: 1.6),
       ),
       contentPadding: const EdgeInsets.symmetric(
@@ -118,10 +118,10 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
       elevation: 0,
       margin: margin ?? const EdgeInsets.only(bottom: 16),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(PromptUiShapes.card),
-        side: BorderSide(color: PromptUiTheme.of(context).borderSubtle),
+        borderRadius: BorderRadius.circular(CommonUiShapes.card),
+        side: BorderSide(color: CommonUiTheme.of(context).borderSubtle),
       ),
-      color: PromptUiTheme.of(context).surfaceRaised,
+      color: CommonUiTheme.of(context).surfaceRaised,
       child: Padding(
         padding: padding,
         child: Column(
@@ -251,7 +251,7 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
   }
 
   Future<void> _openApiDebugSheet() async {
-    await showPromptOverlayBottomSheet<void>(
+    await showCommonOverlayBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
@@ -282,7 +282,7 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
       context,
       title: StatusDialog.photoTransferSendSuccess,
       closeCurrentPageAfter: true,
-      usePromptUi: true,
+      useCommonUi: true,
     );
   }
 
@@ -293,7 +293,7 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
       await StatusDialog.showFailure(
         context,
         title: StatusDialog.photoTransferSendFailed,
-        usePromptUi: true,
+        useCommonUi: true,
       );
       return;
     }
@@ -303,7 +303,7 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
       await StatusDialog.showFailure(
         context,
         title: StatusDialog.photoTransferSendFailed,
-        usePromptUi: true,
+        useCommonUi: true,
       );
       return;
     }
@@ -316,7 +316,7 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
       await StatusDialog.showFailure(
         context,
         title: StatusDialog.photoTransferSendFailed,
-        usePromptUi: true,
+        useCommonUi: true,
       );
       return;
     }
@@ -330,7 +330,7 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
         await StatusDialog.showFailure(
           context,
           title: StatusDialog.photoTransferSendFailed,
-        usePromptUi: true,
+        useCommonUi: true,
         );
         return;
       }
@@ -372,7 +372,7 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
       await StatusDialog.showFailure(
         context,
         title: StatusDialog.photoTransferSendFailed,
-        usePromptUi: true,
+        useCommonUi: true,
       );
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -490,7 +490,7 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
   @override
   Widget build(BuildContext context) {
     final createdAt = _fmtCompact(DateTime.now());
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
     return Scaffold(
@@ -516,8 +516,8 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
       bottomNavigationBar: SafeArea(
         top: false,
         child: AnimatedContainer(
-          duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
-          curve: PromptUiMotion.standard,
+          duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+          curve: CommonUiMotion.standard,
           padding: EdgeInsets.only(
             left: 16,
             right: 16,
@@ -564,7 +564,7 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
                 alignment: Alignment.topCenter,
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 720),
-                  child: PromptAnimatedReveal(
+                  child: CommonAnimatedReveal(
                     offset: Offset.zero,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -592,7 +592,7 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
                       Container(
                         decoration: BoxDecoration(
                           color: tokens.surfaceRaised,
-                          borderRadius: BorderRadius.circular(PromptUiShapes.card),
+                          borderRadius: BorderRadius.circular(CommonUiShapes.card),
                           border: Border.all(
                             color: tokens.borderSubtle,
                             width: 1,
@@ -1219,7 +1219,7 @@ class _ApiDebugBottomSheetState extends State<_ApiDebugBottomSheet> {
     final pretty = _prettyJsonIfPossible(raw);
     final insight = _inferInsight(entry);
 
-    await showPromptOverlayBottomSheet<void>(
+    await showCommonOverlayBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,

@@ -149,8 +149,8 @@ extension _TabletGridTextPreviewPart on _TabletGrid3dPreviewState {
     final labelColor = emphasize ? cs.onSurface : cs.onSurfaceVariant;
 
     return AnimatedContainer(
-      duration: tabletPromptDuration(context, PromptUiMotion.component),
-      curve: PromptUiMotion.standard,
+      duration: tabletCommonDuration(context, CommonUiMotion.component),
+      curve: CommonUiMotion.standard,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: bg,
@@ -260,7 +260,7 @@ extension _TabletGridTextPreviewPart on _TabletGrid3dPreviewState {
     required ColorScheme cs,
     required TextTheme tt,
   }) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final loc = entry.location;
     final capacity = max(
       0,

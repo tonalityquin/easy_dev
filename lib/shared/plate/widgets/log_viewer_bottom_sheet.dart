@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../design_system/common_ui/common_ui_theme.dart';
 
 import '../../../shared/plate/domain/models/plate_log_model.dart';
 import '../../../shared/plate/domain/repositories/plate_repository.dart';
@@ -38,7 +38,7 @@ class LogViewerBottomSheet extends StatefulWidget {
     }
     if (!rootContext.mounted) return;
 
-    await showPromptOverlayBottomSheet<void>(
+    await showCommonOverlayBottomSheet<void>(
       context: rootContext,
       useRootNavigator: true,
       useSafeArea: true,
@@ -204,7 +204,7 @@ class _LogViewerBottomSheetState extends State<LogViewerBottomSheet> {
 
     return SafeArea(
       child: Material(
-        color: PromptUiTheme.of(context).transparent,
+        color: CommonUiTheme.of(context).transparent,
         child: Align(
           alignment: Alignment.bottomCenter,
           child: SizedBox(

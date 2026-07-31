@@ -14,8 +14,8 @@ import '../../../../app/auth/google_auth_session.dart';
 import '../../../../app/config/email_config.dart';
 import '../../../../app/init/app_navigator.dart';
 import '../../../../app/utils/status_dialog.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../dev/debug/debug_api_logger.dart';
 import '../../../selector/application/dev_auth.dart';
 
@@ -1650,17 +1650,17 @@ class HeadMemo {
 
   static Future<void> openPanel({
     BuildContext? context,
-    bool usePromptUi = false,
+    bool useCommonUi = false,
   }) {
     return togglePanel(
       context: context,
-      usePromptUi: usePromptUi,
+      useCommonUi: useCommonUi,
     );
   }
 
   static Future<void> togglePanel({
     BuildContext? context,
-    bool usePromptUi = false,
+    bool useCommonUi = false,
   }) async {
     await _ensureInited();
     final ctx = context ?? _bestContext();
@@ -1674,7 +1674,7 @@ class HeadMemo {
       WidgetsBinding.instance.addPostFrameCallback(
         (_) => togglePanel(
           context: context,
-          usePromptUi: usePromptUi,
+          useCommonUi: useCommonUi,
         ),
       );
       return;
@@ -1685,12 +1685,12 @@ class HeadMemo {
     }
     if (_panelFuture != null) return;
     _isPanelOpen = true;
-    final future = usePromptUi
-        ? showPromptOverlayBottomSheet<void>(
+    final future = useCommonUi
+        ? showCommonOverlayBottomSheet<void>(
             context: ctx,
             useSafeArea: true,
             isScrollControlled: true,
-            builder: (_) => const _HeadMemoSheet(usePromptUi: true),
+            builder: (_) => const _HeadMemoSheet(useCommonUi: true),
           )
         : showModalBottomSheet<void>(
             context: ctx,
@@ -1742,9 +1742,9 @@ class HeadMemo {
 }
 
 class _HeadMemoSheet extends StatefulWidget {
-  const _HeadMemoSheet({this.usePromptUi = false});
+  const _HeadMemoSheet({this.useCommonUi = false});
 
-  final bool usePromptUi;
+  final bool useCommonUi;
 
   @override
   State<_HeadMemoSheet> createState() => _HeadMemoSheetState();
@@ -1775,8 +1775,8 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
     bool barrierDismissible = true,
   }) {
     final targetContext = anchorContext ?? context;
-    if (widget.usePromptUi) {
-      return showPromptOverlayDialog<T>(
+    if (widget.useCommonUi) {
+      return showCommonOverlayDialog<T>(
         context: targetContext,
         barrierDismissible: barrierDismissible,
         builder: builder,
@@ -1796,8 +1796,8 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
     bool useSafeArea = true,
   }) {
     final targetContext = anchorContext ?? context;
-    if (widget.usePromptUi) {
-      return showPromptOverlayBottomSheet<T>(
+    if (widget.useCommonUi) {
+      return showCommonOverlayBottomSheet<T>(
         context: targetContext,
         isScrollControlled: isScrollControlled,
         useSafeArea: useSafeArea,
@@ -1998,8 +1998,8 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
                 : Icons.radio_button_checked_rounded,
             label: _pushingOnAir ? 'UP' : 'ON AIR',
             tooltip: '현재 메모북만 Firebase에 업로드',
-            background: PromptUiTheme.of(context).danger,
-            foreground: PromptUiTheme.of(context).onDanger,
+            background: CommonUiTheme.of(context).danger,
+            foreground: CommonUiTheme.of(context).onDanger,
             onTap: disabled ? null : _pushOnAir,
           ),
           const SizedBox(width: 6),
@@ -2584,7 +2584,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
       border: Border.all(color: cs.outlineVariant.withOpacity(.8)),
       boxShadow: [
         BoxShadow(
-          color: PromptUiTheme.of(context).shadow,
+          color: CommonUiTheme.of(context).shadow,
           blurRadius: 24,
           offset: const Offset(0, 12),
         ),
@@ -2735,7 +2735,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
                                           borderRadius: BorderRadius.circular(16),
                                           boxShadow: [
                                             BoxShadow(
-                                              color: PromptUiTheme.of(context).shadow,
+                                              color: CommonUiTheme.of(context).shadow,
                                               blurRadius: 14,
                                               offset: const Offset(0, 8),
                                             ),
@@ -3233,7 +3233,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
       HapticFeedback.mediumImpact();
       await StatusDialog.showSuccess(
         context,
-        usePromptUi: widget.usePromptUi,
+        useCommonUi: widget.useCommonUi,
         title: 'ON AIR 저장 완료',
         description:
             '${result.bookCount}권 · ${result.pageCount}쪽 · 투두 ${result.todoCount}개를 Firebase에 저장했습니다.\n${result.documentPath}',
@@ -3242,7 +3242,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
       if (!mounted) return;
       await StatusDialog.showFailure(
         context,
-        usePromptUi: widget.usePromptUi,
+        useCommonUi: widget.useCommonUi,
         title: 'ON AIR 저장 실패',
         description: 'Firebase 저장에 실패했습니다. 로그인, 네트워크, Firestore 권한을 확인하세요.',
       );
@@ -3274,7 +3274,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
       HapticFeedback.mediumImpact();
       await StatusDialog.showSuccess(
         context,
-        usePromptUi: widget.usePromptUi,
+        useCommonUi: widget.useCommonUi,
         title: 'Firebase 내려받기 완료',
         description:
             '현재 메모북 ${result.activeBookName} · ${result.pageCount}쪽 · 투두 ${result.todoCount}개를 로컬에 반영했습니다.',
@@ -3283,7 +3283,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
       if (!mounted) return;
       await StatusDialog.showFailure(
         context,
-        usePromptUi: widget.usePromptUi,
+        useCommonUi: widget.useCommonUi,
         title: 'Firebase 내려받기 실패',
         description: '원격 본사 메모를 가져오지 못했습니다. 문서 존재 여부, 네트워크, Firestore 권한을 확인하세요.',
       );
@@ -3474,7 +3474,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
       HapticFeedback.mediumImpact();
       await StatusDialog.showSuccess(
         context,
-        usePromptUi: widget.usePromptUi,
+        useCommonUi: widget.useCommonUi,
         title: '원격 책 가져오기 완료',
         description: '${result.activeBookName} · ${result.pageCount}쪽 · 투두 ${result.todoCount}개를 로컬에 반영했습니다.',
       );
@@ -3482,7 +3482,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
       if (!mounted) return;
       await StatusDialog.showFailure(
         context,
-        usePromptUi: widget.usePromptUi,
+        useCommonUi: widget.useCommonUi,
         title: '원격 책 가져오기 실패',
         description: '선택한 원격 책을 가져오지 못했습니다. 네트워크, Firestore 문서, 권한을 확인하세요.',
       );
@@ -3511,7 +3511,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
     if (selected.isEmpty) {
       await StatusDialog.showFailure(
         context,
-        usePromptUi: widget.usePromptUi,
+        useCommonUi: widget.useCommonUi,
         title: '수신자 선택 필요',
         description: '수신자 보관함에서 전송할 이메일을 선택하세요.',
       );
@@ -3530,7 +3530,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
       if (!mounted) return;
       await StatusDialog.showFailure(
         context,
-        usePromptUi: widget.usePromptUi,
+        useCommonUi: widget.useCommonUi,
         title: '메일 전송 실패',
         description: '구글 세션이 차단되어 전송할 수 없습니다.',
       );
@@ -3570,7 +3570,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
       HapticFeedback.mediumImpact();
       await StatusDialog.showSuccess(
         context,
-        usePromptUi: widget.usePromptUi,
+        useCommonUi: widget.useCommonUi,
         title: '메일 전송 완료',
         description: '${book.name} 메모북을 ${selected.length}명에게 전송했습니다.\n첨부: PDF, Markdown',
       );
@@ -3588,7 +3588,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
       if (!mounted) return;
       await StatusDialog.showFailure(
         context,
-        usePromptUi: widget.usePromptUi,
+        useCommonUi: widget.useCommonUi,
         title: '메일 전송 실패',
         description: 'PDF와 Markdown 전송에 실패했습니다. 수신자, 구글 세션, 네트워크 상태를 확인하세요.',
       );
@@ -3948,7 +3948,7 @@ class _BookshelfBookSpine extends StatelessWidget {
               ),
               boxShadow: [
                 BoxShadow(
-                  color: PromptUiTheme.of(context).shadow,
+                  color: CommonUiTheme.of(context).shadow,
                   blurRadius: active ? 20 : 10,
                   offset: Offset(0, active ? 10 : 5),
                 ),
@@ -4048,7 +4048,7 @@ class _BookshelfBookCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(14),
                   boxShadow: [
                     BoxShadow(
-                      color: PromptUiTheme.of(context).shadow,
+                      color: CommonUiTheme.of(context).shadow,
                       blurRadius: 12,
                       offset: const Offset(0, 6),
                     ),

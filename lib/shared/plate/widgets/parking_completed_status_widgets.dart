@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../app/utils/developer_operation_status_dialog.dart';
-import '../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../design_system/common_ui/common_ui_components.dart';
+import '../../../design_system/common_ui/common_ui_theme.dart';
 
 Future<void> traceParkingStatusSectorSummary({
   required BuildContext context,
@@ -29,7 +29,7 @@ Future<void> traceParkingStatusSectorSummary({
       initialMessage: '$statusTitle 화면의 차량 정보를 준비하고 있습니다.',
       developerModeMessage: '개발자 모드 ON: 방문 구역 표시 로그를 복사할 수 있습니다.',
       standardModeMessage: '개발자 모드 OFF: 방문 구역 표시 로그를 콘솔에 기록합니다.',
-      usePromptUi: true,
+      useCommonUi: true,
     );
     trace.log(
       'mode=$mode status=$statusTitle plate=$plateNumber area=$area',
@@ -81,10 +81,10 @@ class ParkingCompletedSheetTitleRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
 
-    return PromptAnimatedReveal(
+    return CommonAnimatedReveal(
       offset: const Offset(0, .02),
       child: Row(
         children: [
@@ -93,7 +93,7 @@ class ParkingCompletedSheetTitleRow extends StatelessWidget {
             height: 42,
             decoration: BoxDecoration(
               color: tokens.accentContainer,
-              borderRadius: BorderRadius.circular(PromptUiShapes.control),
+              borderRadius: BorderRadius.circular(CommonUiShapes.control),
               border: Border.all(color: tokens.borderSubtle),
             ),
             alignment: Alignment.center,
@@ -110,11 +110,11 @@ class ParkingCompletedSheetTitleRow extends StatelessWidget {
             ),
           ),
           if (onClose != null)
-            PromptIconButton(
+            CommonIconButton(
               icon: Icons.close_rounded,
               tooltip: '닫기',
               onPressed: closeEnabled ? onClose : null,
-              haptic: PromptHaptic.selection,
+              haptic: CommonHaptic.selection,
               size: 42,
               iconSize: 21,
             ),
@@ -164,7 +164,7 @@ class ParkingCompletedPlateSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final cs = colorScheme ?? Theme.of(context).colorScheme;
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
@@ -201,14 +201,14 @@ class ParkingCompletedPlateSummaryCard extends StatelessWidget {
           safeAttention * .28,
         )!;
 
-    return PromptAnimatedReveal(
+    return CommonAnimatedReveal(
       child: AnimatedContainer(
-        duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
-        curve: PromptUiMotion.standard,
+        duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+        curve: CommonUiMotion.standard,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: backgroundColor,
-          borderRadius: BorderRadius.circular(PromptUiShapes.card),
+          borderRadius: BorderRadius.circular(CommonUiShapes.card),
           border: Border.all(color: borderColor),
           boxShadow: [
             BoxShadow(
@@ -229,7 +229,7 @@ class ParkingCompletedPlateSummaryCard extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: tokens.accentContainer,
                     borderRadius:
-                        BorderRadius.circular(PromptUiShapes.control),
+                        BorderRadius.circular(CommonUiShapes.control),
                   ),
                   alignment: Alignment.center,
                   child: Icon(
@@ -254,12 +254,12 @@ class ParkingCompletedPlateSummaryCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 AnimatedContainer(
                   duration:
-                      reduceMotion ? Duration.zero : PromptUiMotion.selection,
+                      reduceMotion ? Duration.zero : CommonUiMotion.selection,
                   padding:
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
                     color: badgeBackground,
-                    borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+                    borderRadius: BorderRadius.circular(CommonUiShapes.pill),
                     border: Border.all(color: badgeColor.withOpacity(.42)),
                   ),
                   child: Text(
@@ -273,9 +273,9 @@ class ParkingCompletedPlateSummaryCard extends StatelessWidget {
               ],
             ),
             AnimatedSwitcher(
-              duration: reduceMotion ? Duration.zero : PromptUiMotion.component,
-              switchInCurve: PromptUiMotion.enter,
-              switchOutCurve: PromptUiMotion.exit,
+              duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
+              switchInCurve: CommonUiMotion.enter,
+              switchOutCurve: CommonUiMotion.exit,
               child: safeAttention > .001 && !isLocked
                   ? Container(
                       key: const ValueKey<String>('billing-warning'),
@@ -287,7 +287,7 @@ class ParkingCompletedPlateSummaryCard extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: tokens.dangerContainer,
                         borderRadius:
-                            BorderRadius.circular(PromptUiShapes.control),
+                            BorderRadius.circular(CommonUiShapes.control),
                         border: Border.all(
                           color: tokens.danger.withOpacity(.42),
                         ),
@@ -321,7 +321,7 @@ class ParkingCompletedPlateSummaryCard extends StatelessWidget {
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: tokens.surfaceOverlay,
-                borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                borderRadius: BorderRadius.circular(CommonUiShapes.control),
                 border: Border.all(color: tokens.borderSubtle),
               ),
               child: Column(
@@ -409,7 +409,7 @@ class _ParkingCompletedInfoLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final displayValue = value.trim().isEmpty ? '—' : value.trim();
 
@@ -433,9 +433,9 @@ class _ParkingCompletedInfoLine extends StatelessWidget {
               AnimatedSwitcher(
                 duration: MediaQuery.maybeOf(context)?.disableAnimations == true
                     ? Duration.zero
-                    : PromptUiMotion.component,
-                switchInCurve: PromptUiMotion.enter,
-                switchOutCurve: PromptUiMotion.exit,
+                    : CommonUiMotion.component,
+                switchInCurve: CommonUiMotion.enter,
+                switchOutCurve: CommonUiMotion.exit,
                 transitionBuilder: (child, animation) {
                   final offset = Tween<Offset>(
                     begin: const Offset(0, .12),
@@ -486,19 +486,19 @@ class ParkingCompletedSectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
-    return PromptAnimatedReveal(
+    return CommonAnimatedReveal(
       offset: const Offset(0, .018),
       child: AnimatedContainer(
-        duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
-        curve: PromptUiMotion.standard,
+        duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+        curve: CommonUiMotion.standard,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: tokens.surfaceRaised,
-          borderRadius: BorderRadius.circular(PromptUiShapes.card),
+          borderRadius: BorderRadius.circular(CommonUiShapes.card),
           border: Border.all(color: borderColor ?? tokens.borderSubtle),
           boxShadow: [
             BoxShadow(
@@ -559,7 +559,7 @@ class ParkingCompletedPrimaryCtaButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     return _ParkingCompletedActionButton(
       icon: icon,
       title: title,
@@ -571,7 +571,7 @@ class ParkingCompletedPrimaryCtaButton extends StatelessWidget {
           ? tokens.transparent
           : (foregroundColor ?? tokens.onAccent).withOpacity(.26),
       defaultBackground: backgroundColor == null,
-      haptic: PromptHaptic.medium,
+      haptic: CommonHaptic.medium,
     );
   }
 }
@@ -612,7 +612,7 @@ class ParkingCompletedSecondaryActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final safeAttention = reduceMotion ? 0.0 : attention.clamp(0.0, 1.0).toDouble();
     final baseBg = backgroundColor ?? baseBackgroundColor ?? tokens.accentContainer;
@@ -635,7 +635,7 @@ class ParkingCompletedSecondaryActionButton extends StatelessWidget {
           iconColor: effectiveIcon,
           border: bd,
           minHeight: 48,
-          haptic: PromptHaptic.selection,
+          haptic: CommonHaptic.selection,
         ),
         if (badgeText != null && badgeText!.trim().isNotEmpty)
           Positioned(
@@ -643,12 +643,12 @@ class ParkingCompletedSecondaryActionButton extends StatelessWidget {
             right: -5,
             child: AnimatedContainer(
               duration:
-                  reduceMotion ? Duration.zero : PromptUiMotion.selection,
+                  reduceMotion ? Duration.zero : CommonUiMotion.selection,
               padding:
                   const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
                 color: tokens.surfaceRaised,
-                borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+                borderRadius: BorderRadius.circular(CommonUiShapes.pill),
                 border: Border.all(color: effectiveBadge.withOpacity(.48)),
                 boxShadow: [
                   BoxShadow(
@@ -690,7 +690,7 @@ class ParkingCompletedDangerActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     return _ParkingCompletedActionButton(
       icon: icon,
       title: label,
@@ -700,7 +700,7 @@ class ParkingCompletedDangerActionButton extends StatelessWidget {
       iconColor: tokens.danger,
       border: tokens.danger,
       minHeight: 50,
-      haptic: PromptHaptic.medium,
+      haptic: CommonHaptic.medium,
     );
   }
 }
@@ -730,7 +730,7 @@ class _ParkingCompletedActionButton extends StatefulWidget {
   final Color? iconColor;
   final double minHeight;
   final bool defaultBackground;
-  final PromptHaptic haptic;
+  final CommonHaptic haptic;
 
   @override
   State<_ParkingCompletedActionButton> createState() =>
@@ -784,18 +784,18 @@ class _ParkingCompletedActionButtonState
     setState(() => _invoking = true);
     try {
       switch (widget.haptic) {
-        case PromptHaptic.none:
+        case CommonHaptic.none:
           break;
-        case PromptHaptic.selection:
+        case CommonHaptic.selection:
           await HapticFeedback.selectionClick();
           break;
-        case PromptHaptic.light:
+        case CommonHaptic.light:
           await HapticFeedback.lightImpact();
           break;
-        case PromptHaptic.medium:
+        case CommonHaptic.medium:
           await HapticFeedback.mediumImpact();
           break;
-        case PromptHaptic.heavy:
+        case CommonHaptic.heavy:
           await HapticFeedback.heavyImpact();
           break;
       }
@@ -812,7 +812,7 @@ class _ParkingCompletedActionButtonState
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final disabled = !_available;
@@ -834,12 +834,12 @@ class _ParkingCompletedActionButtonState
       label: widget.title,
       value: _invoking ? '처리 중' : null,
       child: AnimatedContainer(
-        duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
-        curve: PromptUiMotion.standard,
+        duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+        curve: CommonUiMotion.standard,
         constraints: BoxConstraints(minHeight: widget.minHeight),
         decoration: BoxDecoration(
           color: background,
-          borderRadius: BorderRadius.circular(PromptUiShapes.button),
+          borderRadius: BorderRadius.circular(CommonUiShapes.button),
           border: Border.all(
             color: _focused ? tokens.focusRing : border,
             width: _focused ? 2 : 1,
@@ -855,14 +855,14 @@ class _ParkingCompletedActionButtonState
         ),
         child: Material(
           color: tokens.transparent,
-          borderRadius: BorderRadius.circular(PromptUiShapes.button),
+          borderRadius: BorderRadius.circular(CommonUiShapes.button),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: _available ? _activate : null,
             onHighlightChanged: (value) => _queue(pressed: value),
             onHover: (value) => _queue(hovered: value),
             onFocusChange: (value) => _queue(focused: value),
-            borderRadius: BorderRadius.circular(PromptUiShapes.button),
+            borderRadius: BorderRadius.circular(CommonUiShapes.button),
             overlayColor: WidgetStatePropertyAll(
               foreground.withOpacity(_pressed ? .12 : .06),
             ),
@@ -873,13 +873,13 @@ class _ParkingCompletedActionButtonState
                 children: [
                   AnimatedOpacity(
                     duration:
-                        reduceMotion ? Duration.zero : PromptUiMotion.instant,
+                        reduceMotion ? Duration.zero : CommonUiMotion.instant,
                     opacity: _invoking ? 0 : 1,
                     child: AnimatedScale(
                       scale: _pressed && _enabled ? .98 : 1,
                       duration:
-                          reduceMotion ? Duration.zero : PromptUiMotion.press,
-                      curve: PromptUiMotion.enter,
+                          reduceMotion ? Duration.zero : CommonUiMotion.press,
+                      curve: CommonUiMotion.enter,
                       child: Row(
                         children: [
                           Icon(

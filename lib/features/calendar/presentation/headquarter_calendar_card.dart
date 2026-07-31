@@ -5,8 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
-import '../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../design_system/common_ui/common_ui_theme.dart';
 
 import '../../account/applications/user_state.dart';
 import '../domain/models/headquarter_calendar_event.dart';
@@ -19,10 +19,10 @@ import 'headquarter_calendar_status_dialog.dart';
 class HeadquarterCalendarCard extends StatefulWidget {
   const HeadquarterCalendarCard({
     super.key,
-    this.usePromptUi = false,
+    this.useCommonUi = false,
   });
 
-  final bool usePromptUi;
+  final bool useCommonUi;
 
   @override
   State<HeadquarterCalendarCard> createState() =>
@@ -362,8 +362,8 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard> {
     bool barrierDismissible = true,
   }) {
     final targetContext = anchorContext ?? context;
-    if (widget.usePromptUi) {
-      return showPromptOverlayDialog<T>(
+    if (widget.useCommonUi) {
+      return showCommonOverlayDialog<T>(
         context: targetContext,
         barrierDismissible: barrierDismissible,
         builder: builder,
@@ -381,8 +381,8 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard> {
     required WidgetBuilder builder,
   }) {
     final targetContext = anchorContext ?? context;
-    if (widget.usePromptUi) {
-      return showPromptOverlayBottomSheet<T>(
+    if (widget.useCommonUi) {
+      return showCommonOverlayBottomSheet<T>(
         context: targetContext,
         isScrollControlled: true,
         useSafeArea: true,
@@ -403,8 +403,8 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard> {
     required DateTime firstDate,
     required DateTime lastDate,
   }) {
-    if (widget.usePromptUi) {
-      return showPromptDatePicker(
+    if (widget.useCommonUi) {
+      return showCommonDatePicker(
         context: anchorContext,
         initialDate: initialDate,
         firstDate: firstDate,
@@ -1430,14 +1430,14 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard> {
       error: error,
       stackTrace: stackTrace,
       details: details,
-      usePromptUi: widget.usePromptUi,
+      useCommonUi: widget.useCommonUi,
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final events = _events;
     final dayTotal =
         _monthSummary?.day(_selectedDateKey).count ?? events.length;
@@ -1826,7 +1826,7 @@ class _DayCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final foreground = selected
         ? cs.onPrimary
         : inMonth
@@ -1917,7 +1917,7 @@ class _EventTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final color = event.priority == 'urgent'
         ? cs.error
         : event.priority == 'high'

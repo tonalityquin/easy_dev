@@ -4,8 +4,8 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
-import '../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../design_system/common_ui/common_ui_components.dart';
+import '../../../design_system/common_ui/common_ui_theme.dart';
 
 import 'dashboard_start_report_signature_painter.dart';
 
@@ -90,7 +90,7 @@ class _SignatureFullScreenDialogState extends State<SignatureFullScreenDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final name = widget.name.trim().isEmpty ? '이름 미입력' : widget.name.trim();
     final timeText =
         _signDateTime == null ? '서명 전' : _fmtCompact(_signDateTime!);
@@ -106,28 +106,28 @@ class _SignatureFullScreenDialogState extends State<SignatureFullScreenDialog> {
             leadingWidth: 58,
             leading: Padding(
               padding: const EdgeInsets.only(left: 8),
-              child: PromptIconButton(
+              child: CommonIconButton(
                 icon: Icons.close_rounded,
                 tooltip: '닫기',
                 onPressed: () => Navigator.of(context).pop(),
-                haptic: PromptHaptic.selection,
+                haptic: CommonHaptic.selection,
                 size: 40,
               ),
             ),
             actions: [
-              PromptIconButton(
+              CommonIconButton(
                 icon: Icons.layers_clear_rounded,
                 tooltip: '지우기',
                 onPressed: _hasAny ? _clear : null,
-                haptic: PromptHaptic.selection,
+                haptic: CommonHaptic.selection,
                 size: 40,
               ),
               const SizedBox(width: 6),
-              PromptIconButton(
+              CommonIconButton(
                 icon: Icons.undo_rounded,
                 tooltip: '되돌리기',
                 onPressed: _hasAny ? _undo : null,
-                haptic: PromptHaptic.selection,
+                haptic: CommonHaptic.selection,
                 size: 40,
               ),
               const SizedBox(width: 8),
@@ -138,7 +138,7 @@ class _SignatureFullScreenDialogState extends State<SignatureFullScreenDialog> {
           ),
           body: Column(
             children: [
-              PromptAnimatedReveal(
+              CommonAnimatedReveal(
                 offset: const Offset(0, .02),
                 child: Container(
                   width: double.infinity,
@@ -164,13 +164,13 @@ class _SignatureFullScreenDialogState extends State<SignatureFullScreenDialog> {
                         label: '서명 일시',
                         value: timeText,
                       ),
-                      PromptButton(
+                      CommonButton(
                         label: '현재 시각',
                         icon: Icons.schedule_rounded,
                         onPressed: () =>
                             setState(() => _signDateTime = DateTime.now()),
-                        variant: PromptButtonVariant.tertiary,
-                        haptic: PromptHaptic.selection,
+                        variant: CommonButtonVariant.tertiary,
+                        haptic: CommonHaptic.selection,
                         minHeight: 42,
                       ),
                     ],
@@ -180,7 +180,7 @@ class _SignatureFullScreenDialogState extends State<SignatureFullScreenDialog> {
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.all(12),
-                  child: PromptAnimatedReveal(
+                  child: CommonAnimatedReveal(
                     delay: const Duration(milliseconds: 60),
                     offset: const Offset(0, .025),
                     child: RepaintBoundary(
@@ -189,7 +189,7 @@ class _SignatureFullScreenDialogState extends State<SignatureFullScreenDialog> {
                         decoration: BoxDecoration(
                           color: tokens.surfaceRaised,
                           borderRadius:
-                              BorderRadius.circular(PromptUiShapes.card),
+                              BorderRadius.circular(CommonUiShapes.card),
                           border: Border.all(color: tokens.borderSubtle),
                           boxShadow: [
                             BoxShadow(
@@ -201,7 +201,7 @@ class _SignatureFullScreenDialogState extends State<SignatureFullScreenDialog> {
                         ),
                         child: ClipRRect(
                           borderRadius:
-                              BorderRadius.circular(PromptUiShapes.card),
+                              BorderRadius.circular(CommonUiShapes.card),
                           child: GestureDetector(
                             behavior: HitTestBehavior.opaque,
                             onPanStart: (details) => setState(
@@ -238,23 +238,23 @@ class _SignatureFullScreenDialogState extends State<SignatureFullScreenDialog> {
                 child: Row(
                   children: [
                     Expanded(
-                      child: PromptButton(
+                      child: CommonButton(
                         label: '취소',
                         icon: Icons.cancel_outlined,
                         onPressed: () => Navigator.of(context).pop(),
-                        variant: PromptButtonVariant.tertiary,
+                        variant: CommonButtonVariant.tertiary,
                         expand: true,
-                        haptic: PromptHaptic.selection,
+                        haptic: CommonHaptic.selection,
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: PromptButton(
+                      child: CommonButton(
                         label: '저장',
                         icon: Icons.save_alt_rounded,
                         onPressed: _hasAny ? _save : null,
                         expand: true,
-                        haptic: PromptHaptic.medium,
+                        haptic: CommonHaptic.medium,
                       ),
                     ),
                   ],
@@ -290,14 +290,14 @@ class _MetadataChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     return Container(
       constraints: const BoxConstraints(maxWidth: 280),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: tokens.surfaceOverlay,
-        borderRadius: BorderRadius.circular(PromptUiShapes.control),
+        borderRadius: BorderRadius.circular(CommonUiShapes.control),
         border: Border.all(color: tokens.borderSubtle),
       ),
       child: Row(

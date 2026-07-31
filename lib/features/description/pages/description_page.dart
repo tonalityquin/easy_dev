@@ -3,8 +3,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../design_system/common_ui/common_ui_components.dart';
+import '../../../design_system/common_ui/common_ui_theme.dart';
 import '../application/description_content.dart';
 import '../application/description_models.dart';
 import 'widgets/description_navigation_panel.dart';
@@ -82,18 +82,18 @@ class _DescriptionPageState extends State<DescriptionPage> {
 
     await _pageController.animateToPage(
       index,
-      duration: PromptUiMotion.overlay,
-      curve: PromptUiMotion.enter,
+      duration: CommonUiMotion.overlay,
+      curve: CommonUiMotion.enter,
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return PromptUiScope(
+    return CommonUiScope(
       child: Builder(
         builder: (context) {
           final theme = Theme.of(context);
-          final tokens = PromptUiTheme.of(context);
+          final tokens = CommonUiTheme.of(context);
           final media = MediaQuery.of(context);
           final wide = media.size.width >= 1180;
           final reduceMotion = media.disableAnimations;
@@ -142,9 +142,9 @@ class _DescriptionPageState extends State<DescriptionPage> {
                     AnimatedSwitcher(
                       duration: reduceMotion
                           ? Duration.zero
-                          : PromptUiMotion.selection,
-                      switchInCurve: PromptUiMotion.enter,
-                      switchOutCurve: PromptUiMotion.exit,
+                          : CommonUiMotion.selection,
+                      switchInCurve: CommonUiMotion.enter,
+                      switchOutCurve: CommonUiMotion.exit,
                       transitionBuilder: (child, animation) {
                         return FadeTransition(
                           opacity: animation,
@@ -177,12 +177,12 @@ class _DescriptionPageState extends State<DescriptionPage> {
                     Padding(
                       padding: const EdgeInsets.only(right: 8),
                       child: Center(
-                        child: PromptButton(
+                        child: CommonButton(
                           label: '목차',
                           icon: Icons.list_alt_rounded,
-                          variant: PromptButtonVariant.tertiary,
+                          variant: CommonButtonVariant.tertiary,
                           minHeight: 42,
-                          haptic: PromptHaptic.selection,
+                          haptic: CommonHaptic.selection,
                           onPressed: () =>
                               _scaffoldKey.currentState?.openEndDrawer(),
                         ),
@@ -233,9 +233,9 @@ class _DescriptionPageState extends State<DescriptionPage> {
                             AnimatedSwitcher(
                               duration: reduceMotion
                                   ? Duration.zero
-                                  : PromptUiMotion.selection,
-                              switchInCurve: PromptUiMotion.enter,
-                              switchOutCurve: PromptUiMotion.exit,
+                                  : CommonUiMotion.selection,
+                              switchInCurve: CommonUiMotion.enter,
+                              switchOutCurve: CommonUiMotion.exit,
                               child: _CurrentLocationBar(
                                 key: ValueKey<String>(currentSection.id),
                                 chapterTitle: currentChapter?.title ?? '',
@@ -289,12 +289,12 @@ class _DescriptionPageState extends State<DescriptionPage> {
                                           ),
                                           child: SizedBox(
                                             height: cardHeight,
-                                            child: PromptAnimatedReveal(
+                                            child: CommonAnimatedReveal(
                                               key: ValueKey<String>(
                                                 'description-${section.id}',
                                               ),
                                               duration:
-                                                  PromptUiMotion.component,
+                                                  CommonUiMotion.component,
                                               offset: const Offset(0, 0.025),
                                               child: DescriptionSectionCard(
                                                 section: section,
@@ -342,7 +342,7 @@ class _CurrentLocationBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -360,7 +360,7 @@ class _CurrentLocationBar extends StatelessWidget {
               height: 36,
               decoration: BoxDecoration(
                 color: tokens.accentContainer,
-                borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                borderRadius: BorderRadius.circular(CommonUiShapes.control),
                 border: Border.all(
                   color: tokens.accent.withOpacity(
                     tokens.isDark ? 0.58 : 0.38,
@@ -407,7 +407,7 @@ class _CurrentLocationBar extends StatelessWidget {
               ),
               decoration: BoxDecoration(
                 color: tokens.surfaceOverlay,
-                borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+                borderRadius: BorderRadius.circular(CommonUiShapes.pill),
                 border: Border.all(color: tokens.borderSubtle),
               ),
               child: Text(

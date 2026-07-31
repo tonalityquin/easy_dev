@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 
-class PromptModifySectionCard extends StatelessWidget {
-  const PromptModifySectionCard({
+class CommonModifySectionCard extends StatelessWidget {
+  const CommonModifySectionCard({
     super.key,
     required this.child,
     this.padding = const EdgeInsets.all(16),
@@ -14,15 +14,15 @@ class PromptModifySectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     return AnimatedContainer(
-      duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
-      curve: PromptUiMotion.standard,
+      duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+      curve: CommonUiMotion.standard,
       padding: padding,
       decoration: BoxDecoration(
         color: tokens.surfaceRaised,
-        borderRadius: BorderRadius.circular(PromptUiShapes.card),
+        borderRadius: BorderRadius.circular(CommonUiShapes.card),
         border: Border.all(color: tokens.borderSubtle),
         boxShadow: [
           BoxShadow(
@@ -37,8 +37,8 @@ class PromptModifySectionCard extends StatelessWidget {
   }
 }
 
-class PromptModifySectionTitle extends StatelessWidget {
-  const PromptModifySectionTitle({
+class CommonModifySectionTitle extends StatelessWidget {
+  const CommonModifySectionTitle({
     super.key,
     required this.icon,
     required this.title,
@@ -53,7 +53,7 @@ class PromptModifySectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -63,7 +63,7 @@ class PromptModifySectionTitle extends StatelessWidget {
           height: 38,
           decoration: BoxDecoration(
             color: tokens.accentContainer,
-            borderRadius: BorderRadius.circular(PromptUiShapes.control),
+            borderRadius: BorderRadius.circular(CommonUiShapes.control),
             border: Border.all(
               color: tokens.accent.withOpacity(tokens.isDark ? .54 : .36),
             ),

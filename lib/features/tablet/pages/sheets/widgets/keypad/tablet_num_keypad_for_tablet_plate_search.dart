@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
-import '../../../widgets/tablet_prompt_components.dart';
+import '../../../../../../design_system/common_ui/common_ui_theme.dart';
+import '../../../widgets/tablet_common_components.dart';
 
 class TabletNumKeypadForTabletPlateSearch extends StatefulWidget {
   const TabletNumKeypadForTabletPlateSearch({
@@ -49,10 +49,10 @@ class _TabletNumKeypadForTabletPlateSearchState
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     return AnimatedContainer(
-      duration: tabletPromptDuration(context, PromptUiMotion.component),
-      curve: PromptUiMotion.standard,
+      duration: tabletCommonDuration(context, CommonUiMotion.component),
+      curve: CommonUiMotion.standard,
       color: widget.backgroundColor ?? tokens.surfaceRaised,
       padding: const EdgeInsets.all(6),
       child: Column(
@@ -105,7 +105,7 @@ class _TabletNumKeypadForTabletPlateSearchState
   }
 
   Widget _buildKey(_KeySpec spec) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final enabled = _isKeyEnabled(spec);
     final isSearch = spec.isSearch;
     final isBackspace = spec.isBackspace;
@@ -312,7 +312,7 @@ class _PressableState extends State<_Pressable> {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final background = _pressed || _hovered
@@ -327,14 +327,14 @@ class _PressableState extends State<_Pressable> {
       label: widget.semanticsLabel,
       child: AnimatedScale(
         scale: _pressed && widget.enabled ? 0.97 : 1,
-        duration: reduceMotion ? Duration.zero : PromptUiMotion.press,
-        curve: PromptUiMotion.enter,
+        duration: reduceMotion ? Duration.zero : CommonUiMotion.press,
+        curve: CommonUiMotion.enter,
         child: AnimatedContainer(
-          duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
-          curve: PromptUiMotion.standard,
+          duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+          curve: CommonUiMotion.standard,
           decoration: BoxDecoration(
             color: background,
-            borderRadius: BorderRadius.circular(PromptUiShapes.control),
+            borderRadius: BorderRadius.circular(CommonUiShapes.control),
             border: Border.all(
               color: _focused ? tokens.focusRing : widget.border,
               width: _focused ? 2 : 1,
@@ -342,7 +342,7 @@ class _PressableState extends State<_Pressable> {
           ),
           child: Material(
             color: tokens.transparent,
-            borderRadius: BorderRadius.circular(PromptUiShapes.control),
+            borderRadius: BorderRadius.circular(CommonUiShapes.control),
             clipBehavior: Clip.antiAlias,
             child: GestureDetector(
               onLongPressStart:

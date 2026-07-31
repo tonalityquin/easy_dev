@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:googleapis/calendar/v3.dart' as gcal;
 
-import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 
 import '../../../dev/debug/debug_api_logger.dart';
 
@@ -15,7 +15,7 @@ class EventList extends StatelessWidget {
     required this.onDelete,
     required this.onToggleProgress,
     required this.progressOf,
-    this.usePromptUi = false,
+    this.useCommonUi = false,
   });
 
   final List<gcal.Event> events;
@@ -23,7 +23,7 @@ class EventList extends StatelessWidget {
   final void Function(BuildContext, gcal.Event) onDelete;
   final Future<void> Function(BuildContext, gcal.Event, bool) onToggleProgress;
   final int Function(gcal.Event) progressOf;
-  final bool usePromptUi;
+  final bool useCommonUi;
 
   @override
   Widget build(BuildContext context) {
@@ -116,7 +116,7 @@ class EventList extends StatelessWidget {
             onDelete: onDelete,
             onToggleProgress: onToggleProgress,
             progressOf: progressOf,
-            usePromptUi: usePromptUi,
+            useCommonUi: useCommonUi,
           ),
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
@@ -243,7 +243,7 @@ Future<void> _showEventViewSheet(
   required Future<void> Function(BuildContext, gcal.Event, bool)
       onToggleProgress,
   required int Function(gcal.Event) progressOf,
-  bool usePromptUi = false,
+  bool useCommonUi = false,
 }) async {
   final isAllDay = e.start?.date != null && e.start?.dateTime == null;
   final localStart = e.start?.dateTime?.toLocal();
@@ -289,9 +289,9 @@ Future<void> _showEventViewSheet(
           heightFactor: 0.9,
           child: Material(
             color: cs.surface,
-            surfaceTintColor: PromptUiTheme.of(sheetContext).transparent,
+            surfaceTintColor: CommonUiTheme.of(sheetContext).transparent,
             borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(PromptUiShapes.sheet),
+              top: Radius.circular(CommonUiShapes.sheet),
             ),
             clipBehavior: Clip.antiAlias,
             child: SafeArea(
@@ -430,8 +430,8 @@ Future<void> _showEventViewSheet(
         );
       }
 
-    if (usePromptUi) {
-      await showPromptOverlayBottomSheet<void>(
+    if (useCommonUi) {
+      await showCommonOverlayBottomSheet<void>(
         context: context,
         isScrollControlled: true,
         useSafeArea: true,

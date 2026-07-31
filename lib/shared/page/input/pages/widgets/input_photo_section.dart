@@ -4,12 +4,12 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../../app/utils/status_dialog.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../application/input_camera_fullscreen_viewer.dart';
 import '../../application/input_plate_service.dart';
-import '../prompt_input_ui.dart';
+import '../common_input_ui.dart';
 
 class InputPhotoSection extends StatelessWidget {
   final List<XFile> capturedImages;
@@ -36,7 +36,7 @@ class InputPhotoSection extends StatelessWidget {
   }
 
   Future<void> _showSavedPhotos(BuildContext context) async {
-    await showPromptOverlayBottomSheet<void>(
+    await showCommonOverlayBottomSheet<void>(
       context: context,
       useSafeArea: false,
       builder: (sheetContext) {
@@ -55,13 +55,13 @@ class InputPhotoSection extends StatelessWidget {
           minChildSize: .45,
           maxChildSize: .95,
           builder: (sheetContext, scrollController) {
-            return PromptSheetScaffold(
+            return CommonSheetScaffold(
               title: '저장된 사진 목록',
               icon: Icons.photo_library_rounded,
               onClose: () => Navigator.of(sheetContext).pop(),
               body: StatefulBuilder(
                 builder: (context, setModalState) {
-                  final tokens = PromptUiTheme.of(context);
+                  final tokens = CommonUiTheme.of(context);
                   return Column(
                     children: [
                       Padding(
@@ -116,7 +116,7 @@ class InputPhotoSection extends StatelessWidget {
                                     StatusDialog.showFailure(
                                       context,
                                       title: StatusDialog.photoLoadFailed,
-                                      usePromptUi: true,
+                                      useCommonUi: true,
                                     );
                                   }
                                 });
@@ -167,7 +167,7 @@ class InputPhotoSection extends StatelessWidget {
                                 return Material(
                                   color: tokens.surfaceOverlay,
                                   borderRadius: BorderRadius.circular(
-                                    PromptUiShapes.control,
+                                    CommonUiShapes.control,
                                   ),
                                   clipBehavior: Clip.antiAlias,
                                   child: InkWell(
@@ -184,14 +184,14 @@ class InputPhotoSection extends StatelessWidget {
                                           color: tokens.borderSubtle,
                                         ),
                                         borderRadius: BorderRadius.circular(
-                                          PromptUiShapes.control,
+                                          CommonUiShapes.control,
                                         ),
                                       ),
                                       child: Row(
                                         children: [
                                           ClipRRect(
                                             borderRadius: BorderRadius.circular(
-                                              PromptUiShapes.control,
+                                              CommonUiShapes.control,
                                             ),
                                             child: SizedBox(
                                               width: 88,
@@ -278,14 +278,14 @@ class InputPhotoSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
-    return PromptAnimatedReveal(
+    final tokens = CommonUiTheme.of(context);
+    return CommonAnimatedReveal(
       delay: const Duration(milliseconds: 80),
-      child: PromptInputSectionCard(
+      child: CommonInputSectionCard(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const PromptInputSectionTitle(
+            const CommonInputSectionTitle(
               icon: Icons.photo_camera_back_rounded,
               title: '촬영 사진',
               subtitle: '현장 사진을 확인하거나 서버 저장 사진을 불러옵니다.',
@@ -299,7 +299,7 @@ class InputPhotoSection extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: tokens.surfaceOverlay,
                         borderRadius:
-                            BorderRadius.circular(PromptUiShapes.control),
+                            BorderRadius.circular(CommonUiShapes.control),
                         border: Border.all(color: tokens.borderSubtle),
                       ),
                       child: Text(
@@ -325,7 +325,7 @@ class InputPhotoSection extends StatelessWidget {
                             tag: imageFile.path,
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(
-                                PromptUiShapes.control,
+                                CommonUiShapes.control,
                               ),
                               child: Container(
                                 width: 104,
@@ -371,10 +371,10 @@ class InputPhotoSection extends StatelessWidget {
                     ),
             ),
             const SizedBox(height: 12),
-            PromptButton(
+            CommonButton(
               label: '사진 불러오기',
               icon: Icons.cloud_download_rounded,
-              variant: PromptButtonVariant.secondary,
+              variant: CommonButtonVariant.secondary,
               expand: true,
               onPressed: () => _showSavedPhotos(context),
             ),

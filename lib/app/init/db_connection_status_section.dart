@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import '../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../design_system/common_ui/common_ui_theme.dart';
 import '../../features/dashboard/applications/common/firebase_google_auth_bridge.dart';
 import '../auth/google_auth_session.dart';
 
@@ -48,13 +48,13 @@ class DbConnectionStatusSection extends StatelessWidget {
     this.storageLabel = '스토리지 DB',
     this.liveLabel = 'live DB',
     this.spacing = 8,
-    this.usePromptUi = false,
+    this.useCommonUi = false,
   });
 
   final String storageLabel;
   final String liveLabel;
   final double spacing;
-  final bool usePromptUi;
+  final bool useCommonUi;
 
   @override
   Widget build(BuildContext context) {
@@ -68,12 +68,12 @@ class DbConnectionStatusSection extends StatelessWidget {
             _StatusChip(
               label: storageLabel,
               value: snapshot.storageDbOn,
-              usePromptUi: usePromptUi,
+              useCommonUi: useCommonUi,
             ),
             _StatusChip(
               label: liveLabel,
               value: snapshot.liveDbOn,
-              usePromptUi: usePromptUi,
+              useCommonUi: useCommonUi,
             ),
           ],
         );
@@ -88,13 +88,13 @@ class DbConnectionStatusAppBarSection extends StatelessWidget {
     this.storageLabel = '스토리지 DB',
     this.liveLabel = 'live DB',
     this.spacing = 4,
-    this.usePromptUi = false,
+    this.useCommonUi = false,
   });
 
   final String storageLabel;
   final String liveLabel;
   final double spacing;
-  final bool usePromptUi;
+  final bool useCommonUi;
 
   @override
   Widget build(BuildContext context) {
@@ -107,13 +107,13 @@ class DbConnectionStatusAppBarSection extends StatelessWidget {
             _AppBarStatusChip(
               label: liveLabel,
               value: snapshot.liveDbOn,
-              usePromptUi: usePromptUi,
+              useCommonUi: useCommonUi,
             ),
             SizedBox(height: spacing),
             _AppBarStatusChip(
               label: storageLabel,
               value: snapshot.storageDbOn,
-              usePromptUi: usePromptUi,
+              useCommonUi: useCommonUi,
             ),
           ],
         );
@@ -196,10 +196,10 @@ class _StatusColors {
 _StatusColors _resolveStatusColors(
   BuildContext context, {
   required bool value,
-  required bool usePromptUi,
+  required bool useCommonUi,
 }) {
-  if (usePromptUi) {
-    final tokens = PromptUiTheme.of(context);
+  if (useCommonUi) {
+    final tokens = CommonUiTheme.of(context);
     final accent = value ? tokens.success : tokens.danger;
     return _StatusColors(
       background: value ? tokens.successContainer : tokens.dangerContainer,
@@ -225,12 +225,12 @@ class _StatusChip extends StatelessWidget {
   const _StatusChip({
     required this.label,
     required this.value,
-    required this.usePromptUi,
+    required this.useCommonUi,
   });
 
   final String label;
   final bool value;
-  final bool usePromptUi;
+  final bool useCommonUi;
 
   @override
   Widget build(BuildContext context) {
@@ -238,25 +238,25 @@ class _StatusChip extends StatelessWidget {
     final colors = _resolveStatusColors(
       context,
       value: value,
-      usePromptUi: usePromptUi,
+      useCommonUi: useCommonUi,
     );
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
     return AnimatedContainer(
-      duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
-      curve: PromptUiMotion.standard,
+      duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+      curve: CommonUiMotion.standard,
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
       decoration: BoxDecoration(
         color: colors.background,
-        borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+        borderRadius: BorderRadius.circular(CommonUiShapes.pill),
         border: Border.all(color: colors.border),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           AnimatedContainer(
-            duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
+            duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
             width: 7,
             height: 7,
             decoration: BoxDecoration(
@@ -274,9 +274,9 @@ class _StatusChip extends StatelessWidget {
           ),
           const SizedBox(width: 6),
           AnimatedSwitcher(
-            duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
-            switchInCurve: PromptUiMotion.enter,
-            switchOutCurve: PromptUiMotion.exit,
+            duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+            switchInCurve: CommonUiMotion.enter,
+            switchOutCurve: CommonUiMotion.exit,
             transitionBuilder: (child, animation) {
               return FadeTransition(
                 opacity: animation,
@@ -303,12 +303,12 @@ class _AppBarStatusChip extends StatelessWidget {
   const _AppBarStatusChip({
     required this.label,
     required this.value,
-    required this.usePromptUi,
+    required this.useCommonUi,
   });
 
   final String label;
   final bool value;
-  final bool usePromptUi;
+  final bool useCommonUi;
 
   @override
   Widget build(BuildContext context) {
@@ -316,18 +316,18 @@ class _AppBarStatusChip extends StatelessWidget {
     final colors = _resolveStatusColors(
       context,
       value: value,
-      usePromptUi: usePromptUi,
+      useCommonUi: useCommonUi,
     );
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
     return AnimatedContainer(
-      duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
-      curve: PromptUiMotion.standard,
+      duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+      curve: CommonUiMotion.standard,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: colors.background,
-        borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+        borderRadius: BorderRadius.circular(CommonUiShapes.pill),
         border: Border.all(color: colors.border),
       ),
       child: Row(
@@ -353,7 +353,7 @@ class _AppBarStatusChip extends StatelessWidget {
           ),
           const SizedBox(width: 5),
           AnimatedSwitcher(
-            duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
+            duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
             child: Text(
               value ? 'ON' : 'OFF',
               key: ValueKey<bool>(value),

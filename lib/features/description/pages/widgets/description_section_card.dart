@@ -2,8 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../application/description_models.dart';
 
 Future<void> _showImagePreviewDialog(
@@ -15,7 +15,7 @@ Future<void> _showImagePreviewDialog(
     return Future.value();
   }
 
-  final tokens = PromptUiTheme.of(context);
+  final tokens = CommonUiTheme.of(context);
   final reduceMotion =
       MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
@@ -25,13 +25,13 @@ Future<void> _showImagePreviewDialog(
     barrierDismissible: true,
     barrierColor: tokens.scrim,
     transitionDuration:
-        reduceMotion ? Duration.zero : PromptUiMotion.component,
+        reduceMotion ? Duration.zero : CommonUiMotion.component,
     pageBuilder: (context, animation, secondaryAnimation) {
-      return PromptUiScope(
+      return CommonUiScope(
         child: Builder(
           builder: (context) {
             final theme = Theme.of(context);
-            final dialogTokens = PromptUiTheme.of(context);
+            final dialogTokens = CommonUiTheme.of(context);
 
             return SafeArea(
               minimum: const EdgeInsets.all(12),
@@ -49,7 +49,7 @@ Future<void> _showImagePreviewDialog(
                       decoration: BoxDecoration(
                         color: dialogTokens.surfaceRaised,
                         borderRadius:
-                            BorderRadius.circular(PromptUiShapes.dialog),
+                            BorderRadius.circular(CommonUiShapes.dialog),
                         border: Border.all(
                           color: dialogTokens.borderSubtle,
                         ),
@@ -63,7 +63,7 @@ Future<void> _showImagePreviewDialog(
                       ),
                       child: ClipRRect(
                         borderRadius:
-                            BorderRadius.circular(PromptUiShapes.dialog),
+                            BorderRadius.circular(CommonUiShapes.dialog),
                         child: Column(
                           children: [
                             DecoratedBox(
@@ -86,7 +86,7 @@ Future<void> _showImagePreviewDialog(
                                       decoration: BoxDecoration(
                                         color: dialogTokens.accentContainer,
                                         borderRadius: BorderRadius.circular(
-                                          PromptUiShapes.control,
+                                          CommonUiShapes.control,
                                         ),
                                         border: Border.all(
                                           color: dialogTokens.accent.withOpacity(
@@ -115,12 +115,12 @@ Future<void> _showImagePreviewDialog(
                                       ),
                                     ),
                                     const SizedBox(width: 12),
-                                    PromptIconButton(
+                                    CommonIconButton(
                                       icon: Icons.close_rounded,
                                       tooltip: '닫기',
                                       onPressed: () =>
                                           Navigator.of(context).pop(),
-                                      haptic: PromptHaptic.selection,
+                                      haptic: CommonHaptic.selection,
                                     ),
                                   ],
                                 ),
@@ -131,7 +131,7 @@ Future<void> _showImagePreviewDialog(
                                 padding: const EdgeInsets.all(16),
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(
-                                    PromptUiShapes.card,
+                                    CommonUiShapes.card,
                                   ),
                                   child: DecoratedBox(
                                     decoration: BoxDecoration(
@@ -176,8 +176,8 @@ Future<void> _showImagePreviewDialog(
     transitionBuilder: (context, animation, secondaryAnimation, child) {
       final curved = CurvedAnimation(
         parent: animation,
-        curve: PromptUiMotion.enter,
-        reverseCurve: PromptUiMotion.exit,
+        curve: CommonUiMotion.enter,
+        reverseCurve: CommonUiMotion.exit,
       );
       return FadeTransition(
         opacity: curved,
@@ -209,13 +209,13 @@ class DescriptionSectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
     return AnimatedContainer(
-      duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
-      curve: PromptUiMotion.standard,
+      duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+      curve: CommonUiMotion.standard,
       decoration: BoxDecoration(
         color: tokens.surfaceRaised,
         borderRadius: BorderRadius.circular(28),
@@ -294,7 +294,7 @@ class _SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -313,7 +313,7 @@ class _SectionHeader extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
             color: tokens.accentContainer,
-            borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+            borderRadius: BorderRadius.circular(CommonUiShapes.pill),
             border: Border.all(
               color: tokens.accent.withOpacity(
                 tokens.isDark ? 0.62 : 0.42,
@@ -351,8 +351,8 @@ class _PortraitLayout extends StatelessWidget {
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final useSideBySide = width >= 1040 && viewportHeight >= 560;
-    final image = PromptAnimatedReveal(
-      duration: PromptUiMotion.component,
+    final image = CommonAnimatedReveal(
+      duration: CommonUiMotion.component,
       offset: const Offset(-0.025, 0),
       child: _MediaPanel(
         media: section.media,
@@ -366,9 +366,9 @@ class _PortraitLayout extends StatelessWidget {
               ),
       ),
     );
-    final text = PromptAnimatedReveal(
+    final text = CommonAnimatedReveal(
       delay: reduceMotion ? Duration.zero : const Duration(milliseconds: 50),
-      duration: PromptUiMotion.component,
+      duration: CommonUiMotion.component,
       offset: const Offset(0.025, 0),
       child: _TextPanel(
         section: section,
@@ -420,7 +420,7 @@ class _LandscapeLayout extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        PromptAnimatedReveal(
+        CommonAnimatedReveal(
           child: _MediaPanel(
             media: section.media,
             layout: section.layout,
@@ -430,7 +430,7 @@ class _LandscapeLayout extends StatelessWidget {
         ),
         const SizedBox(height: 14),
         Expanded(
-          child: PromptAnimatedReveal(
+          child: CommonAnimatedReveal(
             delay:
                 reduceMotion ? Duration.zero : const Duration(milliseconds: 50),
             child: _TextPanel(
@@ -458,7 +458,7 @@ class _TextOnlyLayout extends StatelessWidget {
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 900),
-        child: PromptAnimatedReveal(
+        child: CommonAnimatedReveal(
           child: _TextPanel(
             section: section,
             compact: viewportHeight < 560,
@@ -494,7 +494,7 @@ class _MediaPanelState extends State<_MediaPanel> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final minHeight = widget.layout == DescriptionSectionLayout.landscape
@@ -509,11 +509,11 @@ class _MediaPanelState extends State<_MediaPanel> {
             : tokens.borderSubtle;
 
     return AnimatedContainer(
-      duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
-      curve: PromptUiMotion.standard,
+      duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+      curve: CommonUiMotion.standard,
       decoration: BoxDecoration(
         color: tokens.surfaceOverlay,
-        borderRadius: BorderRadius.circular(PromptUiShapes.sheet),
+        borderRadius: BorderRadius.circular(CommonUiShapes.sheet),
         border: Border.all(color: borderColor),
         boxShadow: [
           if (_hovered && hasAsset)
@@ -548,7 +548,7 @@ class _MediaPanelState extends State<_MediaPanel> {
                     child: Material(
                       color: tokens.surface,
                       borderRadius:
-                          BorderRadius.circular(PromptUiShapes.card),
+                          BorderRadius.circular(CommonUiShapes.card),
                       clipBehavior: Clip.antiAlias,
                       child: InkWell(
                         onTap: () =>
@@ -559,13 +559,13 @@ class _MediaPanelState extends State<_MediaPanel> {
                         onHighlightChanged: (value) =>
                             setState(() => _pressed = value),
                         borderRadius:
-                            BorderRadius.circular(PromptUiShapes.card),
+                            BorderRadius.circular(CommonUiShapes.card),
                         child: AnimatedScale(
                           scale: _pressed ? 0.99 : 1,
                           duration: reduceMotion
                               ? Duration.zero
-                              : PromptUiMotion.press,
-                          curve: PromptUiMotion.enter,
+                              : CommonUiMotion.press,
+                          curve: CommonUiMotion.enter,
                           child: Stack(
                             fit: StackFit.expand,
                             children: [
@@ -586,7 +586,7 @@ class _MediaPanelState extends State<_MediaPanel> {
                                 child: AnimatedContainer(
                                   duration: reduceMotion
                                       ? Duration.zero
-                                      : PromptUiMotion.selection,
+                                      : CommonUiMotion.selection,
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 10,
                                     vertical: 6,
@@ -596,7 +596,7 @@ class _MediaPanelState extends State<_MediaPanel> {
                                         ? tokens.accentContainer
                                         : tokens.surfaceRaised.withOpacity(0.94),
                                     borderRadius: BorderRadius.circular(
-                                      PromptUiShapes.pill,
+                                      CommonUiShapes.pill,
                                     ),
                                     border: Border.all(
                                       color: _hovered
@@ -676,7 +676,7 @@ class _MediaFallback extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -781,7 +781,7 @@ class _MediaFallback extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: tokens.surfaceRaised.withOpacity(0.9),
                           borderRadius: BorderRadius.circular(
-                            PromptUiShapes.pill,
+                            CommonUiShapes.pill,
                           ),
                           border: Border.all(color: tokens.borderSubtle),
                         ),
@@ -848,7 +848,7 @@ class _TextPanelState extends State<_TextPanel> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
@@ -909,11 +909,11 @@ class _TextPanelState extends State<_TextPanel> {
         );
 
         return AnimatedContainer(
-          duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
-          curve: PromptUiMotion.standard,
+          duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+          curve: CommonUiMotion.standard,
           decoration: BoxDecoration(
             color: tokens.surface,
-            borderRadius: BorderRadius.circular(PromptUiShapes.sheet),
+            borderRadius: BorderRadius.circular(CommonUiShapes.sheet),
             border: Border.all(color: tokens.borderSubtle),
           ),
           padding: EdgeInsets.all(bodyPadding),
@@ -993,13 +993,13 @@ class _MetaChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         color: tokens.surfaceOverlay,
-        borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+        borderRadius: BorderRadius.circular(CommonUiShapes.pill),
         border: Border.all(color: tokens.borderSubtle),
       ),
       child: Text(

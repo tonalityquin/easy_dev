@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../account/applications/user_state.dart';
 
 class CommonCommuteInInfoCardWidget extends StatefulWidget {
@@ -21,7 +21,7 @@ class _CommonCommuteInInfoCardWidgetState
   @override
   Widget build(BuildContext context) {
     final userState = context.watch<UserState>();
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final text = Theme.of(context).textTheme;
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
@@ -34,12 +34,12 @@ class _CommonCommuteInInfoCardWidgetState
       button: true,
       label: '근무자 상세 정보',
       child: AnimatedContainer(
-        duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
-        curve: PromptUiMotion.standard,
+        duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+        curve: CommonUiMotion.standard,
         width: double.infinity,
         decoration: BoxDecoration(
           color: background,
-          borderRadius: BorderRadius.circular(PromptUiShapes.card),
+          borderRadius: BorderRadius.circular(CommonUiShapes.card),
           border: Border.all(
             color: border,
             width: _focused ? 2 : 1,
@@ -61,7 +61,7 @@ class _CommonCommuteInInfoCardWidgetState
         ),
         child: Material(
           color: tokens.transparent,
-          borderRadius: BorderRadius.circular(PromptUiShapes.card),
+          borderRadius: BorderRadius.circular(CommonUiShapes.card),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: () {
@@ -82,11 +82,11 @@ class _CommonCommuteInInfoCardWidgetState
             overlayColor: WidgetStatePropertyAll(
               tokens.accent.withOpacity(_pressed ? 0.10 : 0.05),
             ),
-            borderRadius: BorderRadius.circular(PromptUiShapes.card),
+            borderRadius: BorderRadius.circular(CommonUiShapes.card),
             child: AnimatedScale(
               scale: _pressed ? 0.992 : 1,
-              duration: reduceMotion ? Duration.zero : PromptUiMotion.press,
-              curve: PromptUiMotion.enter,
+              duration: reduceMotion ? Duration.zero : CommonUiMotion.press,
+              curve: CommonUiMotion.enter,
               child: Padding(
                 padding: const EdgeInsets.all(20),
                 child: Column(
@@ -100,7 +100,7 @@ class _CommonCommuteInInfoCardWidgetState
                           decoration: BoxDecoration(
                             color: tokens.accentContainer,
                             borderRadius: BorderRadius.circular(
-                              PromptUiShapes.control,
+                              CommonUiShapes.control,
                             ),
                           ),
                           child: Icon(
@@ -125,7 +125,7 @@ class _CommonCommuteInInfoCardWidgetState
                           decoration: BoxDecoration(
                             color: tokens.surfaceOverlay,
                             borderRadius: BorderRadius.circular(
-                              PromptUiShapes.control,
+                              CommonUiShapes.control,
                             ),
                             border: Border.all(color: tokens.borderSubtle),
                           ),
@@ -236,7 +236,7 @@ class _InfoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final text = Theme.of(context).textTheme;
 
     return Container(
@@ -244,7 +244,7 @@ class _InfoRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
       decoration: BoxDecoration(
         color: tokens.surfaceOverlay,
-        borderRadius: BorderRadius.circular(PromptUiShapes.control),
+        borderRadius: BorderRadius.circular(CommonUiShapes.control),
         border: Border.all(color: tokens.borderSubtle),
       ),
       child: Row(

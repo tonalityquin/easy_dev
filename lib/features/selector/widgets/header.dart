@@ -4,8 +4,8 @@ import 'package:url_launcher/url_launcher_string.dart';
 
 import '../../../app/init/app_exit_service.dart';
 import '../../../app/init/db_connection_status_section.dart';
-import '../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../design_system/common_ui/common_ui_components.dart';
+import '../../../design_system/common_ui/common_ui_theme.dart';
 import '../sheets/service_bottom_sheet.dart';
 
 const String _kPrivacyUrl = 'https://forms.gle/hDTkX1p6U9jMMuySA';
@@ -42,18 +42,18 @@ class _HeaderState extends State<Header> {
   }
 
   Widget _buildDetailSection(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final text = Theme.of(context).textTheme;
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
     return AnimatedContainer(
-      duration: reduceMotion ? Duration.zero : PromptUiMotion.component,
-      curve: PromptUiMotion.standard,
+      duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
+      curve: CommonUiMotion.standard,
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       decoration: BoxDecoration(
         color: tokens.surfaceRaised,
-        borderRadius: BorderRadius.circular(PromptUiShapes.card),
+        borderRadius: BorderRadius.circular(CommonUiShapes.card),
         border: Border.all(color: tokens.borderStrong.withOpacity(0.58)),
       ),
       child: Row(
@@ -64,7 +64,7 @@ class _HeaderState extends State<Header> {
             height: 38,
             decoration: BoxDecoration(
               color: tokens.accentContainer,
-              borderRadius: BorderRadius.circular(PromptUiShapes.control),
+              borderRadius: BorderRadius.circular(CommonUiShapes.control),
             ),
             child: Icon(
               Icons.privacy_tip_outlined,
@@ -96,12 +96,12 @@ class _HeaderState extends State<Header> {
             ),
           ),
           const SizedBox(width: 10),
-          PromptButton(
+          CommonButton(
             label: 'Shortcut',
             icon: Icons.open_in_new_rounded,
             onPressed: _openPrivacy,
-            variant: PromptButtonVariant.secondary,
-            haptic: PromptHaptic.selection,
+            variant: CommonButtonVariant.secondary,
+            haptic: CommonHaptic.selection,
             minHeight: 42,
           ),
         ],
@@ -111,7 +111,7 @@ class _HeaderState extends State<Header> {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final text = Theme.of(context).textTheme;
 
     return Column(
@@ -122,9 +122,9 @@ class _HeaderState extends State<Header> {
         ),
         const SizedBox(height: 12),
         AnimatedSwitcher(
-          duration: PromptUiMotion.component,
-          switchInCurve: PromptUiMotion.enter,
-          switchOutCurve: PromptUiMotion.exit,
+          duration: CommonUiMotion.component,
+          switchInCurve: CommonUiMotion.enter,
+          switchOutCurve: CommonUiMotion.exit,
           child: Text(
             '환영합니다',
             key: const ValueKey<String>('welcome'),
@@ -136,7 +136,7 @@ class _HeaderState extends State<Header> {
           ),
         ),
         const SizedBox(height: 10),
-        const DbConnectionStatusSection(usePromptUi: true),
+        const DbConnectionStatusSection(useCommonUi: true),
         const SizedBox(height: 12),
         _buildDetailSection(context),
         const SizedBox(height: 12),
@@ -160,7 +160,7 @@ class _TopRow extends StatelessWidget {
   }
 
   Future<void> _exitApp(BuildContext context) async {
-    await AppExitService.exitApp(context, usePromptUi: true);
+    await AppExitService.exitApp(context, useCommonUi: true);
   }
 
   @override
@@ -171,12 +171,12 @@ class _TopRow extends StatelessWidget {
         _AnimatedSide(
           show: expanded,
           axisAlignment: -1,
-          child: PromptButton(
+          child: CommonButton(
             label: '앱 설정',
             icon: Icons.settings_outlined,
             onPressed: () => _openServiceSheet(context),
-            variant: PromptButtonVariant.secondary,
-            haptic: PromptHaptic.selection,
+            variant: CommonButtonVariant.secondary,
+            haptic: CommonHaptic.selection,
             minHeight: 44,
           ),
         ),
@@ -190,12 +190,12 @@ class _TopRow extends StatelessWidget {
         _AnimatedSide(
           show: expanded,
           axisAlignment: 1,
-          child: PromptButton(
+          child: CommonButton(
             label: '앱 종료',
             icon: Icons.power_settings_new,
             onPressed: () => _exitApp(context),
-            variant: PromptButtonVariant.destructive,
-            haptic: PromptHaptic.heavy,
+            variant: CommonButtonVariant.destructive,
+            haptic: CommonHaptic.heavy,
             minHeight: 44,
           ),
         ),
@@ -221,9 +221,9 @@ class _AnimatedSide extends StatelessWidget {
 
     return Flexible(
       child: AnimatedSwitcher(
-        duration: reduceMotion ? Duration.zero : PromptUiMotion.layout,
-        switchInCurve: PromptUiMotion.enter,
-        switchOutCurve: PromptUiMotion.exit,
+        duration: reduceMotion ? Duration.zero : CommonUiMotion.layout,
+        switchInCurve: CommonUiMotion.enter,
+        switchOutCurve: CommonUiMotion.exit,
         transitionBuilder: (child, animation) {
           return FadeTransition(
             opacity: animation,
@@ -263,11 +263,11 @@ class HeaderBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
     return TweenAnimationBuilder<double>(
-      duration: reduceMotion ? Duration.zero : PromptUiMotion.layout,
+      duration: reduceMotion ? Duration.zero : CommonUiMotion.layout,
       tween: Tween<double>(begin: 0.94, end: 1),
       curve: Curves.easeOutBack,
       builder: (context, scale, child) {
@@ -311,7 +311,7 @@ class _HeaderBadgeInnerState extends State<_HeaderBadgeInner>
     super.initState();
     _rotationController = AnimationController(
       vsync: this,
-      duration: PromptUiMotion.layout,
+      duration: CommonUiMotion.layout,
     );
   }
 
@@ -336,7 +336,7 @@ class _HeaderBadgeInnerState extends State<_HeaderBadgeInner>
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
     return Semantics(
@@ -344,10 +344,10 @@ class _HeaderBadgeInnerState extends State<_HeaderBadgeInner>
       label: '허브 메뉴',
       child: AnimatedScale(
         scale: _pressed ? 0.95 : 1,
-        duration: reduceMotion ? Duration.zero : PromptUiMotion.press,
-        curve: PromptUiMotion.enter,
+        duration: reduceMotion ? Duration.zero : CommonUiMotion.press,
+        curve: CommonUiMotion.enter,
         child: AnimatedContainer(
-          duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
+          duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
           decoration: BoxDecoration(
             color: tokens.surface,
             shape: BoxShape.circle,

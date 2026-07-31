@@ -2,8 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import '../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../design_system/common_ui/common_ui_components.dart';
+import '../../../design_system/common_ui/common_ui_theme.dart';
 
 class UpdateBottomSheet extends StatelessWidget {
   const UpdateBottomSheet({super.key, this.entries});
@@ -67,7 +67,7 @@ class UpdateBottomSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final list = entries ?? defaultEntries;
 
-    return PromptSheetScaffold(
+    return CommonSheetScaffold(
       title: '업데이트',
       icon: Icons.new_releases_rounded,
       onClose: () => Navigator.of(context).pop(),
@@ -79,7 +79,7 @@ class UpdateBottomSheet extends StatelessWidget {
           final delay = Duration(
             milliseconds: math.min(index * 45, 140),
           );
-          return PromptAnimatedReveal(
+          return CommonAnimatedReveal(
             delay: delay,
             child: _UpdateTile(entry: list[index]),
           );
@@ -106,13 +106,13 @@ class _UpdateTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final text = Theme.of(context).textTheme;
 
     return Container(
       decoration: BoxDecoration(
         color: tokens.surface,
-        borderRadius: BorderRadius.circular(PromptUiShapes.card),
+        borderRadius: BorderRadius.circular(CommonUiShapes.card),
         border: Border.all(color: tokens.borderStrong.withOpacity(0.58)),
       ),
       child: Padding(
@@ -124,7 +124,7 @@ class _UpdateTile extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
                 color: tokens.accentContainer,
-                borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+                borderRadius: BorderRadius.circular(CommonUiShapes.pill),
                 border: Border.all(color: tokens.accent.withOpacity(0.30)),
               ),
               child: Text(

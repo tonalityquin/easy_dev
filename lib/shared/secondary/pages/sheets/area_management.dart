@@ -2,8 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../app/utils/snackbar_helper.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 import 'tabs/add_area_tab.dart';
 import 'tabs/division_management_tab.dart';
 import 'tabs/status_mapping_helper.dart';
@@ -76,7 +76,7 @@ class _AreaManagementState extends State<AreaManagement>
       showFailedSnackbar(
         context,
         '회사 목록 로드 실패: $error',
-        usePromptUi: true,
+        useCommonUi: true,
       );
     }
   }
@@ -97,14 +97,14 @@ class _AreaManagementState extends State<AreaManagement>
       showSuccessSnackbar(
         context,
         '회사 "$trimmed" 추가됨',
-        usePromptUi: true,
+        useCommonUi: true,
       );
     } catch (error) {
       if (!mounted) return;
       showFailedSnackbar(
         context,
         '추가 실패: $error',
-        usePromptUi: true,
+        useCommonUi: true,
       );
     }
   }
@@ -143,14 +143,14 @@ class _AreaManagementState extends State<AreaManagement>
       showSuccessSnackbar(
         context,
         '회사 "$name" 삭제됨',
-        usePromptUi: true,
+        useCommonUi: true,
       );
     } catch (error) {
       if (!mounted) return;
       showFailedSnackbar(
         context,
         '삭제 실패: $error',
-        usePromptUi: true,
+        useCommonUi: true,
       );
     } finally {
       if (mounted) {
@@ -173,7 +173,7 @@ class _AreaManagementState extends State<AreaManagement>
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final body = TabBarView(
@@ -248,7 +248,7 @@ class _AreaManagementState extends State<AreaManagement>
                 opacity: _showIntroOverlay ? 1 : 0,
                 duration: reduceMotion
                     ? Duration.zero
-                    : PromptUiMotion.component,
+                    : CommonUiMotion.component,
                 child: ColoredBox(
                   color: tokens.canvas,
                   child: Center(
@@ -256,13 +256,13 @@ class _AreaManagementState extends State<AreaManagement>
                       padding: const EdgeInsets.all(20),
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 420),
-                        child: PromptAnimatedReveal(
+                        child: CommonAnimatedReveal(
                           child: Container(
                             padding: const EdgeInsets.all(20),
                             decoration: BoxDecoration(
                               color: tokens.surfaceRaised,
                               borderRadius: BorderRadius.circular(
-                                PromptUiShapes.card,
+                                CommonUiShapes.card,
                               ),
                               border: Border.all(
                                 color: tokens.borderSubtle,
@@ -285,7 +285,7 @@ class _AreaManagementState extends State<AreaManagement>
                                   decoration: BoxDecoration(
                                     color: tokens.accentContainer,
                                     borderRadius: BorderRadius.circular(
-                                      PromptUiShapes.control,
+                                      CommonUiShapes.control,
                                     ),
                                   ),
                                   alignment: Alignment.center,
@@ -317,39 +317,39 @@ class _AreaManagementState extends State<AreaManagement>
                                       ),
                                 ),
                                 const SizedBox(height: 18),
-                                PromptButton(
+                                CommonButton(
                                   label: '지역 추가',
                                   icon: Icons.add_location_alt_rounded,
                                   onPressed: () => _openTab(0),
                                   expand: true,
-                                  haptic: PromptHaptic.selection,
+                                  haptic: CommonHaptic.selection,
                                 ),
                                 const SizedBox(height: 8),
-                                PromptButton(
+                                CommonButton(
                                   label: '회사 관리',
                                   icon: Icons.business_rounded,
                                   onPressed: () => _openTab(1),
                                   expand: true,
-                                  variant: PromptButtonVariant.secondary,
-                                  haptic: PromptHaptic.selection,
+                                  variant: CommonButtonVariant.secondary,
+                                  haptic: CommonHaptic.selection,
                                 ),
                                 const SizedBox(height: 8),
-                                PromptButton(
+                                CommonButton(
                                   label: '계정 조회/관리',
                                   icon: Icons.manage_accounts_rounded,
                                   onPressed: () => _openTab(2),
                                   expand: true,
-                                  variant: PromptButtonVariant.secondary,
-                                  haptic: PromptHaptic.selection,
+                                  variant: CommonButtonVariant.secondary,
+                                  haptic: CommonHaptic.selection,
                                 ),
                                 const SizedBox(height: 8),
-                                PromptButton(
+                                CommonButton(
                                   label: '리밋 설정',
                                   icon: Icons.tune_rounded,
                                   onPressed: () => _openTab(3),
                                   expand: true,
-                                  variant: PromptButtonVariant.tertiary,
-                                  haptic: PromptHaptic.selection,
+                                  variant: CommonButtonVariant.tertiary,
+                                  haptic: CommonHaptic.selection,
                                 ),
                               ],
                             ),
@@ -369,7 +369,7 @@ class _AreaManagementState extends State<AreaManagement>
                 opacity: _isDeletingDivision ? 1 : 0,
                 duration: reduceMotion
                     ? Duration.zero
-                    : PromptUiMotion.selection,
+                    : CommonUiMotion.selection,
                 child: ColoredBox(
                   color: tokens.scrim,
                   child: Center(
@@ -381,7 +381,7 @@ class _AreaManagementState extends State<AreaManagement>
                       decoration: BoxDecoration(
                         color: tokens.surfaceRaised,
                         borderRadius: BorderRadius.circular(
-                          PromptUiShapes.control,
+                          CommonUiShapes.control,
                         ),
                         border: Border.all(color: tokens.borderSubtle),
                       ),

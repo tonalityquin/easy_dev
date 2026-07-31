@@ -5,8 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../app/di/routes.dart';
 import '../../../../app/theme/brand_theme.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../account/applications/user_state.dart';
 import '../../controllers/double/double_login_controller.dart';
 import '../../controllers/minor/minor_login_controller.dart';
@@ -85,7 +85,7 @@ class _LoginScreenState extends State<LoginScreen> {
     return _normalizeMode(value);
   }
 
-  bool get _usesPromptUi => _mode != 'service';
+  bool get _usesCommonUi => _mode != 'service';
 
   void _createControllerForMode() {
     switch (_mode) {
@@ -313,10 +313,10 @@ class _LoginScreenState extends State<LoginScreen> {
     final base = ThemeData(brightness: brightness, useMaterial3: true);
     return Theme(
       data: base,
-      child: PromptUiScope(
+      child: CommonUiScope(
         child: Builder(
           builder: (context) {
-            final tokens = PromptUiTheme.of(context);
+            final tokens = CommonUiTheme.of(context);
             return AnnotatedRegion<SystemUiOverlayStyle>(
               value: _systemUiStyle(tokens),
               child: Scaffold(
@@ -328,7 +328,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     decoration: BoxDecoration(
                       color: tokens.surfaceRaised,
                       borderRadius:
-                          BorderRadius.circular(PromptUiShapes.control),
+                          BorderRadius.circular(CommonUiShapes.control),
                       border: Border.all(color: tokens.borderSubtle),
                     ),
                     alignment: Alignment.center,
@@ -350,7 +350,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  SystemUiOverlayStyle _systemUiStyle(PromptUiTokens tokens) {
+  SystemUiOverlayStyle _systemUiStyle(CommonUiTokens tokens) {
     final iconBrightness =
         tokens.isDark ? Brightness.light : Brightness.dark;
     return SystemUiOverlayStyle(
@@ -367,7 +367,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _buildModeMismatch() {
     return Builder(
       builder: (context) {
-        final tokens = PromptUiTheme.of(context);
+        final tokens = CommonUiTheme.of(context);
         return AnnotatedRegion<SystemUiOverlayStyle>(
           value: _systemUiStyle(tokens),
           child: PopScope(
@@ -380,13 +380,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     padding: const EdgeInsets.all(24),
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 420),
-                      child: PromptAnimatedReveal(
+                      child: CommonAnimatedReveal(
                         child: Container(
                           padding: const EdgeInsets.all(22),
                           decoration: BoxDecoration(
                             color: tokens.surfaceRaised,
                             borderRadius:
-                                BorderRadius.circular(PromptUiShapes.card),
+                                BorderRadius.circular(CommonUiShapes.card),
                             border: Border.all(color: tokens.borderSubtle),
                             boxShadow: <BoxShadow>[
                               BoxShadow(
@@ -437,13 +437,13 @@ class _LoginScreenState extends State<LoginScreen> {
                                     ?.copyWith(color: tokens.textSecondary),
                               ),
                               const SizedBox(height: 18),
-                              PromptButton(
+                              CommonButton(
                                 label: '허브로 돌아가기',
                                 icon: Icons.hub_rounded,
                                 expand: true,
                                 onPressed: () => Navigator.of(context)
                                     .pushReplacementNamed(AppRoutes.selector),
-                                haptic: PromptHaptic.selection,
+                                haptic: CommonHaptic.selection,
                               ),
                             ],
                           ),
@@ -460,10 +460,10 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _buildPromptScreen(Widget loginForm) {
+  Widget _buildCommonScreen(Widget loginForm) {
     return Builder(
       builder: (context) {
-        final tokens = PromptUiTheme.of(context);
+        final tokens = CommonUiTheme.of(context);
         return AnnotatedRegion<SystemUiOverlayStyle>(
           value: _systemUiStyle(tokens),
           child: PopScope(
@@ -473,9 +473,9 @@ class _LoginScreenState extends State<LoginScreen> {
               body: AnimatedSwitcher(
                 duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false
                     ? Duration.zero
-                    : PromptUiMotion.component,
-                switchInCurve: PromptUiMotion.enter,
-                switchOutCurve: PromptUiMotion.exit,
+                    : CommonUiMotion.component,
+                switchInCurve: CommonUiMotion.enter,
+                switchOutCurve: CommonUiMotion.exit,
                 child: KeyedSubtree(
                   key: ValueKey<String>(_mode),
                   child: loginForm,
@@ -520,11 +520,11 @@ class _LoginScreenState extends State<LoginScreen> {
     if (_requiredMode != null && _requiredMode != _mode) {
       return Theme(
         data: themed,
-        child: PromptUiScope(child: _buildModeMismatch()),
+        child: CommonUiScope(child: _buildModeMismatch()),
       );
     }
 
-    if (!_usesPromptUi) {
+    if (!_usesCommonUi) {
       return Theme(
         data: themed,
         child: _buildLegacyServiceScreen(loginForm),
@@ -533,7 +533,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     return Theme(
       data: themed,
-      child: PromptUiScope(child: _buildPromptScreen(loginForm)),
+      child: CommonUiScope(child: _buildCommonScreen(loginForm)),
     );
   }
 

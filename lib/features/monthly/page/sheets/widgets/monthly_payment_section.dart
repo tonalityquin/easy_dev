@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../controllers/monthly_plate_controller.dart';
-import '../../widgets/monthly_prompt_ui.dart';
+import '../../widgets/monthly_common_ui.dart';
 
 class MonthlyPaymentSection extends StatefulWidget {
   const MonthlyPaymentSection({
@@ -75,17 +75,17 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
       _noteController.clear();
       widget.controller.specialNote = '';
       _toggleExtended(false);
-      showMonthlyPromptMessage(
+      showMonthlyCommonMessage(
         context,
         '결제가 저장되었습니다.',
-        tone: MonthlyPromptMessageTone.success,
+        tone: MonthlyCommonMessageTone.success,
       );
     } catch (_) {
       if (!mounted) return;
-      showMonthlyPromptMessage(
+      showMonthlyCommonMessage(
         context,
         '결제 저장에 실패했습니다. 다시 시도해주세요.',
-        tone: MonthlyPromptMessageTone.danger,
+        tone: MonthlyCommonMessageTone.danger,
       );
     } finally {
       if (mounted) setState(() => _isPaying = false);
@@ -94,11 +94,11 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
-    return MonthlyPromptSection(
+    return MonthlyCommonSection(
       title: '결제 입력',
       subtitle: '결제 금액, 메모와 기간 연장 여부를 확인합니다.',
       icon: Icons.point_of_sale_outlined,
@@ -115,7 +115,7 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
               color: tokens.textPrimary,
               fontWeight: FontWeight.w700,
             ),
-            decoration: monthlyPromptInputDecoration(
+            decoration: monthlyCommonInputDecoration(
               context,
               label: '이번 결제 금액',
               prefixIcon: Icon(
@@ -133,7 +133,7 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
               color: tokens.textPrimary,
               fontWeight: FontWeight.w600,
             ),
-            decoration: monthlyPromptInputDecoration(
+            decoration: monthlyCommonInputDecoration(
               context,
               label: '결제 메모',
               prefixIcon: Icon(
@@ -149,17 +149,17 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
             label: '결제 후 다음 기간으로 연장',
             child: InkWell(
               onTap: () => _toggleExtended(!widget.controller.isExtended),
-              borderRadius: BorderRadius.circular(PromptUiShapes.card),
+              borderRadius: BorderRadius.circular(CommonUiShapes.card),
               child: AnimatedContainer(
                 duration:
-                    reduceMotion ? Duration.zero : PromptUiMotion.selection,
-                curve: PromptUiMotion.standard,
+                    reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                curve: CommonUiMotion.standard,
                 padding: const EdgeInsets.all(13),
                 decoration: BoxDecoration(
                   color: widget.controller.isExtended
                       ? tokens.successContainer
                       : tokens.surfaceOverlay,
-                  borderRadius: BorderRadius.circular(PromptUiShapes.card),
+                  borderRadius: BorderRadius.circular(CommonUiShapes.card),
                   border: Border.all(
                     color: widget.controller.isExtended
                         ? tokens.success.withOpacity(0.34)
@@ -206,18 +206,18 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
             ),
           ),
           const SizedBox(height: 14),
-          PromptButton(
+          CommonButton(
             label: _isPaying ? '처리 중' : '결제 저장',
             icon: Icons.check_circle_outline_rounded,
             expand: true,
             loading: _isPaying,
-            haptic: PromptHaptic.medium,
+            haptic: CommonHaptic.medium,
             onPressed: _isPaying ? null : _handlePayment,
           ),
           AnimatedSwitcher(
-            duration: reduceMotion ? Duration.zero : PromptUiMotion.component,
-            switchInCurve: PromptUiMotion.enter,
-            switchOutCurve: PromptUiMotion.exit,
+            duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
+            switchInCurve: CommonUiMotion.enter,
+            switchOutCurve: CommonUiMotion.exit,
             child: _paymentHistoryLog.isEmpty
                 ? const SizedBox.shrink(
                     key: ValueKey<String>('empty-payment-log'),
@@ -239,7 +239,7 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
                         for (var index = 0;
                             index < _paymentHistoryLog.length;
                             index++)
-                          PromptAnimatedReveal(
+                          CommonAnimatedReveal(
                             delay: reduceMotion
                                 ? Duration.zero
                                 : Duration(milliseconds: index * 35),
@@ -250,7 +250,7 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
                               decoration: BoxDecoration(
                                 color: tokens.surfaceOverlay,
                                 borderRadius: BorderRadius.circular(
-                                  PromptUiShapes.control,
+                                  CommonUiShapes.control,
                                 ),
                                 border: Border.all(
                                   color: tokens.borderSubtle,

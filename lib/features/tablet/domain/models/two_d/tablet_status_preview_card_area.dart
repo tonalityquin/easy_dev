@@ -5,8 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../pages/widgets/tablet_prompt_components.dart';
+import '../../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../pages/widgets/tablet_common_components.dart';
 import '../../../../../app/utils/dev_firebase_debug_dialog.dart';
 import '../../../../../shared/plate/application/common/view_doc_rows_store.dart';
 import '../../../../../shared/plate/domain/repositories/plate_repository.dart';
@@ -226,7 +226,7 @@ class _ParkingStatusPreviewCardAreaState
                 'overlayStatus': spec.status.name,
                 'widget': 'ParkingStatusPreviewCardArea',
               },
-              usePromptUi: true,
+              useCommonUi: true,
             ),
           );
           if (!mounted) return;
@@ -348,14 +348,14 @@ class _ParkingStatusPreviewCardAreaState
     Map<String, TextParkingPreviewMetrics> textMetricsByLocation,
   ) {
     if (locations.isEmpty) {
-      return const TabletPromptEmptyState(
+      return const TabletCommonEmptyState(
         title: '주차 구역 정보가 없습니다',
         message: '설정에서 주차 구역 데이터를 새로고침한 뒤 다시 시도하세요.',
         icon: Icons.local_parking_rounded,
       );
     }
 
-    return PromptAnimatedReveal(
+    return CommonAnimatedReveal(
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: TabletGrid2dPreview(
@@ -393,7 +393,7 @@ class _ParkingStatusPreviewCardAreaState
         future: _prefsFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const TabletPromptLoadingState(
+            return const TabletCommonLoadingState(
               label: '주차 구역 불러오는 중',
             );
           }

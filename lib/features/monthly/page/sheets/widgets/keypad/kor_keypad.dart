@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../../../design_system/common_ui/common_ui_theme.dart';
 import 'kor_keypad/kor_0.dart';
 import 'kor_keypad/kor_1.dart';
 import 'kor_keypad/kor_2.dart';
@@ -51,7 +51,7 @@ class _KorKeypadState extends State<KorKeypad> {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final layoutKey = activeSubLayout ?? 'main';
 
@@ -59,8 +59,8 @@ class _KorKeypadState extends State<KorKeypad> {
       container: true,
       label: '한글 키패드',
       child: AnimatedContainer(
-        duration: reduceMotion ? Duration.zero : PromptUiMotion.component,
-        curve: PromptUiMotion.standard,
+        duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
+        curve: CommonUiMotion.standard,
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: tokens.surface,
@@ -69,10 +69,10 @@ class _KorKeypadState extends State<KorKeypad> {
         child: SizedBox(
           height: widget.height,
           child: AnimatedSwitcher(
-            duration: reduceMotion ? Duration.zero : PromptUiMotion.layout,
-            reverseDuration: reduceMotion ? Duration.zero : PromptUiMotion.component,
-            switchInCurve: PromptUiMotion.enter,
-            switchOutCurve: PromptUiMotion.exit,
+            duration: reduceMotion ? Duration.zero : CommonUiMotion.layout,
+            reverseDuration: reduceMotion ? Duration.zero : CommonUiMotion.component,
+            switchInCurve: CommonUiMotion.enter,
+            switchOutCurve: CommonUiMotion.exit,
             layoutBuilder: (currentChild, previousChildren) {
               return Stack(
                 alignment: Alignment.center,
@@ -114,7 +114,7 @@ class _KorKeypadState extends State<KorKeypad> {
               return Expanded(
                 child: Padding(
                   padding: const EdgeInsets.all(4),
-                  child: _PromptKoreanMainKey(
+                  child: _CommonKoreanMainKey(
                     label: label,
                     kind: label == '지움'
                         ? _KoreanMainKeyKind.destructive
@@ -196,8 +196,8 @@ enum _KoreanMainKeyKind {
   destructive,
 }
 
-class _PromptKoreanMainKey extends StatefulWidget {
-  const _PromptKoreanMainKey({
+class _CommonKoreanMainKey extends StatefulWidget {
+  const _CommonKoreanMainKey({
     required this.label,
     required this.kind,
     required this.entranceDelay,
@@ -210,10 +210,10 @@ class _PromptKoreanMainKey extends StatefulWidget {
   final VoidCallback onTap;
 
   @override
-  State<_PromptKoreanMainKey> createState() => _PromptKoreanMainKeyState();
+  State<_CommonKoreanMainKey> createState() => _CommonKoreanMainKeyState();
 }
 
-class _PromptKoreanMainKeyState extends State<_PromptKoreanMainKey> {
+class _CommonKoreanMainKeyState extends State<_CommonKoreanMainKey> {
   bool _pressed = false;
   bool _hovered = false;
   bool _focused = false;
@@ -256,7 +256,7 @@ class _PromptKoreanMainKeyState extends State<_PromptKoreanMainKey> {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final baseBackground = switch (widget.kind) {
@@ -289,11 +289,11 @@ class _PromptKoreanMainKeyState extends State<_PromptKoreanMainKey> {
       button: true,
       label: widget.label,
       child: AnimatedContainer(
-        duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
-        curve: PromptUiMotion.standard,
+        duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+        curve: CommonUiMotion.standard,
         decoration: BoxDecoration(
           color: background,
-          borderRadius: BorderRadius.circular(PromptUiShapes.button),
+          borderRadius: BorderRadius.circular(CommonUiShapes.button),
           border: Border.all(
             color: borderColor,
             width: _focused ? 2 : 1,
@@ -309,7 +309,7 @@ class _PromptKoreanMainKeyState extends State<_PromptKoreanMainKey> {
         ),
         child: Material(
           color: tokens.transparent,
-          borderRadius: BorderRadius.circular(PromptUiShapes.button),
+          borderRadius: BorderRadius.circular(CommonUiShapes.button),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: widget.onTap,
@@ -321,8 +321,8 @@ class _PromptKoreanMainKeyState extends State<_PromptKoreanMainKey> {
                 tween: Tween<double>(begin: reduceMotion ? 1 : 0, end: 1),
                 duration: reduceMotion
                     ? Duration.zero
-                    : PromptUiMotion.component + widget.entranceDelay,
-                curve: PromptUiMotion.enter,
+                    : CommonUiMotion.component + widget.entranceDelay,
+                curve: CommonUiMotion.enter,
                 builder: (context, progress, child) {
                   return Opacity(
                     opacity: progress,
@@ -334,8 +334,8 @@ class _PromptKoreanMainKeyState extends State<_PromptKoreanMainKey> {
                 },
                 child: AnimatedScale(
                   scale: _pressed ? 0.92 : 1,
-                  duration: reduceMotion ? Duration.zero : PromptUiMotion.press,
-                  curve: PromptUiMotion.enter,
+                  duration: reduceMotion ? Duration.zero : CommonUiMotion.press,
+                  curve: CommonUiMotion.enter,
                   child: Text(
                     widget.label,
                     style: (widget.kind == _KoreanMainKeyKind.standard

@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
-import '../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../design_system/common_ui/common_ui_components.dart';
+import '../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../shared/plate/domain/repositories/plate_repository.dart';
 import '../../../shared/plate/domain/services/plate_status_record.dart';
 import '../../account/applications/user_state.dart';
@@ -14,7 +14,7 @@ import '../controllers/monthly_plate_controller.dart';
 import '../domain/monthly_parking_options.dart';
 import 'sheets/monthly_plate_bottom_sheet.dart';
 import 'sheets/monthly_plate_payment_bottom_sheet.dart';
-import 'widgets/monthly_prompt_ui.dart';
+import 'widgets/monthly_common_ui.dart';
 
 class MonthlyParkingManagement extends StatefulWidget {
   const MonthlyParkingManagement({super.key});
@@ -251,10 +251,10 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
         _loading = false;
         _loadError = e;
       });
-      showMonthlyPromptMessage(
+      showMonthlyCommonMessage(
         context,
         '정기 주차 목록을 불러오지 못했습니다. 아래로 당겨 다시 시도해주세요.',
-        tone: MonthlyPromptMessageTone.danger,
+        tone: MonthlyCommonMessageTone.danger,
       );
     }
   }
@@ -281,7 +281,7 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
 
   Future<void> _openAddDialog() async {
     FocusScope.of(context).unfocus();
-    await showPromptOverlayDialog<void>(
+    await showCommonOverlayDialog<void>(
       context: context,
       barrierDismissible: true,
       builder: (_) => const MonthlyPlateBottomSheet(),
@@ -293,7 +293,7 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
     FocusScope.of(context).unfocus();
     final sourceItem = await _hydrateFromSource(item);
     if (!mounted) return;
-    await showPromptOverlayDialog<void>(
+    await showCommonOverlayDialog<void>(
       context: context,
       barrierDismissible: true,
       builder: (_) => MonthlyPlateBottomSheet(
@@ -337,7 +337,7 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
       return;
     }
 
-    await showPromptOverlayBottomSheet<void>(
+    await showCommonOverlayBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
@@ -355,7 +355,7 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
   }
 
   Future<void> _deleteItem(_MonthlyPlateVM item) async {
-    final ok = await showMonthlyPromptConfirmation(
+    final ok = await showMonthlyCommonConfirmation(
       context: context,
       title: '정기권 삭제',
       message: '${item.plateNumber} 정기 주차 정보를 삭제합니다. 삭제 후에는 복구할 수 없습니다.',
@@ -372,18 +372,18 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
       setState(() {
         if (_selectedDocId == item.docId) _selectedDocId = null;
       });
-      showMonthlyPromptMessage(
+      showMonthlyCommonMessage(
         context,
         '정기 주차 정보가 삭제되었습니다.',
-        tone: MonthlyPromptMessageTone.success,
+        tone: MonthlyCommonMessageTone.success,
       );
       await _refreshMonthlyPlateView();
     } catch (_) {
       if (!mounted) return;
-      showMonthlyPromptMessage(
+      showMonthlyCommonMessage(
         context,
         '삭제에 실패했습니다. 다시 시도해주세요.',
-        tone: MonthlyPromptMessageTone.danger,
+        tone: MonthlyCommonMessageTone.danger,
       );
     }
   }
@@ -394,7 +394,7 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
     final sourceItem = await _hydrateFromSource(item);
     if (!mounted) return;
 
-    await showPromptOverlayBottomSheet<void>(
+    await showCommonOverlayBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
@@ -424,7 +424,7 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
   }) {
     return RefreshIndicator(
       onRefresh: _refreshMonthlyPlateView,
-      color: PromptUiTheme.of(context).accent,
+      color: CommonUiTheme.of(context).accent,
       child: child,
     );
   }
@@ -504,16 +504,16 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
       );
     }
 
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
-    return PromptUiScope(
+    return CommonUiScope(
       child: Scaffold(
         backgroundColor: tokens.canvas,
         body: AnimatedSwitcher(
-          duration: reduceMotion ? Duration.zero : PromptUiMotion.component,
-          switchInCurve: PromptUiMotion.enter,
-          switchOutCurve: PromptUiMotion.exit,
+          duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
+          switchInCurve: CommonUiMotion.enter,
+          switchOutCurve: CommonUiMotion.exit,
           child: Column(
             key: ValueKey<String>(currentArea),
         children: [
@@ -616,10 +616,10 @@ class _MonthlyOpsHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
 
-    return PromptAnimatedReveal(
+    return CommonAnimatedReveal(
       child: Container(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
         decoration: BoxDecoration(
@@ -637,7 +637,7 @@ class _MonthlyOpsHeader extends StatelessWidget {
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: tokens.accentContainer,
-                    borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                    borderRadius: BorderRadius.circular(CommonUiShapes.control),
                     border: Border.all(
                       color: tokens.accent.withOpacity(
                         tokens.isDark ? 0.56 : 0.34,
@@ -673,11 +673,11 @@ class _MonthlyOpsHeader extends StatelessWidget {
                     ],
                   ),
                 ),
-                PromptButton(
+                CommonButton(
                   label: '신규 등록',
                   icon: Icons.add_rounded,
                   minHeight: 46,
-                  haptic: PromptHaptic.medium,
+                  haptic: CommonHaptic.medium,
                   onPressed: onAdd,
                 ),
               ],
@@ -691,31 +691,31 @@ class _MonthlyOpsHeader extends StatelessWidget {
                     label: '전체',
                     value: summary.total,
                     icon: Icons.dashboard_customize_outlined,
-                    tone: MonthlyPromptMessageTone.info,
+                    tone: MonthlyCommonMessageTone.info,
                   ),
                   _SummaryCell(
                     label: '정상',
                     value: summary.active,
                     icon: Icons.verified_outlined,
-                    tone: MonthlyPromptMessageTone.success,
+                    tone: MonthlyCommonMessageTone.success,
                   ),
                   _SummaryCell(
                     label: 'D-7',
                     value: summary.expiringSoon,
                     icon: Icons.timer_outlined,
-                    tone: MonthlyPromptMessageTone.warning,
+                    tone: MonthlyCommonMessageTone.warning,
                   ),
                   _SummaryCell(
                     label: '만료',
                     value: summary.expired,
                     icon: Icons.warning_amber_rounded,
-                    tone: MonthlyPromptMessageTone.danger,
+                    tone: MonthlyCommonMessageTone.danger,
                   ),
                   _SummaryCell(
                     label: '메모',
                     value: summary.memo,
                     icon: Icons.sticky_note_2_outlined,
-                    tone: MonthlyPromptMessageTone.info,
+                    tone: MonthlyCommonMessageTone.info,
                   ),
                 ],
               ),
@@ -738,11 +738,11 @@ class _SummaryCell extends StatelessWidget {
   final String label;
   final int value;
   final IconData icon;
-  final MonthlyPromptMessageTone tone;
+  final MonthlyCommonMessageTone tone;
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final foreground = _toneForeground(tokens, tone);
     final background = _toneBackground(tokens, tone);
@@ -753,7 +753,7 @@ class _SummaryCell extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(PromptUiShapes.card),
+        borderRadius: BorderRadius.circular(CommonUiShapes.card),
         border: Border.all(color: foreground.withOpacity(0.22)),
       ),
       child: Column(
@@ -844,10 +844,10 @@ class _MonthlyCommandBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
 
-    return PromptAnimatedReveal(
+    return CommonAnimatedReveal(
       delay: const Duration(milliseconds: 45),
       child: Container(
         color: tokens.canvas,
@@ -865,7 +865,7 @@ class _MonthlyCommandBar extends StatelessWidget {
                     color: tokens.textPrimary,
                     fontWeight: FontWeight.w600,
                   ),
-                  decoration: monthlyPromptInputDecoration(
+                  decoration: monthlyCommonInputDecoration(
                     context,
                     label: '차량번호·정산명 검색',
                     prefixIcon: Icon(
@@ -874,12 +874,12 @@ class _MonthlyCommandBar extends StatelessWidget {
                     ),
                     suffixIcon: query.isEmpty
                         ? null
-                        : PromptIconButton(
+                        : CommonIconButton(
                             icon: Icons.close_rounded,
                             tooltip: '검색어 지우기',
                             size: 40,
                             iconSize: 19,
-                            haptic: PromptHaptic.selection,
+                            haptic: CommonHaptic.selection,
                             onPressed: onQueryClear,
                           ),
                   ),
@@ -887,7 +887,7 @@ class _MonthlyCommandBar extends StatelessWidget {
                 final sortField = DropdownButtonFormField<_MonthlySort>(
                   value: sort,
                   isExpanded: true,
-                  decoration: monthlyPromptInputDecoration(
+                  decoration: monthlyCommonInputDecoration(
                     context,
                     label: '정렬',
                     prefixIcon: Icon(
@@ -960,15 +960,15 @@ class _MonthlyCommandBar extends StatelessWidget {
                         for (final value in _MonthlyFilter.values)
                           Padding(
                             padding: const EdgeInsets.only(right: 8),
-                            child: PromptButton(
+                            child: CommonButton(
                               label: _filterLabel(value),
                               icon: _filterIcon(value),
                               minHeight: 40,
                               selected: filter == value,
                               variant: filter == value
-                                  ? PromptButtonVariant.secondary
-                                  : PromptButtonVariant.tertiary,
-                              haptic: PromptHaptic.selection,
+                                  ? CommonButtonVariant.secondary
+                                  : CommonButtonVariant.tertiary,
+                              haptic: CommonHaptic.selection,
                               onPressed: () => onFilterChanged(value),
                             ),
                           ),
@@ -977,10 +977,10 @@ class _MonthlyCommandBar extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 10),
-                MonthlyPromptBadge(
+                MonthlyCommonBadge(
                   label: '$visibleCount / $totalCount',
                   icon: Icons.format_list_numbered_rounded,
-                  tone: MonthlyPromptMessageTone.info,
+                  tone: MonthlyCommonMessageTone.info,
                 ),
               ],
             ),
@@ -1008,31 +1008,31 @@ class _MonthlyPlateOpsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final won = NumberFormat.decimalPattern('ko_KR');
     final tone = _statusTone(item.status);
     final statusColor = _toneForeground(tokens, tone);
 
-    return PromptAnimatedReveal(
+    return CommonAnimatedReveal(
       delay: reduceMotion ? Duration.zero : delay,
       child: Material(
         color: tokens.transparent,
-        borderRadius: BorderRadius.circular(PromptUiShapes.card),
+        borderRadius: BorderRadius.circular(CommonUiShapes.card),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
           child: AnimatedContainer(
-            duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
-            curve: PromptUiMotion.standard,
+            duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+            curve: CommonUiMotion.standard,
             decoration: BoxDecoration(
               color: selected ? tokens.surfaceSelected : tokens.surfaceRaised,
               border: Border.all(
                 color: selected ? tokens.accent : tokens.borderSubtle,
                 width: selected ? 1.5 : 1,
               ),
-              borderRadius: BorderRadius.circular(PromptUiShapes.card),
+              borderRadius: BorderRadius.circular(CommonUiShapes.card),
               boxShadow: [
                 if (selected)
                   BoxShadow(
@@ -1070,7 +1070,7 @@ class _MonthlyPlateOpsRow extends StatelessWidget {
                                   ),
                                 ),
                               ),
-                              MonthlyPromptBadge(
+                              MonthlyCommonBadge(
                                 label: _statusLabel(item),
                                 icon: _statusIcon(item.status),
                                 tone: tone,
@@ -1121,10 +1121,10 @@ class _MonthlyPlateOpsRow extends StatelessWidget {
                     decoration: BoxDecoration(
                       border: Border(left: BorderSide(color: tokens.borderSubtle)),
                     ),
-                    child: PromptIconButton(
+                    child: CommonIconButton(
                       icon: Icons.payments_outlined,
                       tooltip: '결제',
-                      haptic: PromptHaptic.medium,
+                      haptic: CommonHaptic.medium,
                       onPressed: onPay,
                     ),
                   ),
@@ -1149,12 +1149,12 @@ class _InfoPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
         color: tokens.surfaceOverlay,
-        borderRadius: BorderRadius.circular(PromptUiShapes.control),
+        borderRadius: BorderRadius.circular(CommonUiShapes.control),
         border: Border.all(color: tokens.borderSubtle),
       ),
       child: Row(
@@ -1213,8 +1213,8 @@ class _MonthlyDetailPanel extends StatelessWidget {
       minChildSize: 0.6,
       maxChildSize: 0.97,
       builder: (context, scrollController) {
-        final tokens = PromptUiTheme.of(context);
-        return PromptSheetScaffold(
+        final tokens = CommonUiTheme.of(context);
+        return CommonSheetScaffold(
           title: item.plateNumber,
           icon: Icons.assignment_turned_in_outlined,
           onClose: () => Navigator.of(context).pop(),
@@ -1227,7 +1227,7 @@ class _MonthlyDetailPanel extends StatelessWidget {
                   children: [
                     Align(
                       alignment: Alignment.centerLeft,
-                      child: MonthlyPromptBadge(
+                      child: MonthlyCommonBadge(
                         label: _statusLabel(item),
                         icon: _statusIcon(item.status),
                         tone: _statusTone(item.status),
@@ -1273,7 +1273,7 @@ class _MonthlyDetailPanel extends StatelessWidget {
                     _OpsPanel(
                       title: '결제 내역',
                       icon: Icons.receipt_long_outlined,
-                      trailing: MonthlyPromptBadge(
+                      trailing: MonthlyCommonBadge(
                         label: '${history.length}건',
                         icon: Icons.history_rounded,
                       ),
@@ -1298,7 +1298,7 @@ class _MonthlyDetailPanel extends StatelessWidget {
                               for (var index = 0;
                                   index < history.length;
                                   index++)
-                                PromptAnimatedReveal(
+                                CommonAnimatedReveal(
                                   delay: MediaQuery.maybeOf(context)
                                               ?.disableAnimations ??
                                           false
@@ -1323,30 +1323,30 @@ class _MonthlyDetailPanel extends StatelessWidget {
                 child: Row(
                   children: [
                     Expanded(
-                      child: PromptButton(
+                      child: CommonButton(
                         label: '수정',
                         icon: Icons.edit_outlined,
-                        variant: PromptButtonVariant.secondary,
-                        haptic: PromptHaptic.selection,
+                        variant: CommonButtonVariant.secondary,
+                        haptic: CommonHaptic.selection,
                         onPressed: onEdit,
                       ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: PromptButton(
+                      child: CommonButton(
                         label: '결제',
                         icon: Icons.payments_outlined,
-                        haptic: PromptHaptic.medium,
+                        haptic: CommonHaptic.medium,
                         onPressed: onPay,
                       ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: PromptButton(
+                      child: CommonButton(
                         label: '삭제',
                         icon: Icons.delete_outline_rounded,
-                        variant: PromptButtonVariant.destructive,
-                        haptic: PromptHaptic.heavy,
+                        variant: CommonButtonVariant.destructive,
+                        haptic: CommonHaptic.heavy,
                         onPressed: onDelete,
                       ),
                     ),
@@ -1376,13 +1376,13 @@ class _OpsPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: tokens.surfaceRaised,
-        borderRadius: BorderRadius.circular(PromptUiShapes.card),
+        borderRadius: BorderRadius.circular(CommonUiShapes.card),
         border: Border.all(color: tokens.borderSubtle),
       ),
       child: Column(
@@ -1423,7 +1423,7 @@ class _KV extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     return Padding(
       padding: const EdgeInsets.only(bottom: 9),
@@ -1498,7 +1498,7 @@ class _PaymentHistoryRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final amount = _amountValue(payment['paymentAmount'] ?? payment['amount']);
     final paidBy = _textValue(payment['paidBy']);
@@ -1527,7 +1527,7 @@ class _PaymentHistoryRow extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: tokens.surfaceOverlay,
-        borderRadius: BorderRadius.circular(PromptUiShapes.control),
+        borderRadius: BorderRadius.circular(CommonUiShapes.control),
         border: Border.all(color: tokens.borderSubtle),
       ),
       child: Column(
@@ -1546,10 +1546,10 @@ class _PaymentHistoryRow extends StatelessWidget {
                 ),
               ),
               if (extended)
-                const MonthlyPromptBadge(
+                const MonthlyCommonBadge(
                   label: '연장',
                   icon: Icons.update_rounded,
-                  tone: MonthlyPromptMessageTone.success,
+                  tone: MonthlyCommonMessageTone.success,
                 ),
             ],
           ),
@@ -1610,12 +1610,12 @@ class _MonthlyLoadErrorState extends StatelessWidget {
       icon: Icons.error_outline_rounded,
       title: '목록을 불러오지 못했습니다.',
       message: '아래로 당기거나 다시 시도 버튼을 눌러 갱신하세요.',
-      tone: MonthlyPromptMessageTone.danger,
-      action: PromptButton(
+      tone: MonthlyCommonMessageTone.danger,
+      action: CommonButton(
         label: '다시 시도',
         icon: Icons.refresh_rounded,
-        variant: PromptButtonVariant.secondary,
-        haptic: PromptHaptic.selection,
+        variant: CommonButtonVariant.secondary,
+        haptic: CommonHaptic.selection,
         onPressed: onRetry,
       ),
     );
@@ -1627,14 +1627,14 @@ class _MonthlyLoadingView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     return Center(
-      child: PromptAnimatedReveal(
+      child: CommonAnimatedReveal(
         child: Container(
           padding: const EdgeInsets.all(22),
           decoration: BoxDecoration(
             color: tokens.surfaceRaised,
-            borderRadius: BorderRadius.circular(PromptUiShapes.card),
+            borderRadius: BorderRadius.circular(CommonUiShapes.card),
             border: Border.all(color: tokens.borderSubtle),
           ),
           child: CircularProgressIndicator(color: tokens.accent),
@@ -1655,11 +1655,11 @@ class _MonthlyEmptyState extends StatelessWidget {
       icon: Icons.local_parking_outlined,
       title: '등록된 정기 주차가 없습니다.',
       message: '신규 등록으로 첫 정기권을 추가하세요.',
-      tone: MonthlyPromptMessageTone.info,
-      action: PromptButton(
+      tone: MonthlyCommonMessageTone.info,
+      action: CommonButton(
         label: '신규 등록',
         icon: Icons.add_rounded,
-        haptic: PromptHaptic.medium,
+        haptic: CommonHaptic.medium,
         onPressed: onAdd,
       ),
     );
@@ -1677,12 +1677,12 @@ class _MonthlyNoResultState extends StatelessWidget {
       icon: Icons.manage_search_rounded,
       title: '조건에 맞는 정기권이 없습니다.',
       message: '검색어와 필터를 초기화해보세요.',
-      tone: MonthlyPromptMessageTone.warning,
-      action: PromptButton(
+      tone: MonthlyCommonMessageTone.warning,
+      action: CommonButton(
         label: '초기화',
         icon: Icons.refresh_rounded,
-        variant: PromptButtonVariant.secondary,
-        haptic: PromptHaptic.selection,
+        variant: CommonButtonVariant.secondary,
+        haptic: CommonHaptic.selection,
         onPressed: onReset,
       ),
     );
@@ -1701,22 +1701,22 @@ class _MonthlyStateCard extends StatelessWidget {
   final IconData icon;
   final String title;
   final String message;
-  final MonthlyPromptMessageTone tone;
+  final MonthlyCommonMessageTone tone;
   final Widget action;
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final foreground = _toneForeground(tokens, tone);
     final background = _toneBackground(tokens, tone);
-    return PromptAnimatedReveal(
+    return CommonAnimatedReveal(
       child: Container(
         constraints: const BoxConstraints(maxWidth: 420),
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
           color: tokens.surfaceRaised,
-          borderRadius: BorderRadius.circular(PromptUiShapes.card),
+          borderRadius: BorderRadius.circular(CommonUiShapes.card),
           border: Border.all(color: tokens.borderSubtle),
         ),
         child: Column(
@@ -1728,7 +1728,7 @@ class _MonthlyStateCard extends StatelessWidget {
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 color: background,
-                borderRadius: BorderRadius.circular(PromptUiShapes.card),
+                borderRadius: BorderRadius.circular(CommonUiShapes.card),
                 border: Border.all(color: foreground.withOpacity(0.22)),
               ),
               child: Icon(icon, color: foreground, size: 32),
@@ -1760,12 +1760,12 @@ class _MonthlyStateCard extends StatelessWidget {
   }
 }
 
-MonthlyPromptMessageTone _statusTone(_MonthlyStatus status) {
+MonthlyCommonMessageTone _statusTone(_MonthlyStatus status) {
   return switch (status) {
-    _MonthlyStatus.active => MonthlyPromptMessageTone.success,
-    _MonthlyStatus.expiringSoon => MonthlyPromptMessageTone.warning,
-    _MonthlyStatus.expired => MonthlyPromptMessageTone.danger,
-    _MonthlyStatus.unknown => MonthlyPromptMessageTone.info,
+    _MonthlyStatus.active => MonthlyCommonMessageTone.success,
+    _MonthlyStatus.expiringSoon => MonthlyCommonMessageTone.warning,
+    _MonthlyStatus.expired => MonthlyCommonMessageTone.danger,
+    _MonthlyStatus.unknown => MonthlyCommonMessageTone.info,
   };
 }
 
@@ -1789,25 +1789,25 @@ IconData _statusIcon(_MonthlyStatus status) {
 }
 
 Color _toneForeground(
-  PromptUiTokens tokens,
-  MonthlyPromptMessageTone tone,
+  CommonUiTokens tokens,
+  MonthlyCommonMessageTone tone,
 ) {
   return switch (tone) {
-    MonthlyPromptMessageTone.info => tokens.onInfoContainer,
-    MonthlyPromptMessageTone.success => tokens.onSuccessContainer,
-    MonthlyPromptMessageTone.warning => tokens.onWarningContainer,
-    MonthlyPromptMessageTone.danger => tokens.onDangerContainer,
+    MonthlyCommonMessageTone.info => tokens.onInfoContainer,
+    MonthlyCommonMessageTone.success => tokens.onSuccessContainer,
+    MonthlyCommonMessageTone.warning => tokens.onWarningContainer,
+    MonthlyCommonMessageTone.danger => tokens.onDangerContainer,
   };
 }
 
 Color _toneBackground(
-  PromptUiTokens tokens,
-  MonthlyPromptMessageTone tone,
+  CommonUiTokens tokens,
+  MonthlyCommonMessageTone tone,
 ) {
   return switch (tone) {
-    MonthlyPromptMessageTone.info => tokens.infoContainer,
-    MonthlyPromptMessageTone.success => tokens.successContainer,
-    MonthlyPromptMessageTone.warning => tokens.warningContainer,
-    MonthlyPromptMessageTone.danger => tokens.dangerContainer,
+    MonthlyCommonMessageTone.info => tokens.infoContainer,
+    MonthlyCommonMessageTone.success => tokens.successContainer,
+    MonthlyCommonMessageTone.warning => tokens.warningContainer,
+    MonthlyCommonMessageTone.danger => tokens.dangerContainer,
   };
 }

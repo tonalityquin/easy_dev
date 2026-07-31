@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../design_system/common_ui/common_ui_theme.dart';
 
 class MonthlyPlateField extends StatelessWidget {
   const MonthlyPlateField({
@@ -96,7 +96,7 @@ class _PlateBoxInput extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final active = controller == activeController && !editMode;
     final enabled = !editMode;
@@ -113,12 +113,12 @@ class _PlateBoxInput extends StatelessWidget {
       selected: active,
       label: korean ? '번호판 가운데 글자' : '번호판 숫자',
       child: AnimatedContainer(
-        duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
-        curve: PromptUiMotion.standard,
+        duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+        curve: CommonUiMotion.standard,
         height: 54,
         decoration: BoxDecoration(
           color: background,
-          borderRadius: BorderRadius.circular(PromptUiShapes.control),
+          borderRadius: BorderRadius.circular(CommonUiShapes.control),
           border: Border.all(color: border, width: active ? 1.5 : 1),
           boxShadow: [
             if (active)
@@ -168,14 +168,14 @@ class _PlateBoxInput extends StatelessWidget {
               top: 8,
               child: AnimatedScale(
                 scale: active ? 1 : 0,
-                duration: reduceMotion ? Duration.zero : PromptUiMotion.press,
-                curve: PromptUiMotion.enter,
+                duration: reduceMotion ? Duration.zero : CommonUiMotion.press,
+                curve: CommonUiMotion.enter,
                 child: Container(
                   width: 8,
                   height: 8,
                   decoration: BoxDecoration(
                     color: tokens.accent,
-                    borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+                    borderRadius: BorderRadius.circular(CommonUiShapes.pill),
                   ),
                 ),
               ),

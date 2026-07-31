@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../application/personal_todo_store.dart';
 import '../../domain/models/personal_todo_item.dart';
-import '../widgets/personal_prompt_components.dart';
+import '../widgets/personal_common_components.dart';
 
 Future<bool?> showPersonalTodoDialog(BuildContext context) {
-  return showPromptOverlayDialog<bool>(
+  return showCommonOverlayDialog<bool>(
     context: context,
     builder: (_) => const PersonalTodoDialog(),
   );
@@ -57,7 +57,7 @@ class _PersonalTodoDialogState extends State<PersonalTodoDialog> {
   }
 
   Future<void> _add() async {
-    final item = await showPromptOverlayDialog<PersonalTodoItem>(
+    final item = await showCommonOverlayDialog<PersonalTodoItem>(
       context: context,
       builder: (_) => const _TodoEditorDialog(),
     );
@@ -68,7 +68,7 @@ class _PersonalTodoDialogState extends State<PersonalTodoDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final size = MediaQuery.sizeOf(context);
 
@@ -77,7 +77,7 @@ class _PersonalTodoDialogState extends State<PersonalTodoDialog> {
       backgroundColor: tokens.surfaceRaised,
       surfaceTintColor: tokens.transparent,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(PromptUiShapes.dialog),
+        borderRadius: BorderRadius.circular(CommonUiShapes.dialog),
         side: BorderSide(color: tokens.borderSubtle),
       ),
       child: SafeArea(
@@ -100,7 +100,7 @@ class _PersonalTodoDialogState extends State<PersonalTodoDialog> {
                     decoration: BoxDecoration(
                       color: tokens.accentContainer,
                       borderRadius: BorderRadius.circular(
-                        PromptUiShapes.control,
+                        CommonUiShapes.control,
                       ),
                     ),
                     child: Icon(
@@ -118,18 +118,18 @@ class _PersonalTodoDialogState extends State<PersonalTodoDialog> {
                       ),
                     ),
                   ),
-                  PersonalPromptStatusPill(
+                  PersonalCommonStatusPill(
                     label: '${_todos.where((todo) => !todo.done).length}개 진행',
                     foreground: tokens.statusSettlementPending,
                     background: tokens.statusSettlementPendingContainer,
                     icon: Icons.pending_actions_rounded,
                   ),
                   const SizedBox(width: 6),
-                  PromptIconButton(
+                  CommonIconButton(
                     icon: Icons.close_rounded,
                     tooltip: '닫기',
                     onPressed: () => Navigator.of(context).pop(false),
-                    haptic: PromptHaptic.selection,
+                    haptic: CommonHaptic.selection,
                   ),
                 ],
               ),
@@ -137,7 +137,7 @@ class _PersonalTodoDialogState extends State<PersonalTodoDialog> {
               Divider(height: 1, color: tokens.borderSubtle),
               const SizedBox(height: 14),
               Flexible(
-                child: PersonalPromptAnimatedSwap(
+                child: PersonalCommonAnimatedSwap(
                   stateKey: _loading
                       ? 'loading'
                       : _todos.isEmpty
@@ -146,12 +146,12 @@ class _PersonalTodoDialogState extends State<PersonalTodoDialog> {
                   alignment: Alignment.topCenter,
                   child: _loading
                       ? const Center(
-                          child: PersonalPromptLoadingState(
+                          child: PersonalCommonLoadingState(
                             label: '할 일을 불러오는 중입니다.',
                           ),
                         )
                       : _todos.isEmpty
-                          ? PersonalPromptEmptyState(
+                          ? PersonalCommonEmptyState(
                               icon: Icons.task_alt_rounded,
                               title: '아직 등록된 할 일이 없습니다.',
                               message: '차량 관련 메모를 남겨두면 홈에서 바로 확인할 수 있습니다.',
@@ -165,20 +165,20 @@ class _PersonalTodoDialogState extends State<PersonalTodoDialog> {
                                   const SizedBox(height: 8),
                               itemBuilder: (context, index) {
                                 final todo = _todos[index];
-                                return PromptAnimatedReveal(
+                                return CommonAnimatedReveal(
                                   key: ValueKey<String>(todo.id),
                                   delay: Duration(milliseconds: index * 24),
                                   child: AnimatedContainer(
-                                    duration: personalPromptDuration(
+                                    duration: personalCommonDuration(
                                       context,
-                                      PromptUiMotion.selection,
+                                      CommonUiMotion.selection,
                                     ),
                                     decoration: BoxDecoration(
                                       color: todo.done
                                           ? tokens.surfaceOverlay
                                           : tokens.surfaceRaised,
                                       borderRadius: BorderRadius.circular(
-                                        PromptUiShapes.card,
+                                        CommonUiShapes.card,
                                       ),
                                       border: Border.all(
                                         color: todo.done
@@ -207,11 +207,11 @@ class _PersonalTodoDialogState extends State<PersonalTodoDialog> {
                                           fontWeight: FontWeight.w500,
                                         ),
                                       ),
-                                      secondary: PromptIconButton(
+                                      secondary: CommonIconButton(
                                         icon: Icons.delete_outline_rounded,
                                         tooltip: '삭제',
                                         onPressed: () => _remove(todo),
-                                        haptic: PromptHaptic.medium,
+                                        haptic: CommonHaptic.medium,
                                       ),
                                       controlAffinity:
                                           ListTileControlAffinity.leading,
@@ -223,11 +223,11 @@ class _PersonalTodoDialogState extends State<PersonalTodoDialog> {
                 ),
               ),
               const SizedBox(height: 16),
-              PromptButton(
+              CommonButton(
                 label: '할 일 추가',
                 icon: Icons.add_rounded,
                 expand: true,
-                haptic: PromptHaptic.light,
+                haptic: CommonHaptic.light,
                 onPressed: _add,
               ),
             ],
@@ -259,7 +259,7 @@ class _TodoEditorDialogState extends State<_TodoEditorDialog> {
 
   Future<void> _pickDate() async {
     final now = DateTime.now();
-    final picked = await showPromptDatePicker(
+    final picked = await showCommonDatePicker(
       context: context,
       initialDate: _dueDate ?? now,
       firstDate: DateTime(now.year - 1),
@@ -290,13 +290,13 @@ class _TodoEditorDialogState extends State<_TodoEditorDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     return Dialog(
       backgroundColor: tokens.surfaceRaised,
       surfaceTintColor: tokens.transparent,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(PromptUiShapes.dialog),
+        borderRadius: BorderRadius.circular(CommonUiShapes.dialog),
         side: BorderSide(color: tokens.borderSubtle),
       ),
       child: SafeArea(
@@ -345,30 +345,30 @@ class _TodoEditorDialogState extends State<_TodoEditorDialog> {
                 onSubmitted: (_) => _save(),
               ),
               const SizedBox(height: 12),
-              PromptButton(
+              CommonButton(
                 label: _dueDate == null ? '날짜 선택' : _formatDate(_dueDate!),
                 icon: Icons.event_rounded,
-                variant: PromptButtonVariant.secondary,
+                variant: CommonButtonVariant.secondary,
                 expand: true,
-                haptic: PromptHaptic.selection,
+                haptic: CommonHaptic.selection,
                 onPressed: _pickDate,
               ),
               const SizedBox(height: 18),
               Row(
                 children: <Widget>[
                   Expanded(
-                    child: PromptButton(
+                    child: CommonButton(
                       label: '취소',
-                      variant: PromptButtonVariant.tertiary,
+                      variant: CommonButtonVariant.tertiary,
                       onPressed: () => Navigator.of(context).pop(),
                     ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: PromptButton(
+                    child: CommonButton(
                       label: '저장',
                       icon: Icons.check_rounded,
-                      haptic: PromptHaptic.light,
+                      haptic: CommonHaptic.light,
                       onPressed: _save,
                     ),
                   ),

@@ -3,9 +3,9 @@ import 'dart:math';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
-import '../../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
-import '../../../pages/widgets/tablet_prompt_components.dart';
+import '../../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../../design_system/common_ui/common_ui_theme.dart';
+import '../../../pages/widgets/tablet_common_components.dart';
 import '../../../../location/domain/models/grid_rect.dart';
 import '../../../../location/domain/models/location_model.dart';
 import '../../../../location/domain/models/parking_grid_model.dart';
@@ -1395,8 +1395,8 @@ class _TabletGrid2dPreviewState extends State<TabletGrid2dPreview> {
       children: List.generate(count, (i) {
         final selected = i == index;
         return AnimatedContainer(
-          duration: tabletPromptDuration(context, PromptUiMotion.selection),
-          curve: PromptUiMotion.standard,
+          duration: tabletCommonDuration(context, CommonUiMotion.selection),
+          curve: CommonUiMotion.standard,
           width: selected ? 16 : 6,
           height: 6,
           margin: const EdgeInsets.symmetric(horizontal: 3),
@@ -1444,9 +1444,9 @@ class _TabletGrid2dPreviewState extends State<TabletGrid2dPreview> {
 
   Widget _animatedBody({required Key key, required Widget child}) {
     return AnimatedSwitcher(
-      duration: tabletPromptDuration(context, PromptUiMotion.component),
-      switchInCurve: PromptUiMotion.enter,
-      switchOutCurve: PromptUiMotion.exit,
+      duration: tabletCommonDuration(context, CommonUiMotion.component),
+      switchInCurve: CommonUiMotion.enter,
+      switchOutCurve: CommonUiMotion.exit,
       layoutBuilder: (currentChild, previousChildren) {
         return Stack(
           alignment: Alignment.topCenter,
@@ -1476,7 +1476,7 @@ class _TabletGrid2dPreviewState extends State<TabletGrid2dPreview> {
     EdgeInsets padding =
         const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
   }) {
-    return TabletPromptPanel(
+    return TabletCommonPanel(
       padding: padding,
       clipBehavior: Clip.antiAlias,
       child: child,
@@ -1487,8 +1487,8 @@ class _TabletGrid2dPreviewState extends State<TabletGrid2dPreview> {
     required String label,
     required IconData icon,
   }) {
-    final tokens = PromptUiTheme.of(context);
-    return TabletPromptStatusPill(
+    final tokens = CommonUiTheme.of(context);
+    return TabletCommonStatusPill(
       label: label,
       icon: icon,
       tone: icon == Icons.account_tree_rounded
@@ -1504,7 +1504,7 @@ class _TabletGrid2dPreviewState extends State<TabletGrid2dPreview> {
     String? kindLabel,
     IconData? kindIcon,
   }) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final text = Theme.of(context).textTheme;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1514,7 +1514,7 @@ class _TabletGrid2dPreviewState extends State<TabletGrid2dPreview> {
           height: 38,
           decoration: BoxDecoration(
             color: tokens.surfaceOverlay,
-            borderRadius: BorderRadius.circular(PromptUiShapes.control),
+            borderRadius: BorderRadius.circular(CommonUiShapes.control),
             border: Border.all(color: tokens.borderSubtle),
           ),
           child: Icon(
@@ -1546,13 +1546,13 @@ class _TabletGrid2dPreviewState extends State<TabletGrid2dPreview> {
           ),
         ),
         const SizedBox(width: 12),
-        PromptButton(
+        CommonButton(
           label: '구역 선택',
           icon: Icons.layers_rounded,
-          variant: PromptButtonVariant.secondary,
+          variant: CommonButtonVariant.secondary,
           minHeight: 44,
           onPressed: onPick,
-          haptic: PromptHaptic.selection,
+          haptic: CommonHaptic.selection,
         ),
       ],
     );

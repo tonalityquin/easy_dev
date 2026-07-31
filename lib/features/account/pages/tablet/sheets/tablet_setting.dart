@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../../app/utils/snackbar_helper.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../../shared/auth/five_digit_password_generator.dart';
 import '../../../../../shared/secondary/widgets/ops_console_widgets.dart';
 import '../../../domain/models/tablet/tablet_model.dart';
@@ -104,7 +104,7 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
     showSelectedSnackbar(
       context,
       '태블릿 비밀번호를 복사했습니다.',
-      usePromptUi: true,
+      useCommonUi: true,
     );
   }
 
@@ -193,7 +193,7 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
   }
 
   Widget _buildRoleSection(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     return OpsWorkSection(
       title: '운영 권한',
       subtitle: '태블릿 단말이 수행할 수 있는 현장 역할을 지정합니다.',
@@ -248,7 +248,7 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final title = isEditMode ? '태블릿 계정 수정' : '태블릿 등록';
     final subtitle = isEditMode ? '현장 단말의 배정 정보와 권한을 갱신합니다.' : '운영 구역에 배정할 태블릿 계정을 프로비저닝합니다.';
     final areaLabel = widget.division.trim().isEmpty ? widget.areaValue : '${widget.division} · ${widget.areaValue}';
@@ -328,15 +328,15 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
             ],
           ),
           const SizedBox(height: 12),
-          PromptAnimatedReveal(
+          CommonAnimatedReveal(
             delay: const Duration(milliseconds: 40),
             child: _buildIdentitySection(context),
           ),
-          PromptAnimatedReveal(
+          CommonAnimatedReveal(
             delay: const Duration(milliseconds: 80),
             child: _buildRoleSection(context),
           ),
-          PromptAnimatedReveal(
+          CommonAnimatedReveal(
             delay: const Duration(milliseconds: 120),
             child: _buildPasswordSection(context),
           ),

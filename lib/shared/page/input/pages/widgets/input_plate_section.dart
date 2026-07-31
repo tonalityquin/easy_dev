@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
-import '../prompt_input_ui.dart';
+import '../../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../../design_system/common_ui/common_ui_theme.dart';
+import '../common_input_ui.dart';
 
 class InputPlateSection extends StatelessWidget {
   final String? selectedManufacturerName;
@@ -20,7 +20,7 @@ class InputPlateSection extends StatelessWidget {
     required String? value,
     required IconData icon,
   }) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final displayValue = value == null || value.trim().isEmpty
         ? '미등록'
         : value.trim();
@@ -30,7 +30,7 @@ class InputPlateSection extends StatelessWidget {
       decoration: BoxDecoration(
         color: tokens.surfaceOverlay,
         border: Border.all(color: tokens.borderSubtle),
-        borderRadius: BorderRadius.circular(PromptUiShapes.control),
+        borderRadius: BorderRadius.circular(CommonUiShapes.control),
       ),
       child: Row(
         children: [
@@ -70,12 +70,12 @@ class InputPlateSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PromptAnimatedReveal(
-      child: PromptInputSectionCard(
+    return CommonAnimatedReveal(
+      child: CommonInputSectionCard(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const PromptInputSectionTitle(
+            const CommonInputSectionTitle(
               icon: Icons.directions_car_filled_rounded,
               title: '차량 정보 입력',
               subtitle: '번호판 인식 결과에 연결된 차량 정보를 확인합니다.',

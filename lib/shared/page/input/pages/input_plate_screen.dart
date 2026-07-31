@@ -6,9 +6,9 @@ import 'package:uuid/uuid.dart';
 import '../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../app/utils/status_dialog.dart';
 import '../../../../app/utils/snackbar_helper.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../features/account/applications/user_state.dart';
 import '../../../../features/dev/application/area_state.dart';
 import '../../../../features/monthly/page/sheets/widgets/keypad/kor_keypad.dart';
@@ -186,7 +186,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
   void _showFloatingMessage(String message) {
     if (!mounted) return;
-    showSelectedSnackbar(context, message, usePromptUi: true);
+    showSelectedSnackbar(context, message, useCommonUi: true);
   }
 
   Future<void> _loadHasMonthlyParkingFlag() async {
@@ -290,7 +290,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
           initialMessage: open
               ? '터치로 추가 정보 카드를 열고 있습니다.'
               : '터치로 추가 정보 카드를 닫고 있습니다.',
-          usePromptUi: true,
+          useCommonUi: true,
           developerModeMessage:
               '개발자 모드 ON: 카드 제어 로그를 복사할 수 있습니다.',
           standardModeMessage:
@@ -317,7 +317,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       final reduceMotion =
           MediaQuery.maybeOf(context)?.disableAnimations ?? false;
       if (!reduceMotion) {
-        await Future<void>.delayed(PromptUiMotion.layout);
+        await Future<void>.delayed(CommonUiMotion.layout);
       }
 
       if (open) {
@@ -413,7 +413,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     final customStatusText =
         (customStatus ?? '').trim().isEmpty ? '-' : customStatus!.trim();
 
-    await showPromptOverlayDialog<void>(
+    await showCommonOverlayDialog<void>(
       context: context,
       barrierLabel: 'plate_status_loaded',
       builder: (dialogContext) => _PlateStatusLoadedDialog(
@@ -514,7 +514,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
         context: context,
         title: '입차 상태 정보 조회',
         initialMessage: '기존 상태 메모를 확인하고 있습니다.',
-        usePromptUi: true,
+        useCommonUi: true,
         developerModeMessage:
             '개발자 모드 ON: 상태 조회 실패 로그를 복사할 수 있습니다.',
         standardModeMessage:
@@ -699,7 +699,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       await StatusDialog.showFailure(
         context,
         title: StatusDialog.invalidPlateInput,
-        usePromptUi: true,
+        useCommonUi: true,
       );
       return;
     }
@@ -721,7 +721,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
         context: context,
         title: '정기 상태 정보 조회',
         initialMessage: '정기 차량의 상태 정보와 유효기간을 확인하고 있습니다.',
-        usePromptUi: true,
+        useCommonUi: true,
         developerModeMessage:
             '개발자 모드 ON: 정기 상태 조회 로그를 복사할 수 있습니다.',
         standardModeMessage:
@@ -783,7 +783,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
           await StatusDialog.showFailure(
             context,
             title: '정기 주차 기간이 만료되었습니다.',
-            usePromptUi: true,
+            useCommonUi: true,
           );
         } else if (result.failure == _MonthlyFetchFailureType.notFound) {
           trace.log('result=notFound apply=false', progress: .76);
@@ -791,7 +791,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
           await StatusDialog.showFailure(
             context,
             title: StatusDialog.monthlyDocNotFound,
-            usePromptUi: true,
+            useCommonUi: true,
           );
         } else {
           trace.log('result=readError apply=false', progress: .76);
@@ -863,7 +863,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       await StatusDialog.showFailure(
         context,
         title: StatusDialog.invalidPlateInput,
-        usePromptUi: true,
+        useCommonUi: true,
       );
       return;
     }
@@ -904,7 +904,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
         context: context,
         title: '정기 상태 메모 반영',
         initialMessage: '정기 차량의 상태 메모를 반영하고 있습니다.',
-        usePromptUi: true,
+        useCommonUi: true,
         developerModeMessage:
             '개발자 모드 ON: 상태 메모 저장 로그를 복사할 수 있습니다.',
         standardModeMessage:
@@ -1145,7 +1145,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
         front: front,
         mid: '',
         back: back,
-        promptMid: true,
+        commonMid: true,
         sessionId: sessionId,
       );
       return;
@@ -1158,7 +1158,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
         front: front,
         mid: '',
         back: back,
-        promptMid: true,
+        commonMid: true,
         sessionId: sessionId,
       );
       return;
@@ -1169,7 +1169,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     required String front,
     required String mid,
     required String back,
-    bool promptMid = false,
+    bool commonMid = false,
     String? sessionId,
   }) {
     controller.suppressOcrEditCount(true);
@@ -1188,7 +1188,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       _resolvedMonthlyDocId = null;
       _lastPlateStatusDialogKey = null;
 
-      if (promptMid || !controller.isInputValid()) {
+      if (commonMid || !controller.isInputValid()) {
         _activateNextIncompleteFieldOrFinish();
       } else {
         _finishPlateEditing();
@@ -1250,12 +1250,12 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     final result = _lastOcrSessionResult;
     if (result == null || !mounted) return;
 
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final text = _buildOcrClipboardText(result);
 
-    await showPromptOverlayDialog<void>(
+    await showCommonOverlayDialog<void>(
       context: context,
-      builder: (dialogContext) => PromptDialogFrame(
+      builder: (dialogContext) => CommonDialogFrame(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 560, maxHeight: 680),
           child: Column(
@@ -1269,7 +1269,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                     height: 42,
                     decoration: BoxDecoration(
                       color: tokens.infoContainer,
-                      borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                      borderRadius: BorderRadius.circular(CommonUiShapes.control),
                       border: Border.all(color: tokens.info.withOpacity(.36)),
                     ),
                     alignment: Alignment.center,
@@ -1314,7 +1314,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: tokens.surfaceOverlay,
-                          borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                          borderRadius: BorderRadius.circular(CommonUiShapes.control),
                           border: Border.all(color: tokens.borderSubtle),
                         ),
                         child: SelectableText(
@@ -1334,10 +1334,10 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
               Row(
                 children: [
                   Expanded(
-                    child: PromptButton(
+                    child: CommonButton(
                       label: '복사',
                       icon: Icons.copy_rounded,
-                      variant: PromptButtonVariant.secondary,
+                      variant: CommonButtonVariant.secondary,
                       onPressed: () async {
                         await Clipboard.setData(ClipboardData(text: text));
                         if (!dialogContext.mounted) return;
@@ -1347,7 +1347,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: PromptButton(
+                    child: CommonButton(
                       label: '닫기',
                       onPressed: () => Navigator.of(dialogContext).pop(),
                     ),
@@ -1394,7 +1394,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       context: context,
       selectedRegion: controller.dropdownValue,
       regions: controller.regions,
-      usePromptUi: true,
+      useCommonUi: true,
       onConfirm: (region) {
         setState(() {
           controller.dropdownValue = region;
@@ -1412,14 +1412,14 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
         pageBuilder: (_, animation, secondaryAnimation) =>
             LiveOcrPage(sessionId: sessionId),
         transitionDuration:
-            reduceMotion ? Duration.zero : PromptUiMotion.component,
+            reduceMotion ? Duration.zero : CommonUiMotion.component,
         reverseTransitionDuration:
-            reduceMotion ? Duration.zero : PromptUiMotion.selection,
+            reduceMotion ? Duration.zero : CommonUiMotion.selection,
         transitionsBuilder: (_, animation, secondaryAnimation, child) {
           final curved = CurvedAnimation(
             parent: animation,
-            curve: PromptUiMotion.enter,
-            reverseCurve: PromptUiMotion.exit,
+            curve: CommonUiMotion.enter,
+            reverseCurve: CommonUiMotion.exit,
           );
           return FadeTransition(
             opacity: curved,
@@ -1452,7 +1452,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
         front: result.weakFront!,
         mid: '',
         back: result.weakBack!,
-        promptMid: true,
+        commonMid: true,
         sessionId: result.sessionId,
       );
       return;
@@ -1654,15 +1654,15 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
     final Widget ocrButton = Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-      child: PromptAnimatedReveal(
+      child: CommonAnimatedReveal(
         delay: const Duration(milliseconds: 140),
         offset: const Offset(0, .025),
-        child: PromptButton(
+        child: CommonButton(
           label: '실시간 OCR 다시 스캔',
           icon: Icons.camera_alt_outlined,
-          variant: PromptButtonVariant.secondary,
+          variant: CommonButtonVariant.secondary,
           expand: true,
-          haptic: PromptHaptic.selection,
+          haptic: CommonHaptic.selection,
           onPressed: _openLiveScanner,
         ),
       ),
@@ -1826,9 +1826,9 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final content = AnimatedSwitcher(
-      duration: reduceMotion ? Duration.zero : PromptUiMotion.component,
-      switchInCurve: PromptUiMotion.enter,
-      switchOutCurve: PromptUiMotion.exit,
+      duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
+      switchInCurve: CommonUiMotion.enter,
+      switchOutCurve: CommonUiMotion.exit,
       transitionBuilder: (child, animation) {
         final begin = _dockSlideFromRight
             ? const Offset(0.10, 0)
@@ -1858,13 +1858,13 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return PromptUiScope(
-      child: Builder(builder: _buildPromptScreen),
+    return CommonUiScope(
+      child: Builder(builder: _buildCommonScreen),
     );
   }
 
-  Widget _buildPromptScreen(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+  Widget _buildCommonScreen(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
     final viewInset = MediaQuery.of(context).viewInsets.bottom;
     final sysBottom = MediaQuery.of(context).padding.bottom;
     final bottomSafePadding =
@@ -1977,8 +1977,8 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                 AnimatedPositioned(
                   duration: MediaQuery.of(context).disableAnimations
                       ? Duration.zero
-                      : PromptUiMotion.layout,
-                  curve: PromptUiMotion.standard,
+                      : CommonUiMotion.layout,
+                  curve: CommonUiMotion.standard,
                   left: 0,
                   right: 0,
                   bottom: 0,
@@ -1991,8 +1991,8 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                     return AnimatedContainer(
                       duration: MediaQuery.of(context).disableAnimations
                           ? Duration.zero
-                          : PromptUiMotion.selection,
-                      curve: PromptUiMotion.standard,
+                          : CommonUiMotion.selection,
+                      curve: CommonUiMotion.standard,
                       decoration: BoxDecoration(
                         borderRadius: const BorderRadius.vertical(
                           top: Radius.circular(16),
@@ -2100,9 +2100,9 @@ class _PlateStatusLoadedDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
-    return PromptDialogFrame(
+    return CommonDialogFrame(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 420),
         child: Column(
@@ -2116,7 +2116,7 @@ class _PlateStatusLoadedDialog extends StatelessWidget {
                   height: 42,
                   decoration: BoxDecoration(
                     color: tokens.successContainer,
-                    borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                    borderRadius: BorderRadius.circular(CommonUiShapes.control),
                     border: Border.all(color: tokens.success.withOpacity(.36)),
                   ),
                   alignment: Alignment.center,
@@ -2136,7 +2136,7 @@ class _PlateStatusLoadedDialog extends StatelessWidget {
                     ),
                   ),
                 ),
-                PromptIconButton(
+                CommonIconButton(
                   icon: Icons.close_rounded,
                   tooltip: '닫기',
                   onPressed: onClose,
@@ -2156,7 +2156,7 @@ class _PlateStatusLoadedDialog extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
               decoration: BoxDecoration(
                 color: tokens.surfaceOverlay,
-                borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                borderRadius: BorderRadius.circular(CommonUiShapes.control),
                 border: Border.all(color: tokens.borderSubtle),
               ),
               child: Row(
@@ -2192,7 +2192,7 @@ class _PlateStatusLoadedDialog extends StatelessWidget {
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: tokens.surfaceOverlay,
-                borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                borderRadius: BorderRadius.circular(CommonUiShapes.control),
                 border: Border.all(color: tokens.borderSubtle),
               ),
               child: Row(
@@ -2203,7 +2203,7 @@ class _PlateStatusLoadedDialog extends StatelessWidget {
                     height: 36,
                     decoration: BoxDecoration(
                       color: tokens.accentContainer,
-                      borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                      borderRadius: BorderRadius.circular(CommonUiShapes.control),
                     ),
                     alignment: Alignment.center,
                     child: Icon(
@@ -2243,15 +2243,15 @@ class _PlateStatusLoadedDialog extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: PromptButton(
+                  child: CommonButton(
                     label: '닫기',
-                    variant: PromptButtonVariant.secondary,
+                    variant: CommonButtonVariant.secondary,
                     onPressed: onClose,
                   ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: PromptButton(
+                  child: CommonButton(
                     label: '메모 보기',
                     icon: Icons.note_alt_rounded,
                     onPressed: onGoMemo,
@@ -2300,20 +2300,20 @@ class _SheetHeaderDelegate extends SliverPersistentHeaderDelegate {
     final cs = Theme.of(context).colorScheme;
     final bg = selected
         ? cs.surfaceContainerLow
-        : PromptUiTheme.of(context).transparent;
+        : CommonUiTheme.of(context).transparent;
     final border = selected
         ? cs.primary.withOpacity(.55)
         : cs.outlineVariant.withOpacity(.85);
     final fg = selected ? cs.onSurface : cs.onSurfaceVariant;
 
     return Material(
-      color: PromptUiTheme.of(context).transparent,
+      color: CommonUiTheme.of(context).transparent,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(10),
         child: AnimatedContainer(
-          duration: PromptUiMotion.selection,
-          curve: PromptUiMotion.standard,
+          duration: CommonUiMotion.selection,
+          curve: CommonUiMotion.standard,
           height: 34,
           alignment: Alignment.center,
           decoration: BoxDecoration(
@@ -2363,7 +2363,7 @@ class _SheetHeaderDelegate extends SliverPersistentHeaderDelegate {
         child: Column(
           children: [
             Material(
-              color: PromptUiTheme.of(context).transparent,
+              color: CommonUiTheme.of(context).transparent,
               child: InkWell(
                 onTap: sheetAnimating ? null : onToggle,
                 borderRadius: BorderRadius.circular(12),
@@ -2372,8 +2372,8 @@ class _SheetHeaderDelegate extends SliverPersistentHeaderDelegate {
                   child: Row(
                     children: [
                       AnimatedContainer(
-                        duration: PromptUiMotion.selection,
-                        curve: PromptUiMotion.standard,
+                        duration: CommonUiMotion.selection,
+                        curve: CommonUiMotion.standard,
                         width: 36,
                         height: 36,
                         decoration: BoxDecoration(
@@ -2389,7 +2389,7 @@ class _SheetHeaderDelegate extends SliverPersistentHeaderDelegate {
                         ),
                         alignment: Alignment.center,
                         child: AnimatedSwitcher(
-                          duration: PromptUiMotion.selection,
+                          duration: CommonUiMotion.selection,
                           child: sheetAnimating
                               ? SizedBox(
                                   key: const ValueKey('loading'),
@@ -2413,7 +2413,7 @@ class _SheetHeaderDelegate extends SliverPersistentHeaderDelegate {
                       const SizedBox(width: 10),
                       Expanded(
                         child: AnimatedSwitcher(
-                          duration: PromptUiMotion.selection,
+                          duration: CommonUiMotion.selection,
                           child: Column(
                             key: ValueKey(
                               '${sheetOpen}_$sheetAnimating',
@@ -2469,8 +2469,8 @@ class _SheetHeaderDelegate extends SliverPersistentHeaderDelegate {
                       const SizedBox(width: 4),
                       AnimatedRotation(
                         turns: sheetOpen ? .5 : 0,
-                        duration: PromptUiMotion.selection,
-                        curve: PromptUiMotion.standard,
+                        duration: CommonUiMotion.selection,
+                        curve: CommonUiMotion.standard,
                         child: Icon(
                           Icons.expand_less_rounded,
                           color: cs.onSurfaceVariant,
@@ -2570,7 +2570,7 @@ class _PlateDock extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
 
     return Material(
-      color: PromptUiTheme.of(context).transparent,
+      color: CommonUiTheme.of(context).transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(10),
         onTap: onTapRegion,

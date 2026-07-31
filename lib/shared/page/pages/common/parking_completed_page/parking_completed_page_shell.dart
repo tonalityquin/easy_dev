@@ -3,8 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../../app/init/db_connection_status_section.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../../features/account/applications/user_state.dart';
 import '../../../../../features/dev/application/area_state.dart';
 import '../../../../../features/voice/application/voice_appbar_ui_state.dart';
@@ -55,7 +55,7 @@ class ParkingCompletedBrandTintedLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final background = PromptUiTheme.of(context).surface;
+    final background = CommonUiTheme.of(context).surface;
     final tint = resolveParkingCompletedLogoTint(
       background: background,
       preferred: preferredColor,
@@ -104,10 +104,10 @@ class ParkingCompletedPageShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PromptUiScope(
+    return CommonUiScope(
       child: Builder(
         builder: (context) {
-          final tokens = PromptUiTheme.of(context);
+          final tokens = CommonUiTheme.of(context);
           final reduceMotion =
               MediaQuery.maybeOf(context)?.disableAnimations ?? false;
           final talkUiEnabled = context.watch<VoiceAppbarUiState>().enabled;
@@ -135,9 +135,9 @@ class ParkingCompletedPageShell extends StatelessWidget {
                   title: AnimatedSwitcher(
                     duration: reduceMotion
                         ? Duration.zero
-                        : PromptUiMotion.component,
-                    switchInCurve: PromptUiMotion.enter,
-                    switchOutCurve: PromptUiMotion.exit,
+                        : CommonUiMotion.component,
+                    switchInCurve: CommonUiMotion.enter,
+                    switchOutCurve: CommonUiMotion.exit,
                     child: talkUiEnabled
                         ? const SizedBox.shrink(
                             key: ValueKey<String>('talk-title'),
@@ -162,14 +162,14 @@ class ParkingCompletedPageShell extends StatelessWidget {
                     child: AnimatedSwitcher(
                       duration: reduceMotion
                           ? Duration.zero
-                          : PromptUiMotion.component,
-                      switchInCurve: PromptUiMotion.enter,
-                      switchOutCurve: PromptUiMotion.exit,
+                          : CommonUiMotion.component,
+                      switchInCurve: CommonUiMotion.enter,
+                      switchOutCurve: CommonUiMotion.exit,
                       transitionBuilder: (child, animation) {
                         final curved = CurvedAnimation(
                           parent: animation,
-                          curve: PromptUiMotion.enter,
-                          reverseCurve: PromptUiMotion.exit,
+                          curve: CommonUiMotion.enter,
+                          reverseCurve: CommonUiMotion.exit,
                         );
                         return FadeTransition(opacity: curved, child: child);
                       },
@@ -191,7 +191,7 @@ class ParkingCompletedPageShell extends StatelessWidget {
                                       child: Semantics(
                                         label: semanticsLabel,
                                         child: ExcludeSemantics(
-                                          child: PromptAnimatedReveal(
+                                          child: CommonAnimatedReveal(
                                             offset: const Offset(-0.035, 0),
                                             child:
                                                 ParkingCompletedBrandTintedLogo(
@@ -257,9 +257,9 @@ class ParkingCompletedPageShell extends StatelessWidget {
                     AnimatedSwitcher(
                       duration: reduceMotion
                           ? Duration.zero
-                          : PromptUiMotion.component,
-                      switchInCurve: PromptUiMotion.enter,
-                      switchOutCurve: PromptUiMotion.exit,
+                          : CommonUiMotion.component,
+                      switchInCurve: CommonUiMotion.enter,
+                      switchOutCurve: CommonUiMotion.exit,
                       child: KeyedSubtree(
                         key: ValueKey<String>(syncSourceTag),
                         child: content,

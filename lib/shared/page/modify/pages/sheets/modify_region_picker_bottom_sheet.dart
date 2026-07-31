@@ -1,9 +1,9 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
-import '../../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../../design_system/common_ui/common_ui_theme.dart';
 
 Future<void> modifyRegionPickerBottomSheet({
   required BuildContext context,
@@ -17,7 +17,7 @@ Future<void> modifyRegionPickerBottomSheet({
       : regions.first;
   final initialIndex = regions.indexOf(tempSelected);
 
-  await showPromptOverlayBottomSheet<void>(
+  await showCommonOverlayBottomSheet<void>(
     context: context,
     useSafeArea: false,
     builder: (sheetContext) => DraggableScrollableSheet(
@@ -25,8 +25,8 @@ Future<void> modifyRegionPickerBottomSheet({
       minChildSize: .4,
       maxChildSize: .9,
       builder: (sheetContext, _) {
-        final tokens = PromptUiTheme.of(sheetContext);
-        return PromptSheetScaffold(
+        final tokens = CommonUiTheme.of(sheetContext);
+        return CommonSheetScaffold(
           title: '지역 선택',
           icon: Icons.public_rounded,
           onClose: () => Navigator.of(sheetContext).pop(),
@@ -77,11 +77,11 @@ Future<void> modifyRegionPickerBottomSheet({
               Divider(height: 1, color: tokens.borderSubtle),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                child: PromptButton(
+                child: CommonButton(
                   label: '확인',
                   icon: Icons.check_rounded,
                   expand: true,
-                  haptic: PromptHaptic.selection,
+                  haptic: CommonHaptic.selection,
                   onPressed: () {
                     Navigator.of(sheetContext).pop();
                     onConfirm(tempSelected);

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 
-Duration tabletPromptDuration(
+Duration tabletCommonDuration(
   BuildContext context,
   Duration duration,
 ) {
@@ -11,12 +11,12 @@ Duration tabletPromptDuration(
       : duration;
 }
 
-class TabletPromptPanel extends StatelessWidget {
-  const TabletPromptPanel({
+class TabletCommonPanel extends StatelessWidget {
+  const TabletCommonPanel({
     super.key,
     required this.child,
     this.padding = const EdgeInsets.all(16),
-    this.radius = PromptUiShapes.card,
+    this.radius = CommonUiShapes.card,
     this.selected = false,
     this.clipBehavior = Clip.none,
   });
@@ -29,10 +29,10 @@ class TabletPromptPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     return AnimatedContainer(
-      duration: tabletPromptDuration(context, PromptUiMotion.component),
-      curve: PromptUiMotion.standard,
+      duration: tabletCommonDuration(context, CommonUiMotion.component),
+      curve: CommonUiMotion.standard,
       decoration: BoxDecoration(
         color: selected ? tokens.surfaceSelected : tokens.surfaceRaised,
         borderRadius: BorderRadius.circular(radius),
@@ -55,8 +55,8 @@ class TabletPromptPanel extends StatelessWidget {
   }
 }
 
-class TabletPromptStatusPill extends StatelessWidget {
-  const TabletPromptStatusPill({
+class TabletCommonStatusPill extends StatelessWidget {
+  const TabletCommonStatusPill({
     super.key,
     required this.label,
     required this.icon,
@@ -71,18 +71,18 @@ class TabletPromptStatusPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final resolvedTone = tone ?? tokens.accent;
     final foreground = selected ? tokens.onAccentContainer : tokens.textSecondary;
     final background = selected ? tokens.accentContainer : tokens.surfaceOverlay;
     return AnimatedContainer(
-      duration: tabletPromptDuration(context, PromptUiMotion.selection),
-      curve: PromptUiMotion.standard,
+      duration: tabletCommonDuration(context, CommonUiMotion.selection),
+      curve: CommonUiMotion.standard,
       constraints: const BoxConstraints(minHeight: 32),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+        borderRadius: BorderRadius.circular(CommonUiShapes.pill),
         border: Border.all(
           color: selected ? resolvedTone : tokens.borderSubtle,
         ),
@@ -109,8 +109,8 @@ class TabletPromptStatusPill extends StatelessWidget {
   }
 }
 
-class TabletPromptLoadingState extends StatefulWidget {
-  const TabletPromptLoadingState({
+class TabletCommonLoadingState extends StatefulWidget {
+  const TabletCommonLoadingState({
     super.key,
     this.label = '불러오는 중',
   });
@@ -118,11 +118,11 @@ class TabletPromptLoadingState extends StatefulWidget {
   final String label;
 
   @override
-  State<TabletPromptLoadingState> createState() =>
-      _TabletPromptLoadingStateState();
+  State<TabletCommonLoadingState> createState() =>
+      _TabletCommonLoadingStateState();
 }
 
-class _TabletPromptLoadingStateState extends State<TabletPromptLoadingState>
+class _TabletCommonLoadingStateState extends State<TabletCommonLoadingState>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
 
@@ -162,10 +162,10 @@ class _TabletPromptLoadingStateState extends State<TabletPromptLoadingState>
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    return _TabletPromptStateViewport(
+    return _TabletCommonStateViewport(
       child: Semantics(
         label: widget.label,
         value: '처리 중',
@@ -179,7 +179,7 @@ class _TabletPromptLoadingStateState extends State<TabletPromptLoadingState>
                 height: 42,
                 decoration: BoxDecoration(
                   color: tokens.statusSynchronizedContainer,
-                  borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                  borderRadius: BorderRadius.circular(CommonUiShapes.control),
                   border: Border.all(color: tokens.statusSynchronized),
                 ),
                 alignment: Alignment.center,
@@ -205,7 +205,7 @@ class _TabletPromptLoadingStateState extends State<TabletPromptLoadingState>
                           height: 42,
                           decoration: BoxDecoration(
                             borderRadius:
-                                BorderRadius.circular(PromptUiShapes.control),
+                                BorderRadius.circular(CommonUiShapes.control),
                             gradient: LinearGradient(
                               begin: Alignment(-1 + value * 2, 0),
                               end: Alignment(value * 2, 0),
@@ -247,8 +247,8 @@ class _TabletPromptLoadingStateState extends State<TabletPromptLoadingState>
   }
 }
 
-class TabletPromptEmptyState extends StatelessWidget {
-  const TabletPromptEmptyState({
+class TabletCommonEmptyState extends StatelessWidget {
+  const TabletCommonEmptyState({
     super.key,
     required this.title,
     required this.icon,
@@ -261,9 +261,9 @@ class TabletPromptEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final resolvedMessage = message?.trim();
-    return _TabletPromptStateViewport(
+    return _TabletCommonStateViewport(
       child: Semantics(
         label: title,
         value: resolvedMessage?.isNotEmpty ?? false ? resolvedMessage : null,
@@ -275,7 +275,7 @@ class TabletPromptEmptyState extends StatelessWidget {
               height: 52,
               decoration: BoxDecoration(
                 color: tokens.surfaceOverlay,
-                borderRadius: BorderRadius.circular(PromptUiShapes.card),
+                borderRadius: BorderRadius.circular(CommonUiShapes.card),
                 border: Border.all(color: tokens.borderSubtle),
               ),
               child: Icon(icon, color: tokens.iconSecondary, size: 26),
@@ -306,8 +306,8 @@ class TabletPromptEmptyState extends StatelessWidget {
   }
 }
 
-class _TabletPromptStateViewport extends StatelessWidget {
-  const _TabletPromptStateViewport({required this.child});
+class _TabletCommonStateViewport extends StatelessWidget {
+  const _TabletCommonStateViewport({required this.child});
 
   final Widget child;
 
@@ -362,8 +362,8 @@ class _TabletPromptStateViewport extends StatelessWidget {
   }
 }
 
-class TabletPromptAnimatedSwap extends StatelessWidget {
-  const TabletPromptAnimatedSwap({
+class TabletCommonAnimatedSwap extends StatelessWidget {
+  const TabletCommonAnimatedSwap({
     super.key,
     required this.child,
     this.alignment = Alignment.center,
@@ -374,12 +374,12 @@ class TabletPromptAnimatedSwap extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final duration = tabletPromptDuration(context, PromptUiMotion.component);
+    final duration = tabletCommonDuration(context, CommonUiMotion.component);
     return AnimatedSwitcher(
       duration: duration,
       reverseDuration: duration,
-      switchInCurve: PromptUiMotion.enter,
-      switchOutCurve: PromptUiMotion.exit,
+      switchInCurve: CommonUiMotion.enter,
+      switchOutCurve: CommonUiMotion.exit,
       layoutBuilder: (Widget? currentChild, List<Widget> previousChildren) {
         return Stack(
           alignment: alignment,

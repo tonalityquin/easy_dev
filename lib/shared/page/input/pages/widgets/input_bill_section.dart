@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../../features/payment/applications/bill_state.dart';
-import '../prompt_input_ui.dart';
+import '../common_input_ui.dart';
 
 class InputBillSection extends StatelessWidget {
   final String? selectedBill;
@@ -28,17 +28,17 @@ class InputBillSection extends StatelessWidget {
     String normalizedType,
     List<dynamic> bills,
   ) async {
-    await showPromptOverlayBottomSheet<void>(
+    await showCommonOverlayBottomSheet<void>(
       context: context,
       useSafeArea: false,
       builder: (sheetContext) {
-        final tokens = PromptUiTheme.of(sheetContext);
+        final tokens = CommonUiTheme.of(sheetContext);
         return DraggableScrollableSheet(
           initialChildSize: .55,
           minChildSize: .36,
           maxChildSize: .9,
           builder: (sheetContext, scrollController) {
-            return PromptSheetScaffold(
+            return CommonSheetScaffold(
               title: '$normalizedType 정산 선택',
               icon: Icons.receipt_long_rounded,
               onClose: () => Navigator.of(sheetContext).pop(),
@@ -54,12 +54,12 @@ class InputBillSection extends StatelessWidget {
                   return AnimatedContainer(
                     duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false
                         ? Duration.zero
-                        : PromptUiMotion.selection,
+                        : CommonUiMotion.selection,
                     decoration: BoxDecoration(
                       color: selected
                           ? tokens.surfaceSelected
                           : tokens.surfaceOverlay,
-                      borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                      borderRadius: BorderRadius.circular(CommonUiShapes.control),
                       border: Border.all(
                         color: selected ? tokens.accent : tokens.borderSubtle,
                       ),
@@ -93,18 +93,18 @@ class InputBillSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final billState = context.watch<BillState>();
     final normalizedType = selectedBillType == '고정' ? '변동' : selectedBillType;
     final isGeneral = normalizedType == '변동';
     final isMonthly = normalizedType == '정기';
     final filteredBills = billState.generalBills;
 
-    return PromptInputSectionCard(
+    return CommonInputSectionCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const PromptInputSectionTitle(
+          const CommonInputSectionTitle(
             icon: Icons.payments_rounded,
             title: '정산 유형',
             subtitle: '입차 차량에 적용할 정산 방식을 선택합니다.',
@@ -113,19 +113,19 @@ class InputBillSection extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: PromptButton(
+                child: CommonButton(
                   label: '변동',
                   selected: isGeneral,
-                  variant: PromptButtonVariant.secondary,
+                  variant: CommonButtonVariant.secondary,
                   onPressed: () => onTypeChanged('변동'),
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: PromptButton(
+                child: CommonButton(
                   label: '정기',
                   selected: isMonthly,
-                  variant: PromptButtonVariant.secondary,
+                  variant: CommonButtonVariant.secondary,
                   onPressed: () => onTypeChanged('정기'),
                 ),
               ),
@@ -135,9 +135,9 @@ class InputBillSection extends StatelessWidget {
           AnimatedSwitcher(
             duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false
                 ? Duration.zero
-                : PromptUiMotion.component,
-            switchInCurve: PromptUiMotion.enter,
-            switchOutCurve: PromptUiMotion.exit,
+                : CommonUiMotion.component,
+            switchInCurve: CommonUiMotion.enter,
+            switchOutCurve: CommonUiMotion.exit,
             child: isMonthly
                 ? TextField(
                     key: const ValueKey('monthly'),
@@ -165,7 +165,7 @@ class InputBillSection extends StatelessWidget {
                             decoration: BoxDecoration(
                               color: tokens.warningContainer,
                               borderRadius:
-                                  BorderRadius.circular(PromptUiShapes.control),
+                                  BorderRadius.circular(CommonUiShapes.control),
                               border: Border.all(
                                 color: tokens.warning.withOpacity(.36),
                               ),
@@ -182,11 +182,11 @@ class InputBillSection extends StatelessWidget {
                                   ),
                             ),
                           )
-                        : PromptButton(
+                        : CommonButton(
                             key: const ValueKey('selector'),
                             label: selectedBill ?? '정산 선택',
                             icon: Icons.expand_more_rounded,
-                            variant: PromptButtonVariant.secondary,
+                            variant: CommonButtonVariant.secondary,
                             expand: true,
                             onPressed: () => _showBillSheet(
                               context,

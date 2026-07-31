@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../design_system/common_ui/common_ui_components.dart';
 
 class UpdateAlertBar extends StatelessWidget {
   const UpdateAlertBar({
@@ -12,13 +12,13 @@ class UpdateAlertBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PromptButton(
+    return CommonButton(
       label: '업데이트',
       icon: Icons.new_releases_rounded,
       onPressed: onTapUpdate,
-      variant: PromptButtonVariant.secondary,
+      variant: CommonButtonVariant.secondary,
       expand: true,
-      haptic: PromptHaptic.selection,
+      haptic: CommonHaptic.selection,
       minHeight: 52,
       semanticsLabel: '업데이트 내역 열기',
     );

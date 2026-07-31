@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../design_system/common_ui/common_ui_components.dart';
+import '../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../design_system/common_ui/common_ui_theme.dart';
 
 class ActionTraceController {
   final ValueNotifier<List<String>> lines =
@@ -41,7 +41,7 @@ class ActionTraceDialog extends StatefulWidget {
   }) async {
     if (!context.mounted) return;
     final controller = ActionTraceController();
-    showPromptOverlayDialog<void>(
+    showCommonOverlayDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (_) => ActionTraceDialog(
@@ -93,19 +93,19 @@ class _ActionTraceDialogState extends State<ActionTraceDialog> {
         _scrollController.position.maxScrollExtent,
         duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false
             ? Duration.zero
-            : PromptUiMotion.selection,
-        curve: PromptUiMotion.enter,
+            : CommonUiMotion.selection,
+        curve: CommonUiMotion.enter,
       );
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     return WillPopScope(
       onWillPop: () async => false,
-      child: PromptDialogFrame(
+      child: CommonDialogFrame(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 480, maxHeight: 620),
           child: Column(
@@ -119,7 +119,7 @@ class _ActionTraceDialogState extends State<ActionTraceDialog> {
                     height: 42,
                     decoration: BoxDecoration(
                       color: tokens.infoContainer,
-                      borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                      borderRadius: BorderRadius.circular(CommonUiShapes.control),
                       border: Border.all(color: tokens.info.withOpacity(.36)),
                     ),
                     alignment: Alignment.center,
@@ -144,7 +144,7 @@ class _ActionTraceDialogState extends State<ActionTraceDialog> {
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: tokens.surfaceOverlay,
-                    borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                    borderRadius: BorderRadius.circular(CommonUiShapes.control),
                     border: Border.all(color: tokens.borderSubtle),
                   ),
                   child: ValueListenableBuilder<List<String>>(
@@ -169,7 +169,7 @@ class _ActionTraceDialogState extends State<ActionTraceDialog> {
               ValueListenableBuilder<bool>(
                 valueListenable: widget.controller.isCompleted,
                 builder: (_, isCompleted, __) {
-                  return PromptButton(
+                  return CommonButton(
                     label: isCompleted ? '닫기' : '진행 중',
                     loading: !isCompleted,
                     expand: true,

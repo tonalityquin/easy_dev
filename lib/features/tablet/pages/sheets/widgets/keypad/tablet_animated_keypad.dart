@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
-import '../../../widgets/tablet_prompt_components.dart';
+import '../../../../../../design_system/common_ui/common_ui_theme.dart';
+import '../../../widgets/tablet_common_components.dart';
 import 'tablet_num_keypad_for_tablet_plate_search.dart';
 
 class TabletAnimatedKeypad extends StatelessWidget {
@@ -28,10 +28,10 @@ class TabletAnimatedKeypad extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final keypad = AnimatedContainer(
-      duration: tabletPromptDuration(context, PromptUiMotion.component),
-      curve: PromptUiMotion.standard,
+      duration: tabletCommonDuration(context, CommonUiMotion.component),
+      curve: CommonUiMotion.standard,
       constraints: fullHeight
           ? const BoxConstraints()
           : BoxConstraints(
@@ -40,7 +40,7 @@ class TabletAnimatedKeypad extends StatelessWidget {
       decoration: BoxDecoration(
         color: tokens.surfaceRaised,
         borderRadius: const BorderRadius.vertical(
-          top: Radius.circular(PromptUiShapes.card),
+          top: Radius.circular(CommonUiShapes.card),
         ),
         border: Border(
           top: BorderSide(color: tokens.borderSubtle),

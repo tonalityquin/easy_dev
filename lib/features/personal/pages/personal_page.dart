@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
-import '../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../design_system/common_ui/common_ui_components.dart';
+import '../../../design_system/common_ui/common_ui_theme.dart';
 import '../../dev/application/area_state.dart';
 import '../../tablet/applications/tablet_work_session_state.dart';
 import 'panels/personal_home_panel.dart';
-import 'widgets/personal_prompt_components.dart';
+import 'widgets/personal_common_components.dart';
 import 'widgets/personal_side_menu.dart';
 import 'widgets/personal_top_navigation.dart';
 
@@ -35,10 +35,10 @@ class _PersonalPageState extends State<PersonalPage> {
 
   @override
   Widget build(BuildContext context) {
-    return PromptUiScope(
+    return CommonUiScope(
       child: Builder(
         builder: (scopedContext) {
-          final tokens = PromptUiTheme.of(scopedContext);
+          final tokens = CommonUiTheme.of(scopedContext);
           final area = scopedContext.select<AreaState, String?>(
                 (state) => state.currentArea,
               ) ??
@@ -49,9 +49,9 @@ class _PersonalPageState extends State<PersonalPage> {
           final canRenderWorkingContent = workStateReady && workActive;
           final size = MediaQuery.sizeOf(scopedContext);
           final menuWidth = size.width < 420 ? size.width * .86 : 360.0;
-          final duration = personalPromptDuration(
+          final duration = personalCommonDuration(
             scopedContext,
-            PromptUiMotion.overlay,
+            CommonUiMotion.overlay,
           );
 
           final scaffold = Scaffold(
@@ -70,7 +70,7 @@ class _PersonalPageState extends State<PersonalPage> {
                     child: Stack(
                       children: <Widget>[
                         Positioned.fill(
-                          child: PersonalPromptAnimatedSwap(
+                          child: PersonalCommonAnimatedSwap(
                             stateKey: canRenderWorkingContent,
                             child: canRenderWorkingContent
                                 ? ColoredBox(
@@ -84,7 +84,7 @@ class _PersonalPageState extends State<PersonalPage> {
                           ),
                         ),
                         Positioned.fill(
-                          child: PersonalPromptAnimatedSwap(
+                          child: PersonalCommonAnimatedSwap(
                             stateKey: workStateReady
                                 ? workActive
                                     ? 'active'
@@ -118,7 +118,7 @@ class _PersonalPageState extends State<PersonalPage> {
                   ignoring: !_menuOpen,
                   child: AnimatedOpacity(
                     duration: duration,
-                    curve: PromptUiMotion.standard,
+                    curve: CommonUiMotion.standard,
                     opacity: _menuOpen ? 1 : 0,
                     child: GestureDetector(
                       behavior: HitTestBehavior.opaque,
@@ -129,7 +129,7 @@ class _PersonalPageState extends State<PersonalPage> {
                 ),
                 AnimatedPositioned(
                   duration: duration,
-                  curve: PromptUiMotion.enter,
+                  curve: CommonUiMotion.enter,
                   top: 0,
                   bottom: 0,
                   right: _menuOpen ? 0 : -menuWidth,
@@ -164,7 +164,7 @@ class _PersonalWorkSessionLoadingOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     return Stack(
       children: <Widget>[
         ModalBarrier(dismissible: false, color: tokens.scrim),
@@ -173,7 +173,7 @@ class _PersonalWorkSessionLoadingOverlay extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 24),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 360),
-              child: const PersonalPromptLoadingState(
+              child: const PersonalCommonLoadingState(
                 label: '개인형 사용 상태를 확인하는 중입니다.',
               ),
             ),
@@ -189,7 +189,7 @@ class _PersonalWorkSessionInactiveOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final workState = context.read<TabletWorkSessionState>();
 
@@ -201,8 +201,8 @@ class _PersonalWorkSessionInactiveOverlay extends StatelessWidget {
             constraints: const BoxConstraints(maxWidth: 420),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: PromptAnimatedReveal(
-                child: PersonalPromptPanel(
+              child: CommonAnimatedReveal(
+                child: PersonalCommonPanel(
                   padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -217,7 +217,7 @@ class _PersonalWorkSessionInactiveOverlay extends StatelessWidget {
                             decoration: BoxDecoration(
                               color: tokens.statusOfflineContainer,
                               borderRadius: BorderRadius.circular(
-                                PromptUiShapes.control,
+                                CommonUiShapes.control,
                               ),
                               border: Border.all(
                                 color: tokens.statusOffline.withOpacity(.28),
@@ -252,11 +252,11 @@ class _PersonalWorkSessionInactiveOverlay extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 18),
-                      PromptButton(
+                      CommonButton(
                         label: '앱 사용 시작',
                         icon: Icons.play_arrow_rounded,
                         expand: true,
-                        haptic: PromptHaptic.medium,
+                        haptic: CommonHaptic.medium,
                         onPressed: workState.startWork,
                       ),
                     ],

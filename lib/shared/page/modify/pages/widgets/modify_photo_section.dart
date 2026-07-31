@@ -4,12 +4,12 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../../app/utils/status_dialog.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../application/modify_camera_fullscreen_viewer.dart';
 import '../../application/modify_plate_service.dart';
-import '../prompt_modify_ui.dart';
+import '../common_modify_ui.dart';
 
 class ModifyPhotoSection extends StatelessWidget {
   const ModifyPhotoSection({
@@ -38,7 +38,7 @@ class ModifyPhotoSection extends StatelessWidget {
   }
 
   Future<void> _showSavedPhotos(BuildContext context) async {
-    await showPromptOverlayBottomSheet<void>(
+    await showCommonOverlayBottomSheet<void>(
       context: context,
       useSafeArea: false,
       builder: (sheetContext) {
@@ -57,13 +57,13 @@ class ModifyPhotoSection extends StatelessWidget {
           minChildSize: .45,
           maxChildSize: .95,
           builder: (sheetContext, scrollController) {
-            return PromptSheetScaffold(
+            return CommonSheetScaffold(
               title: '저장된 사진 목록',
               icon: Icons.photo_library_rounded,
               onClose: () => Navigator.of(sheetContext).pop(),
               body: StatefulBuilder(
                 builder: (context, setModalState) {
-                  final tokens = PromptUiTheme.of(context);
+                  final tokens = CommonUiTheme.of(context);
                   return Column(
                     children: [
                       Padding(
@@ -118,7 +118,7 @@ class ModifyPhotoSection extends StatelessWidget {
                                     StatusDialog.showFailure(
                                       context,
                                       title: StatusDialog.photoLoadFailed,
-                                      usePromptUi: true,
+                                      useCommonUi: true,
                                     );
                                   }
                                 });
@@ -169,7 +169,7 @@ class ModifyPhotoSection extends StatelessWidget {
                                 return Material(
                                   color: tokens.surfaceOverlay,
                                   borderRadius: BorderRadius.circular(
-                                    PromptUiShapes.control,
+                                    CommonUiShapes.control,
                                   ),
                                   clipBehavior: Clip.antiAlias,
                                   child: InkWell(
@@ -187,14 +187,14 @@ class ModifyPhotoSection extends StatelessWidget {
                                           color: tokens.borderSubtle,
                                         ),
                                         borderRadius: BorderRadius.circular(
-                                          PromptUiShapes.control,
+                                          CommonUiShapes.control,
                                         ),
                                       ),
                                       child: Row(
                                         children: [
                                           ClipRRect(
                                             borderRadius: BorderRadius.circular(
-                                              PromptUiShapes.control,
+                                              CommonUiShapes.control,
                                             ),
                                             child: SizedBox(
                                               width: 88,
@@ -281,16 +281,16 @@ class ModifyPhotoSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final items = <dynamic>[...imageUrls, ...capturedImages];
-    return PromptAnimatedReveal(
+    return CommonAnimatedReveal(
       delay: const Duration(milliseconds: 80),
       offset: const Offset(0, .025),
-      child: PromptModifySectionCard(
+      child: CommonModifySectionCard(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const PromptModifySectionTitle(
+            const CommonModifySectionTitle(
               icon: Icons.photo_camera_back_rounded,
               title: '촬영 사진',
               subtitle: '기존 사진과 새로 촬영한 현장 사진을 확인합니다.',
@@ -304,7 +304,7 @@ class ModifyPhotoSection extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: tokens.surfaceOverlay,
                         borderRadius:
-                            BorderRadius.circular(PromptUiShapes.control),
+                            BorderRadius.circular(CommonUiShapes.control),
                         border: Border.all(color: tokens.borderSubtle),
                       ),
                       child: Text(
@@ -332,7 +332,7 @@ class ModifyPhotoSection extends StatelessWidget {
                             tag: path,
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(
-                                PromptUiShapes.control,
+                                CommonUiShapes.control,
                               ),
                               child: Container(
                                 width: 104,
@@ -389,10 +389,10 @@ class ModifyPhotoSection extends StatelessWidget {
                     ),
             ),
             const SizedBox(height: 12),
-            PromptButton(
+            CommonButton(
               label: '사진 불러오기',
               icon: Icons.cloud_download_rounded,
-              variant: PromptButtonVariant.secondary,
+              variant: CommonButtonVariant.secondary,
               expand: true,
               onPressed: () => _showSavedPhotos(context),
             ),

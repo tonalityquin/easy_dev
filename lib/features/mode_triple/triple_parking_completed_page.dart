@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../design_system/common_ui/common_ui_overlays.dart';
 import '../account/applications/user_state.dart';
 import '../dev/application/area_state.dart';
 import '../../shared/page/application/common/type_view_mode_state.dart';
@@ -39,7 +39,7 @@ class _TripleParkingCompletedPageState
     final currentArea = context.read<AreaState>().currentArea;
     _log('open search dialog');
 
-    showPromptOverlayBottomSheet<void>(
+    showCommonOverlayBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: false,

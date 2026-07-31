@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../design_system/common_ui/common_ui_components.dart';
+import '../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../shared/plate/domain/enums/plate_type.dart';
 import '../../../shared/tts/application/plate_tts_event_hub.dart';
 import '../../dev/application/area_state.dart';
@@ -15,7 +15,7 @@ import 'panels/tablet_right_panel.dart';
 import 'sheets/widgets/tablet_grid_mode_page.dart';
 import 'sheets/widgets/tablet_grid_pad_mode_page.dart';
 import 'sheets/widgets/tablet_top_navigation.dart';
-import 'widgets/tablet_prompt_components.dart';
+import 'widgets/tablet_common_components.dart';
 
 class TabletPage extends StatefulWidget {
   const TabletPage({super.key});
@@ -86,7 +86,7 @@ class _TabletPageState extends State<TabletPage> {
     required PadMode padMode,
     required String area,
   }) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     switch (padMode) {
       case PadMode.gridPad:
         return TabletGridPadModePage(
@@ -104,7 +104,7 @@ class _TabletPageState extends State<TabletPage> {
           color: tokens.canvas,
           child: Padding(
             padding: const EdgeInsets.all(24),
-            child: TabletPromptPanel(
+            child: TabletCommonPanel(
               child: LeftPaneDeparturePlates(
                 key: ValueKey<String>('left-pane-$area-show'),
                 columns: 5,
@@ -133,7 +133,7 @@ class _TabletPageState extends State<TabletPage> {
                 color: tokens.canvas,
                 child: Padding(
                   padding: const EdgeInsets.all(24),
-                  child: TabletPromptPanel(
+                  child: TabletCommonPanel(
                     child: LeftPaneDeparturePlates(
                       key: ValueKey<String>('left-pane-$area'),
                       columns: 3,
@@ -153,7 +153,7 @@ class _TabletPageState extends State<TabletPage> {
                 color: tokens.surface,
                 child: ClipRRect(
                   borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(PromptUiShapes.control),
+                    topLeft: Radius.circular(CommonUiShapes.control),
                   ),
                   child: RightPaneSearchPanel(
                     key: ValueKey<String>('right-pane-$area'),
@@ -169,10 +169,10 @@ class _TabletPageState extends State<TabletPage> {
 
   @override
   Widget build(BuildContext context) {
-    return PromptUiScope(
+    return CommonUiScope(
       child: Builder(
         builder: (context) {
-          final tokens = PromptUiTheme.of(context);
+          final tokens = CommonUiTheme.of(context);
           final area =
               context.select<AreaState, String?>((state) => state.currentArea) ??
                   '';
@@ -213,7 +213,7 @@ class _TabletPageState extends State<TabletPage> {
             body: SafeArea(
               top: false,
               bottom: true,
-              child: TabletPromptAnimatedSwap(child: content),
+              child: TabletCommonAnimatedSwap(child: content),
             ),
           );
           return PopScope(
@@ -226,7 +226,7 @@ class _TabletPageState extends State<TabletPage> {
                   child: scaffold,
                 ),
                 Positioned.fill(
-                  child: TabletPromptAnimatedSwap(
+                  child: TabletCommonAnimatedSwap(
                     child: !workStateReady
                         ? const _TabletWorkSessionLoadingOverlay(
                             key: ValueKey<String>('work-loading'),
@@ -254,21 +254,21 @@ class _TabletWorkSessionLoadingOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     return Stack(
       children: <Widget>[
         ModalBarrier(dismissible: false, color: tokens.scrim),
         Center(
-          child: PromptAnimatedReveal(
+          child: CommonAnimatedReveal(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 320),
-              child: TabletPromptPanel(
+              child: TabletCommonPanel(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 24,
                   vertical: 26,
                 ),
-                radius: PromptUiShapes.dialog,
-                child: const TabletPromptLoadingState(
+                radius: CommonUiShapes.dialog,
+                child: const TabletCommonLoadingState(
                   label: '업무 상태 확인 중',
                 ),
               ),
@@ -285,7 +285,7 @@ class _TabletWorkSessionInactiveOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final text = Theme.of(context).textTheme;
     return Stack(
       children: <Widget>[
@@ -293,12 +293,12 @@ class _TabletWorkSessionInactiveOverlay extends StatelessWidget {
         Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 420),
-            child: PromptAnimatedReveal(
+            child: CommonAnimatedReveal(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: TabletPromptPanel(
+                child: TabletCommonPanel(
                   padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
-                  radius: PromptUiShapes.dialog,
+                  radius: CommonUiShapes.dialog,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -311,7 +311,7 @@ class _TabletWorkSessionInactiveOverlay extends StatelessWidget {
                             decoration: BoxDecoration(
                               color: tokens.statusOfflineContainer,
                               borderRadius:
-                                  BorderRadius.circular(PromptUiShapes.card),
+                                  BorderRadius.circular(CommonUiShapes.card),
                               border: Border.all(color: tokens.statusOffline),
                             ),
                             child: Icon(
@@ -333,7 +333,7 @@ class _TabletWorkSessionInactiveOverlay extends StatelessWidget {
                         ],
                       ),
                       const SizedBox(height: 18),
-                      PromptButton(
+                      CommonButton(
                         label: '업무 시작',
                         icon: Icons.play_arrow_rounded,
                         expand: true,
@@ -342,7 +342,7 @@ class _TabletWorkSessionInactiveOverlay extends StatelessWidget {
                               .read<TabletWorkSessionState>()
                               .startWork();
                         },
-                        haptic: PromptHaptic.medium,
+                        haptic: CommonHaptic.medium,
                       ),
                     ],
                   ),

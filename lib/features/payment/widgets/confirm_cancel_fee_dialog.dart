@@ -2,8 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../design_system/common_ui/common_ui_components.dart';
+import '../../../design_system/common_ui/common_ui_theme.dart';
 
 class ConfirmCancelFeeDialog extends StatefulWidget {
   const ConfirmCancelFeeDialog({super.key});
@@ -40,12 +40,12 @@ class _ConfirmCancelFeeDialogState extends State<ConfirmCancelFeeDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
-    return PromptDialogFrame(
+    return CommonDialogFrame(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 420),
         child: Column(
@@ -60,7 +60,7 @@ class _ConfirmCancelFeeDialogState extends State<ConfirmCancelFeeDialog> {
                   decoration: BoxDecoration(
                     color: tokens.dangerContainer,
                     borderRadius:
-                        BorderRadius.circular(PromptUiShapes.control),
+                        BorderRadius.circular(CommonUiShapes.control),
                     border: Border.all(
                       color: tokens.danger.withOpacity(
                         tokens.isDark ? 0.58 : 0.36,
@@ -91,7 +91,7 @@ class _ConfirmCancelFeeDialogState extends State<ConfirmCancelFeeDialog> {
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: tokens.surfaceOverlay,
-                borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                borderRadius: BorderRadius.circular(CommonUiShapes.control),
                 border: Border.all(color: tokens.borderSubtle),
               ),
               child: Text(
@@ -105,7 +105,7 @@ class _ConfirmCancelFeeDialogState extends State<ConfirmCancelFeeDialog> {
             ),
             const SizedBox(height: 14),
             AnimatedSwitcher(
-              duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
+              duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
               child: Container(
                 key: ValueKey<int>(_remainingSeconds),
                 padding: const EdgeInsets.symmetric(
@@ -116,7 +116,7 @@ class _ConfirmCancelFeeDialogState extends State<ConfirmCancelFeeDialog> {
                   color: _enabled
                       ? tokens.successContainer
                       : tokens.warningContainer,
-                  borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                  borderRadius: BorderRadius.circular(CommonUiShapes.control),
                 ),
                 child: Text(
                   _enabled
@@ -136,24 +136,24 @@ class _ConfirmCancelFeeDialogState extends State<ConfirmCancelFeeDialog> {
             Row(
               children: [
                 Expanded(
-                  child: PromptButton(
+                  child: CommonButton(
                     label: '아니오',
                     onPressed: () => Navigator.of(context).pop(false),
-                    variant: PromptButtonVariant.tertiary,
+                    variant: CommonButtonVariant.tertiary,
                     expand: true,
-                    haptic: PromptHaptic.selection,
+                    haptic: CommonHaptic.selection,
                   ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: PromptButton(
+                  child: CommonButton(
                     label: '예, 취소합니다',
                     icon: Icons.cancel_outlined,
                     onPressed:
                         _enabled ? () => Navigator.of(context).pop(true) : null,
-                    variant: PromptButtonVariant.destructive,
+                    variant: CommonButtonVariant.destructive,
                     expand: true,
-                    haptic: PromptHaptic.medium,
+                    haptic: CommonHaptic.medium,
                   ),
                 ),
               ],

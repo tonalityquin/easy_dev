@@ -4,12 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../app/utils/dev_firebase_debug_dialog.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../shared/plate/application/common/view_doc_rows_store.dart';
 import '../../../../shared/plate/domain/repositories/plate_repository.dart';
 import '../../../dev/application/area_state.dart';
-import '../widgets/tablet_prompt_components.dart';
+import '../widgets/tablet_common_components.dart';
 
 @immutable
 class TabletCompletedDepartureNotice {
@@ -64,14 +64,14 @@ class LeftPaneDeparturePlates extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final text = Theme.of(context).textTheme;
     final currentArea =
         context.select<AreaState, String?>((state) => state.currentArea) ?? '';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        PromptAnimatedReveal(
+        CommonAnimatedReveal(
           child: Row(
             children: <Widget>[
               Container(
@@ -79,7 +79,7 @@ class LeftPaneDeparturePlates extends StatelessWidget {
                 height: 38,
                 decoration: BoxDecoration(
                   color: tokens.accentContainer,
-                  borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                  borderRadius: BorderRadius.circular(CommonUiShapes.control),
                   border: Border.all(color: tokens.accent),
                 ),
                 child: Icon(
@@ -121,14 +121,14 @@ class LeftPaneDeparturePlates extends StatelessWidget {
         const SizedBox(height: 12),
         Expanded(
           flex: 3,
-          child: PromptAnimatedReveal(
+          child: CommonAnimatedReveal(
             delay: const Duration(milliseconds: 50),
             child: _PanelSection(
               title: '출차 요청',
               icon: Icons.logout_rounded,
               tone: tokens.statusDepartureRequested,
               child: currentArea.trim().isEmpty
-                  ? const TabletPromptEmptyState(
+                  ? const TabletCommonEmptyState(
                       title: '선택된 지역이 없습니다',
                       icon: Icons.map_outlined,
                     )
@@ -142,7 +142,7 @@ class LeftPaneDeparturePlates extends StatelessWidget {
         const SizedBox(height: 12),
         Expanded(
           flex: 2,
-          child: PromptAnimatedReveal(
+          child: CommonAnimatedReveal(
             delay: const Duration(milliseconds: 100),
             child: _PanelSection(
               title: '업무 중 출차 완료',
@@ -175,13 +175,13 @@ class _PanelSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     return AnimatedContainer(
-      duration: tabletPromptDuration(context, PromptUiMotion.component),
-      curve: PromptUiMotion.standard,
+      duration: tabletCommonDuration(context, CommonUiMotion.component),
+      curve: CommonUiMotion.standard,
       decoration: BoxDecoration(
         color: tokens.surfaceRaised,
-        borderRadius: BorderRadius.circular(PromptUiShapes.card),
+        borderRadius: BorderRadius.circular(CommonUiShapes.card),
         border: Border.all(color: tokens.borderSubtle),
       ),
       clipBehavior: Clip.antiAlias,
@@ -287,20 +287,20 @@ class _DepartureRequestGridState extends State<_DepartureRequestGrid> {
                 'primaryAtField': 'departureRequestedAt',
                 'widget': 'LeftPaneDeparturePlates',
               },
-              usePromptUi: true,
+              useCommonUi: true,
             ),
           );
-          return const TabletPromptEmptyState(
+          return const TabletCommonEmptyState(
             title: '출차 요청을 불러오지 못했습니다',
             icon: Icons.cloud_off_rounded,
           );
         }
         if (!snapshot.hasData) {
-          return const TabletPromptLoadingState(label: '출차 요청 확인 중');
+          return const TabletCommonLoadingState(label: '출차 요청 확인 중');
         }
         final rows = LeftPaneDeparturePlates._rowsFromViewRows(snapshot.data!);
         if (rows.isEmpty) {
-          return const TabletPromptEmptyState(
+          return const TabletCommonEmptyState(
             title: '대기 중인 출차 요청이 없습니다',
             icon: Icons.directions_car_outlined,
           );
@@ -312,7 +312,7 @@ class _DepartureRequestGridState extends State<_DepartureRequestGrid> {
           desiredTileHeight: 90,
           itemBuilder: (context, index) {
             final row = rows[index];
-            return PromptAnimatedReveal(
+            return CommonAnimatedReveal(
               key: ValueKey<String>('request-${row.plateDocId}-${row.isSelected}'),
               delay: Duration(milliseconds: index.clamp(0, 8).toInt() * 24),
               offset: const Offset(0, 0.05),
@@ -341,7 +341,7 @@ class _CompletedDepartureGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (notices.isEmpty) {
-      return const TabletPromptEmptyState(
+      return const TabletCommonEmptyState(
         title: '업무 중 완료된 출차가 없습니다',
         icon: Icons.task_alt_rounded,
       );
@@ -353,7 +353,7 @@ class _CompletedDepartureGrid extends StatelessWidget {
       desiredTileHeight: 98,
       itemBuilder: (context, index) {
         final notice = notices[index];
-        return PromptAnimatedReveal(
+        return CommonAnimatedReveal(
           key: ValueKey<String>('completed-${notice.docId}'),
           delay: Duration(milliseconds: index.clamp(0, 8).toInt() * 24),
           offset: const Offset(0, 0.05),
@@ -450,7 +450,7 @@ class _PlateTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final tone = completed
         ? tokens.statusSynchronized
         : inProgress
@@ -467,11 +467,11 @@ class _PlateTile extends StatelessWidget {
             ? tokens.onStatusDepartureRequestedContainer
             : tokens.textPrimary;
     return AnimatedContainer(
-      duration: tabletPromptDuration(context, PromptUiMotion.selection),
-      curve: PromptUiMotion.standard,
+      duration: tabletCommonDuration(context, CommonUiMotion.selection),
+      curve: CommonUiMotion.standard,
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(PromptUiShapes.card),
+        borderRadius: BorderRadius.circular(CommonUiShapes.card),
         border: Border.all(color: tone),
         boxShadow: <BoxShadow>[
           BoxShadow(

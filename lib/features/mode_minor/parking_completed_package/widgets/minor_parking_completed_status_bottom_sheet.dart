@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
+import '../../../../design_system/common_ui/common_ui_overlays.dart';
 import '../../../account/applications/user_state.dart';
 import '../../../dev/application/area_state.dart';
 import '../../../payment/widgets/billing_bottom_sheet.dart';
@@ -16,7 +16,7 @@ import '../../../../shared/plate/domain/models/plate_log_model.dart';
 import '../../../../shared/plate/domain/models/plate_model.dart';
 import '../../../../shared/plate/domain/repositories/plate_repository.dart';
 import '../../../../shared/plate/widgets/log_viewer_bottom_sheet.dart';
-import '../../../../shared/plate/widgets/parking_completed_prompt_dialog.dart';
+import '../../../../shared/plate/widgets/parking_completed_common_dialog.dart';
 import '../../../../shared/plate/widgets/parking_completed_status_widgets.dart';
 import '../../../../shared/page/input/pages/sheets/input_location_bottom_sheet.dart';
 
@@ -85,7 +85,7 @@ Future<bool?> showMinorParkingCompletedStatusBottomSheet({
   );
   if (!context.mounted) return null;
 
-  return showPromptOverlayBottomSheet<bool>(
+  return showCommonOverlayBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
@@ -472,7 +472,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
         controller,
         (v) => picked = v,
         preferredParkingAreas: _platePreferredParkingAreas(),
-        usePromptUi: true,
+        useCommonUi: true,
       );
     } catch (_) {
       return null;
@@ -590,7 +590,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
         return;
       }
 
-      final confirm = await showPromptOverlayDialog<bool>(
+      final confirm = await showCommonOverlayDialog<bool>(
         context: context,
         builder: (_) => const ConfirmCancelFeeDialog(),
       );

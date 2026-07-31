@@ -41,7 +41,7 @@ Future<SprintWorkspacePanelResult?> showSprintWorkspacePanel({
           reduceMotion ? Duration.zero : const Duration(milliseconds: 260),
       reverseTransitionDuration:
           reduceMotion ? Duration.zero : const Duration(milliseconds: 220),
-      pageBuilder: (_, __, ___) => SprintPromptScope(
+      pageBuilder: (_, __, ___) => SprintCommonScope(
         child: SprintWorkspacePanelPage(store: store),
       ),
       transitionsBuilder: (_, animation, __, child) {

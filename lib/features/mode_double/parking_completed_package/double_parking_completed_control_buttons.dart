@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../app/models/capability.dart';
-import '../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../design_system/common_ui/common_ui_components.dart';
+import '../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../design_system/common_ui/common_ui_theme.dart';
 import '../../account/applications/user_state.dart';
 import '../../dev/application/area_state.dart';
 import '../../dashboard/widgets/productivity_sheet.dart';
@@ -19,7 +19,7 @@ class DoubleParkingCompletedControlButtons extends StatelessWidget {
   final VoidCallback showSearchDialog;
 
   Future<void> _openDepartureCompleted(BuildContext context) async {
-    await showPromptOverlayBottomSheet<void>(
+    await showCommonOverlayBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
@@ -30,7 +30,7 @@ class DoubleParkingCompletedControlButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final hasMonthlyCapability = context.select<AreaState, bool>(
       (state) => state.capabilitiesOfCurrentArea.contains(Capability.monthly),
     );
@@ -49,39 +49,39 @@ class DoubleParkingCompletedControlButtons extends StatelessWidget {
         child: Row(
           children: [
             Expanded(
-              child: PromptButton(
+              child: CommonButton(
                 label: '정기 주차',
                 icon: Icons.dashboard_customize_rounded,
                 onPressed: canUseMonthly
                     ? () => ProductivitySheet.togglePanel()
                     : null,
-                variant: PromptButtonVariant.secondary,
+                variant: CommonButtonVariant.secondary,
                 expand: true,
                 minHeight: 50,
-                haptic: PromptHaptic.selection,
+                haptic: CommonHaptic.selection,
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: PromptButton(
+              child: CommonButton(
                 label: '검색',
                 icon: Icons.manage_search_rounded,
                 onPressed: showSearchDialog,
-                variant: PromptButtonVariant.secondary,
+                variant: CommonButtonVariant.secondary,
                 expand: true,
                 minHeight: 50,
-                haptic: PromptHaptic.selection,
+                haptic: CommonHaptic.selection,
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: PromptButton(
+              child: CommonButton(
                 label: '출차 완료',
                 icon: Icons.directions_car_filled_rounded,
                 onPressed: () => _openDepartureCompleted(context),
                 expand: true,
                 minHeight: 50,
-                haptic: PromptHaptic.selection,
+                haptic: CommonHaptic.selection,
               ),
             ),
           ],

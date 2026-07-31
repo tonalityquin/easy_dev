@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../../../../design_system/common_ui/common_ui_components.dart';
 
 class ModifyAnimatedActionButton extends StatelessWidget {
   const ModifyAnimatedActionButton({
@@ -19,7 +19,7 @@ class ModifyAnimatedActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final label = buttonLabel ?? '수정 완료';
-    return PromptButton(
+    return CommonButton(
       label: label,
       icon: Icons.save_rounded,
       loading: isLoading,
@@ -27,7 +27,7 @@ class ModifyAnimatedActionButton extends StatelessWidget {
       semanticsLabel: isLocationSelected
           ? '$label, 주차 구역 선택됨'
           : '$label, 주차 구역 미선택',
-      haptic: PromptHaptic.medium,
+      haptic: CommonHaptic.medium,
       onPressed: isLoading ? null : onPressed,
     );
   }

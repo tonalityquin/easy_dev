@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../../app/utils/snackbar_helper.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../widgets/ops_console_dialogs.dart';
 import '../../../widgets/ops_console_widgets.dart';
 
@@ -81,7 +81,7 @@ class _AddAreaTabState extends State<AddAreaTab> {
       showFailedSnackbar(
         context,
         '먼저 회사를 선택하세요.',
-        usePromptUi: true,
+        useCommonUi: true,
       );
       return;
     }
@@ -89,7 +89,7 @@ class _AddAreaTabState extends State<AddAreaTab> {
       showFailedSnackbar(
         context,
         '새 지역 이름을 입력하세요.',
-        usePromptUi: true,
+        useCommonUi: true,
       );
       return;
     }
@@ -119,14 +119,14 @@ class _AddAreaTabState extends State<AddAreaTab> {
       showSuccessSnackbar(
         context,
         '"$areaName" 지역이 추가되었습니다.',
-        usePromptUi: true,
+        useCommonUi: true,
       );
     } catch (error) {
       if (!mounted) return;
       showFailedSnackbar(
         context,
         '지역 추가 실패: $error',
-        usePromptUi: true,
+        useCommonUi: true,
       );
     } finally {
       if (mounted) {
@@ -155,7 +155,7 @@ class _AddAreaTabState extends State<AddAreaTab> {
       showSelectedSnackbar(
         context,
         '다른 삭제 작업이 진행 중입니다.',
-        usePromptUi: true,
+        useCommonUi: true,
       );
       return;
     }
@@ -182,14 +182,14 @@ class _AddAreaTabState extends State<AddAreaTab> {
       showSuccessSnackbar(
         context,
         '"$areaName" 지역이 삭제되었습니다.',
-        usePromptUi: true,
+        useCommonUi: true,
       );
     } catch (error) {
       if (!mounted) return;
       showFailedSnackbar(
         context,
         '삭제 실패: $error',
-        usePromptUi: true,
+        useCommonUi: true,
       );
     } finally {
       if (mounted) {
@@ -320,14 +320,14 @@ class _AddAreaTabState extends State<AddAreaTab> {
                         itemBuilder: (context, index) {
                           final areaName = areas[index];
                           final deleting = _deletingAreaName == areaName;
-                          return PromptAnimatedReveal(
+                          return CommonAnimatedReveal(
                             delay: Duration(milliseconds: index * 30),
                             offset: const Offset(.02, 0),
                             child: ListTile(
                               key: ValueKey<String>(areaName),
                               leading: const Icon(Icons.location_on_rounded),
                               title: Text(areaName),
-                              trailing: PromptIconButton(
+                              trailing: CommonIconButton(
                                 icon: Icons.delete_outline_rounded,
                                 tooltip: '지역 삭제',
                                 destructive: true,
@@ -335,7 +335,7 @@ class _AddAreaTabState extends State<AddAreaTab> {
                                 onPressed: busy
                                     ? null
                                     : () => _deleteArea(areaName),
-                                haptic: PromptHaptic.medium,
+                                haptic: CommonHaptic.medium,
                               ),
                             ),
                           );

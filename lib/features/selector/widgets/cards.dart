@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../app/di/routes.dart';
-import '../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../design_system/common_ui/common_ui_components.dart';
+import '../../../design_system/common_ui/common_ui_theme.dart';
 import '../../dev/debug/debug_action_recorder.dart';
 
-Future<void> _invokeCardAction(PromptAction? action) async {
+Future<void> _invokeCardAction(CommonAction? action) async {
   if (action == null) return;
   final result = action();
   if (result is Future) {
@@ -15,7 +15,7 @@ Future<void> _invokeCardAction(PromptAction? action) async {
 }
 
 Text _selectorCardTitle(BuildContext context, String text, {bool enabled = true}) {
-  final tokens = PromptUiTheme.of(context);
+  final tokens = CommonUiTheme.of(context);
   return Text(
     text,
     textAlign: TextAlign.center,
@@ -35,7 +35,7 @@ Widget _selectorCardFeatureText(
   int maxLines = 2,
   bool enabled = true,
 }) {
-  final tokens = PromptUiTheme.of(context);
+  final tokens = CommonUiTheme.of(context);
   return Text(
     text,
     textAlign: textAlign,
@@ -49,7 +49,7 @@ Widget _selectorCardFeatureText(
 }
 
 List<BoxShadow> _cardShadows(
-  PromptUiTokens tokens, {
+  CommonUiTokens tokens, {
   required bool focused,
   required bool hovered,
 }) {
@@ -85,7 +85,7 @@ class CardBody extends StatefulWidget {
   final IconData icon;
   final String title;
   final String? featureText;
-  final PromptAction? onPressed;
+  final CommonAction? onPressed;
   final bool enabled;
   final String? disabledTooltip;
   final String traceName;
@@ -134,7 +134,7 @@ class _CardBodyState extends State<CardBody> {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final hasFeature =
         widget.featureText != null && widget.featureText!.trim().isNotEmpty;
@@ -157,11 +157,11 @@ class _CardBodyState extends State<CardBody> {
       label: widget.title,
       value: _invoking ? '처리 중' : null,
       child: AnimatedContainer(
-        duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
-        curve: PromptUiMotion.standard,
+        duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+        curve: CommonUiMotion.standard,
         decoration: BoxDecoration(
           color: surface,
-          borderRadius: BorderRadius.circular(PromptUiShapes.card),
+          borderRadius: BorderRadius.circular(CommonUiShapes.card),
           border: Border.all(color: border, width: 1),
           boxShadow: _cardShadows(
             tokens,
@@ -171,7 +171,7 @@ class _CardBodyState extends State<CardBody> {
         ),
         child: Material(
           color: tokens.transparent,
-          borderRadius: BorderRadius.circular(PromptUiShapes.card),
+          borderRadius: BorderRadius.circular(CommonUiShapes.card),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: _enabled ? () => _activate('card') : null,
@@ -189,11 +189,11 @@ class _CardBodyState extends State<CardBody> {
             },
             mouseCursor:
                 _enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
-            borderRadius: BorderRadius.circular(PromptUiShapes.card),
+            borderRadius: BorderRadius.circular(CommonUiShapes.card),
             child: AnimatedScale(
               scale: _pressed && _enabled ? 0.985 : 1,
-              duration: reduceMotion ? Duration.zero : PromptUiMotion.press,
-              curve: PromptUiMotion.enter,
+              duration: reduceMotion ? Duration.zero : CommonUiMotion.press,
+              curve: CommonUiMotion.enter,
               child: Padding(
                 padding: const EdgeInsets.all(20),
                 child: Column(
@@ -201,7 +201,7 @@ class _CardBodyState extends State<CardBody> {
                   children: [
                     AnimatedContainer(
                       duration:
-                          reduceMotion ? Duration.zero : PromptUiMotion.selection,
+                          reduceMotion ? Duration.zero : CommonUiMotion.selection,
                       width: 52,
                       height: 52,
                       decoration: BoxDecoration(
@@ -248,13 +248,13 @@ class _CardBodyState extends State<CardBody> {
                       const SizedBox(height: 10),
                     ] else
                       const SizedBox(height: 12),
-                    PromptIconButton(
+                    CommonIconButton(
                       icon: Icons.arrow_forward_rounded,
                       tooltip: _enabled
                           ? '이동'
                           : widget.disabledTooltip ?? '선택할 수 없음',
                       onPressed: _enabled ? () => _activate('arrow') : null,
-                      haptic: PromptHaptic.none,
+                      haptic: CommonHaptic.none,
                     ),
                   ],
                 ),
@@ -281,14 +281,14 @@ class StaticCardBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final hasFeature =
         featureText != null && featureText!.trim().isNotEmpty;
 
     return Container(
       decoration: BoxDecoration(
         color: tokens.surfaceRaised,
-        borderRadius: BorderRadius.circular(PromptUiShapes.card),
+        borderRadius: BorderRadius.circular(CommonUiShapes.card),
         border: Border.all(color: tokens.borderSubtle),
       ),
       child: Padding(
@@ -327,7 +327,7 @@ class StaticCardBody extends StatelessWidget {
               height: 46,
               decoration: BoxDecoration(
                 color: tokens.accentContainer,
-                borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                borderRadius: BorderRadius.circular(CommonUiShapes.control),
                 border: Border.all(color: tokens.borderSubtle),
               ),
               child: Icon(
@@ -347,7 +347,7 @@ Widget _selectorCardShell({
   required BuildContext context,
   required Widget child,
 }) {
-  return PromptAnimatedReveal(child: child);
+  return CommonAnimatedReveal(child: child);
 }
 
 class ExperienceCard extends StatefulWidget {
@@ -392,7 +392,7 @@ class _ExperienceCardState extends State<ExperienceCard> {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final text = Theme.of(context).textTheme;
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final surface = _pressed || _hovered
@@ -408,10 +408,10 @@ class _ExperienceCardState extends State<ExperienceCard> {
         label: '앱에 대해 알아보기',
         value: _invoking ? '처리 중' : null,
         child: AnimatedContainer(
-          duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
+          duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
           decoration: BoxDecoration(
             color: surface,
-            borderRadius: BorderRadius.circular(PromptUiShapes.card),
+            borderRadius: BorderRadius.circular(CommonUiShapes.card),
             border: Border.all(color: border, width: 1),
             boxShadow: _cardShadows(
               tokens,
@@ -421,7 +421,7 @@ class _ExperienceCardState extends State<ExperienceCard> {
           ),
           child: Material(
             color: tokens.transparent,
-            borderRadius: BorderRadius.circular(PromptUiShapes.card),
+            borderRadius: BorderRadius.circular(CommonUiShapes.card),
             clipBehavior: Clip.antiAlias,
             child: InkWell(
               onTap: _invoking ? null : () => _openDescription('card'),
@@ -442,8 +442,8 @@ class _ExperienceCardState extends State<ExperienceCard> {
                   : SystemMouseCursors.click,
               child: AnimatedScale(
                 scale: _pressed && !_invoking ? 0.99 : 1,
-                duration: reduceMotion ? Duration.zero : PromptUiMotion.press,
-                curve: PromptUiMotion.enter,
+                duration: reduceMotion ? Duration.zero : CommonUiMotion.press,
+                curve: CommonUiMotion.enter,
                 child: Row(
                   children: [
                     Expanded(
@@ -492,7 +492,7 @@ class _ExperienceCardState extends State<ExperienceCard> {
                               '대표 흐름과 화면 구성을 먼저 둘러보세요',
                             ),
                             const SizedBox(height: 10),
-                            PromptIconButton(
+                            CommonIconButton(
                               icon: Icons.arrow_forward_rounded,
                               tooltip: '앱에 대해 알아보기 열기',
                               onPressed: _invoking

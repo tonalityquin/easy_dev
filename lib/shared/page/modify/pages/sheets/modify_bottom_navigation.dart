@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../../design_system/common_ui/common_ui_theme.dart';
 
 class ModifyBottomNavigation extends StatelessWidget {
   const ModifyBottomNavigation({
@@ -20,14 +20,14 @@ class ModifyBottomNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final showKeyboardContent = showKeypad == true && keypad != null;
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: reduceMotion ? Duration.zero : PromptUiMotion.layout,
-        curve: PromptUiMotion.standard,
+        duration: reduceMotion ? Duration.zero : CommonUiMotion.layout,
+        curve: CommonUiMotion.standard,
         decoration: BoxDecoration(
           color: backgroundColor ?? tokens.surfaceRaised,
           border: Border(top: BorderSide(color: tokens.borderSubtle)),
@@ -41,9 +41,9 @@ class ModifyBottomNavigation extends StatelessWidget {
         ),
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
         child: AnimatedSwitcher(
-          duration: reduceMotion ? Duration.zero : PromptUiMotion.component,
-          switchInCurve: PromptUiMotion.enter,
-          switchOutCurve: PromptUiMotion.exit,
+          duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
+          switchInCurve: CommonUiMotion.enter,
+          switchOutCurve: CommonUiMotion.exit,
           transitionBuilder: (child, animation) {
             return FadeTransition(
               opacity: animation,

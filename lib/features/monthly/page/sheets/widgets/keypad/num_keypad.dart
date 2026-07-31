@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../../../design_system/common_ui/common_ui_theme.dart';
 
 class NumKeypad extends StatelessWidget {
   final TextEditingController controller;
@@ -58,7 +58,7 @@ class NumKeypad extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final rows = <List<String>>[
       ['1', '2', '3'],
@@ -71,8 +71,8 @@ class NumKeypad extends StatelessWidget {
       container: true,
       label: '숫자 키패드',
       child: AnimatedContainer(
-        duration: reduceMotion ? Duration.zero : PromptUiMotion.component,
-        curve: PromptUiMotion.standard,
+        duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
+        curve: CommonUiMotion.standard,
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
         decoration: BoxDecoration(
           color: tokens.surface,
@@ -80,8 +80,8 @@ class NumKeypad extends StatelessWidget {
         ),
         child: TweenAnimationBuilder<double>(
           tween: Tween<double>(begin: reduceMotion ? 1 : 0, end: 1),
-          duration: reduceMotion ? Duration.zero : PromptUiMotion.layout,
-          curve: PromptUiMotion.enter,
+          duration: reduceMotion ? Duration.zero : CommonUiMotion.layout,
+          curve: CommonUiMotion.enter,
           builder: (context, progress, child) {
             return Opacity(opacity: progress, child: child);
           },
@@ -97,7 +97,7 @@ class NumKeypad extends StatelessWidget {
                     return Expanded(
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 4),
-                        child: _PromptNumberKey(
+                        child: _CommonNumberKey(
                           label: label,
                           kind: _kindFor(label),
                           entranceDelay: Duration(
@@ -132,8 +132,8 @@ enum _NumberKeyKind {
   destructive,
 }
 
-class _PromptNumberKey extends StatefulWidget {
-  const _PromptNumberKey({
+class _CommonNumberKey extends StatefulWidget {
+  const _CommonNumberKey({
     required this.label,
     required this.kind,
     required this.entranceDelay,
@@ -146,10 +146,10 @@ class _PromptNumberKey extends StatefulWidget {
   final VoidCallback onTap;
 
   @override
-  State<_PromptNumberKey> createState() => _PromptNumberKeyState();
+  State<_CommonNumberKey> createState() => _CommonNumberKeyState();
 }
 
-class _PromptNumberKeyState extends State<_PromptNumberKey> {
+class _CommonNumberKeyState extends State<_CommonNumberKey> {
   bool _pressed = false;
   bool _hovered = false;
   bool _focused = false;
@@ -196,7 +196,7 @@ class _PromptNumberKeyState extends State<_PromptNumberKey> {
   Widget build(BuildContext context) {
     if (_empty) return const SizedBox(height: 52);
 
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final baseBackground = switch (widget.kind) {
@@ -232,11 +232,11 @@ class _PromptNumberKeyState extends State<_PromptNumberKey> {
       label: widget.label,
       child: AnimatedContainer(
         height: 52,
-        duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
-        curve: PromptUiMotion.standard,
+        duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+        curve: CommonUiMotion.standard,
         decoration: BoxDecoration(
           color: background,
-          borderRadius: BorderRadius.circular(PromptUiShapes.button),
+          borderRadius: BorderRadius.circular(CommonUiShapes.button),
           border: Border.all(
             color: borderColor,
             width: _focused ? 2 : 1,
@@ -252,7 +252,7 @@ class _PromptNumberKeyState extends State<_PromptNumberKey> {
         ),
         child: Material(
           color: tokens.transparent,
-          borderRadius: BorderRadius.circular(PromptUiShapes.button),
+          borderRadius: BorderRadius.circular(CommonUiShapes.button),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: widget.onTap,
@@ -264,8 +264,8 @@ class _PromptNumberKeyState extends State<_PromptNumberKey> {
                 tween: Tween<double>(begin: reduceMotion ? 1 : 0, end: 1),
                 duration: reduceMotion
                     ? Duration.zero
-                    : PromptUiMotion.component + widget.entranceDelay,
-                curve: PromptUiMotion.enter,
+                    : CommonUiMotion.component + widget.entranceDelay,
+                curve: CommonUiMotion.enter,
                 builder: (context, progress, child) {
                   return Opacity(
                     opacity: progress,
@@ -277,8 +277,8 @@ class _PromptNumberKeyState extends State<_PromptNumberKey> {
                 },
                 child: AnimatedScale(
                   scale: _pressed ? 0.92 : 1,
-                  duration: reduceMotion ? Duration.zero : PromptUiMotion.press,
-                  curve: PromptUiMotion.enter,
+                  duration: reduceMotion ? Duration.zero : CommonUiMotion.press,
+                  curve: CommonUiMotion.enter,
                   child: Text(
                     widget.label,
                     style: (widget.kind == _NumberKeyKind.standard

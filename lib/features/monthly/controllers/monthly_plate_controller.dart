@@ -9,7 +9,7 @@ import '../../../shared/plate/domain/repositories/plate_repository.dart';
 import '../application/monthly_area_resolver.dart';
 import '../application/monthly_date_range_calculator.dart';
 import '../domain/monthly_parking_options.dart';
-import '../page/widgets/monthly_prompt_ui.dart';
+import '../page/widgets/monthly_common_ui.dart';
 
 class MonthlyPlateController {
   final TextEditingController controllerFrontDigit = TextEditingController();
@@ -108,9 +108,9 @@ class MonthlyPlateController {
   void _showMessage(
     BuildContext context,
     String message, {
-    MonthlyPromptMessageTone tone = MonthlyPromptMessageTone.warning,
+    MonthlyCommonMessageTone tone = MonthlyCommonMessageTone.warning,
   }) {
-    showMonthlyPromptMessage(context, message, tone: tone);
+    showMonthlyCommonMessage(context, message, tone: tone);
   }
 
   int _regularDurationValue() {
@@ -555,7 +555,7 @@ class MonthlyPlateController {
     refreshUI();
 
     unawaited(
-      showMonthlyPromptProgress(
+      showMonthlyCommonProgress(
         context: context,
         title: '정기권 수정 중',
         message: '변경 내용을 안전하게 저장하고 있습니다.',
@@ -584,7 +584,7 @@ class MonthlyPlateController {
       _showMessage(
         context,
         '정기 주차 정보가 수정되었습니다.',
-        tone: MonthlyPromptMessageTone.success,
+        tone: MonthlyCommonMessageTone.success,
       );
       if (nav.canPop()) nav.pop();
       if (nav.canPop()) nav.pop();
@@ -595,7 +595,7 @@ class MonthlyPlateController {
       _showMessage(
         context,
         '수정에 실패했습니다. 다시 시도해주세요.',
-        tone: MonthlyPromptMessageTone.danger,
+        tone: MonthlyCommonMessageTone.danger,
       );
       debugPrint('월주차 수정 실패: ${e.toString()}');
     } finally {
@@ -620,7 +620,7 @@ class MonthlyPlateController {
     refreshUI();
 
     unawaited(
-      showMonthlyPromptProgress(
+      showMonthlyCommonProgress(
         context: context,
         title: '정기권 등록 중',
         message: '차량과 정기권 정보를 저장하고 있습니다.',
@@ -649,7 +649,7 @@ class MonthlyPlateController {
       _showMessage(
         context,
         '정기 주차가 등록되었습니다.',
-        tone: MonthlyPromptMessageTone.success,
+        tone: MonthlyCommonMessageTone.success,
       );
       if (nav.canPop()) nav.pop();
       if (nav.canPop()) nav.pop();
@@ -660,7 +660,7 @@ class MonthlyPlateController {
       _showMessage(
         context,
         '등록에 실패했습니다. 다시 시도해주세요.',
-        tone: MonthlyPromptMessageTone.danger,
+        tone: MonthlyCommonMessageTone.danger,
       );
       debugPrint('월주차 등록 실패: ${e.toString()}');
     } finally {

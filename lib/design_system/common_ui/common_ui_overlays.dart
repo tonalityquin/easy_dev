@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 
-import 'prompt_ui_theme.dart';
+import 'common_ui_theme.dart';
 
-Future<T?> showPromptOverlayDialog<T>({
+Future<T?> showCommonOverlayDialog<T>({
   required BuildContext context,
   required WidgetBuilder builder,
   bool barrierDismissible = true,
   bool useRootNavigator = true,
   String? barrierLabel,
 }) {
-  final tokens = PromptUiTheme.of(context);
+  final tokens = CommonUiTheme.of(context);
   final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
   return showGeneralDialog<T>(
     context: context,
@@ -18,9 +18,9 @@ Future<T?> showPromptOverlayDialog<T>({
     barrierLabel:
         barrierLabel ?? MaterialLocalizations.of(context).modalBarrierDismissLabel,
     barrierColor: tokens.scrim,
-    transitionDuration: reduceMotion ? Duration.zero : PromptUiMotion.overlay,
+    transitionDuration: reduceMotion ? Duration.zero : CommonUiMotion.overlay,
     pageBuilder: (dialogContext, _, __) {
-      return PromptUiScope(
+      return CommonUiScope(
         child: SafeArea(
           child: Center(
             child: Material(
@@ -36,8 +36,8 @@ Future<T?> showPromptOverlayDialog<T>({
     transitionBuilder: (context, animation, secondaryAnimation, child) {
       final curved = CurvedAnimation(
         parent: animation,
-        curve: PromptUiMotion.enter,
-        reverseCurve: PromptUiMotion.exit,
+        curve: CommonUiMotion.enter,
+        reverseCurve: CommonUiMotion.exit,
       );
       return FadeTransition(
         opacity: curved,
@@ -50,7 +50,7 @@ Future<T?> showPromptOverlayDialog<T>({
   );
 }
 
-Future<T?> showPromptOverlayBottomSheet<T>({
+Future<T?> showCommonOverlayBottomSheet<T>({
   required BuildContext context,
   required WidgetBuilder builder,
   bool isScrollControlled = true,
@@ -61,7 +61,7 @@ Future<T?> showPromptOverlayBottomSheet<T>({
   bool useRootNavigator = false,
   bool transparentBackground = true,
 }) {
-  final tokens = PromptUiTheme.of(context);
+  final tokens = CommonUiTheme.of(context);
   return showModalBottomSheet<T>(
     context: context,
     useRootNavigator: useRootNavigator,
@@ -78,13 +78,13 @@ Future<T?> showPromptOverlayBottomSheet<T>({
         ? null
         : RoundedRectangleBorder(
             borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(PromptUiShapes.sheet),
+              top: Radius.circular(CommonUiShapes.sheet),
             ),
             side: BorderSide(color: tokens.borderSubtle),
           ),
     clipBehavior: transparentBackground ? Clip.none : Clip.antiAlias,
     builder: (sheetContext) {
-      return PromptUiScope(
+      return CommonUiScope(
         child: Builder(
           builder: (scopedContext) => builder(scopedContext),
         ),
@@ -93,7 +93,7 @@ Future<T?> showPromptOverlayBottomSheet<T>({
   );
 }
 
-Future<DateTime?> showPromptDatePicker({
+Future<DateTime?> showCommonDatePicker({
   required BuildContext context,
   required DateTime initialDate,
   required DateTime firstDate,
@@ -105,12 +105,12 @@ Future<DateTime?> showPromptDatePicker({
     firstDate: firstDate,
     lastDate: lastDate,
     builder: (pickerContext, child) {
-      return PromptUiScope(child: child ?? const SizedBox.shrink());
+      return CommonUiScope(child: child ?? const SizedBox.shrink());
     },
   );
 }
 
-Future<TimeOfDay?> showPromptTimePicker({
+Future<TimeOfDay?> showCommonTimePicker({
   required BuildContext context,
   required TimeOfDay initialTime,
   TransitionBuilder? builder,
@@ -119,7 +119,7 @@ Future<TimeOfDay?> showPromptTimePicker({
     context: context,
     initialTime: initialTime,
     builder: (pickerContext, child) {
-      final scoped = PromptUiScope(
+      final scoped = CommonUiScope(
         child: child ?? const SizedBox.shrink(),
       );
       return builder == null ? scoped : builder(pickerContext, scoped);
@@ -127,7 +127,7 @@ Future<TimeOfDay?> showPromptTimePicker({
   );
 }
 
-Future<DateTimeRange?> showPromptDateRangePicker({
+Future<DateTimeRange?> showCommonDateRangePicker({
   required BuildContext context,
   required DateTime firstDate,
   required DateTime lastDate,
@@ -143,7 +143,7 @@ Future<DateTimeRange?> showPromptDateRangePicker({
     cancelText: cancelText,
     confirmText: confirmText,
     builder: (pickerContext, child) {
-      return PromptUiScope(child: child ?? const SizedBox.shrink());
+      return CommonUiScope(child: child ?? const SizedBox.shrink());
     },
   );
 }

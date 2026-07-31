@@ -2,13 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../design_system/common_ui/common_ui_components.dart';
+import '../../design_system/common_ui/common_ui_theme.dart';
 import 'document_box_action.dart';
 import 'document_item.dart';
 
-class PromptDocumentBoxSheet extends StatelessWidget {
-  const PromptDocumentBoxSheet({
+class CommonDocumentBoxSheet extends StatelessWidget {
+  const CommonDocumentBoxSheet({
     super.key,
     required this.title,
     required this.description,
@@ -29,7 +29,7 @@ class PromptDocumentBoxSheet extends StatelessWidget {
       minChildSize: 0.5,
       maxChildSize: 0.96,
       builder: (sheetContext, scrollController) {
-        return PromptSheetScaffold(
+        return CommonSheetScaffold(
           title: title,
           icon: Icons.folder_open_rounded,
           onClose: () => Navigator.of(sheetContext).maybePop(),
@@ -54,10 +54,10 @@ class PromptDocumentBoxSheet extends StatelessWidget {
                       itemBuilder: (context, index) {
                         final item = items[index];
                         final action = actionFor(item);
-                        return PromptAnimatedReveal(
+                        return CommonAnimatedReveal(
                           delay: Duration(milliseconds: 35 * index.clamp(0, 6).toInt()),
                           offset: Offset.zero,
-                          child: _PromptDocumentItem(
+                          child: _CommonDocumentItem(
                             item: item,
                             enabled: action != null,
                             onTap: action == null
@@ -85,7 +85,7 @@ class _DocumentBoxDescription extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
@@ -94,7 +94,7 @@ class _DocumentBoxDescription extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           color: tokens.infoContainer,
-          borderRadius: BorderRadius.circular(PromptUiShapes.control),
+          borderRadius: BorderRadius.circular(CommonUiShapes.control),
           border: Border.all(color: tokens.info.withOpacity(0.38)),
         ),
         child: Row(
@@ -119,8 +119,8 @@ class _DocumentBoxDescription extends StatelessWidget {
   }
 }
 
-class _PromptDocumentItem extends StatefulWidget {
-  const _PromptDocumentItem({
+class _CommonDocumentItem extends StatefulWidget {
+  const _CommonDocumentItem({
     required this.item,
     required this.enabled,
     required this.onTap,
@@ -131,10 +131,10 @@ class _PromptDocumentItem extends StatefulWidget {
   final VoidCallback? onTap;
 
   @override
-  State<_PromptDocumentItem> createState() => _PromptDocumentItemState();
+  State<_CommonDocumentItem> createState() => _CommonDocumentItemState();
 }
 
-class _PromptDocumentItemState extends State<_PromptDocumentItem> {
+class _CommonDocumentItemState extends State<_CommonDocumentItem> {
   bool _pressed = false;
   bool _hovered = false;
   bool _focused = false;
@@ -173,7 +173,7 @@ class _PromptDocumentItemState extends State<_PromptDocumentItem> {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final tone = _documentTone(tokens, widget.item);
@@ -188,11 +188,11 @@ class _PromptDocumentItemState extends State<_PromptDocumentItem> {
         enabled: widget.enabled,
         label: widget.item.title,
         child: AnimatedContainer(
-          duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
-          curve: PromptUiMotion.standard,
+          duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+          curve: CommonUiMotion.standard,
           decoration: BoxDecoration(
             color: widget.enabled ? background : tokens.surfaceDisabled,
-            borderRadius: BorderRadius.circular(PromptUiShapes.card),
+            borderRadius: BorderRadius.circular(CommonUiShapes.card),
             border: Border.all(
               color: _focused ? tokens.focusRing : tokens.borderSubtle,
               width: _focused ? 2 : 1,
@@ -208,7 +208,7 @@ class _PromptDocumentItemState extends State<_PromptDocumentItem> {
           ),
           child: Material(
             color: tokens.transparent,
-            borderRadius: BorderRadius.circular(PromptUiShapes.card),
+            borderRadius: BorderRadius.circular(CommonUiShapes.card),
             clipBehavior: Clip.antiAlias,
             child: InkWell(
               onTap: widget.onTap,
@@ -234,7 +234,7 @@ class _PromptDocumentItemState extends State<_PromptDocumentItem> {
                       decoration: BoxDecoration(
                         color: tone.container,
                         borderRadius:
-                            BorderRadius.circular(PromptUiShapes.control),
+                            BorderRadius.circular(CommonUiShapes.control),
                       ),
                       alignment: Alignment.center,
                       child: Icon(
@@ -279,7 +279,7 @@ class _PromptDocumentItemState extends State<_PromptDocumentItem> {
                             decoration: BoxDecoration(
                               color: tone.container,
                               borderRadius:
-                                  BorderRadius.circular(PromptUiShapes.pill),
+                                  BorderRadius.circular(CommonUiShapes.pill),
                             ),
                             child: Text(
                               _typeLabelForItem(widget.item),
@@ -296,7 +296,7 @@ class _PromptDocumentItemState extends State<_PromptDocumentItem> {
                     AnimatedScale(
                       scale: _pressed ? 0.9 : 1,
                       duration:
-                          reduceMotion ? Duration.zero : PromptUiMotion.press,
+                          reduceMotion ? Duration.zero : CommonUiMotion.press,
                       child: Icon(
                         Icons.chevron_right_rounded,
                         color: widget.enabled
@@ -320,10 +320,10 @@ class _DocumentBoxEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     return Center(
-      child: PromptAnimatedReveal(
+      child: CommonAnimatedReveal(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
@@ -334,7 +334,7 @@ class _DocumentBoxEmptyState extends StatelessWidget {
                 height: 72,
                 decoration: BoxDecoration(
                   color: tokens.surfaceOverlay,
-                  borderRadius: BorderRadius.circular(PromptUiShapes.card),
+                  borderRadius: BorderRadius.circular(CommonUiShapes.card),
                   border: Border.all(color: tokens.borderSubtle),
                 ),
                 child: Icon(
@@ -374,7 +374,7 @@ class _DocumentTone {
   final Color foreground;
 }
 
-_DocumentTone _documentTone(PromptUiTokens tokens, DocumentItem item) {
+_DocumentTone _documentTone(CommonUiTokens tokens, DocumentItem item) {
   if (item.type == DocumentType.workStartReportForm) {
     return _DocumentTone(tokens.successContainer, tokens.onSuccessContainer);
   }

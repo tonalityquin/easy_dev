@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../../app/utils/snackbar_helper.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_components.dart';
+import '../../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../widgets/ops_console_dialogs.dart';
 import '../../../widgets/ops_console_widgets.dart';
 
@@ -40,7 +40,7 @@ class _DivisionManagementTabState extends State<DivisionManagementTab> {
       showSelectedSnackbar(
         context,
         '회사 이름을 입력해주세요.',
-        usePromptUi: true,
+        useCommonUi: true,
       );
       return;
     }
@@ -48,7 +48,7 @@ class _DivisionManagementTabState extends State<DivisionManagementTab> {
       showSelectedSnackbar(
         context,
         '회사 이름에 "/" 문자는 사용할 수 없습니다.',
-        usePromptUi: true,
+        useCommonUi: true,
       );
       return;
     }
@@ -69,14 +69,14 @@ class _DivisionManagementTabState extends State<DivisionManagementTab> {
       showSuccessSnackbar(
         context,
         '회사 "$input"이 추가되었습니다.',
-        usePromptUi: true,
+        useCommonUi: true,
       );
     } catch (error) {
       if (!mounted) return;
       showFailedSnackbar(
         context,
         '회사 추가 실패: $error',
-        usePromptUi: true,
+        useCommonUi: true,
       );
     } finally {
       if (mounted) {
@@ -90,7 +90,7 @@ class _DivisionManagementTabState extends State<DivisionManagementTab> {
       showSelectedSnackbar(
         context,
         '다른 삭제 작업이 진행 중입니다.',
-        usePromptUi: true,
+        useCommonUi: true,
       );
       return;
     }
@@ -111,7 +111,7 @@ class _DivisionManagementTabState extends State<DivisionManagementTab> {
       showFailedSnackbar(
         context,
         '삭제 실패: $error',
-        usePromptUi: true,
+        useCommonUi: true,
       );
     } finally {
       if (mounted) {
@@ -170,13 +170,13 @@ class _DivisionManagementTabState extends State<DivisionManagementTab> {
                     itemBuilder: (context, index) {
                       final division = widget.divisionList[index];
                       final deleting = _deletingDivisionName == division;
-                      return PromptAnimatedReveal(
+                      return CommonAnimatedReveal(
                         delay: Duration(milliseconds: index * 30),
                         offset: const Offset(.02, 0),
                         child: ListTile(
                           leading: const Icon(Icons.business_rounded),
                           title: Text(division),
-                          trailing: PromptIconButton(
+                          trailing: CommonIconButton(
                             icon: Icons.delete_outline_rounded,
                             tooltip: '회사 삭제',
                             destructive: true,
@@ -184,7 +184,7 @@ class _DivisionManagementTabState extends State<DivisionManagementTab> {
                             onPressed: busy
                                 ? null
                                 : () => _handleDeleteDivision(division),
-                            haptic: PromptHaptic.medium,
+                            haptic: CommonHaptic.medium,
                           ),
                         ),
                       );

@@ -2,23 +2,23 @@ import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import '../../../../../app/utils/status_dialog.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../application/modify_camera_helper.dart';
 
 
-Route<T> _modifyPromptPageRoute<T>(BuildContext context, Widget child) {
+Route<T> _modifyCommonPageRoute<T>(BuildContext context, Widget child) {
   final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
   return PageRouteBuilder<T>(
     pageBuilder: (_, __, ___) => child,
-    transitionDuration: reduceMotion ? Duration.zero : PromptUiMotion.component,
+    transitionDuration: reduceMotion ? Duration.zero : CommonUiMotion.component,
     reverseTransitionDuration:
-        reduceMotion ? Duration.zero : PromptUiMotion.selection,
+        reduceMotion ? Duration.zero : CommonUiMotion.selection,
     transitionsBuilder: (_, animation, __, routeChild) {
       final curved = CurvedAnimation(
         parent: animation,
-        curve: PromptUiMotion.enter,
-        reverseCurve: PromptUiMotion.exit,
+        curve: CommonUiMotion.enter,
+        reverseCurve: CommonUiMotion.exit,
       );
       return FadeTransition(
         opacity: curved,
@@ -139,7 +139,7 @@ class _ModifyCameraPreviewDialogState extends State<ModifyCameraPreviewDialog> {
     await StatusDialog.showFailure(
       context,
       title: StatusDialog.photoSaveFailed,
-      usePromptUi: true,
+      useCommonUi: true,
     );
   }
 
@@ -154,7 +154,7 @@ class _ModifyCameraPreviewDialogState extends State<ModifyCameraPreviewDialog> {
     }
 
     await Navigator.of(context).push(
-      _modifyPromptPageRoute<void>(
+      _modifyCommonPageRoute<void>(
         context,
         ModifyGalleryView(
           images: List<XFile>.from(_capturedImages),
@@ -171,7 +171,7 @@ class _ModifyCameraPreviewDialogState extends State<ModifyCameraPreviewDialog> {
   }
 
   Widget _buildPreview() {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final cameraForeground =
         tokens.isDark ? tokens.textPrimary : tokens.surfaceRaised;
     final cs = Theme.of(context).colorScheme;
@@ -192,7 +192,7 @@ class _ModifyCameraPreviewDialogState extends State<ModifyCameraPreviewDialog> {
                 style: TextStyle(color: cameraForeground),
               ),
               const SizedBox(height: 12),
-              PromptButton(
+              CommonButton(
                 label: '다시 시도',
                 icon: Icons.refresh_rounded,
                 onPressed: _initializeCamera,
@@ -288,13 +288,13 @@ class _ModifyCameraPreviewDialogState extends State<ModifyCameraPreviewDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return PromptUiScope(
-      child: Builder(builder: _buildPromptCameraPreview),
+    return CommonUiScope(
+      child: Builder(builder: _buildCommonCameraPreview),
     );
   }
 
-  Widget _buildPromptCameraPreview(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+  Widget _buildCommonCameraPreview(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
     final ctrl = _cameraHelper.cameraController;
 
     return WillPopScope(
@@ -311,7 +311,7 @@ class _ModifyCameraPreviewDialogState extends State<ModifyCameraPreviewDialog> {
         child: Scaffold(
           backgroundColor: tokens.scrim,
           body: _buildPreview(),
-          bottomNavigationBar: PromptAnimatedReveal(
+          bottomNavigationBar: CommonAnimatedReveal(
             delay: const Duration(milliseconds: 80),
             offset: const Offset(0, .04),
             child: SafeArea(
@@ -320,13 +320,13 @@ class _ModifyCameraPreviewDialogState extends State<ModifyCameraPreviewDialog> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  PromptIconButton(
+                  CommonIconButton(
                     icon: Icons.camera_alt_rounded,
                     tooltip: '사진 촬영',
                     size: 68,
                     iconSize: 30,
                     selected: true,
-                    haptic: PromptHaptic.medium,
+                    haptic: CommonHaptic.medium,
                     onPressed: (!_isCameraReady ||
                             ctrl == null ||
                             !(ctrl.value.isInitialized) ||
@@ -338,10 +338,10 @@ class _ModifyCameraPreviewDialogState extends State<ModifyCameraPreviewDialog> {
                   ),
                   if (_capturedImages.isNotEmpty) ...[
                     const SizedBox(width: 12),
-                    PromptButton(
+                    CommonButton(
                       label: '갤러리 ${_capturedImages.length}',
                       icon: Icons.photo_library_rounded,
-                      variant: PromptButtonVariant.secondary,
+                      variant: CommonButtonVariant.secondary,
                       onPressed: _openModifyGalleryView,
                     ),
                   ],
@@ -367,13 +367,13 @@ class ModifyGalleryView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PromptUiScope(
-      child: Builder(builder: _buildPromptGallery),
+    return CommonUiScope(
+      child: Builder(builder: _buildCommonGallery),
     );
   }
 
-  Widget _buildPromptGallery(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+  Widget _buildCommonGallery(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
     final cameraForeground =
         tokens.isDark ? tokens.textPrimary : tokens.surfaceRaised;
 
@@ -399,7 +399,7 @@ class ModifyGalleryView extends StatelessWidget {
             onTap: () {
               Navigator.push(
                 context,
-                _modifyPromptPageRoute<void>(
+                _modifyCommonPageRoute<void>(
                   context,
                   FullScreenModifyGalleryView(
                     images: images,
@@ -467,13 +467,13 @@ class _FullScreenModifyGalleryViewState extends State<FullScreenModifyGalleryVie
 
   @override
   Widget build(BuildContext context) {
-    return PromptUiScope(
-      child: Builder(builder: _buildPromptFullScreenGallery),
+    return CommonUiScope(
+      child: Builder(builder: _buildCommonFullScreenGallery),
     );
   }
 
-  Widget _buildPromptFullScreenGallery(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+  Widget _buildCommonFullScreenGallery(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
     final cameraForeground =
         tokens.isDark ? tokens.textPrimary : tokens.surfaceRaised;
 

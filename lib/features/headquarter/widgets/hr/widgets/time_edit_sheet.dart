@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../../design_system/common_ui/common_ui_theme.dart';
 
 class TimeFieldSpec {
   const TimeFieldSpec({
@@ -25,7 +25,7 @@ Future<Map<String, String>?> showTimeEditSheet({
   required List<TimeFieldSpec> fields,
   List<TimeSheetValidator> validators = const [],
   String? title,
-  bool usePromptUi = false,
+  bool useCommonUi = false,
 }) {
   Widget buildSheet(BuildContext sheetContext) {
     return _TimeEditSheet(
@@ -33,12 +33,12 @@ Future<Map<String, String>?> showTimeEditSheet({
       fields: fields,
       validators: validators,
       title: title,
-      usePromptUi: usePromptUi,
+      useCommonUi: useCommonUi,
     );
   }
 
-  if (usePromptUi) {
-    return showPromptOverlayBottomSheet<Map<String, String>>(
+  if (useCommonUi) {
+    return showCommonOverlayBottomSheet<Map<String, String>>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
@@ -63,14 +63,14 @@ class _TimeEditSheet extends StatefulWidget {
     required this.fields,
     required this.validators,
     required this.title,
-    required this.usePromptUi,
+    required this.useCommonUi,
   });
 
   final DateTime date;
   final List<TimeFieldSpec> fields;
   final List<TimeSheetValidator> validators;
   final String? title;
-  final bool usePromptUi;
+  final bool useCommonUi;
 
   @override
   State<_TimeEditSheet> createState() => _TimeEditSheetState();
@@ -160,7 +160,7 @@ class _TimeEditSheetState extends State<_TimeEditSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
@@ -169,8 +169,8 @@ class _TimeEditSheetState extends State<_TimeEditSheet> {
       child: SafeArea(
         top: false,
         child: AnimatedPadding(
-          duration: reduceMotion ? Duration.zero : PromptUiMotion.component,
-          curve: PromptUiMotion.standard,
+          duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
+          curve: CommonUiMotion.standard,
           padding: EdgeInsets.fromLTRB(
             20,
             12,
@@ -189,7 +189,7 @@ class _TimeEditSheetState extends State<_TimeEditSheet> {
                     height: 4,
                     decoration: BoxDecoration(
                       color: tokens.handle,
-                      borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+                      borderRadius: BorderRadius.circular(CommonUiShapes.pill),
                     ),
                   ),
                 ),
@@ -202,7 +202,7 @@ class _TimeEditSheetState extends State<_TimeEditSheet> {
                       decoration: BoxDecoration(
                         color: tokens.accentContainer,
                         borderRadius:
-                            BorderRadius.circular(PromptUiShapes.control),
+                            BorderRadius.circular(CommonUiShapes.control),
                       ),
                       alignment: Alignment.center,
                       child: Icon(
@@ -220,18 +220,18 @@ class _TimeEditSheetState extends State<_TimeEditSheet> {
                         ),
                       ),
                     ),
-                    PromptIconButton(
+                    CommonIconButton(
                       icon: Icons.close_rounded,
                       tooltip: '닫기',
                       onPressed: () => Navigator.of(context).pop(),
-                      haptic: PromptHaptic.selection,
+                      haptic: CommonHaptic.selection,
                     ),
                   ],
                 ),
                 AnimatedSize(
                   duration:
-                      reduceMotion ? Duration.zero : PromptUiMotion.component,
-                  curve: PromptUiMotion.standard,
+                      reduceMotion ? Duration.zero : CommonUiMotion.component,
+                  curve: CommonUiMotion.standard,
                   child: _error == null
                       ? const SizedBox(height: 14)
                       : Padding(
@@ -244,7 +244,7 @@ class _TimeEditSheetState extends State<_TimeEditSheet> {
                             decoration: BoxDecoration(
                               color: tokens.dangerContainer,
                               borderRadius:
-                                  BorderRadius.circular(PromptUiShapes.control),
+                                  BorderRadius.circular(CommonUiShapes.control),
                               border: Border.all(
                                 color: tokens.danger.withOpacity(
                                   tokens.isDark ? .60 : .38,
@@ -273,7 +273,7 @@ class _TimeEditSheetState extends State<_TimeEditSheet> {
                         ),
                 ),
                 ...widget.fields.asMap().entries.map(
-                      (entry) => PromptAnimatedReveal(
+                      (entry) => CommonAnimatedReveal(
                         delay: Duration(milliseconds: entry.key * 45),
                         offset: const Offset(0, .025),
                         child: Padding(
@@ -289,13 +289,13 @@ class _TimeEditSheetState extends State<_TimeEditSheet> {
                       ),
                     ),
                 const SizedBox(height: 4),
-                PromptButton(
+                CommonButton(
                   label: '저장',
                   icon: Icons.save_rounded,
                   onPressed: _save,
                   loading: _saving,
                   expand: true,
-                  haptic: PromptHaptic.selection,
+                  haptic: CommonHaptic.selection,
                 ),
               ],
             ),
@@ -319,13 +319,13 @@ class _TimeInputRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: tokens.surfaceOverlay,
-        borderRadius: BorderRadius.circular(PromptUiShapes.card),
+        borderRadius: BorderRadius.circular(CommonUiShapes.card),
         border: Border.all(color: tokens.borderSubtle),
       ),
       child: Column(
@@ -398,7 +398,7 @@ Future<AttendanceTimeResult?> showAttendanceTimeSheet({
   required DateTime date,
   required String initialInTime,
   required String initialOutTime,
-  bool usePromptUi = false,
+  bool useCommonUi = false,
 }) async {
   final result = await showTimeEditSheet(
     context: context,
@@ -409,7 +409,7 @@ Future<AttendanceTimeResult?> showAttendanceTimeSheet({
       TimeFieldSpec(id: 'in', label: '출근 시간', initial: initialInTime),
       TimeFieldSpec(id: 'out', label: '퇴근 시간', initial: initialOutTime),
     ],
-    usePromptUi: usePromptUi,
+    useCommonUi: useCommonUi,
     validators: [
       (values) {
         final inTime = values['in']!;
@@ -431,7 +431,7 @@ Future<String?> showBreakTimeSheet({
   required BuildContext context,
   required DateTime date,
   required String initialTime,
-  bool usePromptUi = false,
+  bool useCommonUi = false,
 }) async {
   final result = await showTimeEditSheet(
     context: context,
@@ -439,7 +439,7 @@ Future<String?> showBreakTimeSheet({
     fields: [
       TimeFieldSpec(id: 'break', label: '휴게 시간', initial: initialTime),
     ],
-    usePromptUi: usePromptUi,
+    useCommonUi: useCommonUi,
   );
   return result?['break'];
 }

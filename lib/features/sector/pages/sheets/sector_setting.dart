@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../shared/secondary/widgets/ops_console_widgets.dart';
 import '../../domain/models/sector_model.dart';
 
@@ -116,7 +116,7 @@ class _SectorSettingState extends State<SectorSetting>
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
@@ -126,7 +126,7 @@ class _SectorSettingState extends State<SectorSetting>
       decoration: BoxDecoration(
         color: tokens.surfaceRaised,
         borderRadius: const BorderRadius.vertical(
-          top: Radius.circular(PromptUiShapes.sheet),
+          top: Radius.circular(CommonUiShapes.sheet),
         ),
         border: Border.all(color: tokens.borderSubtle),
         boxShadow: <BoxShadow>[
@@ -165,7 +165,7 @@ class _SectorSettingState extends State<SectorSetting>
                     decoration: BoxDecoration(
                       color: tokens.accentContainer,
                       borderRadius:
-                          BorderRadius.circular(PromptUiShapes.control),
+                          BorderRadius.circular(CommonUiShapes.control),
                       border: Border.all(color: tokens.borderSubtle),
                     ),
                     alignment: Alignment.center,
@@ -203,11 +203,11 @@ class _SectorSettingState extends State<SectorSetting>
                       ],
                     ),
                   ),
-                  PromptIconButton(
+                  CommonIconButton(
                     icon: Icons.close_rounded,
                     tooltip: '닫기',
                     onPressed: _saving ? null : () => Navigator.of(context).pop(),
-                    haptic: PromptHaptic.selection,
+                    haptic: CommonHaptic.selection,
                   ),
                 ],
               ),
@@ -215,12 +215,12 @@ class _SectorSettingState extends State<SectorSetting>
               AnimatedContainer(
                 duration: reduceMotion
                     ? Duration.zero
-                    : PromptUiMotion.selection,
-                curve: PromptUiMotion.standard,
+                    : CommonUiMotion.selection,
+                curve: CommonUiMotion.standard,
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
                   color: tokens.surfaceOverlay,
-                  borderRadius: BorderRadius.circular(PromptUiShapes.card),
+                  borderRadius: BorderRadius.circular(CommonUiShapes.card),
                   border: Border.all(
                     color: _errorText == null
                         ? tokens.borderSubtle
@@ -255,30 +255,30 @@ class _SectorSettingState extends State<SectorSetting>
               AnimatedSwitcher(
                 duration: reduceMotion
                     ? Duration.zero
-                    : PromptUiMotion.component,
-                switchInCurve: PromptUiMotion.enter,
-                switchOutCurve: PromptUiMotion.exit,
+                    : CommonUiMotion.component,
+                switchInCurve: CommonUiMotion.enter,
+                switchOutCurve: CommonUiMotion.exit,
                 child: Row(
                   key: ValueKey<bool>(_saving),
                   children: <Widget>[
                     Expanded(
-                      child: PromptButton(
+                      child: CommonButton(
                         label: '취소',
                         icon: Icons.close_rounded,
-                        variant: PromptButtonVariant.secondary,
+                        variant: CommonButtonVariant.secondary,
                         onPressed:
                             _saving ? null : () => Navigator.of(context).pop(),
-                        haptic: PromptHaptic.selection,
+                        haptic: CommonHaptic.selection,
                       ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: PromptButton(
+                      child: CommonButton(
                         label: _editing ? '수정 저장' : '등록 저장',
                         icon: Icons.save_rounded,
                         loading: _saving,
                         onPressed: _saving ? null : _save,
-                        haptic: PromptHaptic.medium,
+                        haptic: CommonHaptic.medium,
                       ),
                     ),
                   ],

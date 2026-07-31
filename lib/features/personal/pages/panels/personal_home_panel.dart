@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../app/utils/dev_firebase_debug_dialog.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 
 import '../../../../shared/plate/domain/enums/plate_type.dart';
 import '../../../../shared/plate/domain/models/plate_model.dart';
@@ -21,7 +21,7 @@ import '../dialogs/personal_departure_success_dialog.dart';
 import '../dialogs/personal_todo_dialog.dart';
 import '../dialogs/personal_vehicle_editor_dialog.dart';
 import '../dialogs/personal_vehicle_status_sheet.dart';
-import '../widgets/personal_prompt_components.dart';
+import '../widgets/personal_common_components.dart';
 
 class PersonalHomePanel extends StatefulWidget {
   const PersonalHomePanel({
@@ -218,7 +218,7 @@ class PersonalHomePanelState extends State<PersonalHomePanel> {
         operation: 'personal.home.vehicleStatusRefresh',
         error: e,
         stackTrace: st,
-        usePromptUi: true,
+        useCommonUi: true,
         details: <String, Object?>{
           'area': area,
           'vehicleId': vehicle.id,
@@ -289,7 +289,7 @@ class PersonalHomePanelState extends State<PersonalHomePanel> {
   void _showSnack(String message, {required bool success}) {
     final messenger = ScaffoldMessenger.maybeOf(context);
     if (messenger == null) return;
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     messenger.clearSnackBars();
     messenger.showSnackBar(
       SnackBar(
@@ -327,7 +327,7 @@ class PersonalHomePanelState extends State<PersonalHomePanel> {
     if (delta < -1) delta += 3;
     _pageController.animateToPage(
       _rawPageIndex + delta,
-      duration: personalPromptDuration(context, PromptUiMotion.overlay),
+      duration: personalCommonDuration(context, CommonUiMotion.overlay),
       curve: Curves.easeOutCubic,
     );
   }
@@ -339,7 +339,7 @@ class PersonalHomePanelState extends State<PersonalHomePanel> {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final bottom = MediaQuery.paddingOf(context).bottom;
 
     return ColoredBox(
@@ -347,7 +347,7 @@ class PersonalHomePanelState extends State<PersonalHomePanel> {
       child: Column(
         children: <Widget>[
           Expanded(
-            child: PromptAnimatedReveal(
+            child: CommonAnimatedReveal(
               child: PageView.builder(
                 controller: _pageController,
                 onPageChanged: _handlePageChanged,
@@ -401,7 +401,7 @@ class PersonalHomePanelState extends State<PersonalHomePanel> {
             ),
           ),
           AnimatedContainer(
-            duration: personalPromptDuration(context),
+            duration: personalCommonDuration(context),
             padding: EdgeInsets.fromLTRB(16, 8, 16, 10 + bottom),
             decoration: BoxDecoration(
               color: tokens.surfaceRaised,
@@ -628,12 +628,12 @@ class _CalendarFocusPage extends StatelessWidget {
             ...selectedTodos.map((todo) => _TodoRowCard(todo: todo, onToggle: () => onToggleTodo(todo))),
           ],
           const SizedBox(height: 6),
-          PromptButton(
+          CommonButton(
             label: '이 날짜의 할 일 관리',
             icon: Icons.add_task_rounded,
-            variant: PromptButtonVariant.secondary,
+            variant: CommonButtonVariant.secondary,
             expand: true,
-            haptic: PromptHaptic.selection,
+            haptic: CommonHaptic.selection,
             onPressed: onOpenTodo,
           ),
         ],
@@ -754,14 +754,14 @@ class _HeroDetailIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AnimatedOpacity(
-      duration: personalPromptDuration(context, PromptUiMotion.selection),
+      duration: personalCommonDuration(context, CommonUiMotion.selection),
       opacity: enabled ? 1 : .46,
-      child: PromptIconButton(
+      child: CommonIconButton(
         icon: Icons.near_me_rounded,
         tooltip: enabled ? '선택 차량 상세 보기' : '차량을 먼저 추가해 주세요',
         onPressed: enabled ? onTap : null,
         selected: enabled,
-        haptic: PromptHaptic.selection,
+        haptic: CommonHaptic.selection,
         size: 56,
         iconSize: 28,
       ),
@@ -1207,9 +1207,9 @@ class _PageTitleCard extends StatelessWidget {
               ],
             ),
           ),
-          PromptButton(
+          CommonButton(
             label: actionLabel,
-            variant: PromptButtonVariant.tertiary,
+            variant: CommonButtonVariant.tertiary,
             minHeight: 38,
             onPressed: onAction,
           ),
@@ -1278,9 +1278,9 @@ class _LinkedSectionTitle extends StatelessWidget {
       child: Row(
         children: [
           Expanded(child: Text(title, style: text.titleMedium?.copyWith(color: cs.onSurface, fontWeight: FontWeight.w900))),
-          PromptButton(
+          CommonButton(
             label: actionLabel,
-            variant: PromptButtonVariant.tertiary,
+            variant: CommonButtonVariant.tertiary,
             minHeight: 38,
             onPressed: onAction,
           ),
@@ -1391,7 +1391,7 @@ class _InlineCalendar extends StatelessWidget {
         children: [
           Row(
             children: [
-              PromptIconButton(
+              CommonIconButton(
                 icon: Icons.chevron_left_rounded,
                 tooltip: '이전 달',
                 size: 40,
@@ -1400,7 +1400,7 @@ class _InlineCalendar extends StatelessWidget {
                 ),
               ),
               Expanded(child: Text('${month.year}년 ${month.month}월', textAlign: TextAlign.center, style: text.titleMedium?.copyWith(fontWeight: FontWeight.w900))),
-              PromptIconButton(
+              CommonIconButton(
                 icon: Icons.chevron_right_rounded,
                 tooltip: '다음 달',
                 size: 40,
@@ -1468,9 +1468,9 @@ class _DayDot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     return AnimatedContainer(
-      duration: personalPromptDuration(context, PromptUiMotion.selection),
+      duration: personalCommonDuration(context, CommonUiMotion.selection),
       width: 5,
       height: 5,
       decoration: BoxDecoration(
@@ -1495,13 +1495,13 @@ class _PageSwitcher extends StatelessWidget {
       Icons.calendar_month_rounded,
     ];
     const labels = <String>['내 차량', '할 일', '달력'];
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: tokens.surfaceOverlay,
-        borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+        borderRadius: BorderRadius.circular(CommonUiShapes.pill),
         border: Border.all(color: tokens.borderSubtle),
       ),
       child: Row(
@@ -1513,29 +1513,29 @@ class _PageSwitcher extends StatelessWidget {
                 selected: current == i,
                 label: labels[i],
                 child: InkWell(
-                  borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+                  borderRadius: BorderRadius.circular(CommonUiShapes.pill),
                   onTap: () => onTap(i),
                   child: AnimatedContainer(
-                    duration: personalPromptDuration(
+                    duration: personalCommonDuration(
                       context,
-                      PromptUiMotion.selection,
+                      CommonUiMotion.selection,
                     ),
-                    curve: PromptUiMotion.standard,
+                    curve: CommonUiMotion.standard,
                     padding: const EdgeInsets.symmetric(vertical: 10),
                     decoration: BoxDecoration(
                       color: current == i
                           ? tokens.accent
                           : tokens.transparent,
-                      borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+                      borderRadius: BorderRadius.circular(CommonUiShapes.pill),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: <Widget>[
                         AnimatedScale(
                           scale: current == i ? 1 : .94,
-                          duration: personalPromptDuration(
+                          duration: personalCommonDuration(
                             context,
-                            PromptUiMotion.selection,
+                            CommonUiMotion.selection,
                           ),
                           child: Icon(
                             icons[i],

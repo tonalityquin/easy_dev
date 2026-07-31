@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../design_system/common_ui/common_ui_components.dart';
+import '../../../design_system/common_ui/common_ui_theme.dart';
 
 class OpsMetric {
   final String label;
@@ -45,10 +45,10 @@ class OpsConsoleScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PromptUiScope(
+    return CommonUiScope(
       child: Builder(
         builder: (context) {
-          final tokens = PromptUiTheme.of(context);
+          final tokens = CommonUiTheme.of(context);
           final reduceMotion =
               MediaQuery.maybeOf(context)?.disableAnimations ?? false;
           return Scaffold(
@@ -57,7 +57,7 @@ class OpsConsoleScaffold extends StatelessWidget {
               bottom: false,
               child: Column(
                 children: [
-                  PromptAnimatedReveal(
+                  CommonAnimatedReveal(
                     child: OpsConsoleHeader(
                       title: title,
                       subtitle: subtitle,
@@ -68,7 +68,7 @@ class OpsConsoleScaffold extends StatelessWidget {
                     ),
                   ),
                   if (commandBar != null)
-                    PromptAnimatedReveal(
+                    CommonAnimatedReveal(
                       delay: const Duration(milliseconds: 45),
                       offset: const Offset(0, .025),
                       child: Padding(
@@ -82,9 +82,9 @@ class OpsConsoleScaffold extends StatelessWidget {
                         AnimatedSwitcher(
                           duration: reduceMotion
                               ? Duration.zero
-                              : PromptUiMotion.component,
-                          switchInCurve: PromptUiMotion.enter,
-                          switchOutCurve: PromptUiMotion.exit,
+                              : CommonUiMotion.component,
+                          switchInCurve: CommonUiMotion.enter,
+                          switchOutCurve: CommonUiMotion.exit,
                           child: KeyedSubtree(
                             key: ValueKey<bool>(loading),
                             child: body,
@@ -97,7 +97,7 @@ class OpsConsoleScaffold extends StatelessWidget {
                               opacity: loading ? 1 : 0,
                               duration: reduceMotion
                                   ? Duration.zero
-                                  : PromptUiMotion.selection,
+                                  : CommonUiMotion.selection,
                               child: ColoredBox(
                                 color: tokens.scrim.withOpacity(.12),
                                 child: Center(
@@ -107,7 +107,7 @@ class OpsConsoleScaffold extends StatelessWidget {
                                     decoration: BoxDecoration(
                                       color: tokens.surfaceRaised,
                                       borderRadius: BorderRadius.circular(
-                                        PromptUiShapes.control,
+                                        CommonUiShapes.control,
                                       ),
                                       border: Border.all(
                                         color: tokens.borderSubtle,
@@ -169,7 +169,7 @@ class OpsConsoleHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final subtitleText = subtitle?.trim() ?? '';
     return Container(
@@ -189,7 +189,7 @@ class OpsConsoleHeader extends StatelessWidget {
                 height: 44,
                 decoration: BoxDecoration(
                   color: tokens.accentContainer,
-                  borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                  borderRadius: BorderRadius.circular(CommonUiShapes.control),
                   border: Border.all(color: tokens.borderSubtle),
                 ),
                 alignment: Alignment.center,
@@ -243,7 +243,7 @@ class OpsConsoleHeader extends StatelessWidget {
                 scrollDirection: Axis.horizontal,
                 itemCount: metrics.length,
                 separatorBuilder: (_, __) => const SizedBox(width: 8),
-                itemBuilder: (context, index) => PromptAnimatedReveal(
+                itemBuilder: (context, index) => CommonAnimatedReveal(
                   delay: Duration(milliseconds: index * 35),
                   offset: const Offset(.025, 0),
                   child: OpsMetricCard(metric: metrics[index]),
@@ -264,12 +264,12 @@ class OpsHeaderPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
         color: tokens.surfaceOverlay,
-        borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+        borderRadius: BorderRadius.circular(CommonUiShapes.pill),
         border: Border.all(color: tokens.borderSubtle),
       ),
       child: Text(
@@ -290,14 +290,14 @@ class OpsMetricCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final color = metric.color ?? tokens.accent;
     return Container(
       width: 118,
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       decoration: BoxDecoration(
         color: tokens.surfaceOverlay,
-        borderRadius: BorderRadius.circular(PromptUiShapes.control),
+        borderRadius: BorderRadius.circular(CommonUiShapes.control),
         border: Border.all(color: tokens.borderSubtle),
       ),
       child: Column(
@@ -343,13 +343,13 @@ class OpsCommandPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: tokens.surfaceRaised,
-        borderRadius: BorderRadius.circular(PromptUiShapes.card),
+        borderRadius: BorderRadius.circular(CommonUiShapes.card),
         border: Border.all(color: tokens.borderSubtle),
       ),
       child: Column(
@@ -368,7 +368,7 @@ class OpsSearchField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     return TextField(
       onChanged: onChanged,
       textInputAction: TextInputAction.search,
@@ -401,7 +401,7 @@ class OpsFilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final foreground = selected ? tokens.onAccentContainer : tokens.textSecondary;
@@ -410,19 +410,19 @@ class OpsFilterChip extends StatelessWidget {
       selected: selected,
       label: label,
       child: AnimatedContainer(
-        duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
+        duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
         decoration: BoxDecoration(
           color: selected ? tokens.accentContainer : tokens.surfaceOverlay,
-          borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+          borderRadius: BorderRadius.circular(CommonUiShapes.pill),
           border: Border.all(
             color: selected ? tokens.accent : tokens.borderSubtle,
           ),
         ),
         child: Material(
           color: tokens.transparent,
-          borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+          borderRadius: BorderRadius.circular(CommonUiShapes.pill),
           child: InkWell(
-            borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+            borderRadius: BorderRadius.circular(CommonUiShapes.pill),
             onTap: onSelected,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -468,17 +468,17 @@ class OpsPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final accent = accentColor ?? tokens.accent;
     return AnimatedContainer(
-      duration: reduceMotion ? Duration.zero : PromptUiMotion.selection,
-      curve: PromptUiMotion.standard,
+      duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+      curve: CommonUiMotion.standard,
       margin: margin,
       decoration: BoxDecoration(
         color: selected ? tokens.surfaceSelected : tokens.surfaceRaised,
-        borderRadius: BorderRadius.circular(PromptUiShapes.card),
+        borderRadius: BorderRadius.circular(CommonUiShapes.card),
         border: Border.all(
           color: selected ? accent : tokens.borderSubtle,
           width: selected ? 1.4 : 1,
@@ -505,7 +505,7 @@ class OpsSectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -515,7 +515,7 @@ class OpsSectionTitle extends StatelessWidget {
           height: 34,
           decoration: BoxDecoration(
             color: tokens.accentContainer,
-            borderRadius: BorderRadius.circular(PromptUiShapes.control),
+            borderRadius: BorderRadius.circular(CommonUiShapes.control),
             border: Border.all(color: tokens.borderSubtle),
           ),
           alignment: Alignment.center,
@@ -571,7 +571,7 @@ class OpsStatusBadge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
         color: color.withOpacity(.12),
-        borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+        borderRadius: BorderRadius.circular(CommonUiShapes.pill),
         border: Border.all(color: color.withOpacity(.32)),
       ),
       child: Row(
@@ -602,12 +602,12 @@ class OpsInfoPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
         color: tokens.surfaceOverlay,
-        borderRadius: BorderRadius.circular(PromptUiShapes.pill),
+        borderRadius: BorderRadius.circular(CommonUiShapes.pill),
         border: Border.all(color: tokens.borderSubtle),
       ),
       child: Row(
@@ -646,12 +646,12 @@ class OpsEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 28),
-        child: PromptAnimatedReveal(
+        child: CommonAnimatedReveal(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -660,7 +660,7 @@ class OpsEmptyState extends StatelessWidget {
                 height: 58,
                 decoration: BoxDecoration(
                   color: tokens.accentContainer,
-                  borderRadius: BorderRadius.circular(PromptUiShapes.card),
+                  borderRadius: BorderRadius.circular(CommonUiShapes.card),
                   border: Border.all(color: tokens.borderSubtle),
                 ),
                 alignment: Alignment.center,
@@ -704,7 +704,7 @@ class OpsBottomActionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
     return Container(
       padding: EdgeInsets.fromLTRB(16, 10, 16, 12 + bottomInset),
@@ -737,17 +737,17 @@ class OpsActionButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        return PromptButton(
+        return CommonButton(
           label: label,
           icon: icon,
           onPressed: onPressed,
           expand: constraints.hasBoundedWidth,
-          haptic: danger ? PromptHaptic.medium : PromptHaptic.selection,
+          haptic: danger ? CommonHaptic.medium : CommonHaptic.selection,
           variant: danger
-              ? PromptButtonVariant.destructive
+              ? CommonButtonVariant.destructive
               : tonal
-                  ? PromptButtonVariant.secondary
-                  : PromptButtonVariant.primary,
+                  ? CommonButtonVariant.secondary
+                  : CommonButtonVariant.primary,
         );
       },
     );
@@ -759,7 +759,7 @@ class OpsDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Divider(height: 1, color: PromptUiTheme.of(context).borderSubtle);
+    return Divider(height: 1, color: CommonUiTheme.of(context).borderSubtle);
   }
 }
 
@@ -793,10 +793,10 @@ class OpsWorkSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PromptUiScope(
+    return CommonUiScope(
       child: Builder(
         builder: (context) {
-          final tokens = PromptUiTheme.of(context);
+          final tokens = CommonUiTheme.of(context);
           final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
           return Material(
             color: tokens.transparent,
@@ -806,7 +806,7 @@ class OpsWorkSheet extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: tokens.canvas,
                   borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(PromptUiShapes.sheet),
+                    top: Radius.circular(CommonUiShapes.sheet),
                   ),
                   border: Border(
                     top: BorderSide(color: tokens.borderSubtle),
@@ -823,7 +823,7 @@ class OpsWorkSheet extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: tokens.handle,
                           borderRadius: BorderRadius.circular(
-                            PromptUiShapes.pill,
+                            CommonUiShapes.pill,
                           ),
                         ),
                       ),
@@ -835,11 +835,11 @@ class OpsWorkSheet extends StatelessWidget {
                         areaLabel: areaLabel,
                         metrics: metrics,
                         trailing: trailing ??
-                            PromptIconButton(
+                            CommonIconButton(
                               icon: Icons.close_rounded,
                               tooltip: '닫기',
                               onPressed: () => Navigator.pop(context),
-                              haptic: PromptHaptic.selection,
+                              haptic: CommonHaptic.selection,
                             ),
                       ),
                       Expanded(
@@ -847,7 +847,7 @@ class OpsWorkSheet extends StatelessWidget {
                           controller: bodyScrollController,
                           physics: bodyScrollPhysics,
                           padding: bodyPadding,
-                          child: PromptAnimatedReveal(child: body),
+                          child: CommonAnimatedReveal(child: body),
                         ),
                       ),
                       if (bottomBar != null) bottomBar!,
@@ -922,20 +922,20 @@ class OpsInlineMessage extends StatelessWidget {
     if (message == null || message!.trim().isEmpty) {
       return const SizedBox.shrink();
     }
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final background = danger ? tokens.dangerContainer : tokens.infoContainer;
     final foreground =
         danger ? tokens.onDangerContainer : tokens.onInfoContainer;
     return AnimatedContainer(
       duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false
           ? Duration.zero
-          : PromptUiMotion.selection,
+          : CommonUiMotion.selection,
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(PromptUiShapes.control),
+        borderRadius: BorderRadius.circular(CommonUiShapes.control),
         border: Border.all(
           color: danger ? tokens.danger : tokens.info,
         ),
@@ -970,7 +970,7 @@ InputDecoration opsInputDecoration(
   String? suffixText,
   bool locked = false,
 }) {
-  final tokens = PromptUiTheme.of(context);
+  final tokens = CommonUiTheme.of(context);
   return InputDecoration(
     labelText: label,
     errorText: errorText,
@@ -992,23 +992,23 @@ InputDecoration opsInputDecoration(
           fontWeight: FontWeight.w500,
         ),
     enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(PromptUiShapes.control),
+      borderRadius: BorderRadius.circular(CommonUiShapes.control),
       borderSide: BorderSide(color: tokens.borderSubtle),
     ),
     focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(PromptUiShapes.control),
+      borderRadius: BorderRadius.circular(CommonUiShapes.control),
       borderSide: BorderSide(color: tokens.focusRing, width: 1.5),
     ),
     errorBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(PromptUiShapes.control),
+      borderRadius: BorderRadius.circular(CommonUiShapes.control),
       borderSide: BorderSide(color: tokens.danger),
     ),
     focusedErrorBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(PromptUiShapes.control),
+      borderRadius: BorderRadius.circular(CommonUiShapes.control),
       borderSide: BorderSide(color: tokens.danger, width: 1.5),
     ),
     border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(PromptUiShapes.control),
+      borderRadius: BorderRadius.circular(CommonUiShapes.control),
     ),
   );
 }
@@ -1029,25 +1029,25 @@ class OpsFormChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final foreground = selected ? tokens.onAccentContainer : tokens.textSecondary;
     return AnimatedContainer(
       duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false
           ? Duration.zero
-          : PromptUiMotion.selection,
+          : CommonUiMotion.selection,
       decoration: BoxDecoration(
         color: selected ? tokens.accentContainer : tokens.surfaceOverlay,
-        borderRadius: BorderRadius.circular(PromptUiShapes.control),
+        borderRadius: BorderRadius.circular(CommonUiShapes.control),
         border: Border.all(
           color: selected ? tokens.accent : tokens.borderSubtle,
         ),
       ),
       child: Material(
         color: tokens.transparent,
-        borderRadius: BorderRadius.circular(PromptUiShapes.control),
+        borderRadius: BorderRadius.circular(CommonUiShapes.control),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(PromptUiShapes.control),
+          borderRadius: BorderRadius.circular(CommonUiShapes.control),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: Row(

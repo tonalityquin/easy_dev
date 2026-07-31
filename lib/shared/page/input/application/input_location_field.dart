@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 
 class InputLocationField extends StatelessWidget {
   final TextEditingController controller;
@@ -16,7 +16,7 @@ class InputLocationField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final screenWidth = MediaQuery.sizeOf(context).width;
     return SizedBox(
       width: screenWidth * widthFactor,

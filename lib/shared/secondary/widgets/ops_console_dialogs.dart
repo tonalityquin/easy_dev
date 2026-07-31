@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../../design_system/prompt_ui/prompt_ui_components.dart';
-import '../../../design_system/prompt_ui/prompt_ui_overlays.dart';
-import '../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../design_system/common_ui/common_ui_components.dart';
+import '../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../design_system/common_ui/common_ui_theme.dart';
 
 Future<bool> showOpsConfirmDialog({
   required BuildContext context,
@@ -14,16 +14,16 @@ Future<bool> showOpsConfirmDialog({
   bool destructive = false,
   bool barrierDismissible = true,
 }) async {
-  final result = await showPromptOverlayDialog<bool>(
+  final result = await showCommonOverlayDialog<bool>(
     context: context,
     barrierDismissible: barrierDismissible,
     builder: (dialogContext) {
-      final tokens = PromptUiTheme.of(dialogContext);
+      final tokens = CommonUiTheme.of(dialogContext);
       final toneBackground =
           destructive ? tokens.dangerContainer : tokens.accentContainer;
       final toneForeground =
           destructive ? tokens.onDangerContainer : tokens.onAccentContainer;
-      return PromptDialogFrame(
+      return CommonDialogFrame(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 420),
           child: Padding(
@@ -41,7 +41,7 @@ Future<bool> showOpsConfirmDialog({
                       decoration: BoxDecoration(
                         color: toneBackground,
                         borderRadius: BorderRadius.circular(
-                          PromptUiShapes.control,
+                          CommonUiShapes.control,
                         ),
                         border: Border.all(color: tokens.borderSubtle),
                       ),
@@ -83,25 +83,25 @@ Future<bool> showOpsConfirmDialog({
                 Row(
                   children: [
                     Expanded(
-                      child: PromptButton(
+                      child: CommonButton(
                         label: cancelLabel,
                         onPressed: () => Navigator.pop(dialogContext, false),
-                        variant: PromptButtonVariant.tertiary,
-                        haptic: PromptHaptic.selection,
+                        variant: CommonButtonVariant.tertiary,
+                        haptic: CommonHaptic.selection,
                         expand: true,
                       ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: PromptButton(
+                      child: CommonButton(
                         label: confirmLabel,
                         onPressed: () => Navigator.pop(dialogContext, true),
                         variant: destructive
-                            ? PromptButtonVariant.destructive
-                            : PromptButtonVariant.primary,
+                            ? CommonButtonVariant.destructive
+                            : CommonButtonVariant.primary,
                         haptic: destructive
-                            ? PromptHaptic.medium
-                            : PromptHaptic.selection,
+                            ? CommonHaptic.medium
+                            : CommonHaptic.selection,
                         expand: true,
                       ),
                     ),
@@ -135,11 +135,11 @@ class OpsDialogShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final background = danger ? tokens.dangerContainer : tokens.accentContainer;
     final foreground =
         danger ? tokens.onDangerContainer : tokens.onAccentContainer;
-    return PromptDialogFrame(
+    return CommonDialogFrame(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 520),
         child: Padding(
@@ -155,7 +155,7 @@ class OpsDialogShell extends StatelessWidget {
                     height: 42,
                     decoration: BoxDecoration(
                       color: background,
-                      borderRadius: BorderRadius.circular(PromptUiShapes.control),
+                      borderRadius: BorderRadius.circular(CommonUiShapes.control),
                       border: Border.all(color: tokens.borderSubtle),
                     ),
                     alignment: Alignment.center,

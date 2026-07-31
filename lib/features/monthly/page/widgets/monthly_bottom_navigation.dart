@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../design_system/prompt_ui/prompt_ui_theme.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 
 class MonthlyBottomNavigation extends StatelessWidget {
   const MonthlyBottomNavigation({
@@ -18,13 +18,13 @@ class MonthlyBottomNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = PromptUiTheme.of(context);
+    final tokens = CommonUiTheme.of(context);
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final bottomInset = MediaQuery.of(context).padding.bottom;
 
     return AnimatedContainer(
-      duration: reduceMotion ? Duration.zero : PromptUiMotion.component,
-      curve: PromptUiMotion.standard,
+      duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
+      curve: CommonUiMotion.standard,
       padding: EdgeInsets.fromLTRB(12, 10, 12, bottomInset > 0 ? 8 : 12),
       decoration: BoxDecoration(
         color: backgroundColor ?? tokens.surfaceRaised,
@@ -38,10 +38,10 @@ class MonthlyBottomNavigation extends StatelessWidget {
         ],
       ),
       child: AnimatedSwitcher(
-        duration: reduceMotion ? Duration.zero : PromptUiMotion.layout,
-        reverseDuration: reduceMotion ? Duration.zero : PromptUiMotion.component,
-        switchInCurve: PromptUiMotion.enter,
-        switchOutCurve: PromptUiMotion.exit,
+        duration: reduceMotion ? Duration.zero : CommonUiMotion.layout,
+        reverseDuration: reduceMotion ? Duration.zero : CommonUiMotion.component,
+        switchInCurve: CommonUiMotion.enter,
+        switchOutCurve: CommonUiMotion.exit,
         transitionBuilder: (child, animation) {
           final offset = Tween<Offset>(
             begin: const Offset(0, 0.04),

@@ -408,7 +408,7 @@ class InputPlateController {
       context: context,
       title: '입차 상태 메모 삭제',
       initialMessage: '저장된 상태 메모를 삭제하고 있습니다.',
-      usePromptUi: true,
+      useCommonUi: true,
       developerModeMessage:
           '개발자 모드 ON: 상태 메모 삭제 로그를 복사할 수 있습니다.',
       standardModeMessage:
@@ -455,7 +455,7 @@ class InputPlateController {
       context: context,
       title: '입차 방문처 선택',
       initialMessage: initialMessage,
-      usePromptUi: true,
+      useCommonUi: true,
       developerModeMessage: '개발자 모드 ON: 방문처 선택 로그를 복사할 수 있습니다.',
       standardModeMessage: '개발자 모드 OFF: 방문처 선택 로그를 콘솔에 기록합니다.',
     );
@@ -545,7 +545,7 @@ class InputPlateController {
           context,
           title: '방문처 데이터를 준비하고 있습니다.',
           description: '잠시 후 입차 버튼을 다시 눌러주세요.',
-          usePromptUi: true,
+          useCommonUi: true,
         );
       }
       return const _SectorEntryResolution(proceed: false);
@@ -576,7 +576,7 @@ class InputPlateController {
           context,
           title: '선택할 방문처가 없습니다.',
           description: '태블릿 설정 또는 내 정보에서 운영 데이터를 다시 내려받아 주세요.',
-          usePromptUi: true,
+          useCommonUi: true,
         );
       }
       return const _SectorEntryResolution(proceed: false);
@@ -652,7 +652,7 @@ class InputPlateController {
           context,
           title: '방문처 선택을 다시 진행해주세요.',
           description: '현재 지역 또는 로컬 방문처 정보가 변경되었습니다.',
-          usePromptUi: true,
+          useCommonUi: true,
         );
       }
       return const _SectorEntryResolution(proceed: false);
@@ -707,7 +707,7 @@ class InputPlateController {
           context: context,
           title: '입차 상태 조회 확인',
           initialMessage: '입차 전 상태 정보 확인 여부를 검사하고 있습니다.',
-          usePromptUi: true,
+          useCommonUi: true,
           developerModeMessage:
               '개발자 모드 ON: 상태 조회 차단 로그를 복사할 수 있습니다.',
           standardModeMessage:
@@ -721,7 +721,7 @@ class InputPlateController {
         await lookupTrace.fail(message);
       }
       if (context.mounted) {
-        showFailedSnackbar(context, message, usePromptUi: true);
+        showFailedSnackbar(context, message, useCommonUi: true);
       }
       return false;
     }
@@ -731,7 +731,7 @@ class InputPlateController {
     if (!isValid) {
       trace?.add('중단: 번호판 입력 불완전');
       if (context.mounted) {
-        showFailedSnackbar(context, '번호판 입력을 확인해주세요.', usePromptUi: true);
+        showFailedSnackbar(context, '번호판 입력을 확인해주세요.', useCommonUi: true);
       }
       return false;
     }
@@ -756,7 +756,7 @@ class InputPlateController {
     if (!isMinorMode && !isLocationSelected) {
       trace?.add('중단: 주차 위치 미선택');
       if (context.mounted) {
-        showFailedSnackbar(context, '주차 위치를 선택해주세요.', usePromptUi: true);
+        showFailedSnackbar(context, '주차 위치를 선택해주세요.', useCommonUi: true);
       }
       return false;
     }
@@ -785,7 +785,7 @@ class InputPlateController {
         selectedBillType != '정기') {
       trace?.add('중단: selectedBill 누락');
       if (context.mounted) {
-        showFailedSnackbar(context, '정산 유형을 선택해주세요.', usePromptUi: true);
+        showFailedSnackbar(context, '정산 유형을 선택해주세요.', useCommonUi: true);
       }
       return false;
     }
@@ -807,7 +807,7 @@ class InputPlateController {
         context: context,
         title: '입차 상태 정보 저장',
         initialMessage: '입차 정보와 상태 메모를 저장하고 있습니다.',
-        usePromptUi: true,
+        useCommonUi: true,
         developerModeMessage:
             '개발자 모드 ON: 상태 저장 로그를 복사할 수 있습니다.',
         standardModeMessage:
@@ -850,7 +850,7 @@ class InputPlateController {
         await StatusDialog.showFailure(
           context,
           title: StatusDialog.photoSaveFailed,
-          usePromptUi: true,
+          useCommonUi: true,
         );
       }
 
@@ -968,7 +968,7 @@ class InputPlateController {
         );
       }
       if (context.mounted) {
-        showFailedSnackbar(context, '입차 처리 실패: $e', usePromptUi: true);
+        showFailedSnackbar(context, '입차 처리 실패: $e', useCommonUi: true);
       }
       return false;
     } finally {
