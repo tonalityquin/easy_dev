@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 
+import '../../../app/utils/developer_operation_status_dialog.dart';
 import '../application/sprint_mode_store.dart';
 import '../domain/sprint_models.dart';
 import 'sprint_block_editor_sheet.dart';
 import 'sprint_conflict_resolution_sheet.dart';
+import 'sprint_external_event_editor_sheet.dart';
 import 'sprint_project_archive_page.dart';
 import 'sprint_project_completion_page.dart';
 import 'sprint_project_management_page.dart';
@@ -895,15 +897,66 @@ class _ScheduleTimeline extends StatelessWidget {
     final entries = store.timelineFor(store.selectedDate);
     return RefreshIndicator(
       onRefresh: () async {
-        if (store.calendarState == SprintCalendarConnectionState.connected ||
-            store.calendarState == SprintCalendarConnectionState.failed) {
-          await store.syncGoogleCalendar();
+        if (store.calendarState != SprintCalendarConnectionState.connected &&
+            store.calendarState != SprintCalendarConnectionState.failed) {
+          return;
+        }
+        final trace = await DeveloperOperationTrace.start(
+          context: context,
+          title: 'Google 캘린더 동기화',
+          initialMessage: '연결된 Google Calendar 일정을 내려받고 있습니다.',
+          useCommonUi: true,
+          developerModeMessage:
+              '개발자 모드 ON: 캘린더 동기화 로그를 복사할 수 있습니다.',
+          standardModeMessage:
+              '개발자 모드 OFF: 캘린더 동기화 로그를 콘솔에 기록합니다.',
+        );
+        trace.log(
+          'profiles=${store.calendarProfiles.length} '
+          'selectedDate=${store.selectedDate.toIso8601String()}',
+          progress: 0.2,
+        );
+        try {
+          final reports = await store.syncGoogleCalendar();
+          for (final report in reports) {
+            trace.log(
+              'profile=${report.profileId} calendar=${report.calendarId} '
+              'mode=${report.mode.name} pages=${report.pageCount} '
+              'received=${report.receivedCount} inserted=${report.insertedCount} '
+              'updated=${report.updatedCount} deleted=${report.deletedCount} '
+              'unlinkedTasks=${report.unlinkedTaskCount} '
+              'tokenReset=${report.tokenReset} success=${report.success} '
+              'error=${report.error ?? ''}',
+              progress: 0.76,
+            );
+          }
+          final connected = store.calendarProfiles.where((profile) =>
+              store.calendarStateForProfile(profile.id) ==
+              SprintCalendarConnectionState.connected).length;
+          trace.log(
+            'connected=$connected externalEvents=${store.externalEvents.length}',
+            progress: 0.92,
+          );
+          await trace.succeed('Google Calendar 동기화를 완료했습니다.');
+        } catch (error, stackTrace) {
+          await trace.fail(
+            'Google Calendar 동기화에 실패했습니다.',
+            error: error,
+            stackTrace: stackTrace,
+          );
+          if (context.mounted && !trace.developerMode) {
+            sprintShowMessage(
+              context: context,
+              message: 'Google Calendar 동기화에 실패했습니다.',
+              danger: true,
+            );
+          }
         }
       },
       child: ListView.builder(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-        itemCount: entries.length + 2 + (entries.isEmpty ? 1 : 0),
+        itemCount: entries.length + 3 + (entries.isEmpty ? 1 : 0),
         itemBuilder: (context, index) {
           if (index == 0) {
             return Padding(
@@ -913,11 +966,17 @@ class _ScheduleTimeline extends StatelessWidget {
           }
           if (index == 1) {
             return Padding(
-              padding: const EdgeInsets.only(bottom: 14),
+              padding: const EdgeInsets.only(bottom: 10),
               child: _DateTaskAddButton(
                 store: store,
                 onPressed: onAddTask,
               ),
+            );
+          }
+          if (index == 2) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 14),
+              child: _ExternalCalendarEventAddButton(store: store),
             );
           }
           if (entries.isEmpty) {
@@ -926,11 +985,12 @@ class _ScheduleTimeline extends StatelessWidget {
               onAddTask: onAddTask,
             );
           }
-          final entry = entries[index - 2];
+          final entry = entries[index - 3];
           if (entry.isExternal) {
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: _ExternalEventCard(
+                store: store,
                 event: entry.externalEvent!,
                 calendarLabel: store.calendarProfileLabel(
                   entry.externalEvent!.calendarProfileId,
@@ -1403,17 +1463,125 @@ class _TaskDismissibleCard extends StatelessWidget {
   }
 }
 
+class _ExternalCalendarEventAddButton extends StatelessWidget {
+  const _ExternalCalendarEventAddButton({required this.store});
+
+  final SprintModeStore store;
+
+  @override
+  Widget build(BuildContext context) {
+    final profile = store.preferredEditableCalendarProfile();
+    if (profile == null) return const SizedBox.shrink();
+    final colors = Theme.of(context).colorScheme;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final duration =
+        reduceMotion ? Duration.zero : const Duration(milliseconds: 220);
+    return AnimatedContainer(
+      duration: duration,
+      curve: Curves.easeOutCubic,
+      decoration: BoxDecoration(
+        color: profile.canManageSharing
+            ? colors.secondaryContainer
+            : colors.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: profile.canManageSharing
+              ? colors.secondary
+              : colors.outlineVariant,
+        ),
+      ),
+      child: Material(
+        color: sprintTransparent(context),
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: () => showSprintExternalEventEditorSheet(
+            context: context,
+            store: store,
+            initialDate: store.selectedDate,
+            initialCalendarProfileId: profile.id,
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 56),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  AnimatedContainer(
+                    duration: duration,
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: profile.canManageSharing
+                          ? colors.secondary
+                          : colors.primary,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      profile.canManageSharing
+                          ? Icons.admin_panel_settings_rounded
+                          : Icons.event_available_rounded,
+                      color: profile.canManageSharing
+                          ? colors.onSecondary
+                          : colors.onPrimary,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${sprintFormatDate(store.selectedDate)}에 Google 일정 추가',
+                          style: const TextStyle(fontWeight: FontWeight.w900),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${profile.label} · ${profile.accessRoleLabel}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: colors.onSurfaceVariant,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right_rounded),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ExternalEventCard extends StatelessWidget {
   const _ExternalEventCard({
+    required this.store,
     required this.event,
     required this.calendarLabel,
   });
 
+  final SprintModeStore store;
   final SprintExternalEvent event;
   final String calendarLabel;
 
-  void _openDetails(BuildContext context) {
-    sprintShowBottomSheet<void>(
+  Future<void> _openDetails(BuildContext context) async {
+    final profile = store.calendarProfileById(event.calendarProfileId);
+    if (profile?.canEditEvents == true) {
+      await showSprintExternalEventEditorSheet(
+        context: context,
+        store: store,
+        event: event,
+      );
+      return;
+    }
+    await sprintShowBottomSheet<void>(
       context: context,
       showDragHandle: true,
       useSafeArea: true,
@@ -1429,7 +1597,7 @@ class _ExternalEventCard extends StatelessWidget {
                   const Icon(Icons.event_outlined),
                   const SizedBox(width: 8),
                   Text(
-                    '외부 일정',
+                    'Google 일정',
                     style: Theme.of(sheetContext)
                         .textTheme
                         .labelLarge
@@ -1444,6 +1612,10 @@ class _ExternalEventCard extends StatelessWidget {
                       fontWeight: FontWeight.w900,
                     ),
               ),
+              if (event.description.trim().isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text(event.description.trim()),
+              ],
               const SizedBox(height: 8),
               Text(sprintFormatDate(event.start)),
               const SizedBox(height: 4),
@@ -1453,7 +1625,9 @@ class _ExternalEventCard extends StatelessWidget {
                     : '${sprintFormatTime(event.start)}–${sprintFormatTime(event.end)}',
               ),
               const SizedBox(height: 14),
-              Text('$calendarLabel · 외부 일정 · 읽기 전용'),
+              Text(
+                '$calendarLabel · ${profile?.accessRoleLabel ?? '읽기 전용'}',
+              ),
               const SizedBox(height: 20),
               FilledButton.tonal(
                 onPressed: () => Navigator.of(sheetContext).pop(),
@@ -1469,10 +1643,18 @@ class _ExternalEventCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final profile = store.calendarProfileById(event.calendarProfileId);
+    final editable = profile?.canEditEvents == true;
+    final manageable = profile?.canManageSharing == true;
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final duration =
         reduceMotion ? Duration.zero : const Duration(milliseconds: 240);
+    final stateLabel = manageable
+        ? '변경 및 공유 관리'
+        : editable
+            ? '편집 가능'
+            : '읽기 전용';
     return Material(
       color: Colors.transparent,
       borderRadius: BorderRadius.circular(20),
@@ -1485,9 +1667,13 @@ class _ExternalEventCard extends StatelessWidget {
           constraints: const BoxConstraints(minHeight: 84),
           padding: const EdgeInsets.all(15),
           decoration: BoxDecoration(
-            color: colors.surfaceContainerLow,
+            color: manageable
+                ? colors.secondaryContainer
+                : colors.surfaceContainerLow,
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: colors.outlineVariant),
+            border: Border.all(
+              color: manageable ? colors.secondary : colors.outlineVariant,
+            ),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1498,10 +1684,18 @@ class _ExternalEventCard extends StatelessWidget {
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: colors.surfaceContainerHighest,
+                  color: editable
+                      ? colors.primaryContainer
+                      : colors.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: const Icon(Icons.event_outlined),
+                child: Icon(
+                  manageable
+                      ? Icons.admin_panel_settings_rounded
+                      : editable
+                          ? Icons.edit_calendar_rounded
+                          : Icons.event_outlined,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -1526,10 +1720,16 @@ class _ExternalEventCard extends StatelessWidget {
                             ),
                           ),
                         ),
-                        Icon(
-                          Icons.link_rounded,
-                          size: 18,
-                          color: colors.onSurfaceVariant,
+                        AnimatedSwitcher(
+                          duration: duration,
+                          child: Icon(
+                            editable
+                                ? Icons.edit_outlined
+                                : Icons.link_rounded,
+                            key: ValueKey<bool>(editable),
+                            size: 18,
+                            color: colors.onSurfaceVariant,
+                          ),
                         ),
                       ],
                     ),
@@ -1545,10 +1745,10 @@ class _ExternalEventCard extends StatelessWidget {
                       duration: duration,
                       child: Text(
                         event.allDay
-                            ? '종일 · 외부 일정 · 읽기 전용'
-                            : '${sprintFormatTime(event.start)}–${sprintFormatTime(event.end)} · 외부 일정 · 읽기 전용',
+                            ? '종일 · Google 일정 · $stateLabel'
+                            : '${sprintFormatTime(event.start)}–${sprintFormatTime(event.end)} · Google 일정 · $stateLabel',
                         key: ValueKey<String>(
-                          '${event.id}-${event.start.millisecondsSinceEpoch}',
+                          '${event.id}-${event.start.millisecondsSinceEpoch}-$stateLabel',
                         ),
                         style: TextStyle(
                           color: colors.onSurfaceVariant,

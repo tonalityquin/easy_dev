@@ -43,6 +43,11 @@ enum SprintGoogleSyncState {
   failed,
 }
 
+enum SprintCalendarSyncMode {
+  full,
+  incremental,
+}
+
 enum SprintPostponeType {
   tomorrow,
   nextWeek,
@@ -135,6 +140,13 @@ class SprintCalendarProfile {
     this.sortOrder = 0,
     this.lastSyncedAt,
     this.lastSyncError,
+    this.accessRole = 'unknown',
+    this.googlePrimary = false,
+    this.syncToken,
+    this.syncScopeStart,
+    this.syncScopeEnd,
+    this.lastFullSyncAt,
+    this.lastIncrementalSyncAt,
     DateTime? createdAt,
     DateTime? updatedAt,
   })  : createdAt = createdAt ?? DateTime.now(),
@@ -150,11 +162,70 @@ class SprintCalendarProfile {
   int sortOrder;
   DateTime? lastSyncedAt;
   String? lastSyncError;
+  String accessRole;
+  bool googlePrimary;
+  String? syncToken;
+  DateTime? syncScopeStart;
+  DateTime? syncScopeEnd;
+  DateTime? lastFullSyncAt;
+  DateTime? lastIncrementalSyncAt;
   DateTime createdAt;
   DateTime updatedAt;
 
   bool get isPrimary => role == SprintCalendarProfileRole.primary;
   bool get isSecondary => role == SprintCalendarProfileRole.secondary;
+  String get normalizedAccessRole => accessRole.trim().toLowerCase();
+  bool get canEditEvents =>
+      normalizedAccessRole == 'owner' || normalizedAccessRole == 'writer';
+  bool get canManageSharing => normalizedAccessRole == 'owner';
+  bool get isReadOnly => !canEditEvents;
+  bool get isPersonalCalendarSlot => googlePrimary;
+  bool get isCompanyCalendarSlot => !googlePrimary;
+  String get slotLabel => googlePrimary ? '내 캘린더' : '회사 캘린더';
+  String get accessRoleLabel {
+    switch (normalizedAccessRole) {
+      case 'owner':
+        return '변경 및 공유 관리';
+      case 'writer':
+        return '일정 변경';
+      case 'reader':
+        return '일정 보기';
+      case 'freebusyreader':
+        return '한가함/바쁨 보기';
+      default:
+        return '권한 확인 필요';
+    }
+  }
+}
+
+class SprintCalendarSyncReport {
+  const SprintCalendarSyncReport({
+    required this.profileId,
+    required this.calendarId,
+    required this.mode,
+    required this.pageCount,
+    required this.receivedCount,
+    required this.insertedCount,
+    required this.updatedCount,
+    required this.deletedCount,
+    required this.unlinkedTaskCount,
+    required this.tokenReset,
+    required this.success,
+    this.error,
+  });
+
+  final String profileId;
+  final String calendarId;
+  final SprintCalendarSyncMode mode;
+  final int pageCount;
+  final int receivedCount;
+  final int insertedCount;
+  final int updatedCount;
+  final int deletedCount;
+  final int unlinkedTaskCount;
+  final bool tokenReset;
+  final bool success;
+  final String? error;
 }
 
 class SprintWorkspaceScope {
@@ -369,12 +440,15 @@ class SprintExternalEvent {
     required this.googleEventId,
     required this.calendarProfileId,
     required this.title,
+    this.description = '',
     required this.start,
     required this.end,
     required this.allDay,
     required this.blocksTime,
     this.sourceUrl,
     this.colorId,
+    this.etag,
+    this.remoteUpdatedAt,
     this.managedBySprint = false,
     this.linkedTaskId,
     this.linkedProjectId,
@@ -384,12 +458,15 @@ class SprintExternalEvent {
   final String googleEventId;
   final String calendarProfileId;
   final String title;
+  final String description;
   final DateTime start;
   final DateTime end;
   final bool allDay;
   final bool blocksTime;
   final String? sourceUrl;
   final String? colorId;
+  final String? etag;
+  final DateTime? remoteUpdatedAt;
   final bool managedBySprint;
   final String? linkedTaskId;
   final String? linkedProjectId;

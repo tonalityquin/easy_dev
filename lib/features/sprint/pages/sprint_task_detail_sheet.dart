@@ -134,16 +134,13 @@ class _SprintTaskDetailSheetState extends State<_SprintTaskDetailSheet> {
     if (calendarProfileId != null &&
         !widget.store.isProfileAuthenticated(calendarProfileId)) {
       try {
-        await widget.store.authenticateCalendarProfile(
-          calendarProfileId,
-          forceAccountSelection: true,
-        );
+        await widget.store.authenticateCalendarProfile(calendarProfileId);
       } catch (_) {
         if (!mounted) return;
         setState(() => _saving = false);
         sprintShowMessage(
           context: context,
-          message: '선택한 캘린더의 Google 계정을 인증하지 못했습니다.',
+          message: '현재 앱 사용자 계정으로 선택한 캘린더 권한을 확인하지 못했습니다.',
           danger: true,
         );
         return;

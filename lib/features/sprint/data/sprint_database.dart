@@ -54,7 +54,7 @@ class SprintDatabase {
   static final SprintDatabase instance = SprintDatabase._();
 
   static const String _databaseName = 'sprint_mode.db';
-  static const int _databaseVersion = 12;
+  static const int _databaseVersion = 15;
   static const String _legacyMigrationKey = 'legacy_preferences_migrated';
   static const String _calendarProfilesMigrationKey =
       'calendar_profiles_migrated_v10';
@@ -122,6 +122,15 @@ class SprintDatabase {
     }
     if (oldVersion < 12) {
       await _migrateCalendarProfileRoles(db);
+    }
+    if (oldVersion < 13) {
+      await _ensureExternalCalendarEditColumns(db);
+    }
+    if (oldVersion < 14) {
+      await _ensureGooglePrimaryCalendarColumn(db);
+    }
+    if (oldVersion < 15) {
+      await _ensureCalendarIncrementalSyncColumns(db);
     }
     await _ensureSchema(db);
   }
@@ -264,6 +273,76 @@ class SprintDatabase {
     );
   }
 
+  Future<void> _ensureExternalCalendarEditColumns(Database db) async {
+    await _ensureColumn(
+      db,
+      table: 'sprint_calendar_profiles',
+      column: 'access_role',
+      definition: "TEXT NOT NULL DEFAULT 'unknown'",
+    );
+    await _ensureColumn(
+      db,
+      table: 'sprint_external_events',
+      column: 'description',
+      definition: "TEXT NOT NULL DEFAULT ''",
+    );
+    await _ensureColumn(
+      db,
+      table: 'sprint_external_events',
+      column: 'etag',
+      definition: 'TEXT',
+    );
+    await _ensureColumn(
+      db,
+      table: 'sprint_external_events',
+      column: 'remote_updated_at_ms',
+      definition: 'INTEGER',
+    );
+  }
+
+
+  Future<void> _ensureGooglePrimaryCalendarColumn(Database db) async {
+    await _ensureColumn(
+      db,
+      table: 'sprint_calendar_profiles',
+      column: 'google_primary',
+      definition: 'INTEGER NOT NULL DEFAULT 0',
+    );
+  }
+
+  Future<void> _ensureCalendarIncrementalSyncColumns(Database db) async {
+    await _ensureColumn(
+      db,
+      table: 'sprint_calendar_profiles',
+      column: 'sync_token',
+      definition: 'TEXT',
+    );
+    await _ensureColumn(
+      db,
+      table: 'sprint_calendar_profiles',
+      column: 'sync_scope_start_ms',
+      definition: 'INTEGER',
+    );
+    await _ensureColumn(
+      db,
+      table: 'sprint_calendar_profiles',
+      column: 'sync_scope_end_ms',
+      definition: 'INTEGER',
+    );
+    await _ensureColumn(
+      db,
+      table: 'sprint_calendar_profiles',
+      column: 'last_full_sync_at_ms',
+      definition: 'INTEGER',
+    );
+    await _ensureColumn(
+      db,
+      table: 'sprint_calendar_profiles',
+      column: 'last_incremental_sync_at_ms',
+      definition: 'INTEGER',
+    );
+  }
+
   Future<void> _migrateCalendarProfileRoles(Database db) async {
     await _ensureCalendarProfileRoleColumn(db);
     await db.update(
@@ -386,6 +465,13 @@ class SprintDatabase {
         calendar_id TEXT NOT NULL,
         label TEXT NOT NULL,
         profile_role TEXT NOT NULL DEFAULT 'secondary',
+        access_role TEXT NOT NULL DEFAULT 'unknown',
+        google_primary INTEGER NOT NULL DEFAULT 0,
+        sync_token TEXT,
+        sync_scope_start_ms INTEGER,
+        sync_scope_end_ms INTEGER,
+        last_full_sync_at_ms INTEGER,
+        last_incremental_sync_at_ms INTEGER,
         locked INTEGER NOT NULL DEFAULT 0,
         enabled INTEGER NOT NULL DEFAULT 1,
         sort_order INTEGER NOT NULL DEFAULT 0,
@@ -398,6 +484,8 @@ class SprintDatabase {
       )
     ''');
     await _ensureCalendarProfileRoleColumn(db);
+    await _ensureGooglePrimaryCalendarColumn(db);
+    await _ensureCalendarIncrementalSyncColumns(db);
     await _ensureColumn(
       db,
       table: 'sprint_tasks',
@@ -655,12 +743,15 @@ class SprintDatabase {
       CREATE TABLE IF NOT EXISTS sprint_external_events (
         id TEXT PRIMARY KEY,
         title TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
         start_at_ms INTEGER NOT NULL,
         end_at_ms INTEGER NOT NULL,
         all_day INTEGER NOT NULL DEFAULT 0,
         blocks_time INTEGER NOT NULL DEFAULT 1,
         source_url TEXT,
         color_id TEXT,
+        etag TEXT,
+        remote_updated_at_ms INTEGER,
         managed_by_sprint INTEGER NOT NULL DEFAULT 0,
         linked_task_id TEXT,
         linked_project_id TEXT,
@@ -753,6 +844,13 @@ class SprintDatabase {
         calendar_id TEXT NOT NULL,
         label TEXT NOT NULL,
         profile_role TEXT NOT NULL DEFAULT 'secondary',
+        access_role TEXT NOT NULL DEFAULT 'unknown',
+        google_primary INTEGER NOT NULL DEFAULT 0,
+        sync_token TEXT,
+        sync_scope_start_ms INTEGER,
+        sync_scope_end_ms INTEGER,
+        last_full_sync_at_ms INTEGER,
+        last_incremental_sync_at_ms INTEGER,
         locked INTEGER NOT NULL DEFAULT 0,
         enabled INTEGER NOT NULL DEFAULT 1,
         sort_order INTEGER NOT NULL DEFAULT 0,
@@ -801,6 +899,7 @@ class SprintDatabase {
     await _ensureCalendarSyncColumns(db);
     await _ensureTaskDescriptionColumn(db);
     await _ensureCalendarProfileStorage(db);
+    await _ensureExternalCalendarEditColumns(db);
     await db.execute('''
       CREATE INDEX IF NOT EXISTS idx_sprint_conflict_block_key
       ON sprint_conflict_resolutions(block_id, conflict_key)
@@ -1077,6 +1176,16 @@ class SprintDatabase {
             'calendar_id': profile.calendarId,
             'label': profile.label,
             'profile_role': profile.role.name,
+            'access_role': profile.accessRole,
+            'google_primary': profile.googlePrimary ? 1 : 0,
+            'sync_token': profile.syncToken,
+            'sync_scope_start_ms':
+                profile.syncScopeStart?.millisecondsSinceEpoch,
+            'sync_scope_end_ms': profile.syncScopeEnd?.millisecondsSinceEpoch,
+            'last_full_sync_at_ms':
+                profile.lastFullSyncAt?.millisecondsSinceEpoch,
+            'last_incremental_sync_at_ms':
+                profile.lastIncrementalSyncAt?.millisecondsSinceEpoch,
             'locked': profile.locked ? 1 : 0,
             'enabled': profile.enabled ? 1 : 0,
             'sort_order': profile.sortOrder,
@@ -1091,6 +1200,16 @@ class SprintDatabase {
             'calendar_id': profile.calendarId,
             'label': profile.label,
             'profile_role': profile.role.name,
+            'access_role': profile.accessRole,
+            'google_primary': profile.googlePrimary ? 1 : 0,
+            'sync_token': profile.syncToken,
+            'sync_scope_start_ms':
+                profile.syncScopeStart?.millisecondsSinceEpoch,
+            'sync_scope_end_ms': profile.syncScopeEnd?.millisecondsSinceEpoch,
+            'last_full_sync_at_ms':
+                profile.lastFullSyncAt?.millisecondsSinceEpoch,
+            'last_incremental_sync_at_ms':
+                profile.lastIncrementalSyncAt?.millisecondsSinceEpoch,
             'locked': profile.locked ? 1 : 0,
             'enabled': profile.enabled ? 1 : 0,
             'sort_order': profile.sortOrder,
@@ -1261,12 +1380,16 @@ class SprintDatabase {
           <String, Object?>{
             'id': event.id,
             'title': event.title,
+            'description': event.description,
             'start_at_ms': event.start.millisecondsSinceEpoch,
             'end_at_ms': event.end.millisecondsSinceEpoch,
             'all_day': event.allDay ? 1 : 0,
             'blocks_time': event.blocksTime ? 1 : 0,
             'source_url': event.sourceUrl,
             'color_id': event.colorId,
+            'etag': event.etag,
+            'remote_updated_at_ms':
+                event.remoteUpdatedAt?.millisecondsSinceEpoch,
             'managed_by_sprint': event.managedBySprint ? 1 : 0,
             'linked_task_id': event.linkedTaskId,
             'linked_project_id': event.linkedProjectId,
@@ -1540,6 +1663,13 @@ class SprintDatabase {
         (value) => value.name == row['profile_role']?.toString(),
         orElse: () => SprintCalendarProfileRole.secondary,
       ),
+      accessRole: row['access_role']?.toString() ?? 'unknown',
+      googlePrimary: _int(row['google_primary']) != 0,
+      syncToken: row['sync_token']?.toString(),
+      syncScopeStart: _date(row['sync_scope_start_ms']),
+      syncScopeEnd: _date(row['sync_scope_end_ms']),
+      lastFullSyncAt: _date(row['last_full_sync_at_ms']),
+      lastIncrementalSyncAt: _date(row['last_incremental_sync_at_ms']),
       locked: _int(row['locked']) != 0,
       enabled: _int(row['enabled']) != 0,
       sortOrder: _int(row['sort_order']),
@@ -1651,12 +1781,15 @@ class SprintDatabase {
       googleEventId: googleEventId,
       calendarProfileId: profileId,
       title: row['title'].toString(),
+      description: row['description']?.toString() ?? '',
       start: _date(row['start_at_ms'])!,
       end: _date(row['end_at_ms'])!,
       allDay: _int(row['all_day']) == 1,
       blocksTime: _int(row['blocks_time']) == 1,
       sourceUrl: row['source_url']?.toString(),
       colorId: row['color_id']?.toString(),
+      etag: row['etag']?.toString(),
+      remoteUpdatedAt: _date(row['remote_updated_at_ms']),
       managedBySprint: _int(row['managed_by_sprint']) == 1,
       linkedTaskId: row['linked_task_id']?.toString(),
       linkedProjectId: row['linked_project_id']?.toString(),

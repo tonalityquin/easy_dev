@@ -326,15 +326,12 @@ Future<SprintTask?> sprintCreateTaskFromComposer({
   if (calendarProfileId != null &&
       !store.isProfileAuthenticated(calendarProfileId)) {
     try {
-      await store.authenticateCalendarProfile(
-        calendarProfileId,
-        forceAccountSelection: true,
-      );
+      await store.authenticateCalendarProfile(calendarProfileId);
     } catch (_) {
       if (context.mounted) {
         sprintShowMessage(
           context: context,
-          message: '선택한 캘린더의 Google 계정을 인증하지 못했습니다.',
+          message: '현재 앱 사용자 계정으로 선택한 캘린더 권한을 확인하지 못했습니다.',
           danger: true,
         );
       }

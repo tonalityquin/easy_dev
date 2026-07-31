@@ -2,6 +2,79 @@ import 'package:googleapis/calendar/v3.dart' as gcal;
 import '../../../../app/auth/google_auth_session.dart';
 import '../../../dev/debug/debug_api_logger.dart';
 
+class GoogleCalendarAccessEntry {
+  const GoogleCalendarAccessEntry({
+    required this.id,
+    required this.summary,
+    required this.accessRole,
+    required this.primary,
+    required this.selected,
+    required this.hidden,
+    required this.backgroundColor,
+    required this.foregroundColor,
+    required this.timeZone,
+  });
+
+  final String id;
+  final String summary;
+  final String accessRole;
+  final bool primary;
+  final bool selected;
+  final bool hidden;
+  final String? backgroundColor;
+  final String? foregroundColor;
+  final String? timeZone;
+
+  String get normalizedAccessRole => accessRole.trim().toLowerCase();
+
+  bool get canEditEvents =>
+      normalizedAccessRole == 'owner' || normalizedAccessRole == 'writer';
+
+  bool get canManageSharing => normalizedAccessRole == 'owner';
+
+  String get displayName {
+    final normalizedSummary = summary.trim();
+    return normalizedSummary.isEmpty ? id : normalizedSummary;
+  }
+
+  String get accessLabel {
+    switch (normalizedAccessRole) {
+      case 'owner':
+        return '변경 및 공유 관리';
+      case 'writer':
+        return '일정 변경';
+      case 'reader':
+        return '일정 보기';
+      case 'freebusyreader':
+        return '한가함/바쁨 보기';
+      default:
+        return '권한 확인 필요';
+    }
+  }
+}
+
+
+class GoogleCalendarEventSyncResult {
+  const GoogleCalendarEventSyncResult({
+    required this.events,
+    required this.nextSyncToken,
+    required this.pageCount,
+    required this.incremental,
+  });
+
+  final List<gcal.Event> events;
+  final String? nextSyncToken;
+  final int pageCount;
+  final bool incremental;
+}
+
+class GoogleCalendarSyncTokenExpiredException implements Exception {
+  const GoogleCalendarSyncTokenExpiredException();
+
+  @override
+  String toString() => 'google_calendar_sync_token_expired';
+}
+
 class GoogleCalendarService {
   static const int _allDayReminderMinutes = 7 * 60;
   static const String _tCal = 'calendar';
@@ -150,6 +223,76 @@ class GoogleCalendarService {
     GoogleAuthSession.instance.invalidateClient(accountEmail: accountEmail);
   }
 
+
+  Future<List<GoogleCalendarAccessEntry>> listAccessibleCalendars({
+    required String accountEmail,
+  }) async {
+    try {
+      return await _runWithAuthRetry<List<GoogleCalendarAccessEntry>>(
+        accountEmail: accountEmail,
+        operation: 'listAccessibleCalendars',
+        request: (api) async {
+          final result = <GoogleCalendarAccessEntry>[];
+          String? pageToken;
+          do {
+            final response = await api.calendarList.list(
+              maxResults: 250,
+              pageToken: pageToken,
+              showHidden: true,
+            );
+            for (final entry
+                in response.items ?? const <gcal.CalendarListEntry>[]) {
+              if (entry.deleted == true) continue;
+              final id = entry.id?.trim() ?? '';
+              if (id.isEmpty) continue;
+              result.add(
+                GoogleCalendarAccessEntry(
+                  id: id,
+                  summary: (entry.summaryOverride?.trim().isNotEmpty == true
+                          ? entry.summaryOverride
+                          : entry.summary)
+                      ?.trim() ??
+                      '',
+                  accessRole: entry.accessRole?.trim().toLowerCase() ??
+                      'unknown',
+                  primary: entry.primary == true,
+                  selected: entry.selected == true,
+                  hidden: entry.hidden == true,
+                  backgroundColor: entry.backgroundColor?.trim(),
+                  foregroundColor: entry.foregroundColor?.trim(),
+                  timeZone: entry.timeZone?.trim(),
+                ),
+              );
+            }
+            final next = response.nextPageToken?.trim();
+            pageToken = next?.isNotEmpty == true ? next : null;
+          } while (pageToken != null);
+          result.sort((a, b) {
+            if (a.primary != b.primary) return a.primary ? -1 : 1;
+            if (a.canEditEvents != b.canEditEvents) {
+              return a.canEditEvents ? -1 : 1;
+            }
+            return a.displayName.toLowerCase().compareTo(
+                  b.displayName.toLowerCase(),
+                );
+          });
+          return result;
+        },
+      );
+    } catch (e) {
+      await _logApiError(
+        tag: 'GoogleCalendarService.listAccessibleCalendars',
+        message: '접근 가능한 Google Calendar 목록 조회 실패',
+        error: e,
+        extra: <String, dynamic>{
+          'accountEmail': accountEmail.trim().toLowerCase(),
+        },
+        tags: const <String>[_tCal, _tCalService, _tCalList],
+      );
+      rethrow;
+    }
+  }
+
   Future<void> verifyCalendarAccess({
     required String accountEmail,
     required String calendarId,
@@ -186,14 +329,14 @@ class GoogleCalendarService {
     }
   }
 
-  Future<void> verifyCalendarWriteAccess({
+  Future<String> calendarAccessRole({
     required String accountEmail,
     required String calendarId,
   }) async {
     try {
       final accessRole = await _runWithAuthRetry<String?>(
         accountEmail: accountEmail,
-        operation: 'verifyCalendarWriteAccess',
+        operation: 'calendarAccessRole',
         request: (api) async {
           gcal.CalendarListEntry? entry;
           if (calendarId.trim().toLowerCase() == 'primary') {
@@ -214,9 +357,35 @@ class GoogleCalendarService {
           return entry?.accessRole?.trim().toLowerCase();
         },
       );
+      return accessRole?.isNotEmpty == true ? accessRole! : 'unknown';
+    } catch (e) {
+      await _logApiError(
+        tag: 'GoogleCalendarService.calendarAccessRole',
+        message: 'Calendar 권한 조회 실패',
+        error: e,
+        extra: <String, dynamic>{
+          'accountEmail': accountEmail.trim().toLowerCase(),
+          'calendarId': calendarId,
+        },
+        tags: const <String>[_tCal, _tCalService, _tCalVerify],
+      );
+      rethrow;
+    }
+  }
+
+  Future<String> verifyCalendarWriteAccess({
+    required String accountEmail,
+    required String calendarId,
+  }) async {
+    try {
+      final accessRole = await calendarAccessRole(
+        accountEmail: accountEmail,
+        calendarId: calendarId,
+      );
       if (accessRole != 'owner' && accessRole != 'writer') {
         throw StateError('calendar_write_access_required');
       }
+      return accessRole;
     } catch (e) {
       await _logApiError(
         tag: 'GoogleCalendarService.verifyCalendarWriteAccess',
@@ -239,37 +408,123 @@ class GoogleCalendarService {
     DateTime? timeMax,
     int maxResults = 100,
   }) async {
+    final result = await listEventsSnapshot(
+      accountEmail: accountEmail,
+      calendarId: calendarId,
+      timeMin: timeMin,
+      timeMax: timeMax,
+      maxResults: maxResults,
+    );
+    return result.events;
+  }
+
+  Future<GoogleCalendarEventSyncResult> listEventsSnapshot({
+    String? accountEmail,
+    required String calendarId,
+    DateTime? timeMin,
+    DateTime? timeMax,
+    int maxResults = 500,
+  }) async {
     final tMin =
         (timeMin ?? DateTime.now().subtract(const Duration(days: 30))).toUtc();
     final tMax =
         (timeMax ?? DateTime.now().add(const Duration(days: 60))).toUtc();
+    return _listEventPages(
+      accountEmail: accountEmail,
+      calendarId: calendarId,
+      timeMin: tMin,
+      timeMax: tMax,
+      maxResults: maxResults,
+    );
+  }
 
+  Future<GoogleCalendarEventSyncResult> listEventChanges({
+    String? accountEmail,
+    required String calendarId,
+    required String syncToken,
+    int maxResults = 500,
+  }) async {
+    final normalizedToken = syncToken.trim();
+    if (normalizedToken.isEmpty) {
+      throw ArgumentError.value(syncToken, 'syncToken');
+    }
+    return _listEventPages(
+      accountEmail: accountEmail,
+      calendarId: calendarId,
+      syncToken: normalizedToken,
+      maxResults: maxResults,
+    );
+  }
+
+  Future<GoogleCalendarEventSyncResult> _listEventPages({
+    String? accountEmail,
+    required String calendarId,
+    DateTime? timeMin,
+    DateTime? timeMax,
+    String? syncToken,
+    required int maxResults,
+  }) async {
+    final incremental = syncToken?.isNotEmpty == true;
     try {
-      return await _runWithAuthRetry<List<gcal.Event>>(
+      return await _runWithAuthRetry<GoogleCalendarEventSyncResult>(
         accountEmail: accountEmail,
-        operation: 'listEvents',
+        operation: incremental ? 'listEventChanges' : 'listEventsSnapshot',
         request: (api) async {
-          final resp = await api.events.list(
-            calendarId,
-            timeMin: tMin,
-            timeMax: tMax,
-            singleEvents: true,
-            orderBy: 'startTime',
-            maxResults: maxResults,
+          final events = <gcal.Event>[];
+          String? pageToken;
+          String? nextSyncToken;
+          var pageCount = 0;
+          do {
+            gcal.Events response;
+            try {
+              response = await api.events.list(
+                calendarId,
+                timeMin: incremental ? null : timeMin,
+                timeMax: incremental ? null : timeMax,
+                singleEvents: true,
+                orderBy: incremental ? null : 'startTime',
+                maxResults: maxResults,
+                pageToken: pageToken,
+                syncToken: incremental ? syncToken : null,
+              );
+            } on gcal.DetailedApiRequestError catch (error) {
+              if (incremental && error.status == 410) {
+                throw const GoogleCalendarSyncTokenExpiredException();
+              }
+              rethrow;
+            }
+            pageCount += 1;
+            events.addAll(response.items ?? const <gcal.Event>[]);
+            pageToken = response.nextPageToken?.trim();
+            if (pageToken?.isEmpty == true) pageToken = null;
+            final candidateToken = response.nextSyncToken?.trim();
+            if (candidateToken?.isNotEmpty == true) {
+              nextSyncToken = candidateToken;
+            }
+          } while (pageToken != null);
+          return GoogleCalendarEventSyncResult(
+            events: events,
+            nextSyncToken: nextSyncToken,
+            pageCount: pageCount,
+            incremental: incremental,
           );
-          return resp.items ?? <gcal.Event>[];
         },
       );
     } catch (e) {
       await _logApiError(
-        tag: 'GoogleCalendarService.listEvents',
-        message: 'Calendar events.list 실패',
+        tag: incremental
+            ? 'GoogleCalendarService.listEventChanges'
+            : 'GoogleCalendarService.listEventsSnapshot',
+        message: incremental
+            ? 'Calendar 증분 events.list 실패'
+            : 'Calendar 전체 events.list 실패',
         error: e,
         extra: <String, dynamic>{
           'accountEmail': accountEmail?.trim().toLowerCase(),
           'calendarId': calendarId,
-          'timeMinUtc': tMin.toIso8601String(),
-          'timeMaxUtc': tMax.toIso8601String(),
+          'incremental': incremental,
+          'timeMinUtc': timeMin?.toIso8601String(),
+          'timeMaxUtc': timeMax?.toIso8601String(),
           'maxResults': maxResults,
         },
         tags: const <String>[_tCal, _tCalService, _tCalList],
@@ -369,6 +624,7 @@ class GoogleCalendarService {
     bool? allDay,
     String? colorId,
     Map<String, String>? privateProperties,
+    String? expectedEtag,
   }) async {
     gcal.Event buildPatch() {
       final patch = gcal.Event();
@@ -403,7 +659,14 @@ class GoogleCalendarService {
       return await _runWithAuthRetry<gcal.Event>(
         accountEmail: accountEmail,
         operation: 'updateEvent',
-        request: (api) {
+        request: (api) async {
+          final normalizedEtag = expectedEtag?.trim();
+          if (normalizedEtag?.isNotEmpty == true) {
+            final current = await api.events.get(calendarId, eventId);
+            if (current.etag?.trim() != normalizedEtag) {
+              throw StateError('calendar_event_conflict');
+            }
+          }
           return api.events.patch(buildPatch(), calendarId, eventId);
         },
       );
@@ -422,6 +685,7 @@ class GoogleCalendarService {
           'allDay': allDay,
           'colorIdProvided': colorId != null,
           'privatePropertyCount': privateProperties?.length ?? 0,
+          'expectedEtag': expectedEtag,
         },
         tags: const <String>[_tCal, _tCalService, _tCalUpdate],
       );
@@ -443,12 +707,20 @@ class GoogleCalendarService {
     String? accountEmail,
     required String calendarId,
     required String eventId,
+    String? expectedEtag,
   }) async {
     try {
       await _runWithAuthRetry<void>(
         accountEmail: accountEmail,
         operation: 'deleteEvent',
         request: (api) async {
+          final normalizedEtag = expectedEtag?.trim();
+          if (normalizedEtag?.isNotEmpty == true) {
+            final current = await api.events.get(calendarId, eventId);
+            if (current.etag?.trim() != normalizedEtag) {
+              throw StateError('calendar_event_conflict');
+            }
+          }
           await api.events.delete(calendarId, eventId);
         },
       );
@@ -461,6 +733,7 @@ class GoogleCalendarService {
           'accountEmail': accountEmail?.trim().toLowerCase(),
           'calendarId': calendarId,
           'eventId': eventId,
+          'expectedEtag': expectedEtag,
         },
         tags: const <String>[_tCal, _tCalService, _tCalDelete],
       );

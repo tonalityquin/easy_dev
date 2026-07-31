@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/auth/google_auth_session.dart';
+import '../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../shared/google_calendar/google_event_colors.dart';
+import '../../headquarter/widgets/calendar/google_calendar_service.dart';
 import '../application/sprint_mode_store.dart';
 import '../domain/sprint_models.dart';
 import 'sprint_project_form_sheet.dart';
@@ -1343,92 +1345,187 @@ class _SprintAccountSheet extends StatefulWidget {
 
 class _SprintAccountSheetState extends State<_SprintAccountSheet> {
   String? _busyProfileId;
-  bool _addingCurrentAccount = false;
-  bool _addingOtherAccount = false;
+  bool _discoveringCalendars = false;
 
   bool get _busy =>
-      _addingCurrentAccount ||
-      _addingOtherAccount ||
+      _discoveringCalendars ||
       _busyProfileId != null ||
       widget.store.accountBusy;
 
   String _errorMessage(Object error) {
     if (error is GoogleAccountMismatchException) {
-      return '선택한 Google 계정이 저장된 계정과 일치하지 않습니다.';
+      return '현재 앱 사용자 계정이 저장된 Calendar 연결 계정과 일치하지 않습니다.';
     }
     if (error is StateError) {
-      if (error.message == 'calendar_profile_in_use') {
-        return '연결된 스프린트 업무가 있어 이 캘린더를 삭제할 수 없습니다.';
-      }
       if (error.message == 'interactive_google_auth_not_supported') {
-        return '이 환경에서는 Google 계정 선택을 시작할 수 없습니다.';
+        return '이 환경에서는 앱 사용자 Google 계정 인증을 시작할 수 없습니다.';
+      }
+      if (error.message == 'calendar_profile_account_mismatch') {
+        return '현재 앱 사용자 계정과 이 캘린더를 연결한 계정이 다릅니다. 기존 연결을 제거한 뒤 현재 계정의 공유 캘린더 목록에서 다시 연결하세요.';
+      }
+      if (error.message == 'calendar_profile_account_missing') {
+        return '이전 방식으로 저장된 캘린더 연결입니다. 기존 연결을 제거한 뒤 현재 계정의 공유 캘린더 목록에서 다시 연결하세요.';
       }
       if (error.message == 'calendar_profile_not_found') {
         return '저장된 캘린더 정보를 찾지 못했습니다.';
       }
       if (error.message == 'calendar_profile_duplicate') {
-        return '같은 Google 계정과 Calendar ID 조합이 이미 등록돼 있습니다.';
+        return '현재 앱 사용자 계정에 같은 Calendar가 이미 등록돼 있습니다.';
+      }
+      if (error.message == 'company_calendar_slot_occupied') {
+        return '회사 캘린더는 1개만 연결할 수 있습니다. 기존 회사 캘린더를 삭제한 뒤 다른 캘린더를 연결하세요.';
+      }
+      if (error.message == 'personal_calendar_slot_fixed') {
+        return '내 캘린더는 현재 OAuth 로그인 계정의 기본 캘린더로 유지됩니다.';
+      }
+      if (error.message == 'google_primary_calendar_not_found') {
+        return '현재 OAuth 로그인 계정의 기본 Google 캘린더를 찾지 못했습니다.';
       }
       if (error.message == 'calendar_write_access_required') {
-        return '선택한 Google 계정에 이 캘린더의 일정 변경 권한이 없습니다.';
+        return '현재 앱 사용자 계정에 일정 변경 또는 변경 및 공유 관리 권한이 없습니다.';
       }
       if (error.message == 'account_operation_in_progress') {
-        return '다른 Google 계정 작업이 진행 중입니다.';
+        return 'Google Calendar 연결 작업이 진행 중입니다.';
       }
     }
     final message = error.toString().toLowerCase();
     if (message.contains('status: 403') || message.contains('status 403')) {
-      return '선택한 Google 계정에 이 캘린더의 읽기 또는 쓰기 권한이 없습니다.';
+      return '현재 앱 사용자 계정에 이 캘린더의 읽기 또는 쓰기 권한이 없습니다.';
     }
     if (message.contains('status: 404') || message.contains('status 404')) {
-      return '캘린더를 찾지 못했거나 선택한 Google 계정으로 접근할 수 없습니다.';
+      return '캘린더를 찾지 못했거나 현재 앱 사용자 계정으로 접근할 수 없습니다.';
     }
     return 'Google 캘린더 작업을 완료하지 못했습니다.';
   }
 
-  Future<void> _addProfile({
-    required bool forceAccountSelection,
-  }) async {
+  Future<void> _addProfile() async {
     if (_busy) return;
-    final draft = await _showSprintCalendarProfileEditor(context);
-    if (draft == null || !mounted) return;
-    setState(() {
-      if (forceAccountSelection) {
-        _addingOtherAccount = true;
-      } else {
-        _addingCurrentAccount = true;
-      }
-    });
-    try {
-      final firstProfile = widget.store.calendarProfiles.isEmpty;
-      await widget.store.addGoogleCalendarProfile(
-        label: draft.label,
-        calendarId: draft.calendarId,
-        locked: draft.locked,
-        forceAccountSelection: forceAccountSelection,
-        makeActive: firstProfile,
+    if (widget.store.hasCompanyCalendarProfile) {
+      final trace = await DeveloperOperationTrace.start(
+        context: context,
+        title: '회사 Google 캘린더 연결',
+        initialMessage: '회사 캘린더 슬롯 상태를 확인하고 있습니다.',
+        useCommonUi: true,
+        developerModeMessage:
+            '개발자 모드 ON: 회사 캘린더 슬롯 차단 로그를 복사할 수 있습니다.',
+        standardModeMessage:
+            '개발자 모드 OFF: 회사 캘린더 슬롯 차단 로그를 콘솔에 기록합니다.',
       );
-      if (!mounted) return;
+      trace.log(
+        'companyProfile=${widget.store.companyCalendarProfile?.id} '
+        'calendar=${widget.store.companyCalendarProfile?.calendarId}',
+        progress: 0.6,
+      );
+      await trace.fail(
+        '회사 캘린더는 1개만 연결할 수 있습니다. 기존 회사 캘린더를 삭제한 뒤 다시 연결하세요.',
+      );
+      if (!mounted || trace.developerMode) return;
       sprintShowMessage(
         context: context,
-        message: firstProfile
-            ? 'Google 캘린더를 연결하고 기본 캘린더로 설정했습니다.'
-            : 'Google 캘린더를 추가했습니다.',
+        message: '기존 회사 캘린더를 삭제한 뒤 다른 회사 캘린더를 연결할 수 있습니다.',
+        danger: true,
       );
-    } catch (error) {
+      return;
+    }
+    setState(() => _discoveringCalendars = true);
+    try {
+      final calendars = await widget.store.discoverAccessibleGoogleCalendars();
       if (!mounted) return;
+      if (widget.store.hasCompanyCalendarProfile) {
+        throw StateError('company_calendar_slot_occupied');
+      }
+      final connectedIds = widget.store.calendarProfiles
+          .map((profile) => profile.calendarId.trim().toLowerCase())
+          .toSet();
+      final selected = await _showSprintCalendarAccessPicker(
+        context: context,
+        accountEmail:
+            GoogleAuthSession.instance.currentIdentity?.email.trim() ?? '',
+        calendars: calendars,
+        connectedCalendarIds: connectedIds,
+      );
+      if (selected == null || !mounted) return;
+      final trace = await DeveloperOperationTrace.start(
+        context: context,
+        title: '공유 Google 캘린더 연결',
+        initialMessage: '앱 사용자 계정에 공유된 캘린더 권한을 확인하고 있습니다.',
+        useCommonUi: true,
+        developerModeMessage:
+            '개발자 모드 ON: 공유 캘린더 연결 로그를 복사할 수 있습니다.',
+        standardModeMessage:
+            '개발자 모드 OFF: 공유 캘린더 연결 로그를 콘솔에 기록합니다.',
+      );
+      trace.log(
+        'calendar=${selected.id} name=${selected.displayName} '
+        'accessRole=${selected.accessRole} primary=${selected.primary}',
+        progress: 0.22,
+      );
+      try {
+        trace.log(
+          '현재 앱 사용자 계정으로 Calendar 접근 권한을 재확인하고 있습니다.',
+          progress: 0.42,
+        );
+        final profile = await widget.store.addGoogleCalendarProfile(
+          label: selected.displayName,
+          calendarId: selected.id,
+          locked: true,
+          makeActive: false,
+        );
+        trace.log(
+          'profile=${profile.id} accessRole=${profile.accessRole} '
+          'canEdit=${profile.canEditEvents} canManageSharing=${profile.canManageSharing}',
+          progress: 0.9,
+        );
+        await trace.succeed(
+          profile.canManageSharing
+              ? '변경 및 공유 관리 권한의 공유 캘린더를 연결했습니다.'
+              : '일정 변경 권한의 공유 캘린더를 연결했습니다.',
+        );
+        if (!mounted) return;
+        sprintShowMessage(
+          context: context,
+          message: '회사 캘린더를 연결했습니다.',
+        );
+      } catch (error, stackTrace) {
+        await trace.fail(
+          _errorMessage(error),
+          error: error,
+          stackTrace: stackTrace,
+        );
+        if (!mounted) return;
+        if (!trace.developerMode) {
+          sprintShowMessage(
+            context: context,
+            message: _errorMessage(error),
+            danger: true,
+          );
+        }
+      }
+    } catch (error, stackTrace) {
+      if (!mounted) return;
+      final trace = await DeveloperOperationTrace.start(
+        context: context,
+        title: '공유 Google 캘린더 검색',
+        initialMessage: '현재 앱 사용자 계정의 공유 캘린더 목록을 불러오지 못했습니다.',
+        useCommonUi: true,
+        developerModeMessage:
+            '개발자 모드 ON: 공유 캘린더 검색 오류 로그를 복사할 수 있습니다.',
+        standardModeMessage:
+            '개발자 모드 OFF: 공유 캘린더 검색 오류를 콘솔에 기록합니다.',
+      );
+      await trace.fail(
+        _errorMessage(error),
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (!mounted || trace.developerMode) return;
       sprintShowMessage(
         context: context,
         message: _errorMessage(error),
         danger: true,
       );
     } finally {
-      if (mounted) {
-        setState(() {
-          _addingCurrentAccount = false;
-          _addingOtherAccount = false;
-        });
-      }
+      if (mounted) setState(() => _discoveringCalendars = false);
     }
   }
 
@@ -1457,11 +1554,37 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
   Future<void> _syncProfile(SprintCalendarProfile profile) async {
     if (_busy) return;
     setState(() => _busyProfileId = profile.id);
+    final trace = await DeveloperOperationTrace.start(
+      context: context,
+      title: 'Google 캘린더 동기화',
+      initialMessage: '${profile.label} 캘린더 일정을 내려받고 있습니다.',
+      useCommonUi: true,
+      developerModeMessage:
+          '개발자 모드 ON: 캘린더 동기화 로그를 복사할 수 있습니다.',
+      standardModeMessage:
+          '개발자 모드 OFF: 캘린더 동기화 로그를 콘솔에 기록합니다.',
+    );
+    trace.log(
+      'profile=${profile.id} calendar=${profile.calendarId} '
+      'accessRole=${profile.accessRole}',
+      progress: 0.22,
+    );
     try {
       await widget.store.syncCalendarProfile(profile.id);
-      if (!mounted) return;
       final state = widget.store.calendarStateForProfile(profile.id);
       final success = state == SprintCalendarConnectionState.connected;
+      final refreshed = widget.store.calendarProfileById(profile.id);
+      trace.log(
+        'state=${state.name} accessRole=${refreshed?.accessRole ?? ''} '
+        'externalEvents=${widget.store.externalEvents.where((event) => event.calendarProfileId == profile.id).length}',
+        progress: 0.92,
+      );
+      if (success) {
+        await trace.succeed('${profile.label} 캘린더 동기화를 완료했습니다.');
+      } else {
+        await trace.fail('${profile.label} 캘린더 동기화를 완료하지 못했습니다.');
+      }
+      if (!mounted) return;
       sprintShowMessage(
         context: context,
         message: success
@@ -1469,13 +1592,20 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
             : '${profile.label} 캘린더 동기화를 완료하지 못했습니다.',
         danger: !success,
       );
-    } catch (error) {
-      if (!mounted) return;
-      sprintShowMessage(
-        context: context,
-        message: _errorMessage(error),
-        danger: true,
+    } catch (error, stackTrace) {
+      await trace.fail(
+        _errorMessage(error),
+        error: error,
+        stackTrace: stackTrace,
       );
+      if (!mounted) return;
+      if (!trace.developerMode) {
+        sprintShowMessage(
+          context: context,
+          message: _errorMessage(error),
+          danger: true,
+        );
+      }
     } finally {
       if (mounted) setState(() => _busyProfileId = null);
     }
@@ -1484,27 +1614,54 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
   Future<void> _authenticateProfile(SprintCalendarProfile profile) async {
     if (_busy) return;
     setState(() => _busyProfileId = profile.id);
+    final trace = await DeveloperOperationTrace.start(
+      context: context,
+      title: 'Google 캘린더 재인증',
+      initialMessage: '${profile.label} 캘린더의 앱 사용자 계정 권한을 갱신하고 있습니다.',
+      useCommonUi: true,
+      developerModeMessage:
+          '개발자 모드 ON: Calendar 권한 갱신 로그를 복사할 수 있습니다.',
+      standardModeMessage:
+          '개발자 모드 OFF: Calendar 권한 갱신 로그를 콘솔에 기록합니다.',
+    );
+    trace.log(
+      'profile=${profile.id} calendar=${profile.calendarId} '
+      'account=${widget.store.accountForProfile(profile.id)?.email ?? ''}',
+      progress: 0.2,
+    );
     try {
-      await widget.store.authenticateCalendarProfile(
-        profile.id,
-        forceAccountSelection: true,
-      );
+      await widget.store.authenticateCalendarProfile(profile.id);
+      trace.log('권한 확인을 완료하고 일정을 내려받고 있습니다.', progress: 0.58);
       await widget.store.syncCalendarProfile(
         profile.id,
         interactive: false,
       );
+      final refreshed = widget.store.calendarProfileById(profile.id);
+      trace.log(
+        'accessRole=${refreshed?.accessRole ?? ''} '
+        'canManageSharing=${refreshed?.canManageSharing ?? false}',
+        progress: 0.94,
+      );
+      await trace.succeed('${profile.label} Calendar 권한 갱신을 완료했습니다.');
       if (!mounted) return;
       sprintShowMessage(
         context: context,
-        message: '${profile.label} Google 계정을 인증하고 동기화했습니다.',
+        message: '${profile.label} Calendar 권한을 갱신하고 동기화했습니다.',
       );
-    } catch (error) {
+    } catch (error, stackTrace) {
+      await trace.fail(
+        _errorMessage(error),
+        error: error,
+        stackTrace: stackTrace,
+      );
       if (!mounted) return;
-      sprintShowMessage(
-        context: context,
-        message: _errorMessage(error),
-        danger: true,
-      );
+      if (!trace.developerMode) {
+        sprintShowMessage(
+          context: context,
+          message: _errorMessage(error),
+          danger: true,
+        );
+      }
     } finally {
       if (mounted) setState(() => _busyProfileId = null);
     }
@@ -1515,7 +1672,6 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
     final draft = await _showSprintCalendarProfileEditor(
       context,
       profile: profile,
-      calendarIdReadOnly: true,
     );
     if (draft == null || !mounted) return;
     setState(() => _busyProfileId = profile.id);
@@ -1523,7 +1679,7 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
       await widget.store.updateCalendarProfile(
         profileId: profile.id,
         label: draft.label,
-        locked: draft.locked,
+        locked: profile.locked,
       );
       if (!mounted) return;
       sprintShowMessage(
@@ -1544,6 +1700,14 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
 
   Future<void> _removeProfile(SprintCalendarProfile profile) async {
     if (_busy) return;
+    if (profile.googlePrimary) {
+      sprintShowMessage(
+        context: context,
+        message: '내 캘린더는 현재 OAuth 로그인 계정의 기본 캘린더로 유지됩니다.',
+        danger: true,
+      );
+      return;
+    }
     final colors = Theme.of(context).colorScheme;
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
@@ -1573,7 +1737,7 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
                   );
                 },
                 child: Text(
-                  '${profile.label} 캘린더를 저장 목록에서 삭제할까요? 다른 캘린더는 유지됩니다.',
+                  '${profile.label} 회사 캘린더 연결을 삭제할까요? Google Calendar 원본 일정은 삭제되지 않으며, 연결된 Sprint 업무는 Google 연결만 해제됩니다.',
                 ),
               ),
               actions: [
@@ -1597,15 +1761,39 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
         false;
     if (!confirmed || !mounted) return;
     setState(() => _busyProfileId = profile.id);
+    final trace = await DeveloperOperationTrace.start(
+      context: context,
+      title: '회사 Google 캘린더 연결 삭제',
+      initialMessage: '회사 캘린더 연결을 안전하게 해제하고 있습니다.',
+      useCommonUi: true,
+      developerModeMessage:
+          '개발자 모드 ON: 회사 캘린더 연결 삭제 로그를 복사할 수 있습니다.',
+      standardModeMessage:
+          '개발자 모드 OFF: 회사 캘린더 연결 삭제 로그를 콘솔에 기록합니다.',
+    );
+    trace.log(
+      'profile=${profile.id} calendar=${profile.calendarId} '
+      'slot=${profile.slotLabel}',
+      progress: 0.25,
+    );
     try {
       await widget.store.removeCalendarProfile(profile.id);
+      trace.log('회사 캘린더 슬롯이 비워졌습니다.', progress: 0.9);
+      await trace.succeed('다른 공유 캘린더를 회사 캘린더로 연결할 수 있습니다.');
       if (!mounted) return;
-      sprintShowMessage(
-        context: context,
-        message: '저장된 캘린더를 삭제했습니다.',
+      if (!trace.developerMode) {
+        sprintShowMessage(
+          context: context,
+          message: '회사 캘린더 연결을 삭제했습니다.',
+        );
+      }
+    } catch (error, stackTrace) {
+      await trace.fail(
+        _errorMessage(error),
+        error: error,
+        stackTrace: stackTrace,
       );
-    } catch (error) {
-      if (!mounted) return;
+      if (!mounted || trace.developerMode) return;
       sprintShowMessage(
         context: context,
         message: _errorMessage(error),
@@ -1619,11 +1807,51 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
   Future<void> _syncAll() async {
     if (_busy || widget.store.calendarProfiles.isEmpty) return;
     setState(() => _busyProfileId = 'all');
+    final trace = await DeveloperOperationTrace.start(
+      context: context,
+      title: '전체 Google 캘린더 동기화',
+      initialMessage: '연결된 Google Calendar 일정을 모두 내려받고 있습니다.',
+      useCommonUi: true,
+      developerModeMessage:
+          '개발자 모드 ON: 전체 캘린더 동기화 로그를 복사할 수 있습니다.',
+      standardModeMessage:
+          '개발자 모드 OFF: 전체 캘린더 동기화 로그를 콘솔에 기록합니다.',
+    );
+    trace.log(
+      'profiles=${widget.store.calendarProfiles.length} '
+      'selectedDate=${widget.store.selectedDate.toIso8601String()}',
+      progress: 0.18,
+    );
     try {
-      await widget.store.syncGoogleCalendar();
-      if (!mounted) return;
+      final reports = await widget.store.syncGoogleCalendar();
+      for (final report in reports) {
+        trace.log(
+          'profile=${report.profileId} calendar=${report.calendarId} '
+          'mode=${report.mode.name} pages=${report.pageCount} '
+          'received=${report.receivedCount} inserted=${report.insertedCount} '
+          'updated=${report.updatedCount} deleted=${report.deletedCount} '
+          'unlinkedTasks=${report.unlinkedTaskCount} '
+          'tokenReset=${report.tokenReset} success=${report.success} '
+          'error=${report.error ?? ''}',
+          progress: 0.76,
+        );
+      }
       final success = widget.store.calendarState ==
           SprintCalendarConnectionState.connected;
+      final ownerProfiles = widget.store.calendarProfiles
+          .where((profile) => profile.canManageSharing)
+          .length;
+      trace.log(
+        'state=${widget.store.calendarState.name} ownerProfiles=$ownerProfiles '
+        'externalEvents=${widget.store.externalEvents.length}',
+        progress: 0.92,
+      );
+      if (success) {
+        await trace.succeed('연결된 Google 캘린더 동기화를 완료했습니다.');
+      } else {
+        await trace.fail('일부 Google 캘린더의 동기화를 완료하지 못했습니다.');
+      }
+      if (!mounted) return;
       sprintShowMessage(
         context: context,
         message: success
@@ -1631,13 +1859,20 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
             : '일부 Google 캘린더에 재인증 또는 동기화 확인이 필요합니다.',
         danger: !success,
       );
-    } catch (error) {
-      if (!mounted) return;
-      sprintShowMessage(
-        context: context,
-        message: _errorMessage(error),
-        danger: true,
+    } catch (error, stackTrace) {
+      await trace.fail(
+        _errorMessage(error),
+        error: error,
+        stackTrace: stackTrace,
       );
+      if (!mounted) return;
+      if (!trace.developerMode) {
+        sprintShowMessage(
+          context: context,
+          message: _errorMessage(error),
+          danger: true,
+        );
+      }
     } finally {
       if (mounted) setState(() => _busyProfileId = null);
     }
@@ -1655,6 +1890,8 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
       animation: widget.store,
       builder: (context, child) {
         final profiles = widget.store.calendarProfiles;
+        final personal = widget.store.personalCalendarProfile;
+        final company = widget.store.companyCalendarProfile;
         final active = widget.store.defaultCalendarProfile;
         final activeAccount = widget.store.accountForProfile(active?.id);
         final activeEmail = activeAccount?.email.trim() ?? '';
@@ -1664,7 +1901,7 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
         Color? verificationBackground;
         Color? verificationForeground;
         if (calendarState == SprintCalendarConnectionState.switching) {
-          verificationMessage = 'Google 계정과 캘린더 권한을 확인하고 있습니다.';
+          verificationMessage = '현재 앱 사용자 계정과 캘린더 권한을 확인하고 있습니다.';
           verificationIcon = Icons.verified_user_outlined;
           verificationBackground = colors.secondaryContainer;
           verificationForeground = colors.onSecondaryContainer;
@@ -1703,7 +1940,7 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      '모든 캘린더는 업무 생성, 수정, 삭제와 독립 동기화를 동일하게 지원합니다. 기본 캘린더는 신규 업무의 최초 선택값입니다.',
+                      '현재 OAuth 로그인 계정의 내 캘린더 1개와 회사용 공유 캘린더 1개, 최대 2개만 연결합니다. 기본 캘린더는 신규 업무의 최초 선택값입니다.',
                       style: TextStyle(color: colors.onSurfaceVariant),
                     ),
                     const SizedBox(height: 16),
@@ -1771,7 +2008,7 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
                                         Text(
                                           activeEmail.isNotEmpty
                                               ? '$activeEmail · ${active.calendarId}'
-                                              : 'Google 계정 연결 필요 · ${active.calendarId}',
+                                              : '앱 사용자 계정 연결 필요 · ${active.calendarId}',
                                           maxLines: 2,
                                           overflow: TextOverflow.ellipsis,
                                           style: TextStyle(
@@ -1871,7 +2108,7 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
                     const SizedBox(height: 22),
                     _AnimatedCalendarProfileSection(
                       title: '연결된 캘린더',
-                      emptyText: '연결된 Google 캘린더가 없습니다.',
+                      emptyText: '현재 OAuth 로그인 계정의 Google 캘린더를 확인하고 있습니다.',
                       profiles: profiles,
                       duration: duration,
                       builder: (profile) {
@@ -1893,26 +2130,53 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
                               _busy ? null : () => _authenticateProfile(profile),
                           onSync: _busy ? null : () => _syncProfile(profile),
                           onEdit: _busy ? null : () => _editProfile(profile),
-                          onDelete:
-                              _busy ? null : () => _removeProfile(profile),
+                          onDelete: _busy || profile.googlePrimary
+                              ? null
+                              : () => _removeProfile(profile),
                         );
                       },
                     ),
                     const SizedBox(height: 16),
-                    FilledButton.icon(
-                      onPressed: _busy
-                          ? null
-                          : () => _addProfile(
-                                forceAccountSelection: false,
+                    AnimatedContainer(
+                      duration: duration,
+                      curve: Curves.easeOutCubic,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: colors.secondaryContainer,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.business_rounded,
+                            color: colors.onSecondaryContainer,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              '내 캘린더는 현재 OAuth 로그인 계정의 기본 캘린더로 자동 유지됩니다. 회사 캘린더는 공유받은 캘린더 1개만 연결하며, 다른 캘린더로 교체하려면 기존 회사 캘린더 연결을 먼저 삭제합니다.',
+                              style: TextStyle(
+                                color: colors.onSecondaryContainer,
+                                fontWeight: FontWeight.w800,
+                                height: 1.35,
                               ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    FilledButton.icon(
+                      onPressed: _busy || company != null ? null : _addProfile,
                       style: FilledButton.styleFrom(
                         minimumSize: const Size.fromHeight(52),
                       ),
                       icon: AnimatedSwitcher(
                         duration: duration,
-                        child: _addingCurrentAccount
+                        child: _discoveringCalendars
                             ? const SizedBox(
-                                key: ValueKey<String>('adding-current'),
+                                key: ValueKey<String>('discovering-calendars'),
                                 width: 20,
                                 height: 20,
                                 child: CircularProgressIndicator(
@@ -1920,39 +2184,23 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
                                 ),
                               )
                             : const Icon(
-                                Icons.event_available_outlined,
-                                key: ValueKey<String>('add-current'),
+                                Icons.travel_explore_rounded,
+                                key: ValueKey<String>('discover-calendars'),
                               ),
                       ),
-                      label: const Text('현재 Google 계정 캘린더 추가'),
-                    ),
-                    const SizedBox(height: 10),
-                    OutlinedButton.icon(
-                      onPressed: _busy
-                          ? null
-                          : () => _addProfile(
-                                forceAccountSelection: true,
-                              ),
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size.fromHeight(52),
-                      ),
-                      icon: AnimatedSwitcher(
+                      label: AnimatedSwitcher(
                         duration: duration,
-                        child: _addingOtherAccount
-                            ? const SizedBox(
-                                key: ValueKey<String>('adding-other'),
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2.2,
-                                ),
-                              )
-                            : const Icon(
-                                Icons.person_add_alt_1_rounded,
-                                key: ValueKey<String>('add-other'),
-                              ),
+                        child: Text(
+                          company != null
+                              ? '회사 캘린더 연결됨 · 삭제 후 교체 가능'
+                              : personal == null
+                                  ? '내 캘린더 확인 후 회사 캘린더 연결'
+                                  : '회사 캘린더 연결',
+                          key: ValueKey<String>(
+                            '${personal?.id ?? 'none'}-${company?.id ?? 'none'}',
+                          ),
+                        ),
                       ),
-                      label: const Text('다른 Google 계정 캘린더 추가'),
                     ),
                   ],
                 ),
@@ -1961,6 +2209,213 @@ class _SprintAccountSheetState extends State<_SprintAccountSheet> {
           ),
         );
       },
+    );
+  }
+}
+
+Future<GoogleCalendarAccessEntry?> _showSprintCalendarAccessPicker({
+  required BuildContext context,
+  required String accountEmail,
+  required List<GoogleCalendarAccessEntry> calendars,
+  required Set<String> connectedCalendarIds,
+}) {
+  return sprintShowBottomSheet<GoogleCalendarAccessEntry>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    showDragHandle: true,
+    builder: (_) => _SprintCalendarAccessPicker(
+      accountEmail: accountEmail,
+      calendars: calendars,
+      connectedCalendarIds: connectedCalendarIds,
+    ),
+  );
+}
+
+class _SprintCalendarAccessPicker extends StatelessWidget {
+  const _SprintCalendarAccessPicker({
+    required this.accountEmail,
+    required this.calendars,
+    required this.connectedCalendarIds,
+  });
+
+  final String accountEmail;
+  final List<GoogleCalendarAccessEntry> calendars;
+  final Set<String> connectedCalendarIds;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final duration =
+        reduceMotion ? Duration.zero : const Duration(milliseconds: 220);
+    final editableCount = calendars.where((value) => value.canEditEvents).length;
+    return Material(
+      color: colors.surface,
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          height: MediaQuery.sizeOf(context).height * 0.78,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  '회사 캘린더 선택',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleLarge
+                      ?.copyWith(fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  accountEmail.isEmpty
+                      ? '현재 OAuth 로그인 계정에 공유된 회사용 Google Calendar를 표시합니다.'
+                      : '$accountEmail 계정에 공유된 회사용 Google Calendar를 표시합니다.',
+                  style: TextStyle(
+                    color: colors.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                AnimatedContainer(
+                  duration: duration,
+                  curve: Curves.easeOutCubic,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: editableCount > 0
+                        ? colors.primaryContainer
+                        : colors.errorContainer,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Text(
+                    editableCount > 0
+                        ? '회사 캘린더 슬롯에 연결할 수 있는 편집 가능 캘린더가 $editableCount개 있습니다.'
+                        : '회사 캘린더로 연결할 일정 변경 권한의 공유 캘린더가 없습니다.',
+                    style: TextStyle(
+                      color: editableCount > 0
+                          ? colors.onPrimaryContainer
+                          : colors.onErrorContainer,
+                      fontWeight: FontWeight.w800,
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Expanded(
+                  child: AnimatedSwitcher(
+                    duration: duration,
+                    child: calendars.isEmpty
+                        ? Center(
+                            key: const ValueKey<String>('calendar-list-empty'),
+                            child: Text(
+                              '접근 가능한 Google Calendar가 없습니다.',
+                              style: TextStyle(
+                                color: colors.onSurfaceVariant,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          )
+                        : ListView.separated(
+                            key: ValueKey<String>(
+                              calendars.map((value) => value.id).join('|'),
+                            ),
+                            itemCount: calendars.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 10),
+                            itemBuilder: (context, index) {
+                              final calendar = calendars[index];
+                              final connected = connectedCalendarIds.contains(
+                                calendar.id.trim().toLowerCase(),
+                              );
+                              final enabled = calendar.canEditEvents && !connected;
+                              return AnimatedContainer(
+                                duration: duration,
+                                curve: Curves.easeOutCubic,
+                                decoration: BoxDecoration(
+                                  color: enabled
+                                      ? colors.surfaceContainerHigh
+                                      : colors.surfaceContainerLow,
+                                  borderRadius: BorderRadius.circular(18),
+                                  border: Border.all(
+                                    color: calendar.canManageSharing
+                                        ? colors.primary
+                                        : colors.outlineVariant,
+                                  ),
+                                ),
+                                child: ListTile(
+                                  enabled: enabled,
+                                  minTileHeight: 74,
+                                  leading: CircleAvatar(
+                                    backgroundColor: calendar.canManageSharing
+                                        ? colors.primaryContainer
+                                        : colors.secondaryContainer,
+                                    foregroundColor: calendar.canManageSharing
+                                        ? colors.onPrimaryContainer
+                                        : colors.onSecondaryContainer,
+                                    child: Icon(
+                                      calendar.primary
+                                          ? Icons.account_circle_rounded
+                                          : calendar.canManageSharing
+                                              ? Icons.admin_panel_settings_rounded
+                                              : Icons.calendar_month_rounded,
+                                    ),
+                                  ),
+                                  title: Text(
+                                    calendar.displayName,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                  subtitle: Padding(
+                                    padding: const EdgeInsets.only(top: 4),
+                                    child: Text(
+                                      connected
+                                          ? '${calendar.accessLabel} · 연결됨'
+                                          : calendar.accessLabel,
+                                      style: TextStyle(
+                                        color: calendar.canEditEvents
+                                            ? colors.primary
+                                            : colors.onSurfaceVariant,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ),
+                                  trailing: AnimatedSwitcher(
+                                    duration: duration,
+                                    child: connected
+                                        ? const Icon(
+                                            Icons.check_circle_rounded,
+                                            key: ValueKey<String>('connected'),
+                                          )
+                                        : calendar.canEditEvents
+                                            ? const Icon(
+                                                Icons.chevron_right_rounded,
+                                                key: ValueKey<String>('select'),
+                                              )
+                                            : const Icon(
+                                                Icons.visibility_outlined,
+                                                key: ValueKey<String>('readonly'),
+                                              ),
+                                  ),
+                                  onTap: enabled
+                                      ? () => Navigator.of(context).pop(calendar)
+                                      : null,
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -2166,7 +2621,7 @@ class _SprintCalendarProfileCard extends StatelessWidget {
                             borderRadius: BorderRadius.circular(999),
                           ),
                           child: Text(
-                            active ? '기본' : '추가',
+                            profile.slotLabel,
                             style: TextStyle(
                               color: active
                                   ? colors.onSecondary
@@ -2184,7 +2639,7 @@ class _SprintCalendarProfileCard extends StatelessWidget {
                       child: Text(
                         accountEmail.isNotEmpty
                             ? accountEmail
-                            : 'Google 계정 연결 필요',
+                            : '앱 사용자 계정 연결 필요',
                         key: ValueKey<String>(
                           '${profile.id}-${accountEmail.toLowerCase()}',
                         ),
@@ -2201,6 +2656,48 @@ class _SprintCalendarProfileCard extends StatelessWidget {
                       style: TextStyle(
                         color: colors.onSurfaceVariant,
                         fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 7),
+                    AnimatedContainer(
+                      duration: duration,
+                      curve: Curves.easeOutCubic,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 9,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: profile.canManageSharing
+                            ? colors.primaryContainer
+                            : profile.canEditEvents
+                                ? colors.secondaryContainer
+                                : colors.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            profile.canManageSharing
+                                ? Icons.admin_panel_settings_rounded
+                                : profile.canEditEvents
+                                    ? Icons.edit_calendar_outlined
+                                    : Icons.visibility_outlined,
+                            size: 15,
+                          ),
+                          const SizedBox(width: 5),
+                          Flexible(
+                            child: Text(
+                              profile.accessRoleLabel,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -2224,9 +2721,15 @@ class _SprintCalendarProfileCard extends StatelessWidget {
                       ),
               ),
               IconButton(
-                tooltip: '저장 목록에서 삭제',
+                tooltip: profile.googlePrimary
+                    ? '내 캘린더는 OAuth 계정과 함께 유지됩니다.'
+                    : '회사 캘린더 연결 삭제',
                 onPressed: onDelete,
-                icon: const Icon(Icons.delete_outline_rounded),
+                icon: Icon(
+                  profile.googlePrimary
+                      ? Icons.lock_outline_rounded
+                      : Icons.delete_outline_rounded,
+                ),
               ),
             ],
           ),
@@ -2357,9 +2860,9 @@ String _profileConnectionLabel(SprintCalendarConnectionState state) {
     case SprintCalendarConnectionState.cached:
       return '인증됨';
     case SprintCalendarConnectionState.reauthenticationRequired:
-      return '재인증 필요';
+      return '권한 갱신 필요';
     case SprintCalendarConnectionState.switching:
-      return '계정 확인 중';
+      return '권한 확인 중';
     case SprintCalendarConnectionState.syncing:
       return '동기화 중';
     case SprintCalendarConnectionState.connected:
@@ -2372,100 +2875,77 @@ String _profileConnectionLabel(SprintCalendarConnectionState state) {
 class _SprintCalendarProfileDraft {
   const _SprintCalendarProfileDraft({
     required this.label,
-    required this.calendarId,
-    required this.locked,
   });
 
   final String label;
-  final String calendarId;
-  final bool locked;
 }
 
 Future<_SprintCalendarProfileDraft?> _showSprintCalendarProfileEditor(
   BuildContext context, {
-  SprintCalendarProfile? profile,
-  bool calendarIdReadOnly = false,
+  required SprintCalendarProfile profile,
 }) async {
-  final labelController = TextEditingController(text: profile?.label ?? '');
-  final calendarController = TextEditingController(
-    text: profile?.calendarId ?? 'primary',
-  );
-  var locked = profile?.locked ?? false;
+  final labelController = TextEditingController(text: profile.label);
   final result = await sprintShowDialog<_SprintCalendarProfileDraft>(
     context: context,
     builder: (dialogContext) {
-      return StatefulBuilder(
-        builder: (context, setState) {
-          return AlertDialog(
-            title: Text(
-              profile == null ? 'Google 캘린더 연결' : '캘린더 설정',
-            ),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: labelController,
-                    decoration: const InputDecoration(
-                      labelText: '캘린더 이름',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: calendarController,
-                    readOnly: calendarIdReadOnly || locked,
-                    autocorrect: false,
-                    enableSuggestions: false,
-                    decoration: const InputDecoration(
-                      labelText: 'Google Calendar ID',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  SwitchListTile.adaptive(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Calendar ID 잠금'),
-                    value: locked,
-                    onChanged: (value) => setState(() => locked = value),
-                  ),
-                ],
+      return AlertDialog(
+        title: const Text('캘린더 설정'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(
+                controller: labelController,
+                decoration: const InputDecoration(
+                  labelText: '캘린더 이름',
+                  border: OutlineInputBorder(),
+                ),
               ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: const Text('취소'),
-              ),
-              FilledButton(
-                onPressed: () {
-                  final calendarId = calendarController.text.trim();
-                  if (calendarId.isEmpty) {
-                    sprintShowMessage(
-                      context: context,
-                      message: 'Google Calendar ID를 입력하세요.',
-                      danger: true,
-                    );
-                    return;
-                  }
-                  Navigator.of(dialogContext).pop(
-                    _SprintCalendarProfileDraft(
-                      label: labelController.text.trim(),
-                      calendarId: calendarId,
-                      locked: locked,
+              const SizedBox(height: 12),
+              SprintSurface(
+                backgroundColor:
+                    Theme.of(context).colorScheme.surfaceContainerHigh,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      profile.calendarId,
+                      style: const TextStyle(fontWeight: FontWeight.w800),
                     ),
-                  );
-                },
-                child: const Text('확인'),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${profile.accessRoleLabel} · Calendar ID는 공유 캘린더 목록에서만 변경할 수 있습니다.',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
-          );
-        },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop(
+                _SprintCalendarProfileDraft(
+                  label: labelController.text.trim(),
+                ),
+              );
+            },
+            child: const Text('확인'),
+          ),
+        ],
       );
     },
   );
   labelController.dispose();
-  calendarController.dispose();
   return result;
 }
-

@@ -1,20 +1,16 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:provider/provider.dart';
 
+import '../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../design_system/common_ui/common_ui_overlays.dart';
 import '../../../design_system/common_ui/common_ui_theme.dart';
-
-import '../../account/applications/user_state.dart';
-import '../domain/models/headquarter_calendar_event.dart';
-import '../domain/models/headquarter_calendar_event_page.dart';
-import '../domain/models/headquarter_calendar_month_summary.dart';
-import '../domain/models/headquarter_calendar_search.dart';
-import '../domain/repositories/headquarter_calendar_repository.dart';
-import 'headquarter_calendar_status_dialog.dart';
+import '../../../shared/google_calendar/google_event_colors.dart';
+import '../../sprint/application/sprint_mode_store.dart';
+import '../../sprint/domain/sprint_models.dart';
+import '../../sprint/pages/sprint_external_event_editor_sheet.dart';
+import '../../sprint/pages/sprint_task_detail_sheet.dart';
 
 class HeadquarterCalendarCard extends StatefulWidget {
   const HeadquarterCalendarCard({
@@ -29,8 +25,8 @@ class HeadquarterCalendarCard extends StatefulWidget {
       _HeadquarterCalendarCardState();
 }
 
-class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard> {
-  static const int _pageSize = 20;
+class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard>
+    with SingleTickerProviderStateMixin {
   static const List<String> _weekdays = <String>[
     '일',
     '월',
@@ -40,47 +36,15 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard> {
     '금',
     '토',
   ];
-  static const List<_Option> _eventTypes = <_Option>[
-    _Option('notice', '공지', Icons.campaign_rounded),
-    _Option('field_support', '현장 지원', Icons.support_agent_rounded),
-    _Option('annual_leave', '연차', Icons.event_available_rounded),
-    _Option('absence', '결근', Icons.person_off_rounded),
-    _Option('new_hire', '신규', Icons.person_add_alt_1_rounded),
-    _Option('document', '서류', Icons.description_rounded),
-    _Option('meeting', '회의', Icons.groups_rounded),
-    _Option('end', '종료', Icons.task_alt_rounded),
-    _Option('resignation', '퇴사', Icons.logout_rounded),
-    _Option('vacation', '휴가', Icons.beach_access_rounded),
-  ];
-  static const List<_Option> _priorities = <_Option>[
-    _Option('normal', '일반', Icons.radio_button_unchecked_rounded),
-    _Option('high', '중요', Icons.star_rounded),
-    _Option('urgent', '긴급', Icons.warning_rounded),
-  ];
 
+  late final SprintModeStore _store;
+  late final AnimationController _refreshController;
   late DateTime _visibleMonth;
   late DateTime _selectedDay;
-  HeadquarterCalendarRepository? _repository;
-  String _configuredUserId = '';
-  StreamSubscription<HeadquarterCalendarMonthSummary>? _monthSubscription;
-  StreamSubscription<List<HeadquarterCalendarEvent>>? _eventSubscription;
-  HeadquarterCalendarMonthSummary? _monthSummary;
-  List<HeadquarterCalendarEvent> _liveEvents =
-      const <HeadquarterCalendarEvent>[];
-  List<HeadquarterCalendarEvent> _pagedEvents =
-      const <HeadquarterCalendarEvent>[];
-  Set<String> _acknowledgedIds = const <String>{};
-  String _ackCacheKey = '';
-  HeadquarterCalendarEventCursor? _nextCursor;
-  bool _monthLoading = true;
-  bool _eventsLoading = true;
-  bool _loadingMore = false;
-  bool _hasMore = false;
-  Object? _monthError;
-  StackTrace? _monthStack;
-  Object? _eventError;
-  StackTrace? _eventStack;
-  int _eventSubscriptionGeneration = 0;
+  Object? _initializationError;
+  StackTrace? _initializationStack;
+  bool _refreshing = false;
+  bool _disposed = false;
 
   @override
   void initState() {
@@ -88,243 +52,118 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard> {
     final now = DateTime.now();
     _visibleMonth = DateTime(now.year, now.month, 1);
     _selectedDay = DateTime(now.year, now.month, now.day);
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final repository = context.read<HeadquarterCalendarRepository>();
-    final userState = Provider.of<UserState>(context);
-    final userId = userState.session?.id.trim() ?? '';
-    if (!identical(_repository, repository) || _configuredUserId != userId) {
-      _repository = repository;
-      _configuredUserId = userId;
-      _subscribeAll();
-    }
+    _store = SprintModeStore()..addListener(_handleStoreChanged);
+    _refreshController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 850),
+    );
+    unawaited(_initialize());
   }
 
   @override
   void dispose() {
-    _eventSubscriptionGeneration += 1;
-    _monthSubscription?.cancel();
-    _eventSubscription?.cancel();
+    _disposed = true;
+    _refreshController.dispose();
+    _store.removeListener(_handleStoreChanged);
+    unawaited(_store.flush());
+    _store.dispose();
     super.dispose();
   }
 
-  String get _monthKey =>
-      HeadquarterCalendarEvent.monthKeyOf(_visibleMonth);
-
-  String get _selectedDateKey =>
-      HeadquarterCalendarEvent.dateKeyOf(_selectedDay);
-
-  List<HeadquarterCalendarEvent> get _events {
-    final map = <String, HeadquarterCalendarEvent>{};
-    for (final event in _pagedEvents) {
-      map[event.id] = event;
-    }
-    for (final event in _liveEvents) {
-      map[event.id] = event;
-    }
-    final result = map.values.toList()..sort(_compareEvents);
-    return result;
+  void _handleStoreChanged() {
+    if (!mounted) return;
+    setState(() {});
   }
 
-  int _compareEvents(
-    HeadquarterCalendarEvent left,
-    HeadquarterCalendarEvent right,
-  ) {
-    final priority = right.priorityRank.compareTo(left.priorityRank);
-    if (priority != 0) return priority;
-    final leftCreated =
-        left.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-    final rightCreated =
-        right.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-    final created = rightCreated.compareTo(leftCreated);
-    if (created != 0) return created;
-    return right.id.compareTo(left.id);
-  }
-
-  void _subscribeAll() {
-    _subscribeMonth();
-    unawaited(_subscribeEvents());
-  }
-
-  void _subscribeMonth() {
-    _monthSubscription?.cancel();
-    final repository = _repository;
-    if (repository == null) return;
-    _monthLoading = true;
-    _monthError = null;
-    _monthStack = null;
-    _monthSubscription = repository
-        .watchMonthSummary(monthKey: _monthKey)
-        .listen(
-      (summary) {
-        if (!mounted) return;
-        setState(() {
-          _monthSummary = summary;
-          _monthLoading = false;
-          _monthError = null;
-          _updateHasMore();
-        });
-      },
-      onError: (Object error, StackTrace stackTrace) {
-        if (!mounted) return;
-        setState(() {
-          _monthLoading = false;
-          _monthError = error;
-          _monthStack = stackTrace;
-        });
-      },
-    );
-  }
-
-  Future<void> _subscribeEvents() async {
-    final generation = ++_eventSubscriptionGeneration;
-    await _eventSubscription?.cancel();
-    final repository = _repository;
-    if (repository == null) return;
-    if (mounted) {
-      setState(() {
-        _eventsLoading = true;
-        _eventError = null;
-        _eventStack = null;
-        _liveEvents = const <HeadquarterCalendarEvent>[];
-        _pagedEvents = const <HeadquarterCalendarEvent>[];
-        _nextCursor = null;
-        _hasMore = false;
-        _acknowledgedIds = const <String>{};
-        _ackCacheKey = '';
-      });
-    }
-    _eventSubscription = repository
-        .watchFirstEventsForDate(
-          dateKey: _selectedDateKey,
-          limit: _pageSize,
-        )
-        .listen(
-      (events) {
-        if (!mounted || generation != _eventSubscriptionGeneration) return;
-        final orderedEvents = events.toList()..sort(_compareEvents);
-        setState(() {
-          _liveEvents = events;
-          _eventsLoading = false;
-          _eventError = null;
-          _nextCursor = orderedEvents.isEmpty
-              ? null
-              : _cursorOf(orderedEvents.last);
-          _updateHasMore();
-        });
-        unawaited(_loadAcknowledged());
-      },
-      onError: (Object error, StackTrace stackTrace) {
-        if (!mounted || generation != _eventSubscriptionGeneration) return;
-        setState(() {
-          _eventsLoading = false;
-          _eventError = error;
-          _eventStack = stackTrace;
-        });
-      },
-    );
-  }
-
-  HeadquarterCalendarEventCursor _cursorOf(
-    HeadquarterCalendarEvent event,
-  ) {
-    return HeadquarterCalendarEventCursor(
-      priorityRank: event.priorityRank,
-      createdAtMillis:
-          (event.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0))
-              .millisecondsSinceEpoch,
-      documentId: event.id,
-    );
-  }
-
-  void _updateHasMore() {
-    final total = _monthSummary?.day(_selectedDateKey).count ?? 0;
-    _hasMore = _nextCursor != null && total > _events.length;
-  }
-
-  Future<void> _loadMore() async {
-    final repository = _repository;
-    final cursor = _nextCursor;
-    if (repository == null || cursor == null || _loadingMore || !_hasMore) {
-      return;
-    }
-    setState(() => _loadingMore = true);
+  Future<void> _initialize() async {
     try {
-      final page = await repository.fetchMoreEventsForDate(
-        dateKey: _selectedDateKey,
-        cursor: cursor,
-        limit: _pageSize,
-      );
-      if (!mounted) return;
-      setState(() {
-        _pagedEvents = _mergeEvents(_pagedEvents, page.events);
-        _nextCursor = page.nextCursor ?? _nextCursor;
-        _hasMore = page.hasMore &&
-            (_monthSummary?.day(_selectedDateKey).count ?? _events.length) >
-                _events.length;
-      });
-      await _loadAcknowledged();
-    } catch (error, stackTrace) {
-      if (!mounted) return;
-      await _showFailure(
-        title: '이전 일정 조회 실패',
-        operation: 'fetchMoreEventsForDate',
-        error: error,
-        stackTrace: stackTrace,
-        details: <String, Object?>{'dateKey': _selectedDateKey},
-      );
-    } finally {
-      if (mounted) setState(() => _loadingMore = false);
-    }
-  }
-
-  List<HeadquarterCalendarEvent> _mergeEvents(
-    List<HeadquarterCalendarEvent> left,
-    List<HeadquarterCalendarEvent> right,
-  ) {
-    final map = <String, HeadquarterCalendarEvent>{};
-    for (final event in left) {
-      map[event.id] = event;
-    }
-    for (final event in right) {
-      map[event.id] = event;
-    }
-    return map.values.toList(growable: false);
-  }
-
-  Future<void> _loadAcknowledged() async {
-    final repository = _repository;
-    if (repository == null || _configuredUserId.isEmpty) return;
-    final ids = _events.map((event) => event.id).toList()..sort();
-    final key = '${_configuredUserId}|${ids.join(',')}';
-    if (_ackCacheKey == key) return;
-    _ackCacheKey = key;
-    try {
-      final result = await repository.readAcknowledgedEventIds(
-        eventIds: ids,
-        userId: _configuredUserId,
-      );
-      if (!mounted || _ackCacheKey != key) return;
-      setState(() => _acknowledgedIds = result);
-    } catch (_) {
-      if (_ackCacheKey == key) _ackCacheKey = '';
-    }
-  }
-
-  void _selectDay(DateTime day) {
-    setState(() {
-      _selectedDay = DateTime(day.year, day.month, day.day);
-      if (day.year != _visibleMonth.year ||
-          day.month != _visibleMonth.month) {
-        _visibleMonth = DateTime(day.year, day.month, 1);
+      await _store.initialize();
+      if (_disposed) return;
+      _store.ensureCalendarRangeFor(_monthAnchor, immediate: true);
+      if (mounted) {
+        setState(() {
+          _initializationError = null;
+          _initializationStack = null;
+        });
       }
-    });
-    HapticFeedback.selectionClick();
-    _subscribeMonth();
-    unawaited(_subscribeEvents());
+    } catch (error, stackTrace) {
+      debugPrint('[HeadquarterCalendar] initialize failure error=$error');
+      debugPrint('$stackTrace');
+      if (!mounted) return;
+      setState(() {
+        _initializationError = error;
+        _initializationStack = stackTrace;
+      });
+    }
+  }
+
+  DateTime get _monthAnchor =>
+      DateTime(_visibleMonth.year, _visibleMonth.month, 15);
+
+  List<_HeadquarterCalendarItem> get _items {
+    if (!_store.initialized) return const <_HeadquarterCalendarItem>[];
+    final visibleProfiles = _store.visibleCalendarProfileIds;
+    final items = <_HeadquarterCalendarItem>[];
+    for (final task in _store.tasks) {
+      if (!task.hasGoogleEvent || task.deleteAfterSync) continue;
+      final profileId = task.googleCalendarProfileId;
+      if (profileId == null || !visibleProfiles.contains(profileId)) continue;
+      if (task.state == SprintTaskState.cancelled) continue;
+      final project = _store.projectById(task.projectId);
+      items.add(
+        _HeadquarterCalendarItem.task(
+          task: task,
+          profileLabel: _store.calendarProfileLabel(profileId),
+          projectName: project?.name ?? '스프린트 업무',
+          projectIcon: project?.icon ?? Icons.task_alt_rounded,
+          projectColorId: project?.googleColorId,
+        ),
+      );
+    }
+    for (final event in _store.externalEvents) {
+      items.add(
+        _HeadquarterCalendarItem.external(
+          event: event,
+          profileLabel: _store.calendarProfileLabel(event.calendarProfileId),
+          editable: _store.canEditExternalEvent(event),
+        ),
+      );
+    }
+    items.sort(_compareItems);
+    return items;
+  }
+
+  int _compareItems(
+    _HeadquarterCalendarItem left,
+    _HeadquarterCalendarItem right,
+  ) {
+    final start = left.start.compareTo(right.start);
+    if (start != 0) return start;
+    if (left.isTask != right.isTask) return left.isTask ? -1 : 1;
+    return left.title.compareTo(right.title);
+  }
+
+  List<_HeadquarterCalendarItem> get _selectedItems => _items
+      .where((item) => item.spans(_selectedDay))
+      .toList(growable: false)
+    ..sort(_compareItems);
+
+  Map<String, _DaySummary> get _monthSummary {
+    final result = <String, _DaySummary>{};
+    for (final item in _items) {
+      var day = _day(item.start);
+      final last = item.lastDay;
+      while (!day.isAfter(last)) {
+        final key = _dateKey(day);
+        final current = result[key] ?? const _DaySummary();
+        result[key] = _DaySummary(
+          count: current.count + 1,
+          important: current.important || item.important,
+        );
+        day = day.add(const Duration(days: 1));
+      }
+    }
+    return result;
   }
 
   void _moveMonth(int delta) {
@@ -333,1114 +172,353 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard> {
       _visibleMonth.month + delta,
       1,
     );
-    final day = math.min(
-      _selectedDay.day,
-      DateTime(next.year, next.month + 1, 0).day,
-    );
+    final lastDay = DateTime(next.year, next.month + 1, 0).day;
+    final selectedDay = _selectedDay.day > lastDay
+        ? lastDay
+        : _selectedDay.day;
     setState(() {
       _visibleMonth = next;
-      _selectedDay = DateTime(next.year, next.month, day);
+      _selectedDay = DateTime(next.year, next.month, selectedDay);
     });
-    _subscribeMonth();
-    unawaited(_subscribeEvents());
+    HapticFeedback.selectionClick();
+    _store.ensureCalendarRangeFor(_monthAnchor, immediate: true);
   }
 
-  HeadquarterCalendarActor _actor(UserState state) {
-    final session = state.session;
-    return HeadquarterCalendarActor(
-      userId: session?.id ?? '',
-      userName: session?.displayName ?? state.name,
-      role: state.role,
-      division: state.division,
-      areaName: state.currentArea,
-    );
+  void _selectDay(DateTime day) {
+    setState(() {
+      _selectedDay = _day(day);
+      if (day.year != _visibleMonth.year || day.month != _visibleMonth.month) {
+        _visibleMonth = DateTime(day.year, day.month, 1);
+      }
+    });
+    HapticFeedback.selectionClick();
+    _store.ensureCalendarRangeFor(day, immediate: true);
   }
 
-  Future<T?> _showCalendarDialog<T>({
-    BuildContext? anchorContext,
-    required WidgetBuilder builder,
-    bool barrierDismissible = true,
-  }) {
-    final targetContext = anchorContext ?? context;
-    if (widget.useCommonUi) {
-      return showCommonOverlayDialog<T>(
-        context: targetContext,
-        barrierDismissible: barrierDismissible,
-        builder: builder,
-      );
+  Future<void> _refresh() async {
+    if (_refreshing || !_store.initialized) return;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    setState(() => _refreshing = true);
+    if (!reduceMotion) {
+      _refreshController.repeat();
     }
-    return showDialog<T>(
-      context: targetContext,
-      barrierDismissible: barrierDismissible,
-      builder: builder,
+    final trace = await DeveloperOperationTrace.start(
+      context: context,
+      title: '본사 Google 캘린더 갱신',
+      initialMessage: '스프린트 모드에 연결된 Google Calendar 일정을 갱신하고 있습니다.',
+      useCommonUi: widget.useCommonUi,
+      developerModeMessage:
+          '개발자 모드 ON: 본사 캘린더 동기화 로그를 복사할 수 있습니다.',
+      standardModeMessage:
+          '개발자 모드 OFF: 본사 캘린더 동기화 로그를 콘솔에 기록합니다.',
     );
-  }
-
-  Future<T?> _showCalendarBottomSheet<T>({
-    BuildContext? anchorContext,
-    required WidgetBuilder builder,
-  }) {
-    final targetContext = anchorContext ?? context;
-    if (widget.useCommonUi) {
-      return showCommonOverlayBottomSheet<T>(
-        context: targetContext,
-        isScrollControlled: true,
-        useSafeArea: true,
-        builder: builder,
-      );
-    }
-    return showModalBottomSheet<T>(
-      context: targetContext,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: builder,
+    trace.log(
+      'profiles=${_store.calendarProfiles.length} '
+      'editable=${_store.editableCalendarProfiles.length} '
+      'anchor=${_selectedDay.toIso8601String()}',
+      progress: 0.18,
     );
-  }
-
-  Future<DateTime?> _showCalendarDatePicker({
-    required BuildContext anchorContext,
-    required DateTime initialDate,
-    required DateTime firstDate,
-    required DateTime lastDate,
-  }) {
-    if (widget.useCommonUi) {
-      return showCommonDatePicker(
-        context: anchorContext,
-        initialDate: initialDate,
-        firstDate: firstDate,
-        lastDate: lastDate,
-      );
-    }
-    return showDatePicker(
-      context: anchorContext,
-      initialDate: initialDate,
-      firstDate: firstDate,
-      lastDate: lastDate,
-    );
-  }
-
-  Future<void> _openEditor({HeadquarterCalendarEvent? event}) async {
-    final repository = _repository;
-    if (repository == null) return;
-    final userState = context.read<UserState>();
-    final actor = _actor(userState);
-    final titleController = TextEditingController(text: event?.title ?? '');
-    final descriptionController =
-        TextEditingController(text: event?.description ?? '');
-    var startDate = event?.startDate ?? _selectedDay;
-    var endDate = event?.endDate ?? _selectedDay;
-    var eventType = _normalizedEventType(event?.eventType ?? 'notice');
-    var priority = event?.priority ?? 'normal';
-    var requiresAck = event?.requiresAck ?? false;
-    var recurrence =
-        event?.isRecurring == true ? event!.recurrenceFrequency : 'none';
-    var recurrenceInterval = event?.recurrenceInterval ?? 1;
-    var recurrenceUntil = event?.recurrenceUntilDateKey.isNotEmpty == true
-        ? HeadquarterCalendarEvent.dateFromKey(
-                event!.recurrenceUntilDateKey) ??
-            startDate
-        : DateTime(startDate.year + 1, startDate.month, startDate.day)
-            .subtract(const Duration(days: 1));
-    var applyToSeries = event?.isRecurring == true;
-    var saving = false;
-    String validation = '';
-
-    await _showCalendarDialog<void>(
-      barrierDismissible: false,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            Future<void> pickStart() async {
-              final value = await _showCalendarDatePicker(
-                anchorContext: context,
-                initialDate: startDate,
-                firstDate: DateTime(2020),
-                lastDate: DateTime(2040),
-              );
-              if (value == null) return;
-              setDialogState(() {
-                startDate = DateTime(value.year, value.month, value.day);
-                if (endDate.isBefore(startDate)) endDate = startDate;
-                if (recurrenceUntil.isBefore(startDate)) {
-                  recurrenceUntil = startDate;
-                }
-              });
-            }
-
-            Future<void> pickEnd() async {
-              final value = await _showCalendarDatePicker(
-                anchorContext: context,
-                initialDate: endDate,
-                firstDate: startDate,
-                lastDate: startDate.add(const Duration(days: 365)),
-              );
-              if (value == null) return;
-              setDialogState(() {
-                endDate = DateTime(value.year, value.month, value.day);
-              });
-            }
-
-            Future<void> pickUntil() async {
-              final maxDate = DateTime(
-                startDate.year + 1,
-                startDate.month,
-                startDate.day,
-              ).subtract(const Duration(days: 1));
-              final initial = recurrenceUntil.isAfter(maxDate)
-                  ? maxDate
-                  : recurrenceUntil;
-              final value = await _showCalendarDatePicker(
-                anchorContext: context,
-                initialDate: initial.isBefore(startDate)
-                    ? startDate
-                    : initial,
-                firstDate: startDate,
-                lastDate: maxDate,
-              );
-              if (value == null) return;
-              setDialogState(() {
-                recurrenceUntil =
-                    DateTime(value.year, value.month, value.day);
-              });
-            }
-
-            Future<void> save() async {
-              if (saving) return;
-              final title = titleController.text.trim();
-              if (title.isEmpty) {
-                setDialogState(() {
-                  validation = '일정 제목을 입력해 주세요.';
-                });
-                return;
-              }
-              if (endDate.isBefore(startDate)) {
-                setDialogState(() {
-                  validation = '종료일은 시작일보다 빠를 수 없습니다.';
-                });
-                return;
-              }
-              setDialogState(() {
-                validation = '';
-                saving = true;
-              });
-              final draft = HeadquarterCalendarEventDraft(
-                title: title,
-                description: descriptionController.text.trim(),
-                startDate: startDate,
-                endDate: endDate,
-                eventType: eventType,
-                priority: priority,
-                requiresAck: requiresAck,
-                recurrenceFrequency: recurrence,
-                recurrenceInterval: recurrenceInterval,
-                recurrenceUntilDate: recurrenceUntil,
-              );
-              try {
-                if (event == null) {
-                  await repository.createEvent(draft: draft, actor: actor);
-                } else {
-                  await repository.updateEvent(
-                    eventId: event.id,
-                    draft: draft,
-                    actor: actor,
-                    applyToSeries: applyToSeries,
-                  );
-                }
-                if (!context.mounted) return;
-                Navigator.pop(context);
-                if (mounted) {
-                  setState(() {
-                    _visibleMonth =
-                        DateTime(startDate.year, startDate.month, 1);
-                    _selectedDay = startDate;
-                  });
-                  _subscribeAll();
-                }
-              } catch (error, stackTrace) {
-                if (!context.mounted) return;
-                setDialogState(() => saving = false);
-                await _showFailure(
-                  title: '본사 일정 저장 실패',
-                  operation:
-                      event == null ? 'createEvent' : 'updateEvent',
-                  error: error,
-                  stackTrace: stackTrace,
-                  details: <String, Object?>{
-                    'eventId': event?.id ?? '',
-                    'startDateKey':
-                        HeadquarterCalendarEvent.dateKeyOf(startDate),
-                    'endDateKey':
-                        HeadquarterCalendarEvent.dateKeyOf(endDate),
-                    'eventType': eventType,
-                    'recurrence': recurrence,
-                  },
-                );
-              }
-            }
-
-            final cs = Theme.of(context).colorScheme;
-            final media = MediaQuery.of(context);
-            final maxDialogHeight = math.max(
-              360.0,
-              math.min(
-                760.0,
-                media.size.height - media.viewInsets.bottom - 48,
-              ),
-            );
-            return Dialog(
-              backgroundColor: cs.surface,
-              surfaceTintColor: cs.surface,
-              elevation: 12,
-              insetPadding: const EdgeInsets.symmetric(
-                horizontal: 20,
-                vertical: 24,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(24),
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: 720,
-                  maxHeight: maxDialogHeight,
-                ),
-                child: Container(
-                  color: cs.surface,
-                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                event == null
-                                    ? '본사 일정 추가'
-                                    : '본사 일정 수정',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .titleLarge
-                                    ?.copyWith(fontWeight: FontWeight.w900),
-                              ),
-                            ),
-                            IconButton(
-                              tooltip: '닫기',
-                              onPressed: saving
-                                  ? null
-                                  : () => Navigator.of(dialogContext).pop(),
-                              icon: const Icon(Icons.close_rounded),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        TextField(
-                          controller: titleController,
-                          maxLength: 80,
-                          decoration: const InputDecoration(
-                            labelText: '제목',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        TextField(
-                          controller: descriptionController,
-                          minLines: 3,
-                          maxLines: 6,
-                          maxLength: 1000,
-                          decoration: const InputDecoration(
-                            labelText: '내용',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _ValueButton(
-                                label: '시작일',
-                                value: _dateLabel(startDate),
-                                onTap: pickStart,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: _ValueButton(
-                                label: '종료일',
-                                value: _dateLabel(endDate),
-                                onTap: pickEnd,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          '모든 일정은 종일 일정으로 저장됩니다.',
-                          style: TextStyle(
-                            color: cs.onSurfaceVariant,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 12,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        DropdownButtonFormField<String>(
-                          value: eventType,
-                          decoration: const InputDecoration(
-                            labelText: '유형',
-                            border: OutlineInputBorder(),
-                          ),
-                          items: _eventTypes
-                              .map(
-                                (option) => DropdownMenuItem<String>(
-                                  value: option.value,
-                                  child: Text(option.label),
-                                ),
-                              )
-                              .toList(growable: false),
-                          onChanged: (value) {
-                            setDialogState(() {
-                              eventType = value ?? 'notice';
-                            });
-                          },
-                        ),
-                        const SizedBox(height: 10),
-                        DropdownButtonFormField<String>(
-                          value: priority,
-                          decoration: const InputDecoration(
-                            labelText: '중요도',
-                            border: OutlineInputBorder(),
-                          ),
-                          items: _priorities
-                              .map(
-                                (option) => DropdownMenuItem<String>(
-                                  value: option.value,
-                                  child: Text(option.label),
-                                ),
-                              )
-                              .toList(growable: false),
-                          onChanged: (value) {
-                            setDialogState(() {
-                              priority = value ?? 'normal';
-                            });
-                          },
-                        ),
-                        const SizedBox(height: 10),
-                        DropdownButtonFormField<String>(
-                          value: recurrence,
-                          decoration: const InputDecoration(
-                            labelText: '반복',
-                            border: OutlineInputBorder(),
-                          ),
-                          items: const <DropdownMenuItem<String>>[
-                            DropdownMenuItem<String>(
-                              value: 'none',
-                              child: Text('반복 없음'),
-                            ),
-                            DropdownMenuItem<String>(
-                              value: 'weekly',
-                              child: Text('매주 반복'),
-                            ),
-                            DropdownMenuItem<String>(
-                              value: 'monthly',
-                              child: Text('매월 반복'),
-                            ),
-                          ],
-                          onChanged: event?.isRecurring == true
-                              ? null
-                              : (value) {
-                                  setDialogState(() {
-                                    recurrence = value ?? 'none';
-                                  });
-                                },
-                        ),
-                        if (recurrence != 'none') ...[
-                          const SizedBox(height: 10),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: DropdownButtonFormField<int>(
-                                  value: recurrenceInterval,
-                                  decoration: const InputDecoration(
-                                    labelText: '반복 간격',
-                                    border: OutlineInputBorder(),
-                                  ),
-                                  items: List<DropdownMenuItem<int>>.generate(
-                                    4,
-                                    (index) {
-                                      final value = index + 1;
-                                      return DropdownMenuItem<int>(
-                                        value: value,
-                                        child: Text(
-                                          '$value${recurrence == 'weekly' ? '주' : '개월'}마다',
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                  onChanged: (value) {
-                                    setDialogState(() {
-                                      recurrenceInterval = value ?? 1;
-                                    });
-                                  },
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: _ValueButton(
-                                  label: '반복 종료일',
-                                  value: _dateLabel(recurrenceUntil),
-                                  onTap: pickUntil,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                        if (event?.isRecurring == true) ...[
-                          const SizedBox(height: 4),
-                          SwitchListTile.adaptive(
-                            contentPadding: EdgeInsets.zero,
-                            value: applyToSeries,
-                            title: const Text(
-                              '이 일정부터 이후 반복 일정에 적용',
-                            ),
-                            onChanged: (value) {
-                              setDialogState(() => applyToSeries = value);
-                            },
-                          ),
-                        ],
-                        SwitchListTile.adaptive(
-                          contentPadding: EdgeInsets.zero,
-                          value: requiresAck,
-                          title: const Text('확인 필요'),
-                          onChanged: (value) {
-                            setDialogState(() => requiresAck = value);
-                          },
-                        ),
-                        if (validation.isNotEmpty) ...[
-                          const SizedBox(height: 10),
-                          Text(
-                            validation,
-                            style: TextStyle(
-                              color: cs.error,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ],
-                        const SizedBox(height: 16),
-                        FilledButton.icon(
-                          onPressed: saving ? null : save,
-                          icon: saving
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.save_rounded),
-                          label: Text(saving ? '저장 중' : '저장'),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            );
-          },
+    try {
+      final reports = await _store.syncGoogleCalendarFor(_selectedDay);
+      for (final report in reports) {
+        trace.log(
+          'profile=${report.profileId} calendar=${report.calendarId} '
+          'mode=${report.mode.name} pages=${report.pageCount} '
+          'received=${report.receivedCount} inserted=${report.insertedCount} '
+          'updated=${report.updatedCount} deleted=${report.deletedCount} '
+          'unlinkedTasks=${report.unlinkedTaskCount} '
+          'tokenReset=${report.tokenReset} success=${report.success} '
+          'error=${report.error ?? ''}',
+          progress: 0.74,
         );
-      },
-    );
-    titleController.dispose();
-    descriptionController.dispose();
+      }
+      final failedProfiles = _store.calendarProfiles.where((profile) {
+        final state = _store.calendarStateForProfile(profile.id);
+        return state == SprintCalendarConnectionState.failed ||
+            state == SprintCalendarConnectionState.reauthenticationRequired;
+      }).toList(growable: false);
+      trace.log(
+        'externalEvents=${_store.externalEvents.length} '
+        'linkedTasks=${_store.tasks.where((task) => task.hasGoogleEvent).length} '
+        'failedProfiles=${failedProfiles.length}',
+        progress: 0.9,
+      );
+      if (failedProfiles.isNotEmpty) {
+        for (final profile in failedProfiles) {
+          trace.log(
+            'profile=${profile.id} calendar=${profile.calendarId} '
+            'state=${_store.calendarStateForProfile(profile.id).name} '
+            'error=${_store.calendarErrorForProfile(profile.id) ?? ''}',
+          );
+        }
+        if (failedProfiles.length == _store.calendarProfiles.length) {
+          await trace.fail('연결된 Google 캘린더의 갱신에 실패했습니다.');
+        } else {
+          await trace.succeed('일부 캘린더를 제외하고 일정을 갱신했습니다.');
+        }
+      } else {
+        await trace.succeed('본사 캘린더 일정을 최신 상태로 갱신했습니다.');
+      }
+    } catch (error, stackTrace) {
+      await trace.fail(
+        '본사 캘린더 일정 갱신에 실패했습니다.',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    } finally {
+      _refreshController.stop();
+      _refreshController.value = 0;
+      if (mounted) setState(() => _refreshing = false);
+    }
   }
 
-  Future<void> _openDetail(HeadquarterCalendarEvent event) async {
-    final repository = _repository;
-    if (repository == null) return;
-    final userState = context.read<UserState>();
-    final actor = _actor(userState);
-    var acknowledged = _acknowledgedIds.contains(event.id);
-    var working = false;
-    await _showCalendarDialog<void>(
-      barrierDismissible: false,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            Future<void> acknowledge() async {
-              if (working) return;
-              setDialogState(() => working = true);
-              try {
-                await repository.acknowledgeEvent(
-                  event: event,
-                  actor: actor,
-                );
-                acknowledged = true;
-                if (mounted) {
-                  setState(() {
-                    _acknowledgedIds = <String>{
-                      ..._acknowledgedIds,
-                      event.id,
-                    };
-                  });
-                }
-              } catch (error, stackTrace) {
-                if (context.mounted) {
-                  await _showFailure(
-                    title: '일정 확인 처리 실패',
-                    operation: 'acknowledgeEvent',
-                    error: error,
-                    stackTrace: stackTrace,
-                    details: <String, Object?>{'eventId': event.id},
-                  );
-                }
-              } finally {
-                if (context.mounted) {
-                  setDialogState(() => working = false);
-                }
-              }
-            }
+  Future<void> _openCreate() async {
+    if (!_store.initialized) return;
+    if (_store.editableCalendarProfiles.isEmpty) {
+      await _showInfoDialog(
+        title: '일정 추가',
+        message: '스프린트 모드에서 일정 변경 권한이 있는 Google 캘린더를 먼저 연결하세요.',
+      );
+      return;
+    }
+    await showSprintExternalEventEditorSheet(
+      context: context,
+      store: _store,
+      initialDate: _selectedDay,
+      initialCalendarProfileId: _store.defaultCalendarProfile?.id,
+    );
+  }
 
-            Future<void> delete() async {
-              var applyToSeries = false;
-              final confirmed = await _showCalendarDialog<bool>(
-                anchorContext: context,
-                builder: (confirmContext) {
-                  return StatefulBuilder(
-                    builder: (context, setConfirmState) {
-                      return AlertDialog(
-                        title: const Text('일정 삭제'),
-                        content: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text('“${event.title}” 일정을 삭제하시겠습니까?'),
-                            if (event.isRecurring)
-                              CheckboxListTile(
-                                contentPadding: EdgeInsets.zero,
-                                value: applyToSeries,
-                                title: const Text(
-                                  '이 일정부터 이후 반복 일정 삭제',
-                                ),
-                                onChanged: (value) {
-                                  setConfirmState(() {
-                                    applyToSeries = value == true;
-                                  });
-                                },
-                              ),
-                          ],
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () =>
-                                Navigator.pop(confirmContext, false),
-                            child: const Text('취소'),
-                          ),
-                          FilledButton(
-                            onPressed: () =>
-                                Navigator.pop(confirmContext, true),
-                            child: const Text('삭제'),
-                          ),
-                        ],
-                      );
-                    },
-                  );
-                },
-              );
-              if (confirmed != true) return;
-              try {
-                await repository.softDeleteEvent(
-                  eventId: event.id,
-                  actor: actor,
-                  applyToSeries: applyToSeries,
-                );
-                if (context.mounted) Navigator.pop(context);
-              } catch (error, stackTrace) {
-                if (context.mounted) {
-                  await _showFailure(
-                    title: '일정 삭제 실패',
-                    operation: 'softDeleteEvent',
-                    error: error,
-                    stackTrace: stackTrace,
-                    details: <String, Object?>{
-                      'eventId': event.id,
-                      'applyToSeries': applyToSeries,
-                    },
-                  );
-                }
-              }
-            }
+  Future<void> _openItem(_HeadquarterCalendarItem item) async {
+    if (item.isTask) {
+      await _showTaskDetail(item);
+      return;
+    }
+    await _showExternalDetail(item);
+  }
 
-            final cs = Theme.of(context).colorScheme;
-            final media = MediaQuery.of(context);
-            final maxDialogHeight = math.max(
-              320.0,
-              math.min(720.0, media.size.height - 48),
-            );
-            final type = _option(_eventTypes, event.eventType);
-            final priority = _option(_priorities, event.priority);
-            return Dialog(
-              backgroundColor: cs.surface,
-              surfaceTintColor: cs.surface,
-              elevation: 12,
-              insetPadding: const EdgeInsets.symmetric(
-                horizontal: 20,
-                vertical: 24,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(24),
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: 640,
-                  maxHeight: maxDialogHeight,
-                ),
-                child: Container(
-                  color: cs.surface,
-                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: Text(
-                                event.title,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .titleLarge
-                                    ?.copyWith(fontWeight: FontWeight.w900),
-                              ),
-                            ),
-                            IconButton(
-                              tooltip: '닫기',
-                              onPressed: working
-                                  ? null
-                                  : () => Navigator.of(dialogContext).pop(),
-                              icon: const Icon(Icons.close_rounded),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 7,
-                          runSpacing: 7,
-                          children: [
-                            _InfoChip(
-                              icon: Icons.date_range_rounded,
-                              label: _rangeLabel(event),
-                            ),
-                            _InfoChip(icon: type.icon, label: type.label),
-                            _InfoChip(
-                              icon: priority.icon,
-                              label: priority.label,
-                            ),
-                            const _InfoChip(
-                              icon: Icons.apartment_rounded,
-                              label: '본사 일정',
-                            ),
-                            if (event.isRecurring)
-                              _InfoChip(
-                                icon: Icons.repeat_rounded,
-                                label: _recurrenceLabel(event),
-                              ),
-                          ],
-                        ),
-                        if (event.description.isNotEmpty) ...[
-                          const SizedBox(height: 14),
-                          Text(
-                            event.description,
-                            style: TextStyle(
-                              color: cs.onSurface,
-                              height: 1.45,
-                            ),
-                          ),
-                        ],
-                        if (event.requiresAck) ...[
-                          const SizedBox(height: 14),
-                          FilledButton.tonalIcon(
-                            onPressed:
-                                acknowledged || working ? null : acknowledge,
-                            icon: Icon(
-                              acknowledged
-                                  ? Icons.verified_rounded
-                                  : Icons.task_alt_rounded,
-                            ),
-                            label: Text(
-                              acknowledged ? '확인 완료' : '확인 완료 처리',
-                            ),
-                          ),
-                        ],
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                onPressed: () async {
-                                  Navigator.pop(context);
-                                  await _openEditor(event: event);
-                                },
-                                icon: const Icon(Icons.edit_rounded),
-                                label: const Text('수정'),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                onPressed: delete,
-                                icon: Icon(
-                                  Icons.delete_outline_rounded,
-                                  color: cs.error,
-                                ),
-                                label: Text(
-                                  '삭제',
-                                  style: TextStyle(color: cs.error),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            );
-          },
+  Future<void> _showTaskDetail(_HeadquarterCalendarItem item) async {
+    await _showDetailDialog(
+      item: item,
+      actionLabel: '업무 관리',
+      actionIcon: Icons.edit_calendar_rounded,
+      onAction: () async {
+        Navigator.of(context).pop();
+        await showSprintTaskDetailSheet(
+          context: context,
+          store: _store,
+          taskId: item.taskId!,
         );
       },
     );
   }
 
-  Future<void> _openSearch() async {
-    final repository = _repository;
-    if (repository == null) return;
-    final controller = TextEditingController();
-    var eventType = 'all';
-    var priority = 'all';
-    DateTime? fromDate = DateTime(
-      DateTime.now().year - 1,
-      DateTime.now().month,
-      DateTime.now().day,
+  Future<void> _showExternalDetail(_HeadquarterCalendarItem item) async {
+    await _showDetailDialog(
+      item: item,
+      actionLabel: item.editable ? '일정 관리' : null,
+      actionIcon: Icons.edit_calendar_rounded,
+      onAction: item.editable
+          ? () async {
+              Navigator.of(context).pop();
+              final event = _store.externalEventById(item.externalEventId);
+              if (event == null || !mounted) return;
+              await showSprintExternalEventEditorSheet(
+                context: context,
+                store: _store,
+                event: event,
+              );
+            }
+          : null,
     );
-    DateTime? toDate = DateTime.now();
-    var includeDeleted = false;
-    var loading = false;
-    var loadingMore = false;
-    var results = <HeadquarterCalendarEvent>[];
-    var hasSearched = false;
-    HeadquarterCalendarSearchCursor? cursor;
-    var hasMore = false;
-    Object? failure;
+  }
 
-    await _showCalendarBottomSheet<void>(
-      builder: (_) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            HeadquarterCalendarSearchQuery query() {
-              return HeadquarterCalendarSearchQuery(
-                keyword: controller.text.trim(),
-                eventType: eventType,
-                priority: priority,
-                fromDate: fromDate,
-                toDate: toDate,
-                includeDeleted: includeDeleted,
-              );
-            }
-
-            Future<void> run({bool more = false}) async {
-              if (controller.text.trim().length < 2 ||
-                  loading ||
-                  loadingMore) {
-                return;
-              }
-              setSheetState(() {
-                if (more) {
-                  loadingMore = true;
-                } else {
-                  loading = true;
-                  hasSearched = true;
-                  results = <HeadquarterCalendarEvent>[];
-                  cursor = null;
-                  hasMore = false;
-                }
-                failure = null;
-              });
-              try {
-                final page = await repository.searchEvents(
-                  query: query(),
-                  cursor: more ? cursor : null,
-                  limit: _pageSize,
-                );
-                if (!context.mounted) return;
-                setSheetState(() {
-                  results = more
-                      ? _mergeEvents(results, page.events)
-                      : page.events;
-                  cursor = page.nextCursor;
-                  hasMore = page.hasMore;
-                });
-              } catch (error, stackTrace) {
-                if (!context.mounted) return;
-                setSheetState(() => failure = error);
-                await _showFailure(
-                  title: '달력 전체 검색 실패',
-                  operation:
-                      more ? 'searchEventsNextPage' : 'searchEvents',
-                  error: error,
-                  stackTrace: stackTrace,
-                  details: <String, Object?>{
-                    'keyword': controller.text.trim(),
-                    'eventType': eventType,
-                    'priority': priority,
-                  },
-                );
-              } finally {
-                if (context.mounted) {
-                  setSheetState(() {
-                    loading = false;
-                    loadingMore = false;
-                  });
-                }
-              }
-            }
-
-            Future<void> pickRange(bool from) async {
-              final initial = from
-                  ? fromDate ?? DateTime.now()
-                  : toDate ?? DateTime.now();
-              final value = await _showCalendarDatePicker(
-                anchorContext: context,
-                initialDate: initial,
-                firstDate: DateTime(2015),
-                lastDate: DateTime(2040),
-              );
-              if (value == null) return;
-              setSheetState(() {
-                if (from) {
-                  fromDate = value;
-                  if (toDate != null && toDate!.isBefore(value)) {
-                    toDate = value;
-                  }
-                } else {
-                  toDate = value;
-                  if (fromDate != null && fromDate!.isAfter(value)) {
-                    fromDate = value;
-                  }
-                }
-              });
-            }
-
-            final cs = Theme.of(context).colorScheme;
-            return Padding(
-              padding: EdgeInsets.fromLTRB(
-                16,
-                14,
-                16,
-                MediaQuery.of(context).viewInsets.bottom + 18,
-              ),
+  Future<void> _showDetailDialog({
+    required _HeadquarterCalendarItem item,
+    String? actionLabel,
+    IconData actionIcon = Icons.edit_rounded,
+    Future<void> Function()? onAction,
+  }) async {
+    Widget builder(BuildContext dialogContext) {
+      final cs = Theme.of(dialogContext).colorScheme;
+      final color = _itemColor(dialogContext, item);
+      return Dialog(
+        elevation: 12,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 640),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: SingleChildScrollView(
               child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
+                      Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: color.withOpacity(.12),
+                          borderRadius: BorderRadius.circular(13),
+                        ),
+                        child: Icon(item.icon, color: color),
+                      ),
+                      const SizedBox(width: 12),
                       Expanded(
-                        child: TextField(
-                          controller: controller,
-                          textInputAction: TextInputAction.search,
-                          onSubmitted: (_) => run(),
-                          decoration: const InputDecoration(
-                            prefixIcon: Icon(Icons.search_rounded),
-                            labelText: '전체 일정 검색',
-                            border: OutlineInputBorder(),
-                          ),
+                        child: Text(
+                          item.title,
+                          style: Theme.of(dialogContext)
+                              .textTheme
+                              .titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w900),
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      FilledButton(
-                        onPressed: loading ? null : () => run(),
-                        child: const Text('검색'),
+                      IconButton(
+                        onPressed: () => Navigator.of(dialogContext).pop(),
+                        icon: const Icon(Icons.close_rounded),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 9),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        _FilterDropdown(
-                          value: eventType,
-                          label: '유형',
-                          items: <String, String>{
-                            'all': '전체',
-                            for (final item in _eventTypes)
-                              item.value: item.label,
-                          },
-                          onChanged: (value) {
-                            setSheetState(() => eventType = value);
-                          },
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 7,
+                    runSpacing: 7,
+                    children: [
+                      _InfoChip(
+                        icon: Icons.calendar_today_rounded,
+                        label: _rangeLabel(item),
+                      ),
+                      _InfoChip(
+                        icon: Icons.calendar_month_rounded,
+                        label: item.profileLabel,
+                      ),
+                      _InfoChip(
+                        icon: item.isTask
+                            ? Icons.bolt_rounded
+                            : item.editable
+                                ? Icons.edit_rounded
+                                : Icons.lock_outline_rounded,
+                        label: item.isTask
+                            ? item.projectName
+                            : item.editable
+                                ? '편집 가능'
+                                : '읽기 전용',
+                      ),
+                    ],
+                  ),
+                  if (item.description.trim().isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: cs.surfaceContainerHighest.withOpacity(.55),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Text(
+                        item.description.trim(),
+                        style: TextStyle(
+                          color: cs.onSurfaceVariant,
+                          height: 1.45,
+                          fontWeight: FontWeight.w600,
                         ),
-                        const SizedBox(width: 6),
-                        _FilterDropdown(
-                          value: priority,
-                          label: '중요도',
-                          items: <String, String>{
-                            'all': '전체',
-                            for (final item in _priorities)
-                              item.value: item.label,
-                          },
-                          onChanged: (value) {
-                            setSheetState(() => priority = value);
-                          },
-                        ),
-                        const SizedBox(width: 6),
-                        ActionChip(
-                          label: Text(
-                            fromDate == null
-                                ? '시작일'
-                                : _dateLabel(fromDate!),
-                          ),
-                          onPressed: () => pickRange(true),
-                        ),
-                        const SizedBox(width: 6),
-                        ActionChip(
-                          label: Text(
-                            toDate == null
-                                ? '종료일'
-                                : _dateLabel(toDate!),
-                          ),
-                          onPressed: () => pickRange(false),
-                        ),
-                        const SizedBox(width: 6),
-                        FilterChip(
-                          selected: includeDeleted,
-                          label: const Text('삭제 포함'),
-                          onSelected: (value) {
-                            setSheetState(() => includeDeleted = value);
-                          },
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 18),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.of(dialogContext).pop(),
+                        child: const Text('닫기'),
+                      ),
+                      if (actionLabel != null && onAction != null) ...[
+                        const SizedBox(width: 8),
+                        FilledButton.icon(
+                          onPressed: onAction,
+                          icon: Icon(actionIcon),
+                          label: Text(actionLabel),
                         ),
                       ],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Expanded(
-                    child: loading
-                        ? const Center(child: CircularProgressIndicator())
-                        : failure != null
-                            ? Center(
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      '검색하지 못했습니다.',
-                                      style: TextStyle(
-                                        color: cs.error,
-                                        fontWeight: FontWeight.w800,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    OutlinedButton(
-                                      onPressed: loadingMore
-                                          ? null
-                                          : () => run(
-                                                more: cursor != null,
-                                              ),
-                                      child: const Text('다시 시도'),
-                                    ),
-                                  ],
-                                ),
-                              )
-                            : results.isEmpty
-                                ? Center(
-                                    child: Text(
-                                      hasSearched
-                                          ? '조건에 맞는 일정이 없습니다.'
-                                          : '검색어를 입력하고 검색을 실행하세요.',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        color: cs.onSurfaceVariant,
-                                      ),
-                                    ),
-                                  )
-                                : ListView.builder(
-                                    itemCount:
-                                        results.length + (hasMore ? 1 : 0),
-                                    itemBuilder: (context, index) {
-                                      if (index == results.length) {
-                                        return Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                            vertical: 12,
-                                          ),
-                                          child: Center(
-                                            child: OutlinedButton(
-                                              onPressed: loadingMore
-                                                  ? null
-                                                  : () => run(more: true),
-                                              child: Text(
-                                                loadingMore
-                                                    ? '조회 중'
-                                                    : '다음 20개',
-                                              ),
-                                            ),
-                                          ),
-                                        );
-                                      }
-                                      final event = results[index];
-                                      final type = _option(
-                                        _eventTypes,
-                                        event.eventType,
-                                      );
-                                      return ListTile(
-                                        leading: Icon(type.icon),
-                                        title: Text(event.title),
-                                        subtitle: Text(
-                                          '${_rangeLabel(event)} · ${type.label}',
-                                        ),
-                                        trailing: const Icon(
-                                          Icons.chevron_right_rounded,
-                                        ),
-                                        onTap: () {
-                                          Navigator.pop(context);
-                                          _openDetail(event);
-                                        },
-                                      );
-                                    },
-                                  ),
+                    ],
                   ),
                 ],
               ),
-            );
-          },
-        );
-      },
-    );
-    controller.dispose();
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (widget.useCommonUi) {
+      await showCommonOverlayDialog<void>(
+        context: context,
+        builder: builder,
+      );
+      return;
+    }
+    await showDialog<void>(context: context, builder: builder);
   }
 
-  Future<void> _showFailure({
+  Future<void> _showInfoDialog({
     required String title,
-    required String operation,
-    Object? error,
-    StackTrace? stackTrace,
-    Map<String, Object?> details = const <String, Object?>{},
-  }) {
-    return HeadquarterCalendarStatusDialog.showFailure(
-      context,
-      title: title,
-      operation: operation,
-      error: error,
-      stackTrace: stackTrace,
-      details: details,
-      useCommonUi: widget.useCommonUi,
-    );
+    required String message,
+  }) async {
+    Widget builder(BuildContext dialogContext) {
+      return AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('확인'),
+          ),
+        ],
+      );
+    }
+
+    if (widget.useCommonUi) {
+      await showCommonOverlayDialog<void>(
+        context: context,
+        builder: builder,
+      );
+      return;
+    }
+    await showDialog<void>(context: context, builder: builder);
+  }
+
+  Color _itemColor(BuildContext context, _HeadquarterCalendarItem item) {
+    final cs = Theme.of(context).colorScheme;
+    if (item.isTask) {
+      switch (item.priority) {
+        case SprintTaskPriority.high:
+          return cs.error;
+        case SprintTaskPriority.normal:
+          return googleEventColor(item.colorId, cs.primary);
+        case SprintTaskPriority.low:
+          return cs.secondary;
+        case null:
+          return cs.secondary;
+      }
+    }
+    return googleEventColor(item.colorId, cs.secondary);
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tokens = CommonUiTheme.of(context);
-    final events = _events;
-    final dayTotal =
-        _monthSummary?.day(_selectedDateKey).count ?? events.length;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final duration =
+        reduceMotion ? Duration.zero : const Duration(milliseconds: 220);
+    final events = _selectedItems;
+    final summary = _monthSummary;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -1455,159 +533,164 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard> {
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              IconButton(
-                onPressed: () => _moveMonth(-1),
-                icon: const Icon(Icons.chevron_left_rounded),
-              ),
-              Expanded(
-                child: Text(
-                  '${_visibleMonth.year}년 ${_visibleMonth.month.toString().padLeft(2, '0')}월',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w900),
+      child: AnimatedSize(
+        duration: duration,
+        curve: Curves.easeOutCubic,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                IconButton(
+                  onPressed: () => _moveMonth(-1),
+                  icon: const Icon(Icons.chevron_left_rounded),
                 ),
-              ),
-              IconButton(
-                onPressed: () => _moveMonth(1),
-                icon: const Icon(Icons.chevron_right_rounded),
-              ),
-              IconButton(
-                onPressed: _openSearch,
-                icon: const Icon(Icons.manage_search_rounded),
-                tooltip: '일정 검색',
-              ),
-              IconButton(
-                onPressed: () => _openEditor(),
-                icon: const Icon(Icons.add_circle_rounded),
-                tooltip: '일정 추가',
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: _weekdays
-                .map(
-                  (day) => Expanded(
-                    child: Center(
-                      child: Text(
-                        day,
-                        style: TextStyle(
-                          color: cs.onSurfaceVariant,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 12,
+                Expanded(
+                  child: Text(
+                    '${_visibleMonth.year}년 ${_visibleMonth.month.toString().padLeft(2, '0')}월',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w900),
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => _moveMonth(1),
+                  icon: const Icon(Icons.chevron_right_rounded),
+                ),
+                IconButton(
+                  onPressed: _refreshing ? null : _refresh,
+                  tooltip: '일정 갱신',
+                  icon: reduceMotion
+                      ? Icon(
+                          _refreshing
+                              ? Icons.sync_rounded
+                              : Icons.refresh_rounded,
+                        )
+                      : RotationTransition(
+                          turns: _refreshController,
+                          child: Icon(
+                            _refreshing
+                                ? Icons.sync_rounded
+                                : Icons.refresh_rounded,
+                          ),
+                        ),
+                ),
+                IconButton(
+                  onPressed: _store.initialized ? _openCreate : null,
+                  icon: const Icon(Icons.add_circle_rounded),
+                  tooltip: '일정 추가',
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: _weekdays
+                  .map(
+                    (day) => Expanded(
+                      child: Center(
+                        child: Text(
+                          day,
+                          style: TextStyle(
+                            color: cs.onSurfaceVariant,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 12,
+                          ),
                         ),
                       ),
                     ),
+                  )
+                  .toList(growable: false),
+            ),
+            const SizedBox(height: 5),
+            if ((_store.initializing || !_store.initialized) &&
+                _initializationError == null)
+              const SizedBox(
+                height: 250,
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (_initializationError != null)
+              _ErrorBox(
+                text: '캘린더 연결 정보를 불러오지 못했습니다.',
+                onRetry: () {
+                  debugPrint(
+                    '[HeadquarterCalendar] retry initialization error=$_initializationError',
+                  );
+                  if (_initializationStack != null) {
+                    debugPrint('$_initializationStack');
+                  }
+                  setState(() {
+                    _initializationError = null;
+                    _initializationStack = null;
+                  });
+                  unawaited(_initialize());
+                },
+              )
+            else
+              _buildCalendarGrid(summary),
+            const SizedBox(height: 13),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '${_selectedDay.month}월 ${_selectedDay.day}일 ${_weekdays[_selectedDay.weekday % 7]}요일',
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleSmall
+                        ?.copyWith(fontWeight: FontWeight.w900),
                   ),
-                )
-                .toList(growable: false),
-          ),
-          const SizedBox(height: 5),
-          if (_monthLoading && _monthSummary == null)
-            const SizedBox(
-              height: 250,
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else if (_monthError != null && _monthSummary == null)
-            _ErrorBox(
-              text: '월간 일정을 불러오지 못했습니다.',
-              onRetry: () {
-                _subscribeMonth();
-                _showFailure(
-                  title: '월간 달력 조회 실패',
-                  operation: 'watchMonthSummary',
-                  error: _monthError,
-                  stackTrace: _monthStack,
-                  details: <String, Object?>{'monthKey': _monthKey},
-                );
-              },
-            )
-          else
-            _buildCalendarGrid(),
-          const SizedBox(height: 13),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '${_selectedDay.month}월 ${_selectedDay.day}일 ${_weekdays[_selectedDay.weekday % 7]}요일',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleSmall
-                      ?.copyWith(fontWeight: FontWeight.w900),
                 ),
-              ),
-              Text(
-                '${events.length} / $dayTotal개',
-                style: TextStyle(
-                  color: cs.onSurfaceVariant,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          if (_eventsLoading && events.isEmpty)
-            const SizedBox(
-              height: 90,
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else if (_eventError != null && events.isEmpty)
-            _ErrorBox(
-              text: '선택 날짜 일정을 불러오지 못했습니다.',
-              onRetry: () {
-                unawaited(_subscribeEvents());
-                _showFailure(
-                  title: '날짜 일정 조회 실패',
-                  operation: 'watchFirstEventsForDate',
-                  error: _eventError,
-                  stackTrace: _eventStack,
-                  details: <String, Object?>{
-                    'dateKey': _selectedDateKey,
-                  },
-                );
-              },
-            )
-          else if (events.isEmpty)
-            _EmptyBox(onAdd: () => _openEditor())
-          else ...[
-            for (final event in events)
-              _EventTile(
-                event: event,
-                acknowledged: _acknowledgedIds.contains(event.id),
-                type: _option(_eventTypes, event.eventType),
-                onTap: () => _openDetail(event),
-              ),
-            if (_hasMore)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: OutlinedButton.icon(
-                  onPressed: _loadingMore ? null : _loadMore,
-                  icon: _loadingMore
-                      ? const SizedBox(
-                          width: 17,
-                          height: 17,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.expand_more_rounded),
-                  label: Text(
-                    _loadingMore ? '조회 중' : '다음 20개 일정',
+                AnimatedSwitcher(
+                  duration: duration,
+                  child: Text(
+                    '${events.length}개',
+                    key: ValueKey<int>(events.length),
+                    style: TextStyle(
+                      color: cs.onSurfaceVariant,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (_store.calendarProfiles.isEmpty && _store.initialized)
+              _ConnectionBox(onRefresh: _refresh)
+            else if (events.isEmpty)
+              _EmptyBox(onAdd: _openCreate)
+            else
+              AnimatedSwitcher(
+                duration: duration,
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                child: Column(
+                  key: ValueKey<String>(
+                    '${_dateKey(_selectedDay)}-${events.map((event) => event.id).join('|')}',
+                  ),
+                  children: [
+                    for (final event in events)
+                      _EventTile(
+                        event: event,
+                        color: _itemColor(context, event),
+                        onTap: () => _openItem(event),
+                      ),
+                    const SizedBox(height: 2),
+                    TextButton.icon(
+                      onPressed: _openCreate,
+                      icon: const Icon(Icons.add_rounded),
+                      label: const Text('일정 추가'),
+                    ),
+                  ],
                 ),
               ),
           ],
-        ],
+        ),
       ),
     );
   }
 
-  Widget _buildCalendarGrid() {
+  Widget _buildCalendarGrid(Map<String, _DaySummary> summary) {
     final first = DateTime(_visibleMonth.year, _visibleMonth.month, 1);
     final start = first.subtract(Duration(days: first.weekday % 7));
     final days = List<DateTime>.generate(
@@ -1624,16 +707,15 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard> {
       itemCount: days.length,
       itemBuilder: (context, index) {
         final day = days[index];
-        final key = HeadquarterCalendarEvent.dateKeyOf(day);
-        final summary = _monthSummary?.day(key);
+        final daySummary = summary[_dateKey(day)];
         final selected = _sameDay(day, _selectedDay);
         final today = _sameDay(day, DateTime.now());
         final inMonth = day.month == _visibleMonth.month &&
             day.year == _visibleMonth.year;
         return _DayCell(
           day: day.day,
-          count: summary?.count ?? 0,
-          important: summary?.hasImportantEvents ?? false,
+          count: daySummary?.count ?? 0,
+          important: daySummary?.important ?? false,
           selected: selected,
           today: today,
           inMonth: inMonth,
@@ -1643,96 +725,139 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard> {
     );
   }
 
-  bool _sameDay(DateTime left, DateTime right) {
-    return left.year == right.year &&
-        left.month == right.month &&
-        left.day == right.day;
-  }
+  static DateTime _day(DateTime value) =>
+      DateTime(value.year, value.month, value.day);
 
-  static String _dateLabel(DateTime date) {
-    return '${date.year}.${date.month.toString().padLeft(2, '0')}.${date.day.toString().padLeft(2, '0')}';
-  }
+  static bool _sameDay(DateTime left, DateTime right) =>
+      left.year == right.year &&
+      left.month == right.month &&
+      left.day == right.day;
 
-  static String _rangeLabel(HeadquarterCalendarEvent event) {
-    if (event.isSingleDay) {
-      return '${_dateLabel(event.startDate)} · 종일';
+  static String _dateKey(DateTime value) =>
+      '${value.year.toString().padLeft(4, '0')}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
+
+  static String _dateLabel(DateTime date) =>
+      '${date.year}.${date.month.toString().padLeft(2, '0')}.${date.day.toString().padLeft(2, '0')}';
+
+  static String _timeLabel(DateTime value) =>
+      '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
+
+  static String _rangeLabel(_HeadquarterCalendarItem item) {
+    if (item.allDay) {
+      if (_sameDay(item.start, item.lastDay)) {
+        return '${_dateLabel(item.start)} · 종일';
+      }
+      return '${_dateLabel(item.start)} ~ ${_dateLabel(item.lastDay)} · 종일';
     }
-    return '${_dateLabel(event.startDate)} ~ ${_dateLabel(event.endDate)} · ${event.durationDays}일';
-  }
-
-  static String _recurrenceLabel(HeadquarterCalendarEvent event) {
-    final unit = event.recurrenceFrequency == 'monthly' ? '개월' : '주';
-    return '${event.recurrenceInterval}$unit마다 반복';
-  }
-
-  static String _normalizedEventType(String value) {
-    return _eventTypes.any((option) => option.value == value)
-        ? value
-        : 'notice';
-  }
-
-  static _Option _option(List<_Option> options, String value) {
-    return options.firstWhere(
-      (option) => option.value == value,
-      orElse: () => options.first,
-    );
+    if (_sameDay(item.start, item.end)) {
+      return '${_dateLabel(item.start)} · ${_timeLabel(item.start)}~${_timeLabel(item.end)}';
+    }
+    return '${_dateLabel(item.start)} ${_timeLabel(item.start)} ~ ${_dateLabel(item.end)} ${_timeLabel(item.end)}';
   }
 }
 
-class _Option {
-  const _Option(this.value, this.label, this.icon);
-
-  final String value;
-  final String label;
-  final IconData icon;
-}
-
-class _ValueButton extends StatelessWidget {
-  const _ValueButton({
-    required this.label,
-    required this.value,
-    required this.onTap,
+class _HeadquarterCalendarItem {
+  const _HeadquarterCalendarItem({
+    required this.id,
+    required this.title,
+    required this.description,
+    required this.start,
+    required this.end,
+    required this.allDay,
+    required this.profileLabel,
+    required this.icon,
+    required this.colorId,
+    required this.isTask,
+    required this.important,
+    required this.editable,
+    this.priority,
+    this.taskId,
+    this.externalEventId,
+    this.projectName = '',
   });
 
-  final String label;
-  final String value;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-        decoration: BoxDecoration(
-          border: Border.all(color: cs.outlineVariant),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                color: cs.onSurfaceVariant,
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              value,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontWeight: FontWeight.w900),
-            ),
-          ],
-        ),
-      ),
+  factory _HeadquarterCalendarItem.task({
+    required SprintTask task,
+    required String profileLabel,
+    required String projectName,
+    required IconData projectIcon,
+    required String? projectColorId,
+  }) {
+    return _HeadquarterCalendarItem(
+      id: 'task:${task.id}',
+      title: task.title,
+      description: task.description,
+      start: task.startDate,
+      end: task.endDate.add(const Duration(days: 1)),
+      allDay: true,
+      profileLabel: profileLabel,
+      icon: projectIcon,
+      colorId: projectColorId,
+      isTask: true,
+      important: task.priority == SprintTaskPriority.high,
+      editable: true,
+      priority: task.priority,
+      taskId: task.id,
+      projectName: projectName,
     );
   }
+
+  factory _HeadquarterCalendarItem.external({
+    required SprintExternalEvent event,
+    required String profileLabel,
+    required bool editable,
+  }) {
+    return _HeadquarterCalendarItem(
+      id: 'external:${event.id}',
+      title: event.title,
+      description: event.description,
+      start: event.start,
+      end: event.end,
+      allDay: event.allDay,
+      profileLabel: profileLabel,
+      icon: Icons.event_note_rounded,
+      colorId: event.colorId,
+      isTask: false,
+      important: false,
+      editable: editable,
+      externalEventId: event.id,
+    );
+  }
+
+  final String id;
+  final String title;
+  final String description;
+  final DateTime start;
+  final DateTime end;
+  final bool allDay;
+  final String profileLabel;
+  final IconData icon;
+  final String? colorId;
+  final bool isTask;
+  final bool important;
+  final bool editable;
+  final SprintTaskPriority? priority;
+  final String? taskId;
+  final String? externalEventId;
+  final String projectName;
+
+  DateTime get lastDay {
+    final value = allDay ? end.subtract(const Duration(days: 1)) : end;
+    return DateTime(value.year, value.month, value.day);
+  }
+
+  bool spans(DateTime value) {
+    final day = DateTime(value.year, value.month, value.day);
+    final first = DateTime(start.year, start.month, start.day);
+    return !day.isBefore(first) && !day.isAfter(lastDay);
+  }
+}
+
+class _DaySummary {
+  const _DaySummary({this.count = 0, this.important = false});
+
+  final int count;
+  final bool important;
 }
 
 class _InfoChip extends StatelessWidget {
@@ -1755,50 +880,18 @@ class _InfoChip extends StatelessWidget {
         children: [
           Icon(icon, size: 15, color: cs.onSurfaceVariant),
           const SizedBox(width: 5),
-          Text(
-            label,
-            style: TextStyle(
-              color: cs.onSurfaceVariant,
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
+          Flexible(
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: cs.onSurfaceVariant,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _FilterDropdown extends StatelessWidget {
-  const _FilterDropdown({
-    required this.value,
-    required this.label,
-    required this.items,
-    required this.onChanged,
-  });
-
-  final String value;
-  final String label;
-  final Map<String, String> items;
-  final ValueChanged<String> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return DropdownButtonHideUnderline(
-      child: DropdownButton<String>(
-        value: value,
-        borderRadius: BorderRadius.circular(14),
-        items: items.entries
-            .map(
-              (entry) => DropdownMenuItem<String>(
-                value: entry.key,
-                child: Text('${label}: ${entry.value}'),
-              ),
-            )
-            .toList(growable: false),
-        onChanged: (next) {
-          if (next != null) onChanged(next);
-        },
       ),
     );
   }
@@ -1827,6 +920,8 @@ class _DayCell extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tokens = CommonUiTheme.of(context);
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final foreground = selected
         ? cs.onPrimary
         : inMonth
@@ -1841,7 +936,9 @@ class _DayCell extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
+        duration:
+            reduceMotion ? Duration.zero : const Duration(milliseconds: 160),
+        curve: Curves.easeOutCubic,
         margin: const EdgeInsets.all(2),
         padding: const EdgeInsets.fromLTRB(4, 5, 4, 4),
         decoration: BoxDecoration(
@@ -1857,15 +954,17 @@ class _DayCell extends StatelessWidget {
               '$day',
               style: TextStyle(
                 color: foreground,
-                fontWeight: selected || today
-                    ? FontWeight.w900
-                    : FontWeight.w700,
+                fontWeight:
+                    selected || today ? FontWeight.w900 : FontWeight.w700,
                 fontSize: 12,
               ),
             ),
             const Spacer(),
             if (count > 0)
-              Container(
+              AnimatedContainer(
+                duration: reduceMotion
+                    ? Duration.zero
+                    : const Duration(milliseconds: 160),
                 constraints: const BoxConstraints(minWidth: 20),
                 height: 18,
                 padding: const EdgeInsets.symmetric(horizontal: 5),
@@ -1904,25 +1003,22 @@ class _DayCell extends StatelessWidget {
 class _EventTile extends StatelessWidget {
   const _EventTile({
     required this.event,
-    required this.acknowledged,
-    required this.type,
+    required this.color,
     required this.onTap,
   });
 
-  final HeadquarterCalendarEvent event;
-  final bool acknowledged;
-  final _Option type;
+  final _HeadquarterCalendarItem event;
+  final Color color;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tokens = CommonUiTheme.of(context);
-    final color = event.priority == 'urgent'
-        ? cs.error
-        : event.priority == 'high'
-            ? cs.primary
-            : cs.secondary;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final duration =
+        reduceMotion ? Duration.zero : const Duration(milliseconds: 180);
     return Padding(
       padding: const EdgeInsets.only(bottom: 7),
       child: Material(
@@ -1930,7 +1026,9 @@ class _EventTile extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(14),
-          child: Container(
+          child: AnimatedContainer(
+            duration: duration,
+            curve: Curves.easeOutCubic,
             padding: const EdgeInsets.all(11),
             decoration: BoxDecoration(
               color: Color.alphaBlend(color.withOpacity(.07), cs.surface),
@@ -1939,14 +1037,15 @@ class _EventTile extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Container(
+                AnimatedContainer(
+                  duration: duration,
                   width: 34,
                   height: 34,
                   decoration: BoxDecoration(
                     color: color.withOpacity(.12),
                     borderRadius: BorderRadius.circular(11),
                   ),
-                  child: Icon(type.icon, color: color, size: 19),
+                  child: Icon(event.icon, color: color, size: 19),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -1961,7 +1060,7 @@ class _EventTile extends StatelessWidget {
                       ),
                       const SizedBox(height: 3),
                       Text(
-                        '${_HeadquarterCalendarCardState._rangeLabel(event)} · ${type.label}',
+                        '${_HeadquarterCalendarCardState._rangeLabel(event)} · ${event.profileLabel}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -1973,20 +1072,24 @@ class _EventTile extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (event.isRecurring)
-                  const Padding(
-                    padding: EdgeInsets.only(right: 6),
-                    child: Icon(Icons.repeat_rounded, size: 17),
+                if (event.isTask)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: Icon(
+                      Icons.bolt_rounded,
+                      color: color,
+                      size: 17,
+                    ),
+                  )
+                else if (!event.editable)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: Icon(
+                      Icons.lock_outline_rounded,
+                      color: cs.onSurfaceVariant,
+                      size: 17,
+                    ),
                   ),
-                if (event.requiresAck)
-                  Icon(
-                    acknowledged
-                        ? Icons.verified_rounded
-                        : Icons.assignment_late_rounded,
-                    color: acknowledged ? cs.primary : cs.error,
-                    size: 18,
-                  ),
-                const SizedBox(width: 4),
                 const Icon(Icons.chevron_right_rounded, size: 18),
               ],
             ),
@@ -2020,6 +1123,41 @@ class _EmptyBox extends StatelessWidget {
             onPressed: onAdd,
             icon: const Icon(Icons.add_rounded),
             label: const Text('일정 추가'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ConnectionBox extends StatelessWidget {
+  const _ConnectionBox({required this.onRefresh});
+
+  final VoidCallback onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest.withOpacity(.45),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: cs.outlineVariant),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.calendar_month_rounded, color: cs.primary),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Text(
+              '스프린트 모드에 연결된 Google 캘린더가 없습니다.',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ),
+          IconButton(
+            onPressed: onRefresh,
+            icon: const Icon(Icons.refresh_rounded),
           ),
         ],
       ),
