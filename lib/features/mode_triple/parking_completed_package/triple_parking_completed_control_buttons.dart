@@ -8,6 +8,7 @@ import '../../../design_system/common_ui/common_ui_theme.dart';
 import '../../account/applications/user_state.dart';
 import '../../dev/application/area_state.dart';
 import '../../dashboard/widgets/productivity_sheet.dart';
+import '../../../shared/page/application/common/type_auto_transition_guard.dart';
 import '../triple_departure_completed_bottom_sheet.dart';
 
 class TripleParkingCompletedControlButtons extends StatelessWidget {
@@ -16,15 +17,37 @@ class TripleParkingCompletedControlButtons extends StatelessWidget {
     required this.showSearchDialog,
   });
 
-  final VoidCallback showSearchDialog;
+  final Future<void> Function() showSearchDialog;
 
   Future<void> _openDepartureCompleted(BuildContext context) async {
-    await showCommonOverlayBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      transparentBackground: true,
-      builder: (_) => const TripleDepartureCompletedBottomSheet(),
+    final guard = context.read<TypeAutoTransitionGuard>();
+    await guard.runBlocked<void>(
+      '출차 완료',
+      () async {
+        await showCommonOverlayBottomSheet<void>(
+          context: context,
+          isScrollControlled: true,
+          useSafeArea: true,
+          transparentBackground: true,
+          builder: (_) => const TripleDepartureCompletedBottomSheet(),
+        );
+      },
+    );
+  }
+
+  Future<void> _openMonthly(BuildContext context) async {
+    final guard = context.read<TypeAutoTransitionGuard>();
+    await guard.runBlocked<void>(
+      '정기 주차',
+      ProductivitySheet.togglePanel,
+    );
+  }
+
+  Future<void> _openSearch(BuildContext context) async {
+    final guard = context.read<TypeAutoTransitionGuard>();
+    await guard.runBlocked<void>(
+      '검색',
+      showSearchDialog,
     );
   }
 
@@ -53,7 +76,7 @@ class TripleParkingCompletedControlButtons extends StatelessWidget {
                 label: '정기 주차',
                 icon: Icons.dashboard_customize_rounded,
                 onPressed: canUseMonthly
-                    ? () => ProductivitySheet.togglePanel()
+                    ? () => _openMonthly(context)
                     : null,
                 variant: CommonButtonVariant.secondary,
                 expand: true,
@@ -66,7 +89,7 @@ class TripleParkingCompletedControlButtons extends StatelessWidget {
               child: CommonButton(
                 label: '검색',
                 icon: Icons.manage_search_rounded,
-                onPressed: showSearchDialog,
+                onPressed: () => _openSearch(context),
                 variant: CommonButtonVariant.secondary,
                 expand: true,
                 minHeight: 50,

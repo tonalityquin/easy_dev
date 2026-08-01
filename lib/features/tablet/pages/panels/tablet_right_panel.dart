@@ -1,18 +1,21 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../../app/utils/dev_firebase_debug_dialog.dart';
+import '../../../../app/utils/status_dialog.dart';
 import '../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../design_system/common_ui/common_ui_overlays.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
-import '../../../../app/utils/dev_firebase_debug_dialog.dart';
 import '../../../../shared/plate/application/common/movement_plate.dart';
 import '../../../../shared/plate/data/repositories/firestore_plate_repository.dart';
 import '../../../../shared/plate/domain/enums/plate_type.dart';
 import '../../../../shared/plate/domain/models/plate_model.dart';
 import '../../../location/applications/location_state.dart';
 import '../../../location/domain/models/location_model.dart';
+import '../../../selector/application/dev_auth.dart';
 import '../../applications/tablet_pad_mode_state.dart';
 import '../../domain/models/two_d/tablet_grid_2d_preview.dart'
     show
@@ -56,7 +59,9 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
   bool _isLoading = false;
   bool _dialogOpen = false;
   bool _didRunKeypadEntrance = false;
+  bool _debugDialogShowing = false;
   bool? _reduceMotion;
+  final List<String> _debugLines = <String>[];
 
   late final AnimationController _keypadController;
   late final Animation<Offset> _slideAnimation;
@@ -128,6 +133,62 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
   }
 
   bool _isValidPlate(String value) => RegExp(r'^\d{4}$').hasMatch(value);
+
+  void _debugLog(
+    String event, [
+    Map<String, Object?> details = const <String, Object?>{},
+  ]) {
+    final now = DateTime.now();
+    final buffer = StringBuffer()
+      ..write('[TabletPlateSearch] ')
+      ..write(now.toIso8601String())
+      ..write(' event=')
+      ..write(event);
+    for (final entry in details.entries) {
+      if (entry.value == null) continue;
+      buffer
+        ..write(' ')
+        ..write(entry.key)
+        ..write('=')
+        ..write(entry.value);
+    }
+    final line = buffer.toString();
+    _debugLines.add(line);
+    if (_debugLines.length > 100) {
+      _debugLines.removeRange(0, _debugLines.length - 100);
+    }
+    debugPrint(line);
+  }
+
+  String get _debugPrintCode {
+    return _debugLines
+        .map((line) => 'debugPrint(${jsonEncode(line)});')
+        .join('\n');
+  }
+
+  Future<void> _showDeveloperSearchDebugDialog({
+    String title = '태블릿 차량 검색 디버그',
+  }) async {
+    if (!mounted || _debugDialogShowing || _debugLines.isEmpty) return;
+    final enabled = await DevAuth.isDevModeEnabled();
+    if (!enabled || !mounted || _debugDialogShowing) return;
+    final code = _debugPrintCode.trim();
+    if (code.isEmpty) return;
+    _debugDialogShowing = true;
+    try {
+      await StatusDialog.showSuccess(
+        context,
+        title: title,
+        description: _debugLines.join('\n'),
+        copyText: code,
+        copyButtonLabel: 'debugPrint 코드 복사',
+        visibleDuration: const Duration(seconds: 45),
+        useCommonUi: true,
+      );
+    } finally {
+      _debugDialogShowing = false;
+    }
+  }
 
   Color _tintOnSurface(ColorScheme cs, {required double opacity}) {
     return Color.alphaBlend(cs.primary.withOpacity(opacity), cs.surface);
@@ -219,25 +280,55 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
   Future<void> _refreshSearchResults() async {
     if (!mounted || _isLoading || _dialogOpen) return;
 
+    final input = _controller.text;
+    final parkingCompletedType = PlateType.parkingCompleted.firestoreValue;
+    _debugLines.clear();
+    _debugLog('search_started', <String, Object?>{
+      'collection': 'plates',
+      'area': widget.area,
+      'plateFourDigit': input,
+      'type': parkingCompletedType,
+    });
+
     setState(() => _isLoading = true);
 
     try {
       final repository = FirestorePlateRepository();
-      final input = _controller.text;
-
-      final results = await repository.fourDigitForTabletQuery(
+      final queriedResults = await repository.fourDigitForTabletQuery(
         plateFourDigit: input,
         area: widget.area,
       );
+      final results = queriedResults
+          .where((plate) => plate.type == parkingCompletedType)
+          .toList(growable: false);
+      final filteredCount = queriedResults.length - results.length;
+
+      _debugLog('search_completed', <String, Object?>{
+        'queriedCount': queriedResults.length,
+        'resultCount': results.length,
+        'filteredUnexpectedTypeCount': filteredCount,
+      });
+
+      if (filteredCount > 0) {
+        _debugLog('unexpected_type_filtered', <String, Object?>{
+          'count': filteredCount,
+          'requiredType': parkingCompletedType,
+        });
+      }
 
       if (!mounted) return;
       setState(() => _isLoading = false);
 
       await _showUnifiedSearchDialog(results);
+      if (!mounted) return;
+      await _showDeveloperSearchDebugDialog();
     } catch (e, st) {
       if (!mounted) return;
       setState(() => _isLoading = false);
-      debugPrint('검색 중 오류가 발생했습니다: $e');
+      _debugLog('search_failed', <String, Object?>{
+        'error': e,
+        'type': parkingCompletedType,
+      });
       await DevFirebaseDebugDialog.show(
         context: context,
         operation: 'tablet.plates.fourDigitForTabletQuery',
@@ -246,14 +337,15 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
         details: <String, Object?>{
           'collection': 'plates',
           'area': widget.area,
-          'plateFourDigit': _controller.text,
-          'types': <String>[
-            PlateType.parkingCompleted.firestoreValue,
-            PlateType.departureCompleted.firestoreValue,
-          ],
+          'plateFourDigit': input,
+          'type': parkingCompletedType,
           'widget': 'RightPaneSearchPanel',
         },
         useCommonUi: true,
+      );
+      if (!mounted) return;
+      await _showDeveloperSearchDebugDialog(
+        title: '태블릿 차량 검색 오류 디버그',
       );
     }
   }
@@ -302,7 +394,22 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
         Future<void> confirmDepartureRequested(StateSetter setStateSB) async {
           final plate = selected;
           if (plate == null || busy) return;
+          if (plate.type != PlateType.parkingCompleted.firestoreValue) {
+            _debugLog('departure_request_blocked', <String, Object?>{
+              'plateId': plate.id,
+              'plateFourDigit': plate.plateFourDigit,
+              'actualType': plate.type,
+              'requiredType': PlateType.parkingCompleted.firestoreValue,
+            });
+            return;
+          }
 
+          _debugLog('departure_request_started', <String, Object?>{
+            'plateId': plate.id,
+            'plateFourDigit': plate.plateFourDigit,
+            'type': plate.type,
+            'area': plate.area,
+          });
           setStateSB(() => busy = true);
 
           try {
@@ -314,6 +421,10 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
               forceViewSync: true,
             );
 
+            _debugLog('departure_request_completed', <String, Object?>{
+              'plateId': plate.id,
+              'plateFourDigit': plate.plateFourDigit,
+            });
             if (!dialogCtx.mounted) return;
             await _showDepartureRequestedSuccessDialog(dialogCtx, plate);
 
@@ -321,7 +432,11 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
             Navigator.of(dialogCtx).pop(_UnifiedDialogCloseReason.confirmed);
           } catch (e, st) {
             if (!dialogCtx.mounted) return;
-            debugPrint('출차 요청 처리 중 오류가 발생했습니다: $e');
+            _debugLog('departure_request_failed', <String, Object?>{
+              'plateId': plate.id,
+              'plateFourDigit': plate.plateFourDigit,
+              'error': e,
+            });
             await DevFirebaseDebugDialog.show(
               context: dialogCtx,
               operation: 'tablet.movement.setDepartureRequested',
@@ -333,6 +448,7 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
                 'location': plate.location,
                 'plateId': plate.id,
                 'plateFourDigit': plate.plateFourDigit,
+                'type': plate.type,
                 'forceViewSync': true,
                 'widget': 'RightPaneSearchPanel.confirmDepartureRequested',
               },
@@ -369,6 +485,12 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
                 compact: isPhone,
                 onSelect: (p) {
                   if (busy) return;
+                  _debugLog('result_selected', <String, Object?>{
+                    'plateId': p.id,
+                    'plateFourDigit': p.plateFourDigit,
+                    'type': p.type,
+                    'area': p.area,
+                  });
                   setStateSB(() {
                     selected = p;
                     selectedId = p.id;
@@ -867,6 +989,10 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
 
     _dialogOpen = false;
     if (!mounted) return;
+    _debugLog('result_dialog_closed', <String, Object?>{
+      'reason': closeReason?.name ?? 'dismissed',
+      'resultCount': results.length,
+    });
 
     if (closeReason == null ||
         closeReason == _UnifiedDialogCloseReason.reset ||
@@ -907,10 +1033,28 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
   }
 
   Widget _buildSearchProgressBar(ColorScheme cs) {
+    final duration = tabletCommonDuration(context, CommonUiMotion.selection);
     return AnimatedSwitcher(
-      duration: tabletCommonDuration(context, CommonUiMotion.selection),
+      duration: duration,
+      reverseDuration: duration,
+      transitionBuilder: (child, animation) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: CommonUiMotion.enter,
+          reverseCurve: CommonUiMotion.exit,
+        );
+        return FadeTransition(
+          opacity: curved,
+          child: SizeTransition(
+            sizeFactor: curved,
+            axisAlignment: -1,
+            child: child,
+          ),
+        );
+      },
       child: _isLoading
           ? ClipRRect(
+              key: const ValueKey<String>('tablet-search-loading'),
               borderRadius: BorderRadius.circular(999),
               child: LinearProgressIndicator(
                 minHeight: 3,
@@ -918,7 +1062,10 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
                 backgroundColor: cs.outlineVariant.withOpacity(.35),
               ),
             )
-          : const SizedBox.shrink(),
+          : const SizedBox(
+              key: ValueKey<String>('tablet-search-idle'),
+              height: 3,
+            ),
     );
   }
 

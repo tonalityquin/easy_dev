@@ -18,6 +18,7 @@ import '../../../plate/domain/enums/plate_type.dart';
 import '../../../plate/domain/repositories/plate_repository.dart';
 import '../../../tts/application/plate_tts_event_hub.dart';
 import '../../../tts/services/page/tts_view_refresh_service.dart';
+import '../../application/common/type_auto_transition_guard.dart';
 import '../../application/common/type_view_mode_state.dart';
 import 'type_page_bottom_bars.dart';
 
@@ -326,6 +327,9 @@ class _TypePageShellState<PState, PgState extends ChangeNotifier>
           ChangeNotifierProvider<TypeViewModeState>(
             create: (_) => TypeViewModeState(),
           ),
+          ChangeNotifierProvider<TypeAutoTransitionGuard>(
+            create: (_) => TypeAutoTransitionGuard(),
+          ),
           ChangeNotifierProvider<VoiceAppbarUiState>.value(
             value: _talkUiState,
           ),
@@ -374,17 +378,24 @@ class _TypePageShellState<PState, PgState extends ChangeNotifier>
                     (msg) => debugPrint(msg),
                   );
                 },
-                child: Scaffold(
-                  backgroundColor: tokens.canvas,
-                  body: body,
-                  bottomNavigationBar: TypePageBottomBars(
-                    tableTop: TypePageParkingCompletedControlBar<PgState>(
-                      builder: widget.config.buildParkingCompletedControlBar,
-                    ),
-                    tableMiddle: TypePageEntryDashboardBar(
-                      config: widget.config,
-                    ),
-                    modeSwitch: const TypePageModeSwitchBar(),
+                child: TypePageInteractionBoundary(
+                  child: Stack(
+                    children: [
+                      Scaffold(
+                        backgroundColor: tokens.canvas,
+                        body: body,
+                        bottomNavigationBar: TypePageBottomBars(
+                          tableTop: TypePageParkingCompletedControlBar<PgState>(
+                            builder: widget.config.buildParkingCompletedControlBar,
+                          ),
+                          tableMiddle: TypePageEntryDashboardBar(
+                            config: widget.config,
+                          ),
+                          modeSwitch: const TypePageModeSwitchBar(),
+                        ),
+                      ),
+                      const TypeAutoTransitionDebugIndicator(),
+                    ],
                   ),
                 ),
               ),
@@ -392,6 +403,235 @@ class _TypePageShellState<PState, PgState extends ChangeNotifier>
           },
         ),
       ),
+    );
+  }
+}
+
+class TypePageInteractionBoundary extends StatelessWidget {
+  const TypePageInteractionBoundary({
+    super.key,
+    required this.child,
+  });
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final guard = context.read<TypeAutoTransitionGuard>();
+    return NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        if (notification is ScrollStartNotification) {
+          guard.beginScroll();
+        } else if (notification is ScrollEndNotification) {
+          guard.endScroll();
+        }
+        return false;
+      },
+      child: Listener(
+        behavior: HitTestBehavior.translucent,
+        onPointerDown: guard.pointerDown,
+        onPointerMove: guard.pointerMove,
+        onPointerUp: guard.pointerUp,
+        onPointerCancel: guard.pointerCancel,
+        onPointerSignal: guard.pointerSignal,
+        onPointerHover: (_) => guard.markActivity('pointer_hover'),
+        child: child,
+      ),
+    );
+  }
+}
+
+class TypeAutoTransitionDebugIndicator extends StatefulWidget {
+  const TypeAutoTransitionDebugIndicator({super.key});
+
+  @override
+  State<TypeAutoTransitionDebugIndicator> createState() =>
+      _TypeAutoTransitionDebugIndicatorState();
+}
+
+class _TypeAutoTransitionDebugIndicatorState
+    extends State<TypeAutoTransitionDebugIndicator> {
+  Timer? _ticker;
+
+  @override
+  void initState() {
+    super.initState();
+    _ticker = Timer.periodic(const Duration(milliseconds: 100), (_) {
+      if (!mounted) return;
+      final guard = context.read<TypeAutoTransitionGuard>();
+      if (!guard.developerModeEnabled) return;
+      if (!guard.countdownRunning) return;
+      setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    _ticker = null;
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final guard = context.watch<TypeAutoTransitionGuard>();
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final duration = reduceMotion ? Duration.zero : CommonUiMotion.component;
+    final tokens = CommonUiTheme.of(context);
+    final textTheme = Theme.of(context).textTheme;
+
+    return Positioned(
+      top: 10,
+      right: 10,
+      child: SafeArea(
+        child: IgnorePointer(
+          child: AnimatedSwitcher(
+            duration: duration,
+            switchInCurve: CommonUiMotion.enter,
+            switchOutCurve: CommonUiMotion.exit,
+            transitionBuilder: (child, animation) {
+              final curved = CurvedAnimation(
+                parent: animation,
+                curve: CommonUiMotion.enter,
+                reverseCurve: CommonUiMotion.exit,
+              );
+              return FadeTransition(
+                opacity: curved,
+                child: ScaleTransition(
+                  scale: Tween<double>(begin: 0.96, end: 1).animate(curved),
+                  alignment: Alignment.topRight,
+                  child: child,
+                ),
+              );
+            },
+            child: !guard.developerModeEnabled
+                ? const SizedBox.shrink(
+                    key: ValueKey<String>('auto-debug-hidden'),
+                  )
+                : Container(
+                    key: const ValueKey<String>('auto-debug-visible'),
+                    width: 178,
+                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                    decoration: BoxDecoration(
+                      color: tokens.surfaceRaised.withOpacity(0.94),
+                      borderRadius: BorderRadius.circular(CommonUiShapes.card),
+                      border: Border.all(color: tokens.borderSubtle),
+                      boxShadow: [
+                        BoxShadow(
+                          color: tokens.shadow,
+                          blurRadius: 14,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: _TypeAutoTransitionDebugContent(
+                      guard: guard,
+                      textTheme: textTheme,
+                      accent: tokens.accent,
+                      foreground: tokens.textPrimary,
+                      secondary: tokens.textSecondary,
+                    ),
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TypeAutoTransitionDebugContent extends StatelessWidget {
+  const _TypeAutoTransitionDebugContent({
+    required this.guard,
+    required this.textTheme,
+    required this.accent,
+    required this.foreground,
+    required this.secondary,
+  });
+
+  final TypeAutoTransitionGuard guard;
+  final TextTheme textTheme;
+  final Color accent;
+  final Color foreground;
+  final Color secondary;
+
+  @override
+  Widget build(BuildContext context) {
+    final running = guard.countdownRunning;
+    final blocked = guard.isBlocked;
+    final remainingSeconds = guard.remaining.inMilliseconds / 1000;
+    final stateKey = running
+        ? 'running'
+        : blocked
+            ? 'blocked'
+            : 'disabled';
+    final title = running
+        ? 'STATUS ${remainingSeconds.toStringAsFixed(1)}s'
+        : blocked
+            ? 'STATUS PAUSE'
+            : 'STATUS OFF';
+    final detail = blocked
+        ? guard.blockReason ?? '작업 중'
+        : guard.countdownEnabled
+            ? '전환 대기'
+            : guard.disabledReason;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        AnimatedSwitcher(
+          duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false
+              ? Duration.zero
+              : CommonUiMotion.selection,
+          child: Row(
+            key: ValueKey<String>(stateKey),
+            children: [
+              Icon(
+                running
+                    ? Icons.timer_outlined
+                    : blocked
+                        ? Icons.pause_circle_outline_rounded
+                        : Icons.stop_circle_outlined,
+                size: 17,
+                color: running ? accent : secondary,
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: (textTheme.labelLarge ?? const TextStyle()).copyWith(
+                    color: foreground,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 7),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(999),
+          child: LinearProgressIndicator(
+            minHeight: 5,
+            value: running ? guard.progress : 0,
+            backgroundColor: secondary.withOpacity(0.18),
+            valueColor: AlwaysStoppedAnimation<Color>(accent),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          detail,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: (textTheme.labelSmall ?? const TextStyle()).copyWith(
+            color: secondary,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -422,12 +662,18 @@ class TypePageEntryDashboardBar<PState, PgState extends ChangeNotifier>
   final TypePageConfig<PState, PgState> config;
 
   Future<void> _openDashboard(BuildContext context) async {
-    await showCommonOverlayBottomSheet<void>(
-      context: context,
-      useSafeArea: true,
-      isScrollControlled: true,
-      transparentBackground: true,
-      builder: (_) => config.buildDashboardBottomSheet(),
+    final guard = context.read<TypeAutoTransitionGuard>();
+    await guard.runBlocked<void>(
+      '대시보드',
+      () async {
+        await showCommonOverlayBottomSheet<void>(
+          context: context,
+          useSafeArea: true,
+          isScrollControlled: true,
+          transparentBackground: true,
+          builder: (_) => config.buildDashboardBottomSheet(),
+        );
+      },
     );
   }
 
@@ -531,7 +777,11 @@ class TypePageOpenEntryButton<PState, PgState extends ChangeNotifier>
       icon: Icons.add_circle_outline_rounded,
       onPressed: () async {
         _trace(context);
-        await _openEntryScreen(context);
+        final guard = context.read<TypeAutoTransitionGuard>();
+        await guard.runBlocked<void>(
+          '입차 화면',
+          () => _openEntryScreen(context),
+        );
       },
       variant: CommonButtonVariant.secondary,
       expand: true,

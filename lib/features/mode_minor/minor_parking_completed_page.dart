@@ -17,9 +17,13 @@ import '../../shared/plate/widgets/parking_completed_plate_search_sheet.dart';
 class MinorParkingCompletedPage extends StatefulWidget {
   const MinorParkingCompletedPage({super.key});
 
-  static void openSearchDialog(GlobalKey key, BuildContext context) {
-    (key.currentState as _MinorParkingCompletedPageState?)
-        ?._showSearchDialog(context);
+  static Future<void> openSearchDialog(
+    GlobalKey key,
+    BuildContext context,
+  ) async {
+    final state = key.currentState as _MinorParkingCompletedPageState?;
+    if (state == null) return;
+    await state._showSearchDialog(context);
   }
 
   @override
@@ -34,11 +38,11 @@ class _MinorParkingCompletedPageState extends State<MinorParkingCompletedPage> {
     }
   }
 
-  void _showSearchDialog(BuildContext context) {
+  Future<void> _showSearchDialog(BuildContext context) async {
     final currentArea = context.read<AreaState>().currentArea;
     _log('open search dialog');
 
-    showCommonOverlayBottomSheet<void>(
+    await showCommonOverlayBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: false,

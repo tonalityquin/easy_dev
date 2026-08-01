@@ -67,16 +67,13 @@ class PlateQueryService {
     required String plateFourDigit,
     required String area,
   }) async {
-    final types = [
-      PlateType.parkingCompleted.firestoreValue,
-      PlateType.departureCompleted.firestoreValue,
-    ];
+    final type = PlateType.parkingCompleted.firestoreValue;
 
     final query = _firestore
         .collection('plates')
         .where('plate_four_digit', isEqualTo: plateFourDigit)
         .where('area', isEqualTo: area)
-        .where('type', whereIn: types);
+        .where('type', isEqualTo: type);
 
     return _queryPlates(
       query,
@@ -84,7 +81,7 @@ class PlateQueryService {
       filters: {
         'plate_four_digit': plateFourDigit,
         'area': area,
-        'type_in': types
+        'type': type,
       },
       tags: const ['plates', 'query', 'fourDigit', 'tablet'],
     );

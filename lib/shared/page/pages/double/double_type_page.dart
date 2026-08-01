@@ -61,12 +61,10 @@ class DoubleTypePage extends StatelessWidget {
         },
         buildParkingCompletedControlBar: (context, pageState) {
           return DoubleParkingCompletedControlButtons(
-            showSearchDialog: () {
-              DoubleParkingCompletedPage.openSearchDialog(
-                pageState.parkingCompletedKey,
-                context,
-              );
-            },
+            showSearchDialog: () => DoubleParkingCompletedPage.openSearchDialog(
+              pageState.parkingCompletedKey,
+              context,
+            ),
           );
         },
         buildDashboardBottomSheet: () => const DoubleHomeDashBoardBottomSheet(),

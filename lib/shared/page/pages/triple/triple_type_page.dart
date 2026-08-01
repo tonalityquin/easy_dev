@@ -65,12 +65,10 @@ class TripleTypePage extends StatelessWidget {
         },
         buildParkingCompletedControlBar: (context, pageState) {
           return TripleParkingCompletedControlButtons(
-            showSearchDialog: () {
-              TripleParkingCompletedPage.openSearchDialog(
-                pageState.parkingCompletedKey,
-                context,
-              );
-            },
+            showSearchDialog: () => TripleParkingCompletedPage.openSearchDialog(
+              pageState.parkingCompletedKey,
+              context,
+            ),
           );
         },
         buildDashboardBottomSheet: () => const TripleHomeDashBoardBottomSheet(),

@@ -67,12 +67,10 @@ class MinorTypePage extends StatelessWidget {
         },
         buildParkingCompletedControlBar: (context, pageState) {
           return MinorParkingCompletedControlButtons(
-            showSearchDialog: () {
-              MinorParkingCompletedPage.openSearchDialog(
-                pageState.parkingCompletedKey,
-                context,
-              );
-            },
+            showSearchDialog: () => MinorParkingCompletedPage.openSearchDialog(
+              pageState.parkingCompletedKey,
+              context,
+            ),
           );
         },
         buildDashboardBottomSheet: () => const MinorHomeDashBoardBottomSheet(),

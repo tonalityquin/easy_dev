@@ -55,19 +55,22 @@ class DevAuth {
     return DevPrefs(savedMode: savedMode, devAuthorized: dev);
   }
 
+  static Future<bool> isDevModeEnabled() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool(kDevModeEnabledKey) ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   static Future<bool> isDeveloperLoggedIn() async {
     try {
       final restored = await restorePrefs();
-      final prefs = await SharedPreferences.getInstance();
-      final devModeEnabled = prefs.getBool(kDevModeEnabledKey) ?? false;
+      final devModeEnabled = await isDevModeEnabled();
       return restored.devAuthorized || devModeEnabled;
     } catch (_) {
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        return prefs.getBool(kDevModeEnabledKey) ?? false;
-      } catch (_) {
-        return false;
-      }
+      return await isDevModeEnabled();
     }
   }
 

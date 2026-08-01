@@ -1,13 +1,16 @@
 import 'dart:async';
 import 'dart:ui' show FontFeature;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../app/utils/status_dialog.dart';
 import '../../features/account/applications/user_state.dart';
 import '../../features/dev/application/area_state.dart';
 import '../../features/chat/presentation/area_chat_panel.dart';
 import '../../features/voice/application/voice_appbar_ui_state.dart';
+import '../page/application/common/type_auto_transition_guard.dart';
 import '../page/application/common/type_view_mode_state.dart';
 import '../plate/application/common/view_doc_rows_store.dart';
 import 'real_time_tab_controller.dart';
@@ -20,7 +23,7 @@ class RealTimeViewModeAutoSpec {
   final Set<String> tabIdsForceTableOnTap;
 
   const RealTimeViewModeAutoSpec({
-    this.idleToStatusAfter = const Duration(seconds: 3),
+    this.idleToStatusAfter = const Duration(seconds: 5),
     this.tabIdsForceTableOnTap = const {
       'parking_requests',
       'parking_completed',
@@ -69,13 +72,13 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
 
   TypeViewModeState? _viewMode;
   VoiceAppbarUiState? _talkUi;
+  TypeAutoTransitionGuard? _autoGuard;
   Timer? _idleTimer;
-  int _lastActivityAtMs = 0;
-  int _autoPauseDepth = 0;
 
   bool _transitionMaskOn = false;
   String _transitionMaskMessage = '구역 불러오는 중...';
   bool _handlingTap = false;
+  bool _debugDialogShowing = false;
 
   @override
   void initState() {
@@ -104,6 +107,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    _attachAutoGuardListener();
     _attachTalkUiListener();
     if (widget.viewModeAuto == null) {
       _detachViewModeListener();
@@ -120,6 +124,38 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     _viewMode = next;
     _viewMode?.addListener(_onViewModeChanged);
     _syncIdleWithMode();
+  }
+
+  void _attachAutoGuardListener() {
+    TypeAutoTransitionGuard? next;
+    try {
+      next = context.read<TypeAutoTransitionGuard>();
+    } catch (_) {
+      next = null;
+    }
+    if (_autoGuard == next) return;
+    _autoGuard?.removeListener(_onAutoGuardChanged);
+    _autoGuard = next;
+    _autoGuard?.addListener(_onAutoGuardChanged);
+    final auto = widget.viewModeAuto;
+    if (auto != null) {
+      _autoGuard?.setCountdownDuration(auto.idleToStatusAfter);
+    }
+    _debugLog('initialized', <String, Object?>{
+      'idleMs': auto?.idleToStatusAfter.inMilliseconds,
+      'screen': widget.screen,
+    });
+    _syncIdleWithMode();
+  }
+
+  void _detachAutoGuardListener() {
+    _autoGuard?.removeListener(_onAutoGuardChanged);
+    _autoGuard = null;
+  }
+
+  void _onAutoGuardChanged() {
+    if (!mounted) return;
+    _scheduleIdleFromGuard();
   }
 
   void _attachTalkUiListener() {
@@ -143,6 +179,9 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
 
   void _onTalkUiChanged() {
     if (!mounted) return;
+    _debugLog('talk_ui_changed', <String, Object?>{
+      'enabled': _talkUi?.enabled == true,
+    });
     _syncIdleWithMode();
     setState(() {});
   }
@@ -156,53 +195,151 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
 
   void _onViewModeChanged() {
     if (!mounted) return;
+    _debugLog('view_mode_changed', <String, Object?>{
+      'mode': _viewMode?.mode.name,
+    });
     _syncIdleWithMode();
   }
 
   void _syncIdleWithMode() {
     final auto = widget.viewModeAuto;
     final vm = _viewMode;
-    if (auto == null || vm == null || _talkUi?.enabled == true) {
+    final guard = _autoGuard;
+    if (auto == null || vm == null || guard == null) {
       _idleTimer?.cancel();
       _idleTimer = null;
       return;
     }
-    if (vm.mode == TypeViewMode.table && _autoPauseDepth == 0) {
-      _scheduleIdle(auto);
-    } else {
+
+    guard.setCountdownDuration(auto.idleToStatusAfter);
+
+    if (_talkUi?.enabled == true) {
+      guard.setCountdownEnabled(false, reason: 'Talk');
       _idleTimer?.cancel();
       _idleTimer = null;
+      return;
+    }
+
+    if (vm.mode != TypeViewMode.table) {
+      guard.setCountdownEnabled(false, reason: '현황 모드');
+      _idleTimer?.cancel();
+      _idleTimer = null;
+      return;
+    }
+
+    guard.setCountdownEnabled(true, reason: '테이블 모드');
+    _scheduleIdleFromGuard();
+  }
+
+  void _debugLog(
+    String event, [
+    Map<String, Object?> details = const <String, Object?>{},
+  ]) {
+    final guard = _autoGuard;
+    if (guard != null) {
+      guard.log(event, details);
+      return;
+    }
+    final buffer = StringBuffer()
+      ..write('[RealTimeViewMode] ')
+      ..write(DateTime.now().toIso8601String())
+      ..write(' event=')
+      ..write(event);
+    for (final entry in details.entries) {
+      if (entry.value == null) continue;
+      buffer
+        ..write(' ')
+        ..write(entry.key)
+        ..write('=')
+        ..write(entry.value);
+    }
+    debugPrint(buffer.toString());
+  }
+
+  Future<void> _showAutoSwitchDebugDialog() async {
+    final guard = _autoGuard;
+    if (!mounted || _debugDialogShowing || guard == null) return;
+    await guard.refreshDeveloperMode();
+    if (!guard.developerModeEnabled || !mounted || _debugDialogShowing) return;
+    final code = guard.debugPrintCode.trim();
+    if (code.isEmpty) return;
+    _debugDialogShowing = true;
+    try {
+      await StatusDialog.showSuccess(
+        context,
+        title: '현황 자동 전환 디버그',
+        description: guard.debugLines.join('\n'),
+        copyText: code,
+        copyButtonLabel: 'debugPrint 코드 복사',
+        visibleDuration: const Duration(seconds: 45),
+        useCommonUi: true,
+      );
+    } finally {
+      _debugDialogShowing = false;
     }
   }
 
-  void _scheduleIdle(RealTimeViewModeAutoSpec auto) {
+  void _scheduleIdleFromGuard() {
     _idleTimer?.cancel();
-    if (_autoPauseDepth > 0 || _talkUi?.enabled == true) {
-      _idleTimer = null;
-      return;
-    }
-    _idleTimer = Timer(auto.idleToStatusAfter, () {
+    _idleTimer = null;
+    final auto = widget.viewModeAuto;
+    final guard = _autoGuard;
+    final vm = _viewMode;
+    if (auto == null || guard == null || vm == null) return;
+    if (_talkUi?.enabled == true) return;
+    if (vm.mode != TypeViewMode.table) return;
+    if (!guard.countdownRunning) return;
+
+    final remaining = guard.remaining;
+    _idleTimer = Timer(remaining, () {
       if (!mounted) return;
-      if (_autoPauseDepth > 0 || _talkUi?.enabled == true) return;
-      final vm = _viewMode;
-      if (vm == null) return;
-      if (widget.viewModeAuto == null) return;
-      if (vm.mode != TypeViewMode.table) return;
-      final now = DateTime.now().millisecondsSinceEpoch;
-      if (now - _lastActivityAtMs < auto.idleToStatusAfter.inMilliseconds) {
-        _scheduleIdle(auto);
+      final currentGuard = _autoGuard;
+      final currentVm = _viewMode;
+      if (currentGuard == null || currentVm == null) return;
+      if (_talkUi?.enabled == true) return;
+      if (currentVm.mode != TypeViewMode.table) return;
+      if (!currentGuard.countdownElapsed) {
+        _scheduleIdleFromGuard();
         return;
       }
-      _runMaskedAutoSwitchToStatus(auto);
+      _debugLog('idle_timeout', <String, Object?>{
+        'thresholdMs': auto.idleToStatusAfter.inMilliseconds,
+        'tab': widget.tabs[_tabCtrl.index].id,
+      });
+      unawaited(_runMaskedAutoSwitchToStatus(auto));
     });
   }
 
   Future<void> _runMaskedAutoSwitchToStatus(
-      RealTimeViewModeAutoSpec auto) async {
+    RealTimeViewModeAutoSpec auto,
+  ) async {
     if (!mounted) return;
     if (_transitionMaskOn) return;
-    if (_autoPauseDepth > 0) return;
+    final guard = _autoGuard;
+    final vm = _viewMode;
+    if (guard == null || vm == null) return;
     if (_talkUi?.enabled == true) return;
+    if (vm.mode != TypeViewMode.table) return;
+    if (!guard.countdownElapsed) return;
+
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
+    if (_transitionMaskOn) return;
+    if (_talkUi?.enabled == true) return;
+    if (_viewMode?.mode != TypeViewMode.table) return;
+    if (!guard.countdownElapsed) {
+      _debugLog('auto_switch_cancelled', <String, Object?>{
+        'reason': guard.isBlocked ? guard.blockReason : 'activity',
+      });
+      return;
+    }
+
+    _debugLog('auto_switch_started', <String, Object?>{
+      'from': TypeViewMode.table.name,
+      'to': TypeViewMode.status.name,
+      'thresholdMs': auto.idleToStatusAfter.inMilliseconds,
+      'tab': widget.tabs[_tabCtrl.index].id,
+    });
 
     setState(() {
       _transitionMaskMessage = '현황 전환 중...';
@@ -210,22 +347,14 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     });
 
     final started = DateTime.now();
+    var switched = false;
 
     try {
-      await WidgetsBinding.instance.endOfFrame;
-      if (!mounted) return;
-      final vm = _viewMode;
-      if (vm == null) return;
-      if (widget.viewModeAuto == null) return;
-      if (vm.mode != TypeViewMode.table) return;
-      if (_autoPauseDepth > 0 || _talkUi?.enabled == true) return;
-
-      final now = DateTime.now().millisecondsSinceEpoch;
-      if (now - _lastActivityAtMs < auto.idleToStatusAfter.inMilliseconds) {
-        return;
-      }
-
       vm.setMode(TypeViewMode.status);
+      switched = true;
+      _debugLog('auto_switch_completed', <String, Object?>{
+        'mode': TypeViewMode.status.name,
+      });
       await WidgetsBinding.instance.endOfFrame;
     } finally {
       final elapsed = DateTime.now().difference(started);
@@ -239,39 +368,22 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
         _transitionMaskMessage = '구역 불러오는 중...';
       });
     }
+
+    if (switched && mounted) {
+      unawaited(_showAutoSwitchDebugDialog());
+    }
   }
 
   void _onUserActivity() {
-    final auto = widget.viewModeAuto;
-    final vm = _viewMode;
-    if (auto == null || vm == null || _talkUi?.enabled == true) return;
-    if (vm.mode != TypeViewMode.table) return;
-    final now = DateTime.now().millisecondsSinceEpoch;
-    if (now - _lastActivityAtMs < 80) return;
-    _lastActivityAtMs = now;
-    if (_autoPauseDepth == 0) {
-      _scheduleIdle(auto);
-    }
+    _autoGuard?.markActivity('table_body');
   }
 
   void _beginAutoPause() {
-    final auto = widget.viewModeAuto;
-    if (auto == null) return;
-    _autoPauseDepth++;
-    _lastActivityAtMs = DateTime.now().millisecondsSinceEpoch;
-    _idleTimer?.cancel();
-    _idleTimer = null;
+    _autoGuard?.beginBlock('테이블 다이얼로그');
   }
 
   void _endAutoPause() {
-    final auto = widget.viewModeAuto;
-    if (auto == null) return;
-    if (_autoPauseDepth > 0) _autoPauseDepth--;
-    _lastActivityAtMs = DateTime.now().millisecondsSinceEpoch;
-    final vm = _viewMode;
-    if (_autoPauseDepth == 0 && vm != null && vm.mode == TypeViewMode.table) {
-      _scheduleIdle(auto);
-    }
+    _autoGuard?.endBlock('테이블 다이얼로그');
   }
 
   bool _shouldForceTableOnTap(int index) {
@@ -283,6 +395,12 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     return auto.tabIdsForceTableOnTap.contains(id);
   }
 
+  Duration _motionDuration(Duration duration) {
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    return reduceMotion ? Duration.zero : duration;
+  }
+
   Widget _sharedAxisYTransition(Widget child, Animation<double> animation) {
     final curved = CurvedAnimation(
       parent: animation,
@@ -290,41 +408,91 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
       reverseCurve: Curves.easeInCubic,
     );
     final offset = Tween<Offset>(
-      begin: const Offset(0, 0.03),
+      begin: const Offset(0, 0.035),
       end: Offset.zero,
     ).animate(curved);
+    final scale = Tween<double>(begin: 0.985, end: 1).animate(curved);
     return FadeTransition(
       opacity: curved,
-      child: SlideTransition(position: offset, child: child),
+      child: SlideTransition(
+        position: offset,
+        child: ScaleTransition(
+          scale: scale,
+          alignment: Alignment.center,
+          child: child,
+        ),
+      ),
     );
   }
 
-  Widget _transitionMask(BuildContext context, {required String message}) {
+  Widget _transitionMaskSurface(
+    BuildContext context, {
+    required String message,
+  }) {
     final cs = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
+    return AbsorbPointer(
+      absorbing: true,
+      child: Container(
+        color: cs.surface,
+        alignment: Alignment.center,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(
+              height: 44,
+              width: 44,
+              child: CircularProgressIndicator(),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: (text.titleMedium ?? text.bodyLarge ?? const TextStyle())
+                  .copyWith(fontWeight: FontWeight.w800),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _transitionMaskLayer(BuildContext context) {
     return Positioned.fill(
-      child: AbsorbPointer(
-        absorbing: true,
-        child: Container(
-          color: cs.surface,
-          alignment: Alignment.center,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(
-                height: 44,
-                width: 44,
-                child: CircularProgressIndicator(),
+      child: IgnorePointer(
+        ignoring: !_transitionMaskOn,
+        child: AnimatedSwitcher(
+          duration: _motionDuration(const Duration(milliseconds: 240)),
+          reverseDuration: _motionDuration(const Duration(milliseconds: 180)),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          transitionBuilder: (child, animation) {
+            final curved = CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOutCubic,
+              reverseCurve: Curves.easeInCubic,
+            );
+            return FadeTransition(
+              opacity: curved,
+              child: ScaleTransition(
+                scale: Tween<double>(begin: 0.985, end: 1).animate(curved),
+                child: child,
               ),
-              const SizedBox(height: 18),
-              Text(
-                message,
-                textAlign: TextAlign.center,
-                style: (text.titleMedium ?? text.bodyLarge ?? const TextStyle())
-                    .copyWith(fontWeight: FontWeight.w800),
-              ),
-            ],
-          ),
+            );
+          },
+          child: _transitionMaskOn
+              ? KeyedSubtree(
+                  key: ValueKey<String>(
+                    'transition-mask:$_transitionMaskMessage',
+                  ),
+                  child: _transitionMaskSurface(
+                    context,
+                    message: _transitionMaskMessage,
+                  ),
+                )
+              : const SizedBox.expand(
+                  key: ValueKey<String>('transition-mask-off'),
+                ),
         ),
       ),
     );
@@ -367,6 +535,9 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     ctrl.unbind();
 
     if (vm != null && vm.mode == TypeViewMode.status) {
+      _debugLog('manual_return_to_table', <String, Object?>{
+        'tab': widget.tabs[index].id,
+      });
       vm.setMode(TypeViewMode.table);
     }
 
@@ -393,6 +564,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
   void dispose() {
     _detachViewModeListener();
     _detachTalkUiListener();
+    _detachAutoGuardListener();
     _tabCtrl.dispose();
     super.dispose();
   }
@@ -476,7 +648,15 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
 
     _onUserActivity();
     try {
-      await _runMaskedTabTransition(index);
+      final guard = _autoGuard;
+      if (guard == null) {
+        await _runMaskedTabTransition(index);
+      } else {
+        await guard.runBlocked<void>(
+          '탭 전환',
+          () => _runMaskedTabTransition(index),
+        );
+      }
     } finally {
       _handlingTap = false;
     }
@@ -639,7 +819,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
         children: [
           Expanded(
             child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 260),
+              duration: _motionDuration(const Duration(milliseconds: 320)),
               switchInCurve: Curves.easeOutCubic,
               switchOutCurve: Curves.easeInCubic,
               transitionBuilder: _sharedAxisYTransition,
@@ -692,7 +872,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
                                     : table;
 
                                 return AnimatedSwitcher(
-                                  duration: const Duration(milliseconds: 260),
+                                  duration: _motionDuration(const Duration(milliseconds: 320)),
                                   switchInCurve: Curves.easeOutCubic,
                                   switchOutCurve: Curves.easeInCubic,
                                   transitionBuilder: _sharedAxisYTransition,
@@ -716,8 +896,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
                               );
                             }),
                           ),
-                          if (_transitionMaskOn)
-                            _transitionMask(context, message: _transitionMaskMessage),
+                          _transitionMaskLayer(context),
                         ],
                       ),
                     ),
@@ -727,17 +906,6 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
         ],
       ),
     );
-
-    if (widget.viewModeAuto != null && _viewMode != null) {
-      out = Listener(
-        behavior: HitTestBehavior.translucent,
-        onPointerDown: (_) => _onUserActivity(),
-        onPointerMove: (_) => _onUserActivity(),
-        onPointerUp: (_) => _onUserActivity(),
-        onPointerSignal: (_) => _onUserActivity(),
-        child: out,
-      );
-    }
 
     return out;
   }
