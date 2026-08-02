@@ -5,14 +5,19 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../../../design_system/common_ui/common_ui_components.dart';
-import '../../../pages/widgets/tablet_common_components.dart';
 import '../../../../../app/utils/dev_firebase_debug_dialog.dart';
-import '../../../../../shared/plate/application/common/view_doc_rows_store.dart';
-import '../../../../../shared/plate/domain/repositories/plate_repository.dart';
+import '../../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../location/applications/location_state.dart';
 import '../../../../location/domain/models/location_model.dart';
-import 'tablet_grid_2d_preview.dart';
+import '../../../../../shared/plate/domain/repositories/plate_repository.dart';
+import '../../../../../shared/plate/application/common/view_doc_rows_store.dart';
+import '../../../pages/widgets/tablet_common_components.dart';
+import '../two_d/tablet_grid_2d_preview.dart'
+    show
+        ParkingGridOverlay,
+        ParkingSlotStatus,
+        parkingOverlayCanonicalChildKey;
+import 'tablet_grid_3d_lite_preview.dart';
 
 @immutable
 class ParkingStatusOverlaySpec {
@@ -90,13 +95,13 @@ String _primaryAtFieldForCollection(String collection) {
 class ParkingStatusPreviewCardArea extends StatefulWidget {
   final String area;
   final List<ParkingStatusOverlaySpec> overlay;
-  final bool cleanPresentation;
+  final ValueChanged<String>? onDebugLog;
 
   const ParkingStatusPreviewCardArea({
     super.key,
     required this.area,
     required this.overlay,
-    this.cleanPresentation = false,
+    this.onDebugLog,
   });
 
   @override
@@ -114,7 +119,6 @@ class _ParkingStatusPreviewCardAreaState
 
   Future<List<LocationModel>>? _prefsFuture;
   String _prefsArea = '';
-
   String _boundArea = '';
   String _boundOverlaySignature = '';
 
@@ -127,12 +131,10 @@ class _ParkingStatusPreviewCardAreaState
   @override
   void didUpdateWidget(covariant ParkingStatusPreviewCardArea oldWidget) {
     super.didUpdateWidget(oldWidget);
-
     if (oldWidget.area.trim() != widget.area.trim()) {
       _prefsFuture = null;
       _prefsArea = '';
     }
-
     _bindSubscriptionsIfNeeded();
   }
 
@@ -158,30 +160,25 @@ class _ParkingStatusPreviewCardAreaState
   List<_LiveViewRow> _rowsFromViewRows(List<ViewRowData> rows) {
     final out = <_LiveViewRow>[];
     final seen = <String>{};
-
     for (final row in rows) {
       final location = _normalizeLocationValue(row.location);
       if (location.isEmpty) continue;
       if (!seen.add(location)) continue;
       out.add(_LiveViewRow(location: location));
     }
-
     return out;
   }
 
   void _bindSubscriptionsIfNeeded() {
     final area = widget.area.trim();
     final signature = _overlaySignature();
-
     final sameBinding = _boundArea == area &&
         _boundOverlaySignature == signature &&
         _subscriptions.isNotEmpty;
-
     if (sameBinding) return;
 
     _cancelAllSubscriptions();
     _rowsByCollection.clear();
-
     _boundArea = area;
     _boundOverlaySignature = signature;
 
@@ -193,11 +190,9 @@ class _ParkingStatusPreviewCardAreaState
     }
 
     final repo = context.read<PlateRepository>();
-
     for (final spec in widget.overlay) {
       final collection = spec.collection.trim();
       if (collection.isEmpty) continue;
-
       _subscriptions[collection] = repo
           .watchViewRows(
             collection: collection,
@@ -213,12 +208,12 @@ class _ParkingStatusPreviewCardAreaState
         },
         onError: (error, stackTrace) {
           debugPrint(
-            'ParkingStatusPreviewCardArea subscribe error [$collection/$area]: $error',
+            'ParkingStatusPreviewCardArea[3d-lite] subscribe error [$collection/$area]: $error',
           );
           unawaited(
             DevFirebaseDebugDialog.show(
               context: context,
-              operation: 'tablet.grid.two_d.watchViewRows',
+              operation: 'tablet.grid.three_d_lite.watchViewRows',
               error: error,
               stackTrace: stackTrace,
               details: <String, Object?>{
@@ -279,11 +274,9 @@ class _ParkingStatusPreviewCardAreaState
 
         final parentKey = _nameKey(segments[0]);
         final childKey = parkingOverlayCanonicalChildKey(segments[1]);
-
         if (parentKey.isEmpty || childKey.isEmpty) continue;
 
         final baseKey = '$parentKey|$childKey';
-
         int? slotNo;
         if (segments.length >= 3) {
           slotNo = _parseFirstInt(segments[2]);
@@ -312,42 +305,10 @@ class _ParkingStatusPreviewCardAreaState
     );
   }
 
-  Map<String, TextParkingPreviewMetrics> _buildTextMetrics(
-    List<LocationModel> locations,
-  ) {
-    final parkingCompletedLocations = <String>[];
-    final departureRequestLocations = <String>[];
-
-    for (final spec in widget.overlay) {
-      final collection = spec.collection.trim();
-      if (collection.isEmpty) continue;
-
-      final rows = _rowsForCollection(collection);
-
-      switch (spec.status) {
-        case ParkingSlotStatus.parked:
-          parkingCompletedLocations.addAll(rows.map((e) => e.location));
-          break;
-        case ParkingSlotStatus.departureRequest:
-          departureRequestLocations.addAll(rows.map((e) => e.location));
-          break;
-        case ParkingSlotStatus.empty:
-        case ParkingSlotStatus.parkingRequest:
-          break;
-      }
-    }
-
-    return buildTextParkingPreviewMetricsByLocations(
-      locations: locations,
-      parkingCompletedLocations: parkingCompletedLocations,
-      departureRequestLocations: departureRequestLocations,
-    );
-  }
 
   Widget _buildPreview(
     List<LocationModel> locations,
     ParkingGridOverlay overlay,
-    Map<String, TextParkingPreviewMetrics> textMetricsByLocation,
   ) {
     if (locations.isEmpty) {
       return const TabletCommonEmptyState(
@@ -357,19 +318,12 @@ class _ParkingStatusPreviewCardAreaState
       );
     }
 
-    final preview = TabletGrid2dPreview(
-      locations: locations,
-      overlay: overlay,
-      textMetricsByLocation: textMetricsByLocation,
-      cleanPresentation: widget.cleanPresentation,
-    );
     return CommonAnimatedReveal(
-      child: widget.cleanPresentation
-          ? preview
-          : Padding(
-              padding: const EdgeInsets.all(12),
-              child: preview,
-            ),
+      child: TabletGrid3dLitePreview(
+        locations: locations,
+        overlay: overlay,
+        onDebugLog: widget.onDebugLog,
+      ),
     );
   }
 
@@ -377,15 +331,13 @@ class _ParkingStatusPreviewCardAreaState
   Widget build(BuildContext context) {
     final resolvedArea = widget.area.trim();
     final overlay = _buildOverlay();
-
     final liveLocations = List<LocationModel>.of(
       context.watch<LocationState>().locations,
     );
 
     if (liveLocations.isNotEmpty) {
-      final textMetricsByLocation = _buildTextMetrics(liveLocations);
       return SizedBox.expand(
-        child: _buildPreview(liveLocations, overlay, textMetricsByLocation),
+        child: _buildPreview(liveLocations, overlay),
       );
     }
 
@@ -405,12 +357,9 @@ class _ParkingStatusPreviewCardAreaState
           }
 
           final locations = snapshot.data ?? const <LocationModel>[];
-          final textMetricsByLocation = _buildTextMetrics(locations);
-
           return _buildPreview(
             locations,
             overlay,
-            textMetricsByLocation,
           );
         },
       ),

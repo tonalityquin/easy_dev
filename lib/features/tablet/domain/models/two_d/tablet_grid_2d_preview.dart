@@ -1192,12 +1192,14 @@ class TabletGrid2dPreview extends StatefulWidget {
   final List<LocationModel> locations;
   final ParkingGridOverlay overlay;
   final Map<String, TextParkingPreviewMetrics> textMetricsByLocation;
+  final bool cleanPresentation;
 
   const TabletGrid2dPreview({
     super.key,
     required this.locations,
     this.overlay = const ParkingGridOverlay.empty(),
     this.textMetricsByLocation = const <String, TextParkingPreviewMetrics>{},
+    this.cleanPresentation = false,
   });
 
   @override
@@ -1357,7 +1359,7 @@ class _TabletGrid2dPreviewState extends State<TabletGrid2dPreview> {
     required int count,
     required Widget child,
   }) {
-    if (count <= 1) return child;
+    if (widget.cleanPresentation || count <= 1) return child;
 
     final cs = Theme.of(context).colorScheme;
     final on = cs.onSurface.withOpacity(0.42);
@@ -1617,6 +1619,13 @@ class _TabletGrid2dPreviewState extends State<TabletGrid2dPreview> {
     final contentKey = ValueKey<String>(
       '${entry.kind.name}_${idx}_${_nameKey(nameTrimmed)}',
     );
+
+    if (widget.cleanPresentation) {
+      return _wrapSwipe(
+        count: count,
+        child: _animatedBody(key: contentKey, child: body),
+      );
+    }
 
     return _wrapSwipe(
       count: count,

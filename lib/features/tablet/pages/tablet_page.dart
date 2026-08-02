@@ -107,7 +107,6 @@ class _TabletPageState extends State<TabletPage> {
             child: TabletCommonPanel(
               child: LeftPaneDeparturePlates(
                 key: ValueKey<String>('left-pane-$area-show'),
-                columns: 5,
                 completedNotices: _completedNotices,
               ),
             ),
@@ -136,7 +135,6 @@ class _TabletPageState extends State<TabletPage> {
                   child: TabletCommonPanel(
                     child: LeftPaneDeparturePlates(
                       key: ValueKey<String>('left-pane-$area'),
-                      columns: 3,
                       completedNotices: _completedNotices,
                     ),
                   ),

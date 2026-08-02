@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -11,12 +13,16 @@ import '../../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../../app/init/app_exit_service.dart';
 import '../../../../../app/init/logout_helper.dart';
 import '../../../../../app/utils/operational_data_sync_workflow.dart';
+import '../../../../../app/utils/status_dialog.dart';
 import '../../../../../app/theme/brand_theme.dart';
 import '../../../../../app/theme/theme_prefs_controller.dart';
 import '../../../../dev/application/area_state.dart';
 import '../../../../sector/applications/sector_state.dart';
+import '../../../../selector/application/dev_auth.dart';
+import '../../../applications/tablet_grid_render_mode_state.dart';
 import '../../../applications/tablet_pad_mode_state.dart';
 import '../../../applications/tablet_parking_completed_view_toggle_state.dart';
+import '../../../applications/tablet_plate_tail4_size_state.dart';
 import '../../../applications/tablet_work_session_state.dart';
 import '../../widgets/tablet_common_components.dart';
 
@@ -33,6 +39,8 @@ class TabletTopNavigation extends StatefulWidget {
 }
 
 class _TabletTopNavigationState extends State<TabletTopNavigation> {
+  final List<String> _settingsDebugLines = <String>[];
+  bool _settingsDebugDialogShowing = false;
 
   bool _refreshing = false;
   DateTime? _lastRefreshAt;
@@ -347,6 +355,140 @@ class _TabletTopNavigationState extends State<TabletTopNavigation> {
     );
   }
 
+  void _settingsDebugLog(
+    String event, [
+    Map<String, Object?> details = const <String, Object?>{},
+  ]) {
+    final buffer = StringBuffer()
+      ..write('[TabletTopNavigation] ')
+      ..write(DateTime.now().toIso8601String())
+      ..write(' event=')
+      ..write(event);
+    for (final entry in details.entries) {
+      if (entry.value == null) continue;
+      buffer
+        ..write(' ')
+        ..write(entry.key)
+        ..write('=')
+        ..write(entry.value);
+    }
+    final line = buffer.toString();
+    _settingsDebugLines.add(line);
+    if (_settingsDebugLines.length > 120) {
+      _settingsDebugLines.removeRange(0, _settingsDebugLines.length - 120);
+    }
+    debugPrint(line);
+  }
+
+  String get _settingsDebugPrintCode => _settingsDebugLines
+      .map((line) => 'debugPrint(${jsonEncode(line)});')
+      .join('\n');
+
+  Future<void> _showSettingsDeveloperDebugDialog(
+    BuildContext dialogContext, {
+    required String title,
+  }) async {
+    if (!mounted ||
+        !dialogContext.mounted ||
+        _settingsDebugDialogShowing ||
+        _settingsDebugLines.isEmpty) {
+      return;
+    }
+    final enabled = await DevAuth.isDevModeEnabled();
+    if (!enabled ||
+        !mounted ||
+        !dialogContext.mounted ||
+        _settingsDebugDialogShowing) {
+      return;
+    }
+    final code = _settingsDebugPrintCode.trim();
+    if (code.isEmpty) return;
+    _settingsDebugDialogShowing = true;
+    try {
+      await StatusDialog.showSuccess(
+        dialogContext,
+        title: title,
+        description: _settingsDebugLines.join('\n'),
+        copyText: code,
+        copyButtonLabel: 'debugPrint 코드 복사',
+        visibleDuration: const Duration(seconds: 45),
+        useCommonUi: true,
+      );
+    } finally {
+      _settingsDebugDialogShowing = false;
+    }
+  }
+
+  Future<void> _setGridRenderMode(
+    BuildContext dialogContext,
+    TabletGridRenderMode next,
+  ) async {
+    final state = dialogContext.read<TabletGridRenderModeState>();
+    if (!state.isReady || state.mode == next) return;
+    final previous = state.mode;
+    final area = context.read<AreaState>().currentArea.trim();
+    HapticFeedback.selectionClick();
+    _settingsDebugLog(
+      'grid_render_mode_change_requested',
+      <String, Object?>{
+        'from': previous.name,
+        'to': next.name,
+        'area': area,
+      },
+    );
+    await state.setMode(next);
+    if (!mounted || !dialogContext.mounted) return;
+    _settingsDebugLog(
+      'grid_render_mode_changed',
+      <String, Object?>{
+        'mode': next.name,
+        'persistKey': TabletGridRenderModeState.prefsKey,
+        'area': area,
+      },
+    );
+    await _showSettingsDeveloperDebugDialog(
+      dialogContext,
+      title: next == TabletGridRenderMode.threeD
+          ? '3D 주차장 전환 디버그'
+          : '2D 도면 전환 디버그',
+    );
+  }
+
+  Future<void> _setPlateTail4Size(
+    BuildContext dialogContext,
+    TabletPlateTail4Size next,
+  ) async {
+    final state = dialogContext.read<TabletPlateTail4SizeState>();
+    if (!state.isReady || state.size == next) return;
+    final previous = state.size;
+    final area = context.read<AreaState>().currentArea.trim();
+    HapticFeedback.selectionClick();
+    _settingsDebugLog(
+      'plate_tail4_size_change_requested',
+      <String, Object?>{
+        'from': previous.name,
+        'to': next.name,
+        'fontSize': next.fontSize,
+        'area': area,
+      },
+    );
+    await state.setSize(next);
+    if (!mounted || !dialogContext.mounted) return;
+    _settingsDebugLog(
+      'plate_tail4_size_changed',
+      <String, Object?>{
+        'size': next.name,
+        'fontSize': next.fontSize,
+        'persistKey': TabletPlateTail4SizeState.prefsKey,
+        'area': area,
+      },
+    );
+    await _showSettingsDeveloperDebugDialog(
+      dialogContext,
+      title: '차량번호 숫자 크기 디버그',
+    );
+  }
+
   Future<void> _openTopNavDialog(BuildContext context) async {
     final area = context.read<AreaState>().currentArea;
     final padMode = context.read<TabletPadModeState>().mode;
@@ -510,6 +652,223 @@ class _TabletTopNavigationState extends State<TabletTopNavigation> {
                       innerCtx.watch<TabletParkingCompletedViewToggleState>();
                   final includeParkingCompletedView =
                       parkingCompletedToggle.includeParkingCompletedView;
+                  final gridRenderState =
+                      innerCtx.watch<TabletGridRenderModeState>();
+                  final plateTail4SizeState =
+                      innerCtx.watch<TabletPlateTail4SizeState>();
+
+                  Widget plateTail4SizeButton(TabletPlateTail4Size target) {
+                    final selected = plateTail4SizeState.size == target;
+                    final duration = tabletCommonDuration(
+                      innerCtx,
+                      CommonUiMotion.selection,
+                    );
+                    return Expanded(
+                      child: Semantics(
+                        button: true,
+                        selected: selected,
+                        label: '${target.label} 크기',
+                        child: AnimatedContainer(
+                          duration: duration,
+                          curve: CommonUiMotion.standard,
+                          constraints: const BoxConstraints(minHeight: 48),
+                          decoration: BoxDecoration(
+                            color: selected
+                                ? tokens.surfaceSelected
+                                : tokens.surface,
+                            borderRadius:
+                                BorderRadius.circular(CommonUiShapes.button),
+                            border: Border.all(
+                              color: selected
+                                  ? tokens.accent
+                                  : tokens.borderSubtle,
+                              width: selected ? 2 : 1,
+                            ),
+                          ),
+                          child: Material(
+                            color: tokens.transparent,
+                            borderRadius:
+                                BorderRadius.circular(CommonUiShapes.button),
+                            clipBehavior: Clip.antiAlias,
+                            child: InkWell(
+                              onTap: !plateTail4SizeState.isReady || selected
+                                  ? null
+                                  : () => _setPlateTail4Size(
+                                        innerCtx,
+                                        target,
+                                      ),
+                              child: Center(
+                                child: AnimatedDefaultTextStyle(
+                                  duration: duration,
+                                  curve: CommonUiMotion.standard,
+                                  style: (text.labelLarge ?? const TextStyle())
+                                      .copyWith(
+                                    color: selected
+                                        ? tokens.accent
+                                        : tokens.textPrimary,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                  child: Text(target.label),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+
+                  Widget plateTail4Preview() {
+                    final duration = tabletCommonDuration(
+                      innerCtx,
+                      CommonUiMotion.component,
+                    );
+                    final fontSize = plateTail4SizeState.isReady
+                        ? plateTail4SizeState.fontSize
+                        : TabletPlateTail4Size.standard.fontSize;
+                    return Center(
+                      child: AnimatedSize(
+                        duration: duration,
+                        curve: CommonUiMotion.standard,
+                        child: AnimatedContainer(
+                          duration: duration,
+                          curve: CommonUiMotion.standard,
+                          padding: EdgeInsets.symmetric(
+                            horizontal:
+                                (fontSize * 0.44).clamp(11.0, 18.0).toDouble(),
+                            vertical:
+                                (fontSize * 0.30).clamp(8.0, 14.0).toDouble(),
+                          ),
+                          decoration: BoxDecoration(
+                            color: tokens.surfaceRaised,
+                            borderRadius:
+                                BorderRadius.circular(CommonUiShapes.card),
+                            border: Border.all(color: tokens.accent),
+                          ),
+                          child: AnimatedDefaultTextStyle(
+                            duration: duration,
+                            curve: CommonUiMotion.standard,
+                            style: (text.headlineSmall ?? const TextStyle())
+                                .copyWith(
+                              fontSize: fontSize,
+                              color: tokens.textPrimary,
+                              fontWeight: FontWeight.w800,
+                              height: 1,
+                              fontFeatures: const <FontFeature>[
+                                FontFeature.tabularFigures(),
+                              ],
+                            ),
+                            child: const Text(
+                              '8888',
+                              maxLines: 1,
+                              softWrap: false,
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+
+                  Widget gridRenderButton({
+                    required TabletGridRenderMode target,
+                    required String title,
+                    required IconData icon,
+                  }) {
+                    final selected = gridRenderState.mode == target;
+                    final duration = tabletCommonDuration(
+                      innerCtx,
+                      CommonUiMotion.selection,
+                    );
+                    return Expanded(
+                      child: Semantics(
+                        button: true,
+                        selected: selected,
+                        label: title,
+                        child: AnimatedContainer(
+                          duration: duration,
+                          curve: CommonUiMotion.standard,
+                          decoration: BoxDecoration(
+                            color: selected
+                                ? tokens.surfaceSelected
+                                : tokens.surface,
+                            borderRadius:
+                                BorderRadius.circular(CommonUiShapes.button),
+                            border: Border.all(
+                              color: selected
+                                  ? tokens.accent
+                                  : tokens.borderSubtle,
+                              width: selected ? 2 : 1,
+                            ),
+                          ),
+                          child: Material(
+                            color: tokens.transparent,
+                            borderRadius:
+                                BorderRadius.circular(CommonUiShapes.button),
+                            clipBehavior: Clip.antiAlias,
+                            child: InkWell(
+                              onTap: !gridRenderState.isReady || selected
+                                  ? null
+                                  : () => _setGridRenderMode(
+                                        innerCtx,
+                                        target,
+                                      ),
+                              child: ConstrainedBox(
+                                constraints:
+                                    const BoxConstraints(minHeight: 58),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 12,
+                                  ),
+                                  child: Row(
+                                    children: <Widget>[
+                                      AnimatedScale(
+                                        duration: duration,
+                                        curve: CommonUiMotion.standard,
+                                        scale: selected ? 1.08 : 1,
+                                        child: Icon(
+                                          icon,
+                                          color: selected
+                                              ? tokens.accent
+                                              : tokens.iconSecondary,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(
+                                          title,
+                                          style: text.bodyLarge?.copyWith(
+                                            color: tokens.textPrimary,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ),
+                                      AnimatedSwitcher(
+                                        duration: duration,
+                                        child: selected
+                                            ? Icon(
+                                                Icons.check_circle_rounded,
+                                                key: ValueKey<String>(
+                                                  'grid-render-${target.name}',
+                                                ),
+                                                color: tokens.accent,
+                                              )
+                                            : const SizedBox.shrink(
+                                                key: ValueKey<String>(
+                                                  'grid-render-unselected',
+                                                ),
+                                              ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }
 
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -673,8 +1032,66 @@ class _TabletTopNavigationState extends State<TabletTopNavigation> {
                               modeButton(
                                 target: PadMode.grid,
                                 title: 'Grid',
-                                subtitle: '3D 주차 그리드 미리보기를 전체 화면으로 표시',
+                                subtitle: '전체 화면 주차장 보기',
                                 icon: Icons.grid_view_rounded,
+                              ),
+                              const SizedBox(height: 20),
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  '차량번호 숫자 크기',
+                                  style: sectionTitleStyle,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: <Widget>[
+                                  plateTail4SizeButton(
+                                    TabletPlateTail4Size.compact,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  plateTail4SizeButton(
+                                    TabletPlateTail4Size.small,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  plateTail4SizeButton(
+                                    TabletPlateTail4Size.standard,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  plateTail4SizeButton(
+                                    TabletPlateTail4Size.large,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  plateTail4SizeButton(
+                                    TabletPlateTail4Size.extraLarge,
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              plateTail4Preview(),
+                              const SizedBox(height: 20),
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  'Grid 표시 방식',
+                                  style: sectionTitleStyle,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: <Widget>[
+                                  gridRenderButton(
+                                    target: TabletGridRenderMode.twoD,
+                                    title: '2D 도면',
+                                    icon: Icons.grid_view_rounded,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  gridRenderButton(
+                                    target: TabletGridRenderMode.threeD,
+                                    title: '3D 주차장',
+                                    icon: Icons.view_in_ar_rounded,
+                                  ),
+                                ],
                               ),
                               const SizedBox(height: 20),
                               Align(

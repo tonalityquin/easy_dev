@@ -19,6 +19,7 @@ class UpdateBottomSheet extends StatelessWidget {
         '본사 대시보드 일부 기능 추가 및 개선',
         '일부 과도하게 메모리 사용을 유발하는 기능 개선',
         '일부 본사 관련 기능 사전 UI 업데이트',
+        'OCR 인식 로직 일부 개선',
       ],
     ),
     const UpdateEntry(

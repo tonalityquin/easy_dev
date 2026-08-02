@@ -9,6 +9,7 @@ import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../shared/plate/application/common/view_doc_rows_store.dart';
 import '../../../../shared/plate/domain/repositories/plate_repository.dart';
 import '../../../dev/application/area_state.dart';
+import '../../applications/tablet_plate_tail4_size_state.dart';
 import '../widgets/tablet_common_components.dart';
 
 @immutable
@@ -27,11 +28,9 @@ class TabletCompletedDepartureNotice {
 class LeftPaneDeparturePlates extends StatelessWidget {
   const LeftPaneDeparturePlates({
     super.key,
-    this.columns = 3,
     this.completedNotices = const <TabletCompletedDepartureNotice>[],
-  }) : assert(columns > 0);
+  });
 
-  final int columns;
   final List<TabletCompletedDepartureNotice> completedNotices;
 
   static List<_DepartureRow> _rowsFromViewRows(List<ViewRowData> rows) {
@@ -134,7 +133,6 @@ class LeftPaneDeparturePlates extends StatelessWidget {
                     )
                   : _DepartureRequestGrid(
                       area: currentArea.trim(),
-                      columns: columns,
                     ),
             ),
           ),
@@ -150,7 +148,6 @@ class LeftPaneDeparturePlates extends StatelessWidget {
               tone: tokens.statusSynchronized,
               child: _CompletedDepartureGrid(
                 notices: completedNotices,
-                columns: columns,
               ),
             ),
           ),
@@ -230,11 +227,9 @@ class _PanelSection extends StatelessWidget {
 class _DepartureRequestGrid extends StatefulWidget {
   const _DepartureRequestGrid({
     required this.area,
-    required this.columns,
   });
 
   final String area;
-  final int columns;
 
   @override
   State<_DepartureRequestGrid> createState() => _DepartureRequestGridState();
@@ -307,9 +302,6 @@ class _DepartureRequestGridState extends State<_DepartureRequestGrid> {
         }
         return _PlateGrid(
           itemCount: rows.length,
-          columns: widget.columns,
-          minTileWidth: 72,
-          desiredTileHeight: 90,
           itemBuilder: (context, index) {
             final row = rows[index];
             return CommonAnimatedReveal(
@@ -332,11 +324,9 @@ class _DepartureRequestGridState extends State<_DepartureRequestGrid> {
 class _CompletedDepartureGrid extends StatelessWidget {
   const _CompletedDepartureGrid({
     required this.notices,
-    required this.columns,
   });
 
   final List<TabletCompletedDepartureNotice> notices;
-  final int columns;
 
   @override
   Widget build(BuildContext context) {
@@ -348,9 +338,6 @@ class _CompletedDepartureGrid extends StatelessWidget {
     }
     return _PlateGrid(
       itemCount: notices.length,
-      columns: columns,
-      minTileWidth: 78,
-      desiredTileHeight: 98,
       itemBuilder: (context, index) {
         final notice = notices[index];
         return CommonAnimatedReveal(
@@ -371,52 +358,30 @@ class _CompletedDepartureGrid extends StatelessWidget {
 class _PlateGrid extends StatelessWidget {
   const _PlateGrid({
     required this.itemCount,
-    required this.columns,
-    required this.minTileWidth,
-    required this.desiredTileHeight,
     required this.itemBuilder,
   });
 
   final int itemCount;
-  final int columns;
-  final double minTileWidth;
-  final double desiredTileHeight;
   final IndexedWidgetBuilder itemBuilder;
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const crossSpacing = 10.0;
-        const mainSpacing = 10.0;
-        const padding = 12.0;
-        var effectiveColumns = columns;
-        while (effectiveColumns > 1) {
-          final width = (constraints.maxWidth -
-                  padding -
-                  crossSpacing * (effectiveColumns - 1)) /
-              effectiveColumns;
-          if (width >= minTileWidth) break;
-          effectiveColumns -= 1;
-        }
-        final tileWidth = (constraints.maxWidth -
-                padding -
-                crossSpacing * (effectiveColumns - 1)) /
-            effectiveColumns;
-        final aspect =
-            (tileWidth / desiredTileHeight).clamp(0.55, 1.10).toDouble();
-        return GridView.builder(
-          padding: const EdgeInsets.all(6),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: effectiveColumns,
-            crossAxisSpacing: crossSpacing,
-            mainAxisSpacing: mainSpacing,
-            childAspectRatio: aspect,
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(6),
+      child: Align(
+        alignment: Alignment.topLeft,
+        child: Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          alignment: WrapAlignment.start,
+          crossAxisAlignment: WrapCrossAlignment.start,
+          children: List<Widget>.generate(
+            itemCount,
+            (index) => itemBuilder(context, index),
+            growable: false,
           ),
-          itemCount: itemCount,
-          itemBuilder: itemBuilder,
-        );
-      },
+        ),
+      ),
     );
   }
 }
@@ -451,6 +416,12 @@ class _PlateTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = CommonUiTheme.of(context);
+    final textTheme = Theme.of(context).textTheme;
+    final sizeState = context.watch<TabletPlateTail4SizeState>();
+    final fontSize = sizeState.isReady
+        ? sizeState.fontSize
+        : TabletPlateTail4Size.standard.fontSize;
+    final duration = tabletCommonDuration(context, CommonUiMotion.selection);
     final tone = completed
         ? tokens.statusSynchronized
         : inProgress
@@ -466,9 +437,44 @@ class _PlateTile extends StatelessWidget {
         : inProgress
             ? tokens.onStatusDepartureRequestedContainer
             : tokens.textPrimary;
+    final numberStyle = (textTheme.headlineSmall ?? const TextStyle()).copyWith(
+      fontSize: fontSize,
+      fontWeight: FontWeight.w800,
+      color: foreground,
+      letterSpacing: 0.2,
+      height: 1,
+      fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
+    );
+    final painter = TextPainter(
+      text: TextSpan(text: tail4, style: numberStyle),
+      maxLines: 1,
+      textDirection: Directionality.of(context),
+    )..layout();
+    final hasStatusIcon = completed || inProgress;
+    final hasSecondary = (completed && timeLabel != null) || inProgress;
+    final horizontalPadding = (fontSize * 0.44).clamp(11.0, 18.0).toDouble();
+    final verticalPadding = (fontSize * 0.30).clamp(8.0, 14.0).toDouble();
+    final iconSize = (fontSize * 0.58).clamp(16.0, 23.0).toDouble();
+    final iconGap = hasStatusIcon ? 6.0 : 0.0;
+    final cardWidth = (painter.width +
+            horizontalPadding * 2 +
+            (hasStatusIcon ? iconSize + iconGap : 0))
+        .clamp(fontSize * 3.25, fontSize * 5.4)
+        .toDouble();
+    final secondaryHeight = hasSecondary ? 18.0 : 0.0;
+    final secondaryGap = hasSecondary ? 5.0 : 0.0;
+    final cardHeight = (fontSize +
+            verticalPadding * 2 +
+            secondaryHeight +
+            secondaryGap)
+        .clamp(fontSize * 1.65, fontSize * 2.35)
+        .toDouble();
+
     return AnimatedContainer(
-      duration: tabletCommonDuration(context, CommonUiMotion.selection),
+      duration: duration,
       curve: CommonUiMotion.standard,
+      width: cardWidth,
+      height: cardHeight,
       decoration: BoxDecoration(
         color: background,
         borderRadius: BorderRadius.circular(CommonUiShapes.card),
@@ -481,67 +487,66 @@ class _PlateTile extends StatelessWidget {
           ),
         ],
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: EdgeInsets.symmetric(
+        horizontal: horizontalPadding,
+        vertical: verticalPadding,
+      ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Row(
+            mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              if (completed || inProgress) ...<Widget>[
-                Icon(
-                  completed
-                      ? Icons.check_circle_outline_rounded
-                      : Icons.directions_car_filled_rounded,
-                  color: tone,
-                  size: 18,
-                ),
-                const SizedBox(width: 5),
-              ],
-              Expanded(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    tail4,
-                    maxLines: 1,
-                    softWrap: false,
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          color: foreground,
-                          fontFeatures: const <FontFeature>[
-                            FontFeature.tabularFigures(),
-                          ],
-                        ),
+              if (hasStatusIcon) ...<Widget>[
+                AnimatedScale(
+                  duration: duration,
+                  curve: CommonUiMotion.standard,
+                  scale: inProgress ? 1.06 : 1,
+                  child: Icon(
+                    completed
+                        ? Icons.check_circle_outline_rounded
+                        : Icons.directions_car_filled_rounded,
+                    color: tone,
+                    size: iconSize,
                   ),
+                ),
+                SizedBox(width: iconGap),
+              ],
+              AnimatedDefaultTextStyle(
+                duration: duration,
+                curve: CommonUiMotion.standard,
+                style: numberStyle,
+                child: Text(
+                  tail4,
+                  maxLines: 1,
+                  softWrap: false,
                 ),
               ),
             ],
           ),
           if (completed && timeLabel != null) ...<Widget>[
-            const SizedBox(height: 3),
+            SizedBox(height: secondaryGap),
             Text(
               '완료 $timeLabel',
               maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: foreground,
-                    fontWeight: FontWeight.w600,
-                    fontFeatures: const <FontFeature>[
-                      FontFeature.tabularFigures(),
-                    ],
-                  ),
+              overflow: TextOverflow.clip,
+              style: textTheme.labelSmall?.copyWith(
+                color: foreground,
+                fontWeight: FontWeight.w600,
+                fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
+              ),
             ),
           ] else if (inProgress) ...<Widget>[
-            const SizedBox(height: 3),
+            SizedBox(height: secondaryGap),
             Text(
               '출차 중',
               maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: foreground,
-                    fontWeight: FontWeight.w600,
-                  ),
+              overflow: TextOverflow.clip,
+              style: textTheme.labelSmall?.copyWith(
+                color: foreground,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ],
         ],

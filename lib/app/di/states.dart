@@ -16,8 +16,10 @@ import '../../features/payment/applications/bill_state.dart';
 import '../../features/payment/domain/repositories/bill_repository.dart';
 import '../../features/sector/applications/sector_state.dart';
 import '../../features/sector/domain/repositories/sector_repository.dart';
+import '../../features/tablet/applications/tablet_grid_render_mode_state.dart';
 import '../../features/tablet/applications/tablet_pad_mode_state.dart';
 import '../../features/tablet/applications/tablet_parking_completed_view_toggle_state.dart';
+import '../../features/tablet/applications/tablet_plate_tail4_size_state.dart';
 import '../../features/tablet/applications/tablet_work_session_state.dart';
 import '../../shared/plate/application/common/delete_plate.dart';
 import '../../shared/plate/application/common/input_plate.dart';
@@ -40,6 +42,8 @@ final List<SingleChildWidget> stateProviders = [
   ),
   ChangeNotifierProvider(create: (_) => ViewDocRowsStore()),
   ChangeNotifierProvider(create: (_) => TabletPadModeState()),
+  ChangeNotifierProvider(create: (_) => TabletGridRenderModeState()),
+  ChangeNotifierProvider(create: (_) => TabletPlateTail4SizeState()),
   ChangeNotifierProvider(create: (_) => TabletWorkSessionState()),
   ChangeNotifierProvider(
     create: (_) => TabletParkingCompletedViewToggleState(),
