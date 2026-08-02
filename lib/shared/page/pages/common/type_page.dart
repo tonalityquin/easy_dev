@@ -540,7 +540,7 @@ class _TypeAutoTransitionDebugIndicatorState
   }
 }
 
-class _TypeAutoTransitionDebugContent extends StatelessWidget {
+class _TypeAutoTransitionDebugContent extends StatefulWidget {
   const _TypeAutoTransitionDebugContent({
     required this.guard,
     required this.textTheme,
@@ -556,15 +556,35 @@ class _TypeAutoTransitionDebugContent extends StatelessWidget {
   final Color secondary;
 
   @override
+  State<_TypeAutoTransitionDebugContent> createState() =>
+      _TypeAutoTransitionDebugContentState();
+}
+
+class _TypeAutoTransitionDebugContentState
+    extends State<_TypeAutoTransitionDebugContent> {
+  String? _lastVisualState;
+  int _visualStateRevision = 0;
+
+  ValueKey<String> _visualStateKey(String state) {
+    if (_lastVisualState != state) {
+      _lastVisualState = state;
+      _visualStateRevision += 1;
+    }
+    return ValueKey<String>('status-$state-$_visualStateRevision');
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final guard = widget.guard;
     final running = guard.countdownRunning;
     final blocked = guard.isBlocked;
     final remainingSeconds = guard.remaining.inMilliseconds / 1000;
-    final stateKey = running
+    final visualState = running
         ? 'running'
         : blocked
             ? 'blocked'
             : 'disabled';
+    final visualStateKey = _visualStateKey(visualState);
     final title = running
         ? 'STATUS ${remainingSeconds.toStringAsFixed(1)}s'
         : blocked
@@ -585,7 +605,7 @@ class _TypeAutoTransitionDebugContent extends StatelessWidget {
               ? Duration.zero
               : CommonUiMotion.selection,
           child: Row(
-            key: ValueKey<String>(stateKey),
+            key: visualStateKey,
             children: [
               Icon(
                 running
@@ -594,7 +614,7 @@ class _TypeAutoTransitionDebugContent extends StatelessWidget {
                         ? Icons.pause_circle_outline_rounded
                         : Icons.stop_circle_outlined,
                 size: 17,
-                color: running ? accent : secondary,
+                color: running ? widget.accent : widget.secondary,
               ),
               const SizedBox(width: 7),
               Expanded(
@@ -602,8 +622,9 @@ class _TypeAutoTransitionDebugContent extends StatelessWidget {
                   title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: (textTheme.labelLarge ?? const TextStyle()).copyWith(
-                    color: foreground,
+                  style:
+                      (widget.textTheme.labelLarge ?? const TextStyle()).copyWith(
+                    color: widget.foreground,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
@@ -617,8 +638,8 @@ class _TypeAutoTransitionDebugContent extends StatelessWidget {
           child: LinearProgressIndicator(
             minHeight: 5,
             value: running ? guard.progress : 0,
-            backgroundColor: secondary.withOpacity(0.18),
-            valueColor: AlwaysStoppedAnimation<Color>(accent),
+            backgroundColor: widget.secondary.withOpacity(0.18),
+            valueColor: AlwaysStoppedAnimation<Color>(widget.accent),
           ),
         ),
         const SizedBox(height: 6),
@@ -626,8 +647,8 @@ class _TypeAutoTransitionDebugContent extends StatelessWidget {
           detail,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: (textTheme.labelSmall ?? const TextStyle()).copyWith(
-            color: secondary,
+          style: (widget.textTheme.labelSmall ?? const TextStyle()).copyWith(
+            color: widget.secondary,
             fontWeight: FontWeight.w700,
           ),
         ),

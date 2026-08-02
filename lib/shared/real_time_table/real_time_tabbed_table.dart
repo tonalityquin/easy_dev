@@ -74,6 +74,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
   VoiceAppbarUiState? _talkUi;
   TypeAutoTransitionGuard? _autoGuard;
   Timer? _idleTimer;
+  bool _idleSyncScheduled = false;
 
   bool _transitionMaskOn = false;
   String _transitionMaskMessage = '구역 불러오는 중...';
@@ -119,11 +120,29 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     } catch (_) {
       next = null;
     }
-    if (_viewMode == next) return;
-    _detachViewModeListener();
-    _viewMode = next;
-    _viewMode?.addListener(_onViewModeChanged);
-    _syncIdleWithMode();
+    if (_viewMode != next) {
+      _detachViewModeListener();
+      _viewMode = next;
+      _viewMode?.addListener(_onViewModeChanged);
+    }
+    _scheduleIdleSyncAfterBuild();
+  }
+
+  void _scheduleIdleSyncAfterBuild() {
+    if (_idleSyncScheduled) return;
+    _idleSyncScheduled = true;
+    _debugLog('idle_sync_scheduled', <String, Object?>{
+      'screen': widget.screen,
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _idleSyncScheduled = false;
+      if (!mounted) return;
+      _debugLog('idle_sync_after_build', <String, Object?>{
+        'mode': _viewMode?.mode.name,
+        'talk': _talkUi?.enabled == true,
+      });
+      _syncIdleWithMode();
+    });
   }
 
   void _attachAutoGuardListener() {
@@ -138,14 +157,10 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     _autoGuard = next;
     _autoGuard?.addListener(_onAutoGuardChanged);
     final auto = widget.viewModeAuto;
-    if (auto != null) {
-      _autoGuard?.setCountdownDuration(auto.idleToStatusAfter);
-    }
     _debugLog('initialized', <String, Object?>{
       'idleMs': auto?.idleToStatusAfter.inMilliseconds,
       'screen': widget.screen,
     });
-    _syncIdleWithMode();
   }
 
   void _detachAutoGuardListener() {
@@ -169,7 +184,6 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     _talkUi?.removeListener(_onTalkUiChanged);
     _talkUi = next;
     _talkUi?.addListener(_onTalkUiChanged);
-    _syncIdleWithMode();
   }
 
   void _detachTalkUiListener() {
@@ -702,7 +716,9 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
             ? cs.outlineVariant.withOpacity(.55)
             : (selected ? accent.withOpacity(.95) : accent.withOpacity(.55));
 
-        return Container(
+        return AnimatedContainer(
+          duration: _motionDuration(const Duration(milliseconds: 220)),
+          curve: Curves.easeOutCubic,
           margin: const EdgeInsets.only(left: 6),
           constraints: const BoxConstraints(minHeight: 24, minWidth: 28),
           padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
@@ -711,18 +727,38 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
             borderRadius: BorderRadius.circular(999),
             border: Border.all(color: bc),
           ),
-          child: Text(
-            '$count',
-            maxLines: 1,
-            overflow: TextOverflow.fade,
-            style: (text.labelMedium ?? text.bodyMedium ?? const TextStyle())
-                .copyWith(
-              fontSize: 14,
-              fontWeight: FontWeight.w900,
-              color: fg,
-              fontFeatures: const [FontFeature.tabularFigures()],
-              height: 1.0,
-              letterSpacing: .1,
+          child: AnimatedSwitcher(
+            duration: _motionDuration(const Duration(milliseconds: 180)),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (child, animation) {
+              final curved = CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+                reverseCurve: Curves.easeInCubic,
+              );
+              return FadeTransition(
+                opacity: curved,
+                child: ScaleTransition(
+                  scale: Tween<double>(begin: 0.88, end: 1).animate(curved),
+                  child: child,
+                ),
+              );
+            },
+            child: Text(
+              '$count',
+              key: ValueKey<int>(count),
+              maxLines: 1,
+              overflow: TextOverflow.fade,
+              style: (text.labelMedium ?? text.bodyMedium ?? const TextStyle())
+                  .copyWith(
+                fontSize: 14,
+                fontWeight: FontWeight.w900,
+                color: fg,
+                fontFeatures: const [FontFeature.tabularFigures()],
+                height: 1.0,
+                letterSpacing: .1,
+              ),
             ),
           ),
         );
