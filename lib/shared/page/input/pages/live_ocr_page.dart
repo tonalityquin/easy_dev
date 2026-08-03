@@ -192,6 +192,112 @@ enum _WeakSegmentationEvidence {
   inferred,
 }
 
+enum _PlateRecoverySlot {
+  front,
+  mid,
+  back,
+}
+
+class _PlateSlotUncertainty {
+  final bool front;
+  final bool mid;
+  final bool back;
+
+  const _PlateSlotUncertainty({
+    required this.front,
+    required this.mid,
+    required this.back,
+  });
+}
+
+class _LocalBoundaryEvidence {
+  final _PlateRecoverySlot slot;
+  final String? front;
+  final String? mid;
+  final String? back;
+  final String text;
+  final Rect rect;
+  final Uint8List bytes;
+  final int ocrMs;
+  final String sourceKind;
+  final double score;
+
+  const _LocalBoundaryEvidence({
+    required this.slot,
+    required this.front,
+    required this.mid,
+    required this.back,
+    required this.text,
+    required this.rect,
+    required this.bytes,
+    required this.ocrMs,
+    required this.sourceKind,
+    required this.score,
+  });
+}
+
+class _LocalOcrBudget {
+  final int maxAttempts;
+  int used = 0;
+  int totalOcrMs = 0;
+
+  _LocalOcrBudget({required this.maxAttempts});
+
+  bool get canRun => used < maxAttempts;
+
+  bool consume() {
+    if (!canRun) return false;
+    used++;
+    return true;
+  }
+
+  void addOcrMs(int value) {
+    totalOcrMs += value;
+  }
+}
+
+class _BoundaryAnchorCandidate {
+  final Rect rect;
+  final String sourceKind;
+  final double score;
+
+  const _BoundaryAnchorCandidate({
+    required this.rect,
+    required this.sourceKind,
+    required this.score,
+  });
+}
+
+class _PartialBoundarySeed {
+  final _PlateRecoverySlot slot;
+  final Rect plateBox;
+  final String? front;
+  final String mid;
+  final String? back;
+  final int frontLen;
+  final String rawFront;
+  final String rawBack;
+  final String sourceText;
+  final String sourceKind;
+  final double score;
+
+  const _PartialBoundarySeed({
+    required this.slot,
+    required this.plateBox,
+    required this.front,
+    required this.mid,
+    required this.back,
+    required this.frontLen,
+    required this.rawFront,
+    required this.rawBack,
+    required this.sourceText,
+    required this.sourceKind,
+    required this.score,
+  });
+
+  String get signature => '${front ?? rawFront}?${back ?? rawBack}';
+}
+
 class _StructuredWeakCandidate {
   final String signature;
   final String front;
@@ -224,8 +330,8 @@ enum _OcrDebugStage {
   weakPlateDetected,
   cropPrepared,
   cropOcr,
-  microCropPrepared,
-  microCropOcr,
+  localCropPrepared,
+  localCropOcr,
   refocusing,
   recovered,
   fallback,
@@ -280,12 +386,13 @@ class _MicroMidEvidence {
 }
 
 class _MicroCropRecovery {
-  final String plate;
+  final String? plate;
   final String text;
   final Rect rect;
   final Uint8List bytes;
   final int ocrMs;
   final String signature;
+  final bool hasUsefulEvidence;
 
   const _MicroCropRecovery({
     required this.plate,
@@ -294,16 +401,23 @@ class _MicroCropRecovery {
     required this.bytes,
     required this.ocrMs,
     required this.signature,
+    required this.hasUsefulEvidence,
   });
 }
 
 class _DecodedCapture {
   final img.Image image;
   final Size imageSize;
+  final bool geometryReliable;
+  final bool decodedFits;
+  final bool bakedFits;
 
   const _DecodedCapture({
     required this.image,
     required this.imageSize,
+    required this.geometryReliable,
+    required this.decodedFits,
+    required this.bakedFits,
   });
 }
 
@@ -317,6 +431,8 @@ class _CropRecoveryOutcome {
   final Uint8List cropBytes;
   final Offset focusPoint;
   final int cropOcrMs;
+  final int recoveryWallMs;
+  final bool allowRefocus;
 
   const _CropRecoveryOutcome({
     required this.signature,
@@ -328,6 +444,8 @@ class _CropRecoveryOutcome {
     required this.cropBytes,
     required this.focusPoint,
     required this.cropOcrMs,
+    required this.recoveryWallMs,
+    this.allowRefocus = true,
   });
 }
 
@@ -368,19 +486,22 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
   Size? _ocrDebugSourceImageSize;
   Rect? _ocrDebugWeakBox;
   Rect? _ocrDebugCropBox;
-  Rect? _ocrDebugMicroCropBox;
+  Rect? _ocrDebugLocalCropBox;
+  _PlateRecoverySlot? _ocrDebugLocalSlot;
   Offset? _ocrDebugFocusPoint;
   Uint8List? _ocrDebugCropBytes;
-  Uint8List? _ocrDebugMicroCropBytes;
+  Uint8List? _ocrDebugLocalCropBytes;
   String? _ocrDebugCropText;
-  String? _ocrDebugMicroCropText;
+  String? _ocrDebugLocalCropText;
   String? _ocrDebugStructuredPlate;
   String? _ocrDebugRecoveredPlate;
   String? _ocrDebugStageDetail;
   int? _ocrDebugCaptureMs;
   int? _ocrDebugFullOcrMs;
   int? _ocrDebugCropOcrMs;
-  int? _ocrDebugMicroOcrMs;
+  int? _ocrDebugLocalOcrMs;
+  int? _ocrDebugLocalWallMs;
+  int? _ocrDebugRecoveryWallMs;
   int _ocrDebugRevision = 0;
   String? _pendingRefocusSignature;
   int _pendingRefocusRetryCount = 0;
@@ -389,6 +510,8 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
   Rect? _lastAutoRefocusRegion;
   Size? _lastAutoRefocusImageSize;
   String? _lastRefocusDecision;
+  int? _lastLocalStageWallMs;
+  String? _lastLocalStageSignature;
 
   int _autoIntervalMs = 900;
   int _attempt = 0;
@@ -423,6 +546,8 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
   final Map<String, Map<String, int>> _weakStructuredObservedHangulVotes = {};
   final Map<String, _StructuredWeakCandidate> _weakStructuredBest = {};
   final List<Map<String, Map<String, double>>> _segmentationEvidenceFrames = [];
+  final Map<String, Map<String, int>> _localMidEvidenceVotes = {};
+  final Map<String, int> _lastHeavyRecoveryAttemptBySignature = {};
   static const int _voteWindow = 4;
   static const int _stableVoteThreshold = 2;
   static const int _tentativeVoteThreshold = 2;
@@ -430,6 +555,7 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
   static const int _refocusRetryLimit = 1;
   static const int _refocusRetryIntervalMs = 260;
   static const int _refocusCooldownMs = 10000;
+  static const int _heavyRecoveryCooldownFrames = 2;
   static const double _refocusMajorCenterShift = .18;
   static const double _refocusMajorScaleRatio = 1.55;
 
@@ -507,9 +633,9 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
       _learningSummary = await _learningRepo.getSummary();
       _appendLog(
         '학습 정책 로드 committed=${_learningSummary?.committedCount ?? 0} '
-        'pending=${_learningSummary?.pendingCount ?? 0} '
-        'midMap=${_dynMidMap.length} candidateMap=${_dynCandidateMap.length} '
-        'preferredFrontLen=${_preferredFrontLen ?? '-'}',
+            'pending=${_learningSummary?.pendingCount ?? 0} '
+            'midMap=${_dynMidMap.length} candidateMap=${_dynCandidateMap.length} '
+            'preferredFrontLen=${_preferredFrontLen ?? '-'}',
       );
     } catch (e) {
       if (kDebugMode && mounted) {
@@ -544,7 +670,7 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
 
       final cameras = await availableCameras();
       final back = cameras.firstWhere(
-        (c) => c.lensDirection == CameraLensDirection.back,
+            (c) => c.lensDirection == CameraLensDirection.back,
         orElse: () => cameras.first,
       );
       _cameraDescription = back;
@@ -618,6 +744,8 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
       _lastAutoRefocusRegion = null;
       _lastAutoRefocusImageSize = null;
       _lastRefocusDecision = null;
+      _lastLocalStageWallMs = null;
+      _lastLocalStageSignature = null;
       _appendLog('카메라 복구 성공');
       if (mounted) {
         setState(() {});
@@ -668,6 +796,8 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
       _weakStructuredObservedHangulVotes.clear();
       _weakStructuredBest.clear();
       _segmentationEvidenceFrames.clear();
+      _localMidEvidenceVotes.clear();
+      _lastHeavyRecoveryAttemptBySignature.clear();
       _sessionLogs.clear();
       _lastSavedLearningKey = null;
       _ocrDebugStage = _OcrDebugStage.idle;
@@ -675,19 +805,22 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
       _ocrDebugSourceImageSize = null;
       _ocrDebugWeakBox = null;
       _ocrDebugCropBox = null;
-      _ocrDebugMicroCropBox = null;
+      _ocrDebugLocalCropBox = null;
+      _ocrDebugLocalSlot = null;
       _ocrDebugFocusPoint = null;
       _ocrDebugCropBytes = null;
-      _ocrDebugMicroCropBytes = null;
+      _ocrDebugLocalCropBytes = null;
       _ocrDebugCropText = null;
-      _ocrDebugMicroCropText = null;
+      _ocrDebugLocalCropText = null;
       _ocrDebugStructuredPlate = null;
       _ocrDebugRecoveredPlate = null;
       _ocrDebugStageDetail = null;
       _ocrDebugCaptureMs = null;
       _ocrDebugFullOcrMs = null;
       _ocrDebugCropOcrMs = null;
-      _ocrDebugMicroOcrMs = null;
+      _ocrDebugLocalOcrMs = null;
+      _ocrDebugLocalWallMs = null;
+      _ocrDebugRecoveryWallMs = null;
       _ocrDebugRevision = 0;
       _pendingRefocusSignature = null;
       _pendingRefocusRetryCount = 0;
@@ -696,13 +829,15 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
       _lastAutoRefocusRegion = null;
       _lastAutoRefocusImageSize = null;
       _lastRefocusDecision = null;
+      _lastLocalStageWallMs = null;
+      _lastLocalStageSignature = null;
     }
 
     _autoGen++;
     final gen = _autoGen;
     _appendLog(
       '인식 시작 gen=$gen intervalMs=$_autoIntervalMs '
-      'forceInsert=${_allowForceInsert ? 'on' : 'off'} torch=${_torch ? 'on' : 'off'}',
+          'forceInsert=${_allowForceInsert ? 'on' : 'off'} torch=${_torch ? 'on' : 'off'}',
     );
     _autoLoop(gen);
   }
@@ -717,6 +852,8 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
     _lastAutoRefocusRegion = null;
     _lastAutoRefocusImageSize = null;
     _lastRefocusDecision = null;
+    _lastLocalStageWallMs = null;
+    _lastLocalStageSignature = null;
     _appendLog('인식 중지');
   }
 
@@ -787,7 +924,7 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
         }
         _appendLog(
           'attempt=$_attempt captureMs=${captureWatch.elapsedMilliseconds} '
-          'fullOcrMs=${ocrWatch.elapsedMilliseconds} ocrText=${_lastText ?? ''}',
+              'fullOcrMs=${ocrWatch.elapsedMilliseconds} ocrText=${_lastText ?? ''}',
         );
 
         final direct = _extractStrictKoreanPlate(allText);
@@ -834,6 +971,60 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
           structuredWeakFrame,
         );
 
+        if (midRecoveryCandidates.isEmpty) {
+          final partialSeeds = _extractPartialBoundarySeeds(
+            result,
+            onUseLearningMid: () {
+              usedLearningMidThis = true;
+            },
+          );
+          if (partialSeeds.isNotEmpty) {
+            final partialSignature = partialSeeds.first.signature;
+            _CropRecoveryOutcome? partialOutcome;
+            if (_canRunHeavyRecovery(partialSignature)) {
+              _markHeavyRecovery(partialSignature);
+              partialOutcome = await _tryRecoverPartialBoundaryCases(
+                capturedPath: captured.path,
+                result: result,
+                seeds: partialSeeds,
+                decodedCapture: decodedCapture,
+                onUseLearningMid: () {
+                  usedLearningMidThis = true;
+                },
+              );
+            } else {
+              _appendLog(
+                'partial recovery cooldown skip signature=$partialSignature '
+                'remainingFrames=${_heavyRecoveryCooldownRemainingFrames(partialSignature)}',
+              );
+            }
+            if (partialOutcome?.plate != null &&
+                _isModernPlate(_normalizeCandidateKey(partialOutcome!.plate!))) {
+              final recoveredPlate = _normalizeCandidateKey(partialOutcome.plate!);
+              _pendingRefocusSignature = null;
+              _pendingRefocusRetryCount = 0;
+              _usedLearningMidLast = usedLearningMidThis;
+              _usedLearningRankLast = false;
+              _appendLog(
+                'partial local 복구 성공 plate=$recoveredPlate '
+                'ocrMs=${partialOutcome.cropOcrMs} '
+                'text=${partialOutcome.cropText.replaceAll('\n', ' ')}',
+              );
+              _setOcrDebugStage(
+                _OcrDebugStage.recovered,
+                detail: 'partialLocalRecovered:$recoveredPlate',
+                recoveredPlate: recoveredPlate,
+              );
+              await _holdDeveloperVisualization();
+              await _finishAndPop(
+                plate: recoveredPlate,
+                exitType: LiveOcrExitType.autoLoose,
+              );
+              return;
+            }
+          }
+        }
+
         if (midRecoveryCandidates.isEmpty &&
             _pendingRefocusSignature != null) {
           _appendLog(
@@ -844,15 +1035,25 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
         }
 
         if (midRecoveryCandidates.isNotEmpty) {
-          final outcome = await _tryRecoverUnresolvedMidFromDynamicCrop(
-            capturedPath: captured.path,
-            result: result,
-            weakCandidates: midRecoveryCandidates,
-            decodedCapture: decodedCapture,
-            onUseLearningMid: () {
-              usedLearningMidThis = true;
-            },
-          );
+          final primarySignature = midRecoveryCandidates.first.signature;
+          _CropRecoveryOutcome? outcome;
+          if (_canRunHeavyRecovery(primarySignature)) {
+            _markHeavyRecovery(primarySignature);
+            outcome = await _tryRecoverFromDynamicCrop(
+              capturedPath: captured.path,
+              result: result,
+              weakCandidates: midRecoveryCandidates,
+              decodedCapture: decodedCapture,
+              onUseLearningMid: () {
+                usedLearningMidThis = true;
+              },
+            );
+          } else {
+            _appendLog(
+              'dynamic recovery cooldown skip signature=$primarySignature '
+              'remainingFrames=${_heavyRecoveryCooldownRemainingFrames(primarySignature)}',
+            );
+          }
 
           if (outcome != null) {
             if (outcome.plate != null &&
@@ -862,13 +1063,15 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
               _pendingRefocusRetryCount = 0;
               _usedLearningMidLast = usedLearningMidThis;
               _usedLearningRankLast = false;
+              final recoveryKind =
+              _ocrDebugLocalCropText == null ? 'dynamic' : 'local';
               _appendLog(
-                '동적 crop 복구 성공 plate=$recoveredPlate '
-                'cropOcrMs=${outcome.cropOcrMs} cropText=${outcome.cropText.replaceAll('\n', ' ')}',
+                '복구 성공 kind=$recoveryKind plate=$recoveredPlate '
+                    'ocrMs=${outcome.cropOcrMs} text=${outcome.cropText.replaceAll('\n', ' ')}',
               );
               _setOcrDebugStage(
                 _OcrDebugStage.recovered,
-                detail: 'cropRecovered:$recoveredPlate',
+                detail: '${recoveryKind}Recovered:$recoveredPlate',
                 recoveredPlate: recoveredPlate,
               );
               await _holdDeveloperVisualization();
@@ -884,7 +1087,15 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
             final retryConsumed = samePendingSignature &&
                 _pendingRefocusRetryCount >= _refocusRetryLimit;
 
-            if (!retryConsumed) {
+            if (!outcome.allowRefocus) {
+              _lastRefocusDecision = 'suppressed:midOnlyStableDigits';
+              _pendingRefocusSignature = null;
+              _pendingRefocusRetryCount = 0;
+              _appendLog(
+                '재초점 억제 signature=${outcome.signature} '
+                'reason=midOnlyStableDigits wallMs=${outcome.recoveryWallMs}',
+              );
+            } else if (!retryConsumed) {
               final refocusDecision = _evaluateAutoRefocus(outcome);
               if (refocusDecision.allow) {
                 if (!samePendingSignature) {
@@ -898,7 +1109,7 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
                 _setOcrDebugStage(
                   _OcrDebugStage.refocusing,
                   detail:
-                      'retry=$_pendingRefocusRetryCount/$_refocusRetryLimit ${refocusDecision.reason} focus:${outcome.focusPoint.dx.toStringAsFixed(3)},${outcome.focusPoint.dy.toStringAsFixed(3)}',
+                  'retry=$_pendingRefocusRetryCount/$_refocusRetryLimit ${refocusDecision.reason} focus:${outcome.focusPoint.dx.toStringAsFixed(3)},${outcome.focusPoint.dy.toStringAsFixed(3)}',
                   structuredPlate: outcome.signature,
                   focusPoint: outcome.focusPoint,
                 );
@@ -909,11 +1120,11 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
                 );
                 _appendLog(
                   '동적 crop 복구 실패 focus 재지정 '
-                  'signature=${outcome.signature} '
-                  'retry=$_pendingRefocusRetryCount/$_refocusRetryLimit '
-                  'reason=${refocusDecision.reason} '
-                  'cropOcrMs=${outcome.cropOcrMs} cropText=${outcome.cropText.replaceAll('\n', ' ')} '
-                  'weakChip=suppressed',
+                      'signature=${outcome.signature} '
+                      'retry=$_pendingRefocusRetryCount/$_refocusRetryLimit '
+                      'reason=${refocusDecision.reason} '
+                      'cropOcrMs=${outcome.cropOcrMs} cropText=${outcome.cropText.replaceAll('\n', ' ')} '
+                      'weakChip=suppressed',
                 );
               } else {
                 _lastRefocusDecision = 'suppressed:${refocusDecision.reason}';
@@ -921,22 +1132,22 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
                 _pendingRefocusRetryCount = 0;
                 _appendLog(
                   '재초점 cooldown 억제 signature=${outcome.signature} '
-                  'reason=${refocusDecision.reason} '
-                  'sourceBox=${_rectForLog(outcome.sourceRegion)}',
+                      'reason=${refocusDecision.reason} '
+                      'sourceBox=${_rectForLog(outcome.sourceRegion)}',
                 );
               }
             } else {
               _appendLog(
                 '재초점 자동 재시도 소진 signature=${outcome.signature} '
-                'retry=$_pendingRefocusRetryCount/$_refocusRetryLimit fallback=allowed',
+                    'retry=$_pendingRefocusRetryCount/$_refocusRetryLimit fallback=allowed',
               );
               _pendingRefocusSignature = null;
               _pendingRefocusRetryCount = 0;
             }
           } else if (_pendingRefocusSignature != null &&
               midRecoveryCandidates.any(
-                (candidate) =>
-                    candidate.signature == _pendingRefocusSignature,
+                    (candidate) =>
+                candidate.signature == _pendingRefocusSignature,
               )) {
             _appendLog(
               '재초점 자동 재시도 결과 없음 signature=$_pendingRefocusSignature fallback=allowed',
@@ -949,15 +1160,15 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
         final rawSet = <String>{};
         rawSet.addAll(
             _extractModernCandidatesAnyChar(allText, onUseLearningMid: () {
-          usedLearningMidThis = true;
-        }));
+              usedLearningMidThis = true;
+            }));
         rawSet.addAll(_extractLegacyRegionCandidates(allText));
         rawSet.addAll(_extractDigitsOnlyNoMidCandidates(structuredWeakFrame));
         rawSet.addAll(_extractByGeometryCandidates(result));
         rawSet.addAll(
             _extractWeakRecoverableCandidates(structuredWeakFrame, onUseLearningMid: () {
-          usedLearningMidThis = true;
-        }));
+              usedLearningMidThis = true;
+            }));
 
         final prioritized = _applyLearnedCandidateMap(rawSet);
         if (prioritized.isNotEmpty || _preferredFrontLen != null) {
@@ -1008,10 +1219,10 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
           displayChips = displayChips
               .where(
                 (chip) => !_shouldSuppressWeakChip(
-                  chip,
-                  suppressedWeakSignature!,
-                ),
-              )
+              chip,
+              suppressedWeakSignature!,
+            ),
+          )
               .toList(growable: false);
         }
         _candidateChips =
@@ -1042,12 +1253,12 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
 
         _appendLog(
           'rawCandidates=${_joinForLog(_rankAllCandidates(rawSet.toList(), prioritized: prioritized))} '
-          'stableFrame=${_joinForLog(stableFrame.toList())} '
-          'tentativeFrame=${_joinForLog(tentativeFrame.toList())} '
-          'weakFrame=${_joinForLog(weakFrame.toList())} '
-          'weakStructured=${_joinForLog(_rankStructuredWeakLogs(structuredWeakFrame))} '
-          'display=${_joinForLog(displayChips.map((e) => e.label).toList())} '
-          'failure=${_currentFailureReason ?? '-'}',
+              'stableFrame=${_joinForLog(stableFrame.toList())} '
+              'tentativeFrame=${_joinForLog(tentativeFrame.toList())} '
+              'weakFrame=${_joinForLog(weakFrame.toList())} '
+              'weakStructured=${_joinForLog(_rankStructuredWeakLogs(structuredWeakFrame))} '
+              'display=${_joinForLog(displayChips.map((e) => e.label).toList())} '
+              'failure=${_currentFailureReason ?? '-'}',
         );
 
         if (_allowForceInsert) {
@@ -1108,28 +1319,31 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
   }
 
   void _setOcrDebugStage(
-    _OcrDebugStage stage, {
-    String? detail,
-    String? structuredPlate,
-    String? recoveredPlate,
-    Offset? focusPoint,
-    bool clearFrameGeometry = false,
-  }) {
+      _OcrDebugStage stage, {
+        String? detail,
+        String? structuredPlate,
+        String? recoveredPlate,
+        Offset? focusPoint,
+        bool clearFrameGeometry = false,
+      }) {
     if (clearFrameGeometry) {
       _ocrDebugLineBoxes = const [];
       _ocrDebugSourceImageSize = null;
       _ocrDebugWeakBox = null;
       _ocrDebugCropBox = null;
-      _ocrDebugMicroCropBox = null;
+      _ocrDebugLocalCropBox = null;
+      _ocrDebugLocalSlot = null;
       _ocrDebugFocusPoint = null;
       _ocrDebugCropBytes = null;
-      _ocrDebugMicroCropBytes = null;
+      _ocrDebugLocalCropBytes = null;
       _ocrDebugCropText = null;
-      _ocrDebugMicroCropText = null;
+      _ocrDebugLocalCropText = null;
       _ocrDebugStructuredPlate = null;
       _ocrDebugRecoveredPlate = null;
       _ocrDebugCropOcrMs = null;
-      _ocrDebugMicroOcrMs = null;
+      _ocrDebugLocalOcrMs = null;
+      _ocrDebugLocalWallMs = null;
+      _ocrDebugRecoveryWallMs = null;
     }
     _ocrDebugStage = stage;
     _ocrDebugStageDetail = detail;
@@ -1145,8 +1359,8 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
     _ocrDebugRevision++;
     _appendLog(
       'debugStage=${stage.name} detail=${detail ?? '-'} '
-      'structured=${_ocrDebugStructuredPlate ?? '-'} '
-      'recovered=${_ocrDebugRecoveredPlate ?? '-'}',
+          'structured=${_ocrDebugStructuredPlate ?? '-'} '
+          'recovered=${_ocrDebugRecoveredPlate ?? '-'}',
     );
     if (mounted) {
       setState(() {});
@@ -1176,21 +1390,24 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
     _ocrDebugSourceImageSize = sourceImageSize;
     _ocrDebugWeakBox = null;
     _ocrDebugCropBox = null;
-    _ocrDebugMicroCropBox = null;
+    _ocrDebugLocalCropBox = null;
+    _ocrDebugLocalSlot = null;
     _ocrDebugFocusPoint = null;
     _ocrDebugCropBytes = null;
-    _ocrDebugMicroCropBytes = null;
+    _ocrDebugLocalCropBytes = null;
     _ocrDebugCropText = null;
-    _ocrDebugMicroCropText = null;
+    _ocrDebugLocalCropText = null;
     _ocrDebugCropOcrMs = null;
-    _ocrDebugMicroOcrMs = null;
+    _ocrDebugLocalOcrMs = null;
+    _ocrDebugLocalWallMs = null;
+    _ocrDebugRecoveryWallMs = null;
     _ocrDebugStructuredPlate = null;
     _ocrDebugRecoveredPlate = null;
     _ocrDebugStageDetail = 'lines=${boxes.length}';
     _ocrDebugRevision++;
     _appendLog(
       'debugGeometry lines=${boxes.length} sourceSize='
-      '${sourceImageSize == null ? '-' : '${sourceImageSize.width.toInt()}x${sourceImageSize.height.toInt()}'}',
+          '${sourceImageSize == null ? '-' : '${sourceImageSize.width.toInt()}x${sourceImageSize.height.toInt()}'}',
     );
     if (mounted) {
       setState(() {});
@@ -1216,9 +1433,9 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
   }
 
   Future<_DecodedCapture?> _decodeCaptureForGeometry(
-    String path,
-    RecognizedText result,
-  ) async {
+      String path,
+      RecognizedText result,
+      ) async {
     try {
       final bytes = await File(path).readAsBytes();
       final decoded = img.decodeImage(bytes);
@@ -1236,6 +1453,7 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
         Size(baked.width.toDouble(), baked.height.toDouble()),
         result,
       );
+      final geometryReliable = decodedFits || bakedFits;
       final selected = bakedFits || !decodedFits ? baked : decoded;
       final size = Size(
         selected.width.toDouble(),
@@ -1243,9 +1461,16 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
       );
       _appendLog(
         'geometry image size=${selected.width}x${selected.height} '
-        'decodedFits=$decodedFits bakedFits=$bakedFits',
+            'decodedFits=$decodedFits bakedFits=$bakedFits '
+            'reliable=$geometryReliable',
       );
-      return _DecodedCapture(image: selected, imageSize: size);
+      return _DecodedCapture(
+        image: selected,
+        imageSize: size,
+        geometryReliable: geometryReliable,
+        decodedFits: decodedFits,
+        bakedFits: bakedFits,
+      );
     } catch (e, stackTrace) {
       _appendLog('geometry image load 오류 $e');
       _appendLog('geometry image stack=$stackTrace');
@@ -1289,9 +1514,9 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
   }
 
   bool _digitsSupportWeakCandidate(
-    String digits,
-    _StructuredWeakCandidate candidate,
-  ) {
+      String digits,
+      _StructuredWeakCandidate candidate,
+      ) {
     if (digits.isEmpty) return false;
     final targetDigits = '${candidate.front}${candidate.back}';
     if (digits.contains(targetDigits)) return true;
@@ -1336,9 +1561,9 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
   }
 
   Rect? _estimatedCandidateSpanBox(
-    TextLine line,
-    _StructuredWeakCandidate candidate,
-  ) {
+      TextLine line,
+      _StructuredWeakCandidate candidate,
+      ) {
     final source = _normalizeWeakSource(line.text);
     if (source.isEmpty) return null;
     final sep = r'[\s\.\-·•_]*';
@@ -1364,9 +1589,9 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
   }
 
   Rect? _candidateElementUnionBox(
-    TextLine line,
-    _StructuredWeakCandidate candidate,
-  ) {
+      TextLine line,
+      _StructuredWeakCandidate candidate,
+      ) {
     final wholeEvidence = <Rect>[];
     final frontEvidence = <Rect>[];
     final backEvidence = <Rect>[];
@@ -1396,9 +1621,9 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
   }
 
   ({Rect box, String kind})? _tightCandidateBoxInLine(
-    TextLine line,
-    _StructuredWeakCandidate candidate,
-  ) {
+      TextLine line,
+      _StructuredWeakCandidate candidate,
+      ) {
     final boxes = <({Rect box, String kind})>[];
     final elementBox = _candidateElementUnionBox(line, candidate);
     if (elementBox != null) {
@@ -1418,9 +1643,9 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
   }
 
   _WeakPlateRegion? _findWeakPlateRegion(
-    RecognizedText result,
-    List<_StructuredWeakCandidate> weakCandidates,
-  ) {
+      RecognizedText result,
+      List<_StructuredWeakCandidate> weakCandidates,
+      ) {
     if (weakCandidates.isEmpty) return null;
     final sorted = List<_StructuredWeakCandidate>.from(weakCandidates)
       ..sort((a, b) => b.score.compareTo(a.score));
@@ -1527,9 +1752,9 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
     final left = (source.left - padX).clamp(0.0, imageSize.width).toDouble();
     final top = (source.top - padY).clamp(0.0, imageSize.height).toDouble();
     final right =
-        (source.right + padX).clamp(0.0, imageSize.width).toDouble();
+    (source.right + padX).clamp(0.0, imageSize.width).toDouble();
     final bottom =
-        (source.bottom + padY).clamp(0.0, imageSize.height).toDouble();
+    (source.bottom + padY).clamp(0.0, imageSize.height).toDouble();
     return Rect.fromLTRB(left, top, right, bottom);
   }
 
@@ -1560,11 +1785,11 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
   }
 
   bool _hasMajorRefocusGeometryChange(
-    Rect current,
-    Size currentSize,
-    Rect previous,
-    Size previousSize,
-  ) {
+      Rect current,
+      Size currentSize,
+      Rect previous,
+      Size previousSize,
+      ) {
     if (currentSize.width <= 0 ||
         currentSize.height <= 0 ||
         previousSize.width <= 0 ||
@@ -1603,8 +1828,8 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
   }
 
   ({bool allow, String reason}) _evaluateAutoRefocus(
-    _CropRecoveryOutcome outcome,
-  ) {
+      _CropRecoveryOutcome outcome,
+      ) {
     final lastAt = _lastAutoRefocusAt;
     final lastIdentity = _lastAutoRefocusIdentity;
     final lastRegion = _lastAutoRefocusRegion;
@@ -1631,8 +1856,8 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
       return (allow: true, reason: 'cooldownExpired');
     }
     return (
-      allow: false,
-      reason: 'cooldown:${math.max(0, _refocusCooldownMs - elapsed)}ms',
+    allow: false,
+    reason: 'cooldown:${math.max(0, _refocusCooldownMs - elapsed)}ms',
     );
   }
 
@@ -1644,7 +1869,993 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
     _lastRefocusDecision = 'allowed:$reason';
   }
 
-  Future<_CropRecoveryOutcome?> _tryRecoverUnresolvedMidFromDynamicCrop({
+  bool _canRunHeavyRecovery(String signature) {
+    final lastAttempt = _lastHeavyRecoveryAttemptBySignature[signature];
+    if (lastAttempt == null) return true;
+    return _attempt - lastAttempt > _heavyRecoveryCooldownFrames;
+  }
+
+  int _heavyRecoveryCooldownRemainingFrames(String signature) {
+    final lastAttempt = _lastHeavyRecoveryAttemptBySignature[signature];
+    if (lastAttempt == null) return 0;
+    return math.max(
+      0,
+      _heavyRecoveryCooldownFrames - (_attempt - lastAttempt) + 1,
+    ).toInt();
+  }
+
+  void _markHeavyRecovery(String signature) {
+    _lastHeavyRecoveryAttemptBySignature[signature] = _attempt;
+  }
+
+  int get _estimatedNextFrameWallMs {
+    final capture = _ocrDebugCaptureMs ?? 500;
+    final fullOcr = _ocrDebugFullOcrMs ?? 180;
+    return _autoIntervalMs + capture + fullOcr;
+  }
+
+  bool _localRecoveryFitsLatencyBudget(String signature) {
+    if (_lastLocalStageSignature != signature || _lastLocalStageWallMs == null) {
+      return true;
+    }
+    return _lastLocalStageWallMs! <= _estimatedNextFrameWallMs;
+  }
+
+  void _recordLocalStageWall(String signature, int wallMs) {
+    _lastLocalStageSignature = signature;
+    _lastLocalStageWallMs = wallMs;
+    _ocrDebugLocalWallMs = wallMs;
+  }
+
+  String _localEvidenceKey(String front, String back) {
+    final prefixLength = math.min(2, front.length).toInt();
+    final prefix = front.substring(0, prefixLength);
+    return '$prefix|$back';
+  }
+
+  void _recordLocalMidEvidence(
+    String front,
+    String back,
+    _MicroMidEvidence evidence,
+  ) {
+    if (!evidence.leftContextMatched && !evidence.rightContextMatched) return;
+    final key = _localEvidenceKey(front, back);
+    final votes = _localMidEvidenceVotes.putIfAbsent(
+      key,
+      () => <String, int>{},
+    );
+    final weight = evidence.strongContext ? 2 : 1;
+    votes[evidence.mid] = (votes[evidence.mid] ?? 0) + weight;
+    _appendLog(
+      'local mid evidence key=$key mid=${evidence.mid} weight=$weight total=${votes[evidence.mid]}',
+    );
+  }
+
+  ({String mid, int votes})? _bestLocalMidEvidence(
+    String front,
+    String back,
+  ) {
+    final votes = _localMidEvidenceVotes[_localEvidenceKey(front, back)];
+    if (votes == null || votes.isEmpty) return null;
+    final ranked = votes.entries.toList()
+      ..sort((a, b) {
+        final byVotes = b.value.compareTo(a.value);
+        if (byVotes != 0) return byVotes;
+        return a.key.compareTo(b.key);
+      });
+    final best = ranked.first;
+    return (mid: best.key, votes: best.value);
+  }
+
+  _PlateSlotUncertainty _analyzeSlotUncertainty({
+    required _WeakPlateRegion region,
+    required List<_StructuredWeakCandidate> weakCandidates,
+  }) {
+    final relevant = weakCandidates
+        .where((candidate) => candidate.back == region.back)
+        .toList(growable: false);
+    final fronts = relevant.map((candidate) => candidate.front).toSet();
+    final backs = weakCandidates.map((candidate) => candidate.back).toSet();
+    final resolvedFront = _resolveFrontFromEvidence(region.back, weakCandidates);
+    return _PlateSlotUncertainty(
+      front: resolvedFront == null || fronts.length > 1,
+      mid: true,
+      back: backs.length > 1,
+    );
+  }
+
+  Rect _clampRecoveryRect(Rect rect, Size imageSize) {
+    final maxWidth = math.max(1.0, imageSize.width);
+    final maxHeight = math.max(1.0, imageSize.height);
+    final left = rect.left.clamp(0.0, maxWidth - 1.0).toDouble();
+    final top = rect.top.clamp(0.0, maxHeight - 1.0).toDouble();
+    final right = rect.right.clamp(left + 1.0, maxWidth).toDouble();
+    final bottom = rect.bottom.clamp(top + 1.0, maxHeight).toDouble();
+    return Rect.fromLTRB(left, top, right, bottom);
+  }
+
+  Rect _estimatedSourceRangeBox({
+    required Rect sourceBox,
+    required int sourceLength,
+    required int start,
+    required int end,
+  }) {
+    if (sourceLength <= 0 || sourceBox.width <= 0 || sourceBox.height <= 0) {
+      return sourceBox;
+    }
+    final safeStart = start.clamp(0, sourceLength).toInt();
+    final safeEnd = end.clamp(safeStart + 1, sourceLength).toInt();
+    final startRatio = safeStart / sourceLength;
+    final endRatio = safeEnd / sourceLength;
+    final pad = math.max(sourceBox.height * .20, 3.0);
+    return Rect.fromLTRB(
+      sourceBox.left + sourceBox.width * startRatio - pad,
+      sourceBox.top - pad * .25,
+      sourceBox.left + sourceBox.width * endRatio + pad,
+      sourceBox.bottom + pad * .25,
+    );
+  }
+
+  List<_PartialBoundarySeed> _extractPartialBoundarySeeds(
+    RecognizedText result, {
+    required VoidCallback onUseLearningMid,
+  }) {
+    final out = <_PartialBoundarySeed>[];
+    final seen = <String>{};
+    final sep = r'[\s\.\-·•_]*';
+    final frontBroken = RegExp(
+      '(?<![0-9A-Za-z가-힣])([0-9A-Za-z○#|]{2,3})$sep([가-힣])$sep(\\d{4})(?![0-9A-Za-z가-힣])',
+    );
+    final backBroken = RegExp(
+      '(?<![0-9A-Za-z가-힣])(\\d{2,3})$sep([가-힣])$sep([0-9A-Za-z○#|]{4})(?![0-9A-Za-z가-힣])',
+    );
+
+    void process(String rawSource, Rect sourceBox, String sourceKind) {
+      final source = _normalizeWeakSource(rawSource);
+      if (source.isEmpty || sourceBox.width <= 0 || sourceBox.height <= 0) return;
+
+      for (final match in frontBroken.allMatches(source)) {
+        final rawFront = match.group(1)!;
+        final mappedFront = _applyCharMap(rawFront);
+        if (RegExp(r'^\d{2,3}$').hasMatch(mappedFront)) continue;
+        final rawMid = match.group(2)!;
+        final mid = _normalizeMidToken(
+          rawMid,
+          onUseLearningMid: onUseLearningMid,
+        );
+        if (!_KoreanPlatePolicy.allowedNewMids.contains(mid)) continue;
+        final back = match.group(3)!;
+        final plateBox = _estimatedSourceRangeBox(
+          sourceBox: sourceBox,
+          sourceLength: source.length,
+          start: match.start,
+          end: match.end,
+        );
+        final key = 'front|$rawFront|$mid|$back|${plateBox.left.round()}|${plateBox.top.round()}';
+        if (!seen.add(key)) continue;
+        out.add(
+          _PartialBoundarySeed(
+            slot: _PlateRecoverySlot.front,
+            plateBox: plateBox,
+            front: null,
+            mid: mid,
+            back: back,
+            frontLen: rawFront.length.clamp(2, 3).toInt(),
+            rawFront: rawFront,
+            rawBack: back,
+            sourceText: rawSource,
+            sourceKind: sourceKind,
+            score: sourceKind == 'line' ? 6.0 : 5.2,
+          ),
+        );
+      }
+
+      for (final match in backBroken.allMatches(source)) {
+        final front = match.group(1)!;
+        final rawMid = match.group(2)!;
+        final mid = _normalizeMidToken(
+          rawMid,
+          onUseLearningMid: onUseLearningMid,
+        );
+        if (!_KoreanPlatePolicy.allowedNewMids.contains(mid)) continue;
+        final rawBack = match.group(3)!;
+        final mappedBack = _applyCharMap(rawBack);
+        if (RegExp(r'^\d{4}$').hasMatch(mappedBack)) continue;
+        final plateBox = _estimatedSourceRangeBox(
+          sourceBox: sourceBox,
+          sourceLength: source.length,
+          start: match.start,
+          end: match.end,
+        );
+        final key = 'back|$front|$mid|$rawBack|${plateBox.left.round()}|${plateBox.top.round()}';
+        if (!seen.add(key)) continue;
+        out.add(
+          _PartialBoundarySeed(
+            slot: _PlateRecoverySlot.back,
+            plateBox: plateBox,
+            front: front,
+            mid: mid,
+            back: null,
+            frontLen: front.length,
+            rawFront: front,
+            rawBack: rawBack,
+            sourceText: rawSource,
+            sourceKind: sourceKind,
+            score: sourceKind == 'line' ? 6.0 : 5.2,
+          ),
+        );
+      }
+    }
+
+    for (final block in result.blocks) {
+      final lines = block.lines;
+      for (var i = 0; i < lines.length; i++) {
+        process(lines[i].text, lines[i].boundingBox, 'line');
+        if (i + 1 < lines.length) {
+          final union = _unionRects([
+            lines[i].boundingBox,
+            lines[i + 1].boundingBox,
+          ]);
+          process('${lines[i].text} ${lines[i + 1].text}', union, 'adjacentLines');
+        }
+      }
+    }
+
+    out.sort((a, b) => b.score.compareTo(a.score));
+    return out;
+  }
+
+  List<_BoundaryAnchorCandidate> _buildAdaptiveBoundaryRects({
+    required RecognizedText result,
+    required Rect plateBox,
+    required Size imageSize,
+    required _PlateRecoverySlot slot,
+    required int frontLen,
+    String? front,
+    String? back,
+    String? mid,
+  }) {
+    final out = <_BoundaryAnchorCandidate>[];
+    final seen = <String>{};
+    final envelope = _clampRecoveryRect(
+      plateBox.inflate(math.max(plateBox.height * 1.5, 18.0)),
+      imageSize,
+    );
+
+    void add(Rect rawRect, String sourceKind, double score) {
+      if (!rawRect.overlaps(envelope) && !envelope.contains(rawRect.center)) {
+        return;
+      }
+      var rect = rawRect.intersect(envelope);
+      rect = _clampRecoveryRect(rect, imageSize);
+      if (rect.width < 4 || rect.height < 4) return;
+      final key = '${rect.left.round()}|${rect.top.round()}|${rect.right.round()}|${rect.bottom.round()}';
+      if (!seen.add(key)) return;
+      out.add(
+        _BoundaryAnchorCandidate(
+          rect: rect,
+          sourceKind: sourceKind,
+          score: score,
+        ),
+      );
+    }
+
+    Rect expandVertical(Rect rect, double factor) {
+      final padY = math.max(rect.height * factor, 7.0);
+      return Rect.fromLTRB(rect.left, rect.top - padY, rect.right, rect.bottom + padY);
+    }
+
+    String? normalizedAllowedMid(String raw) {
+      if (!RegExp(r'^[가-힣]$').hasMatch(raw)) return null;
+      final normalized = _KoreanPlatePolicy.staticMidNormalize[raw] ?? raw;
+      if (!_KoreanPlatePolicy.allowedNewMids.contains(normalized)) return null;
+      if (mid != null && normalized != mid) return null;
+      return normalized;
+    }
+
+    final searchRect = envelope;
+    for (final block in result.blocks) {
+      for (final line in block.lines) {
+        final lineBox = line.boundingBox;
+        if (!searchRect.overlaps(lineBox) && !searchRect.contains(lineBox.center)) {
+          continue;
+        }
+
+        final frontElements = <Rect>[];
+        final midElements = <Rect>[];
+        final backElements = <Rect>[];
+        for (final element in line.elements) {
+          final raw = _normalizeWeakSource(element.text);
+          final mapped = _applyCharMap(raw);
+          final digits = mapped.replaceAll(RegExp(r'[^0-9]'), '');
+          if (front != null && digits.contains(front)) {
+            frontElements.add(element.boundingBox);
+          }
+          if (back != null && digits.contains(back)) {
+            backElements.add(element.boundingBox);
+          }
+          final chars = raw.split('');
+          if (chars.any((char) => normalizedAllowedMid(char) != null)) {
+            midElements.add(element.boundingBox);
+          }
+        }
+
+        if (slot == _PlateRecoverySlot.front) {
+          for (final f in frontElements) {
+            for (final m in midElements) {
+              if (m.center.dx + m.width * .4 < f.center.dx) continue;
+              add(
+                expandVertical(_unionRects([f, m]), .34),
+                'elementPair',
+                6.4,
+              );
+            }
+          }
+          for (final m in midElements) {
+            final left = math.max(plateBox.left, m.left - math.max(m.width, m.height) * (frontLen + .7));
+            add(
+              expandVertical(Rect.fromLTRB(left, math.min(plateBox.top, m.top), m.right + m.width * .35, math.max(plateBox.bottom, m.bottom)), .28),
+              'midElementAnchor',
+              5.5,
+            );
+          }
+          for (final f in frontElements) {
+            add(
+              expandVertical(Rect.fromLTRB(f.left - f.height * .2, f.top, f.right + f.height * 1.45, f.bottom), .32),
+              'frontElementAnchor',
+              4.7,
+            );
+          }
+        } else if (slot == _PlateRecoverySlot.back) {
+          for (final m in midElements) {
+            for (final b in backElements) {
+              if (b.center.dx - b.width * .4 < m.center.dx) continue;
+              add(
+                expandVertical(_unionRects([m, b]), .34),
+                'elementPair',
+                6.4,
+              );
+            }
+          }
+          for (final m in midElements) {
+            final right = math.min(plateBox.right, m.right + math.max(m.width, m.height) * 5.0);
+            add(
+              expandVertical(Rect.fromLTRB(m.left - m.width * .35, math.min(plateBox.top, m.top), right, math.max(plateBox.bottom, m.bottom)), .28),
+              'midElementAnchor',
+              5.5,
+            );
+          }
+          for (final b in backElements) {
+            add(
+              expandVertical(Rect.fromLTRB(b.left - b.height * 1.45, b.top, b.right + b.height * .2, b.bottom), .32),
+              'backElementAnchor',
+              4.7,
+            );
+          }
+        }
+
+        Rect? midSpan;
+        if (mid != null) {
+          midSpan = _estimatedLiteralSpanBox(line, mid);
+        } else {
+          final normalizedLine = _normalizeWeakSource(line.text);
+          for (final char in normalizedLine.split('')) {
+            if (normalizedAllowedMid(char) != null) {
+              midSpan = _estimatedLiteralSpanBox(line, char);
+              if (midSpan != null) break;
+            }
+          }
+        }
+        final frontSpan = front == null ? null : _estimatedLiteralSpanBox(line, front);
+        final backSpan = back == null ? null : _estimatedLiteralSpanBox(line, back);
+
+        if (slot == _PlateRecoverySlot.front) {
+          if (frontSpan != null && midSpan != null) {
+            add(expandVertical(_unionRects([frontSpan, midSpan]), .30), 'linePair', 6.0);
+          }
+          if (midSpan != null) {
+            add(
+              expandVertical(Rect.fromLTRB(plateBox.left, math.min(plateBox.top, midSpan.top), midSpan.right + midSpan.height * .45, math.max(plateBox.bottom, midSpan.bottom)), .24),
+              'lineMidAnchor',
+              5.0,
+            );
+          }
+          if (frontSpan != null) {
+            add(
+              expandVertical(Rect.fromLTRB(frontSpan.left, frontSpan.top, frontSpan.right + frontSpan.height * 1.5, frontSpan.bottom), .30),
+              'lineFrontAnchor',
+              4.4,
+            );
+          }
+        } else if (slot == _PlateRecoverySlot.back) {
+          if (midSpan != null && backSpan != null) {
+            add(expandVertical(_unionRects([midSpan, backSpan]), .30), 'linePair', 6.0);
+          }
+          if (midSpan != null) {
+            add(
+              expandVertical(Rect.fromLTRB(midSpan.left - midSpan.height * .45, math.min(plateBox.top, midSpan.top), plateBox.right, math.max(plateBox.bottom, midSpan.bottom)), .24),
+              'lineMidAnchor',
+              5.0,
+            );
+          }
+          if (backSpan != null) {
+            add(
+              expandVertical(Rect.fromLTRB(backSpan.left - backSpan.height * 1.5, backSpan.top, backSpan.right, backSpan.bottom), .30),
+              'lineBackAnchor',
+              4.4,
+            );
+          }
+        }
+      }
+    }
+
+    final totalSlots = frontLen + 1 + 4;
+    final unit = plateBox.width / math.max(7, totalSlots);
+    final padX = math.max(unit * .45, 8.0);
+    final padY = math.max(plateBox.height * .28, 8.0);
+    if (slot == _PlateRecoverySlot.front) {
+      add(
+        Rect.fromLTRB(
+          plateBox.left - padX,
+          plateBox.top - padY,
+          plateBox.left + unit * (frontLen + 1.35),
+          plateBox.bottom + padY,
+        ),
+        'slotFallback',
+        1.0,
+      );
+    } else if (slot == _PlateRecoverySlot.back) {
+      add(
+        Rect.fromLTRB(
+          plateBox.left + unit * math.max(0.0, frontLen - .35),
+          plateBox.top - padY,
+          plateBox.right + padX,
+          plateBox.bottom + padY,
+        ),
+        'slotFallback',
+        1.0,
+      );
+    }
+
+    out.sort((a, b) => b.score.compareTo(a.score));
+    return out;
+  }
+
+  _LocalBoundaryEvidence? _parseBoundaryLocalEvidence({
+    required _PlateRecoverySlot slot,
+    required String text,
+    required Rect rect,
+    required Uint8List bytes,
+    required int ocrMs,
+    required String sourceKind,
+    required List<_StructuredWeakCandidate> weakCandidates,
+    required _WeakPlateRegion region,
+    required VoidCallback onUseLearningMid,
+  }) {
+    final normalized = _applyCharMap(text);
+    final compact = normalized.replaceAll(RegExp(r'[^0-9가-힣]'), '');
+    final relevant = weakCandidates
+        .where((candidate) => candidate.back == region.back)
+        .toList(growable: false)
+      ..sort((a, b) => b.score.compareTo(a.score));
+
+    String? bestFront;
+    String? bestMid;
+    String? bestBack;
+    double bestScore = -1;
+
+    if (slot == _PlateRecoverySlot.front) {
+      final digitRuns = normalized
+          .split(RegExp(r'[^0-9]+'))
+          .where((value) => value.length >= 2 && value.length <= 3)
+          .toSet();
+      for (final candidate in relevant) {
+        var score = digitRuns.contains(candidate.front) ? 3.0 : 0.0;
+        String? mid;
+        final frontIndex = compact.indexOf(candidate.front);
+        if (frontIndex >= 0) {
+          final midIndex = frontIndex + candidate.front.length;
+          if (midIndex < compact.length) {
+            final token = compact[midIndex];
+            if (RegExp(r'[가-힣]').hasMatch(token)) {
+              final normalizedMid = _normalizeMidToken(
+                token,
+                onUseLearningMid: onUseLearningMid,
+              );
+              if (_KoreanPlatePolicy.allowedNewMids.contains(normalizedMid)) {
+                mid = normalizedMid;
+                score += 4.0;
+              }
+            }
+          }
+        }
+        if (score > bestScore) {
+          bestScore = score;
+          bestFront = score > 0 ? candidate.front : null;
+          bestMid = mid;
+        }
+      }
+    } else if (slot == _PlateRecoverySlot.back) {
+      final digitRuns = normalized
+          .split(RegExp(r'[^0-9]+'))
+          .where((value) => value.length == 4)
+          .toSet();
+      final backCandidates = weakCandidates.map((candidate) => candidate.back).toSet();
+      for (final back in backCandidates) {
+        var score = digitRuns.contains(back) ? 3.0 : 0.0;
+        String? mid;
+        final backIndex = compact.lastIndexOf(back);
+        if (backIndex >= 0 && backIndex > 0) {
+          final token = compact[backIndex - 1];
+          if (RegExp(r'[가-힣]').hasMatch(token)) {
+            final normalizedMid = _normalizeMidToken(
+              token,
+              onUseLearningMid: onUseLearningMid,
+            );
+            if (_KoreanPlatePolicy.allowedNewMids.contains(normalizedMid)) {
+              mid = normalizedMid;
+              score += 4.0;
+            }
+          }
+        }
+        if (score > bestScore) {
+          bestScore = score;
+          bestBack = score > 0 ? back : null;
+          bestMid = mid;
+        }
+      }
+    }
+
+    if (bestScore <= 0) return null;
+    return _LocalBoundaryEvidence(
+      slot: slot,
+      front: bestFront,
+      mid: bestMid,
+      back: bestBack,
+      text: text,
+      rect: rect,
+      bytes: bytes,
+      ocrMs: ocrMs,
+      sourceKind: sourceKind,
+      score: bestScore,
+    );
+  }
+
+  Future<_LocalBoundaryEvidence?> _runBoundaryLocalOcr({
+    required String capturedPath,
+    required _DecodedCapture decoded,
+    required RecognizedText sourceResult,
+    required _WeakPlateRegion region,
+    required _StructuredWeakCandidate candidate,
+    required List<_StructuredWeakCandidate> weakCandidates,
+    required _PlateRecoverySlot slot,
+    required VoidCallback onUseLearningMid,
+    required _LocalOcrBudget budget,
+    int maxAttempts = 1,
+  }) async {
+    String? knownMid;
+    if (RegExp(r'^[가-힣]$').hasMatch(candidate.observedToken)) {
+      final normalized = _KoreanPlatePolicy.staticMidNormalize[candidate.observedToken] ?? candidate.observedToken;
+      if (_KoreanPlatePolicy.allowedNewMids.contains(normalized)) {
+        knownMid = normalized;
+      }
+    }
+    final anchors = _buildAdaptiveBoundaryRects(
+      result: sourceResult,
+      plateBox: region.box,
+      imageSize: decoded.imageSize,
+      slot: slot,
+      frontLen: candidate.frontLen,
+      front: candidate.front,
+      back: candidate.back,
+      mid: knownMid,
+    );
+    _LocalBoundaryEvidence? best;
+    var tried = 0;
+
+    for (var index = 0; index < anchors.length; index++) {
+      if (!budget.canRun || tried >= maxAttempts) break;
+      final anchor = anchors[index];
+      final localRect = anchor.rect;
+      _ocrDebugLocalSlot = slot;
+      _ocrDebugLocalCropBox = localRect;
+      _setOcrDebugStage(
+        _OcrDebugStage.localCropPrepared,
+        detail: '${slot.name}Boundary anchor=${anchor.sourceKind} rect=${_rectForLog(localRect)} budget=${budget.used}/${budget.maxAttempts}',
+        structuredPlate: candidate.signature,
+      );
+      await _developerDebugBeat(const Duration(milliseconds: 90));
+      final localStageWatch = Stopwatch()..start();
+
+      final x = localRect.left.floor().clamp(0, decoded.image.width - 1).toInt();
+      final y = localRect.top.floor().clamp(0, decoded.image.height - 1).toInt();
+      final right = localRect.right.ceil().clamp(x + 1, decoded.image.width).toInt();
+      final bottom = localRect.bottom.ceil().clamp(y + 1, decoded.image.height).toInt();
+      var local = img.copyCrop(
+        decoded.image,
+        x: x,
+        y: y,
+        width: right - x,
+        height: bottom - y,
+      );
+      local.exif.imageIfd.orientation = null;
+      final scale = (360.0 / math.max(1, local.height)).clamp(1.0, 5.0).toDouble();
+      if (scale > 1.02) {
+        local = img.copyResize(
+          local,
+          width: math.max(1, (local.width * scale).round()).toInt(),
+          height: math.max(1, (local.height * scale).round()).toInt(),
+          interpolation: img.Interpolation.cubic,
+        );
+      }
+
+      final bytes = Uint8List.fromList(img.encodeJpg(local, quality: 98));
+      final safeKind = anchor.sourceKind.replaceAll(RegExp(r'[^A-Za-z0-9_]'), '_');
+      final localPath = '$capturedPath.live_ocr_local_${slot.name}_${candidate.front}_${candidate.back}_${index}_$safeKind.jpg';
+      final file = File(localPath);
+      try {
+        await file.writeAsBytes(bytes, flush: true);
+        _ocrDebugLocalCropBytes = bytes;
+        _ocrDebugLocalCropText = null;
+        if (!budget.consume()) break;
+        tried++;
+        _setOcrDebugStage(
+          _OcrDebugStage.localCropOcr,
+          detail: '${slot.name}Boundary anchor=${anchor.sourceKind} crop=${local.width}x${local.height} budget=${budget.used}/${budget.maxAttempts}',
+          structuredPlate: candidate.signature,
+        );
+        final watch = Stopwatch()..start();
+        final localResult = await _recognizer.processImage(
+          InputImage.fromFilePath(localPath),
+        );
+        watch.stop();
+        final text = localResult.text;
+        final ocrMs = watch.elapsedMilliseconds;
+        budget.addOcrMs(ocrMs);
+        localStageWatch.stop();
+        _recordLocalStageWall(candidate.signature, localStageWatch.elapsedMilliseconds);
+        _ocrDebugLocalCropText = text.replaceAll('\n', ' ');
+        _ocrDebugLocalOcrMs = budget.totalOcrMs;
+        final evidence = _parseBoundaryLocalEvidence(
+          slot: slot,
+          text: text,
+          rect: localRect,
+          bytes: bytes,
+          ocrMs: ocrMs,
+          sourceKind: anchor.sourceKind,
+          weakCandidates: weakCandidates,
+          region: region,
+          onUseLearningMid: onUseLearningMid,
+        );
+        _appendLog(
+          'local OCR slot=${slot.name} signature=${candidate.signature} '
+          'anchor=${anchor.sourceKind} rect=${_rectForLog(localRect)} '
+          'crop=${local.width}x${local.height} ocrMs=$ocrMs '
+          'localWallMs=${localStageWatch.elapsedMilliseconds} '
+          'localOcrTotalMs=${budget.totalOcrMs} budget=${budget.used}/${budget.maxAttempts} '
+          'text=${text.replaceAll('\n', ' ')} front=${evidence?.front ?? '-'} '
+          'mid=${evidence?.mid ?? '-'} back=${evidence?.back ?? '-'} score=${evidence?.score.toStringAsFixed(2) ?? '-'}',
+        );
+        if (evidence != null && (best == null || evidence.score > best.score)) {
+          best = evidence;
+        }
+        if (evidence != null && evidence.score >= 7.0) {
+          return evidence;
+        }
+      } finally {
+        try {
+          if (file.existsSync()) file.deleteSync();
+        } catch (_) {}
+      }
+    }
+    return best;
+  }
+
+  _LocalBoundaryEvidence? _parsePartialBoundaryEvidence({
+    required _PartialBoundarySeed seed,
+    required String text,
+    required Rect rect,
+    required Uint8List bytes,
+    required int ocrMs,
+    required String sourceKind,
+    required VoidCallback onUseLearningMid,
+  }) {
+    final compact = _applyCharMap(text).replaceAll(RegExp(r'[^0-9가-힣]'), '');
+    if (seed.slot == _PlateRecoverySlot.front) {
+      final reg = RegExp(r'(\d{2,3})([가-힣])');
+      _LocalBoundaryEvidence? best;
+      for (final match in reg.allMatches(compact)) {
+        final front = match.group(1)!;
+        final mid = _normalizeMidToken(
+          match.group(2)!,
+          onUseLearningMid: onUseLearningMid,
+        );
+        if (mid != seed.mid) continue;
+        var score = 7.0;
+        if (_preferredFrontLen != null && front.length == _preferredFrontLen) {
+          score += .6;
+        }
+        final evidence = _LocalBoundaryEvidence(
+          slot: seed.slot,
+          front: front,
+          mid: mid,
+          back: seed.back,
+          text: text,
+          rect: rect,
+          bytes: bytes,
+          ocrMs: ocrMs,
+          sourceKind: sourceKind,
+          score: score,
+        );
+        if (best == null || evidence.score > best.score) best = evidence;
+      }
+      return best;
+    }
+    if (seed.slot == _PlateRecoverySlot.back) {
+      final reg = RegExp(r'([가-힣])(\d{4})');
+      for (final match in reg.allMatches(compact)) {
+        final mid = _normalizeMidToken(
+          match.group(1)!,
+          onUseLearningMid: onUseLearningMid,
+        );
+        if (mid != seed.mid) continue;
+        final back = match.group(2)!;
+        return _LocalBoundaryEvidence(
+          slot: seed.slot,
+          front: seed.front,
+          mid: mid,
+          back: back,
+          text: text,
+          rect: rect,
+          bytes: bytes,
+          ocrMs: ocrMs,
+          sourceKind: sourceKind,
+          score: 7.0,
+        );
+      }
+    }
+    return null;
+  }
+
+  Future<_LocalBoundaryEvidence?> _runPartialBoundaryLocalOcr({
+    required String capturedPath,
+    required _DecodedCapture decoded,
+    required RecognizedText sourceResult,
+    required _PartialBoundarySeed seed,
+    required VoidCallback onUseLearningMid,
+    required _LocalOcrBudget budget,
+  }) async {
+    final anchors = _buildAdaptiveBoundaryRects(
+      result: sourceResult,
+      plateBox: seed.plateBox,
+      imageSize: decoded.imageSize,
+      slot: seed.slot,
+      frontLen: seed.frontLen,
+      front: seed.front,
+      back: seed.back,
+      mid: seed.mid,
+    );
+    for (var index = 0; index < anchors.length; index++) {
+      if (!budget.canRun) break;
+      final anchor = anchors[index];
+      final localRect = anchor.rect;
+      _ocrDebugWeakBox = seed.plateBox;
+      _ocrDebugLocalSlot = seed.slot;
+      _ocrDebugLocalCropBox = localRect;
+      _setOcrDebugStage(
+        _OcrDebugStage.localCropPrepared,
+        detail: 'partial=${seed.slot.name} anchor=${anchor.sourceKind} rect=${_rectForLog(localRect)} budget=${budget.used}/${budget.maxAttempts}',
+        structuredPlate: seed.signature,
+      );
+      await _developerDebugBeat(const Duration(milliseconds: 90));
+      final localStageWatch = Stopwatch()..start();
+
+      final x = localRect.left.floor().clamp(0, decoded.image.width - 1).toInt();
+      final y = localRect.top.floor().clamp(0, decoded.image.height - 1).toInt();
+      final right = localRect.right.ceil().clamp(x + 1, decoded.image.width).toInt();
+      final bottom = localRect.bottom.ceil().clamp(y + 1, decoded.image.height).toInt();
+      var local = img.copyCrop(
+        decoded.image,
+        x: x,
+        y: y,
+        width: right - x,
+        height: bottom - y,
+      );
+      local.exif.imageIfd.orientation = null;
+      final scale = (380.0 / math.max(1, local.height)).clamp(1.0, 5.5).toDouble();
+      if (scale > 1.02) {
+        local = img.copyResize(
+          local,
+          width: math.max(1, (local.width * scale).round()).toInt(),
+          height: math.max(1, (local.height * scale).round()).toInt(),
+          interpolation: img.Interpolation.cubic,
+        );
+      }
+
+      final bytes = Uint8List.fromList(img.encodeJpg(local, quality: 98));
+      final safeKind = anchor.sourceKind.replaceAll(RegExp(r'[^A-Za-z0-9_]'), '_');
+      final path = '$capturedPath.live_ocr_partial_${seed.slot.name}_${index}_$safeKind.jpg';
+      final file = File(path);
+      try {
+        await file.writeAsBytes(bytes, flush: true);
+        _ocrDebugLocalCropBytes = bytes;
+        _ocrDebugLocalCropText = null;
+        if (!budget.consume()) break;
+        _setOcrDebugStage(
+          _OcrDebugStage.localCropOcr,
+          detail: 'partial=${seed.slot.name} anchor=${anchor.sourceKind} crop=${local.width}x${local.height} budget=${budget.used}/${budget.maxAttempts}',
+          structuredPlate: seed.signature,
+        );
+        final watch = Stopwatch()..start();
+        final result = await _recognizer.processImage(InputImage.fromFilePath(path));
+        watch.stop();
+        final text = result.text;
+        final ocrMs = watch.elapsedMilliseconds;
+        budget.addOcrMs(ocrMs);
+        localStageWatch.stop();
+        _recordLocalStageWall(seed.signature, localStageWatch.elapsedMilliseconds);
+        _ocrDebugLocalCropText = text.replaceAll('\n', ' ');
+        _ocrDebugLocalOcrMs = budget.totalOcrMs;
+        final evidence = _parsePartialBoundaryEvidence(
+          seed: seed,
+          text: text,
+          rect: localRect,
+          bytes: bytes,
+          ocrMs: ocrMs,
+          sourceKind: anchor.sourceKind,
+          onUseLearningMid: onUseLearningMid,
+        );
+        _appendLog(
+          'partial local OCR slot=${seed.slot.name} signature=${seed.signature} '
+          'anchor=${anchor.sourceKind} rect=${_rectForLog(localRect)} '
+          'ocrMs=$ocrMs localWallMs=${localStageWatch.elapsedMilliseconds} '
+          'localOcrTotalMs=${budget.totalOcrMs} '
+          'budget=${budget.used}/${budget.maxAttempts} text=${text.replaceAll('\n', ' ')} '
+          'front=${evidence?.front ?? '-'} mid=${evidence?.mid ?? '-'} back=${evidence?.back ?? '-'}',
+        );
+        if (evidence != null) return evidence;
+      } finally {
+        try {
+          if (file.existsSync()) file.deleteSync();
+        } catch (_) {}
+      }
+    }
+    return null;
+  }
+
+  Future<_CropRecoveryOutcome?> _tryRecoverPartialBoundaryCases({
+    required String capturedPath,
+    required RecognizedText result,
+    required List<_PartialBoundarySeed> seeds,
+    required _DecodedCapture? decodedCapture,
+    required VoidCallback onUseLearningMid,
+  }) async {
+    if (seeds.isEmpty) return null;
+    final recoveryWatch = Stopwatch()..start();
+    _ocrDebugRecoveryWallMs = null;
+    final decoded = decodedCapture ?? await _decodeCaptureForGeometry(capturedPath, result);
+    if (decoded == null) {
+      recoveryWatch.stop();
+      _ocrDebugRecoveryWallMs = recoveryWatch.elapsedMilliseconds;
+      return null;
+    }
+    if (!decoded.geometryReliable) {
+      recoveryWatch.stop();
+      _ocrDebugRecoveryWallMs = recoveryWatch.elapsedMilliseconds;
+      _appendLog(
+        'partial recovery 생략 geometry unreliable '
+        'decodedFits=${decoded.decodedFits} bakedFits=${decoded.bakedFits} '
+        'wallMs=${recoveryWatch.elapsedMilliseconds}',
+      );
+      return null;
+    }
+    final budget = _LocalOcrBudget(maxAttempts: 1);
+    final seenSlots = <_PlateRecoverySlot>{};
+    for (final seed in seeds) {
+      if (!budget.canRun) break;
+      if (!seenSlots.add(seed.slot) && seeds.length > 1) continue;
+      final localLatencyAllowed = _localRecoveryFitsLatencyBudget(seed.signature);
+      _appendLog(
+        'partial recovery seed slot=${seed.slot.name} signature=${seed.signature} '
+        'source=${seed.sourceKind} text=${seed.sourceText.replaceAll('\n', ' ')} '
+        'budget=${budget.used}/${budget.maxAttempts} '
+        'latencyAllowed=$localLatencyAllowed nextFrameEstimateMs=$_estimatedNextFrameWallMs',
+      );
+      if (!localLatencyAllowed) {
+        _appendLog(
+          'partial recovery latency skip signature=${seed.signature} '
+          'lastLocalWallMs=${_lastLocalStageWallMs ?? '-'}',
+        );
+        continue;
+      }
+      final evidence = await _runPartialBoundaryLocalOcr(
+        capturedPath: capturedPath,
+        decoded: decoded,
+        sourceResult: result,
+        seed: seed,
+        onUseLearningMid: onUseLearningMid,
+        budget: budget,
+      );
+      if (evidence == null) continue;
+      String? plate;
+      if (seed.slot == _PlateRecoverySlot.front &&
+          evidence.front != null &&
+          seed.back != null &&
+          evidence.mid == seed.mid) {
+        plate = '${evidence.front}${seed.mid}${seed.back}';
+      } else if (seed.slot == _PlateRecoverySlot.back &&
+          seed.front != null &&
+          evidence.back != null &&
+          evidence.mid == seed.mid) {
+        plate = '${seed.front}${seed.mid}${evidence.back}';
+      }
+      if (plate == null || !_isModernPlate(plate)) continue;
+      _ocrDebugLocalOcrMs = budget.totalOcrMs;
+      recoveryWatch.stop();
+      _ocrDebugRecoveryWallMs = recoveryWatch.elapsedMilliseconds;
+      return _CropRecoveryOutcome(
+        signature: seed.signature,
+        plate: plate,
+        cropText: 'LOCAL ${evidence.text.replaceAll('\n', ' ')}',
+        sourceRegion: seed.plateBox,
+        cropRegion: evidence.rect,
+        sourceImageSize: decoded.imageSize,
+        cropBytes: evidence.bytes,
+        focusPoint: _normalizedFocusPoint(seed.plateBox, decoded.imageSize),
+        cropOcrMs: budget.totalOcrMs,
+        recoveryWallMs: recoveryWatch.elapsedMilliseconds,
+        allowRefocus: false,
+      );
+    }
+    _ocrDebugLocalOcrMs = budget.totalOcrMs == 0 ? null : budget.totalOcrMs;
+    recoveryWatch.stop();
+    _ocrDebugRecoveryWallMs = recoveryWatch.elapsedMilliseconds;
+    _appendLog(
+      'partial recovery 실패 seeds=${seeds.length} localOcrTotalMs=${budget.totalOcrMs} '
+      'budget=${budget.used}/${budget.maxAttempts} wallMs=${recoveryWatch.elapsedMilliseconds}',
+    );
+    return null;
+  }
+
+  String? _fuseBoundaryRecovery({
+    required _WeakPlateRegion region,
+    required List<_StructuredWeakCandidate> weakCandidates,
+    required _LocalBoundaryEvidence evidence,
+  }) {
+    final storedMid = _bestLocalMidEvidence(region.front, region.back);
+    final trustedStoredMid = storedMid != null && storedMid.votes >= 2
+        ? storedMid.mid
+        : null;
+    if (evidence.mid == null && storedMid != null && storedMid.votes < 2) {
+      _appendLog(
+        'local mid evidence 자동확정 보류 key=${_localEvidenceKey(region.front, region.back)} '
+        'mid=${storedMid.mid} votes=${storedMid.votes}',
+      );
+    }
+    final mid = evidence.mid ?? trustedStoredMid;
+    if (mid == null) return null;
+    if (evidence.slot == _PlateRecoverySlot.front && evidence.front != null) {
+      final supported = weakCandidates.any(
+        (candidate) =>
+            candidate.front == evidence.front && candidate.back == region.back,
+      );
+      if (!supported) return null;
+      final plate = '${evidence.front}$mid${region.back}';
+      return _isModernPlate(plate) ? plate : null;
+    }
+    if (evidence.slot == _PlateRecoverySlot.back && evidence.back != null) {
+      final resolvedFront = _resolveFrontFromEvidence(
+        evidence.back!,
+        weakCandidates,
+      );
+      if (resolvedFront == null) return null;
+      final plate = '$resolvedFront$mid${evidence.back}';
+      return _isModernPlate(plate) ? plate : null;
+    }
+    return null;
+  }
+
+  Future<_CropRecoveryOutcome?> _tryRecoverFromDynamicCrop({
     required String capturedPath,
     required RecognizedText result,
     required List<_StructuredWeakCandidate> weakCandidates,
@@ -1652,23 +2863,42 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
     required VoidCallback onUseLearningMid,
   }) async {
     String? tempCropPath;
+    final recoveryWatch = Stopwatch()..start();
     try {
-      _ocrDebugMicroCropBox = null;
-      _ocrDebugMicroCropBytes = null;
-      _ocrDebugMicroCropText = null;
-      _ocrDebugMicroOcrMs = null;
+      _ocrDebugRecoveryWallMs = null;
+      _ocrDebugLocalCropBox = null;
+      _ocrDebugLocalSlot = null;
+      _ocrDebugLocalCropBytes = null;
+      _ocrDebugLocalCropText = null;
+      _ocrDebugLocalOcrMs = null;
+      _ocrDebugLocalWallMs = null;
       final decoded = decodedCapture ??
           await _decodeCaptureForGeometry(capturedPath, result);
       if (decoded == null) {
-        _appendLog('동적 crop 복구 생략 image decode 실패');
+        recoveryWatch.stop();
+        _ocrDebugRecoveryWallMs = recoveryWatch.elapsedMilliseconds;
+        _appendLog('동적 crop 복구 생략 image decode 실패 wallMs=${recoveryWatch.elapsedMilliseconds}');
+        return null;
+      }
+      if (!decoded.geometryReliable) {
+        recoveryWatch.stop();
+        _ocrDebugRecoveryWallMs = recoveryWatch.elapsedMilliseconds;
+        _appendLog(
+          '동적 crop 복구 생략 geometry unreliable '
+          'decodedFits=${decoded.decodedFits} bakedFits=${decoded.bakedFits} '
+          'wallMs=${recoveryWatch.elapsedMilliseconds}',
+        );
         return null;
       }
 
       final region = _findWeakPlateRegion(result, weakCandidates);
       if (region == null) {
+        recoveryWatch.stop();
+        _ocrDebugRecoveryWallMs = recoveryWatch.elapsedMilliseconds;
         _appendLog(
           '동적 crop 복구 생략 weak region 미검출 '
-          'candidates=${_joinForLog(weakCandidates.map((e) => e.signature).toList())}',
+              'candidates=${_joinForLog(weakCandidates.map((e) => e.signature).toList())} '
+              'wallMs=${recoveryWatch.elapsedMilliseconds}',
         );
         _setOcrDebugStage(
           _OcrDebugStage.fallback,
@@ -1689,7 +2919,7 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
       await _developerDebugBeat();
       _appendLog(
         'weak region 발견 signature=${region.signature} sourceKind=${region.sourceKind} '
-        'box=${_rectForLog(region.box)} sourceText=${region.sourceText.replaceAll('\n', ' ')}',
+            'box=${_rectForLog(region.box)} sourceText=${region.sourceText.replaceAll('\n', ' ')}',
       );
 
       final cropRect = _expandWeakPlateRect(region.box, decoded.imageSize);
@@ -1761,7 +2991,7 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
       _ocrDebugCropOcrMs = cropOcrMs;
 
       final expected = weakCandidates.firstWhere(
-        (candidate) => candidate.signature == region.signature,
+            (candidate) => candidate.signature == region.signature,
         orElse: () => weakCandidates.first,
       );
       var plate = _recoverExpectedModernPlateFromCrop(
@@ -1773,7 +3003,37 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
         onUseLearningMid: onUseLearningMid,
       );
       _MicroCropRecovery? microRecovery;
-      if (plate == null) {
+      _LocalBoundaryEvidence? boundaryRecovery;
+      final localBudget = _LocalOcrBudget(maxAttempts: 2);
+      final uncertainty = _analyzeSlotUncertainty(
+        region: region,
+        weakCandidates: weakCandidates,
+      );
+      final localLatencyAllowed = _localRecoveryFitsLatencyBudget(region.signature);
+      _appendLog(
+        'local recovery plan front=${uncertainty.front} '
+            'mid=${uncertainty.mid} back=${uncertainty.back} '
+            'signature=${region.signature} baseBudget=1 conditionalMax=2 '
+            'latencyAllowed=$localLatencyAllowed '
+            'lastLocalWallMs=${_lastLocalStageSignature == region.signature ? (_lastLocalStageWallMs ?? '-') : '-'} '
+            'nextFrameEstimateMs=$_estimatedNextFrameWallMs',
+      );
+
+      List<_StructuredWeakCandidate> rankedForBack(String back) {
+        final ranked = weakCandidates
+            .where((candidate) => candidate.back == back)
+            .toList(growable: false)
+          ..sort((a, b) => b.score.compareTo(a.score));
+        return ranked;
+      }
+
+      Future<void> runMidOnce() async {
+        if (plate != null ||
+            !uncertainty.mid ||
+            !localBudget.canRun ||
+            !localLatencyAllowed) {
+          return;
+        }
         microRecovery = await _tryRecoverFromMidContextMicroCrops(
           capturedPath: capturedPath,
           decoded: decoded,
@@ -1781,21 +3041,103 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
           region: region,
           weakCandidates: weakCandidates,
           onUseLearningMid: onUseLearningMid,
+          budget: localBudget,
+          maxAttempts: 1,
         );
         plate = microRecovery?.plate;
       }
+
+      Future<void> runBoundaryOnce(_PlateRecoverySlot slot) async {
+        if (plate != null || !localBudget.canRun) return;
+        final ranked = slot == _PlateRecoverySlot.front
+            ? rankedForBack(region.back)
+            : (List<_StructuredWeakCandidate>.from(weakCandidates)
+              ..sort((a, b) => b.score.compareTo(a.score)));
+        if (ranked.isEmpty) return;
+        boundaryRecovery = await _runBoundaryLocalOcr(
+          capturedPath: capturedPath,
+          decoded: decoded,
+          sourceResult: result,
+          region: region,
+          candidate: ranked.first,
+          weakCandidates: weakCandidates,
+          slot: slot,
+          onUseLearningMid: onUseLearningMid,
+          budget: localBudget,
+          maxAttempts: 1,
+        );
+        if (boundaryRecovery != null) {
+          plate = _fuseBoundaryRecovery(
+            region: region,
+            weakCandidates: weakCandidates,
+            evidence: boundaryRecovery!,
+          );
+        }
+      }
+
+      if (plate == null && uncertainty.mid) {
+        if (!localLatencyAllowed) {
+          _appendLog(
+            'local recovery latency skip signature=${region.signature} '
+            'lastLocalWallMs=${_lastLocalStageWallMs ?? '-'} '
+            'nextFrameEstimateMs=$_estimatedNextFrameWallMs',
+          );
+        }
+        await runMidOnce();
+      }
+
+      final canUseConditionalSecond = plate == null &&
+          microRecovery?.hasUsefulEvidence == true &&
+          localBudget.canRun &&
+          _localRecoveryFitsLatencyBudget(region.signature);
+      if (canUseConditionalSecond && uncertainty.front) {
+        _appendLog(
+          'local 2차 조건부 허용 signature=${region.signature} '
+          'reason=validMidEvidence target=front',
+        );
+        await runBoundaryOnce(_PlateRecoverySlot.front);
+      } else if (canUseConditionalSecond && uncertainty.back) {
+        _appendLog(
+          'local 2차 조건부 허용 signature=${region.signature} '
+          'reason=validMidEvidence target=back',
+        );
+        await runBoundaryOnce(_PlateRecoverySlot.back);
+      }
+
+      if (plate == null && localBudget.used >= 1 &&
+          microRecovery?.hasUsefulEvidence != true) {
+        _appendLog(
+          'local 2차 중단 signature=${region.signature} '
+          'reason=noUsefulFirstLocalEvidence budget=${localBudget.used}/${localBudget.maxAttempts}',
+        );
+      }
       final focusPoint = _normalizedFocusPoint(region.box, decoded.imageSize);
-      final combinedText = microRecovery == null
+      final localTexts = <String>[];
+      if (boundaryRecovery?.text.isNotEmpty == true) {
+        localTexts.add(boundaryRecovery!.text.replaceAll('\n', ' '));
+      }
+      if (microRecovery?.text.isNotEmpty == true &&
+          !localTexts.contains(microRecovery!.text.replaceAll('\n', ' '))) {
+        localTexts.add(microRecovery!.text.replaceAll('\n', ' '));
+      }
+      final combinedText = localTexts.isEmpty
           ? cropText
-          : '$cropText | MICRO ${microRecovery.text}';
-      final combinedOcrMs =
-          cropOcrMs + (microRecovery?.ocrMs ?? _ocrDebugMicroOcrMs ?? 0);
+          : '$cropText | LOCAL ${localTexts.join(' | ')}';
+      final combinedOcrMs = cropOcrMs + localBudget.totalOcrMs;
+      _ocrDebugLocalOcrMs = localBudget.totalOcrMs == 0
+          ? null
+          : localBudget.totalOcrMs;
+      recoveryWatch.stop();
+      _ocrDebugRecoveryWallMs = recoveryWatch.elapsedMilliseconds;
+      final midOnlyUncertain =
+          !uncertainty.front && uncertainty.mid && !uncertainty.back;
 
       _appendLog(
         'crop OCR signature=${region.signature} '
-        'sourceBox=${_rectForLog(region.box)} cropBox=${_rectForLog(cropRect)} '
-        'cropSize=${crop.width}x${crop.height} cropOcrMs=$cropOcrMs '
-        'cropText=${cropText.replaceAll('\n', ' ')} plate=${plate ?? '-'}',
+            'sourceBox=${_rectForLog(region.box)} cropBox=${_rectForLog(cropRect)} '
+            'cropSize=${crop.width}x${crop.height} cropOcrMs=$cropOcrMs '
+            'localOcrMs=${localBudget.totalOcrMs} wallMs=${recoveryWatch.elapsedMilliseconds} '
+            'cropText=${cropText.replaceAll('\n', ' ')} plate=${plate ?? '-'}',
       );
 
       if (_developerMode && mounted) {
@@ -1808,11 +3150,13 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
         plate: plate,
         cropText: combinedText,
         sourceRegion: region.box,
-        cropRegion: microRecovery?.rect ?? cropRect,
+        cropRegion: boundaryRecovery?.rect ?? microRecovery?.rect ?? cropRect,
         sourceImageSize: decoded.imageSize,
-        cropBytes: microRecovery?.bytes ?? cropBytes,
+        cropBytes: boundaryRecovery?.bytes ?? microRecovery?.bytes ?? cropBytes,
         focusPoint: focusPoint,
         cropOcrMs: combinedOcrMs,
+        recoveryWallMs: recoveryWatch.elapsedMilliseconds,
+        allowRefocus: !midOnlyUncertain,
       );
     } catch (e, stackTrace) {
       if (tempCropPath != null) {
@@ -1823,13 +3167,15 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
           }
         } catch (_) {}
       }
-      _appendLog('동적 crop 복구 오류 $e');
+      if (recoveryWatch.isRunning) recoveryWatch.stop();
+      _ocrDebugRecoveryWallMs = recoveryWatch.elapsedMilliseconds;
+      _appendLog('동적 crop 복구 오류 $e wallMs=${recoveryWatch.elapsedMilliseconds}');
       _appendLog('동적 crop stack=$stackTrace');
       _setOcrDebugStage(
         _OcrDebugStage.fallback,
         detail: 'cropError:$e',
         structuredPlate:
-            weakCandidates.isEmpty ? null : weakCandidates.first.signature,
+        weakCandidates.isEmpty ? null : weakCandidates.first.signature,
       );
       return null;
     }
@@ -1855,10 +3201,10 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
   }
 
   Rect _subCharacterBox(
-    Rect box,
-    int characterCount,
-    int characterIndex,
-  ) {
+      Rect box,
+      int characterCount,
+      int characterIndex,
+      ) {
     final count = math.max(1, characterCount).toInt();
     final index = characterIndex.clamp(0, count - 1).toInt();
     final width = box.width / count;
@@ -2044,21 +3390,21 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
       return (rect: rect, sourceKind: adaptive.kind);
     }
     return (
-      rect: _buildSlotMidContextRect(
-        plateBox: plateBox,
-        candidate: candidate,
-        imageSize: imageSize,
-      ),
-      sourceKind: 'slotFallback',
+    rect: _buildSlotMidContextRect(
+      plateBox: plateBox,
+      candidate: candidate,
+      imageSize: imageSize,
+    ),
+    sourceKind: 'slotFallback',
     );
   }
 
   _MicroMidEvidence? _selectMidFromMicroCropResult(
-    RecognizedText result,
-    Size imageSize, {
-    required _StructuredWeakCandidate expected,
-    required VoidCallback onUseLearningMid,
-  }) {
+      RecognizedText result,
+      Size imageSize, {
+        required _StructuredWeakCandidate expected,
+        required VoidCallback onUseLearningMid,
+      }) {
     if (imageSize.width <= 0 || imageSize.height <= 0) return null;
     final leftDigit = expected.front.substring(expected.front.length - 1);
     final rightDigit = expected.back.substring(0, 1);
@@ -2111,10 +3457,10 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
             final contextBonus = exactContext
                 ? .62
                 : (leftMatched && rightMatched)
-                    ? .40
-                    : (leftMatched || rightMatched)
-                        ? .16
-                        : 0.0;
+                ? .40
+                : (leftMatched || rightMatched)
+                ? .16
+                : 0.0;
             final hintBonus = hintRank < 0
                 ? 0.0
                 : math.max(.03, .12 - (hintRank * .02));
@@ -2144,6 +3490,8 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
     required _WeakPlateRegion region,
     required List<_StructuredWeakCandidate> weakCandidates,
     required VoidCallback onUseLearningMid,
+    required _LocalOcrBudget budget,
+    int maxAttempts = 2,
   }) async {
     final resolvedFront = _resolveFrontFromEvidence(
       region.back,
@@ -2153,14 +3501,14 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
       ..sort((a, b) => b.score.compareTo(a.score));
     final seen = <String>{};
     var tried = 0;
+    _MicroCropRecovery? bestNear;
 
     for (final candidate in ranked) {
       if (candidate.back != region.back) continue;
       if (resolvedFront != null && candidate.front != resolvedFront) continue;
       final key = '${candidate.front}|${candidate.back}|${candidate.frontLen}';
       if (!seen.add(key)) continue;
-      if (tried >= 3) break;
-      tried++;
+      if (tried >= maxAttempts || !budget.canRun) break;
 
       final microContext = _buildMidContextRect(
         result: sourceResult,
@@ -2172,21 +3520,23 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
       final microRect = microContext.rect;
       if (microRect.width < 4 || microRect.height < 4) continue;
 
-      _ocrDebugMicroCropBox = microRect;
+      _ocrDebugLocalSlot = _PlateRecoverySlot.mid;
+      _ocrDebugLocalCropBox = microRect;
       _setOcrDebugStage(
-        _OcrDebugStage.microCropPrepared,
+        _OcrDebugStage.localCropPrepared,
         detail:
-            '${candidate.signature} evidence=${candidate.segmentationEvidence.name} anchor=${microContext.sourceKind} rect=${_rectForLog(microRect)}',
+        '${candidate.signature} evidence=${candidate.segmentationEvidence.name} anchor=${microContext.sourceKind} rect=${_rectForLog(microRect)}',
         structuredPlate: candidate.signature,
       );
       await _developerDebugBeat(const Duration(milliseconds: 110));
+      final localStageWatch = Stopwatch()..start();
 
       final x = microRect.left.floor().clamp(0, decoded.image.width - 1).toInt();
       final y = microRect.top.floor().clamp(0, decoded.image.height - 1).toInt();
       final right =
-          microRect.right.ceil().clamp(x + 1, decoded.image.width).toInt();
+      microRect.right.ceil().clamp(x + 1, decoded.image.width).toInt();
       final bottom =
-          microRect.bottom.ceil().clamp(y + 1, decoded.image.height).toInt();
+      microRect.bottom.ceil().clamp(y + 1, decoded.image.height).toInt();
       var micro = img.copyCrop(
         decoded.image,
         x: x,
@@ -2211,13 +3561,14 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
       final file = File(microPath);
       try {
         await file.writeAsBytes(bytes, flush: true);
-        _ocrDebugMicroCropBytes = bytes;
-        _ocrDebugMicroCropText = null;
-        _ocrDebugMicroOcrMs = null;
+        _ocrDebugLocalCropBytes = bytes;
+        _ocrDebugLocalCropText = null;
+        if (!budget.consume()) break;
+        tried++;
         _setOcrDebugStage(
-          _OcrDebugStage.microCropOcr,
+          _OcrDebugStage.localCropOcr,
           detail:
-              '${candidate.signature} evidence=${candidate.segmentationEvidence.name} crop=${micro.width}x${micro.height}',
+          '${candidate.signature} evidence=${candidate.segmentationEvidence.name} crop=${micro.width}x${micro.height}',
           structuredPlate: candidate.signature,
         );
 
@@ -2228,8 +3579,11 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
         watch.stop();
         final text = microResult.text;
         final ocrMs = watch.elapsedMilliseconds;
-        _ocrDebugMicroCropText = text.replaceAll('\n', ' ');
-        _ocrDebugMicroOcrMs = ocrMs;
+        budget.addOcrMs(ocrMs);
+        localStageWatch.stop();
+        _recordLocalStageWall(candidate.signature, localStageWatch.elapsedMilliseconds);
+        _ocrDebugLocalCropText = text.replaceAll('\n', ' ');
+        _ocrDebugLocalOcrMs = budget.totalOcrMs;
 
         final evidence = _selectMidFromMicroCropResult(
           microResult,
@@ -2237,6 +3591,18 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
           expected: candidate,
           onUseLearningMid: onUseLearningMid,
         );
+        if (evidence != null) {
+          _recordLocalMidEvidence(candidate.front, candidate.back, evidence);
+          bestNear = _MicroCropRecovery(
+            plate: null,
+            text: text,
+            rect: microRect,
+            bytes: bytes,
+            ocrMs: ocrMs,
+            signature: candidate.signature,
+            hasUsefulEvidence: true,
+          );
+        }
         final ambiguousFronts = _ambiguousFrontSegmentations(
           candidate,
           weakCandidates,
@@ -2249,15 +3615,17 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
 
         _appendLog(
           'micro OCR signature=${candidate.signature} '
-          'evidence=${candidate.segmentationEvidence.name} '
-          'anchor=${microContext.sourceKind} '
-          'rect=${_rectForLog(microRect)} crop=${micro.width}x${micro.height} '
-          'ocrMs=$ocrMs text=${text.replaceAll('\n', ' ')} '
-          'mid=${evidence?.mid ?? '-'} '
-          'leftMatch=${evidence?.leftContextMatched ?? false} '
-          'rightMatch=${evidence?.rightContextMatched ?? false} '
-          'frontResolved=$frontResolved '
-          'ambiguous=${ambiguousFronts.join('|')}',
+              'evidence=${candidate.segmentationEvidence.name} '
+              'anchor=${microContext.sourceKind} '
+              'rect=${_rectForLog(microRect)} crop=${micro.width}x${micro.height} '
+              'ocrMs=$ocrMs localWallMs=${localStageWatch.elapsedMilliseconds} '
+              'localOcrTotalMs=${budget.totalOcrMs} '
+              'budget=${budget.used}/${budget.maxAttempts} '
+              'text=${text.replaceAll('\n', ' ')} mid=${evidence?.mid ?? '-'} '
+              'leftMatch=${evidence?.leftContextMatched ?? false} '
+              'rightMatch=${evidence?.rightContextMatched ?? false} '
+              'frontResolved=$frontResolved '
+              'ambiguous=${ambiguousFronts.join('|')}',
         );
 
         if (evidence != null && strongSegmentation) {
@@ -2265,9 +3633,9 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
           if (_isModernPlate(plate)) {
             _appendLog(
               'micro crop 복구 성공 plate=$plate '
-              'signature=${candidate.signature} '
-              'strongContext=${evidence.strongContext} '
-              'evidence=${candidate.segmentationEvidence.name}',
+                  'signature=${candidate.signature} '
+                  'strongContext=${evidence.strongContext} '
+                  'evidence=${candidate.segmentationEvidence.name}',
             );
             return _MicroCropRecovery(
               plate: plate,
@@ -2276,6 +3644,7 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
               bytes: bytes,
               ocrMs: ocrMs,
               signature: candidate.signature,
+              hasUsefulEvidence: true,
             );
           }
         }
@@ -2287,9 +3656,9 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
     }
     _appendLog(
       'micro crop 복구 실패 back=${region.back} tried=$tried '
-      'resolvedFront=${resolvedFront ?? '-'}',
+          'resolvedFront=${resolvedFront ?? '-'} useful=${bestNear != null}',
     );
-    return null;
+    return bestNear;
   }
 
   String? _recoverExpectedModernPlateFromCrop({
@@ -2305,7 +3674,7 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
         _cropPlateMatchesAnyWeakEvidence(direct, expectedCandidates)) {
       _appendLog(
         'crop 완전번호판 채택 plate=$direct '
-        'expected=${expected.signature} reason=weakSegmentationOverride',
+            'expected=${expected.signature} reason=weakSegmentationOverride',
       );
       return direct;
     }
@@ -2318,7 +3687,7 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
         _cropPlateMatchesAnyWeakEvidence(loose, expectedCandidates)) {
       _appendLog(
         'crop 완화번호판 채택 plate=$loose '
-        'expected=${expected.signature} reason=weakSegmentationOverride',
+            'expected=${expected.signature} reason=weakSegmentationOverride',
       );
       return loose;
     }
@@ -2330,7 +3699,7 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
     if (resolvedFront != null && expected.front != resolvedFront) {
       _appendLog(
         'crop mid-only 후보 제외 signature=${expected.signature} '
-        'resolvedFront=$resolvedFront evidence=${expected.segmentationEvidence.name}',
+            'resolvedFront=$resolvedFront evidence=${expected.segmentationEvidence.name}',
       );
       return null;
     }
@@ -2342,8 +3711,8 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
     if (ambiguousFronts.length > 1) {
       _appendLog(
         'crop mid-only 자동확정 차단 signature=${expected.signature} '
-        'raw=${expected.rawValue} back=${expected.back} '
-        'fronts=${ambiguousFronts.join('|')} reason=ambiguousFrontSegmentation',
+            'raw=${expected.rawValue} back=${expected.back} '
+            'fronts=${ambiguousFronts.join('|')} reason=ambiguousFrontSegmentation',
       );
       return null;
     }
@@ -2371,8 +3740,8 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
   }
 
   void _observeSegmentationEvidence(
-    List<_StructuredWeakCandidate> candidates,
-  ) {
+      List<_StructuredWeakCandidate> candidates,
+      ) {
     final frame = <String, Map<String, double>>{};
     for (final candidate in candidates) {
       final weight = _segmentationEvidenceWeight(
@@ -2381,7 +3750,7 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
       if (weight <= 0) continue;
       final fronts = frame.putIfAbsent(
         candidate.back,
-        () => <String, double>{},
+            () => <String, double>{},
       );
       final previous = fronts[candidate.front] ?? 0.0;
       if (weight > previous) {
@@ -2395,9 +3764,9 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
   }
 
   String? _resolveFrontFromEvidence(
-    String back,
-    List<_StructuredWeakCandidate> candidates,
-  ) {
+      String back,
+      List<_StructuredWeakCandidate> candidates,
+      ) {
     final scores = <String, double>{};
     for (final frame in _segmentationEvidenceFrames) {
       final fronts = frame[back];
@@ -2432,9 +3801,9 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
   }
 
   List<String> _ambiguousFrontSegmentations(
-    _StructuredWeakCandidate expected,
-    List<_StructuredWeakCandidate> expectedCandidates,
-  ) {
+      _StructuredWeakCandidate expected,
+      List<_StructuredWeakCandidate> expectedCandidates,
+      ) {
     final resolvedFront = _resolveFrontFromEvidence(
       expected.back,
       expectedCandidates,
@@ -2459,9 +3828,9 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
   }
 
   bool _cropPlateMatchesAnyWeakEvidence(
-    String plate,
-    List<_StructuredWeakCandidate> expectedCandidates,
-  ) {
+      String plate,
+      List<_StructuredWeakCandidate> expectedCandidates,
+      ) {
     final normalized = _normalizeCandidateKey(plate);
     final match = RegExp(r'^(\d{2,3})([가-힣])(\d{4})$')
         .firstMatch(normalized);
@@ -2504,24 +3873,24 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
   }
 
   String? _selectMidFromCropResult(
-    RecognizedText result,
-    Size cropImageSize, {
-    required _StructuredWeakCandidate expected,
-    required VoidCallback onUseLearningMid,
-  }) {
+      RecognizedText result,
+      Size cropImageSize, {
+        required _StructuredWeakCandidate expected,
+        required VoidCallback onUseLearningMid,
+      }) {
     if (cropImageSize.width <= 0 || cropImageSize.height <= 0) {
       return null;
     }
 
     final candidates = <({
-      String mid,
-      double score,
-      double nx,
-      double ny,
-      double nh,
-      bool digitAligned,
-      int hintRank,
-      String lineText,
+    String mid,
+    double score,
+    double nx,
+    double ny,
+    double nh,
+    bool digitAligned,
+    int hintRank,
+    String lineText,
     })>[];
     final expectedMidX = expected.frontLen >= 3 ? .43 : .37;
     final cropCenterY = cropImageSize.height / 2;
@@ -2532,7 +3901,7 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
         if (lineBox.width <= 0 || lineBox.height <= 0) continue;
         final lineText = line.text.trim();
         final lineDigits =
-            lineText.replaceAll(RegExp(r'[^0-9]'), '');
+        lineText.replaceAll(RegExp(r'[^0-9]'), '');
         final digitAligned = lineDigits.contains(expected.front) ||
             lineDigits.contains(expected.back) ||
             lineDigits.contains('${expected.front}${expected.back}');
@@ -2556,8 +3925,8 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
           final lineAligned = digitAligned
               ? lineCenterOffset <= .28
               : geometricLineAligned &&
-                  xDistance <= .18 &&
-                  yDistance <= .22;
+              xDistance <= .18 &&
+              yDistance <= .22;
           if (!xAligned || !yAligned || !sizeAligned || !lineAligned) {
             continue;
           }
@@ -2583,14 +3952,14 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
                 (digitAligned ? .18 : 0) -
                 hintBonus;
             candidates.add((
-              mid: normalized,
-              score: score,
-              nx: nx,
-              ny: ny,
-              nh: nh,
-              digitAligned: digitAligned,
-              hintRank: hintRank,
-              lineText: lineText,
+            mid: normalized,
+            score: score,
+            nx: nx,
+            ny: ny,
+            nh: nh,
+            digitAligned: digitAligned,
+            hintRank: hintRank,
+            lineText: lineText,
             ));
           }
         }
@@ -2608,11 +3977,11 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
     final selected = candidates.first;
     _appendLog(
       'crop mid 선택 signature=${expected.signature} mid=${selected.mid} '
-      'score=${selected.score.toStringAsFixed(3)} '
-      'nx=${selected.nx.toStringAsFixed(3)} ny=${selected.ny.toStringAsFixed(3)} '
-      'nh=${selected.nh.toStringAsFixed(3)} '
-      'digitAligned=${selected.digitAligned} hintRank=${selected.hintRank} '
-      'line=${selected.lineText.replaceAll('\n', ' ')}',
+          'score=${selected.score.toStringAsFixed(3)} '
+          'nx=${selected.nx.toStringAsFixed(3)} ny=${selected.ny.toStringAsFixed(3)} '
+          'nh=${selected.nh.toStringAsFixed(3)} '
+          'digitAligned=${selected.digitAligned} hintRank=${selected.hintRank} '
+          'line=${selected.lineText.replaceAll('\n', ' ')}',
     );
     return selected.mid;
   }
@@ -2623,11 +3992,11 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
   }
 
   String get _debugPrintCode {
-    if (_sessionLogs.isEmpty) {
-      final message = '[LIVE-OCR][${widget.sessionId}] 로그가 없습니다.';
-      return 'debugPrint(${jsonEncode(message)});';
-    }
-    return _sessionLogs.map((line) {
+    final lines = <String>[
+      '[STATUS] ${_developerStatusDescription.replaceAll('\n', ' | ')}',
+      ..._sessionLogs,
+    ];
+    return lines.map((line) {
       final message = '[LIVE-OCR][${widget.sessionId}] $line';
       return 'debugPrint(${jsonEncode(message)});';
     }).join('\n');
@@ -2639,12 +4008,15 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
         'attempt=$_attempt\n'
         'structured=${_ocrDebugStructuredPlate ?? '-'}\n'
         'cropText=${_ocrDebugCropText ?? '-'}\n'
-        'microText=${_ocrDebugMicroCropText ?? '-'}\n'
+        'localSlot=${_ocrDebugLocalSlot?.name ?? '-'}\n'
+        'localText=${_ocrDebugLocalCropText ?? '-'}\n'
         'recovered=${_ocrDebugRecoveredPlate ?? '-'}\n'
         'captureMs=${_ocrDebugCaptureMs ?? '-'}\n'
         'fullOcrMs=${_ocrDebugFullOcrMs ?? '-'}\n'
         'cropOcrMs=${_ocrDebugCropOcrMs ?? '-'}\n'
-        'microOcrMs=${_ocrDebugMicroOcrMs ?? '-'}\n'
+        'localOcrMs=${_ocrDebugLocalOcrMs ?? '-'}\n'
+        'localWallMs=${_ocrDebugLocalWallMs ?? '-'}\n'
+        'recoveryWallMs=${_ocrDebugRecoveryWallMs ?? '-'}\n'
         'refocusPending=${_pendingRefocusSignature ?? '-'}\n'
         'refocusRetry=$_pendingRefocusRetryCount/$_refocusRetryLimit\n'
         'refocusIdentity=${_lastAutoRefocusIdentity ?? '-'}\n'
@@ -2764,9 +4136,9 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
   }
 
   bool _shouldSuppressWeakChip(
-    _DisplayChip chip,
-    String signature,
-  ) {
+      _DisplayChip chip,
+      String signature,
+      ) {
     if (chip.tier != _ChipTier.weak && !chip.requiresMidCompletion) {
       return false;
     }
@@ -2776,11 +4148,11 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
   }
 
   List<_DisplayChip> _buildDisplayChips(
-    Set<String> stableFrame,
-    Set<String> tentativeFrame,
-    Set<String> weakFrame,
-    List<_StructuredWeakCandidate> structuredWeakFrame,
-  ) {
+      Set<String> stableFrame,
+      Set<String> tentativeFrame,
+      Set<String> weakFrame,
+      List<_StructuredWeakCandidate> structuredWeakFrame,
+      ) {
     final stable = stableFrame.toList()
       ..sort((a, b) => (_stableVotes[b] ?? 0).compareTo(_stableVotes[a] ?? 0));
     final votedStable = stable
@@ -2809,14 +4181,14 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
       return votedTentative
           .take(2)
           .map((e) =>
-              _DisplayChip(value: e, label: '추정 $e', tier: _ChipTier.tentative))
+          _DisplayChip(value: e, label: '추정 $e', tier: _ChipTier.tentative))
           .toList();
     }
     if (tentative.isNotEmpty) {
       return tentative
           .take(1)
           .map((e) =>
-              _DisplayChip(value: e, label: '추정 $e', tier: _ChipTier.tentative))
+          _DisplayChip(value: e, label: '추정 $e', tier: _ChipTier.tentative))
           .toList();
     }
 
@@ -2830,7 +4202,7 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
       return weak
           .take(1)
           .map((e) =>
-              _DisplayChip(value: e, label: '보정필요 $e', tier: _ChipTier.weak))
+          _DisplayChip(value: e, label: '보정필요 $e', tier: _ChipTier.weak))
           .toList();
     }
     return const [];
@@ -2843,8 +4215,8 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
 
     final voted = ranked
         .where((e) =>
-            (_weakStructuredVotes[e.signature] ?? 0) >=
-            _weakStructuredVoteThreshold)
+    (_weakStructuredVotes[e.signature] ?? 0) >=
+        _weakStructuredVoteThreshold)
         .toList();
     final source = voted.isNotEmpty ? voted : ranked;
     final selected = <_StructuredWeakCandidate>[];
@@ -3033,7 +4405,7 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
     );
     for (final m in reg.allMatches(norm)) {
       final mid =
-          _normalizeMidToken(m.group(2)!, onUseLearningMid: onUseLearningMid);
+      _normalizeMidToken(m.group(2)!, onUseLearningMid: onUseLearningMid);
       if (!_KoreanPlatePolicy.allowedNewMids.contains(mid)) continue;
       return '${m.group(1)!}$mid${m.group(3)!}';
     }
@@ -3049,7 +4421,7 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
     );
     for (final m in reg.allMatches(norm)) {
       final mid =
-          _normalizeMidToken(m.group(3)!, onUseLearningMid: onUseLearningMid);
+      _normalizeMidToken(m.group(3)!, onUseLearningMid: onUseLearningMid);
       if (!RegExp(r'^[가-힣]$').hasMatch(mid)) continue;
       return '${m.group(1)!}${m.group(2)!}$mid${m.group(4)!}';
     }
@@ -3059,7 +4431,7 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
   String? _extractLooseKoreanPlate(String text,
       {required VoidCallback onUseLearningMid}) {
     final modern =
-        _extractLooseModernPlate(text, onUseLearningMid: onUseLearningMid);
+    _extractLooseModernPlate(text, onUseLearningMid: onUseLearningMid);
     if (modern != null) return modern;
     return _extractLooseLegacyRegionPlate(text,
         onUseLearningMid: onUseLearningMid);
@@ -3105,8 +4477,8 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
   }
 
   List<String> _extractDigitsOnlyNoMidCandidates(
-    List<_StructuredWeakCandidate> candidates,
-  ) {
+      List<_StructuredWeakCandidate> candidates,
+      ) {
     final out = <String>{};
     for (final candidate in candidates) {
       if (RegExp(r'^\d{6,8}$').hasMatch(candidate.rawValue)) {
@@ -3156,9 +4528,9 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
   }
 
   List<String> _extractWeakRecoverableCandidates(
-    List<_StructuredWeakCandidate> candidates, {
-    required VoidCallback onUseLearningMid,
-  }) {
+      List<_StructuredWeakCandidate> candidates, {
+        required VoidCallback onUseLearningMid,
+      }) {
     final out = <String>{};
     for (final candidate in candidates) {
       final mapped = _dynCandidateMap[candidate.rawValue];
@@ -3224,8 +4596,8 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
   }
 
   List<_StructuredWeakCandidate> _extractStructuredWeakCandidates(
-    RecognizedText result,
-  ) {
+      RecognizedText result,
+      ) {
     final out = <_StructuredWeakCandidate>[];
     final seen = <String>{};
 
@@ -3267,14 +4639,22 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
     }
 
     final sep = r'[\s\.\-·•_]*';
+    final requiredSep = r'[\s\.\-·•_]+';
     final unresolvedTokenReg = RegExp(
       '(?<![0-9A-Za-z])(\\d{2,3})$sep([A-Za-z○#|]{1,2})$sep(\\d{4})(?![0-9A-Za-z])',
+    );
+    final unknownMidTokenReg = RegExp(
+      '(?<![0-9A-Za-z가-힣])(\\d{2,3})$sep([^0-9A-Za-z가-힣\\s\\.\\-·•_]{1,2})$sep(\\d{4})(?![0-9A-Za-z가-힣])',
     );
     final unresolvedHangulReg = RegExp(
       '(?<![0-9A-Za-z가-힣])(\\d{2,3})$sep([가-힣])$sep(\\d{4})(?![0-9A-Za-z가-힣])',
     );
+    final separatedMissingMidReg = RegExp(
+      '(?<![0-9A-Za-z])(\\d{2,3})$requiredSep(\\d{4})(?![0-9A-Za-z])',
+    );
 
     for (final source in _weakParseSources(result)) {
+      final explicitMissingRuns = <String>{};
       for (final match in unresolvedTokenReg.allMatches(source)) {
         final front = match.group(1)!;
         final token = match.group(2)!;
@@ -3286,6 +4666,37 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
           rawValue: '$front$token$back',
           frontLen: front.length,
           tokenMissing: false,
+          segmentationEvidence: _WeakSegmentationEvidence.explicit,
+        );
+      }
+
+      for (final match in unknownMidTokenReg.allMatches(source)) {
+        final front = match.group(1)!;
+        final token = match.group(2)!;
+        final back = match.group(3)!;
+        addCandidate(
+          front: front,
+          back: back,
+          observedToken: token,
+          rawValue: '$front$token$back',
+          frontLen: front.length,
+          tokenMissing: false,
+          segmentationEvidence: _WeakSegmentationEvidence.explicit,
+        );
+      }
+
+      for (final match in separatedMissingMidReg.allMatches(source)) {
+        final front = match.group(1)!;
+        final back = match.group(2)!;
+        final raw = '$front$back';
+        explicitMissingRuns.add(raw);
+        addCandidate(
+          front: front,
+          back: back,
+          observedToken: '',
+          rawValue: raw,
+          frontLen: front.length,
+          tokenMissing: true,
           segmentationEvidence: _WeakSegmentationEvidence.explicit,
         );
       }
@@ -3338,6 +4749,9 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
         }
 
         if (digits.length == 7) {
+          if (explicitMissingRuns.contains(digits)) {
+            continue;
+          }
           addCandidate(
             front: digits.substring(0, 3),
             back: digits.substring(3),
@@ -3360,6 +4774,9 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
         }
 
         if (digits.length == 6) {
+          if (explicitMissingRuns.contains(digits)) {
+            continue;
+          }
           addCandidate(
             front: digits.substring(0, 2),
             back: digits.substring(2),
@@ -3453,7 +4870,7 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
     }
 
     final observedEvidence =
-        _weakStructuredObservedHangulVotes[candidate.signature];
+    _weakStructuredObservedHangulVotes[candidate.signature];
     if (observedEvidence != null && observedEvidence.isNotEmpty) {
       final observedEntries = observedEvidence.entries.toList()
         ..sort((a, b) {
@@ -3566,7 +4983,7 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
     final ranked = _rankStructuredWeakCandidates(frame);
     return ranked
         .map((e) =>
-            '${e.front}?${e.back}:${e.rawValue}:token=${e.observedToken.isEmpty ? '-' : e.observedToken}:evidence=${e.segmentationEvidence.name}:${(_weakStructuredVotes[e.signature] ?? 0)}')
+    '${e.front}?${e.back}:${e.rawValue}:token=${e.observedToken.isEmpty ? '-' : e.observedToken}:evidence=${e.segmentationEvidence.name}:${(_weakStructuredVotes[e.signature] ?? 0)}')
         .toList();
   }
 
@@ -3658,7 +5075,7 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
     _stopAuto();
 
     final normalizedPlate =
-        plate == null ? null : _normalizeCandidateKey(plate);
+    plate == null ? null : _normalizeCandidateKey(plate);
     final validForLearning =
         normalizedPlate != null && _isValidKoreanPlate(normalizedPlate);
 
@@ -3713,7 +5130,7 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
         weakObservedValue: weakObservedValue,
         requiresMidCompletion: requiresMidCompletion,
         weakMidSuggestions:
-            List<String>.from(weakMidSuggestions, growable: false),
+        List<String>.from(weakMidSuggestions, growable: false),
       ),
     );
   }
@@ -3943,65 +5360,67 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
   Widget _buildCommonOcrPage(BuildContext context) {
     final tokens = CommonUiTheme.of(context);
     final cameraForeground =
-        tokens.isDark ? tokens.textPrimary : tokens.onAccent;
+    tokens.isDark ? tokens.textPrimary : tokens.onAccent;
 
     final cam = _controller;
     final preview = (!(_initialized && cam != null && cam.value.isInitialized))
         ? Center(
-            child: CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation<Color>(tokens.accent),
-            ),
-          )
+      child: CircularProgressIndicator(
+        valueColor: AlwaysStoppedAnimation<Color>(tokens.accent),
+      ),
+    )
         : LayoutBuilder(
-            builder: (ctx, constraints) {
-              _previewSizeLogical =
-                  Size(constraints.maxWidth, constraints.maxHeight);
-              return GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTapDown: (d) {
-                  if (_previewSizeLogical == null) return;
-                  final s = _previewSizeLogical!;
-                  final dx = (d.localPosition.dx / s.width).clamp(0.0, 1.0);
-                  final dy = (d.localPosition.dy / s.height).clamp(0.0, 1.0);
-                  unawaited(_meterTo(Offset(dx, dy)));
-                },
-                child: CameraPreview(
-                  cam,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      _OcrPublicOverlay(
-                        revision: _ocrDebugRevision,
-                        stage: _ocrDebugStage,
-                        cropBytes: _ocrDebugCropBytes,
-                        microCropBytes: _ocrDebugMicroCropBytes,
-                      ),
-                      if (_developerMode)
-                        _OcrDebugOverlay(
-                          revision: _ocrDebugRevision,
-                          stage: _ocrDebugStage,
-                          lineBoxes: _ocrDebugLineBoxes,
-                          sourceImageSize: _ocrDebugSourceImageSize,
-                          weakBox: _ocrDebugWeakBox,
-                          cropBox: _ocrDebugCropBox,
-                          microCropBox: _ocrDebugMicroCropBox,
-                          focusPoint: _ocrDebugFocusPoint,
-                          cropText: _ocrDebugCropText,
-                          microCropText: _ocrDebugMicroCropText,
-                          structuredPlate: _ocrDebugStructuredPlate,
-                          recoveredPlate: _ocrDebugRecoveredPlate,
-                          detail: _ocrDebugStageDetail,
-                          captureMs: _ocrDebugCaptureMs,
-                          fullOcrMs: _ocrDebugFullOcrMs,
-                          cropOcrMs: _ocrDebugCropOcrMs,
-                          microOcrMs: _ocrDebugMicroOcrMs,
-                        ),
-                    ],
-                  ),
+      builder: (ctx, constraints) {
+        _previewSizeLogical =
+            Size(constraints.maxWidth, constraints.maxHeight);
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: (d) {
+            if (_previewSizeLogical == null) return;
+            final s = _previewSizeLogical!;
+            final dx = (d.localPosition.dx / s.width).clamp(0.0, 1.0);
+            final dy = (d.localPosition.dy / s.height).clamp(0.0, 1.0);
+            unawaited(_meterTo(Offset(dx, dy)));
+          },
+          child: CameraPreview(
+            cam,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                _OcrPublicOverlay(
+                  revision: _ocrDebugRevision,
+                  stage: _ocrDebugStage,
+                  cropBytes: _ocrDebugCropBytes,
+                  localCropBytes: _ocrDebugLocalCropBytes,
+                  localSlot: _ocrDebugLocalSlot,
                 ),
-              );
-            },
-          );
+                if (_developerMode)
+                  _OcrDebugOverlay(
+                    revision: _ocrDebugRevision,
+                    stage: _ocrDebugStage,
+                    lineBoxes: _ocrDebugLineBoxes,
+                    sourceImageSize: _ocrDebugSourceImageSize,
+                    weakBox: _ocrDebugWeakBox,
+                    cropBox: _ocrDebugCropBox,
+                    localCropBox: _ocrDebugLocalCropBox,
+                    localSlot: _ocrDebugLocalSlot,
+                    focusPoint: _ocrDebugFocusPoint,
+                    cropText: _ocrDebugCropText,
+                    localCropText: _ocrDebugLocalCropText,
+                    structuredPlate: _ocrDebugStructuredPlate,
+                    recoveredPlate: _ocrDebugRecoveredPlate,
+                    detail: _ocrDebugStageDetail,
+                    captureMs: _ocrDebugCaptureMs,
+                    fullOcrMs: _ocrDebugFullOcrMs,
+                    cropOcrMs: _ocrDebugCropOcrMs,
+                    localOcrMs: _ocrDebugLocalOcrMs,
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
 
     final hasLearning =
         (_learningSummary?.committedCount ?? 0) > 0 || _dynMidMap.isNotEmpty;
@@ -4011,9 +5430,9 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
     final candidateAnimationKey = _displayChips.isEmpty
         ? 'empty:${_currentFailureReason ?? '-'}'
         : _displayChips
-            .map((chip) =>
-                '${chip.tier.name}:${chip.value}:${chip.requiresMidCompletion}')
-            .join('|');
+        .map((chip) =>
+    '${chip.tier.name}:${chip.value}:${chip.requiresMidCompletion}')
+        .join('|');
 
     return PopScope(
       canPop: false,
@@ -4106,7 +5525,7 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
               Container(
                 width: double.infinity,
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 color: tokens.scrim,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
@@ -4142,7 +5561,7 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
                                   ? Icons.school
                                   : Icons.school_outlined,
                               text:
-                                  '학습 ${_learningSummary?.committedCount ?? 0}건',
+                              '학습 ${_learningSummary?.committedCount ?? 0}건',
                             ),
                             _infoPill(
                               icon: Icons.tune,
@@ -4178,9 +5597,9 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
                   color: tokens.scrim,
                   child: AnimatedSwitcher(
                     duration:
-                        reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                    reduceMotion ? Duration.zero : CommonUiMotion.selection,
                     reverseDuration:
-                        reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                    reduceMotion ? Duration.zero : CommonUiMotion.selection,
                     switchInCurve: CommonUiMotion.enter,
                     switchOutCurve: CommonUiMotion.exit,
                     transitionBuilder: (child, animation) {
@@ -4272,7 +5691,7 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
             return ActionChip(
               label: Text(chip.label),
               labelStyle:
-                  TextStyle(color: labelColor, fontWeight: FontWeight.w600),
+              TextStyle(color: labelColor, fontWeight: FontWeight.w600),
               backgroundColor: backgroundColor,
               tooltip: '이 값으로 삽입',
               onPressed: () async {
@@ -4310,92 +5729,37 @@ class _OcrPublicOverlay extends StatelessWidget {
     required this.revision,
     required this.stage,
     required this.cropBytes,
-    required this.microCropBytes,
+    required this.localCropBytes,
+    required this.localSlot,
   });
 
   final int revision;
   final _OcrDebugStage stage;
   final Uint8List? cropBytes;
-  final Uint8List? microCropBytes;
+  final Uint8List? localCropBytes;
+  final _PlateRecoverySlot? localSlot;
 
   @override
   Widget build(BuildContext context) {
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    final colorScheme = Theme.of(context).colorScheme;
-    final duration = reduceMotion
-        ? Duration.zero
-        : const Duration(milliseconds: 320);
-    final imageBytes = microCropBytes ?? cropBytes;
+    final duration =
+    reduceMotion ? Duration.zero : const Duration(milliseconds: 320);
 
     return IgnorePointer(
       child: Stack(
         fit: StackFit.expand,
         children: [
-          if (imageBytes != null)
+          if (cropBytes != null || localCropBytes != null)
             Positioned(
               right: 12,
               bottom: 78,
-              child: TweenAnimationBuilder<double>(
-                key: ValueKey<String>('public-magnifier-$revision-${stage.name}'),
-                tween: Tween<double>(begin: 0, end: 1),
-                duration: reduceMotion
-                    ? Duration.zero
-                    : const Duration(milliseconds: 360),
-                curve: Curves.easeOutCubic,
-                builder: (context, value, child) {
-                  final t = value.clamp(0.0, 1.0).toDouble();
-                  return Opacity(
-                    opacity: t,
-                    child: Transform.scale(
-                      scale: .94 + (.06 * t),
-                      alignment: Alignment.bottomRight,
-                      child: child,
-                    ),
-                  );
-                },
-                child: Container(
-                  width: 154,
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(.68),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: colorScheme.primary.withOpacity(.82),
-                      width: 1.2,
-                    ),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: AnimatedSwitcher(
-                      duration: duration,
-                      switchInCurve: Curves.easeOutCubic,
-                      switchOutCurve: Curves.easeInCubic,
-                      transitionBuilder: (child, animation) {
-                        return FadeTransition(
-                          opacity: animation,
-                          child: ScaleTransition(
-                            scale: Tween<double>(begin: .96, end: 1).animate(
-                              CurvedAnimation(
-                                parent: animation,
-                                curve: Curves.easeOutCubic,
-                              ),
-                            ),
-                            child: child,
-                          ),
-                        );
-                      },
-                      child: Image.memory(
-                        imageBytes,
-                        key: ValueKey<int>(identityHashCode(imageBytes)),
-                        height: 84,
-                        width: double.infinity,
-                        fit: BoxFit.contain,
-                        gaplessPlayback: true,
-                      ),
-                    ),
-                  ),
-                ),
+              child: _OcrRecoveryPreviewDock(
+                revision: revision,
+                cropBytes: cropBytes,
+                localCropBytes: localCropBytes,
+                localSlot: localSlot,
+                reduceMotion: reduceMotion,
               ),
             ),
           Positioned(
@@ -4442,6 +5806,162 @@ class _OcrPublicOverlay extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _OcrRecoveryPreviewDock extends StatelessWidget {
+  const _OcrRecoveryPreviewDock({
+    required this.revision,
+    required this.cropBytes,
+    required this.localCropBytes,
+    required this.localSlot,
+    required this.reduceMotion,
+  });
+
+  final int revision;
+  final Uint8List? cropBytes;
+  final Uint8List? localCropBytes;
+  final _PlateRecoverySlot? localSlot;
+  final bool reduceMotion;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final duration =
+    reduceMotion ? Duration.zero : const Duration(milliseconds: 300);
+    return AnimatedSize(
+      duration: duration,
+      curve: Curves.easeOutCubic,
+      alignment: Alignment.bottomRight,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          AnimatedSwitcher(
+            duration: duration,
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (child, animation) {
+              final slide = Tween<Offset>(
+                begin: const Offset(.08, .08),
+                end: Offset.zero,
+              ).animate(
+                CurvedAnimation(
+                  parent: animation,
+                  curve: Curves.easeOutCubic,
+                ),
+              );
+              return FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: slide,
+                  child: ScaleTransition(
+                    scale: Tween<double>(begin: .94, end: 1).animate(
+                      CurvedAnimation(
+                        parent: animation,
+                        curve: Curves.easeOutCubic,
+                      ),
+                    ),
+                    child: child,
+                  ),
+                ),
+              );
+            },
+            child: localCropBytes == null
+                ? const SizedBox.shrink(key: ValueKey<String>('local-empty'))
+                : _OcrRecoveryPreviewCard(
+              key: ValueKey<String>(
+                'local-${localSlot?.name ?? 'unknown'}-${identityHashCode(localCropBytes)}-$revision',
+              ),
+              bytes: localCropBytes!,
+              width: 128,
+              height: 68,
+              borderColor: colorScheme.primary,
+              reduceMotion: reduceMotion,
+            ),
+          ),
+          if (localCropBytes != null && cropBytes != null)
+            const SizedBox(height: 8),
+          AnimatedSwitcher(
+            duration: duration,
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            child: cropBytes == null
+                ? const SizedBox.shrink(key: ValueKey<String>('crop-empty'))
+                : _OcrRecoveryPreviewCard(
+              key: ValueKey<String>(
+                'crop-${identityHashCode(cropBytes)}-$revision',
+              ),
+              bytes: cropBytes!,
+              width: 154,
+              height: 84,
+              borderColor: colorScheme.secondary,
+              reduceMotion: reduceMotion,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OcrRecoveryPreviewCard extends StatelessWidget {
+  const _OcrRecoveryPreviewCard({
+    super.key,
+    required this.bytes,
+    required this.width,
+    required this.height,
+    required this.borderColor,
+    required this.reduceMotion,
+  });
+
+  final Uint8List bytes;
+  final double width;
+  final double height;
+  final Color borderColor;
+  final bool reduceMotion;
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: 1),
+      duration:
+      reduceMotion ? Duration.zero : const Duration(milliseconds: 360),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) {
+        final t = value.clamp(0.0, 1.0).toDouble();
+        return Opacity(
+          opacity: t,
+          child: Transform.scale(
+            scale: .94 + (.06 * t),
+            alignment: Alignment.bottomRight,
+            child: child,
+          ),
+        );
+      },
+      child: Container(
+        width: width,
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(.68),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: borderColor.withOpacity(.82),
+            width: 1.2,
+          ),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: Image.memory(
+            bytes,
+            height: height,
+            width: double.infinity,
+            fit: BoxFit.contain,
+            gaplessPlayback: true,
+          ),
+        ),
       ),
     );
   }
@@ -4504,10 +6024,10 @@ class _OcrOperationCaption extends StatelessWidget {
         return '번호판 부분을 확대하고 있어요';
       case _OcrDebugStage.cropOcr:
         return '확대한 번호판을 다시 읽고 있어요';
-      case _OcrDebugStage.microCropPrepared:
-        return '가운데 글자를 더 크게 살펴보고 있어요';
-      case _OcrDebugStage.microCropOcr:
-        return '가운데 글자와 주변 숫자를 함께 확인하고 있어요';
+      case _OcrDebugStage.localCropPrepared:
+        return '번호판의 세부 영역을 더 크게 살펴보고 있어요';
+      case _OcrDebugStage.localCropOcr:
+        return '확대한 세부 영역을 다시 읽고 있어요';
       case _OcrDebugStage.refocusing:
         return '더 선명하게 보기 위해 초점을 다시 맞추고 있어요';
       case _OcrDebugStage.recovered:
@@ -4577,17 +6097,18 @@ class _OcrDebugOverlay extends StatelessWidget {
     required this.sourceImageSize,
     required this.weakBox,
     required this.cropBox,
-    required this.microCropBox,
+    required this.localCropBox,
+    required this.localSlot,
     required this.focusPoint,
     required this.cropText,
-    required this.microCropText,
+    required this.localCropText,
     required this.structuredPlate,
     required this.recoveredPlate,
     required this.detail,
     required this.captureMs,
     required this.fullOcrMs,
     required this.cropOcrMs,
-    required this.microOcrMs,
+    required this.localOcrMs,
   });
 
   final int revision;
@@ -4596,17 +6117,18 @@ class _OcrDebugOverlay extends StatelessWidget {
   final Size? sourceImageSize;
   final Rect? weakBox;
   final Rect? cropBox;
-  final Rect? microCropBox;
+  final Rect? localCropBox;
+  final _PlateRecoverySlot? localSlot;
   final Offset? focusPoint;
   final String? cropText;
-  final String? microCropText;
+  final String? localCropText;
   final String? structuredPlate;
   final String? recoveredPlate;
   final String? detail;
   final int? captureMs;
   final int? fullOcrMs;
   final int? cropOcrMs;
-  final int? microOcrMs;
+  final int? localOcrMs;
 
   @override
   Widget build(BuildContext context) {
@@ -4628,32 +6150,32 @@ class _OcrDebugOverlay extends StatelessWidget {
           final mappedLines = source == null
               ? const <_OcrDebugLineBox>[]
               : lineBoxes
-                  .map(
-                    (item) => _OcrDebugLineBox(
-                      box: _mapDebugRect(
-                        item.box,
-                        source,
-                        viewport,
-                      ),
-                      text: item.text,
-                    ),
-                  )
-                  .toList(growable: false);
+              .map(
+                (item) => _OcrDebugLineBox(
+              box: _mapDebugRect(
+                item.box,
+                source,
+                viewport,
+              ),
+              text: item.text,
+            ),
+          )
+              .toList(growable: false);
           final mappedWeak = source == null || weakBox == null
               ? null
               : _mapDebugRect(weakBox!, source, viewport);
           final mappedCrop = source == null || cropBox == null
               ? null
               : _mapDebugRect(cropBox!, source, viewport);
-          final mappedMicro = source == null || microCropBox == null
+          final mappedLocal = source == null || localCropBox == null
               ? null
-              : _mapDebugRect(microCropBox!, source, viewport);
+              : _mapDebugRect(localCropBox!, source, viewport);
           final focus = focusPoint == null
               ? null
               : Offset(
-                  focusPoint!.dx * viewport.width,
-                  focusPoint!.dy * viewport.height,
-                );
+            focusPoint!.dx * viewport.width,
+            focusPoint!.dy * viewport.height,
+          );
 
           return Stack(
             fit: StackFit.expand,
@@ -4718,9 +6240,9 @@ class _OcrDebugOverlay extends StatelessWidget {
                     );
                   },
                 ),
-              if (mappedMicro != null)
+              if (mappedLocal != null)
                 TweenAnimationBuilder<double>(
-                  key: ValueKey<String>('micro-$revision-${mappedMicro.hashCode}'),
+                  key: ValueKey<String>('local-$revision-${mappedLocal.hashCode}-${localSlot?.name ?? 'unknown'}'),
                   tween: Tween<double>(begin: 0, end: 1),
                   duration: reduceMotion
                       ? Duration.zero
@@ -4728,10 +6250,10 @@ class _OcrDebugOverlay extends StatelessWidget {
                   curve: Curves.easeOutCubic,
                   builder: (context, value, child) {
                     final t = value.clamp(0.0, 1.0).toDouble();
-                    final start = mappedCrop ?? mappedWeak ?? mappedMicro;
+                    final start = mappedCrop ?? mappedWeak ?? mappedLocal;
                     final animatedRect = Rect.lerp(
                       start,
-                      mappedMicro,
+                      mappedLocal,
                       t,
                     )!;
                     return CustomPaint(
@@ -4740,7 +6262,7 @@ class _OcrDebugOverlay extends StatelessWidget {
                         opacity: .45 + (.55 * t),
                         color: colorScheme.error,
                         dashed: true,
-                        label: 'MID MICRO CROP',
+                        label: '${(localSlot ?? _PlateRecoverySlot.mid).name.toUpperCase()} LOCAL',
                       ),
                     );
                   },
@@ -4791,11 +6313,11 @@ class _OcrDebugOverlay extends StatelessWidget {
                     stage: stage,
                     structuredPlate: structuredPlate,
                     recoveredPlate: recoveredPlate,
-                    cropText: microCropText ?? cropText,
+                    cropText: localCropText ?? cropText,
                     detail: detail,
                     captureMs: captureMs,
                     fullOcrMs: fullOcrMs,
-                    cropOcrMs: (cropOcrMs ?? 0) + (microOcrMs ?? 0),
+                    cropOcrMs: (cropOcrMs ?? 0) + (localOcrMs ?? 0),
                   ),
                 ),
               ),
@@ -4807,10 +6329,10 @@ class _OcrDebugOverlay extends StatelessWidget {
   }
 
   static Rect _mapDebugRect(
-    Rect sourceRect,
-    Size sourceSize,
-    Size viewport,
-  ) {
+      Rect sourceRect,
+      Size sourceSize,
+      Size viewport,
+      ) {
     if (sourceSize.width <= 0 ||
         sourceSize.height <= 0 ||
         viewport.width <= 0 ||
@@ -4885,20 +6407,20 @@ class _OcrDebugStagePanel extends StatelessWidget {
           children: lines
               .map(
                 (line) => Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 1),
-                  child: Text(
-                    line,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      height: 1.25,
-                    ),
-                  ),
+              padding: const EdgeInsets.symmetric(vertical: 1),
+              child: Text(
+                line,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  height: 1.25,
                 ),
-              )
+              ),
+            ),
+          )
               .toList(growable: false),
         ),
       ),
@@ -4919,10 +6441,10 @@ class _OcrDebugStagePanel extends StatelessWidget {
         return 'DYNAMIC CROP';
       case _OcrDebugStage.cropOcr:
         return 'CROP OCR';
-      case _OcrDebugStage.microCropPrepared:
-        return 'MID MICRO CROP';
-      case _OcrDebugStage.microCropOcr:
-        return 'MICRO OCR';
+      case _OcrDebugStage.localCropPrepared:
+        return 'LOCAL CROP';
+      case _OcrDebugStage.localCropOcr:
+        return 'LOCAL OCR';
       case _OcrDebugStage.refocusing:
         return 'AF / AE';
       case _OcrDebugStage.recovered:
@@ -4933,9 +6455,9 @@ class _OcrDebugStagePanel extends StatelessWidget {
   }
 
   static Color _stageColor(
-    _OcrDebugStage stage,
-    ColorScheme colorScheme,
-  ) {
+      _OcrDebugStage stage,
+      ColorScheme colorScheme,
+      ) {
     switch (stage) {
       case _OcrDebugStage.recovered:
         return colorScheme.primary;
