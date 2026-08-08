@@ -1,13 +1,19 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../app/init/app_exit_service.dart';
 import '../../../app/init/db_connection_status_section.dart';
 import '../../../app/init/logout_helper.dart';
+import '../../../app/utils/developer_operation_status_dialog.dart';
+import '../../../app/utils/status_dialog.dart';
+import '../../../shared/area_remote_settings/application/area_remote_settings_sync.dart';
 import '../../account/applications/user_state.dart';
-import '../../community/page/community_stub_page.dart';
 import '../../dashboard/applications/common/endtime_reminder_service.dart';
 import '../../dev/debug/debug_api_logger.dart';
+import '../../dev/domain/repositories/area_repo_package/area_repository.dart';
 import '../../selector/sheets/service_bottom_sheet.dart';
 import '../controllers/single_inside_controller.dart';
 import 'widgets/single_inside_document_box_button_section.dart';
@@ -390,7 +396,7 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
     return PopScope(
       canPop: false,
       child: Scaffold(
-        bottomNavigationBar: const _SingleInsideCommunityDock(),
+        bottomNavigationBar: const _SingleInsideDataDownloadDock(),
         body: Consumer<UserState>(
           builder: (context, userState, _) {
             final mode = _resolveMode(userState);
@@ -436,41 +442,387 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
   }
 }
 
-class _SingleInsideCommunityDock extends StatelessWidget {
-  const _SingleInsideCommunityDock();
+enum _SingleInsideDataDownloadState {
+  idle,
+  loading,
+  success,
+  failure,
+}
 
-  Future<void> _openCommunity(BuildContext context) async {
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => const CommunityStubPage(),
-      ),
+class _SingleInsideDataDownloadDock extends StatefulWidget {
+  const _SingleInsideDataDownloadDock();
+
+  @override
+  State<_SingleInsideDataDownloadDock> createState() =>
+      _SingleInsideDataDownloadDockState();
+}
+
+class _SingleInsideDataDownloadDockState
+    extends State<_SingleInsideDataDownloadDock> {
+  _SingleInsideDataDownloadState _state = _SingleInsideDataDownloadState.idle;
+  Timer? _feedbackTimer;
+
+  bool get _busy => _state == _SingleInsideDataDownloadState.loading;
+
+  @override
+  void dispose() {
+    _feedbackTimer?.cancel();
+    super.dispose();
+  }
+
+  void _setStateSafe(_SingleInsideDataDownloadState value) {
+    if (!mounted) return;
+    setState(() => _state = value);
+  }
+
+  void _scheduleIdle() {
+    _feedbackTimer?.cancel();
+    _feedbackTimer = Timer(const Duration(milliseconds: 1600), () {
+      _setStateSafe(_SingleInsideDataDownloadState.idle);
+    });
+  }
+
+  Future<void> _download() async {
+    if (_busy) return;
+
+    _feedbackTimer?.cancel();
+    _setStateSafe(_SingleInsideDataDownloadState.loading);
+    HapticFeedback.selectionClick();
+
+    DeveloperOperationTrace? trace;
+    try {
+      final userState = context.read<UserState>();
+      final division = userState.division.trim();
+      final area = userState.currentArea.trim();
+
+      trace = await DeveloperOperationTrace.start(
+        context: context,
+        title: '연결 데이터 내려받기',
+        initialMessage: '현재 지역의 경량 연결 데이터 동기화를 준비하고 있습니다.',
+        useCommonUi: true,
+        developerModeMessage: '개발자 모드 ON: debugPrint 코드를 복사할 수 있습니다.',
+        standardModeMessage: '개발자 모드 OFF',
+      );
+
+      trace.log(
+        'singleModePolicy=email+invite+communication only areaMasterRefresh=false',
+        progress: 0.04,
+      );
+      trace.log(
+        '현재 로그인 범위를 확인했습니다: divisionPresent=${division.isNotEmpty}, areaPresent=${area.isNotEmpty}',
+        progress: 0.07,
+      );
+
+      final result = await AreaRemoteSettingsSync.sync(
+        repository: context.read<AreaRepository>(),
+        division: division,
+        area: area,
+        onLog: trace.log,
+        progressStart: 0.1,
+        progressEnd: 0.94,
+      );
+
+      trace.log(
+        '출퇴근 경량 데이터 동기화 결과: syncedCount=${result.syncedCount} emailSynced=${result.emailSynced} inviteSynced=${result.inviteSynced} communicationSynced=${result.communicationSynced}',
+        progress: 0.97,
+      );
+      await trace.succeed('현재 지역 연결 데이터 내려받기가 완료되었습니다.');
+
+      if (!mounted) return;
+      _setStateSafe(_SingleInsideDataDownloadState.success);
+      HapticFeedback.lightImpact();
+
+      if (!trace.developerMode) {
+        await StatusDialog.showSuccess(
+          context,
+          title: '데이터 내려받기 완료',
+          description:
+              '현재 지역(${result.area})의 email · invite · communication만 동기화했습니다.\nArea Master는 갱신하지 않았습니다.\n${result.summary}',
+          useCommonUi: true,
+        );
+      }
+
+      _scheduleIdle();
+    } catch (error, stackTrace) {
+      debugPrint('[SingleInsideDataDownload] failure: $error');
+      final activeTrace = trace;
+      if (activeTrace != null) {
+        await activeTrace.fail(
+          '현재 지역 연결 데이터 내려받기에 실패했습니다.',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }
+
+      if (!mounted) return;
+      _setStateSafe(_SingleInsideDataDownloadState.failure);
+      HapticFeedback.mediumImpact();
+
+      if (activeTrace == null || !activeTrace.developerMode) {
+        await StatusDialog.showFailure(
+          context,
+          title: '데이터 내려받기 실패',
+          description:
+              'email · invite · communication 동기화를 완료하지 못했습니다. 기존 로컬값은 가능한 범위에서 복원됩니다.',
+          useCommonUi: true,
+        );
+      }
+
+      _scheduleIdle();
+    }
+  }
+
+  Color _background(ColorScheme cs) {
+    switch (_state) {
+      case _SingleInsideDataDownloadState.idle:
+        return cs.secondaryContainer;
+      case _SingleInsideDataDownloadState.loading:
+        return cs.primaryContainer;
+      case _SingleInsideDataDownloadState.success:
+        return cs.tertiaryContainer;
+      case _SingleInsideDataDownloadState.failure:
+        return cs.errorContainer;
+    }
+  }
+
+  Color _foreground(ColorScheme cs) {
+    switch (_state) {
+      case _SingleInsideDataDownloadState.idle:
+        return cs.onSecondaryContainer;
+      case _SingleInsideDataDownloadState.loading:
+        return cs.onPrimaryContainer;
+      case _SingleInsideDataDownloadState.success:
+        return cs.onTertiaryContainer;
+      case _SingleInsideDataDownloadState.failure:
+        return cs.onErrorContainer;
+    }
+  }
+
+  String get _title {
+    switch (_state) {
+      case _SingleInsideDataDownloadState.idle:
+        return '데이터 내려받기';
+      case _SingleInsideDataDownloadState.loading:
+        return '연결 데이터 동기화 중';
+      case _SingleInsideDataDownloadState.success:
+        return '최신 데이터 적용 완료';
+      case _SingleInsideDataDownloadState.failure:
+        return '다시 내려받기';
+    }
+  }
+
+  String get _subtitle {
+    switch (_state) {
+      case _SingleInsideDataDownloadState.idle:
+        return 'email · invite · communication만 갱신';
+      case _SingleInsideDataDownloadState.loading:
+        return '현재 지역 설정 3개만 확인하고 있습니다';
+      case _SingleInsideDataDownloadState.success:
+        return 'Area Master는 변경하지 않았습니다';
+      case _SingleInsideDataDownloadState.failure:
+        return '기존 로컬값을 유지하고 다시 시도할 수 있습니다';
+    }
+  }
+
+  Widget _leadingIcon({
+    required Color foreground,
+    required bool reduceMotion,
+  }) {
+    if (_state == _SingleInsideDataDownloadState.loading && !reduceMotion) {
+      return SizedBox(
+        key: const ValueKey<String>('loading'),
+        width: 20,
+        height: 20,
+        child: CircularProgressIndicator(
+          strokeWidth: 2.2,
+          color: foreground,
+        ),
+      );
+    }
+
+    final icon = switch (_state) {
+      _SingleInsideDataDownloadState.idle => Icons.cloud_download_rounded,
+      _SingleInsideDataDownloadState.loading => Icons.sync_rounded,
+      _SingleInsideDataDownloadState.success => Icons.cloud_done_rounded,
+      _SingleInsideDataDownloadState.failure => Icons.refresh_rounded,
+    };
+
+    return Icon(
+      icon,
+      key: ValueKey<_SingleInsideDataDownloadState>(_state),
+      size: 22,
+      color: foreground,
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final motion =
+        reduceMotion ? Duration.zero : const Duration(milliseconds: 200);
+    final background = _background(cs);
+    final foreground = _foreground(cs);
 
-    return SafeArea(
+    final dock = SafeArea(
       top: false,
       left: false,
       right: false,
       bottom: true,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-        child: SizedBox(
-          height: 48,
-          child: FilledButton.icon(
-            onPressed: () => _openCommunity(context),
-            icon: const Icon(Icons.groups_rounded),
-            label: const Text('커뮤니티'),
-            style: FilledButton.styleFrom(
-              backgroundColor: cs.secondary,
-              foregroundColor: cs.onSecondary,
-              shape: const StadiumBorder(),
+        child: AnimatedContainer(
+          duration: motion,
+          curve: Curves.easeOutCubic,
+          height: 64,
+          decoration: BoxDecoration(
+            color: background,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(
+              color: foreground.withOpacity(0.14),
+            ),
+          ),
+          child: Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              onTap: _busy ? null : _download,
+              borderRadius: BorderRadius.circular(22),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                child: Row(
+                  children: [
+                    AnimatedContainer(
+                      duration: motion,
+                      curve: Curves.easeOutCubic,
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: foreground.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      alignment: Alignment.center,
+                      child: AnimatedSwitcher(
+                        duration: motion,
+                        switchInCurve: Curves.easeOutBack,
+                        switchOutCurve: Curves.easeInCubic,
+                        transitionBuilder: (child, animation) {
+                          return FadeTransition(
+                            opacity: animation,
+                            child: ScaleTransition(
+                              scale: Tween<double>(begin: 0.86, end: 1).animate(
+                                CurvedAnimation(
+                                  parent: animation,
+                                  curve: Curves.easeOutBack,
+                                ),
+                              ),
+                              child: child,
+                            ),
+                          );
+                        },
+                        child: _leadingIcon(
+                          foreground: foreground,
+                          reduceMotion: reduceMotion,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: AnimatedSwitcher(
+                        duration: motion,
+                        switchInCurve: Curves.easeOutCubic,
+                        switchOutCurve: Curves.easeInCubic,
+                        transitionBuilder: (child, animation) {
+                          return FadeTransition(
+                            opacity: animation,
+                            child: SlideTransition(
+                              position: Tween<Offset>(
+                                begin: const Offset(0, 0.08),
+                                end: Offset.zero,
+                              ).animate(animation),
+                              child: child,
+                            ),
+                          );
+                        },
+                        child: Column(
+                          key: ValueKey<_SingleInsideDataDownloadState>(_state),
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.labelLarge?.copyWith(
+                                color: foreground,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _subtitle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: foreground.withOpacity(0.78),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    AnimatedRotation(
+                      turns: _state == _SingleInsideDataDownloadState.failure
+                          ? -0.08
+                          : 0,
+                      duration: motion,
+                      curve: Curves.easeOutCubic,
+                      child: Icon(
+                        _state == _SingleInsideDataDownloadState.success
+                            ? Icons.check_rounded
+                            : Icons.chevron_right_rounded,
+                        color: foreground.withOpacity(_busy ? 0.45 : 0.82),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ),
+      ),
+    );
+
+    if (reduceMotion) {
+      return Semantics(
+        button: true,
+        enabled: !_busy,
+        label: '데이터 내려받기',
+        child: dock,
+      );
+    }
+
+    return Semantics(
+      button: true,
+      enabled: !_busy,
+      label: '데이터 내려받기',
+      child: TweenAnimationBuilder<double>(
+        tween: Tween<double>(begin: 0, end: 1),
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOutCubic,
+        child: dock,
+        builder: (context, value, child) {
+          return Opacity(
+            opacity: value,
+            child: Transform.translate(
+              offset: Offset(0, 8 * (1 - value)),
+              child: child,
+            ),
+          );
+        },
       ),
     );
   }

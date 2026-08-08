@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui';
 
@@ -14,21 +15,20 @@ import '../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../app/utils/ops_delayed_refresh_gate.dart';
 import '../../../../app/utils/snackbar_helper.dart';
 import '../../../../design_system/common_ui/common_ui_components.dart';
-import '../../../../design_system/common_ui/common_ui_overlays.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
+import '../../../../shared/area_remote_settings/application/area_remote_settings_sync.dart';
 import '../../../account/applications/user_state.dart';
-import '../../../chat/application/chat_area_key.dart';
-import '../../../chat/presentation/area_chat_panel.dart';
+import '../../../community/application/discord/discord_config.dart';
+import '../../../community/page/sheets/discord/discord_bottom_sheet.dart';
+import '../../../dev/domain/repositories/area_repo_package/area_repository.dart';
 import '../../application/area/area_master_cache.dart';
-import '../../page/sheets/company_calendar_page.dart';
 import '../../page/sheets/head_memo.dart';
-import '../../page/sheets/head_tutorials.dart';
-import '../../page/sheets/roadmap_bottom_sheet.dart';
 import '../../../selector/application/dev_auth.dart';
 import '../../widgets/hr/attendance_calendar.dart' as hr_att;
 import '../../widgets/hr/break_calendar.dart' as hr_break;
 import '../../widgets/mgmt/field.dart' as mgmt;
 import '../../widgets/mgmt/statistics.dart' as mgmt_stats;
+
 class HeadHubActions {
   HeadHubActions._();
 
@@ -39,6 +39,10 @@ class HeadHubActions {
   static const _kEnabledKey = 'head_hub_actions_enabled_v1';
   static const _kBubbleXKey = 'head_hub_actions_bubble_x_v1';
   static const contactFormUrl = 'https://forms.gle/hDTkX1p6U9jMMuySA';
+  static const termsOfServiceUrl =
+      'https://sites.google.com/view/parkinworkin3/%ED%99%88';
+  static const privacyPolicyUrl =
+      'https://sites.google.com/view/parkinworkin4/%ED%99%88';
   static const _kBubbleYKey = 'head_hub_actions_bubble_y_v1';
   static const _kGameEnabledKey = 'game_quick_actions_enabled_v1';
   static const _kGameBubbleXKey = 'game_quick_actions_bubble_x_v1';
@@ -58,8 +62,6 @@ class HeadHubActions {
     final overlayCtx = state?.overlay?.context;
     return overlayCtx ?? state?.context;
   }
-
-  static BuildContext? currentContext() => _bestContext();
 
   static Future<void> closeAnySheet() async {
     if (_closing) return;
@@ -142,8 +144,12 @@ class HeadHubActions {
 
   static void toggle() => enabled.value = !enabled.value;
 
-  static Future<bool> openContactForm([BuildContext? context]) async {
-    final uri = Uri.tryParse(contactFormUrl.trim());
+  static Future<bool> _openExternalPage({
+    required String url,
+    required String failureMessage,
+    BuildContext? context,
+  }) async {
+    final uri = Uri.tryParse(url.trim());
     if (uri == null) return false;
 
     var opened = false;
@@ -167,7 +173,7 @@ class HeadHubActions {
       if (ctx != null && ctx.mounted) {
         showFailedSnackbar(
           ctx,
-          '문의하기 화면을 열 수 없습니다.',
+          failureMessage,
           useCommonUi: true,
         );
       }
@@ -176,20 +182,27 @@ class HeadHubActions {
     return opened;
   }
 
+  static Future<bool> openTermsOfService([BuildContext? context]) {
+    return _openExternalPage(
+      url: termsOfServiceUrl,
+      failureMessage: '이용약관 화면을 열 수 없습니다.',
+      context: context,
+    );
+  }
 
-  static Future<void> openHeadquarterChat([BuildContext? context]) async {
-    final ctx = context ?? _bestContext();
-    if (ctx == null) return;
+  static Future<bool> openPrivacyPolicy([BuildContext? context]) {
+    return _openExternalPage(
+      url: privacyPolicyUrl,
+      failureMessage: '개인정보보호처리방침 화면을 열 수 없습니다.',
+      context: context,
+    );
+  }
 
-    await openSheetExclusively<void>(
-      (sheetContext) {
-        return AreaChatPanel.showSheet(
-          context: sheetContext,
-          areaName: headquarterChatAreaName,
-          useCommonUi: true,
-        );
-      },
-      context: ctx,
+  static Future<bool> openContactForm([BuildContext? context]) {
+    return _openExternalPage(
+      url: contactFormUrl,
+      failureMessage: '문의하기 화면을 열 수 없습니다.',
+      context: context,
     );
   }
 
@@ -199,12 +212,16 @@ class HeadHubActions {
     final ctx = context ?? _bestContext();
     if (ctx == null) return;
 
-    final division = ctx.read<UserState>().division.trim();
+    final userState = ctx.read<UserState>();
+    final division = userState.division.trim();
+    final currentArea = userState.currentArea.trim();
     final trace = await DeveloperOperationTrace.start(
       context: ctx,
       title: '지역 마스터 갱신',
       initialMessage: '지역 마스터 갱신 요청을 확인하고 있습니다.',
       useCommonUi: true,
+      developerModeMessage: '개발자 모드 ON: debugPrint 코드를 복사할 수 있습니다.',
+      standardModeMessage: '개발자 모드 OFF',
     );
 
     if (division.isEmpty) {
@@ -220,7 +237,21 @@ class HeadHubActions {
       return;
     }
 
-    trace.log('회사 정보를 확인했습니다: $division', progress: 0.08);
+    if (currentArea.isEmpty) {
+      const failureMessage = '현재 지역 정보가 없어 지역 마스터를 갱신할 수 없습니다.';
+      await trace.fail(failureMessage);
+      if (!trace.developerMode && ctx.mounted) {
+        showFailedSnackbar(
+          ctx,
+          failureMessage,
+          useCommonUi: true,
+        );
+      }
+      return;
+    }
+
+    trace.log('회사 정보를 확인했습니다: $division', progress: 0.06);
+    trace.log('현재 로그인 지역을 확인했습니다: $currentArea', progress: 0.1);
     trace.log('실행 전 갱신 게이트를 확인하고 있습니다.', progress: 0.16);
 
     final shouldRefresh = await OpsDelayedRefreshGate.waitIfNeeded(
@@ -236,11 +267,29 @@ class HeadHubActions {
 
     try {
       trace.log('기존 지역 마스터를 정리하고 있습니다.', progress: 0.3);
-      trace.log('최신 지역 마스터를 내려받고 있습니다.', progress: 0.56);
+      trace.log('최신 지역 마스터를 내려받고 있습니다.', progress: 0.52);
       final snapshot = await AreaMasterCache.refreshDivision(division);
       trace.log(
-        '${snapshot.items.length}개 지역 정보를 저장하고 검증했습니다.',
-        progress: 0.94,
+        '${snapshot.items.length}개 지역 정보를 저장했습니다.',
+        progress: 0.66,
+      );
+      trace.log(
+        '지역 마스터 갱신 후 현재 지역의 경량 연결 데이터 동기화를 시작합니다.',
+        progress: 0.69,
+      );
+
+      final syncResult = await AreaRemoteSettingsSync.sync(
+        repository: ctx.read<AreaRepository>(),
+        division: division,
+        area: currentArea,
+        onLog: trace.log,
+        progressStart: 0.7,
+        progressEnd: 0.96,
+      );
+
+      trace.log(
+        '지역 마스터와 현재 지역 연결 데이터 동기화를 모두 검증했습니다: syncedCount=${syncResult.syncedCount}',
+        progress: 0.98,
       );
 
       if (trace.developerMode) {
@@ -259,7 +308,9 @@ class HeadHubActions {
         builder: (dialogContext) {
           final tokens = CommonUiTheme.of(dialogContext);
           final text = Theme.of(dialogContext).textTheme;
-          return ConstrainedBox(
+          final reduceMotion =
+              MediaQuery.maybeOf(dialogContext)?.disableAnimations ?? false;
+          final content = ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 420),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -304,6 +355,9 @@ class HeadHubActions {
                   child: Text(
                     '기존 지역 마스터를 삭제하고 '
                     '${snapshot.items.length}개 지역 정보를 새로 저장했습니다.\n\n'
+                    '${syncResult.emailSynced ? '현재 지역($currentArea)의 수신자 이메일을 서버 email 값으로 교체했습니다.' : '현재 지역($currentArea)의 email 값이 없어 기존 수신자 이메일을 유지했습니다.'}\n'
+                    '${syncResult.inviteSynced ? 'Discord 초대 링크를 서버 invite 값으로 교체했습니다.' : 'invite 값이 없어 기존 Discord 초대 링크를 유지했습니다.'}\n'
+                    '${syncResult.communicationSynced ? 'Discord 채널 링크를 서버 communication 값으로 교체했습니다.' : 'communication 값이 없어 기존 Discord 채널 링크를 유지했습니다.'}\n\n'
                     '변경 사항 적용을 위해 앱을 종료합니다. '
                     '앱을 다시 실행해 주세요.',
                     style: text.bodyMedium?.copyWith(
@@ -322,6 +376,29 @@ class HeadHubActions {
                 ),
               ],
             ),
+          );
+
+          if (reduceMotion) {
+            return content;
+          }
+
+          return TweenAnimationBuilder<double>(
+            tween: Tween<double>(begin: 0, end: 1),
+            duration: const Duration(milliseconds: 320),
+            curve: Curves.easeOutCubic,
+            child: content,
+            builder: (context, value, child) {
+              return Opacity(
+                opacity: value,
+                child: Transform.translate(
+                  offset: Offset(0, 12 * (1 - value)),
+                  child: Transform.scale(
+                    scale: 0.98 + (0.02 * value),
+                    child: child,
+                  ),
+                ),
+              );
+            },
           );
         },
       );
@@ -395,12 +472,10 @@ class _HubBubble extends StatefulWidget {
   State<_HubBubble> createState() => _HubBubbleState();
 }
 
-class _HubBubbleState extends State<_HubBubble>
-    with SingleTickerProviderStateMixin {
+class _HubBubbleState extends State<_HubBubble> {
   static const double _handleTouchWidth = 44;
   static const double _handleVisualWidth = 18;
   static const double _handleHeight = 56;
-  static const double _dockRadius = 18;
   static const double _gameTouchWidth = 34;
   static const double _gameHeight = 64;
   static const double _bubbleGap = 12;
@@ -408,12 +483,13 @@ class _HubBubbleState extends State<_HubBubble>
   late Offset _pos;
   bool _clampedOnce = false;
 
-  late final AnimationController _ctrl;
-  late final Animation<double> _t;
+  _HeadQuickActionsRoute? _panelRoute;
 
-  bool get _expanded => _ctrl.value > 0.001;
+  bool get _expanded => _panelRoute != null;
 
   bool _developerMode = false;
+  bool _disposing = false;
+  final List<String> _debugLines = <String>[];
 
   final TextEditingController _searchCtrl = TextEditingController();
   final FocusNode _searchFocus = FocusNode();
@@ -422,77 +498,272 @@ class _HubBubbleState extends State<_HubBubble>
   void initState() {
     super.initState();
     _pos = widget.initialPos;
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 240),
-    );
-    _t = CurvedAnimation(
-      parent: _ctrl,
-      curve: const SpringCurve(),
-      reverseCurve: Curves.easeInCubic,
-    )..addListener(() => setState(() {}));
-    _searchCtrl.addListener(() {
-      if (mounted) setState(() {});
-    });
+    _recordDebug('initialized navigation=popup_route');
     _refreshDeveloperMode();
+  }
+
+  void _recordDebug(String message) {
+    final line = '[HeadQuickActions] $message';
+    _debugLines.add(line);
+    if (_debugLines.length > 120) {
+      _debugLines.removeRange(0, _debugLines.length - 120);
+    }
+    debugPrint(line);
+  }
+
+  Future<void> _showDeveloperStatus() async {
+    if (!_developerMode || !mounted) return;
+    HapticFeedback.mediumImpact();
+    final configuredActions = _buildActions(context, CommonUiTheme.of(context));
+    final configuredActionIds =
+        configuredActions.map((action) => action.id).join('>');
+    final visibleActions = configuredActions
+        .where((action) => !action.hiddenUntilExactQuery)
+        .toList(growable: false);
+    final sectionSummary = _QuickActionCategoryUi.mainCategories
+        .map((category) {
+          final ids = visibleActions
+              .where((action) => action.category == category)
+              .map((action) => action.id)
+              .join(',');
+          return '${category.label}:$ids';
+        })
+        .join('|');
+    _recordDebug(
+      'developer_status_open expanded=$_expanded position=${_pos.dx.toStringAsFixed(1)},${_pos.dy.toStringAsFixed(1)}',
+    );
+    _recordDebug(
+      'developer_status_actions count=${configuredActions.length} ids=$configuredActionIds',
+    );
+    _recordDebug(
+      'developer_status_sections layout=vertical_headers indent=10 sections=$sectionSummary',
+    );
+    final panelRoute = _panelRoute;
+    _recordDebug(
+      'developer_status_back_policy navigation=popup_route routeActive=${panelRoute != null} routeCurrent=${panelRoute?.isCurrent ?? false}',
+    );
+    final channelUrl = await loadDiscordChannelUrl();
+    final channelValid = isDiscordChannelUrl(channelUrl);
+    _recordDebug(
+      'developer_status_third_party channelPresent=${channelUrl.isNotEmpty} channelLength=${channelUrl.length} channelValid=$channelValid',
+    );
+    final trace = await DeveloperOperationTrace.start(
+      context: context,
+      title: '빠른 실행 상태',
+      initialMessage: '빠른 실행 상태를 수집하고 있습니다.',
+      useCommonUi: true,
+      developerModeMessage: '개발자 모드 ON: debugPrint 코드를 복사할 수 있습니다.',
+      standardModeMessage: '개발자 모드 OFF',
+    );
+    if (!trace.developerMode) return;
+    final media = MediaQuery.maybeOf(context);
+    trace.log(
+      'expanded=$_expanded, reduceMotion=${media?.disableAnimations ?? false}, debugLines=${_debugLines.length}',
+      progress: 0.25,
+    );
+    trace.log(
+      'position=${_pos.dx.toStringAsFixed(1)},${_pos.dy.toStringAsFixed(1)}, developerMode=$_developerMode',
+      progress: 0.45,
+    );
+    trace.log(
+      'layout=vertical_headers, indent=10, sections=$sectionSummary',
+      progress: 0.52,
+    );
+    trace.log(
+      'work=memo,third_party_use operations=field,attendance,break,statistics support=third_party_support,faq,terms,privacy,contact',
+      progress: 0.58,
+    );
+    trace.log(
+      'thirdPartyChannelPresent=${channelUrl.isNotEmpty}, thirdPartyChannelLength=${channelUrl.length}, thirdPartyChannelValid=$channelValid, launch=discord_scheme_then_https_fallback',
+      progress: 0.63,
+    );
+    trace.log(
+      'backPolicy=popup_route_first, panelRouteActive=${panelRoute != null}, panelRouteCurrent=${panelRoute?.isCurrent ?? false}, closeSources=handle,scrim,action,system_back',
+      progress: 0.68,
+    );
+    final snapshot = List<String>.of(_debugLines);
+    if (snapshot.isEmpty) {
+      trace.log('기록된 빠른 실행 로그가 없습니다.', progress: 0.75);
+    } else {
+      for (var i = 0; i < snapshot.length; i++) {
+        trace.log(
+          snapshot[i],
+          progress: 0.45 + ((i + 1) / snapshot.length) * 0.45,
+        );
+      }
+    }
+    await trace.succeed('빠른 실행 상태 수집이 완료되었습니다.');
   }
 
   Future<void> _refreshDeveloperMode() async {
     final enabled = await DevAuth.isDeveloperLoggedIn();
     if (!mounted) return;
+    _recordDebug('developer_mode=$enabled');
     if (_developerMode == enabled) return;
     setState(() => _developerMode = enabled);
   }
 
   @override
   void dispose() {
+    _disposing = true;
+    final route = _panelRoute;
+    if (route != null) {
+      route.markCloseSource('overlay_dispose');
+      final navigator = route.navigator;
+      if (navigator != null) {
+        navigator.removeRoute(route);
+      }
+      _panelRoute = null;
+    }
     _searchCtrl.dispose();
     _searchFocus.dispose();
-    _ctrl.dispose();
     super.dispose();
   }
 
-  void _toggleMenu() {
+  Future<void> _openMenu({
+    required String source,
+    bool haptic = false,
+  }) async {
+    if (_panelRoute != null || !mounted) return;
+    final navigator = HeadHubActions.navigatorKey.currentState;
+    if (navigator == null) {
+      _recordDebug('quick_route_push_failed source=$source reason=navigator_unavailable');
+      return;
+    }
+    await _refreshDeveloperMode();
+    if (!mounted || _panelRoute != null) return;
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    if (_expanded) {
-      _searchFocus.unfocus();
-      if (reduceMotion) {
-        _ctrl.value = 0;
-      } else {
-        _ctrl.reverse();
-      }
-    } else {
-      _refreshDeveloperMode();
-      _searchCtrl.clear();
-      if (reduceMotion) {
-        _ctrl.value = 1;
-      } else {
-        _ctrl.forward();
-      }
+    _searchCtrl.clear();
+    if (haptic) {
+      HapticFeedback.lightImpact();
     }
-    HapticFeedback.lightImpact();
+    final actions = _buildActions(context, CommonUiTheme.of(context));
+    late final _HeadQuickActionsRoute route;
+    route = _HeadQuickActionsRoute(
+      reduceMotion: reduceMotion,
+      builder: (routeContext, animation) {
+        return _HeadQuickActionsRoutePanel(
+          animation: animation,
+          initialPos: _pos,
+          actions: actions,
+          controller: _searchCtrl,
+          focusNode: _searchFocus,
+          developerMode: _developerMode,
+          clampPosition: _clampToScreen,
+          onPositionChanged: (position) {
+            _pos = position;
+          },
+          onPositionSave: (position) async {
+            _pos = position;
+            await widget.onPosSave(position);
+            _recordDebug(
+              'position_saved x=${position.dx.toStringAsFixed(1)} y=${position.dy.toStringAsFixed(1)} source=panel_route',
+            );
+          },
+          onSelect: _handleActionTap,
+          onCloseRequest: (closeSource, closeHaptic) {
+            return _closeMenu(
+              source: closeSource,
+              haptic: closeHaptic,
+            );
+          },
+          onDeveloperStatus: _showDeveloperStatus,
+        );
+      },
+      onDidPop: (closeSource) {
+        _searchFocus.unfocus();
+        if (closeSource == 'system_back') {
+          _recordDebug('back_requested panelRouteActive=true');
+        }
+        _recordDebug('quick_route_pop source=$closeSource');
+        if (closeSource == 'system_back') {
+          _recordDebug('back_consumed route=quick_actions');
+        }
+      },
+      onDisposed: (closeSource) {
+        if (_panelRoute == route) {
+          _panelRoute = null;
+        }
+        if (mounted && !_disposing) {
+          setState(() {});
+          _recordDebug('quick_route_closed source=$closeSource');
+        }
+      },
+    );
+    _panelRoute = route;
+    setState(() {});
+    _recordDebug(
+      'quick_route_push source=$source reduceMotion=$reduceMotion actions=${actions.length}',
+    );
+    unawaited(
+      navigator.push<void>(route).catchError((Object error, StackTrace stackTrace) {
+        _recordDebug(
+          'quick_route_failure source=$source error=$error\nStackTrace:\n$stackTrace',
+        );
+        if (_panelRoute == route) {
+          _panelRoute = null;
+          if (mounted) setState(() {});
+        }
+      }),
+    );
+  }
+
+  Future<void> _closeMenu({
+    required String source,
+    bool haptic = false,
+  }) async {
+    final route = _panelRoute;
+    if (route == null || !mounted) return;
+    _searchFocus.unfocus();
+    if (haptic) {
+      HapticFeedback.lightImpact();
+    }
+    _recordDebug(
+      'menu_close source=$source navigation=popup_route reduceMotion=${route.reduceMotion} routeCurrent=${route.isCurrent}',
+    );
+    final requested = route.requestClose(source);
+    if (!requested) {
+      _recordDebug(
+        'menu_close_deferred source=$source routeCurrent=${route.isCurrent}',
+      );
+      return;
+    }
+    await route.dismissed;
+    if (mounted) {
+      _recordDebug('menu_closed source=$source navigation=popup_route');
+    }
+  }
+
+  Future<void> _toggleMenu() async {
+    if (_expanded) {
+      await _closeMenu(source: 'handle', haptic: true);
+    } else {
+      await _openMenu(source: 'handle', haptic: true);
+    }
   }
 
   Future<void> _handleActionTap(_DockAction action) async {
     HapticFeedback.selectionClick();
-    await action.onTap();
+    _recordDebug('action_start id=${action.id}');
+    try {
+      await action.onTap();
+      _recordDebug('action_complete id=${action.id}');
+    } catch (error, stackTrace) {
+      _recordDebug(
+        'action_failure id=${action.id} error=$error\n'
+        'StackTrace:\n$stackTrace',
+      );
+      rethrow;
+    }
   }
 
   List<_DockAction> _buildActions(
     BuildContext actionContext,
     CommonUiTokens tokens,
   ) {
-    Future<void> closeMenu() async {
-      if (!_expanded) return;
-      _searchFocus.unfocus();
-      final reduceMotion =
-          MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-      if (reduceMotion) {
-        _ctrl.value = 0;
-      } else {
-        await _ctrl.reverse();
-      }
+    Future<void> closeMenu() {
+      return _closeMenu(source: 'action');
     }
 
     Future<T?> openCommonSheet<T>(
@@ -506,19 +777,8 @@ class _HubBubbleState extends State<_HubBubble>
 
     return <_DockAction>[
       _DockAction(
-        id: 'headquarter_chat',
-        icon: Icons.forum_rounded,
-        label: '본사 채팅',
-        description: '본사 전용 텍스트 채팅',
-        color: tokens.accentContainer,
-        foreground: tokens.onAccentContainer,
-        onTap: () async {
-          await closeMenu();
-          await HeadHubActions.openHeadquarterChat(actionContext);
-        },
-      ),
-      _DockAction(
         id: 'memo',
+        category: _QuickActionCategory.work,
         icon: Icons.sticky_note_2_rounded,
         label: '메모',
         description: '플로팅 버블에서 기록을 관리합니다.',
@@ -535,16 +795,80 @@ class _HubBubbleState extends State<_HubBubble>
         },
       ),
       _DockAction(
-        id: 'company_calendar',
-        icon: Icons.calendar_month_rounded,
-        label: '본사 달력',
-        description: '본사 직원 간 일정을 공유합니다.',
-        color: tokens.successContainer,
-        foreground: tokens.onSuccessContainer,
+        id: 'third_party_use',
+        category: _QuickActionCategory.work,
+        icon: Icons.forum_rounded,
+        label: '서드 파티 사용',
+        description: '저장된 Discord 채널을 바로 엽니다.',
+        color: tokens.surfaceSelected,
+        foreground: tokens.textPrimary,
+        onTap: () async {
+          await closeMenu();
+          final channelUrl = await loadDiscordChannelUrl();
+          final valid = isDiscordChannelUrl(channelUrl);
+          _recordDebug(
+            'third_party_use_request channelPresent=${channelUrl.isNotEmpty} channelLength=${channelUrl.length} channelValid=$valid',
+          );
+          if (!valid) {
+            final feedbackContext = HeadHubActions._bestContext();
+            if (feedbackContext != null && feedbackContext.mounted) {
+              showFailedSnackbar(
+                feedbackContext,
+                '저장된 디스코드 채널 링크가 없습니다. 지원의 서드파티 연결 지원에서 설정해 주세요.',
+                useCommonUi: true,
+              );
+            }
+            _recordDebug('third_party_use_blocked reason=missing_or_invalid');
+            return;
+          }
+          final appUrl = discordChannelDeepLink(channelUrl);
+          var opened = false;
+          var destination = 'https_channel';
+          if (appUrl != null) {
+            final appUri = Uri.tryParse(appUrl);
+            if (appUri != null) {
+              try {
+                opened = await launchUrl(
+                  appUri,
+                  mode: LaunchMode.externalApplication,
+                );
+                _recordDebug(
+                  'third_party_use_app_launch opened=$opened',
+                );
+              } catch (error, stackTrace) {
+                _recordDebug(
+                  'third_party_use_app_launch_failure error=$error\nStackTrace:\n$stackTrace',
+                );
+              }
+            }
+            if (opened) {
+              destination = 'discord_app_channel';
+            }
+          }
+          if (!opened) {
+            opened = await HeadHubActions._openExternalPage(
+              url: channelUrl,
+              failureMessage: '디스코드 채널을 열 수 없습니다.',
+              context: HeadHubActions._bestContext(),
+            );
+          }
+          _recordDebug(
+            'third_party_use_result opened=$opened destination=$destination',
+          );
+        },
+      ),
+      _DockAction(
+        id: 'field',
+        category: _QuickActionCategory.operations,
+        icon: Icons.map_rounded,
+        label: '근무지 현황',
+        description: '사업부별 지역과 근무 인원을 확인합니다.',
+        color: tokens.accentContainer,
+        foreground: tokens.onAccentContainer,
         onTap: () async {
           await closeMenu();
           await openCommonSheet<dynamic>(
-            (sheetContext) => CompanyCalendarPage.showAsBottomSheet(
+            (sheetContext) => mgmt.Field.showAsBottomSheet(
               sheetContext,
               useCommonUi: true,
             ),
@@ -553,6 +877,7 @@ class _HubBubbleState extends State<_HubBubble>
       ),
       _DockAction(
         id: 'attendance',
+        category: _QuickActionCategory.operations,
         icon: Icons.how_to_reg_rounded,
         label: '출·퇴근',
         description: '직원별 출퇴근 기록을 관리합니다.',
@@ -570,6 +895,7 @@ class _HubBubbleState extends State<_HubBubble>
       ),
       _DockAction(
         id: 'break',
+        category: _QuickActionCategory.operations,
         icon: Icons.free_breakfast_rounded,
         label: '휴게 관리',
         description: '직원별 휴게시간을 관리합니다.',
@@ -586,52 +912,8 @@ class _HubBubbleState extends State<_HubBubble>
         },
       ),
       _DockAction(
-        id: 'field',
-        icon: Icons.map_rounded,
-        label: '근무지 현황',
-        description: '사업부별 지역과 근무 인원을 확인합니다.',
-        color: tokens.accentContainer,
-        foreground: tokens.onAccentContainer,
-        onTap: () async {
-          await closeMenu();
-          await openCommonSheet<dynamic>(
-            (sheetContext) => mgmt.Field.showAsBottomSheet(
-              sheetContext,
-              useCommonUi: true,
-            ),
-          );
-        },
-      ),
-      _DockAction(
-        id: 'community',
-        icon: Icons.groups_rounded,
-        label: 'Community',
-        description: '커뮤니티 화면을 엽니다.',
-        color: tokens.infoContainer,
-        foreground: tokens.onInfoContainer,
-        onTap: () async {
-          await closeMenu();
-          await HeadHubActions.closeAnySheet();
-          await HeadHubActions.navigatorKey.currentState
-              ?.pushNamed(AppRoutes.communityStub);
-        },
-      ),
-      _DockAction(
-        id: 'faq',
-        icon: Icons.help_center_rounded,
-        label: 'FAQ',
-        description: '자주 묻는 질문을 확인합니다.',
-        color: tokens.surfaceSelected,
-        foreground: tokens.textPrimary,
-        onTap: () async {
-          await closeMenu();
-          await HeadHubActions.closeAnySheet();
-          await HeadHubActions.navigatorKey.currentState
-              ?.pushNamed(AppRoutes.faq);
-        },
-      ),
-      _DockAction(
         id: 'statistics',
+        category: _QuickActionCategory.operations,
         icon: Icons.stacked_line_chart_rounded,
         label: '통계 비교',
         description: '입·출차와 정산 추이를 비교합니다.',
@@ -648,52 +930,93 @@ class _HubBubbleState extends State<_HubBubble>
         },
       ),
       _DockAction(
-        id: 'roadmap',
-        icon: Icons.edit_note_rounded,
-        label: '향후 로드맵',
-        description: '출시 이후 계획을 확인합니다.',
-        color: tokens.warningContainer,
-        foreground: tokens.onWarningContainer,
+        id: 'third_party_support',
+        category: _QuickActionCategory.support,
+        icon: Icons.extension_rounded,
+        label: '서드파티 연결 지원',
+        description: 'Discord 사내 채널 연결을 설정합니다.',
+        color: tokens.accentContainer,
+        foreground: tokens.onAccentContainer,
         onTap: () async {
           await closeMenu();
-          await openCommonSheet<dynamic>(
-            (sheetContext) => showCommonOverlayBottomSheet<dynamic>(
+          final completed = await openCommonSheet<bool>(
+            (sheetContext) => showModalBottomSheet<bool>(
               context: sheetContext,
               isScrollControlled: true,
-              useSafeArea: true,
-              builder: (_) => const RoadmapBottomSheet(),
+              backgroundColor: Colors.transparent,
+              builder: (_) => DiscordBottomSheet(rootContext: sheetContext),
             ),
+          );
+          _recordDebug(
+            'third_party_support_result completed=${completed == true}',
           );
         },
       ),
       _DockAction(
-        id: 'tutorials',
-        icon: Icons.menu_book_rounded,
-        label: '튜토리얼',
-        description: 'PDF 가이드를 선택합니다.',
-        color: tokens.successContainer,
-        foreground: tokens.onSuccessContainer,
+        id: 'faq',
+        category: _QuickActionCategory.support,
+        icon: Icons.help_center_rounded,
+        label: 'FAQ',
+        description: '자주 묻는 질문을 확인합니다.',
+        color: tokens.surfaceSelected,
+        foreground: tokens.textPrimary,
         onTap: () async {
           await closeMenu();
-          final selected = await openCommonSheet<TutorialItem>(
-            (sheetContext) => HeadTutorials.showPickerBottomSheet(
-              sheetContext,
-              useCommonUi: true,
-            ),
-          );
-          final viewerContext = HeadHubActions.currentContext();
-          if (selected != null && viewerContext != null) {
-            await TutorialPdfViewer.open(
-              viewerContext,
-              selected,
-              useCommonUi: true,
-            );
-          }
+          await HeadHubActions.closeAnySheet();
+          await HeadHubActions.navigatorKey.currentState
+              ?.pushNamed(AppRoutes.faq);
+        },
+      ),
+      _DockAction(
+        id: 'terms',
+        category: _QuickActionCategory.support,
+        icon: Icons.description_rounded,
+        label: '이용약관',
+        description: '서비스 이용약관을 확인합니다.',
+        color: tokens.surfaceSelected,
+        foreground: tokens.textPrimary,
+        onTap: () async {
+          await closeMenu();
+          await HeadHubActions.closeAnySheet();
+          final opened =
+              await HeadHubActions.openTermsOfService(actionContext);
+          _recordDebug('external_result id=terms opened=$opened');
+        },
+      ),
+      _DockAction(
+        id: 'privacy',
+        category: _QuickActionCategory.support,
+        icon: Icons.privacy_tip_rounded,
+        label: '개인정보보호처리방침',
+        description: '개인정보 처리 기준을 확인합니다.',
+        color: tokens.infoContainer,
+        foreground: tokens.onInfoContainer,
+        onTap: () async {
+          await closeMenu();
+          await HeadHubActions.closeAnySheet();
+          final opened = await HeadHubActions.openPrivacyPolicy(actionContext);
+          _recordDebug('external_result id=privacy opened=$opened');
+        },
+      ),
+      _DockAction(
+        id: 'contact',
+        category: _QuickActionCategory.support,
+        icon: Icons.contact_support_rounded,
+        label: '문의하기',
+        description: '이슈와 오류를 문의합니다.',
+        color: tokens.dangerContainer,
+        foreground: tokens.onDangerContainer,
+        onTap: () async {
+          await closeMenu();
+          await HeadHubActions.closeAnySheet();
+          final opened = await HeadHubActions.openContactForm(actionContext);
+          _recordDebug('external_result id=contact opened=$opened');
         },
       ),
       if (_developerMode)
         _DockAction(
           id: 'notensystem',
+          category: _QuickActionCategory.developer,
           icon: Icons.auto_stories_rounded,
           label: 'notensystem',
           description: '소설 설계 및 집필 스튜디오',
@@ -706,19 +1029,6 @@ class _HubBubbleState extends State<_HubBubble>
                 ?.pushNamed(AppRoutes.noteSystem);
           },
         ),
-      _DockAction(
-        id: 'contact',
-        icon: Icons.contact_support_rounded,
-        label: '문의하기',
-        description: '이슈와 오류를 문의합니다.',
-        color: tokens.dangerContainer,
-        foreground: tokens.onDangerContainer,
-        onTap: () async {
-          await closeMenu();
-          await HeadHubActions.closeAnySheet();
-          await HeadHubActions.openContactForm(actionContext);
-        },
-      ),
     ];
   }
 
@@ -728,8 +1038,6 @@ class _HubBubbleState extends State<_HubBubble>
     final screen = media?.size ?? Size.zero;
     final bottomInset = media?.padding.bottom ?? 0;
     final keyboardInset = media?.viewInsets.bottom ?? 0;
-    final tokens = CommonUiTheme.of(context);
-    final reduceMotion = media?.disableAnimations ?? false;
 
     if (!_clampedOnce && screen != Size.zero) {
       _clampedOnce = true;
@@ -739,98 +1047,49 @@ class _HubBubbleState extends State<_HubBubble>
     final dockRight = screen == Size.zero
         ? true
         : (_pos.dx + _handleTouchWidth / 2) >= screen.width / 2;
-
-    final actions = _buildActions(context, tokens);
-
-    final maxDockWidth = (screen.width * 0.92).clamp(240.0, double.infinity);
-    final dockWidth = math.min(360.0, maxDockWidth);
-
-    final dockBorderRadius = dockRight
-        ? const BorderRadius.only(
-            topLeft: Radius.circular(_dockRadius),
-            bottomLeft: Radius.circular(_dockRadius),
-          )
-        : const BorderRadius.only(
-            topRight: Radius.circular(_dockRadius),
-            bottomRight: Radius.circular(_dockRadius),
-          );
-
-    final slideDistance = dockWidth + _handleTouchWidth + 24;
-    final slideX = dockRight
-        ? slideDistance * (1 - _t.value)
-        : -slideDistance * (1 - _t.value);
-
     final handleX = screen == Size.zero
         ? _pos.dx
         : (dockRight ? (screen.width - _handleTouchWidth) : 0.0);
 
     return Stack(
       children: [
-        if (_expanded)
-          Positioned.fill(
-            child: GestureDetector(
-              onTap: _toggleMenu,
-              behavior: HitTestBehavior.opaque,
-              child: AnimatedOpacity(
-                opacity: 0.22 * _t.value,
-                duration:
-                    reduceMotion ? Duration.zero : CommonUiMotion.instant,
-                child: ColoredBox(color: tokens.scrim),
-              ),
-            ),
-          ),
-        Positioned(
-          top: 0,
-          bottom: 0,
-          left: dockRight ? null : 0,
-          right: dockRight ? 0 : null,
-          child: IgnorePointer(
-            ignoring: !_expanded,
-            child: Transform.translate(
-              offset: Offset(slideX, 0),
-              child: Opacity(
-                opacity: _t.value,
-                child: _GlassDock(
-                  width: dockWidth,
-                  height: screen.height,
-                  borderRadius: dockBorderRadius,
-                  child: SafeArea(
-                    child: Padding(
-                      padding: EdgeInsets.only(bottom: keyboardInset),
-                      child: _CommandPaletteDock(
-                        actions: actions,
-                        controller: _searchCtrl,
-                        focusNode: _searchFocus,
-                        onSelect: _handleActionTap,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
         Positioned(
           left: handleX,
           top: _pos.dy,
           child: GestureDetector(
             behavior: HitTestBehavior.translucent,
             onTap: _toggleMenu,
-            onPanUpdate: (d) {
-              if (screen == Size.zero) return;
-              setState(() {
-                final next = Offset(_pos.dx + d.delta.dx, _pos.dy + d.delta.dy);
-                _pos =
-                    _clampToScreen(next, screen, bottomInset + keyboardInset);
-              });
-            },
-            onPanEnd: (_) async {
-              if (screen == Size.zero) return;
-              setState(() {
-                _pos = _clampToScreen(_pos, screen, bottomInset + keyboardInset);
-              });
-              await widget.onPosSave(_pos);
-            },
+            onLongPress: _developerMode ? _showDeveloperStatus : null,
+            onPanUpdate: _expanded
+                ? null
+                : (d) {
+                    if (screen == Size.zero) return;
+                    setState(() {
+                      final next =
+                          Offset(_pos.dx + d.delta.dx, _pos.dy + d.delta.dy);
+                      _pos = _clampToScreen(
+                        next,
+                        screen,
+                        bottomInset + keyboardInset,
+                      );
+                    });
+                  },
+            onPanEnd: _expanded
+                ? null
+                : (_) async {
+                    if (screen == Size.zero) return;
+                    setState(() {
+                      _pos = _clampToScreen(
+                        _pos,
+                        screen,
+                        bottomInset + keyboardInset,
+                      );
+                    });
+                    await widget.onPosSave(_pos);
+                    _recordDebug(
+                      'position_saved x=${_pos.dx.toStringAsFixed(1)} y=${_pos.dy.toStringAsFixed(1)} source=handle_overlay',
+                    );
+                  },
             child: SizedBox(
               width: _handleTouchWidth,
               height: _handleHeight,
@@ -842,7 +1101,7 @@ class _HubBubbleState extends State<_HubBubble>
                   height: _handleHeight,
                   dockRight: dockRight,
                   expanded: _expanded,
-                  progress: _t.value,
+                  progress: _expanded ? 1 : 0,
                 ),
               ),
             ),
@@ -892,6 +1151,341 @@ class _HubBubbleState extends State<_HubBubble>
   }
 }
 
+class _HeadQuickActionsRoute extends PopupRoute<void> {
+  _HeadQuickActionsRoute({
+    required this.reduceMotion,
+    required this.builder,
+    required this.onDidPop,
+    required this.onDisposed,
+  });
+
+  final bool reduceMotion;
+  final Widget Function(BuildContext context, Animation<double> animation)
+      builder;
+  final ValueChanged<String> onDidPop;
+  final ValueChanged<String> onDisposed;
+  final Completer<void> _dismissedCompleter = Completer<void>();
+
+  String? _closeSource;
+  String? _resolvedCloseSource;
+  bool _didPop = false;
+
+  Future<void> get dismissed => _dismissedCompleter.future;
+
+  @override
+  bool get barrierDismissible => false;
+
+  @override
+  Color? get barrierColor => null;
+
+  @override
+  String? get barrierLabel => '빠른 실행';
+
+  @override
+  Duration get transitionDuration =>
+      reduceMotion ? Duration.zero : const Duration(milliseconds: 240);
+
+  @override
+  Duration get reverseTransitionDuration =>
+      reduceMotion ? Duration.zero : const Duration(milliseconds: 240);
+
+  void markCloseSource(String source) {
+    if (_didPop) return;
+    _closeSource = source;
+  }
+
+  bool requestClose(String source) {
+    if (_didPop || !isCurrent) return false;
+    _closeSource = source;
+    navigator?.pop();
+    return true;
+  }
+
+  @override
+  bool didPop(void result) {
+    final popped = super.didPop(result);
+    if (!popped) return false;
+    _didPop = true;
+    _resolvedCloseSource = _closeSource ?? 'system_back';
+    onDidPop(_resolvedCloseSource!);
+    return true;
+  }
+
+  @override
+  Widget buildPage(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+  ) {
+    final panelAnimation = CurvedAnimation(
+      parent: animation,
+      curve: const SpringCurve(),
+      reverseCurve: Curves.easeInCubic,
+    );
+    return CommonUiScope(
+      child: Material(
+        type: MaterialType.transparency,
+        child: builder(context, panelAnimation),
+      ),
+    );
+  }
+
+  @override
+  Widget buildTransitions(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    return child;
+  }
+
+  @override
+  void dispose() {
+    final source = _resolvedCloseSource ?? _closeSource ?? 'route_dispose';
+    if (!_dismissedCompleter.isCompleted) {
+      _dismissedCompleter.complete();
+    }
+    onDisposed(source);
+    super.dispose();
+  }
+}
+
+class _HeadQuickActionsRoutePanel extends StatefulWidget {
+  const _HeadQuickActionsRoutePanel({
+    required this.animation,
+    required this.initialPos,
+    required this.actions,
+    required this.controller,
+    required this.focusNode,
+    required this.developerMode,
+    required this.clampPosition,
+    required this.onPositionChanged,
+    required this.onPositionSave,
+    required this.onSelect,
+    required this.onCloseRequest,
+    required this.onDeveloperStatus,
+  });
+
+  final Animation<double> animation;
+  final Offset initialPos;
+  final List<_DockAction> actions;
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final bool developerMode;
+  final Offset Function(Offset raw, Size screen, double bottomInset)
+      clampPosition;
+  final ValueChanged<Offset> onPositionChanged;
+  final Future<void> Function(Offset position) onPositionSave;
+  final Future<void> Function(_DockAction action) onSelect;
+  final Future<void> Function(String source, bool haptic) onCloseRequest;
+  final Future<void> Function() onDeveloperStatus;
+
+  @override
+  State<_HeadQuickActionsRoutePanel> createState() =>
+      _HeadQuickActionsRoutePanelState();
+}
+
+class _HeadQuickActionsRoutePanelState
+    extends State<_HeadQuickActionsRoutePanel> {
+  static const double _handleTouchWidth = 44;
+  static const double _handleVisualWidth = 18;
+  static const double _handleHeight = 56;
+  static const double _dockRadius = 18;
+
+  late Offset _pos;
+
+  @override
+  void initState() {
+    super.initState();
+    _pos = widget.initialPos;
+    widget.controller.addListener(_handleSearchChanged);
+  }
+
+  void _handleSearchChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_handleSearchChanged);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: widget.animation,
+      builder: (context, _) {
+        final media = MediaQuery.maybeOf(context);
+        final screen = media?.size ?? Size.zero;
+        final bottomInset = media?.padding.bottom ?? 0;
+        final keyboardInset = media?.viewInsets.bottom ?? 0;
+        final tokens = CommonUiTheme.of(context);
+        final progress = widget.animation.value.clamp(0.0, 1.0).toDouble();
+
+        if (screen != Size.zero) {
+          final clamped = widget.clampPosition(
+            _pos,
+            screen,
+            bottomInset + keyboardInset,
+          );
+          if (clamped != _pos) {
+            _pos = clamped;
+            widget.onPositionChanged(_pos);
+          }
+        }
+
+        final dockRight = screen == Size.zero
+            ? true
+            : (_pos.dx + _handleTouchWidth / 2) >= screen.width / 2;
+        final maxDockWidth =
+            (screen.width * 0.92).clamp(240.0, double.infinity);
+        final dockWidth = math.min(360.0, maxDockWidth);
+        final dockBorderRadius = dockRight
+            ? const BorderRadius.only(
+                topLeft: Radius.circular(_dockRadius),
+                bottomLeft: Radius.circular(_dockRadius),
+              )
+            : const BorderRadius.only(
+                topRight: Radius.circular(_dockRadius),
+                bottomRight: Radius.circular(_dockRadius),
+              );
+        final slideDistance = dockWidth + _handleTouchWidth + 24;
+        final slideX = dockRight
+            ? slideDistance * (1 - progress)
+            : -slideDistance * (1 - progress);
+        final handleX = screen == Size.zero
+            ? _pos.dx
+            : (dockRight ? screen.width - _handleTouchWidth : 0.0);
+
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: () => widget.onCloseRequest('scrim', true),
+                behavior: HitTestBehavior.opaque,
+                child: ColoredBox(
+                  color: tokens.scrim.withOpacity(0.22 * progress),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 0,
+              bottom: 0,
+              left: dockRight ? null : 0,
+              right: dockRight ? 0 : null,
+              child: Transform.translate(
+                offset: Offset(slideX, 0),
+                child: Opacity(
+                  opacity: progress,
+                  child: _GlassDock(
+                    width: dockWidth,
+                    height: screen.height,
+                    borderRadius: dockBorderRadius,
+                    child: SafeArea(
+                      child: Padding(
+                        padding: EdgeInsets.only(bottom: keyboardInset),
+                        child: _CommandPaletteDock(
+                          actions: widget.actions,
+                          controller: widget.controller,
+                          focusNode: widget.focusNode,
+                          onSelect: widget.onSelect,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              left: handleX,
+              top: _pos.dy,
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTap: () => widget.onCloseRequest('handle', true),
+                onLongPress:
+                    widget.developerMode ? widget.onDeveloperStatus : null,
+                onPanUpdate: (details) {
+                  if (screen == Size.zero) return;
+                  setState(() {
+                    final next = Offset(
+                      _pos.dx + details.delta.dx,
+                      _pos.dy + details.delta.dy,
+                    );
+                    _pos = widget.clampPosition(
+                      next,
+                      screen,
+                      bottomInset + keyboardInset,
+                    );
+                    widget.onPositionChanged(_pos);
+                  });
+                },
+                onPanEnd: (_) async {
+                  if (screen == Size.zero) return;
+                  setState(() {
+                    _pos = widget.clampPosition(
+                      _pos,
+                      screen,
+                      bottomInset + keyboardInset,
+                    );
+                    widget.onPositionChanged(_pos);
+                  });
+                  await widget.onPositionSave(_pos);
+                },
+                child: SizedBox(
+                  width: _handleTouchWidth,
+                  height: _handleHeight,
+                  child: Align(
+                    alignment: dockRight
+                        ? Alignment.centerRight
+                        : Alignment.centerLeft,
+                    child: _EdgeHandle(
+                      width: _handleVisualWidth,
+                      height: _handleHeight,
+                      dockRight: dockRight,
+                      expanded: true,
+                      progress: progress,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+enum _QuickActionCategory {
+  work,
+  operations,
+  support,
+  developer,
+}
+
+extension _QuickActionCategoryUi on _QuickActionCategory {
+  static const List<_QuickActionCategory> mainCategories = <_QuickActionCategory>[
+    _QuickActionCategory.work,
+    _QuickActionCategory.operations,
+    _QuickActionCategory.support,
+  ];
+
+  String get label {
+    switch (this) {
+      case _QuickActionCategory.work:
+        return '업무';
+      case _QuickActionCategory.operations:
+        return '운영';
+      case _QuickActionCategory.support:
+        return '지원';
+      case _QuickActionCategory.developer:
+        return '개발자';
+    }
+  }
+}
+
 class _CommandPaletteDock extends StatelessWidget {
   final List<_DockAction> actions;
   final TextEditingController controller;
@@ -915,13 +1509,14 @@ class _CommandPaletteDock extends StatelessWidget {
 
     final filtered = query.isEmpty
         ? actions
-            .where((a) => !a.hiddenUntilExactQuery)
+            .where((action) => !action.hiddenUntilExactQuery)
             .toList(growable: false)
-        : actions.where((a) {
-            if (a.hiddenUntilExactQuery) {
-              return query == _normalize(a.id) || query == _normalize(a.label);
+        : actions.where((action) {
+            if (action.hiddenUntilExactQuery) {
+              return query == _normalize(action.id) ||
+                  query == _normalize(action.label);
             }
-            return _normalize(a.searchText).contains(query);
+            return _normalize(action.searchText).contains(query);
           }).toList(growable: false);
 
     final titleText = query.isEmpty ? '빠른 실행' : '검색 결과';
@@ -947,7 +1542,7 @@ class _CommandPaletteDock extends StatelessWidget {
             }
           },
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         Expanded(
           child: _PaletteList(
             query: query,
@@ -1005,8 +1600,8 @@ class _SearchField extends StatelessWidget {
           ),
           ValueListenableBuilder<TextEditingValue>(
             valueListenable: controller,
-            builder: (context, v, _) {
-              final hasText = v.text.trim().isNotEmpty;
+            builder: (context, value, _) {
+              final hasText = value.text.trim().isNotEmpty;
               if (!hasText) return const SizedBox.shrink();
               return IconButton(
                 onPressed: () => controller.clear(),
@@ -1046,17 +1641,159 @@ class _PaletteList extends StatelessWidget {
       );
     }
 
-    return ListView.separated(
-      padding: EdgeInsets.zero,
+    if (query.isNotEmpty) {
+      return ListView.separated(
+        padding: EdgeInsets.zero,
+        physics: const ClampingScrollPhysics(),
+        itemCount: items.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 10),
+        itemBuilder: (context, index) {
+          return _StaggeredReveal(
+            key: ValueKey<String>('search_${items[index].id}'),
+            order: index,
+            child: _PaletteTile(
+              action: items[index],
+              onSelect: onSelect,
+            ),
+          );
+        },
+      );
+    }
+
+    final children = <Widget>[];
+    var revealOrder = 0;
+
+    for (final category in _QuickActionCategoryUi.mainCategories) {
+      final sectionItems = items
+          .where((action) => action.category == category)
+          .toList(growable: false);
+      if (sectionItems.isEmpty) continue;
+
+      if (children.isNotEmpty) {
+        children.add(const SizedBox(height: 14));
+      }
+
+      children.add(
+        _StaggeredReveal(
+          key: ValueKey<String>('header_${category.name}'),
+          order: revealOrder++,
+          offsetY: 6,
+          child: _PaletteSectionHeader(label: category.label),
+        ),
+      );
+      children.add(const SizedBox(height: 8));
+
+      for (var index = 0; index < sectionItems.length; index++) {
+        final action = sectionItems[index];
+        children.add(
+          Padding(
+            padding: const EdgeInsets.only(left: 10),
+            child: _StaggeredReveal(
+              key: ValueKey<String>('section_${category.name}_${action.id}'),
+              order: revealOrder++,
+              child: _PaletteTile(
+                action: action,
+                onSelect: onSelect,
+              ),
+            ),
+          ),
+        );
+        if (index != sectionItems.length - 1) {
+          children.add(const SizedBox(height: 10));
+        }
+      }
+    }
+
+    return ListView(
+      padding: const EdgeInsets.only(bottom: 4),
       physics: const ClampingScrollPhysics(),
-      itemCount: items.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
-      itemBuilder: (context, index) {
-        return _PaletteTile(
-          action: items[index],
-          onSelect: onSelect,
+      children: children,
+    );
+  }
+}
+
+class _PaletteSectionHeader extends StatelessWidget {
+  const _PaletteSectionHeader({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    final text = Theme.of(context).textTheme;
+
+    return Semantics(
+      header: true,
+      label: label,
+      child: Padding(
+        padding: const EdgeInsets.only(left: 2, right: 4),
+        child: Row(
+          children: [
+            Container(
+              width: 3,
+              height: 16,
+              decoration: BoxDecoration(
+                color: tokens.accent,
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: text.labelLarge?.copyWith(
+                color: tokens.textSecondary,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0.35,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StaggeredReveal extends StatelessWidget {
+  const _StaggeredReveal({
+    super.key,
+    required this.order,
+    required this.child,
+    this.offsetY = 9,
+  });
+
+  final int order;
+  final Widget child;
+  final double offsetY;
+
+  @override
+  Widget build(BuildContext context) {
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (reduceMotion) return child;
+
+    final delayMs = math.min(order, 10) * 22;
+    const motionMs = 190;
+    final totalMs = delayMs + motionMs;
+    final start = delayMs / totalMs;
+
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: 1),
+      duration: Duration(milliseconds: totalMs),
+      builder: (context, value, animatedChild) {
+        final normalized = value <= start
+            ? 0.0
+            : ((value - start) / (1 - start)).clamp(0.0, 1.0).toDouble();
+        final motion = Curves.easeOutCubic.transform(normalized);
+        return Opacity(
+          opacity: motion,
+          child: Transform.translate(
+            offset: Offset(0, offsetY * (1 - motion)),
+            child: animatedChild,
+          ),
         );
       },
+      child: child,
     );
   }
 }
@@ -1152,6 +1889,7 @@ class _PaletteTile extends StatelessWidget {
 
 class _DockAction {
   final String id;
+  final _QuickActionCategory category;
   final IconData icon;
   final String label;
   final String? description;
@@ -1162,6 +1900,7 @@ class _DockAction {
 
   _DockAction({
     required this.id,
+    required this.category,
     required this.icon,
     required this.label,
     required this.description,
@@ -1172,7 +1911,7 @@ class _DockAction {
   });
 
   String get searchText =>
-      [id, label, description].whereType<String>().join(' ');
+      [id, category.label, label, description].whereType<String>().join(' ');
 }
 
 class _EdgeHandle extends StatelessWidget {

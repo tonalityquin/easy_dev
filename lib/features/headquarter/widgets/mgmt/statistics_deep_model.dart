@@ -892,6 +892,16 @@ class StatisticsSectorIntegrity {
         'sector assigned=$assignedVehicleCount unassigned=$unassignedVehicleCount invalid=$invalidVehicleCount unavailable=$unavailableVehicleCount conflicts=$sectorConflictCount identityConflicts=$sectorIdentityConflictCount',
         'time missingInput=$missingInputTimeCount missingOutput=$missingOutputTimeCount estimatedOutput=$estimatedOutputTimeCount',
       ];
+
+  List<String> get reportLines => <String>[
+        '차량 합계: $groupedVehicleCount / $analyzableVehicleCount대 (${vehicleCountMatched ? '일치' : '불일치'})',
+        '입차 합계: $groupedInputCount / $inputTimestampVehicleCount대 (${inputCountMatched ? '일치' : '불일치'})',
+        '잠금 금액 합계: ₩$groupedLockedFee / ₩$totalLockedFee (${lockedFeeMatched ? '일치' : '불일치'})',
+        'Sector 상태: 정상 $assignedVehicleCount대 · 미지정 $unassignedVehicleCount대 · 확인 필요 $invalidVehicleCount대 · 원천 없음 $unavailableVehicleCount대',
+        '시간 상태: 입차 시각 없음 $missingInputTimeCount대 · 출차 시각 없음 $missingOutputTimeCount대 · 추정 출차 $estimatedOutputTimeCount대',
+        if (sectorConflictCount > 0 || sectorIdentityConflictCount > 0)
+          'Sector 충돌: 값 충돌 $sectorConflictCount대 · 식별자 충돌 $sectorIdentityConflictCount대',
+      ];
 }
 
 class _MutableStatisticsSectorGroup {

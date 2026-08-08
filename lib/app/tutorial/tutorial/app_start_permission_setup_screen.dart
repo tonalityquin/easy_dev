@@ -1,11 +1,9 @@
-import 'dart:math' as math;
-
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-import '../../../app/config/email_config.dart';
 import '../../../app/di/routes.dart';
 import '../../../app/init/app_start_flow_prefs.dart';
 import '../../../app/utils/snackbar_helper.dart';
@@ -13,6 +11,7 @@ import '../../../app/utils/status_dialog.dart';
 import '../../../design_system/common_ui/common_ui_components.dart';
 import '../../../design_system/common_ui/common_ui_overlays.dart';
 import '../../../design_system/common_ui/common_ui_theme.dart';
+import '../../../features/selector/application/dev_auth.dart';
 
 class AppStartPermissionSetupScreen extends StatefulWidget {
   const AppStartPermissionSetupScreen({super.key});
@@ -30,7 +29,6 @@ enum _PermissionStepKind {
   camera,
   overlay,
   microphone,
-  mailRecipient,
 }
 
 enum _PermissionStatusTone {
@@ -43,7 +41,7 @@ enum _PermissionStatusTone {
 class _AppStartPermissionSetupScreenState
     extends State<AppStartPermissionSetupScreen> with WidgetsBindingObserver {
   final PageController _pageController = PageController();
-  final TextEditingController _mailToCtrl = TextEditingController();
+  final List<String> _debugLines = <String>[];
 
   int _index = 0;
   bool _busy = false;
@@ -54,7 +52,6 @@ class _AppStartPermissionSetupScreenState
   PermissionStatus? _cameraStatus;
   PermissionStatus? _microphoneStatus;
   bool? _overlayGranted;
-  String _savedMailTo = '';
 
   final List<_PermissionStepKind> _steps = const [
     _PermissionStepKind.welcome,
@@ -64,7 +61,6 @@ class _AppStartPermissionSetupScreenState
     _PermissionStepKind.camera,
     _PermissionStepKind.overlay,
     _PermissionStepKind.microphone,
-    _PermissionStepKind.mailRecipient,
   ];
 
   bool get _reduceMotion =>
@@ -74,25 +70,83 @@ class _AppStartPermissionSetupScreenState
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _mailToCtrl.addListener(_handleMailToChanged);
-    _loadSavedMailRecipient();
+    _printDebug('screen_init');
     _refreshForStep(_steps.first);
   }
 
-  void _handleMailToChanged() {
-    if (!mounted) return;
-    setState(() {});
+  String _stepLabel(_PermissionStepKind kind) {
+    return switch (kind) {
+      _PermissionStepKind.welcome => 'welcome',
+      _PermissionStepKind.notifications => 'notifications',
+      _PermissionStepKind.location => 'location',
+      _PermissionStepKind.battery => 'battery',
+      _PermissionStepKind.camera => 'camera',
+      _PermissionStepKind.overlay => 'overlay',
+      _PermissionStepKind.microphone => 'microphone',
+    };
   }
 
-  Future<void> _loadSavedMailRecipient() async {
-    final cfg = await EmailConfig.load();
-    if (!mounted) return;
-    final value = cfg.to.trim();
-    _mailToCtrl.value = TextEditingValue(
-      text: value,
-      selection: TextSelection.collapsed(offset: value.length),
+  String _debugMessage(
+    String event, {
+    Map<String, Object?> meta = const <String, Object?>{},
+  }) {
+    final safeIndex = _index < 0
+        ? 0
+        : _index >= _steps.length
+            ? _steps.length - 1
+            : _index;
+    final parts = <String>[
+      '[PERMISSION_SETUP]',
+      'timestamp=${DateTime.now().toIso8601String()}',
+      'event=$event',
+      'step=${_stepLabel(_steps[safeIndex])}',
+      'index=${safeIndex + 1}/${_steps.length}',
+    ];
+    for (final entry in meta.entries) {
+      parts.add('${entry.key}=${entry.value}');
+    }
+    return parts.join(' ');
+  }
+
+  void _printDebug(
+    String event, {
+    Map<String, Object?> meta = const <String, Object?>{},
+  }) {
+    final line = _debugMessage(event, meta: meta);
+    debugPrint(line);
+    _debugLines.add(line);
+    if (_debugLines.length > 120) {
+      _debugLines.removeRange(0, _debugLines.length - 120);
+    }
+  }
+
+  Future<void> _showDeveloperDebugStatus() async {
+    final developerMode = await DevAuth.isDevModeEnabled();
+    if (!developerMode || !mounted || !context.mounted) return;
+
+    _printDebug(
+      'developer_status_open',
+      meta: <String, Object?>{
+        'busy': _busy,
+        'canProceed': _canProceed(_steps[_index]),
+      },
     );
-    setState(() => _savedMailTo = value);
+
+    final code = _debugLines
+        .map((line) => 'debugPrint(${jsonEncode(line)});')
+        .join('\n');
+
+    await HapticFeedback.mediumImpact();
+    if (!mounted || !context.mounted) return;
+    await StatusDialog.showSuccess(
+      context,
+      title: '권한 설정 개발자 상태',
+      description: '현재 권한 설정 흐름의 debugPrint 코드를 복사할 수 있습니다.',
+      copyText: code,
+      copyButtonLabel: 'debugPrint 복사',
+      visibleDuration: const Duration(seconds: 30),
+      useCommonUi: true,
+    );
   }
 
   @override
@@ -109,21 +163,45 @@ class _AppStartPermissionSetupScreenState
         final status = await Permission.notification.status;
         if (!mounted) return;
         setState(() => _notifStatus = status);
+        _printDebug(
+          'status_refresh',
+          meta: <String, Object?>{
+            'status': _statusLabelForPermission(status),
+          },
+        );
         return;
       case _PermissionStepKind.location:
         final status = await Permission.locationWhenInUse.status;
         if (!mounted) return;
         setState(() => _locationStatus = status);
+        _printDebug(
+          'status_refresh',
+          meta: <String, Object?>{
+            'status': _statusLabelForPermission(status),
+          },
+        );
         return;
       case _PermissionStepKind.battery:
         final status = await Permission.ignoreBatteryOptimizations.status;
         if (!mounted) return;
         setState(() => _batteryStatus = status);
+        _printDebug(
+          'status_refresh',
+          meta: <String, Object?>{
+            'status': _statusLabelForPermission(status),
+          },
+        );
         return;
       case _PermissionStepKind.camera:
         final status = await Permission.camera.status;
         if (!mounted) return;
         setState(() => _cameraStatus = status);
+        _printDebug(
+          'status_refresh',
+          meta: <String, Object?>{
+            'status': _statusLabelForPermission(status),
+          },
+        );
         return;
       case _PermissionStepKind.overlay:
         await _refreshOverlayPermissionStatus();
@@ -132,16 +210,12 @@ class _AppStartPermissionSetupScreenState
         final status = await Permission.microphone.status;
         if (!mounted) return;
         setState(() => _microphoneStatus = status);
-        return;
-      case _PermissionStepKind.mailRecipient:
-        final cfg = await EmailConfig.load();
-        if (!mounted) return;
-        final value = cfg.to.trim();
-        _mailToCtrl.value = TextEditingValue(
-          text: value,
-          selection: TextSelection.collapsed(offset: value.length),
+        _printDebug(
+          'status_refresh',
+          meta: <String, Object?>{
+            'status': _statusLabelForPermission(status),
+          },
         );
-        setState(() => _savedMailTo = value);
         return;
     }
   }
@@ -150,6 +224,10 @@ class _AppStartPermissionSetupScreenState
     final granted = await FlutterOverlayWindow.isPermissionGranted();
     if (!mounted) return;
     setState(() => _overlayGranted = granted);
+    _printDebug(
+      'status_refresh',
+      meta: <String, Object?>{'status': granted ? '허용됨' : '미허용'},
+    );
   }
 
   String _statusLabelForPermission(PermissionStatus? status) {
@@ -183,35 +261,6 @@ class _AppStartPermissionSetupScreenState
         : _PermissionStatusTone.warning;
   }
 
-  bool _isValidGmailToList(String csv) {
-    if (!EmailConfig.isValidToList(csv)) return false;
-    final addresses = csv
-        .split(',')
-        .map((value) => value.trim())
-        .where((value) => value.isNotEmpty);
-    for (final address in addresses) {
-      if (!address.toLowerCase().endsWith('@gmail.com')) return false;
-    }
-    return true;
-  }
-
-  String _mailRecipientStatusLabel() {
-    final current = _mailToCtrl.text.trim();
-    if (current.isEmpty && _savedMailTo.isEmpty) return '미입력';
-    if (!_isValidGmailToList(current)) return '지메일만 가능';
-    if (current != _savedMailTo) return '저장 필요';
-    return '저장됨';
-  }
-
-  _PermissionStatusTone _mailRecipientStatusTone() {
-    final current = _mailToCtrl.text.trim();
-    if (current.isEmpty && _savedMailTo.isEmpty) {
-      return _PermissionStatusTone.neutral;
-    }
-    if (!_isValidGmailToList(current)) return _PermissionStatusTone.danger;
-    if (current != _savedMailTo) return _PermissionStatusTone.warning;
-    return _PermissionStatusTone.success;
-  }
 
   bool _canProceed(_PermissionStepKind kind) {
     switch (kind) {
@@ -229,11 +278,6 @@ class _AppStartPermissionSetupScreenState
         return _overlayGranted == true;
       case _PermissionStepKind.microphone:
         return _microphoneStatus?.isGranted == true;
-      case _PermissionStepKind.mailRecipient:
-        final current = _mailToCtrl.text.trim();
-        return _isValidGmailToList(current) &&
-            current.isNotEmpty &&
-            current == _savedMailTo;
     }
   }
 
@@ -286,24 +330,6 @@ class _AppStartPermissionSetupScreenState
     );
   }
 
-  Future<void> _showNeedMailRecipientDialog() async {
-    if (!mounted) return;
-    await showCommonOverlayDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      barrierLabel: '지메일 수신자 입력 안내',
-      builder: (dialogContext) {
-        return _CommonPermissionDialog(
-          icon: Icons.mail_outline_rounded,
-          title: '지메일 수신자 입력 필요',
-          message: '수신자(To)를 지메일 주소로 입력하고 저장해 주세요.',
-          primaryLabel: '확인',
-          onPrimary: () => Navigator.of(dialogContext).pop(),
-        );
-      },
-    );
-  }
-
   Future<void> _openSettingsHint() async {
     await openAppSettings();
     if (!mounted) return;
@@ -328,11 +354,19 @@ class _AppStartPermissionSetupScreenState
 
   Future<void> _requestNotifications() async {
     if (_busy) return;
+    _printDebug(
+      'permission_request_start',
+      meta: const <String, Object?>{'permission': 'notifications'},
+    );
     setState(() => _busy = true);
     try {
       final status = await Permission.notification.request();
       if (!mounted) return;
       setState(() => _notifStatus = status);
+      _printDebug(
+        'permission_request_result',
+        meta: <String, Object?>{'status': _statusLabelForPermission(status)},
+      );
       if (!status.isGranted) await _showNeedPermissionDialog('알림');
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -341,11 +375,19 @@ class _AppStartPermissionSetupScreenState
 
   Future<void> _requestLocation() async {
     if (_busy) return;
+    _printDebug(
+      'permission_request_start',
+      meta: const <String, Object?>{'permission': 'location'},
+    );
     setState(() => _busy = true);
     try {
       final status = await Permission.locationWhenInUse.request();
       if (!mounted) return;
       setState(() => _locationStatus = status);
+      _printDebug(
+        'permission_request_result',
+        meta: <String, Object?>{'status': _statusLabelForPermission(status)},
+      );
       if (!status.isGranted) await _showNeedPermissionDialog('위치');
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -354,11 +396,19 @@ class _AppStartPermissionSetupScreenState
 
   Future<void> _requestBattery() async {
     if (_busy) return;
+    _printDebug(
+      'permission_request_start',
+      meta: const <String, Object?>{'permission': 'battery'},
+    );
     setState(() => _busy = true);
     try {
       final status = await Permission.ignoreBatteryOptimizations.request();
       if (!mounted) return;
       setState(() => _batteryStatus = status);
+      _printDebug(
+        'permission_request_result',
+        meta: <String, Object?>{'status': _statusLabelForPermission(status)},
+      );
       if (!status.isGranted) {
         await _showNeedPermissionDialog('배터리 최적화 제외');
       }
@@ -369,11 +419,19 @@ class _AppStartPermissionSetupScreenState
 
   Future<void> _requestCamera() async {
     if (_busy) return;
+    _printDebug(
+      'permission_request_start',
+      meta: const <String, Object?>{'permission': 'camera'},
+    );
     setState(() => _busy = true);
     try {
       final status = await Permission.camera.request();
       if (!mounted) return;
       setState(() => _cameraStatus = status);
+      _printDebug(
+        'permission_request_result',
+        meta: <String, Object?>{'status': _statusLabelForPermission(status)},
+      );
       if (!status.isGranted) await _showNeedPermissionDialog('카메라');
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -382,11 +440,19 @@ class _AppStartPermissionSetupScreenState
 
   Future<void> _requestMicrophone() async {
     if (_busy) return;
+    _printDebug(
+      'permission_request_start',
+      meta: const <String, Object?>{'permission': 'microphone'},
+    );
     setState(() => _busy = true);
     try {
       final status = await Permission.microphone.request();
       if (!mounted) return;
       setState(() => _microphoneStatus = status);
+      _printDebug(
+        'permission_request_result',
+        meta: <String, Object?>{'status': _statusLabelForPermission(status)},
+      );
       if (!status.isGranted) {
         await _showNeedPermissionDialog('오디오 · 마이크');
       }
@@ -396,10 +462,18 @@ class _AppStartPermissionSetupScreenState
   }
 
   Future<void> _requestOverlay() async {
+    _printDebug(
+      'permission_request_start',
+      meta: const <String, Object?>{'permission': 'overlay'},
+    );
     final granted = await FlutterOverlayWindow.isPermissionGranted();
     if (!mounted) return;
     if (granted == true) {
       setState(() => _overlayGranted = true);
+      _printDebug(
+        'permission_request_result',
+        meta: const <String, Object?>{'status': '허용됨'},
+      );
       return;
     }
 
@@ -410,35 +484,17 @@ class _AppStartPermissionSetupScreenState
     await _showNeedOverlayPermissionDialog();
   }
 
-  Future<void> _saveMailRecipient() async {
-    if (_busy) return;
-    setState(() => _busy = true);
-    try {
-      final to = _mailToCtrl.text.trim();
-      if (!_isValidGmailToList(to)) {
-        await _showNeedMailRecipientDialog();
-        return;
-      }
-
-      await EmailConfig.save(EmailConfig(to: to));
-      if (!mounted) return;
-      setState(() => _savedMailTo = to);
-      await StatusDialog.showSuccess(
-        context,
-        title: StatusDialog.gmailRecipientSaveSuccess,
-        useCommonUi: true,
-      );
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
   Future<void> _recheckCurrent() async {
     if (_busy) return;
     final kind = _steps[_index];
+    _printDebug('status_recheck_start');
     setState(() => _busy = true);
     try {
       await _refreshForStep(kind);
+      _printDebug(
+        'status_recheck_complete',
+        meta: <String, Object?>{'canProceed': _canProceed(kind)},
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -468,9 +524,11 @@ class _AppStartPermissionSetupScreenState
 
   Future<void> _completePermissions() async {
     if (_busy) return;
+    _printDebug('permission_flow_complete_start');
     setState(() => _busy = true);
     try {
       await AppStartFlowPrefs.setPermissionTutorialDone(true);
+      _printDebug('permission_flow_complete_success');
       if (!mounted) return;
       Navigator.of(context).pushNamedAndRemoveUntil(
         AppRoutes.startGate,
@@ -641,90 +699,10 @@ class _AppStartPermissionSetupScreenState
     );
   }
 
-  Widget _buildMailRecipientCard(BuildContext context) {
-    final tokens = CommonUiTheme.of(context);
-    final textTheme = Theme.of(context).textTheme;
-
-    return _CommonEntrance(
-      delay: const Duration(milliseconds: 70),
-      child: Container(
-        width: double.infinity,
-        constraints: const BoxConstraints(maxWidth: 620),
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: tokens.surfaceRaised,
-          borderRadius: BorderRadius.circular(CommonUiShapes.card),
-          border: Border.all(color: tokens.borderSubtle),
-          boxShadow: [
-            BoxShadow(
-              color: tokens.shadow,
-              blurRadius: 18,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '지메일 수신자(To)',
-                    style: textTheme.titleMedium?.copyWith(
-                      color: tokens.textPrimary,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                _PermissionStatusPill(
-                  label: _mailRecipientStatusLabel(),
-                  tone: _mailRecipientStatusTone(),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _mailToCtrl,
-              enabled: !_busy,
-              keyboardType: TextInputType.emailAddress,
-              textInputAction: TextInputAction.done,
-              scrollPadding: const EdgeInsets.only(bottom: 260),
-              decoration: const InputDecoration(
-                labelText: '수신자(To)',
-                prefixIcon: Icon(Icons.mail_outline_rounded),
-              ),
-              onSubmitted: (_) => _saveMailRecipient(),
-            ),
-            const SizedBox(height: 14),
-            CommonButton(
-              label: _busy ? '처리 중' : '지메일 수신자 저장',
-              icon: Icons.save_rounded,
-              onPressed: _busy ? null : _saveMailRecipient,
-              loading: _busy,
-              expand: true,
-              haptic: CommonHaptic.selection,
-            ),
-            const SizedBox(height: 10),
-            CommonButton(
-              label: '저장값 다시 불러오기',
-              icon: Icons.restore_rounded,
-              variant: CommonButtonVariant.secondary,
-              onPressed: _busy ? null : _loadSavedMailRecipient,
-              expand: true,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildScrollableStep(
     BuildContext context, {
     required Widget child,
   }) {
-    final media = MediaQuery.of(context);
     return LayoutBuilder(
       builder: (context, constraints) {
         return SingleChildScrollView(
@@ -733,7 +711,7 @@ class _AppStartPermissionSetupScreenState
             20,
             24,
             20,
-            math.max(24, media.viewInsets.bottom + 24),
+            24,
           ),
           child: ConstrainedBox(
             constraints: BoxConstraints(minHeight: constraints.maxHeight - 48),
@@ -788,7 +766,7 @@ class _AppStartPermissionSetupScreenState
                 context,
                 Icons.verified_user_outlined,
                 '권한 설정',
-                '서비스 이용에 필요한 권한과 메일 수신자 정보를 순서대로 확인합니다.',
+                '서비스 이용에 필요한 권한을 순서대로 확인합니다.',
               ),
               const SizedBox(height: 22),
               const _PermissionWelcomePanel(),
@@ -862,25 +840,30 @@ class _AppStartPermissionSetupScreenState
           tone: _toneForPermission(_microphoneStatus),
           onRequest: _requestMicrophone,
         );
-      case _PermissionStepKind.mailRecipient:
-        return _buildScrollableStep(
-          context,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _buildPageHeader(
-                context,
-                Icons.mail_outline_rounded,
-                '메일 수신자 등록',
-                '서비스 설정과 동일한 방식으로 지메일 수신자(To)를 저장해야 다음으로 진행할 수 있습니다.',
-              ),
-              const SizedBox(height: 22),
-              _buildMailRecipientCard(context),
-            ],
+    }
+  }
+
+  Widget _buildAnimatedStepPage(Widget child) {
+    if (_reduceMotion) return child;
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: 1),
+      duration: CommonUiMotion.layout,
+      curve: CommonUiMotion.enter,
+      builder: (context, value, child) {
+        return Opacity(
+          opacity: value,
+          child: Transform.translate(
+            offset: Offset(0, 10 * (1 - value)),
+            child: Transform.scale(
+              scale: 0.985 + (0.015 * value),
+              alignment: Alignment.center,
+              child: child,
+            ),
           ),
         );
-    }
+      },
+      child: child,
+    );
   }
 
   Widget _buildProgress(BuildContext context) {
@@ -980,8 +963,6 @@ class _AppStartPermissionSetupScreenState
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _mailToCtrl.removeListener(_handleMailToChanged);
-    _mailToCtrl.dispose();
     _pageController.dispose();
     super.dispose();
   }
@@ -1014,7 +995,14 @@ class _AppStartPermissionSetupScreenState
                 backgroundColor: tokens.canvas,
                 resizeToAvoidBottomInset: true,
                 appBar: AppBar(
-                  title: const Text('권한 설정'),
+                  title: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onLongPress: _showDeveloperDebugStatus,
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                      child: Text('권한 설정'),
+                    ),
+                  ),
                   centerTitle: true,
                   automaticallyImplyLeading: false,
                 ),
@@ -1044,15 +1032,23 @@ class _AppStartPermissionSetupScreenState
                                       const NeverScrollableScrollPhysics(),
                                   onPageChanged: (index) async {
                                     setState(() => _index = index);
+                                    _printDebug(
+                                      'step_changed',
+                                      meta: <String, Object?>{
+                                        'targetStep': _stepLabel(_steps[index]),
+                                      },
+                                    );
                                     await _refreshForStep(_steps[index]);
                                   },
                                   itemCount: _steps.length,
                                   itemBuilder: (context, index) {
-                                    return KeyedSubtree(
-                                      key: ValueKey(_steps[index]),
-                                      child: _buildStep(
-                                        context,
-                                        _steps[index],
+                                    return _buildAnimatedStepPage(
+                                      KeyedSubtree(
+                                        key: ValueKey(_steps[index]),
+                                        child: _buildStep(
+                                          context,
+                                          _steps[index],
+                                        ),
                                       ),
                                     );
                                   },
@@ -1131,7 +1127,7 @@ class _PermissionWelcomePanel extends StatelessWidget {
             _WelcomeRow(
               icon: Icons.lock_outline_rounded,
               title: '필요한 항목만 확인',
-              description: '서비스 동작에 필요한 권한과 메일 수신자 정보만 확인합니다.',
+              description: '서비스 동작에 필요한 권한만 확인합니다.',
               tokens: tokens,
               textTheme: textTheme,
             ),

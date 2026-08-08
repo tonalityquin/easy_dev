@@ -334,7 +334,7 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
             trace.log(line, progress: .24);
           }
           if (!cross.isValid) {
-            await trace.fail('Firestore 보고서와 GCS CSV의 Sector 합계가 일치하지 않습니다.');
+            await trace.fail('보고서와 상세 로그의 Sector 합계가 일치하지 않습니다.');
             return;
           }
         }
@@ -724,7 +724,7 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
                   tone: StatisticsPdfTone.warning,
                   details: const <String>[
                     '차량 수는 분리되지만 과거 집계값만으로 금액을 정확히 재분류할 수 없습니다.',
-                    '개별 차량 GCS 로그가 있는 범위는 심화 Sector 재집계값을 우선 확인합니다.',
+                    '개별 차량 로그가 있는 범위는 심화 Sector 재집계값을 우선 확인합니다.',
                   ],
                 ),
               ],
@@ -1458,10 +1458,10 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
       trace = await DeveloperOperationTrace.start(
         context: context,
         title: '심화 통계 조회',
-        initialMessage: 'GCS 완료 업무 로그를 조회하고 통계를 구성하고 있습니다.',
+        initialMessage: '완료 업무 로그를 조회하고 통계를 구성하고 있습니다.',
         useCommonUi: widget.useCommonUi,
         developerModeMessage:
-            '개발자 모드 ON: CSV·Sector·무결성 로그를 복사할 수 있습니다.',
+            '개발자 모드 ON: 상세 집계·Sector·무결성 로그를 복사할 수 있습니다.',
         standardModeMessage:
             '개발자 모드 OFF: 심화 통계 로그를 콘솔에 기록합니다.',
       );
@@ -1554,7 +1554,7 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
           trace.log(line, progress: .84);
         }
         if (!cross.isValid) {
-          await trace.fail('Firestore 보고서와 GCS CSV의 Sector 합계가 일치하지 않습니다.');
+          await trace.fail('보고서와 상세 로그의 Sector 합계가 일치하지 않습니다.');
           return;
         }
       }

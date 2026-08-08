@@ -289,7 +289,7 @@ class StatisticsDeepLogService {
     );
 
     if (res is! gcs.Media) {
-      throw StateError('Storage CSV 응답 형식이 올바르지 않습니다.');
+      throw StateError('통계 데이터 응답 형식이 올바르지 않습니다.');
     }
 
     final bytes = await res.stream.expand((chunk) => chunk).toList();

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
+import '../../../app/config/email_config.dart';
 import '../../../app/models/capability.dart';
 import '../domain/repositories/area_repo_package/area_repository.dart';
 
@@ -62,6 +63,42 @@ class AreaState with ChangeNotifier {
     _availableAreas
       ..clear()
       ..add(record.name);
+  }
+
+  Future<void> _syncRecipientEmailFromRecord(
+    AreaRecord record, {
+    required String source,
+  }) async {
+    final email = record.email.trim();
+    if (email.isEmpty) {
+      debugPrint(
+        '[AreaState] areas.email 없음 또는 빈 값: area=${record.name}, division=${record.division}, source=$source → 기존 mail.to 유지',
+      );
+      return;
+    }
+
+    try {
+      debugPrint(
+        '[AreaState] areas.email 수신자 동기화 시작: area=${record.name}, division=${record.division}, email=$email, source=$source',
+      );
+      await EmailConfig.replaceRecipient(email);
+      debugPrint(
+        '[AreaState] areas.email 수신자 동기화 완료: area=${record.name}, email=$email, source=$source',
+      );
+    } catch (error, stackTrace) {
+      debugPrint(
+        '[AreaState] areas.email 수신자 동기화 실패: area=${record.name}, email=$email, source=$source, error=$error',
+      );
+      debugPrint('$stackTrace');
+    }
+  }
+
+  Future<AreaRecord?> _fetchCurrentAreaRecord(String area) {
+    final division = _currentDivision.trim();
+    return _repository.getAreaByName(
+      area,
+      division: division.isEmpty ? null : division,
+    );
   }
 
   bool _hasValidCacheFor(String area) {
@@ -135,21 +172,44 @@ class AreaState with ChangeNotifier {
     }
 
     if (!forceRefresh && _hasValidCacheFor(area)) {
-      debugPrint('ℹ️ initializeArea: cache hit → query skip for "$area"');
+      debugPrint('ℹ️ initializeArea: cache hit → 지역 상태 캐시 사용: "$area"');
       _currentArea = area;
       if (_currentDivision.trim().isEmpty) {
         _currentDivision = 'default';
       }
       notifyListeners();
       _notifyForegroundWithArea();
+
+      try {
+        final record = await _fetchCurrentAreaRecord(area);
+        if (record != null) {
+          await _syncRecipientEmailFromRecord(
+            record,
+            source: 'initializeArea.cacheHit',
+          );
+        } else {
+          debugPrint(
+            '[AreaState] currentArea 문서 조회 실패: area=$area, division=$_currentDivision, source=initializeArea.cacheHit',
+          );
+        }
+      } catch (error, stackTrace) {
+        debugPrint(
+          '[AreaState] currentArea 이메일 조회 실패: area=$area, division=$_currentDivision, error=$error',
+        );
+        debugPrint('$stackTrace');
+      }
       return;
     }
 
     try {
-      final record = await _repository.getAreaByName(area);
+      final record = await _fetchCurrentAreaRecord(area);
 
       if (record != null) {
         _applyRecordToState(record);
+        await _syncRecipientEmailFromRecord(
+          record,
+          source: 'initializeArea.remote',
+        );
 
         notifyListeners();
         debugPrint(
@@ -180,7 +240,7 @@ class AreaState with ChangeNotifier {
     }
 
     try {
-      final record = await _repository.getAreaByName(area);
+      final record = await _fetchCurrentAreaRecord(area);
 
       if (record == null) {
         debugPrint('⚠️ refreshCurrentAreaCapabilities: 지역 정보 없음: $area');
@@ -189,6 +249,10 @@ class AreaState with ChangeNotifier {
 
       final previousCaps = _areaCaps[area] ?? <Capability>{};
       _areaCaps[area] = record.capabilities;
+      await _syncRecipientEmailFromRecord(
+        record,
+        source: 'refreshCurrentAreaCapabilities',
+      );
       _currentDivision = record.division.trim().isEmpty
           ? (_currentDivision.trim().isEmpty ? 'default' : _currentDivision)
           : record.division.trim();
@@ -231,10 +295,18 @@ class AreaState with ChangeNotifier {
     }
 
     try {
-      final record = await _repository.getAreaByName(newArea);
+      final division = _currentDivision.trim();
+      final record = await _repository.getAreaByName(
+        newArea,
+        division: division.isEmpty ? null : division,
+      );
 
       if (record != null) {
         _applyRecordToState(record);
+        await _syncRecipientEmailFromRecord(
+          record,
+          source: isSyncing ? 'updateArea.sync' : 'updateArea.user',
+        );
 
         notifyListeners();
         final msg = isSyncing

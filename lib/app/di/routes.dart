@@ -10,7 +10,6 @@ import '../../features/dashboard/pages/triple/triple_headquarter_page.dart';
 import '../../features/description/pages/description_page.dart';
 import '../../features/dev/page/dev_stub_page.dart';
 import '../../features/headquarter/page/head_stub_page.dart';
-import '../../features/headquarter/page/sheets/company_calendar_page.dart';
 import '../../features/headquarter/page/sheets/timesheet_page.dart';
 import '../../features/login/pages/common/login_screen.dart';
 import '../../features/mode_single/page/single_inside_screen.dart';
@@ -76,7 +75,6 @@ class AppRoutes {
   static const headStub = '/head_stub';
   static const devStub = '/dev_stub';
 
-  static const companyCalendar = '/company_calendar';
   static const laborGuide = '/labor_guide';
 
   static const attendanceSheet = '/attendance_sheet';
@@ -141,7 +139,6 @@ final Map<String, WidgetBuilder> appRoutes = {
   AppRoutes.communityStub: (context) => const CommunityStubPage(),
   AppRoutes.headStub: (context) => const HeadStubPage(),
   AppRoutes.devStub: (context) => const DevStubPage(),
-  AppRoutes.companyCalendar: (context) => const CompanyCalendarPage(),
   AppRoutes.attendanceSheet: (context) => const TimesheetPage(
         initialTab: TimesheetTab.attendance,
       ),

@@ -1,26 +1,69 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../../app/init/logout_helper.dart';
 import '../../../../../app/init/work_schedule_prefs.dart';
 import '../../../../../app/utils/operational_data_sync_workflow.dart';
+import '../../../../../app/utils/status_dialog.dart';
 import '../../../../account/applications/user_state.dart';
 import '../../../../dev/application/area_state.dart';
 import '../../../../sector/applications/sector_state.dart';
+import '../../../../selector/application/dev_auth.dart';
 
-Future<void> showMyInfoDialog({required BuildContext context}) {
-  return showDialog<void>(
+enum MyInfoEntrySource {
+  opsBottomSheet,
+  hqDashboard,
+}
+
+Future<void> showMyInfoDialog({
+  required BuildContext context,
+  required MyInfoEntrySource source,
+}) {
+  final reduceMotion =
+      MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+
+  return showGeneralDialog<void>(
     context: context,
     barrierDismissible: true,
-    builder: (_) => const MyInfoDialog(),
+    barrierLabel: '내 정보 닫기',
+    barrierColor: Colors.black54,
+    transitionDuration:
+        reduceMotion ? Duration.zero : const Duration(milliseconds: 260),
+    pageBuilder: (_, __, ___) => MyInfoDialog(source: source),
+    transitionBuilder: (_, animation, __, child) {
+      final curved = CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeInCubic,
+      );
+      return FadeTransition(
+        opacity: curved,
+        child: SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0, 0.035),
+            end: Offset.zero,
+          ).animate(curved),
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.97, end: 1).animate(curved),
+            child: child,
+          ),
+        ),
+      );
+    },
   );
 }
 
 class MyInfoDialog extends StatefulWidget {
-  const MyInfoDialog({super.key});
+  const MyInfoDialog({
+    super.key,
+    required this.source,
+  });
+
+  final MyInfoEntrySource source;
 
   @override
   State<MyInfoDialog> createState() => _MyInfoDialogState();
@@ -52,6 +95,10 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _printDebug('open');
+    });
     _loadPrefs();
   }
 
@@ -135,6 +182,69 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
     return out;
   }
 
+  bool get _showOperationalCards =>
+      widget.source == MyInfoEntrySource.opsBottomSheet;
+
+  String get _sourceKey {
+    switch (widget.source) {
+      case MyInfoEntrySource.opsBottomSheet:
+        return 'ops_bottom_sheet';
+      case MyInfoEntrySource.hqDashboard:
+        return 'hq_dashboard';
+    }
+  }
+
+  String _debugMessage(
+    String event, {
+    Map<String, Object?> extra = const <String, Object?>{},
+  }) {
+    final fields = <String, Object?>{
+      'timestamp': DateTime.now().toIso8601String(),
+      'source': _sourceKey,
+      'event': event,
+      'operationalDataVisible': _showOperationalCards,
+      'sessionLogoutVisible': _showOperationalCards,
+      ...extra,
+    };
+    return '[MY_INFO] ${fields.entries.map((entry) => '${entry.key}=${entry.value}').join(' ')}';
+  }
+
+  void _printDebug(
+    String event, {
+    Map<String, Object?> extra = const <String, Object?>{},
+  }) {
+    debugPrint(_debugMessage(event, extra: extra));
+  }
+
+  Future<void> _showDeveloperDebugStatus() async {
+    final enabled = await DevAuth.isDevModeEnabled();
+    if (!enabled || !mounted || !context.mounted) return;
+
+    final message = _debugMessage(
+      'developer_status',
+      extra: <String, Object?>{
+        'area': _area,
+        'division': _division,
+        'loading': _loading,
+        'refreshing': _refreshing,
+        'localSectorCount': _localSectorCount ?? -1,
+        'hasMonthlyParking': _hasMonthlyParking,
+      },
+    );
+    final code = 'debugPrint(${jsonEncode(message)});';
+    debugPrint(message);
+    HapticFeedback.mediumImpact();
+
+    await StatusDialog.showSuccess(
+      context,
+      title: '내정보 개발자 상태',
+      description: '현재 진입 출처와 카드 노출 상태의 debugPrint 코드를 복사할 수 있습니다.',
+      copyText: code,
+      copyButtonLabel: 'debugPrint 복사',
+      visibleDuration: const Duration(seconds: 30),
+      useCommonUi: true,
+    );
+  }
 
   String _formatLastSync(DateTime dt) {
     String two(int n) => n.toString().padLeft(2, '0');
@@ -145,12 +255,17 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
   Future<void> _manualRefreshAll() async {
     if (_refreshing) return;
 
+    _printDebug('operational_sync_start', extra: <String, Object?>{'area': _area});
     setState(() => _refreshing = true);
     try {
       final result = await OperationalDataSyncWorkflow.run(
         context: context,
         title: '내 정보 데이터 새로고침',
         message: '현재 지역의 주차 구역, 섹터, 정산 데이터를 로컬에 내려받기 전 요청을 준비하고 있습니다.',
+      );
+      _printDebug(
+        'operational_sync_result',
+        extra: <String, Object?>{'result': result.toString()},
       );
       if (result == OperationalDataSyncResult.completed && mounted) {
         await _loadPrefs();
@@ -162,6 +277,7 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
   }
 
   Future<void> _logout() async {
+    _printDebug('logout');
     await LogoutHelper.logoutAndGoToLogin(
       context,
       checkWorking: false,
@@ -190,10 +306,13 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
       prefs.getString(OperationalDataSyncWorkflow.lastSyncAtKey) ?? '',
     );
     final localSectorCount = SectorState.cachedCountOf(prefs, effectiveArea);
-    debugPrint(
-      '[MyInfoDialog] 로컬 동기화 상태 로드: '
-      'area=$effectiveArea, sectorCount=${localSectorCount ?? -1}, '
-      'syncedAt=$lastRefreshAt',
+    _printDebug(
+      'local_state_loaded',
+      extra: <String, Object?>{
+        'area': effectiveArea,
+        'sectorCount': localSectorCount ?? -1,
+        'syncedAt': lastRefreshAt,
+      },
     );
 
     final name = ((cached['name'] as String?) ?? '').trim();
@@ -384,7 +503,32 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
   @override
   Widget build(BuildContext context) {
     final palette = _OpsPalette.of(context);
-    final height = MediaQuery.of(context).size.height;
+    final media = MediaQuery.of(context);
+    final height = media.size.height;
+    final reduceMotion = media.disableAnimations;
+
+    Widget reveal(int order, Widget child) {
+      if (reduceMotion) return child;
+      return TweenAnimationBuilder<double>(
+        tween: Tween<double>(begin: 0, end: 1),
+        duration: Duration(milliseconds: 240 + (order * 55)),
+        curve: Curves.easeOutCubic,
+        child: child,
+        builder: (context, value, child) {
+          return Opacity(
+            opacity: value,
+            child: Transform.translate(
+              offset: Offset(0, (1 - value) * 10),
+              child: Transform.scale(
+                scale: 0.985 + (0.015 * value),
+                alignment: Alignment.topCenter,
+                child: child,
+              ),
+            ),
+          );
+        },
+      );
+    }
 
     Widget loadingBody() {
       return Padding(
@@ -416,65 +560,107 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
       );
     }
 
-    final content = _loading
-        ? loadingBody()
-        : Column(
+    final loadedContent = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _UserInfoCard(
-          name: _name,
-          position: _position,
-          role: _role,
-          phone: _phone,
-          area: _area,
-          division: _division,
+        reveal(
+          0,
+          _UserInfoCard(
+            name: _name,
+            position: _position,
+            role: _role,
+            phone: _phone,
+            area: _area,
+            division: _division,
+          ),
         ),
+        if (_showOperationalCards) ...[
+          const SizedBox(height: 12),
+          reveal(
+            1,
+            _OperationalDataSyncCard(
+              refreshing: _refreshing,
+              lastRefreshAt: _lastRefreshAt,
+              hasMonthlyParking: _hasMonthlyParking,
+              localSectorCount: _localSectorCount,
+              formatLastSync: _formatLastSync,
+              onRefresh: _loading || _refreshing ? null : _manualRefreshAll,
+            ),
+          ),
+          const SizedBox(height: 12),
+          reveal(
+            2,
+            _SessionLogoutCard(
+              onLogout: _loading ? null : _logout,
+            ),
+          ),
+        ],
         const SizedBox(height: 12),
-        _OperationalDataSyncCard(
-          refreshing: _refreshing,
-          lastRefreshAt: _lastRefreshAt,
-          hasMonthlyParking: _hasMonthlyParking,
-          localSectorCount: _localSectorCount,
-          formatLastSync: _formatLastSync,
-          onRefresh: _loading || _refreshing ? null : _manualRefreshAll,
-        ),
-        const SizedBox(height: 12),
-        _SessionLogoutCard(
-          onLogout: _loading ? null : _logout,
-        ),
-        const SizedBox(height: 12),
-        _WeeklyWorkTimeCard(
-          days: _days,
-          startByDay: _startByDay,
-          endByDay: _endByDay,
-          breakDays: _breakDays,
-          savingDay: _savingDay,
-          formatTime: _formatTime,
-          onPickStart: (d) => _pickWeeklyTime(day: d, isStart: true),
-          onPickEnd: (d) => _pickWeeklyTime(day: d, isStart: false),
-          onHolidayChanged: _setHoliday,
-          onBreakChanged: _toggleBreakDay,
+        reveal(
+          _showOperationalCards ? 3 : 1,
+          _WeeklyWorkTimeCard(
+            days: _days,
+            startByDay: _startByDay,
+            endByDay: _endByDay,
+            breakDays: _breakDays,
+            savingDay: _savingDay,
+            formatTime: _formatTime,
+            onPickStart: (d) => _pickWeeklyTime(day: d, isStart: true),
+            onPickEnd: (d) => _pickWeeklyTime(day: d, isStart: false),
+            onHolidayChanged: _setHoliday,
+            onBreakChanged: _toggleBreakDay,
+          ),
         ),
         const SizedBox(height: 14),
-        SizedBox(
-          width: double.infinity,
-          height: 46,
-          child: OutlinedButton(
-            onPressed: () => Navigator.of(context).pop(),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: palette.ink,
-              side: BorderSide(color: palette.line),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              backgroundColor: palette.panel,
-              textStyle: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w900,
+        reveal(
+          _showOperationalCards ? 4 : 2,
+          SizedBox(
+            width: double.infinity,
+            height: 46,
+            child: OutlinedButton(
+              onPressed: () => Navigator.of(context).pop(),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: palette.ink,
+                side: BorderSide(color: palette.line),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                backgroundColor: palette.panel,
+                textStyle: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
+              child: const Text('닫기'),
             ),
-            child: const Text('닫기'),
           ),
         ),
       ],
+    );
+
+    final content = AnimatedSwitcher(
+      duration: reduceMotion ? Duration.zero : const Duration(milliseconds: 220),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      transitionBuilder: (child, animation) {
+        final offset = Tween<Offset>(
+          begin: const Offset(0, 0.02),
+          end: Offset.zero,
+        ).animate(animation);
+        return FadeTransition(
+          opacity: animation,
+          child: SlideTransition(position: offset, child: child),
+        );
+      },
+      child: _loading
+          ? KeyedSubtree(
+              key: const ValueKey<String>('loading'),
+              child: loadingBody(),
+            )
+          : KeyedSubtree(
+              key: ValueKey<String>('content-$_sourceKey'),
+              child: loadedContent,
+            ),
     );
 
     return Dialog(
@@ -498,6 +684,7 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
               area: _area,
               loading: _loading,
               onClose: () => Navigator.of(context).pop(),
+              onLongPress: _showDeveloperDebugStatus,
             ),
             Flexible(
               child: SingleChildScrollView(
@@ -568,86 +755,99 @@ class _DialogConsoleHeader extends StatelessWidget {
   final String area;
   final bool loading;
   final VoidCallback onClose;
+  final VoidCallback onLongPress;
 
   const _DialogConsoleHeader({
     required this.area,
     required this.loading,
     required this.onClose,
+    required this.onLongPress,
   });
 
   @override
   Widget build(BuildContext context) {
     final palette = _OpsPalette.of(context);
     final cs = Theme.of(context).colorScheme;
-    final areaLabel = area.trim().isEmpty ? '운영 지점 미설정' : '${area.trim()} 운영 콘솔';
+    final areaLabel =
+        area.trim().isEmpty ? '운영 지점 미설정' : '${area.trim()} 운영 콘솔';
 
-    return Container(
-      width: double.infinity,
-      color: palette.ink,
-      padding: const EdgeInsets.fromLTRB(18, 14, 10, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Center(
-            child: Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(.24),
-                borderRadius: BorderRadius.circular(999),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onLongPress: onLongPress,
+      child: Container(
+        width: double.infinity,
+        color: palette.ink,
+        padding: const EdgeInsets.fromLTRB(18, 14, 10, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(.24),
+                  borderRadius: BorderRadius.circular(999),
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: palette.action,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.white.withOpacity(.14)),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: palette.action,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.white.withOpacity(.14)),
+                  ),
+                  child: Icon(
+                    Icons.badge_rounded,
+                    color: cs.onPrimary,
+                    size: 22,
+                  ),
                 ),
-                child: Icon(Icons.badge_rounded, color: cs.onPrimary, size: 22),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      '내 정보',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: -.3,
-                        color: Colors.white,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        '내 정보',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -.3,
+                          color: Colors.white,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      loading ? '근무자 프로필을 준비하고 있습니다.' : areaLabel,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                        color: palette.softLabel,
+                      const SizedBox(height: 3),
+                      Text(
+                        loading
+                            ? '근무자 프로필을 준비하고 있습니다.'
+                            : areaLabel,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: palette.softLabel,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              IconButton(
-                onPressed: onClose,
-                icon: const Icon(Icons.close_rounded),
-                color: Colors.white,
-                tooltip: '닫기',
-              ),
-            ],
-          ),
-        ],
+                IconButton(
+                  onPressed: onClose,
+                  icon: const Icon(Icons.close_rounded),
+                  color: Colors.white,
+                  tooltip: '닫기',
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

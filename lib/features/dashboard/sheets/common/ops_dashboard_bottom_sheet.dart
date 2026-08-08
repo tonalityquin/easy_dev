@@ -459,7 +459,10 @@ class _OpsDashboardBottomSheetState extends State<OpsDashboardBottomSheet> {
         description: '계정과 근무 정보를 확인합니다',
         icon: Icons.person_rounded,
         color: cs.primary,
-        onPressed: () => showMyInfoDialog(context: context),
+        onPressed: () => showMyInfoDialog(
+          context: context,
+          source: MyInfoEntrySource.opsBottomSheet,
+        ),
       ),
       _DashboardAction(
         label: 'Community',

@@ -5,7 +5,6 @@ import '../widgets/hr/attendance_calendar.dart' as hr_att;
 import '../widgets/hr/break_calendar.dart' as hr_break;
 import '../widgets/mgmt/field.dart' as mgmt;
 import '../widgets/mgmt/statistics.dart' as mgmt_stats;
-import 'sheets/company_calendar_page.dart';
 import 'sheets/head_memo.dart';
 import 'sheets/head_tutorials.dart';
 import 'sheets/roadmap_bottom_sheet.dart';
@@ -64,13 +63,6 @@ class HeadStubPage extends StatelessWidget {
   List<_HeadHubAction> _actions(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return <_HeadHubAction>[
-      _HeadHubAction(
-        icon: Icons.calendar_month_rounded,
-        title: '본사 달력',
-        color: cs.primary,
-        foreground: cs.onPrimary,
-        onTap: () => CompanyCalendarPage.showAsBottomSheet(context),
-      ),
       _HeadHubAction(
         icon: Icons.how_to_reg_rounded,
         title: '출/퇴근',

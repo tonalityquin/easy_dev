@@ -238,12 +238,13 @@ class _StatisticsSectorAreaComparisonPageState
       final pdfPalette = StatisticsReportDesign.pdfPalette(context);
       trace.log(
         'pdf=build areas=${report.results.length} '
-        'design=app-theme-v3 ${pdfPalette.debugLabel}',
+        'design=app-theme-v4 ${pdfPalette.debugLabel}',
         progress: .32,
       );
       final pdfBytes = await _buildComparisonPdf(
         report,
         pdfPalette,
+        trace: trace,
       );
       final filename =
           'Area_Sector_Comparison_${_comparisonRangeLabel(report.dates).replaceAll(' ', '_').replaceAll('~', '-')}.pdf';
@@ -272,6 +273,9 @@ class _StatisticsSectorAreaComparisonPageState
           error: error,
           stackTrace: stackTrace,
         );
+      } else {
+        debugPrint('[STAT_AREA_COMPARE] send failed error=$error');
+        debugPrint('$stackTrace');
       }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -285,8 +289,9 @@ class _StatisticsSectorAreaComparisonPageState
 
   Future<Uint8List> _buildComparisonPdf(
     StatisticsSectorAreaComparisonReport report,
-    StatisticsPdfPalette palette,
-  ) async {
+    StatisticsPdfPalette palette, {
+    DeveloperOperationTrace? trace,
+  }) async {
     pw.Font? regular;
     pw.Font? bold;
     try {
@@ -301,7 +306,11 @@ class _StatisticsSectorAreaComparisonPageState
         ),
       );
     } catch (error) {
-      debugPrint('[STAT_AREA_COMPARE] pdf font fallback error=$error');
+      _logAreaDebug(
+        trace,
+        '[STAT_AREA_COMPARE] pdf font fallback error=$error',
+        progress: .36,
+      );
     }
     final theme = regular == null
         ? pw.ThemeData.base()
@@ -337,9 +346,12 @@ class _StatisticsSectorAreaComparisonPageState
       (sum, result) => sum + result.sectorReport.sectorCount,
     );
     final doc = pw.Document();
-    debugPrint(
-      '[STAT_AREA_COMPARE] pdf design=app-theme-v3 ${palette.debugLabel} '
-      'areas=${report.results.length} vehicles=$totalVehicles input=$totalInput fee=$totalFee',
+    _logAreaDebug(
+      trace,
+      '[STAT_AREA_COMPARE] pdf design=app-theme-v4 ${palette.debugLabel} '
+      'areas=${report.results.length} vehicles=$totalVehicles input=$totalInput fee=$totalFee '
+      'metricCard=uniform62 radius7 accent=leftBorder metaSlot=reserved',
+      progress: .42,
     );
 
     pw.Widget footer(pw.Context context) {
@@ -453,7 +465,7 @@ class _StatisticsSectorAreaComparisonPageState
             titleText: 'Area 비교 요약',
             subtitle: '$rangeLabel · ${report.results.length}개 Area',
             eyebrow: 'AREA EXECUTIVE SUMMARY',
-            sectionNumber: 'A1',
+            sectionNumber: 'A01',
             tone: StatisticsPdfTone.primary,
           ),
           pw.SizedBox(height: 10),
@@ -536,7 +548,7 @@ class _StatisticsSectorAreaComparisonPageState
             titleText: 'Area·Sector 상세 비교',
             subtitle: '각 Area의 방문 구역별 차량·입차·출차·잠금 금액을 비교합니다.',
             eyebrow: 'AREA SECTOR DETAIL',
-            sectionNumber: 'A2',
+            sectionNumber: 'A02',
             tone: StatisticsPdfTone.secondary,
           ),
           pw.SizedBox(height: 10),
@@ -558,8 +570,10 @@ class _StatisticsSectorAreaComparisonPageState
     );
 
     final bytes = await doc.save();
-    debugPrint(
-      '[STAT_AREA_COMPARE] pdf complete bytes=${bytes.length} style=app-theme-v3',
+    _logAreaDebug(
+      trace,
+      '[STAT_AREA_COMPARE] pdf complete bytes=${bytes.length} style=app-theme-v4',
+      progress: .68,
     );
     return bytes;
   }
@@ -646,7 +660,7 @@ class _StatisticsSectorAreaComparisonPageState
                     alignment: pw.Alignment.centerLeft,
                     decoration: pw.BoxDecoration(
                       color: track,
-                      borderRadius: pw.BorderRadius.circular(999),
+                      borderRadius: pw.BorderRadius.circular(4.5),
                     ),
                     child: pw.Container(
                       width: maxValue <= 0
@@ -655,7 +669,7 @@ class _StatisticsSectorAreaComparisonPageState
                       height: 9,
                       decoration: pw.BoxDecoration(
                         color: accent,
-                        borderRadius: pw.BorderRadius.circular(999),
+                        borderRadius: pw.BorderRadius.circular(4.5),
                       ),
                     ),
                   ),
@@ -832,6 +846,18 @@ class _AreaComparisonMailDraft {
     required this.subject,
     required this.body,
   });
+}
+
+void _logAreaDebug(
+  DeveloperOperationTrace? trace,
+  String message, {
+  double? progress,
+}) {
+  if (trace != null) {
+    trace.log(message, progress: progress);
+    return;
+  }
+  debugPrint(message);
 }
 
 String _comparisonRangeLabel(List<DateTime> dates) {

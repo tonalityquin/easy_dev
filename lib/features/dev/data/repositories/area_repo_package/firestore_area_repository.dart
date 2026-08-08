@@ -17,6 +17,13 @@ class FirestoreAreaRepository implements AreaRepository {
     if (name.isEmpty) return null;
 
     final division = (data['division'] ?? 'default').toString().trim();
+    final rawEmail = data['email'];
+    final email = rawEmail is String ? rawEmail.trim() : '';
+    final rawInvite = data['invite'];
+    final invite = rawInvite is String ? rawInvite.trim() : '';
+    final rawCommunication = data['communication'];
+    final communication =
+        rawCommunication is String ? rawCommunication.trim() : '';
     final capabilities = Cap.fromDynamic(data['capabilities']);
     final rawModes = data['modes'];
     final modes = rawModes is List
@@ -31,6 +38,9 @@ class FirestoreAreaRepository implements AreaRepository {
     return AreaRecord(
       name: name,
       division: division.isEmpty ? 'default' : division,
+      email: email,
+      invite: invite,
+      communication: communication,
       capabilities: capabilities,
       modes: modes,
       isHeadquarter: data['isHeadquarter'] == true,
@@ -56,9 +66,26 @@ class FirestoreAreaRepository implements AreaRepository {
   }
 
   @override
-  Future<AreaRecord?> getAreaByName(String areaName) async {
+  Future<AreaRecord?> getAreaByName(
+    String areaName, {
+    String? division,
+  }) async {
     final trimmedArea = areaName.trim();
+    final trimmedDivision = division?.trim() ?? '';
     if (trimmedArea.isEmpty) return null;
+
+    if (trimmedDivision.isNotEmpty && trimmedDivision != 'default') {
+      final docId = '$trimmedDivision-$trimmedArea';
+      final doc = await _firestore.collection('areas').doc(docId).get();
+      if (!doc.exists) return null;
+
+      final record = _toAreaRecord(doc.data());
+      if (record == null) return null;
+      if (record.name != trimmedArea || record.division != trimmedDivision) {
+        return null;
+      }
+      return record;
+    }
 
     final qs = await _firestore
         .collection('areas')

@@ -207,7 +207,6 @@ class _StatisticsState extends State<Statistics> {
   Future<Map<String, bool>> _loadAreaSectorCapabilities({
     required String division,
     required Iterable<String> areas,
-    bool forceRefresh = false,
   }) async {
     final normalizedDivision = division.trim();
     final areaList = areas.map((area) => area.trim()).where((area) => area.isNotEmpty).toSet();
@@ -216,14 +215,16 @@ class _StatisticsState extends State<Statistics> {
 
     AreaMasterSnapshot? snapshot;
     try {
-      snapshot = forceRefresh
-          ? await AreaMasterCache.refreshDivision(normalizedDivision)
-          : await AreaMasterCache.readSnapshot(normalizedDivision);
-      snapshot ??= await AreaMasterCache.refreshDivision(normalizedDivision);
+      snapshot = await AreaMasterCache.readSnapshot(normalizedDivision);
+      if (snapshot == null) {
+        debugPrint(
+          '[STAT] area capability cache missing division=$normalizedDivision',
+        );
+      }
     } catch (error, stackTrace) {
       debugPrint(
-        '[STAT] area capability refresh failed '
-        'division=$normalizedDivision force=$forceRefresh error=$error',
+        '[STAT] area capability cache read failed '
+        'division=$normalizedDivision error=$error',
       );
       debugPrint('[STAT] area capability stack=$stackTrace');
     }
@@ -455,7 +456,6 @@ class _StatisticsState extends State<Statistics> {
       final areaSectorEnabled = await _loadAreaSectorCapabilities(
         division: div,
         areas: areas,
-        forceRefresh: true,
       );
 
       if (!mounted) return;
@@ -1036,8 +1036,8 @@ class _StatisticsState extends State<Statistics> {
         child: Padding(
           padding: EdgeInsets.all(16),
           child: Text(
-            'SharedPreferences에 division 값이 없습니다.\n'
-                'division을 저장한 뒤 다시 시도하세요.',
+            '사업부 정보가 없습니다.\n'
+                '사업부를 선택하거나 저장한 뒤 다시 시도하세요.',
             textAlign: TextAlign.center,
           ),
         ),
@@ -1049,7 +1049,7 @@ class _StatisticsState extends State<Statistics> {
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Text(
-            'Firestore 갱신 오류: $_refreshError',
+            '데이터 갱신 오류: $_refreshError',
             textAlign: TextAlign.center,
           ),
         ),
@@ -1063,8 +1063,8 @@ class _StatisticsState extends State<Statistics> {
           child: Text(
             _hasLocalCache
                 ? '표시할 데이터가 없습니다.'
-                : '저장된 데이터(로컬 캐시)가 없습니다.\n'
-                '우측 상단 새로고침으로 데이터를 가져오세요.\n\n',
+                : '저장된 데이터가 없습니다.\n'
+                '우측 상단 새로고침으로 데이터를 가져오세요.',
             textAlign: TextAlign.center,
           ),
         ),

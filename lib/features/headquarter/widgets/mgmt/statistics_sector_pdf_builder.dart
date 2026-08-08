@@ -47,7 +47,7 @@ class StatisticsSectorPdfBuilder {
                   '선택한 로그에는 방문 구역 필드가 없어 Sector 통계를 생성하지 않았습니다.',
               tone: StatisticsPdfTone.warning,
               details: <String>[
-                'Sector 지원 이전에 생성된 CSV이거나 방문 구역 필드가 저장되지 않은 범위입니다.',
+                'Sector 지원 이전 데이터이거나 방문 구역 정보가 저장되지 않은 범위입니다.',
                 '전체 ${sector.totalVehicleCount}대는 기본 통계에 포함되며 방문 구역 분석에서만 제외됩니다.',
               ],
             ),

@@ -8,8 +8,6 @@ import '../../features/dashboard/applications/common/calendar_selection_state.da
 import '../../features/dev/application/area_state.dart';
 import '../../features/dev/application/field_calendar_state.dart';
 import '../../features/dev/domain/repositories/area_repo_package/area_repository.dart';
-import '../../features/headquarter/widgets/calendar/calendar_model.dart';
-import '../../features/headquarter/widgets/calendar/google_calendar_service.dart';
 import '../../features/location/applications/location_state.dart';
 import '../../features/location/data/repositories/firestore_location_repository.dart';
 import '../../features/payment/applications/bill_state.dart';
@@ -124,7 +122,6 @@ final List<SingleChildWidget> stateProviders = [
   ),
   ChangeNotifierProvider(create: (_) => FieldSelectedDateState()),
   ChangeNotifierProvider(create: (_) => CalendarSelectionState()),
-  ChangeNotifierProvider(create: (_) => CalendarModel(GoogleCalendarService())),
   ChangeNotifierProxyProvider2<UserState, AreaState, SecondaryState>(
     create: (_) => SecondaryState(),
     update: (ctx, userState, areaState, secondaryState) {

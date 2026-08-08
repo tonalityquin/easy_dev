@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../app/utils/operational_data_sync_workflow.dart';
 import '../../../features/account/applications/user_state.dart';
 import '../../../features/dev/application/area_state.dart';
 import '../../../features/dev/debug/debug_action_recorder.dart';
@@ -127,7 +128,7 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
   int _totalCompositeChildCapacityFromMeta = 0;
   String _locationsLoadedArea = '';
   bool _loadingLocationMeta = false;
-
+  bool _operationalDataSyncing = false;
 
   static const String _zoneChildOrderPrefsPrefix =
       'realtime_zone_child_order_v1';
@@ -531,6 +532,171 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
     return locationFilterOptions(
       meta: _cachedLocations,
       plateLocations: _availableLocations,
+    );
+  }
+
+  String _operationalSyncDebugMessage(
+    String event, {
+    OperationalDataSyncResult? result,
+    Object? error,
+  }) {
+    final parts = <String>[
+      '[REALTIME_ZONE_SYNC]',
+      'timestamp=${DateTime.now().toIso8601String()}',
+      'screen=${widget.screen}',
+      'area=${_currentArea.trim()}',
+      'event=$event',
+      'cacheCount=${_cachedLocations.length}',
+      'syncing=$_operationalDataSyncing',
+    ];
+    if (result != null) parts.add('result=${result.name}');
+    if (error != null) parts.add('error=$error');
+    return parts.join(' ');
+  }
+
+  Future<void> _downloadOperationalDataForCurrentArea() async {
+    if (_operationalDataSyncing) {
+      debugPrint(_operationalSyncDebugMessage('duplicate_tap_ignored'));
+      return;
+    }
+
+    debugPrint(_operationalSyncDebugMessage('download_requested'));
+    _markUserActivity();
+    widget.onAutoPauseStart?.call();
+
+    if (mounted) {
+      setState(() => _operationalDataSyncing = true);
+    }
+
+    try {
+      final result = await OperationalDataSyncWorkflow.run(
+        context: context,
+        title: '현재 지역 데이터 내려받기',
+        message: '현재 지역의 주차 구역, 섹터, 정산 데이터를 로컬에 내려받기 전 요청을 준비하고 있습니다.',
+        useCommonUi: true,
+      );
+
+      debugPrint(
+        _operationalSyncDebugMessage(
+          'download_finished',
+          result: result,
+        ),
+      );
+
+      if (result == OperationalDataSyncResult.completed && mounted) {
+        await _ensureLocationMetaLoaded(force: true);
+      }
+    } catch (error, stackTrace) {
+      debugPrint(
+        _operationalSyncDebugMessage(
+          'download_exception',
+          error: error,
+        ),
+      );
+      debugPrintStack(
+        label: '[REALTIME_ZONE_SYNC] stackTrace',
+        stackTrace: stackTrace,
+      );
+    } finally {
+      widget.onAutoPauseEnd?.call();
+      _markUserActivity();
+      if (mounted) {
+        setState(() => _operationalDataSyncing = false);
+      }
+    }
+  }
+
+  Widget _buildMissingLocationCacheDownload(
+    ColorScheme cs,
+    TextTheme text,
+  ) {
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+
+    final content = Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 380),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.cloud_download_rounded,
+                size: 38,
+                color: cs.primary,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                '현재 지역에 대한 데이터를 1회 내려받아야 합니다.',
+                textAlign: TextAlign.center,
+                style: text.bodyMedium?.copyWith(
+                  color: cs.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
+                  height: 1.45,
+                ),
+              ),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: _operationalDataSyncing
+                    ? null
+                    : _downloadOperationalDataForCurrentArea,
+                icon: AnimatedSwitcher(
+                  duration: reduceMotion
+                      ? Duration.zero
+                      : const Duration(milliseconds: 220),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  child: _operationalDataSyncing
+                      ? const SizedBox(
+                          key: ValueKey<String>('syncing'),
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(
+                          Icons.download_rounded,
+                          key: ValueKey<String>('download'),
+                        ),
+                ),
+                label: AnimatedSwitcher(
+                  duration: reduceMotion
+                      ? Duration.zero
+                      : const Duration(milliseconds: 220),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  child: Text(
+                    _operationalDataSyncing ? '내려받는 중' : '지금 내려받기',
+                    key: ValueKey<bool>(_operationalDataSyncing),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (reduceMotion) return content;
+
+    return TweenAnimationBuilder<double>(
+      key: const ValueKey<String>('missing_location_cache_download'),
+      tween: Tween<double>(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 360),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) {
+        return Opacity(
+          opacity: value,
+          child: Transform.translate(
+            offset: Offset(0, 12 * (1 - value)),
+            child: Transform.scale(
+              scale: 0.985 + (0.015 * value),
+              child: child,
+            ),
+          ),
+        );
+      },
+      child: content,
     );
   }
 
@@ -2306,9 +2472,7 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
     }
 
     if (_cachedLocations.isEmpty) {
-      return const RealTimeExpandedEmpty(
-        message: '주차구역 캐시가 없습니다.\n설정에서 주차구역 새로고침 후 다시 시도하세요.',
-      );
+      return _buildMissingLocationCacheDownload(cs, text);
     }
 
     final groups = buildZoneGroups(

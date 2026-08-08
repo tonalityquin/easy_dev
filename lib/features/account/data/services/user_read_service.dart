@@ -294,6 +294,40 @@ class UserReadService {
     }
   }
 
+  Future<List<UserModel>> refreshActiveUsersByDivisionAreaFromShow(
+    String division,
+    String area,
+  ) async {
+    final docId = _showDocId(division, area);
+    debugPrint(
+      'Firestore active users_show 조회 시작 → $division / $area → docId=$docId',
+    );
+
+    try {
+      final usersRef =
+          _getUserShowCollectionRef().doc(docId).collection('users');
+      final snap = await usersRef
+          .where('isActive', isEqualTo: true)
+          .get();
+
+      final users = snap.docs
+          .map((doc) => UserModel.fromMap(doc.id, doc.data()))
+          .toList(growable: false);
+
+      debugPrint(
+        'Firestore active users_show 조회 완료 → $division / $area → count=${users.length}',
+      );
+      return users;
+    } on FirebaseException {
+      rethrow;
+    } catch (e, st) {
+      debugPrint(
+        'refreshActiveUsersByDivisionAreaFromShow 예외 → $division / $area → $e\nStackTrace:\n$st',
+      );
+      rethrow;
+    }
+  }
+
   Future<List<TabletModel>> refreshTabletsBySelectedArea(
       String selectedArea) async {
     debugPrint('🔥 Firestore 호출 시작 (tablet) → $selectedArea');
