@@ -139,7 +139,7 @@ qperfectusofficial@gmail.com
 
 이용자가 권한을 거부하거나 기기 정책, 제조사 설정, 운영체제 제한으로 인해 동작이 제한될 수 있습니다.
 
-Google, Firebase, Gmail, Drive, Docs, Sheets, Calendar 등 외부 연동 서비스의 장애, 정책 변경, 인증 실패, API 제한으로 인해 일부 기능이 동작하지 않을 수 있습니다.
+Google, Firebase, Gmail, Docs, Calendar 등 외부 연동 서비스의 장애, 정책 변경, 인증 실패, API 제한으로 인해 일부 기능이 동작하지 않을 수 있습니다.
 
 외부 연동 서비스 이용 시 해당 서비스의 약관 및 정책이 함께 적용될 수 있습니다.
 
@@ -306,7 +306,7 @@ Firebase, Google Cloud 및 Google API 연동 과정에서 전송·저장
 회사는 서비스 운영을 위하여 외부 서비스를 이용할 수 있으며, 그 과정에서 개인정보 처리 위탁 또는 국외이전이 발생할 수 있습니다.
 
 Google LLC / Google Cloud
-이용 서비스: Google Sign-In, Gmail API, Drive API, Sheets API, Calendar API, Cloud Storage
+이용 서비스: Google Sign-In, Gmail API, Calendar API, Cloud Storage
 처리 항목: 계정 식별정보, 메일·일정·파일 관련 정보, 첨부파일, 이미지
 목적: 로그인, 메일 전송, 파일 저장, 일정 연동
 이전 국가 및 방법: 미국 등 / 네트워크를 통한 전송

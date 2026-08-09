@@ -153,14 +153,6 @@ class _FaqPageState extends State<FaqPage> {
           '\n\n위의 내용을 점검 후 다시 실행하시면 됩니다.',
     ),
     _FaqData(
-      question: 'code. service_user_humanResource_01',
-      answer: '\nQ. 로그인한 계정에서 구글 드라이브가 안 열려요.'
-          '\n\nA. 문제는 두 가지 중에 있습니다.'
-          '\n\n1.링크를 잘못 삽입했다.'
-          '\n2.계정 권한을 부여하지 않았다.'
-          '\n\n위의 내용을 점검 후 다시 실행하시면 됩니다.',
-    ),
-    _FaqData(
       question: 'code. service_userAccounts_HeadQuarter_00',
       answer: '\nQ. 회사 일정 달력을 열었어요.'
           '\n그런데 일정을 불러오지 못하고 있어요.'

@@ -10,7 +10,6 @@ import '../../features/dashboard/pages/triple/triple_headquarter_page.dart';
 import '../../features/description/pages/description_page.dart';
 import '../../features/dev/page/dev_stub_page.dart';
 import '../../features/headquarter/page/head_stub_page.dart';
-import '../../features/headquarter/page/sheets/timesheet_page.dart';
 import '../../features/login/pages/common/login_screen.dart';
 import '../../features/mode_single/page/single_inside_screen.dart';
 import '../../features/novel/presentation/novel_mobile_writing_page.dart';
@@ -77,8 +76,6 @@ class AppRoutes {
 
   static const laborGuide = '/labor_guide';
 
-  static const attendanceSheet = '/attendance_sheet';
-  static const breakSheet = '/break_sheet';
   static const noteSystem = '/notensystem';
 }
 
@@ -139,11 +136,5 @@ final Map<String, WidgetBuilder> appRoutes = {
   AppRoutes.communityStub: (context) => const CommunityStubPage(),
   AppRoutes.headStub: (context) => const HeadStubPage(),
   AppRoutes.devStub: (context) => const DevStubPage(),
-  AppRoutes.attendanceSheet: (context) => const TimesheetPage(
-        initialTab: TimesheetTab.attendance,
-      ),
-  AppRoutes.breakSheet: (context) => const TimesheetPage(
-        initialTab: TimesheetTab.breakTime,
-      ),
   AppRoutes.noteSystem: (context) => const NovelMobileWritingPage(),
 };

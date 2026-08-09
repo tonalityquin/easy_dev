@@ -495,27 +495,44 @@ class _DeveloperOperationStatusDialogState
                     AnimatedSize(
                       duration: standardMotion,
                       curve: Curves.easeOutCubic,
-                      child: Container(
-                        width: double.infinity,
-                        constraints: const BoxConstraints(
-                          minHeight: 120,
-                          maxHeight: 250,
-                        ),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: colorScheme.surfaceContainerHighest,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: colorScheme.outlineVariant,
+                      child: AnimatedSwitcher(
+                        duration: fastMotion,
+                        transitionBuilder: (child, animation) {
+                          final offset = Tween<Offset>(
+                            begin: const Offset(0, 0.02),
+                            end: Offset.zero,
+                          ).animate(animation);
+                          return FadeTransition(
+                            opacity: animation,
+                            child: SlideTransition(
+                              position: offset,
+                              child: child,
+                            ),
+                          );
+                        },
+                        child: Container(
+                          key: ValueKey<int>(logs.length),
+                          width: double.infinity,
+                          constraints: const BoxConstraints(
+                            minHeight: 120,
+                            maxHeight: 250,
                           ),
-                        ),
-                        child: SingleChildScrollView(
-                          reverse: true,
-                          child: SelectableText(
-                            visibleLogs.join('\n'),
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              fontFamily: 'monospace',
-                              height: 1.45,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: colorScheme.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: colorScheme.outlineVariant,
+                            ),
+                          ),
+                          child: SingleChildScrollView(
+                            reverse: true,
+                            child: SelectableText(
+                              visibleLogs.join('\n'),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                fontFamily: 'monospace',
+                                height: 1.45,
+                              ),
                             ),
                           ),
                         ),

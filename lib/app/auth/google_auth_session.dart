@@ -4,6 +4,8 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis_auth/googleapis_auth.dart' as auth show AuthClient;
 import 'package:extension_google_sign_in_as_googleapis_auth/extension_google_sign_in_as_googleapis_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../init/app_navigator.dart';
+import '../utils/developer_operation_status_dialog.dart';
 import '../../features/dashboard/applications/common/firebase_google_auth_bridge.dart';
 import '../../features/dev/debug/debug_api_logger.dart';
 
@@ -12,23 +14,20 @@ class AppScopes {
       'https://www.googleapis.com/auth/calendar';
   static const String calendarEvents =
       'https://www.googleapis.com/auth/calendar.events';
-  static const String spreadsheets =
-      'https://www.googleapis.com/auth/spreadsheets';
   static const String documents = 'https://www.googleapis.com/auth/documents';
   static const String gmailSend = 'https://www.googleapis.com/auth/gmail.send';
-  static const String driveFile = 'https://www.googleapis.com/auth/drive.file';
   static const String gcsFullControl =
       'https://www.googleapis.com/auth/devstorage.full_control';
 
-  static List<String> all() => <String>{
-        calendar,
-        calendarEvents,
-        spreadsheets,
-        documents,
-        gmailSend,
-        driveFile,
-        gcsFullControl,
-      }.toList();
+  static const List<String> values = <String>[
+    calendar,
+    calendarEvents,
+    documents,
+    gmailSend,
+    gcsFullControl,
+  ];
+
+  static List<String> all() => List<String>.of(values);
 }
 
 class GoogleSessionBlockedException implements Exception {
@@ -648,18 +647,70 @@ class GoogleAuthSession {
 
     if (_user == null) return;
 
+    DeveloperOperationTrace? trace;
+    final context = AppNavigator.context;
+    if (context != null && context.mounted) {
+      trace = await DeveloperOperationTrace.start(
+        context: context,
+        title: 'Google OAuth',
+        initialMessage: 'OAuth 권한 확인 시작',
+        useCommonUi: false,
+        developerModeMessage: '개발자 모드 ON: OAuth 진단 로그를 복사할 수 있습니다.',
+        standardModeMessage: 'OAuth 권한 확인을 진행합니다.',
+      );
+      trace.log(
+        '요청 scope=${_scopes.join(', ')}',
+        progress: 0.18,
+      );
+      trace.log(
+        "사용자=${_user?.email ?? 'null'}, forceAuthorize=$forceAuthorize",
+        progress: 0.28,
+      );
+    } else {
+      debugPrint(
+        "[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] OAuth scope=${_scopes.join(', ')} user=${_user?.email ?? 'null'} forceAuthorize=$forceAuthorize",
+      );
+    }
+
     try {
+      trace?.log('기존 OAuth 승인 상태 확인', progress: 0.42);
       var authorization = forceAuthorize
           ? null
           : await _user!.authorizationClient.authorizationForScopes(_scopes);
 
-      authorization ??=
-          await _user!.authorizationClient.authorizeScopes(_scopes);
+      if (authorization == null) {
+        trace?.log('OAuth 승인 요청 실행', progress: 0.62);
+        authorization =
+            await _user!.authorizationClient.authorizeScopes(_scopes);
+      } else {
+        trace?.log('기존 OAuth 승인 재사용', progress: 0.72);
+      }
 
       _client = authorization.authClient(scopes: _scopes);
       _lastAuthorizedAt = DateTime.now();
       _cacheCurrentClient();
+
+      final successMessage =
+          'OAuth AuthClient 준비 완료 scopeCount=${_scopes.length}';
+      debugPrint(
+        '[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] $successMessage',
+      );
+      if (trace != null) {
+        unawaited(trace.succeed(successMessage));
+      }
     } catch (e, st) {
+      debugPrint(
+        '[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] OAuth authorization failed: $e\n$st',
+      );
+      if (trace != null) {
+        unawaited(
+          trace.fail(
+            'OAuth 권한 확인 실패',
+            error: e,
+            stackTrace: st,
+          ),
+        );
+      }
       await DebugApiLogger().log(
         {
           'tag': 'GoogleAuthSession.ensureAuthorizedClient',
