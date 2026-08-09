@@ -7,6 +7,7 @@ import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config/overlay_edge_side_config.dart';
+import 'checkout_nudge_guard.dart';
 import 'overlay_access_guard.dart';
 
 const Color kCiSoftLinenBg = Color(0xFFF2EDE3);
@@ -23,6 +24,18 @@ const String kBubbleTopPrefsKey = 'quick_overlay_bubble_top_v2';
 const double kBubbleHandleHeight = 72.0;
 const double kBubbleHandleMinVisualWidth = 14.0;
 const double kBubbleHandleMaxVisualWidth = 20.0;
+const Duration kBubbleEntryDuration = Duration(milliseconds: 220);
+const Duration kBubbleBreathDuration = Duration(milliseconds: 2400);
+const Duration kBubbleNudgeDuration = Duration(milliseconds: 240);
+const Duration kBubbleModeTransitionDuration = Duration(milliseconds: 220);
+const double kBubbleBreathMinScale = 0.985;
+const double kBubbleBreathMaxScale = 1.015;
+const double kBubbleAlertVisualWidth = 36.0;
+const Duration kBubbleAlertCycleDuration = Duration(milliseconds: 1400);
+const Duration kBubbleAlertResizeDuration = Duration(milliseconds: 280);
+const Duration kBubbleAlertPunchDuration = Duration(milliseconds: 320);
+const Color kBubbleAlertRed = Color(0xFFFF1744);
+const Color kBubbleAlertGreen = Color(0xFF00C853);
 
 ThemeData _buildOverlayTheme() {
   final colorScheme = ColorScheme.fromSeed(
@@ -80,18 +93,38 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
   late DateTime _overlayStartedAt;
   Duration _elapsed = Duration.zero;
   Timer? _tickTimer;
+  DateTime? _scheduledCheckoutEnd;
+  bool _checkoutBoundaryInFlight = false;
+  bool _checkoutOverdue = false;
+
+  late final AnimationController _entryController;
+  late final Animation<double> _entryProgress;
 
   late final AnimationController _breathController;
   late final Animation<double> _breathScale;
 
   late final AnimationController _nudgeController;
   late Animation<Offset> _nudgeOffset;
-  Timer? _nudgeTimer;
+
+  late final AnimationController _checkoutAlertController;
+  late final AnimationController _checkoutPunchController;
+  late final Animation<double> _checkoutPunchScale;
+  Timer? _attentionTimer;
+  int _attentionStep = 0;
+  bool _reduceMotion = false;
+  bool _motionConfigured = false;
+  bool _isDraggingBubble = false;
 
   OverlayUIMode _uiMode = OverlayUIMode.bubble;
   bool _isSimpleMode = false;
 
   bool get _topHalfAllowed => !_isSimpleMode;
+
+  bool get _bubbleModeActive =>
+      _isSimpleMode || _uiMode == OverlayUIMode.bubble;
+
+  String get _motionModeName =>
+      _isSimpleMode ? 'simple_bubble' : _uiMode.name;
 
   Timer? _shortBreakTimer;
   int _shortBreakSeq = 0;
@@ -112,17 +145,31 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
     _overlayStartedAt = DateTime.now();
     _tickTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
+      final now = DateTime.now();
       setState(() {
-        _elapsed = DateTime.now().difference(_overlayStartedAt);
+        _elapsed = now.difference(_overlayStartedAt);
       });
+      _handleCheckoutBoundaryTick(now);
     });
+
+    _entryController = AnimationController(
+      vsync: this,
+      duration: kBubbleEntryDuration,
+    );
+    _entryProgress = CurvedAnimation(
+      parent: _entryController,
+      curve: Curves.easeOutCubic,
+    );
 
     _breathController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1600),
-    )..repeat(reverse: true);
+      duration: kBubbleBreathDuration,
+    );
 
-    _breathScale = Tween<double>(begin: 0.96, end: 1.04).animate(
+    _breathScale = Tween<double>(
+      begin: kBubbleBreathMinScale,
+      end: kBubbleBreathMaxScale,
+    ).animate(
       CurvedAnimation(
         parent: _breathController,
         curve: Curves.easeInOut,
@@ -131,22 +178,346 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
 
     _nudgeController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 450),
+      duration: kBubbleNudgeDuration,
     );
+
+    _checkoutAlertController = AnimationController(
+      vsync: this,
+      duration: kBubbleAlertCycleDuration,
+    );
+
+    _checkoutPunchController = AnimationController(
+      vsync: this,
+      duration: kBubbleAlertPunchDuration,
+    );
+    _checkoutPunchScale = TweenSequence<double>([
+      TweenSequenceItem<double>(
+        tween: Tween<double>(begin: 1.0, end: 1.12).chain(
+          CurveTween(curve: Curves.easeOutCubic),
+        ),
+        weight: 55,
+      ),
+      TweenSequenceItem<double>(
+        tween: Tween<double>(begin: 1.12, end: 1.0).chain(
+          CurveTween(curve: Curves.easeInOutCubic),
+        ),
+        weight: 45,
+      ),
+    ]).animate(_checkoutPunchController);
 
     _rebuildNudgeOffset();
 
-    _nudgeTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!mounted || _nudgeController.isAnimating) return;
-      _nudgeController.forward(from: 0.0).then((_) {
-        if (mounted) {
-          _nudgeController.reverse();
-        }
-      }).catchError((_) {});
-    });
-
     _sub = FlutterOverlayWindow.overlayListener.listen((event) {
       unawaited(_handleOverlayEvent(event));
+    });
+
+    debugPrint(
+      '[QuickOverlayBubble] initialized interactionWidth=$kEdgeStripWidth visualWidth=$kBubbleHandleMaxVisualWidth height=$kBubbleHandleHeight',
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (_motionConfigured && reduceMotion == _reduceMotion) return;
+    _reduceMotion = reduceMotion;
+    _motionConfigured = true;
+    _configureMotion();
+  }
+
+  void _configureMotion() {
+    _attentionTimer?.cancel();
+    _nudgeController.stop();
+
+    if (_reduceMotion) {
+      _entryController.value = 1.0;
+      _nudgeController.value = 0.0;
+    } else {
+      if (_entryController.value < 1.0) {
+        _entryController.forward();
+      }
+      if (_bubbleModeActive && !_checkoutOverdue) {
+        _scheduleAttentionNudges();
+      }
+    }
+
+    _syncBreathForMode(source: 'motion_config');
+    _syncCheckoutAlertMotion(source: 'motion_config');
+
+    debugPrint(
+      '[QuickOverlayBubble] motion_config reduced=$_reduceMotion mode=$_motionModeName bubbleActive=$_bubbleModeActive entryMs=${kBubbleEntryDuration.inMilliseconds} breathMs=${kBubbleBreathDuration.inMilliseconds} nudgeMs=${kBubbleNudgeDuration.inMilliseconds}',
+    );
+  }
+
+  void _syncBreathForMode({required String source}) {
+    if (!_motionConfigured) return;
+
+    final shouldAnimate =
+        !_reduceMotion && _bubbleModeActive && !_checkoutOverdue;
+    if (shouldAnimate) {
+      if (!_breathController.isAnimating) {
+        _breathController.repeat(reverse: true);
+        debugPrint(
+          '[QuickOverlayBubble] breath_resume source=$source mode=$_motionModeName',
+        );
+      }
+      return;
+    }
+
+    final wasAnimating = _breathController.isAnimating;
+    final wasCentered = (_breathController.value - 0.5).abs() < 0.0001;
+    _breathController.stop();
+    _breathController.value = 0.5;
+
+    if (wasAnimating || !wasCentered) {
+      debugPrint(
+        '[QuickOverlayBubble] breath_pause source=$source mode=$_motionModeName reduced=$_reduceMotion',
+      );
+    }
+  }
+
+  void _syncCheckoutAlertMotion({required String source}) {
+    if (!_motionConfigured) return;
+
+    final shouldAnimate =
+        !_reduceMotion && _bubbleModeActive && _checkoutOverdue;
+    if (shouldAnimate) {
+      if (!_checkoutAlertController.isAnimating) {
+        _checkoutAlertController.repeat();
+        debugPrint(
+          '[QuickOverlayBubble] checkout_alert_resume source=$source cycleMs=${kBubbleAlertCycleDuration.inMilliseconds}',
+        );
+      }
+      return;
+    }
+
+    final wasAnimating = _checkoutAlertController.isAnimating;
+    _checkoutAlertController.stop();
+    _checkoutAlertController.value = 0.0;
+    if (!_checkoutOverdue) {
+      _checkoutPunchController.stop();
+      _checkoutPunchController.value = 0.0;
+    } else if (_reduceMotion) {
+      _checkoutPunchController.value = 1.0;
+    }
+
+    if (wasAnimating) {
+      debugPrint(
+        '[QuickOverlayBubble] checkout_alert_pause source=$source reduced=$_reduceMotion overdue=$_checkoutOverdue',
+      );
+    }
+  }
+
+  void _setStateAndSyncBreath(
+    VoidCallback update, {
+    required String source,
+  }) {
+    if (!mounted) return;
+    setState(update);
+    _syncBreathForMode(source: source);
+    _syncCheckoutAlertMotion(source: source);
+  }
+
+  void _setCheckoutOverdue(
+    bool overdue, {
+    required String source,
+  }) {
+    if (!mounted) return;
+    final changed = _checkoutOverdue != overdue;
+    if (changed) {
+      setState(() {
+        _checkoutOverdue = overdue;
+      });
+    }
+
+    if (overdue) {
+      _attentionTimer?.cancel();
+      _nudgeController.stop();
+      _nudgeController.value = 0.0;
+      if (_reduceMotion) {
+        _checkoutPunchController.value = 1.0;
+      } else if (changed) {
+        _checkoutPunchController.forward(from: 0.0);
+      }
+    } else {
+      _checkoutPunchController.stop();
+      _checkoutPunchController.value = 0.0;
+      if (changed && !_reduceMotion && _bubbleModeActive) {
+        _scheduleAttentionNudges();
+      }
+    }
+
+    _syncBreathForMode(source: source);
+    _syncCheckoutAlertMotion(source: source);
+
+    if (changed) {
+      debugPrint(
+        '[QuickOverlayBoundary] bubble_alert source=$source overdue=$overdue nativeResize=false visualWidth=${overdue ? kBubbleAlertVisualWidth : kBubbleHandleMaxVisualWidth}',
+      );
+    }
+  }
+
+  bool _nativeWindowIsBubble() {
+    final view = WidgetsBinding.instance.platformDispatcher.views.first;
+    final currentWidth = view.physicalSize.width.round();
+    final bubblePhysicalWidth =
+        (kEdgeStripWidth * view.devicePixelRatio).round();
+    return currentWidth <= bubblePhysicalWidth + 8;
+  }
+
+  void _handleCheckoutBoundaryTick(DateTime now) {
+    if (_isSimpleMode || _checkoutBoundaryInFlight) return;
+    final scheduledEnd = _scheduledCheckoutEnd;
+    if (scheduledEnd == null || now.isBefore(scheduledEnd)) return;
+    _scheduledCheckoutEnd = null;
+    unawaited(
+      _refreshLocalCheckoutBoundary(
+        source: 'scheduled_end_boundary',
+      ),
+    );
+  }
+
+  Future<void> _refreshLocalCheckoutBoundary({
+    required String source,
+  }) async {
+    if (_checkoutBoundaryInFlight) return;
+    _checkoutBoundaryInFlight = true;
+
+    try {
+      if (_isSimpleMode) {
+        _scheduledCheckoutEnd = null;
+        _setCheckoutOverdue(false, source: '${source}_simple_mode');
+        return;
+      }
+
+      final decision = await CheckoutNudgeGuard.evaluate();
+      if (!mounted) return;
+
+      switch (decision.type) {
+        case CheckoutOverlayDecisionType.none:
+          final scheduledEnd = decision.scheduledEnd;
+          _scheduledCheckoutEnd = scheduledEnd != null &&
+                  scheduledEnd.isAfter(DateTime.now())
+              ? scheduledEnd
+              : null;
+          _setCheckoutOverdue(false, source: '${source}_none');
+          debugPrint(
+            '[QuickOverlayBoundary] refresh source=$source type=none scheduled=${_scheduledCheckoutEnd != null}',
+          );
+          break;
+        case CheckoutOverlayDecisionType.checkoutNudge:
+          _scheduledCheckoutEnd = null;
+          _cancelShortBreak();
+          _attentionTimer?.cancel();
+          if (_nativeWindowIsBubble()) {
+            if (_uiMode != OverlayUIMode.bubble) {
+              _setStateAndSyncBreath(
+                () {
+                  _uiMode = OverlayUIMode.bubble;
+                },
+                source: 'local_checkout_bubble_geometry',
+              );
+            }
+            _setCheckoutOverdue(true, source: source);
+            debugPrint(
+              '[QuickOverlayBoundary] transition source=$source mode=bubble_attention state=checkoutOverdue localOnly=true nativeResize=false',
+            );
+          } else {
+            _setCheckoutOverdue(false, source: '${source}_panel_geometry');
+            _setStateAndSyncBreath(
+              () {
+                _uiMode = OverlayUIMode.checkoutNudge;
+                _overlayStartedAt = DateTime.now();
+                _elapsed = Duration.zero;
+              },
+              source: 'local_checkout_boundary',
+            );
+            debugPrint(
+              '[QuickOverlayBoundary] transition source=$source mode=checkoutNudge localOnly=true nativeResize=false',
+            );
+          }
+          break;
+        case CheckoutOverlayDecisionType.workFinished:
+          _scheduledCheckoutEnd = null;
+          _cancelShortBreak();
+          _attentionTimer?.cancel();
+          _setCheckoutOverdue(false, source: source);
+          if (_nativeWindowIsBubble()) {
+            if (_uiMode != OverlayUIMode.bubble) {
+              _setStateAndSyncBreath(
+                () {
+                  _uiMode = OverlayUIMode.bubble;
+                },
+                source: 'local_work_finished_bubble_geometry',
+              );
+            }
+            debugPrint(
+              '[QuickOverlayBoundary] transition source=$source mode=bubble state=workFinished localOnly=true nativeResize=false',
+            );
+          } else {
+            _setStateAndSyncBreath(
+              () {
+                _uiMode = OverlayUIMode.workFinished;
+                _overlayStartedAt = DateTime.now();
+                _elapsed = Duration.zero;
+              },
+              source: 'local_work_finished',
+            );
+            debugPrint(
+              '[QuickOverlayBoundary] transition source=$source mode=workFinished localOnly=true nativeResize=false',
+            );
+          }
+          break;
+      }
+    } catch (error) {
+      debugPrint(
+        '[QuickOverlayBoundary] refresh_failure source=$source type=${error.runtimeType}',
+      );
+      _scheduleBoundaryRetry();
+    } finally {
+      _checkoutBoundaryInFlight = false;
+    }
+  }
+
+  void _scheduleBoundaryRetry() {
+    if (_isSimpleMode) return;
+    _scheduledCheckoutEnd = DateTime.now().add(
+      const Duration(seconds: 15),
+    );
+  }
+
+  void _scheduleAttentionNudges() {
+    _attentionTimer?.cancel();
+    if (_reduceMotion || !_bubbleModeActive || _checkoutOverdue) return;
+    _attentionStep = 0;
+    _attentionTimer = Timer(const Duration(milliseconds: 650), () {
+      unawaited(_runAttentionNudge());
+    });
+  }
+
+  Future<void> _runAttentionNudge() async {
+    if (!mounted ||
+        _reduceMotion ||
+        !_bubbleModeActive ||
+        _checkoutOverdue ||
+        _nudgeController.isAnimating) {
+      return;
+    }
+    try {
+      await _nudgeController.forward(from: 0.0);
+      if (!mounted || _reduceMotion) return;
+      await _nudgeController.reverse();
+    } catch (_) {
+      return;
+    }
+
+    if (!mounted || _reduceMotion) return;
+    _attentionStep += 1;
+    if (_attentionStep >= 2) return;
+    _attentionTimer = Timer(const Duration(milliseconds: 900), () {
+      unawaited(_runAttentionNudge());
     });
   }
 
@@ -159,24 +530,48 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
     if (!mounted) return;
 
     if (event == '__work_finished__') {
+      _scheduledCheckoutEnd = null;
       _cancelShortBreak();
       if (!mounted) return;
-      setState(() {
-        _uiMode = simpleMode ? OverlayUIMode.bubble : OverlayUIMode.workFinished;
-        _overlayStartedAt = DateTime.now();
-        _elapsed = Duration.zero;
-      });
+      _setCheckoutOverdue(false, source: 'work_finished');
+      _setStateAndSyncBreath(
+        () {
+          _uiMode = simpleMode || _nativeWindowIsBubble()
+              ? OverlayUIMode.bubble
+              : OverlayUIMode.workFinished;
+          _overlayStartedAt = DateTime.now();
+          _elapsed = Duration.zero;
+        },
+        source: 'work_finished',
+      );
       return;
     }
 
     if (event == '__checkout_nudge__') {
+      _scheduledCheckoutEnd = null;
       _cancelShortBreak();
       if (!mounted) return;
-      setState(() {
-        _uiMode = simpleMode ? OverlayUIMode.bubble : OverlayUIMode.checkoutNudge;
-        _overlayStartedAt = DateTime.now();
-        _elapsed = Duration.zero;
-      });
+      if (!simpleMode && _nativeWindowIsBubble()) {
+        _setStateAndSyncBreath(
+          () {
+            _uiMode = OverlayUIMode.bubble;
+          },
+          source: 'checkout_nudge_bubble_geometry',
+        );
+        _setCheckoutOverdue(true, source: 'checkout_nudge');
+      } else {
+        _setCheckoutOverdue(false, source: 'checkout_nudge_panel_geometry');
+        _setStateAndSyncBreath(
+          () {
+            _uiMode = simpleMode
+                ? OverlayUIMode.bubble
+                : OverlayUIMode.checkoutNudge;
+            _overlayStartedAt = DateTime.now();
+            _elapsed = Duration.zero;
+          },
+          source: 'checkout_nudge',
+        );
+      }
       return;
     }
 
@@ -184,14 +579,17 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
       _cancelShortBreak();
 
       final raw = event.substring('__mode:'.length);
-      setState(() {
-        if (raw.startsWith('topHalf')) {
-          _uiMode =
-              _topHalfAllowed ? OverlayUIMode.topHalf : OverlayUIMode.bubble;
-        } else {
-          _uiMode = OverlayUIMode.bubble;
-        }
-      });
+      _setStateAndSyncBreath(
+        () {
+          if (raw.startsWith('topHalf')) {
+            _uiMode =
+                _topHalfAllowed ? OverlayUIMode.topHalf : OverlayUIMode.bubble;
+          } else {
+            _uiMode = OverlayUIMode.bubble;
+          }
+        },
+        source: 'mode_event',
+      );
       return;
     }
 
@@ -203,11 +601,17 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
         _overlayStartedAt = DateTime.now();
         _elapsed = Duration.zero;
       });
+      unawaited(
+        _refreshLocalCheckoutBoundary(
+          source: 'collapse_event',
+        ),
+      );
     }
   }
 
   Future<bool> _syncAppMode() async {
     final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
     final mode = prefs.getString(kAppModePrefsKey);
 
     if (OverlayAccessGuard.isBlockedMode(mode)) {
@@ -218,18 +622,32 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
     final isSimple = OverlayAccessGuard.normalizeMode(mode) == kAppModeSimpleValue;
 
     if (!mounted) return isSimple;
-    setState(() {
-      _isSimpleMode = isSimple;
-      if (_isSimpleMode && _uiMode != OverlayUIMode.bubble) {
-        _cancelShortBreak();
-        _uiMode = OverlayUIMode.bubble;
-      }
-    });
+    _setStateAndSyncBreath(
+      () {
+        _isSimpleMode = isSimple;
+        if (_isSimpleMode) {
+          _checkoutOverdue = false;
+        }
+        if (_isSimpleMode && _uiMode != OverlayUIMode.bubble) {
+          _cancelShortBreak();
+          _uiMode = OverlayUIMode.bubble;
+        }
+      },
+      source: 'app_mode_sync',
+    );
     return isSimple;
   }
 
   Future<void> _loadAppMode() async {
-    await _syncAppMode();
+    final isSimple = await _syncAppMode();
+    if (!mounted) return;
+    if (isSimple) {
+      _scheduledCheckoutEnd = null;
+      return;
+    }
+    await _refreshLocalCheckoutBoundary(
+      source: 'overlay_init',
+    );
   }
 
   Future<void> _loadEdgeSide() async {
@@ -239,6 +657,9 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
       _side = side;
       _rebuildNudgeOffset();
     });
+    if (_motionConfigured && !_reduceMotion && _bubbleModeActive) {
+      _scheduleAttentionNudges();
+    }
   }
 
   Future<void> _loadBubbleTop() async {
@@ -263,8 +684,8 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
 
   void _rebuildNudgeOffset() {
     final end = _side == OverlayEdgeSide.left
-        ? const Offset(0.20, 0)
-        : const Offset(-0.20, 0);
+        ? const Offset(0.16, 0)
+        : const Offset(-0.16, 0);
     _nudgeOffset = Tween<Offset>(
       begin: Offset.zero,
       end: end,
@@ -291,24 +712,30 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
     _shortBreakTimer?.cancel();
     _shortBreakActive = true;
 
-    setState(() {
-      _overlayStartedAt = DateTime.now();
-      _elapsed = Duration.zero;
-      _uiMode = OverlayUIMode.bubble;
-    });
+    _setStateAndSyncBreath(
+      () {
+        _overlayStartedAt = DateTime.now();
+        _elapsed = Duration.zero;
+        _uiMode = OverlayUIMode.bubble;
+      },
+      source: 'short_break_start',
+    );
 
     _shortBreakTimer = Timer(const Duration(seconds: 15), () {
       if (!mounted) return;
       if (!_shortBreakActive) return;
       if (seq != _shortBreakSeq) return;
 
-      setState(() {
-        _uiMode =
-            _topHalfAllowed ? OverlayUIMode.topHalf : OverlayUIMode.bubble;
-        _shortBreakActive = false;
-        _overlayStartedAt = DateTime.now();
-        _elapsed = Duration.zero;
-      });
+      _setStateAndSyncBreath(
+        () {
+          _uiMode =
+              _topHalfAllowed ? OverlayUIMode.topHalf : OverlayUIMode.bubble;
+          _shortBreakActive = false;
+          _overlayStartedAt = DateTime.now();
+          _elapsed = Duration.zero;
+        },
+        source: 'short_break_end',
+      );
     });
   }
 
@@ -316,10 +743,13 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
   void dispose() {
     _sub?.cancel();
     _tickTimer?.cancel();
-    _nudgeTimer?.cancel();
+    _attentionTimer?.cancel();
     _shortBreakTimer?.cancel();
+    _entryController.dispose();
     _breathController.dispose();
     _nudgeController.dispose();
+    _checkoutAlertController.dispose();
+    _checkoutPunchController.dispose();
     super.dispose();
   }
 
@@ -328,17 +758,22 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
   }
 
   Future<void> _launchMainApp() async {
+    debugPrint('[QuickOverlayBubble] launch_main_start');
     try {
       await FlutterOverlayWindow.closeOverlay();
       FlutterForegroundTask.launchApp('/');
       await _sendBackToMain('open_main_app');
     } catch (_) {
+      debugPrint('[QuickOverlayBubble] launch_main_failure');
       if (!mounted) return;
-      setState(() {
-        _overlayStartedAt = DateTime.now();
-        _elapsed = Duration.zero;
-        _uiMode = OverlayUIMode.bubble;
-      });
+      _setStateAndSyncBreath(
+        () {
+          _overlayStartedAt = DateTime.now();
+          _elapsed = Duration.zero;
+          _uiMode = OverlayUIMode.bubble;
+        },
+        source: 'launch_main_failure',
+      );
     }
   }
 
@@ -461,11 +896,14 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
     }
 
     if (_uiMode == OverlayUIMode.topHalf) {
-      setState(() {
-        _overlayStartedAt = DateTime.now();
-        _elapsed = Duration.zero;
-        _uiMode = OverlayUIMode.bubble;
-      });
+      _setStateAndSyncBreath(
+        () {
+          _overlayStartedAt = DateTime.now();
+          _elapsed = Duration.zero;
+          _uiMode = OverlayUIMode.bubble;
+        },
+        source: 'reset_panel',
+      );
 
       if (lastBreakDate != null && lastBreakDate.isNotEmpty) {
         await prefs.setString(
@@ -490,27 +928,82 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
   Widget _buildEdgeStrip(BuildContext context) {
     final dockRight = _side == OverlayEdgeSide.right;
     final hostWidth = kEdgeStripWidth;
-    final visualWidth = hostWidth
+    final normalVisualWidth = hostWidth
         .clamp(kBubbleHandleMinVisualWidth, kBubbleHandleMaxVisualWidth)
         .toDouble();
+    final targetVisualWidth = _checkoutOverdue
+        ? kBubbleAlertVisualWidth.clamp(0.0, hostWidth).toDouble()
+        : normalVisualWidth;
+    final dragDuration =
+        _reduceMotion ? Duration.zero : const Duration(milliseconds: 140);
+    final resizeDuration =
+        _reduceMotion ? Duration.zero : kBubbleAlertResizeDuration;
 
     return SizedBox(
       width: hostWidth,
       height: kBubbleHandleHeight,
-      child: Align(
-        alignment: dockRight ? Alignment.centerRight : Alignment.centerLeft,
-        child: SlideTransition(
-          position: _nudgeOffset,
-          child: ScaleTransition(
-            scale: _breathScale,
-            child: _OverlayEdgeHandle(
-              width: visualWidth,
-              height: kBubbleHandleHeight,
-              dockRight: dockRight,
-              elapsedText: _formatElapsed(_elapsed),
+      child: AnimatedBuilder(
+        animation: _entryProgress,
+        builder: (context, _) {
+          final progress = _reduceMotion ? 1.0 : _entryProgress.value;
+          final horizontalOffset =
+              (dockRight ? 1.0 : -1.0) * (1.0 - progress) * 8.0;
+          final entryScale = 0.96 + (0.04 * progress);
+          return Opacity(
+            opacity: progress.clamp(0.0, 1.0).toDouble(),
+            child: Transform.translate(
+              offset: Offset(horizontalOffset, 0),
+              child: Transform.scale(
+                scale: entryScale,
+                alignment:
+                    dockRight ? Alignment.centerRight : Alignment.centerLeft,
+                child: AnimatedBuilder(
+                  animation: _checkoutAlertController,
+                  builder: (context, _) {
+                    return Align(
+                      alignment: dockRight
+                          ? Alignment.centerRight
+                          : Alignment.centerLeft,
+                      child: SlideTransition(
+                        position: _nudgeOffset,
+                        child: ScaleTransition(
+                          scale: _breathScale,
+                          child: ScaleTransition(
+                            scale: _checkoutPunchScale,
+                            alignment: dockRight
+                                ? Alignment.centerRight
+                                : Alignment.centerLeft,
+                            child: AnimatedScale(
+                              scale: _isDraggingBubble ? 1.025 : 1.0,
+                              duration: dragDuration,
+                              curve: Curves.easeOutCubic,
+                              child: AnimatedContainer(
+                                width: targetVisualWidth,
+                                height: kBubbleHandleHeight,
+                                duration: resizeDuration,
+                                curve: Curves.easeOutCubic,
+                                child: _OverlayEdgeHandle(
+                                  width: targetVisualWidth,
+                                  height: kBubbleHandleHeight,
+                                  dockRight: dockRight,
+                                  elapsedText: _formatElapsed(_elapsed),
+                                  checkoutOverdue: _checkoutOverdue,
+                                  alertProgress: _reduceMotion
+                                      ? 0.0
+                                      : _checkoutAlertController.value,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
@@ -534,6 +1027,12 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
                 child: GestureDetector(
                   behavior: HitTestBehavior.translucent,
                   onTap: _launchMainApp,
+                  onPanStart: (_) {
+                    if (_isDraggingBubble) return;
+                    setState(() {
+                      _isDraggingBubble = true;
+                    });
+                  },
                   onPanUpdate: (details) {
                     setState(() {
                       _bubbleTop = _clampBubbleTop(
@@ -547,12 +1046,20 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
                       _bubbleTop,
                       constraints.maxHeight,
                     );
-                    if (_bubbleTop != topToSave) {
-                      setState(() {
-                        _bubbleTop = topToSave;
-                      });
-                    }
+                    setState(() {
+                      _isDraggingBubble = false;
+                      _bubbleTop = topToSave;
+                    });
                     await _saveBubbleTop(topToSave);
+                    debugPrint(
+                      '[QuickOverlayBubble] drag_end top=${topToSave.toStringAsFixed(1)}',
+                    );
+                  },
+                  onPanCancel: () {
+                    if (!_isDraggingBubble) return;
+                    setState(() {
+                      _isDraggingBubble = false;
+                    });
                   },
                   child: _buildEdgeStrip(context),
                 ),
@@ -1110,44 +1617,69 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
 
   @override
   Widget build(BuildContext context) {
+    Widget body;
+    String modeKey;
+
     if (_isSimpleMode) {
-      return Material(
-        color: Colors.transparent,
-        child: _buildBubbleOverlay(context),
+      modeKey = 'simple_bubble';
+      body = _buildBubbleOverlay(context);
+    } else if (_uiMode == OverlayUIMode.workFinished) {
+      modeKey = 'work_finished';
+      body = _buildWorkFinishedOverlay(context);
+    } else if (_uiMode == OverlayUIMode.checkoutNudge) {
+      modeKey = 'checkout_nudge';
+      body = _buildTopHalfOverlay(
+        context,
+        checkoutNudge: true,
       );
+    } else {
+      final effectiveMode =
+          _uiMode == OverlayUIMode.topHalf && _topHalfAllowed
+              ? OverlayUIMode.topHalf
+              : OverlayUIMode.bubble;
+      if (effectiveMode == OverlayUIMode.topHalf) {
+        modeKey = 'top_half';
+        body = _buildTopHalfOverlay(context);
+      } else {
+        modeKey = 'bubble';
+        body = _buildBubbleOverlay(context);
+      }
     }
 
-    if (_uiMode == OverlayUIMode.workFinished) {
-      return Material(
-        color: Colors.transparent,
-        child: _buildWorkFinishedOverlay(context),
-      );
-    }
-
-    if (_uiMode == OverlayUIMode.checkoutNudge) {
-      return Material(
-        color: Colors.transparent,
-        child: _buildTopHalfOverlay(
-          context,
-          checkoutNudge: true,
-        ),
-      );
-    }
-
-    final effectiveMode = _uiMode == OverlayUIMode.topHalf && _topHalfAllowed
-        ? OverlayUIMode.topHalf
-        : OverlayUIMode.bubble;
-
-    if (effectiveMode == OverlayUIMode.topHalf) {
-      return Material(
-        color: Colors.transparent,
-        child: _buildTopHalfOverlay(context),
-      );
-    }
+    final transitionDuration =
+        _reduceMotion ? Duration.zero : kBubbleModeTransitionDuration;
 
     return Material(
       color: Colors.transparent,
-      child: _buildBubbleOverlay(context),
+      child: AnimatedSwitcher(
+        duration: transitionDuration,
+        reverseDuration: transitionDuration,
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        transitionBuilder: (child, animation) {
+          if (_reduceMotion) return child;
+          final offset = Tween<Offset>(
+            begin: const Offset(0, 0.025),
+            end: Offset.zero,
+          ).animate(
+            CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOutCubic,
+            ),
+          );
+          return FadeTransition(
+            opacity: animation,
+            child: SlideTransition(
+              position: offset,
+              child: child,
+            ),
+          );
+        },
+        child: KeyedSubtree(
+          key: ValueKey<String>(modeKey),
+          child: body,
+        ),
+      ),
     );
   }
 }
@@ -1157,119 +1689,175 @@ class _OverlayEdgeHandle extends StatelessWidget {
   final double height;
   final bool dockRight;
   final String elapsedText;
+  final bool checkoutOverdue;
+  final double alertProgress;
 
   const _OverlayEdgeHandle({
     required this.width,
     required this.height,
     required this.dockRight,
     required this.elapsedText,
+    required this.checkoutOverdue,
+    required this.alertProgress,
   });
+
+  Color _alertColor(double progress) {
+    final p = progress % 1.0;
+    if (p < 0.42) return kBubbleAlertRed;
+    if (p < 0.50) {
+      return Color.lerp(
+        kBubbleAlertRed,
+        kBubbleAlertGreen,
+        (p - 0.42) / 0.08,
+      )!;
+    }
+    if (p < 0.92) return kBubbleAlertGreen;
+    return Color.lerp(
+      kBubbleAlertGreen,
+      kBubbleAlertRed,
+      (p - 0.92) / 0.08,
+    )!;
+  }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final icon =
+    final normalIcon =
         dockRight ? Icons.chevron_left_rounded : Icons.chevron_right_rounded;
+    final icon = checkoutOverdue ? Icons.priority_high_rounded : normalIcon;
     final turns = dockRight ? 3 : 1;
-    final bg0 = Color.alphaBlend(
-      cs.primaryContainer.withOpacity(0.58),
-      cs.surface,
-    );
-    final bg1 = Color.alphaBlend(
-      cs.secondaryContainer.withOpacity(0.40),
-      cs.surface,
-    );
-    final border = cs.outlineVariant.withOpacity(0.88);
+    final alertColor = _alertColor(alertProgress);
+    final bg0 = checkoutOverdue
+        ? alertColor
+        : Color.alphaBlend(
+            cs.primaryContainer.withOpacity(0.58),
+            cs.surface,
+          );
+    final bg1 = checkoutOverdue
+        ? alertColor
+        : Color.alphaBlend(
+            cs.secondaryContainer.withOpacity(0.40),
+            cs.surface,
+          );
+    final border = checkoutOverdue
+        ? Colors.white.withOpacity(0.98)
+        : cs.outlineVariant.withOpacity(0.88);
+    final foreground = checkoutOverdue
+        ? Colors.white
+        : cs.onSurface.withOpacity(0.92);
+    final secondaryForeground = checkoutOverdue
+        ? Colors.white.withOpacity(0.96)
+        : cs.onSurfaceVariant.withOpacity(0.84);
+    final gripColor = checkoutOverdue
+        ? Colors.white.withOpacity(0.92)
+        : cs.onSurfaceVariant.withOpacity(0.56);
+    final shadowColor = checkoutOverdue
+        ? alertColor.withOpacity(0.86)
+        : cs.shadow.withOpacity(0.22);
 
     return Semantics(
       button: true,
-      label: '앱으로 돌아가기, 경과 시간 $elapsedText',
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(999),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-          child: Container(
-            width: width,
-            height: height,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(999),
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [bg0, bg1],
-              ),
-              border: Border.all(color: border, width: 1),
-              boxShadow: [
-                BoxShadow(
-                  blurRadius: 16,
-                  offset: const Offset(0, 6),
-                  color: cs.shadow.withOpacity(0.22),
-                ),
-              ],
+      label: checkoutOverdue
+          ? '퇴근 시간이 지났습니다. 앱으로 돌아가 퇴근해 주세요. 경과 시간 $elapsedText'
+          : '앱으로 돌아가기, 경과 시간 $elapsedText',
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(999),
+          boxShadow: [
+            BoxShadow(
+              blurRadius: checkoutOverdue ? 22 : 16,
+              spreadRadius: checkoutOverdue ? 3.5 : 0,
+              offset: checkoutOverdue ? Offset.zero : const Offset(0, 6),
+              color: shadowColor,
             ),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final availableHeight = constraints.maxHeight;
-                final compact = availableHeight < 64;
-                final iconSize = compact ? 14.0 : 16.0;
-                final edgeInset = compact ? 3.0 : 5.0;
-                final timeTop = edgeInset + iconSize + 2;
-                final showGrip = availableHeight >= 62;
-                final timeBottom = showGrip ? 13.0 : edgeInset;
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(999),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(
+              sigmaX: checkoutOverdue ? 8 : 18,
+              sigmaY: checkoutOverdue ? 8 : 18,
+            ),
+            child: Container(
+              width: width,
+              height: height,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(999),
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [bg0, bg1],
+                ),
+                border: Border.all(
+                  color: border,
+                  width: checkoutOverdue ? 2.5 : 1,
+                ),
+              ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final availableHeight = constraints.maxHeight;
+                  final compact = availableHeight < 64;
+                  final iconSize = checkoutOverdue
+                      ? (compact ? 19.0 : 22.0)
+                      : (compact ? 15.0 : 18.0);
+                  final edgeInset = compact ? 3.0 : 5.0;
+                  final timeTop = edgeInset + iconSize + 2;
+                  final showGrip = availableHeight >= 62;
+                  final timeBottom = showGrip ? 13.0 : edgeInset;
 
-                return ClipRect(
-                  child: Stack(
-                    fit: StackFit.expand,
-                    alignment: Alignment.center,
-                    children: [
-                      Positioned(
-                        top: edgeInset,
-                        left: 0,
-                        right: 0,
-                        child: Icon(
-                          icon,
-                          size: iconSize,
-                          color: cs.onSurface.withOpacity(0.92),
+                  return ClipRect(
+                    child: Stack(
+                      fit: StackFit.expand,
+                      alignment: Alignment.center,
+                      children: [
+                        Positioned(
+                          top: edgeInset,
+                          left: 0,
+                          right: 0,
+                          child: Icon(
+                            icon,
+                            size: iconSize,
+                            color: foreground,
+                          ),
                         ),
-                      ),
-                      Positioned(
-                        top: timeTop,
-                        bottom: timeBottom,
-                        left: 1,
-                        right: 1,
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: RotatedBox(
-                            quarterTurns: turns,
-                            child: Text(
-                              elapsedText,
-                              maxLines: 1,
-                              style: TextStyle(
-                                color:
-                                    cs.onSurfaceVariant.withOpacity(0.84),
-                                fontSize: 8,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 0.15,
-                                height: 1,
+                        Positioned(
+                          top: timeTop,
+                          bottom: timeBottom,
+                          left: 1,
+                          right: 1,
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: RotatedBox(
+                              quarterTurns: turns,
+                              child: Text(
+                                elapsedText,
+                                maxLines: 1,
+                                style: TextStyle(
+                                  color: secondaryForeground,
+                                  fontSize: checkoutOverdue ? 9 : 8,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: checkoutOverdue ? 0.3 : 0.15,
+                                  height: 1,
+                                ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                      if (showGrip)
-                        Positioned(
-                          bottom: 5,
-                          left: 0,
-                          right: 0,
-                          child: _GripDots(
-                            color:
-                                cs.onSurfaceVariant.withOpacity(0.56),
+                        if (showGrip)
+                          Positioned(
+                            bottom: 5,
+                            left: 0,
+                            right: 0,
+                            child: _GripDots(
+                              color: gripColor,
+                            ),
                           ),
-                        ),
-                    ],
-                  ),
-                );
-              },
+                      ],
+                    ),
+                  );
+                },
+              ),
             ),
           ),
         ),
@@ -1290,9 +1878,9 @@ class _GripDots extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         _Dot(color: color),
-        const SizedBox(width: 2),
+        const SizedBox(width: 1.5),
         _Dot(color: color),
-        const SizedBox(width: 2),
+        const SizedBox(width: 1.5),
         _Dot(color: color),
       ],
     );
@@ -1307,8 +1895,8 @@ class _Dot extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 3.5,
-      height: 3.5,
+      width: 3.0,
+      height: 3.0,
       decoration: BoxDecoration(
         color: color,
         shape: BoxShape.circle,

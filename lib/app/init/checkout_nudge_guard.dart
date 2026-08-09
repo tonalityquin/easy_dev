@@ -1,8 +1,8 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../features/mode_single/application/att_brk_repository.dart';
-import 'work_schedule_prefs.dart';
+import 'local_attendance_reader.dart';
+import 'local_work_schedule_reader.dart';
 
 enum CheckoutOverlayDecisionType {
   none,
@@ -35,120 +35,129 @@ class CheckoutNudgeGuard {
   static Future<CheckoutNudgeDecision> evaluate({DateTime? now}) async {
     final current = now ?? DateTime.now();
     final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+
     final isWorking = prefs.getBool('isWorking') ?? false;
-    final events = await AttBrkRepository.instance.getEventsForDate(current);
+    final todayState = await LocalAttendanceReader.instance.readDay(current);
 
     if (!isWorking) {
-      if (events.containsKey(AttBrkModeType.workOut)) {
-        return const CheckoutNudgeDecision(
-          type: CheckoutOverlayDecisionType.workFinished,
-          reason: 'already_worked_out_today_and_not_working',
-        );
-      }
-
-      return const CheckoutNudgeDecision(
-        type: CheckoutOverlayDecisionType.none,
-        reason: 'isWorking=false',
+      final decision = todayState.hasWorkOut
+          ? const CheckoutNudgeDecision(
+              type: CheckoutOverlayDecisionType.workFinished,
+              reason: 'already_worked_out_today_and_not_working',
+            )
+          : const CheckoutNudgeDecision(
+              type: CheckoutOverlayDecisionType.none,
+              reason: 'isWorking=false',
+            );
+      _logDecision(
+        decision: decision,
+        isWorking: isWorking,
+        hasOpenSession: false,
       );
+      return decision;
     }
 
-    final scheduledEnd = _resolveScheduledEndDateTime(
+    final openSessionDate =
+        await LocalAttendanceReader.instance.findOpenWorkSessionDate();
+    final sessionDate = openSessionDate ?? DateTime(
+      current.year,
+      current.month,
+      current.day,
+    );
+
+    final schedule = LocalWorkScheduleReader.readForSessionDate(
       prefs: prefs,
-      now: current,
+      sessionDate: sessionDate,
+    );
+    final scheduledEnd = _resolveScheduledEndDateTime(
+      sessionDate: sessionDate,
+      start: schedule.start,
+      end: schedule.end,
     );
 
     if (scheduledEnd == null) {
-      return const CheckoutNudgeDecision(
+      const decision = CheckoutNudgeDecision(
         type: CheckoutOverlayDecisionType.none,
         reason: 'no_scheduled_end_time',
       );
+      _logDecision(
+        decision: decision,
+        isWorking: isWorking,
+        hasOpenSession: openSessionDate != null,
+      );
+      return decision;
     }
 
     if (current.isBefore(scheduledEnd.add(grace))) {
-      return CheckoutNudgeDecision(
+      final decision = CheckoutNudgeDecision(
         type: CheckoutOverlayDecisionType.none,
         reason: 'before_scheduled_end_time',
         scheduledEnd: scheduledEnd,
       );
+      _logDecision(
+        decision: decision,
+        isWorking: isWorking,
+        hasOpenSession: openSessionDate != null,
+      );
+      return decision;
     }
 
-    return CheckoutNudgeDecision(
+    final decision = CheckoutNudgeDecision(
       type: CheckoutOverlayDecisionType.checkoutNudge,
       reason: 'after_scheduled_end_time_while_working',
       scheduledEnd: scheduledEnd,
     );
+    _logDecision(
+      decision: decision,
+      isWorking: isWorking,
+      hasOpenSession: openSessionDate != null,
+    );
+    return decision;
   }
 
   static DateTime? _resolveScheduledEndDateTime({
-    required SharedPreferences prefs,
-    required DateTime now,
+    required DateTime sessionDate,
+    required LocalClockTime? start,
+    required LocalClockTime? end,
   }) {
-    final startByDay = WorkSchedulePrefs.readDayTimeMapFromPrefs(
-      prefs,
-      WorkSchedulePrefs.startMapKey,
-    );
-    final endByDay = WorkSchedulePrefs.readDayTimeMapFromPrefs(
-      prefs,
-      WorkSchedulePrefs.endMapKey,
-    );
-    final hasWeeklyEnd = endByDay.values.any((value) => value != null);
-
-    if (hasWeeklyEnd) {
-      return _resolveTodayScheduledEnd(
-        startByDay: startByDay,
-        endByDay: endByDay,
-        now: now,
-      );
-    }
-
-    final legacyEnd = WorkSchedulePrefs.parseHHmm(
-      prefs.getString('endTime'),
-    );
-
-    if (legacyEnd == null) return null;
-
-    return DateTime(
-      now.year,
-      now.month,
-      now.day,
-      legacyEnd.hour,
-      legacyEnd.minute,
-    );
-  }
-
-  static DateTime? _resolveTodayScheduledEnd({
-    required Map<String, TimeOfDay?> startByDay,
-    required Map<String, TimeOfDay?> endByDay,
-    required DateTime now,
-  }) {
-    final todayLabel = WorkSchedulePrefs.days[now.weekday - 1];
-    final start = startByDay[todayLabel];
-    final end = endByDay[todayLabel];
-
     if (end == null) return null;
 
     var scheduledEnd = DateTime(
-      now.year,
-      now.month,
-      now.day,
+      sessionDate.year,
+      sessionDate.month,
+      sessionDate.day,
       end.hour,
       end.minute,
     );
 
     if (start != null) {
       final scheduledStart = DateTime(
-        now.year,
-        now.month,
-        now.day,
+        sessionDate.year,
+        sessionDate.month,
+        sessionDate.day,
         start.hour,
         start.minute,
       );
-
       if (!scheduledEnd.isAfter(scheduledStart)) {
         scheduledEnd = scheduledEnd.add(const Duration(days: 1));
       }
     }
 
     return scheduledEnd;
+  }
+
+  static void _logDecision({
+    required CheckoutNudgeDecision decision,
+    required bool isWorking,
+    required bool hasOpenSession,
+  }) {
+    final now = DateTime.now();
+    final secondsUntilBoundary = decision.scheduledEnd == null
+        ? null
+        : decision.scheduledEnd!.difference(now).inSeconds;
+    debugPrint(
+      '[CheckoutBoundary][local] type=${decision.type.name} reason=${decision.reason} isWorking=$isWorking hasOpenSession=$hasOpenSession hasScheduledEnd=${decision.scheduledEnd != null} secondsUntilBoundary=${secondsUntilBoundary ?? -1}',
+    );
   }
 }

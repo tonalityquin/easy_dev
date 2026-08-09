@@ -76,7 +76,8 @@ Future<void> executeDocumentBoxAction(
     case DocumentBoxAction.submitLeaderCommuteRecords:
       final proceed = await showBreakDurationBlockingDialog(
         context,
-        message: '단말기에 저장된 출퇴근 기록을\n서버에 제출합니다.\n\n제출을 원치 않으면 아래 [취소] 버튼을 눌러 주세요.',
+        message:
+            '단말기에 저장된 출퇴근 기록을\n서버에 제출합니다.\n\n제출을 원치 않으면 아래 [취소] 버튼을 눌러 주세요.',
         duration: const Duration(seconds: 5),
       );
       if (!proceed) return;
@@ -85,7 +86,8 @@ Future<void> executeDocumentBoxAction(
     case DocumentBoxAction.submitLeaderRestTimeRecords:
       final proceed = await showBreakDurationBlockingDialog(
         context,
-        message: '단말기에 저장된 휴게시간 기록을\n서버에 제출합니다.\n\n제출을 원치 않으면 아래 [취소] 버튼을 눌러 주세요.',
+        message:
+            '단말기에 저장된 휴게시간 기록을\n서버에 제출합니다.\n\n제출을 원치 않으면 아래 [취소] 버튼을 눌러 주세요.',
         duration: const Duration(seconds: 5),
       );
       if (!proceed) return;
@@ -94,7 +96,8 @@ Future<void> executeDocumentBoxAction(
     case DocumentBoxAction.submitFielderCommuteRecords:
       final proceed = await showBreakDurationBlockingDialog(
         context,
-        message: '단말기에 저장된 출퇴근 기록을\n서버에 제출합니다.\n\n제출을 원치 않으면 아래 [취소] 버튼을 눌러 주세요.',
+        message:
+            '단말기에 저장된 출퇴근 기록을\n서버에 제출합니다.\n\n제출을 원치 않으면 아래 [취소] 버튼을 눌러 주세요.',
         duration: const Duration(seconds: 5),
       );
       if (!proceed) return;
@@ -103,7 +106,8 @@ Future<void> executeDocumentBoxAction(
     case DocumentBoxAction.submitFielderRestTimeRecords:
       final proceed = await showBreakDurationBlockingDialog(
         context,
-        message: '단말기에 저장된 휴게시간 기록을\n서버에 제출합니다.\n\n제출을 원치 않으면 아래 [취소] 버튼을 눌러 주세요.',
+        message:
+            '단말기에 저장된 휴게시간 기록을\n서버에 제출합니다.\n\n제출을 원치 않으면 아래 [취소] 버튼을 눌러 주세요.',
         duration: const Duration(seconds: 5),
       );
       if (!proceed) return;

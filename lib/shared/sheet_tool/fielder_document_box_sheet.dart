@@ -2,54 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
-import '../../design_system/common_ui/common_ui_overlays.dart';
 import '../../features/account/applications/user_state.dart';
 import '../../features/commute/domain/repositories/commute_log_repository.dart';
 import '../../features/dev/application/area_state.dart';
 import '../../features/mode_single/application/att_brk_mode_db.dart';
-import 'document_box_action.dart';
-import 'document_box_common_sheet.dart';
-import 'fielder_document_inventory_repository.dart';
-import 'document_item.dart';
-
-Future<DocumentBoxAction?> openFielderDocumentBox(BuildContext context) {
-  return showCommonOverlayBottomSheet<DocumentBoxAction>(
-    context: context,
-    useRootNavigator: false,
-    builder: (sheetContext) {
-      final userState = sheetContext.watch<UserState>();
-      final repo = FielderDocumentInventoryRepository.instance;
-      return CommonDocumentBoxSheet(
-        title: '현장 공통 서류함',
-        description: '보고서와 기록 제출 양식을 확인합니다.',
-        stream: repo.streamForUser(userState),
-        actionFor: _documentActionFor,
-      );
-    },
-  );
-}
-
-DocumentBoxAction? _documentActionFor(DocumentItem item) {
-  switch (item.type) {
-    case DocumentType.statementForm:
-      if (item.id == 'template-commute-record') {
-        return DocumentBoxAction.submitFielderCommuteRecords;
-      }
-      if (item.id == 'template-resttime-record') {
-        return DocumentBoxAction.submitFielderRestTimeRecords;
-      }
-      return DocumentBoxAction.openUserStatementForm;
-    case DocumentType.workEndReportForm:
-      return DocumentBoxAction.openWorkEndReportForm;
-    case DocumentType.workStartReportForm:
-      return DocumentBoxAction.openWorkStartReportForm;
-    case DocumentType.generic:
-      if (item.id == 'template-annual-leave-application') {
-        return DocumentBoxAction.openBackupForm;
-      }
-      return null;
-  }
-}
 
 class LocalCommuteRecord {
   final String status;
@@ -199,7 +155,10 @@ Future<void> _submitLocalAttendanceRecordsToFirestore(
   final area = (userState.session?.selectedArea ?? '').trim();
   final division = areaState.currentDivision.trim();
 
+  debugPrint('[$debugTag] start statuses=${statuses.join(',')}');
+
   if (userId.isEmpty || userName.isEmpty || area.isEmpty || division.isEmpty) {
+    debugPrint('[$debugTag] skipped reason=missing_required_context');
     return;
   }
 
@@ -209,16 +168,20 @@ Future<void> _submitLocalAttendanceRecordsToFirestore(
     );
 
     if (records.isEmpty) {
+      debugPrint('[$debugTag] skipped reason=no_local_records');
       return;
     }
 
+    debugPrint('[$debugTag] localRecordCount=${records.length}');
     final filtered = _filterUpToDayBeforeLatest(records);
     final uploadTargets = filtered.uploadTargets;
 
     if (uploadTargets.isEmpty) {
+      debugPrint('[$debugTag] skipped reason=no_eligible_records');
       return;
     }
 
+    debugPrint('[$debugTag] uploadTargetCount=${uploadTargets.length}');
     final repo = CommuteLogRepository();
     final dateFormatter = DateFormat('yyyy-MM-dd');
     final timeFormatter = DateFormat('HH:mm');
@@ -262,6 +225,7 @@ Future<void> _submitLocalAttendanceRecordsToFirestore(
         await _deleteLocalAttendanceRow(record);
       }
     }
+    debugPrint('[$debugTag] complete processed=${uploadTargets.length}');
   } catch (e, st) {
     debugPrint('❌ [$debugTag] 기록 제출 중 오류: $e');
     debugPrint('stack: $st');
@@ -272,7 +236,7 @@ Future<void> submitFielderCommuteRecordsFromSqlite(BuildContext context) async {
   return _submitLocalAttendanceRecordsToFirestore(
     context,
     statuses: const ['출근', '퇴근'],
-    debugTag: 'FielderDocumentBoxSheet/CommuteSubmit',
+    debugTag: 'DashboardQuickActions/FielderCommuteSubmit',
   );
 }
 
@@ -281,6 +245,6 @@ Future<void> submitFielderRestTimeRecordsFromSqlite(
   return _submitLocalAttendanceRecordsToFirestore(
     context,
     statuses: const ['휴게'],
-    debugTag: 'FielderDocumentBoxSheet/BreakSubmit',
+    debugTag: 'DashboardQuickActions/FielderBreakSubmit',
   );
 }

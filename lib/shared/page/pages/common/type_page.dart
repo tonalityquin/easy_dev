@@ -6,7 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../../../../app/models/capability.dart';
 import '../../../../design_system/common_ui/common_ui_components.dart';
-import '../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../design_system/common_ui/common_ui_side_dock.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../features/account/applications/user_state.dart';
 import '../../../../features/dev/application/area_state.dart';
@@ -687,13 +687,14 @@ class TypePageEntryDashboardBar<PState, PgState extends ChangeNotifier>
     await guard.runBlocked<void>(
       '대시보드',
       () async {
-        await showCommonOverlayBottomSheet<void>(
+        final screen = config.debugMeta['screen']?.toString() ?? 'type_page';
+        debugPrint('[TypePageDashboard] open screen=$screen direction=right_to_left');
+        await showCommonRightSideDock<void>(
           context: context,
-          useSafeArea: true,
-          isScrollControlled: true,
-          transparentBackground: true,
+          barrierLabel: '대시보드',
           builder: (_) => config.buildDashboardBottomSheet(),
         );
+        debugPrint('[TypePageDashboard] closed screen=$screen');
       },
     );
   }

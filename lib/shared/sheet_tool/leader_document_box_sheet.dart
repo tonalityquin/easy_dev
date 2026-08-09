@@ -2,54 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
-import '../../design_system/common_ui/common_ui_overlays.dart';
 import '../../features/account/applications/user_state.dart';
 import '../../features/commute/domain/repositories/commute_log_repository.dart';
 import '../../features/dev/application/area_state.dart';
 import '../../features/mode_single/application/att_brk_mode_db.dart';
-import 'document_box_action.dart';
-import 'document_box_common_sheet.dart';
-import 'leader_document_inventory_repository.dart';
-import 'document_item.dart';
-
-Future<DocumentBoxAction?> openLeaderDocumentBox(BuildContext context) {
-  return showCommonOverlayBottomSheet<DocumentBoxAction>(
-    context: context,
-    useRootNavigator: false,
-    builder: (sheetContext) {
-      final userState = sheetContext.watch<UserState>();
-      final repo = LeaderDocumentInventoryRepository.instance;
-      return CommonDocumentBoxSheet(
-        title: '리더 서류함',
-        description: '리더 전용 보고서와 기록 제출 양식을 확인합니다.',
-        stream: repo.streamForUser(userState),
-        actionFor: _documentActionFor,
-      );
-    },
-  );
-}
-
-DocumentBoxAction? _documentActionFor(DocumentItem item) {
-  switch (item.type) {
-    case DocumentType.statementForm:
-      if (item.id == 'template-commute-record') {
-        return DocumentBoxAction.submitLeaderCommuteRecords;
-      }
-      if (item.id == 'template-resttime-record') {
-        return DocumentBoxAction.submitLeaderRestTimeRecords;
-      }
-      return DocumentBoxAction.openUserStatementForm;
-    case DocumentType.workEndReportForm:
-      return DocumentBoxAction.openWorkEndReportForm;
-    case DocumentType.workStartReportForm:
-      return DocumentBoxAction.openWorkStartReportForm;
-    case DocumentType.generic:
-      if (item.id == 'template-annual-leave-application') {
-        return DocumentBoxAction.openBackupForm;
-      }
-      return null;
-  }
-}
 
 class LocalCommuteRecord {
   final String status;
@@ -169,7 +125,11 @@ Future<void> submitLeaderCommuteRecordsFromSqlite(BuildContext context) async {
   final area = (userState.session?.selectedArea ?? '').trim();
   final division = areaState.currentDivision.trim();
 
+  const debugTag = 'DashboardQuickActions/LeaderCommuteSubmit';
+  debugPrint('[$debugTag] start statuses=출근,퇴근');
+
   if (userId.isEmpty || userName.isEmpty || area.isEmpty || division.isEmpty) {
+    debugPrint('[$debugTag] skipped reason=missing_required_context');
     return;
   }
 
@@ -181,9 +141,11 @@ Future<void> submitLeaderCommuteRecordsFromSqlite(BuildContext context) async {
     );
 
     if (records.isEmpty) {
+      debugPrint('[$debugTag] skipped reason=no_local_records');
       return;
     }
 
+    debugPrint('[$debugTag] localRecordCount=${records.length}');
     final repo = CommuteLogRepository();
     final dateFormatter = DateFormat('yyyy-MM-dd');
     final timeFormatter = DateFormat('HH:mm');
@@ -222,11 +184,11 @@ Future<void> submitLeaderCommuteRecordsFromSqlite(BuildContext context) async {
         dateStr: dateStr,
       );
 
-      if (nowExists) {
-      } else {}
+      debugPrint('[$debugTag] remoteVerified=$nowExists');
     }
+    debugPrint('[$debugTag] complete processed=${records.length}');
   } catch (e, st) {
-    debugPrint('❌ [LeaderDocumentBoxSheet] 출퇴근 기록 제출 중 오류: $e');
+    debugPrint('❌ [$debugTag] 출퇴근 기록 제출 중 오류: $e');
     debugPrint('stack: $st');
   }
 }
@@ -240,7 +202,11 @@ Future<void> submitLeaderRestTimeRecordsFromSqlite(BuildContext context) async {
   final area = (userState.session?.selectedArea ?? '').trim();
   final division = areaState.currentDivision.trim();
 
+  const debugTag = 'DashboardQuickActions/LeaderBreakSubmit';
+  debugPrint('[$debugTag] start statuses=휴게');
+
   if (userId.isEmpty || userName.isEmpty || area.isEmpty || division.isEmpty) {
+    debugPrint('[$debugTag] skipped reason=missing_required_context');
     return;
   }
 
@@ -252,9 +218,11 @@ Future<void> submitLeaderRestTimeRecordsFromSqlite(BuildContext context) async {
     );
 
     if (records.isEmpty) {
+      debugPrint('[$debugTag] skipped reason=no_local_records');
       return;
     }
 
+    debugPrint('[$debugTag] localRecordCount=${records.length}');
     final repo = CommuteLogRepository();
     final dateFormatter = DateFormat('yyyy-MM-dd');
     final timeFormatter = DateFormat('HH:mm');
@@ -296,8 +264,9 @@ Future<void> submitLeaderRestTimeRecordsFromSqlite(BuildContext context) async {
         await _deleteLocalAttendanceRow(record);
       }
     }
+    debugPrint('[$debugTag] complete processed=${records.length}');
   } catch (e, st) {
-    debugPrint('❌ [LeaderDocumentBoxSheet] 휴게시간 기록 제출 중 오류: $e');
+    debugPrint('❌ [$debugTag] 휴게시간 기록 제출 중 오류: $e');
     debugPrint('stack: $st');
   }
 }

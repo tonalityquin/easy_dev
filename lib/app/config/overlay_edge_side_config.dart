@@ -1,6 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
-const double kEdgeStripWidth = 32.0;
+const double kEdgeStripWidth = 44.0;
 
 enum OverlayEdgeSide { left, right }
 

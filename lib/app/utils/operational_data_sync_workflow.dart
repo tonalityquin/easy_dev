@@ -70,7 +70,7 @@ class OperationalDataSyncWorkflow {
 
       var dataSaved = false;
       try {
-        trace.log('현재 지역을 확인했습니다: $area', progress: 0.06);
+        trace.log('현재 지역 설정을 확인했습니다.', progress: 0.06);
         trace.log('실행 전 동기화 게이트를 확인하고 있습니다.', progress: 0.12);
 
         final shouldRefresh = await OpsDelayedRefreshGate.waitIfNeeded(
@@ -118,8 +118,7 @@ class OperationalDataSyncWorkflow {
           final sectorCount = await sectorState.manualSectorRefreshStrict();
           trace.log(
             '섹터 로컬 캐시 무결성 검증 완료: '
-            'area=$area, count=$sectorCount, '
-            'cacheKey=${SectorState.cacheKeyForArea(area)}, '
+            'areaConfigured=true, count=$sectorCount, '
             'checks=type,fields,area,duplicateId,duplicateName,date,state',
             progress: 0.79,
           );
