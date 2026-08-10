@@ -47,6 +47,11 @@ class FirestoreAreaRepository implements AreaRepository {
     );
   }
 
+  GetOptions? _getOptions(bool serverOnly) {
+    if (!serverOnly) return null;
+    return const GetOptions(source: Source.server);
+  }
+
   @override
   Future<bool> isHeadquarter({
     required String division,
@@ -69,14 +74,18 @@ class FirestoreAreaRepository implements AreaRepository {
   Future<AreaRecord?> getAreaByName(
     String areaName, {
     String? division,
+    bool serverOnly = false,
   }) async {
     final trimmedArea = areaName.trim();
     final trimmedDivision = division?.trim() ?? '';
     if (trimmedArea.isEmpty) return null;
 
-    if (trimmedDivision.isNotEmpty && trimmedDivision != 'default') {
+    final options = _getOptions(serverOnly);
+
+    if (trimmedDivision.isNotEmpty) {
       final docId = '$trimmedDivision-$trimmedArea';
-      final doc = await _firestore.collection('areas').doc(docId).get();
+      final ref = _firestore.collection('areas').doc(docId);
+      final doc = options == null ? await ref.get() : await ref.get(options);
       if (!doc.exists) return null;
 
       final record = _toAreaRecord(doc.data());
@@ -87,11 +96,11 @@ class FirestoreAreaRepository implements AreaRepository {
       return record;
     }
 
-    final qs = await _firestore
+    final query = _firestore
         .collection('areas')
         .where('name', isEqualTo: trimmedArea)
-        .limit(1)
-        .get();
+        .limit(1);
+    final qs = options == null ? await query.get() : await query.get(options);
 
     if (qs.docs.isEmpty) return null;
     return _toAreaRecord(qs.docs.first.data());

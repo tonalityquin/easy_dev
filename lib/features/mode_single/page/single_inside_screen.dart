@@ -705,18 +705,28 @@ class _SingleInsideDataDownloadDockState
                       alignment: Alignment.center,
                       child: AnimatedSwitcher(
                         duration: motion,
-                        switchInCurve: Curves.easeOutBack,
-                        switchOutCurve: Curves.easeInCubic,
+                        switchInCurve: Curves.linear,
+                        switchOutCurve: Curves.linear,
                         transitionBuilder: (child, animation) {
+                          final fadeAnimation = CurvedAnimation(
+                            parent: animation,
+                            curve: Curves.easeOutCubic,
+                            reverseCurve: Curves.easeInCubic,
+                          );
+                          final scaleAnimation = Tween<double>(
+                            begin: 0.86,
+                            end: 1,
+                          ).animate(
+                            CurvedAnimation(
+                              parent: animation,
+                              curve: Curves.easeOutBack,
+                              reverseCurve: Curves.easeInCubic,
+                            ),
+                          );
                           return FadeTransition(
-                            opacity: animation,
+                            opacity: fadeAnimation,
                             child: ScaleTransition(
-                              scale: Tween<double>(begin: 0.86, end: 1).animate(
-                                CurvedAnimation(
-                                  parent: animation,
-                                  curve: Curves.easeOutBack,
-                                ),
-                              ),
+                              scale: scaleAnimation,
                               child: child,
                             ),
                           );

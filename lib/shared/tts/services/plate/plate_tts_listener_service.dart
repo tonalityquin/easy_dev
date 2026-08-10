@@ -498,6 +498,8 @@ class PlateTtsListenerService {
           final plateNumber = _readPlateNumber(data);
 
           final location = _readLocationForSpeech(data['location']);
+          final departureLocation =
+              _readDepartureLocationForSpeech(data['location']);
 
           final tail = plateNumber.length >= 4
               ? plateNumber.substring(plateNumber.length - 4)
@@ -544,7 +546,7 @@ class PlateTtsListenerService {
                 didSpeak = true;
               } else if (newType ==
                   PlateType.departureRequests.firestoreValue) {
-                final utter = '출차 요청 $spokenTail, $location';
+                final utter = '출차 요청 $spokenTail, $departureLocation';
                 _log(
                     'SPEAK(added): $utter (id=$docId, area=$_currentArea, seq=$mySeq)');
                 _safeSpeak(utter);
@@ -593,7 +595,7 @@ class PlateTtsListenerService {
                 didSpeak = true;
               } else if (newType ==
                   PlateType.departureRequests.firestoreValue) {
-                final utter = '출차 요청 $spokenTail, $location';
+                final utter = '출차 요청 $spokenTail, $departureLocation';
                 _log(
                     'SPEAK(modified→type change): $utter (id=$docId, area=$_currentArea, seq=$mySeq)');
                 _safeSpeak(utter);
@@ -883,6 +885,59 @@ class PlateTtsListenerService {
     }
 
     return '미지정';
+  }
+
+  static String _readDepartureLocationForSpeech(dynamic raw) {
+    if (raw == null) return '미지정';
+
+    if (raw is String) {
+      return _readParentChildFromLocationText(raw);
+    }
+
+    if (raw is Map) {
+      final parent = _trimmedLocationValue(raw['parent']);
+      final child = _trimmedLocationValue(raw['child']);
+      final structured = <String>[
+        if (parent.isNotEmpty) parent,
+        if (child.isNotEmpty) child,
+      ];
+      if (structured.isNotEmpty) return structured.join(' - ');
+
+      final full = _trimmedLocationValue(raw['full']);
+      if (full.isNotEmpty) {
+        return _readParentChildFromLocationText(full);
+      }
+
+      final leaf = _trimmedLocationValue(raw['leaf']);
+      if (leaf.isNotEmpty) {
+        final parts = _locationSegments(leaf);
+        return parts.isEmpty ? '미지정' : parts.first;
+      }
+
+      return '미지정';
+    }
+
+    return '미지정';
+  }
+
+  static String _readParentChildFromLocationText(String raw) {
+    final parts = _locationSegments(raw);
+    if (parts.isEmpty) return '미지정';
+    if (parts.length == 1) return parts.first;
+    return parts.take(2).join(' - ');
+  }
+
+  static List<String> _locationSegments(String raw) {
+    return raw
+        .trim()
+        .split(' - ')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  static String _trimmedLocationValue(dynamic value) {
+    return value is String ? value.trim() : '';
   }
 
   static String _convertToKoreanDigits(String digits) {

@@ -86,6 +86,31 @@ class UserWriteService {
     return map;
   }
 
+  Map<String, dynamic> _removeLegacyScheduleFields(Map<String, dynamic> source) {
+    final map = Map<String, dynamic>.from(source);
+    map['startTime'] = FieldValue.delete();
+    map['endTime'] = FieldValue.delete();
+    return map;
+  }
+
+  Map<String, dynamic> _legacyScheduleDeletes() {
+    return <String, dynamic>{
+      'startTime': FieldValue.delete(),
+      'endTime': FieldValue.delete(),
+    };
+  }
+
+  Map<String, dynamic> _weekdayScheduleMigrationPayload(UserModel user) {
+    final map = user.toMap();
+    return <String, dynamic>{
+      'fixedHolidays': map['fixedHolidays'],
+      'breakDays': map['breakDays'],
+      'startTimeByWeekday': map['startTimeByWeekday'],
+      'endTimeByWeekday': map['endTimeByWeekday'],
+      ..._legacyScheduleDeletes(),
+    };
+  }
+
   int _normalizeLimit(dynamic v) {
     if (v is int && v >= 0) return v;
     return 1 << 30;
@@ -264,7 +289,7 @@ class UserWriteService {
           SetOptions(merge: true),
         );
 
-        final userMap = Map<String, dynamic>.from(user.toMap());
+        final userMap = _removeLegacyScheduleFields(user.toMap());
         userMap['updatedAt'] = FieldValue.serverTimestamp();
         userMap['isActive'] = wantActive;
         if (!wantActive) {
@@ -344,7 +369,7 @@ class UserWriteService {
         final newTotalLimit = _normalizeLimit(newShowData['totalLimit']);
         final newCounts0 = _countsFromMeta(newShowData);
 
-        final userMap = Map<String, dynamic>.from(user.toMap());
+        final userMap = _removeLegacyScheduleFields(user.toMap());
         userMap.remove('isActive');
         userMap.remove('disabledAt');
         userMap['updatedAt'] = FieldValue.serverTimestamp();
@@ -499,8 +524,16 @@ class UserWriteService {
 
         final userData = userSnap.data() ?? <String, dynamic>{};
         final bool currentActive = (userData['isActive'] as bool?) ?? true;
+        final scheduleMigration = _weekdayScheduleMigrationPayload(current);
+
+        tx.update(userDocRef, scheduleMigration);
 
         if (currentActive == isActive) {
+          tx.set(
+            showUserDocRef,
+            scheduleMigration,
+            SetOptions(merge: true),
+          );
           tx.set(
             showDocRef,
             _showMetaPayload(division: division, area: area, counts: counts0),
@@ -519,6 +552,7 @@ class UserWriteService {
           tx.set(
             showUserDocRef,
             {
+              ...scheduleMigration,
               'isActive': true,
               'updatedAt': FieldValue.serverTimestamp(),
               'disabledAt': FieldValue.delete(),
@@ -531,6 +565,7 @@ class UserWriteService {
           tx.set(
             showUserDocRef,
             {
+              ...scheduleMigration,
               'isActive': false,
               'updatedAt': FieldValue.serverTimestamp(),
               'disabledAt': FieldValue.serverTimestamp(),

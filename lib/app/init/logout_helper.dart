@@ -6,7 +6,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../app/di/routes.dart';
 import '../../features/account/applications/user_state.dart';
 import '../../features/dashboard/applications/common/firebase_google_auth_bridge.dart';
+import '../../features/dev/application/area_state.dart';
 import '../utils/block_dialog/blocking_dialog.dart';
+import '../utils/developer_operation_status_dialog.dart';
 import '../utils/snackbar_helper.dart';
 
 class LogoutHelper {
@@ -18,38 +20,63 @@ class LogoutHelper {
     bool useCommonUi = false,
   }) async {
     final target = route ?? AppRoutes.selector;
+    final trace = await DeveloperOperationTrace.start(
+      context: context,
+      title: '로그아웃 상태',
+      initialMessage: '로그아웃과 Area 세션 캐시 초기화를 시작합니다.',
+      useCommonUi: useCommonUi,
+      developerModeMessage:
+          '개발자 모드 ON: 로그아웃 단계와 Area 캐시 초기화를 Status Dialog에 표시합니다.',
+      standardModeMessage:
+          '개발자 모드 OFF: 로그아웃 단계와 Area 캐시 초기화를 debugPrint로 기록합니다.',
+    );
+
+    Future<void> performLogout() async {
+      final userState = Provider.of<UserState>(context, listen: false);
+      final areaState = Provider.of<AreaState>(context, listen: false);
+
+      trace.log('Foreground service 종료를 시작합니다.', progress: 0.1);
+      await FlutterForegroundTask.stopService();
+
+      if (checkWorking) {
+        trace.log('근무 상태 종료 반영을 확인합니다.', progress: 0.2);
+        try {
+          await userState.isHeWorking();
+        } catch (e, st) {
+          trace.log('근무 상태 종료 반영 중 오류가 발생했습니다: $e', progress: 0.24);
+          trace.log('근무 상태 종료 스택 추적: $st', progress: 0.24);
+        }
+      }
+
+      await Future.delayed(delay);
+      trace.log('사용자 세션과 Area 세션 캐시를 초기화합니다.', progress: 0.38);
+      await userState.clearUserToPhone();
+      trace.log(
+        'UserState 로그아웃 완료: currentArea="${areaState.currentArea}", currentDivision="${areaState.currentDivision}", currentRecord=${areaState.currentRecord == null ? 'null' : 'present'}, capabilities=${areaState.capabilitiesOfCurrentArea.length}',
+        progress: 0.62,
+      );
+
+      await FirebaseGoogleAuthBridge.instance.signOutAll();
+      trace.log('Firebase 및 Google 인증 로그아웃 완료.', progress: 0.78);
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('mode');
+      trace.log('로그인 mode 로컬값 제거 완료.', progress: 0.9);
+    }
 
     try {
-      await runWithBlockingDialog(
-        context: context,
-        message: '로그아웃 중입니다...',
-        useCommonUi: useCommonUi,
-        task: () async {
-          final userState = Provider.of<UserState>(context, listen: false);
-          await FlutterForegroundTask.stopService();
-          if (checkWorking) {
-            try {
-              await userState.isHeWorking();
-            } catch (_) {}
-          }
-          await Future.delayed(delay);
-          await userState.clearUserToPhone();
-          debugPrint(
-            '[LOGOUT][${DateTime.now().toIso8601String()}] userState.clearUserToPhone complete',
-          );
+      if (trace.developerMode) {
+        await performLogout();
+      } else {
+        await runWithBlockingDialog(
+          context: context,
+          message: '로그아웃 중입니다...',
+          useCommonUi: useCommonUi,
+          task: performLogout,
+        );
+      }
 
-          await FirebaseGoogleAuthBridge.instance.signOutAll();
-          debugPrint(
-            '[LOGOUT][${DateTime.now().toIso8601String()}] FirebaseGoogleAuthBridge.signOutAll complete',
-          );
-
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.remove('mode');
-          debugPrint(
-            '[LOGOUT][${DateTime.now().toIso8601String()}] prefs.remove(mode) complete',
-          );
-        },
-      );
+      await trace.succeed('로그아웃과 Area 세션 캐시 초기화가 완료되었습니다.');
 
       if (!context.mounted) return;
       Navigator.of(context).pushNamedAndRemoveUntil(target, (route) => false);
@@ -58,7 +85,12 @@ class LogoutHelper {
         '로그아웃 되었습니다.',
         useCommonUi: useCommonUi,
       );
-    } catch (e) {
+    } catch (e, st) {
+      await trace.fail(
+        '로그아웃 처리에 실패했습니다.',
+        error: e,
+        stackTrace: st,
+      );
       if (context.mounted) {
         showFailedSnackbar(
           context,

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const String kDevModeEnabledKey = 'dev_mode_enabled_v1';
@@ -23,6 +24,8 @@ class DevPrefs {
 }
 
 class DevAuth {
+  static final ValueNotifier<bool> devModeEnabled = ValueNotifier<bool>(false);
+
   static bool verifyDevCode(String input) {
     final salt = base64Decode(_DEV_SALT_B64);
     final bytes = <int>[...salt, ...utf8.encode(input)];
@@ -58,8 +61,15 @@ class DevAuth {
   static Future<bool> isDevModeEnabled() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      return prefs.getBool(kDevModeEnabledKey) ?? false;
+      final enabled = prefs.getBool(kDevModeEnabledKey) ?? false;
+      if (devModeEnabled.value != enabled) {
+        devModeEnabled.value = enabled;
+      }
+      return enabled;
     } catch (_) {
+      if (devModeEnabled.value) {
+        devModeEnabled.value = false;
+      }
       return false;
     }
   }
@@ -91,6 +101,9 @@ class DevAuth {
   static Future<void> setDevModeEnabled(bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(kDevModeEnabledKey, value);
+    if (devModeEnabled.value != value) {
+      devModeEnabled.value = value;
+    }
   }
 
   static Future<void> resetDevAuth() => setDevAuthorized(false);

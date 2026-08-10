@@ -11,6 +11,7 @@ import '../../../../features/tablet/applications/tablet_pad_mode_state.dart';
 import '../../../../shared/auth/five_digit_password_generator.dart';
 import '../../../selector/application/dev_auth.dart';
 import '../../applications/tablet/tablet_login_network_service.dart';
+import '../area_login_session_refresher.dart';
 
 String _ts() => DateTime.now().toIso8601String();
 
@@ -100,23 +101,28 @@ class PersonalLoginController {
       final storedSelectedArea = _selectedAreaFromData(data);
       if (storedPhone != phone || storedSelectedArea != selectedArea) return;
 
+      if (!context.mounted) return;
+      final division = _divisionFromData(data);
+      final areaState = context.read<AreaState>();
+      await AreaLoginSessionRefresher.refresh(
+        context: context,
+        areaState: areaState,
+        division: division,
+        area: storedSelectedArea,
+        operationLabel: 'personal-restore',
+      );
+      if (!context.mounted) return;
+
       isLoggedIn = true;
       loggedInAccountId = snap.id;
       loggedInName = (data['name'] ?? prefs.getString('personalName') ?? '').toString();
       nameController.text = loggedInName ?? '';
       phoneController.text = _formatPhoneForDisplay(storedPhone);
-      if (context.mounted) {
-        final division = _divisionFromData(data);
-        context.read<AreaState>().setAreaLocalOnly(
-              storedSelectedArea,
-              division: division,
-            );
-        context.read<TabletPadModeState>().setMode(_targetPadMode);
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!context.mounted) return;
-          Navigator.of(context).pushReplacementNamed(AppRoutes.personal);
-        });
-      }
+      context.read<TabletPadModeState>().setMode(_targetPadMode);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!context.mounted) return;
+        Navigator.of(context).pushReplacementNamed(AppRoutes.personal);
+      });
       debugPrint('[LOGIN-PERSONAL][${_ts()}] restore personal session ok: ${snap.id}');
     } catch (e, st) {
       debugPrint('[LOGIN-PERSONAL][${_ts()}] restore personal session error: $e\n$st');
@@ -533,6 +539,18 @@ class PersonalLoginController {
         return _loginFailureResult('개인형 계정 문서 ID가 전화번호-지역 구조와 일치하지 않습니다.');
       }
 
+      if (!context.mounted) {
+        return _loginFailureResult('로그인 화면이 종료되어 Area 세션을 준비할 수 없습니다.');
+      }
+      final areaState = context.read<AreaState>();
+      await AreaLoginSessionRefresher.refresh(
+        context: context,
+        areaState: areaState,
+        division: division,
+        area: selectedArea,
+        operationLabel: 'personal',
+      );
+
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('mode', _savedMode);
       await prefs.setString('phone', storedPhone);
@@ -554,10 +572,6 @@ class PersonalLoginController {
       );
 
       if (context.mounted) {
-        context.read<AreaState>().setAreaLocalOnly(
-              selectedArea,
-              division: division,
-            );
         context.read<TabletPadModeState>().setMode(_targetPadMode);
       }
 
@@ -688,7 +702,6 @@ class PersonalLoginController {
 
     return InputDecoration(
       labelText: label,
-      hintText: label,
       prefixIcon: icon != null ? Icon(icon) : null,
       suffixIcon: suffixIcon,
       contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),

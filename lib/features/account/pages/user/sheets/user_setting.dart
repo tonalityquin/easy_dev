@@ -46,7 +46,7 @@ class UserSettingBottomSheet extends StatefulWidget {
   State<UserSettingBottomSheet> createState() => _UserSettingBottomSheetState();
 }
 
-class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
+class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> with SingleTickerProviderStateMixin {
   static const List<String> _days = <String>['월', '화', '수', '목', '금', '토', '일'];
   static const List<String> _availableModes = <String>['single', 'double', 'triple', 'minor'];
   static const Map<String, String> _modeLabels = <String, String>{
@@ -73,12 +73,24 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
   Map<String, TimeOfDay?> _endByDay = <String, TimeOfDay?>{};
   Set<String> _breakDays = <String>{};
   String? _errorMessage;
+  late final AnimationController _entryController;
+  late final Animation<double> _entryAnimation;
+  bool _motionConfigured = false;
+  bool _reduceMotion = false;
 
   bool get isEditMode => widget.isEditMode;
 
   @override
   void initState() {
     super.initState();
+    _entryController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 620),
+    );
+    _entryAnimation = CurvedAnimation(
+      parent: _entryController,
+      curve: Curves.easeOutCubic,
+    );
     _startByDay = {for (final day in _days) day: null};
     _endByDay = {for (final day in _days) day: null};
 
@@ -94,9 +106,8 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
         orElse: () => RoleType.fieldCommon,
       );
       _selectedModes.addAll(_normalizeAndFilterModes(user.modes));
-      final excludedDays = user.fixedHolidays.map((e) => e.trim()).where((e) => e.isNotEmpty).toSet();
-      _startByDay = _normalizeWeekMap(user.startTimeByWeekday, fallback: user.startTime, excludedDays: excludedDays);
-      _endByDay = _normalizeWeekMap(user.endTimeByWeekday, fallback: user.endTime, excludedDays: excludedDays);
+      _startByDay = _normalizeWeekMap(user.startTimeByWeekday);
+      _endByDay = _normalizeWeekMap(user.endTimeByWeekday);
       _breakDays = _normalizeDaySet(user.breakDays).intersection(_workingDaySet());
     } else {
       _passwordController.text = FiveDigitPasswordGenerator.generate();
@@ -104,6 +115,23 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
 
     if (_selectedModes.isEmpty) {
       _selectedModes.add('single');
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (_motionConfigured && reduceMotion == _reduceMotion) return;
+    _motionConfigured = true;
+    _reduceMotion = reduceMotion;
+    if (_reduceMotion) {
+      _entryController.stop();
+      _entryController.value = 1;
+      return;
+    }
+    if (_entryController.value < 1 && !_entryController.isAnimating) {
+      _entryController.forward();
     }
   }
 
@@ -118,6 +146,7 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
     _phoneFocus.dispose();
     _emailFocus.dispose();
     _positionFocus.dispose();
+    _entryController.dispose();
     super.dispose();
   }
 
@@ -167,16 +196,11 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
   }
 
   Map<String, TimeOfDay?> _normalizeWeekMap(
-    Map<String, TimeOfDay?> raw, {
-    TimeOfDay? fallback,
-    Set<String> excludedDays = const <String>{},
-  }) {
-    final out = <String, TimeOfDay?>{};
-    final hasWeekly = raw.values.any((value) => value != null);
-    for (final day in _days) {
-      out[day] = hasWeekly ? raw[day] : (excludedDays.contains(day) ? null : fallback);
-    }
-    return out;
+    Map<String, TimeOfDay?> raw,
+  ) {
+    return <String, TimeOfDay?>{
+      for (final day in _days) day: raw[day],
+    };
   }
 
   String _modeLabel(String mode) => _modeLabels[mode] ?? mode;
@@ -248,7 +272,7 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
   String get _modesSummary => _selectedModes.isEmpty ? '모드 미선택' : _selectedModes.map(_modeLabel).join(', ');
 
   String get _timeSummary {
-    if (_workingDayCount == 0) return '근무시간 미설정';
+    if (_workingDayCount == 0) return '전 요일 휴무';
     final parts = <String>[];
     for (final day in _days) {
       final start = _startByDay[day];
@@ -271,7 +295,6 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
   }
 
   bool _validateWeeklyTimes() {
-    var hasWorkingDay = false;
     for (final day in _days) {
       final start = _startByDay[day];
       final end = _endByDay[day];
@@ -281,17 +304,10 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
         _setErrorMessage('$day 요일의 출근/퇴근 시간을 모두 입력하세요');
         return false;
       }
-      if (start != null && end != null) {
-        hasWorkingDay = true;
-        if (_toMinutes(start) > _toMinutes(end)) {
-          _setErrorMessage('$day 요일의 출근/퇴근 시간을 다시 확인하세요');
-          return false;
-        }
+      if (start != null && end != null && _toMinutes(start) > _toMinutes(end)) {
+        _setErrorMessage('$day 요일의 출근/퇴근 시간을 다시 확인하세요');
+        return false;
       }
-    }
-    if (!hasWorkingDay) {
-      _setErrorMessage('최소 1개 요일의 근무 시간을 입력하세요');
-      return false;
     }
     return true;
   }
@@ -420,6 +436,28 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
     );
 
     if (mounted) Navigator.pop(context);
+  }
+
+  Widget _buildAnimatedSection({
+    required int index,
+    required Widget child,
+  }) {
+    final start = (0.08 + index * 0.1).clamp(0.0, 0.72).toDouble();
+    final end = (start + 0.28).clamp(start, 1.0).toDouble();
+    final animation = CurvedAnimation(
+      parent: _entryAnimation,
+      curve: Interval(start, end, curve: Curves.easeOutCubic),
+    );
+    return FadeTransition(
+      opacity: animation,
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0, 0.045),
+          end: Offset.zero,
+        ).animate(animation),
+        child: child,
+      ),
+    );
   }
 
   Widget _buildBasicSection(BuildContext context) {
@@ -597,7 +635,9 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
     final hasPartial = (start == null) != (end == null);
     final borderColor = hasPartial ? cs.error.withOpacity(.45) : (isWorking ? cs.primary.withOpacity(.45) : cs.outlineVariant.withOpacity(.82));
     final statusText = hasPartial ? '시간 확인 필요' : isWorking ? '${_formatTimeOfDay(start)} ~ ${_formatTimeOfDay(end)} · ${hasBreak ? '휴게 있음' : '휴게 없음'}' : '휴무';
-    return Container(
+    return AnimatedContainer(
+      duration: _reduceMotion ? Duration.zero : const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -621,9 +661,25 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: Text(
-                  statusText,
-                  style: TextStyle(color: hasPartial ? cs.error : cs.onSurface, fontWeight: FontWeight.w900),
+                child: AnimatedSwitcher(
+                  duration: _reduceMotion ? Duration.zero : const Duration(milliseconds: 220),
+                  transitionBuilder: (child, animation) {
+                    return FadeTransition(
+                      opacity: animation,
+                      child: SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(0.03, 0),
+                          end: Offset.zero,
+                        ).animate(animation),
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: Text(
+                    statusText,
+                    key: ValueKey<String>(statusText),
+                    style: TextStyle(color: hasPartial ? cs.error : cs.onSurface, fontWeight: FontWeight.w900),
+                  ),
                 ),
               ),
             ],
@@ -707,7 +763,7 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
         OpsMetric(label: '식별', value: _nameOk && _phoneOk && _emailOk ? '완료' : '필수', icon: Icons.badge_rounded, color: _nameOk && _phoneOk && _emailOk ? cs.primary : cs.error),
         OpsMetric(label: '권한', value: _selectedRole.label.split('(').first, icon: Icons.verified_user_rounded, color: cs.primary),
         OpsMetric(label: '모드', value: '${_selectedModes.length}', icon: Icons.widgets_rounded, color: _selectedModes.isEmpty ? cs.error : cs.primary),
-        OpsMetric(label: '근무일', value: '$_workingDayCount', icon: Icons.schedule_rounded, color: _workingDayCount == 0 ? cs.error : cs.primary),
+        OpsMetric(label: '근무일', value: '$_workingDayCount', icon: Icons.schedule_rounded, color: cs.primary),
       ],
       bottomBar: OpsBottomActionBar(
         children: [
@@ -732,26 +788,39 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          OpsInlineMessage(message: _errorMessage),
-          OpsCommandPanel(
-            children: [
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  OpsInfoPill(text: isEditMode ? '수정 모드' : '등록 모드', icon: isEditMode ? Icons.edit_rounded : Icons.person_add_alt_1_rounded),
-                  OpsInfoPill(text: _modesSummary, icon: Icons.widgets_rounded),
-                  OpsInfoPill(text: _timeSummary, icon: Icons.schedule_rounded),
-                ],
+          AnimatedSize(
+            duration: _reduceMotion ? Duration.zero : const Duration(milliseconds: 240),
+            curve: Curves.easeOutCubic,
+            child: AnimatedSwitcher(
+              duration: _reduceMotion ? Duration.zero : const Duration(milliseconds: 200),
+              child: KeyedSubtree(
+                key: ValueKey<String?>(_errorMessage),
+                child: OpsInlineMessage(message: _errorMessage),
               ),
-            ],
+            ),
+          ),
+          _buildAnimatedSection(
+            index: 0,
+            child: OpsCommandPanel(
+              children: [
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    OpsInfoPill(text: isEditMode ? '수정 모드' : '등록 모드', icon: isEditMode ? Icons.edit_rounded : Icons.person_add_alt_1_rounded),
+                    OpsInfoPill(text: _modesSummary, icon: Icons.widgets_rounded),
+                    OpsInfoPill(text: _timeSummary, icon: Icons.schedule_rounded),
+                  ],
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 12),
-          _buildBasicSection(context),
-          _buildRoleSection(context),
-          _buildPositionSection(context),
-          _buildPasswordSection(context),
-          _buildTimeSection(context),
+          _buildAnimatedSection(index: 1, child: _buildBasicSection(context)),
+          _buildAnimatedSection(index: 2, child: _buildRoleSection(context)),
+          _buildAnimatedSection(index: 3, child: _buildPositionSection(context)),
+          _buildAnimatedSection(index: 4, child: _buildPasswordSection(context)),
+          _buildAnimatedSection(index: 5, child: _buildTimeSection(context)),
         ],
       ),
     );

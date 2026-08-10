@@ -52,8 +52,6 @@ class UserState extends ChangeNotifier {
     'role',
     'division',
     'position',
-    'startTime',
-    'endTime',
     'fixedHolidays',
     WorkSchedulePrefs.breakDaysKey,
     WorkSchedulePrefs.startMapKey,
@@ -488,15 +486,8 @@ class UserState extends ChangeNotifier {
     );
     normalizedEnd[day] = endTime;
 
-    final fixedHolidays = _user!.fixedHolidays
-        .map((value) => value.trim())
-        .where((value) => value.isNotEmpty && value != day)
-        .toList(growable: false);
-
     final updatedUser = _user!.copyWith(
-      endTime: WorkSchedulePrefs.pickRepresentative(normalizedEnd) ?? endTime,
       endTimeByWeekday: normalizedEnd,
-      fixedHolidays: fixedHolidays,
     );
 
     try {
@@ -529,24 +520,6 @@ class UserState extends ChangeNotifier {
     normalizedStart[day] = startTime;
     normalizedEnd[day] = endTime;
 
-    final holidaySet = _user!.fixedHolidays
-        .map((value) => value.trim())
-        .where((value) => value.isNotEmpty)
-        .toSet();
-
-    if (startTime == null && endTime == null) {
-      holidaySet.add(day);
-    } else {
-      holidaySet.remove(day);
-    }
-
-    final fixedHolidays = <String>[
-      for (final value in WorkSchedulePrefs.days)
-        if (holidaySet.contains(value)) value,
-      for (final value in holidaySet)
-        if (!WorkSchedulePrefs.days.contains(value)) value,
-    ];
-
     final breakSet = _user!.breakDays
         .map((value) => value.trim())
         .where((value) => value.isNotEmpty)
@@ -572,9 +545,7 @@ class UserState extends ChangeNotifier {
       divisions: current.divisions,
       modes: current.modes,
       email: current.email,
-      endTime: WorkSchedulePrefs.pickRepresentative(normalizedEnd),
       englishSelectedAreaName: current.englishSelectedAreaName,
-      fixedHolidays: fixedHolidays,
       breakDays: breakDays,
       isSaved: current.isSaved,
       isSelected: current.isSelected,
@@ -585,7 +556,6 @@ class UserState extends ChangeNotifier {
       position: current.position,
       role: current.role,
       selectedArea: current.selectedArea,
-      startTime: WorkSchedulePrefs.pickRepresentative(normalizedStart),
       startTimeByWeekday: normalizedStart,
       endTimeByWeekday: normalizedEnd,
       isActive: current.isActive,
@@ -745,11 +715,47 @@ class UserState extends ChangeNotifier {
     }
   }
 
+  Future<void> discardLocalLoginSession({required String source}) async {
+    try {
+      PlateTtsListenerService.stop();
+    } catch (error, stackTrace) {
+      debugPrint(
+        '[USER-STATE][${DateTime.now().toIso8601String()}] local login TTS 정리 실패: source=$source, error=$error\n$stackTrace',
+      );
+    }
+
+    await _areaState.clearSession(
+      source: 'UserState.discardLocalLoginSession.$source',
+    );
+
+    _hasClockInToday = false;
+    _hasClockInTodayForDate = null;
+    _user = null;
+    _tablet = null;
+    _session = null;
+    _isTablet = false;
+    notifyListeners();
+
+    debugPrint(
+      '[USER-STATE][${DateTime.now().toIso8601String()}] local login 세션 폐기 완료: source=$source',
+    );
+  }
+
   Future<void> clearUserToPhone() async {
-    if (_isTablet) {
-      if (_tablet == null) return;
-    } else {
-      if (_user == null) return;
+    if ((_isTablet && _tablet == null) || (!_isTablet && _user == null)) {
+      await _areaState.clearSession(
+        source: _isTablet
+            ? 'UserState.clearUserToPhone.noTablet'
+            : 'UserState.clearUserToPhone.noUser',
+      );
+      _hasClockInToday = false;
+      _hasClockInTodayForDate = null;
+      _user = null;
+      _tablet = null;
+      _session = null;
+      _isTablet = false;
+      notifyListeners();
+      return;
     }
 
     try {
@@ -819,6 +825,13 @@ class UserState extends ChangeNotifier {
           },
         );
       }
+
+      await _areaState.clearSession(
+        source: 'UserState.clearUserToPhone',
+      );
+      debugPrint(
+        '[USER-STATE][${DateTime.now().toIso8601String()}] AreaState 세션 캐시 초기화 완료',
+      );
 
       _hasClockInToday = false;
       _hasClockInTodayForDate = null;
@@ -980,11 +993,10 @@ class UserState extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       final phone = prefs.getString('phone')?.trim();
       final selectedArea = prefs.getString('selectedArea')?.trim();
-      final division = prefs.getString('division')?.trim();
+      final storedDivision = prefs.getString('division')?.trim();
       final role = prefs.getString('role')?.trim();
-      final startTimeStr = prefs.getString('startTime');
-      final endTimeStr = prefs.getString('endTime');
-      final fixedHolidays = prefs.getStringList('fixedHolidays') ?? [];
+      final hadStoredSchedule = WorkSchedulePrefs.hasStoredSchedulePrefs(prefs);
+      await WorkSchedulePrefs.migrateLegacySchedulePrefs(prefs);
       final startTimeByWeekday = WorkSchedulePrefs.readDayTimeMapFromPrefs(
           prefs, WorkSchedulePrefs.startMapKey);
       final endTimeByWeekday = WorkSchedulePrefs.readDayTimeMapFromPrefs(
@@ -1008,10 +1020,10 @@ class UserState extends ChangeNotifier {
       _isTablet = false;
       final trimmedArea = selectedArea.trim();
 
-      final effectiveStartByWeekday = startTimeByWeekday.values.any((value) => value != null)
+      final effectiveStartByWeekday = hadStoredSchedule
           ? startTimeByWeekday
           : userData.startTimeByWeekday;
-      final effectiveEndByWeekday = endTimeByWeekday.values.any((value) => value != null)
+      final effectiveEndByWeekday = hadStoredSchedule
           ? endTimeByWeekday
           : userData.endTimeByWeekday;
       final effectiveBreakDays = _normalizedBreakDaysForUser(
@@ -1021,20 +1033,24 @@ class UserState extends ChangeNotifier {
         endByWeekday: effectiveEndByWeekday,
       );
 
+      final cachedDivision = userData.divisions.firstOrNull?.trim() ?? '';
+      final effectiveDivision = storedDivision != null && storedDivision.isNotEmpty
+          ? storedDivision
+          : cachedDivision;
+
       userData = userData.copyWith(
         currentArea: trimmedArea,
         role: role ?? userData.role,
         position: position ?? userData.position,
-        startTime: _stringToTimeOfDay(startTimeStr) ?? userData.startTime,
-        endTime: _stringToTimeOfDay(endTimeStr) ?? userData.endTime,
-        fixedHolidays:
-            fixedHolidays.isNotEmpty ? fixedHolidays : userData.fixedHolidays,
         breakDays: effectiveBreakDays,
         startTimeByWeekday: effectiveStartByWeekday,
         endTimeByWeekday: effectiveEndByWeekday,
-        divisions: division != null ? [division] : userData.divisions,
+        divisions: effectiveDivision.isNotEmpty
+            ? <String>[effectiveDivision]
+            : userData.divisions,
         isSaved: true,
       );
+      await WorkSchedulePrefs.saveUserSchedule(prefs: prefs, user: userData);
 
       _hasClockInToday = false;
       _hasClockInTodayForDate = null;
@@ -1044,7 +1060,10 @@ class UserState extends ChangeNotifier {
       _session = UserSessionAccount(userData);
       notifyListeners();
 
-      _areaState.setAreaLocalOnly(trimmedArea, division: division);
+      _areaState.setAreaLocalOnly(
+        trimmedArea,
+        division: effectiveDivision.isEmpty ? null : effectiveDivision,
+      );
 
       await _startTtsForArea(trimmedArea);
     } catch (e, st) {
@@ -1059,9 +1078,8 @@ class UserState extends ChangeNotifier {
       final selectedArea = prefs.getString('selectedArea')?.trim();
       final division = prefs.getString('division')?.trim();
       final role = prefs.getString('role')?.trim();
-      final startTimeStr = prefs.getString('startTime');
-      final endTimeStr = prefs.getString('endTime');
-      final fixedHolidays = prefs.getStringList('fixedHolidays') ?? [];
+      final hadStoredSchedule = WorkSchedulePrefs.hasStoredSchedulePrefs(prefs);
+      await WorkSchedulePrefs.migrateLegacySchedulePrefs(prefs);
       final startTimeByWeekday = WorkSchedulePrefs.readDayTimeMapFromPrefs(
           prefs, WorkSchedulePrefs.startMapKey);
       final endTimeByWeekday = WorkSchedulePrefs.readDayTimeMapFromPrefs(
@@ -1082,12 +1100,10 @@ class UserState extends ChangeNotifier {
       _isTablet = false;
       final trimmedArea = selectedArea.trim();
 
-      await _repository.updateLoadCurrentArea(phone, trimmedArea, trimmedArea);
-
-      final effectiveStartByWeekday = startTimeByWeekday.values.any((value) => value != null)
+      final effectiveStartByWeekday = hadStoredSchedule
           ? startTimeByWeekday
           : userData.startTimeByWeekday;
-      final effectiveEndByWeekday = endTimeByWeekday.values.any((value) => value != null)
+      final effectiveEndByWeekday = hadStoredSchedule
           ? endTimeByWeekday
           : userData.endTimeByWeekday;
       final effectiveBreakDays = _normalizedBreakDaysForUser(
@@ -1101,16 +1117,23 @@ class UserState extends ChangeNotifier {
         currentArea: trimmedArea,
         role: role ?? userData.role,
         position: position ?? userData.position,
-        startTime: _stringToTimeOfDay(startTimeStr) ?? userData.startTime,
-        endTime: _stringToTimeOfDay(endTimeStr) ?? userData.endTime,
-        fixedHolidays:
-            fixedHolidays.isNotEmpty ? fixedHolidays : userData.fixedHolidays,
         breakDays: effectiveBreakDays,
         startTimeByWeekday: effectiveStartByWeekday,
         endTimeByWeekday: effectiveEndByWeekday,
         divisions: division != null ? [division] : userData.divisions,
         isSaved: true,
       );
+      final loginDivision = userData.divisions.firstOrNull ?? '';
+      await _areaState.refreshAreaForLogin(
+        area: trimmedArea,
+        division: loginDivision,
+      );
+      debugPrint(
+        '[USER-STATE][${DateTime.now().toIso8601String()}] loadUserToLogIn AreaRecord 서버 강제 동기화 완료: $loginDivision/$trimmedArea',
+      );
+      await _repository.updateLoadCurrentArea(phone, trimmedArea, trimmedArea);
+
+      await WorkSchedulePrefs.saveUserSchedule(prefs: prefs, user: userData);
 
       _hasClockInToday = false;
       _hasClockInTodayForDate = null;
@@ -1119,8 +1142,6 @@ class UserState extends ChangeNotifier {
       _tablet = null;
       _session = UserSessionAccount(userData);
       notifyListeners();
-
-      await _areaState.initializeArea(trimmedArea);
 
       await _startTtsForArea(trimmedArea);
     } catch (e) {
@@ -1150,8 +1171,6 @@ class UserState extends ChangeNotifier {
           await _repository.getTabletByHandleAndAreaName(handle, selectedArea);
       if (tablet == null) return;
 
-      _isTablet = true;
-
       final tabletData = tablet.copyWith(
         currentArea: selectedArea,
         selectedArea: selectedArea,
@@ -1164,6 +1183,16 @@ class UserState extends ChangeNotifier {
         isSaved: true,
       );
 
+      final loginDivision = tabletData.divisions.firstOrNull ?? '';
+      await _areaState.refreshAreaForLogin(
+        area: selectedArea,
+        division: loginDivision,
+      );
+      debugPrint(
+        '[USER-STATE][${DateTime.now().toIso8601String()}] loadTabletToLogIn AreaRecord 서버 강제 동기화 완료: $loginDivision/$selectedArea',
+      );
+
+      _isTablet = true;
       _hasClockInToday = false;
       _hasClockInTodayForDate = null;
 
@@ -1177,7 +1206,6 @@ class UserState extends ChangeNotifier {
         tabletData.areas.firstOrNull ?? '',
         selectedArea,
       );
-      await _areaState.initializeArea(selectedArea);
 
       await _startTtsForArea(selectedArea);
     } catch (e, st) {
@@ -1337,15 +1365,6 @@ class UserState extends ChangeNotifier {
       copied[idx] = item;
     }
     return copied;
-  }
-
-  TimeOfDay? _stringToTimeOfDay(String? timeString) {
-    if (timeString == null || !timeString.contains(':')) return null;
-    final parts = timeString.split(':');
-    final hour = int.tryParse(parts[0]);
-    final minute = int.tryParse(parts[1]);
-    if (hour == null || minute == null) return null;
-    return TimeOfDay(hour: hour, minute: minute);
   }
 
   @override

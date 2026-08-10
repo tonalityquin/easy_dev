@@ -10,6 +10,7 @@ import '../../../../features/tablet/applications/tablet_pad_mode_state.dart';
 import '../../../../shared/tts/application/tts_ownership.dart';
 import '../../../../shared/tts/application/tts_user_filters.dart';
 import '../../../dev/application/area_state.dart';
+import '../area_login_session_refresher.dart';
 import '../../applications/tablet/tablet_login_network_service.dart';
 import '../../applications/tablet/tablet_login_validate.dart';
 
@@ -151,6 +152,17 @@ class TabletLoginController {
           englishSelectedAreaName: englishAreaName,
           isSaved: true,
         );
+        final divisionToSet = sessionTablet.divisions.firstOrNull ?? '';
+        await AreaLoginSessionRefresher.refresh(
+          context: context,
+          areaState: areaState,
+          division: divisionToSet,
+          area: areaName,
+          operationLabel: 'tablet',
+        );
+        debugPrint(
+          '[LOGIN-TABLET][${_ts()}] AreaRecord 서버 강제 동기화 완료: $divisionToSet/$areaName',
+        );
 
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('handle', handle);
@@ -165,10 +177,7 @@ class TabletLoginController {
         await userState.updateLoginTablet(sessionTablet);
         debugPrint('[LOGIN-TABLET][${_ts()}] userState.updateLoginTablet done');
 
-        areaState.updateArea(areaName);
         context.read<TabletPadModeState>().setMode(_targetPadMode);
-        debugPrint(
-            '[LOGIN-TABLET][${_ts()}] areaState.updateArea("$areaName")');
 
         final current = context.read<AreaState>().currentArea;
         debugPrint(
@@ -247,7 +256,6 @@ class TabletLoginController {
 
     return InputDecoration(
       labelText: label,
-      hintText: label,
       prefixIcon: icon != null ? Icon(icon) : null,
       suffixIcon: suffixIcon,
       contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),

@@ -29,15 +29,7 @@ class LocalWorkScheduleReader {
 
   static const String startMapKey = 'startTimeByWeekday';
   static const String endMapKey = 'endTimeByWeekday';
-  static const List<String> days = <String>[
-    '월',
-    '화',
-    '수',
-    '목',
-    '금',
-    '토',
-    '일',
-  ];
+  static const List<String> days = <String>['월', '화', '수', '목', '금', '토', '일'];
 
   static LocalWorkScheduleDay readForSessionDate({
     required SharedPreferences prefs,
@@ -45,21 +37,11 @@ class LocalWorkScheduleReader {
   }) {
     final startByDay = _readDayTimeMap(prefs, startMapKey);
     final endByDay = _readDayTimeMap(prefs, endMapKey);
-    final hasWeeklyEnd = endByDay.values.any((value) => value != null);
-
-    if (hasWeeklyEnd) {
-      final dayLabel = days[sessionDate.weekday - 1];
-      return LocalWorkScheduleDay(
-        start: startByDay[dayLabel],
-        end: endByDay[dayLabel],
-        weeklyScheduleAvailable: true,
-      );
-    }
-
+    final dayLabel = days[sessionDate.weekday - 1];
     return LocalWorkScheduleDay(
-      start: parseHHmm(prefs.getString('startTime')),
-      end: parseHHmm(prefs.getString('endTime')),
-      weeklyScheduleAvailable: false,
+      start: startByDay[dayLabel],
+      end: endByDay[dayLabel],
+      weeklyScheduleAvailable: true,
     );
   }
 
@@ -81,12 +63,10 @@ class LocalWorkScheduleReader {
     String key,
   ) {
     final decoded = _decodeJsonMap((prefs.getString(key) ?? '').trim());
-    final result = <String, LocalClockTime?>{};
-    for (final day in days) {
-      final raw = decoded[day];
-      result[day] = raw is String ? parseHHmm(raw) : null;
-    }
-    return result;
+    return <String, LocalClockTime?>{
+      for (final day in days)
+        day: decoded[day] is String ? parseHHmm(decoded[day] as String) : null,
+    };
   }
 
   static Map<String, dynamic> _decodeJsonMap(String raw) {

@@ -9,6 +9,7 @@ import '../../../../features/account/domain/repositories/user_repository.dart';
 import '../../../../shared/tts/application/tts_ownership.dart';
 import '../../../../shared/tts/application/tts_user_filters.dart';
 import '../../../dev/application/area_state.dart';
+import '../area_login_session_refresher.dart';
 import '../../applications/service/service_login_network_service.dart';
 import '../../applications/service/service_login_validate.dart';
 
@@ -128,6 +129,16 @@ class ServiceLoginController {
         final userState = context.read<UserState>();
         final areaState = context.read<AreaState>();
         final updatedUser = user.copyWith(isSaved: true);
+        final areaToSet = updatedUser.areas.firstOrNull ?? '';
+        final divisionToSet = updatedUser.divisions.firstOrNull ?? '';
+        await AreaLoginSessionRefresher.refresh(
+          context: context,
+          areaState: areaState,
+          division: divisionToSet,
+          area: areaToSet,
+          operationLabel: 'service',
+        );
+        debugPrint('[LOGIN-SERVICE][${_ts()}] AreaRecord 서버 강제 동기화 완료: $divisionToSet/$areaToSet');
         await userState.updateLoginUser(updatedUser);
         debugPrint('[LOGIN-SERVICE][${_ts()}] userState.updateLoginUser done');
 
@@ -147,10 +158,6 @@ class ServiceLoginController {
         debugPrint(
             '[LOGIN-SERVICE][${_ts()}] SharedPreferences 저장 완료: phone=${prefs.getString('phone')}');
 
-        final areaToSet = updatedUser.areas.firstOrNull ?? '';
-        await areaState.updateArea(areaToSet);
-        debugPrint(
-            '[LOGIN-SERVICE][${_ts()}] areaState.updateArea("$areaToSet")');
 
         final a = context.read<AreaState>().currentArea;
         debugPrint(
@@ -226,7 +233,6 @@ class ServiceLoginController {
 
     return InputDecoration(
       labelText: label,
-      hintText: label,
       prefixIcon: icon != null ? Icon(icon) : null,
       suffixIcon: suffixIcon,
       contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),

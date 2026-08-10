@@ -31,6 +31,7 @@ abstract interface class AreaRepository {
   Future<AreaRecord?> getAreaByName(
     String areaName, {
     String? division,
+    bool serverOnly = false,
   });
 
   Future<List<AreaRecord>> getAreasByDivision(String division);

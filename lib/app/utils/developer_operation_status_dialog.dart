@@ -50,7 +50,7 @@ class DeveloperOperationTrace extends ChangeNotifier {
     String? developerModeMessage,
     String? standardModeMessage,
   }) async {
-    final developerMode = await DevAuth.isDeveloperLoggedIn();
+    final developerMode = await DevAuth.isDevModeEnabled();
     final trace = DeveloperOperationTrace._(
       title: title,
       developerMode: developerMode,

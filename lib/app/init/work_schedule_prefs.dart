@@ -8,6 +8,8 @@ class WorkSchedulePrefs {
   static const String startMapKey = 'startTimeByWeekday';
   static const String endMapKey = 'endTimeByWeekday';
   static const String breakDaysKey = 'breakDays';
+  static const String _legacyStartKey = 'startTime';
+  static const String _legacyEndKey = 'endTime';
   static const List<String> days = <String>['월', '화', '수', '목', '금', '토', '일'];
 
   static int dayToWeekdayInt(String day) {
@@ -66,20 +68,16 @@ class WorkSchedulePrefs {
   static String encodeDayTimeMap(Map<String, TimeOfDay?> map) {
     final out = <String, String>{};
     for (final day in days) {
-      final value = map[day];
-      final hhmm = formatTime(value);
-      if (hhmm == null) continue;
-      out[day] = hhmm;
+      final hhmm = formatTime(map[day]);
+      if (hhmm != null) out[day] = hhmm;
     }
     return jsonEncode(out);
   }
 
   static Map<String, TimeOfDay?> normalizeDayTimeMap(Map<String, TimeOfDay?> map) {
-    final out = <String, TimeOfDay?>{};
-    for (final day in days) {
-      out[day] = map[day];
-    }
-    return out;
+    return <String, TimeOfDay?>{
+      for (final day in days) day: map[day],
+    };
   }
 
   static Map<String, TimeOfDay?> readDayTimeMapFromPrefs(
@@ -87,28 +85,39 @@ class WorkSchedulePrefs {
     String key,
   ) {
     final decoded = decodeJsonMap((prefs.getString(key) ?? '').trim());
-    final out = <String, TimeOfDay?>{};
-    for (final day in days) {
-      final raw = decoded[day];
-      if (raw is String) {
-        out[day] = parseHHmm(raw);
-      } else {
-        out[day] = null;
-      }
-    }
-    return out;
+    return <String, TimeOfDay?>{
+      for (final day in days)
+        day: decoded[day] is String ? parseHHmm(decoded[day] as String) : null,
+    };
   }
 
+  static bool hasStoredSchedulePrefs(SharedPreferences prefs) {
+    return prefs.containsKey(startMapKey) ||
+        prefs.containsKey(endMapKey) ||
+        prefs.containsKey(_legacyStartKey) ||
+        prefs.containsKey(_legacyEndKey);
+  }
 
   static List<String> normalizeDayList(Iterable<String> raw) {
     final set = raw.map((value) => value.trim()).where((value) => value.isNotEmpty).toSet();
-    final out = <String>[
+    return <String>[
       for (final day in days)
         if (set.contains(day)) day,
       for (final value in set)
         if (!days.contains(value)) value,
     ];
-    return out;
+  }
+
+  static List<String> fixedHolidaysFromMaps({
+    required Map<String, TimeOfDay?> startByDay,
+    required Map<String, TimeOfDay?> endByDay,
+  }) {
+    final normalizedStart = normalizeDayTimeMap(startByDay);
+    final normalizedEnd = normalizeDayTimeMap(endByDay);
+    return <String>[
+      for (final day in days)
+        if (normalizedStart[day] == null && normalizedEnd[day] == null) day,
+    ];
   }
 
   static List<String> readBreakDaysFromPrefs(
@@ -136,13 +145,10 @@ class WorkSchedulePrefs {
     required Map<String, TimeOfDay?> startByDay,
     required Map<String, TimeOfDay?> endByDay,
   }) {
-    final out = <String>[];
-    for (final day in days) {
-      if (startByDay[day] != null && endByDay[day] != null) {
-        out.add(day);
-      }
-    }
-    return out;
+    return <String>[
+      for (final day in days)
+        if (startByDay[day] != null && endByDay[day] != null) day,
+    ];
   }
 
   static List<String> normalizeBreakDaysForWorkingMap({
@@ -163,43 +169,85 @@ class WorkSchedulePrefs {
     return out;
   }
 
-  static Map<String, TimeOfDay?> fillAllDays(
+  static Map<String, TimeOfDay?> _fillLegacyDays(
     TimeOfDay? time, {
-    Set<String> excludedDays = const <String>{},
+    required Set<String> excludedDays,
   }) {
-    final out = <String, TimeOfDay?>{};
-    for (final day in days) {
-      out[day] = excludedDays.contains(day) ? null : time;
-    }
-    return out;
+    return <String, TimeOfDay?>{
+      for (final day in days) day: excludedDays.contains(day) ? null : time,
+    };
   }
 
-  static TimeOfDay? pickRepresentative(Map<String, TimeOfDay?> map) {
-    final weekdayNow = DateTime.now().weekday;
-    final today = days[weekdayNow - 1];
-    final todayValue = map[today];
-    if (todayValue != null) return todayValue;
-    for (final day in days) {
-      final value = map[day];
-      if (value != null) return value;
+  static Future<bool> migrateLegacySchedulePrefs(SharedPreferences prefs) async {
+    final hasStartMap = prefs.containsKey(startMapKey);
+    final hasEndMap = prefs.containsKey(endMapKey);
+    final hasLegacyStart = prefs.containsKey(_legacyStartKey);
+    final hasLegacyEnd = prefs.containsKey(_legacyEndKey);
+    final excludedDays = (prefs.getStringList('fixedHolidays') ?? const <String>[])
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toSet();
+    var changed = false;
+
+    if (!hasStartMap) {
+      final startByDay = hasLegacyStart
+          ? _fillLegacyDays(
+              parseHHmm(prefs.getString(_legacyStartKey)),
+              excludedDays: excludedDays,
+            )
+          : normalizeDayTimeMap(const <String, TimeOfDay?>{});
+      await prefs.setString(startMapKey, encodeDayTimeMap(startByDay));
+      changed = true;
     }
-    return null;
+
+    if (!hasEndMap) {
+      final endByDay = hasLegacyEnd
+          ? _fillLegacyDays(
+              parseHHmm(prefs.getString(_legacyEndKey)),
+              excludedDays: excludedDays,
+            )
+          : normalizeDayTimeMap(const <String, TimeOfDay?>{});
+      await prefs.setString(endMapKey, encodeDayTimeMap(endByDay));
+      changed = true;
+    }
+
+    if (hasLegacyStart) {
+      await prefs.remove(_legacyStartKey);
+      changed = true;
+    }
+    if (hasLegacyEnd) {
+      await prefs.remove(_legacyEndKey);
+      changed = true;
+    }
+
+    final startByDay = readDayTimeMapFromPrefs(prefs, startMapKey);
+    final endByDay = readDayTimeMapFromPrefs(prefs, endMapKey);
+    final fixedHolidays = fixedHolidaysFromMaps(
+      startByDay: startByDay,
+      endByDay: endByDay,
+    );
+    final previousHolidays = normalizeDayList(
+      prefs.getStringList('fixedHolidays') ?? const <String>[],
+    );
+    if (previousHolidays.join('|') != fixedHolidays.join('|')) {
+      await prefs.setStringList('fixedHolidays', fixedHolidays);
+      changed = true;
+    }
+
+    if (changed) {
+      debugPrint(
+        '[WorkSchedulePrefs] schedule prefs normalized to weekday maps; holidays=${fixedHolidays.length}',
+      );
+    }
+    return changed;
   }
 
   static Map<String, TimeOfDay?> resolveStartMap(UserModel user) {
-    final map = normalizeDayTimeMap(user.startTimeByWeekday);
-    final hasWeekly = map.values.any((value) => value != null);
-    if (hasWeekly) return map;
-    final offDays = user.fixedHolidays.map((e) => e.trim()).where((e) => e.isNotEmpty).toSet();
-    return fillAllDays(user.startTime, excludedDays: offDays);
+    return normalizeDayTimeMap(user.startTimeByWeekday);
   }
 
   static Map<String, TimeOfDay?> resolveEndMap(UserModel user) {
-    final map = normalizeDayTimeMap(user.endTimeByWeekday);
-    final hasWeekly = map.values.any((value) => value != null);
-    if (hasWeekly) return map;
-    final offDays = user.fixedHolidays.map((e) => e.trim()).where((e) => e.isNotEmpty).toSet();
-    return fillAllDays(user.endTime, excludedDays: offDays);
+    return normalizeDayTimeMap(user.endTimeByWeekday);
   }
 
   static Set<int> workingWeekdaysFromMaps({
@@ -208,9 +256,7 @@ class WorkSchedulePrefs {
   }) {
     final out = <int>{};
     for (final day in days) {
-      final start = startByDay[day];
-      final end = endByDay[day];
-      if (start != null && end != null) {
+      if (startByDay[day] != null && endByDay[day] != null) {
         out.add(dayToWeekdayInt(day));
       }
     }
@@ -224,8 +270,7 @@ class WorkSchedulePrefs {
     final out = <int, String>{};
     for (final day in days) {
       final start = startByDay[day];
-      final end = endByDay[day];
-      final hhmm = formatTime(end);
+      final hhmm = formatTime(endByDay[day]);
       if (start == null || hhmm == null) continue;
       out[dayToWeekdayInt(day)] = hhmm;
     }
@@ -236,38 +281,48 @@ class WorkSchedulePrefs {
     required SharedPreferences prefs,
     required Map<String, TimeOfDay?> startByDay,
     required Map<String, TimeOfDay?> endByDay,
-    List<String> fixedHolidays = const <String>[],
     List<String> breakDays = const <String>[],
   }) async {
     final normalizedStart = normalizeDayTimeMap(startByDay);
     final normalizedEnd = normalizeDayTimeMap(endByDay);
+    final fixedHolidays = fixedHolidaysFromMaps(
+      startByDay: normalizedStart,
+      endByDay: normalizedEnd,
+    );
+    final normalizedBreakDays = normalizeBreakDaysForWorkingMap(
+      breakDays: breakDays,
+      startByDay: normalizedStart,
+      endByDay: normalizedEnd,
+    );
 
     await prefs.setString(startMapKey, encodeDayTimeMap(normalizedStart));
     await prefs.setString(endMapKey, encodeDayTimeMap(normalizedEnd));
-    await prefs.setString('startTime', formatTime(pickRepresentative(normalizedStart)) ?? '');
-    await prefs.setString('endTime', formatTime(pickRepresentative(normalizedEnd)) ?? '');
-    await prefs.setStringList('fixedHolidays', normalizeDayList(fixedHolidays));
-    await prefs.setStringList(breakDaysKey, normalizeDayList(breakDays));
+    await prefs.remove(_legacyStartKey);
+    await prefs.remove(_legacyEndKey);
+    await prefs.setStringList('fixedHolidays', fixedHolidays);
+    await prefs.setStringList(breakDaysKey, normalizedBreakDays);
   }
 
   static Future<void> saveUserSchedule({
     required SharedPreferences prefs,
     required UserModel user,
   }) async {
+    final startByDay = resolveStartMap(user);
+    final endByDay = resolveEndMap(user);
     await saveScheduleToPrefs(
       prefs: prefs,
-      startByDay: resolveStartMap(user),
-      endByDay: resolveEndMap(user),
-      fixedHolidays: user.fixedHolidays,
+      startByDay: startByDay,
+      endByDay: endByDay,
       breakDays: normalizeBreakDaysForWorkingMap(
         breakDays: user.breakDays,
-        startByDay: resolveStartMap(user),
-        endByDay: resolveEndMap(user),
+        startByDay: startByDay,
+        endByDay: endByDay,
       ),
     );
   }
 
   static Future<void> refreshReminderFromPrefs(SharedPreferences prefs) async {
+    await migrateLegacySchedulePrefs(prefs);
     final isWorking = prefs.getBool('isWorking') ?? false;
     if (!isWorking) {
       await EndTimeReminderService.instance.cancel();
@@ -276,62 +331,23 @@ class WorkSchedulePrefs {
 
     final startByDay = readDayTimeMapFromPrefs(prefs, startMapKey);
     final endByDay = readDayTimeMapFromPrefs(prefs, endMapKey);
-    final hasWeekly = startByDay.values.any((value) => value != null) ||
-        endByDay.values.any((value) => value != null);
+    final workingWeekdays = workingWeekdaysFromMaps(
+      startByDay: startByDay,
+      endByDay: endByDay,
+    );
+    final endTimesByWeekday = endTimesByWeekdayFromMap(
+      startByDay: startByDay,
+      endByDay: endByDay,
+    );
 
-    if (hasWeekly) {
-      final workingWeekdays = workingWeekdaysFromMaps(
-        startByDay: startByDay,
-        endByDay: endByDay,
-      );
-      final endTimesByWeekday = endTimesByWeekdayFromMap(
-        startByDay: startByDay,
-        endByDay: endByDay,
-      );
-
-      if (workingWeekdays.isEmpty || endTimesByWeekday.isEmpty) {
-        await EndTimeReminderService.instance.cancel();
-        return;
-      }
-
-      await EndTimeReminderService.instance.scheduleWeeklyOneHourBeforeByWeekday(
-        endTimeHHmmByWeekday: endTimesByWeekday,
-        workingWeekdays: workingWeekdays,
-      );
-      return;
-    }
-
-    final legacyEnd = (prefs.getString('endTime') ?? '').trim();
-    if (legacyEnd.isEmpty) {
+    if (workingWeekdays.isEmpty || endTimesByWeekday.isEmpty) {
       await EndTimeReminderService.instance.cancel();
       return;
     }
 
-    final fixedHolidays = prefs.getStringList('fixedHolidays') ?? const <String>[];
-    if (fixedHolidays.isNotEmpty) {
-      await EndTimeReminderService.instance.scheduleWeeklyOneHourBefore(
-        endTimeHHmm: legacyEnd,
-        fixedHolidays: fixedHolidays,
-      );
-      return;
-    }
-
-    final everyDay = <int>{
-      DateTime.monday,
-      DateTime.tuesday,
-      DateTime.wednesday,
-      DateTime.thursday,
-      DateTime.friday,
-      DateTime.saturday,
-      DateTime.sunday,
-    };
-    final endTimeHHmmByWeekday = <int, String>{
-      for (final weekday in everyDay) weekday: legacyEnd,
-    };
-
     await EndTimeReminderService.instance.scheduleWeeklyOneHourBeforeByWeekday(
-      endTimeHHmmByWeekday: endTimeHHmmByWeekday,
-      workingWeekdays: everyDay,
+      endTimeHHmmByWeekday: endTimesByWeekday,
+      workingWeekdays: workingWeekdays,
     );
   }
 }

@@ -155,43 +155,36 @@ class _WeeklyWorkScheduleEditorState extends State<WeeklyWorkScheduleEditor> {
     final user = session is UserSessionAccount ? session.user : null;
     final prefs = await SharedPreferences.getInstance();
     await prefs.reload();
+    final hadStoredSchedule = WorkSchedulePrefs.hasStoredSchedulePrefs(prefs);
+    await WorkSchedulePrefs.migrateLegacySchedulePrefs(prefs);
     final cached = _decodeJsonMap(prefs.getString('cachedUserJson') ?? '');
-    final fixedHolidays = prefs.getStringList('fixedHolidays') ??
-        user?.fixedHolidays ??
-        _cachedStringList(cached['fixedHolidays']);
-
-    final startRaw = (prefs.getString(WorkSchedulePrefs.startMapKey) ?? '').trim();
-    final endRaw = (prefs.getString(WorkSchedulePrefs.endMapKey) ?? '').trim();
-
-    Map<String, TimeOfDay?> startMap;
-    if (startRaw.isNotEmpty) {
-      startMap = WorkSchedulePrefs.readDayTimeMapFromPrefs(
-        prefs,
-        WorkSchedulePrefs.startMapKey,
-      );
-    } else if (user != null) {
-      startMap = WorkSchedulePrefs.resolveStartMap(user);
-    } else {
-      startMap = WorkSchedulePrefs.fillAllDays(
-        WorkSchedulePrefs.parseHHmm(prefs.getString('startTime')),
-        excludedDays: fixedHolidays.toSet(),
-      );
+    if (!hadStoredSchedule && user != null) {
+      await WorkSchedulePrefs.saveUserSchedule(prefs: prefs, user: user);
     }
 
-    Map<String, TimeOfDay?> endMap;
-    if (endRaw.isNotEmpty) {
-      endMap = WorkSchedulePrefs.readDayTimeMapFromPrefs(
-        prefs,
-        WorkSchedulePrefs.endMapKey,
-      );
-    } else if (user != null) {
-      endMap = WorkSchedulePrefs.resolveEndMap(user);
-    } else {
-      endMap = WorkSchedulePrefs.fillAllDays(
-        WorkSchedulePrefs.parseHHmm(prefs.getString('endTime')),
-        excludedDays: fixedHolidays.toSet(),
-      );
-    }
+    final Map<String, TimeOfDay?> startMap = hadStoredSchedule
+        ? WorkSchedulePrefs.readDayTimeMapFromPrefs(
+            prefs,
+            WorkSchedulePrefs.startMapKey,
+          )
+        : user != null
+            ? WorkSchedulePrefs.resolveStartMap(user)
+            : WorkSchedulePrefs.readDayTimeMapFromPrefs(
+                prefs,
+                WorkSchedulePrefs.startMapKey,
+              );
+
+    final Map<String, TimeOfDay?> endMap = hadStoredSchedule
+        ? WorkSchedulePrefs.readDayTimeMapFromPrefs(
+            prefs,
+            WorkSchedulePrefs.endMapKey,
+          )
+        : user != null
+            ? WorkSchedulePrefs.resolveEndMap(user)
+            : WorkSchedulePrefs.readDayTimeMapFromPrefs(
+                prefs,
+                WorkSchedulePrefs.endMapKey,
+              );
 
     final workingDays = _workingDays(startMap, endMap);
     final fallbackBreakDays = user?.breakDays ??

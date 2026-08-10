@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import '../../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../../app/utils/status_dialog.dart';
 import '../../../../../design_system/common_ui/common_ui_overlays.dart';
 import '../../../widgets/ops_console_widgets.dart';
@@ -66,31 +67,68 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
   bool _creating = false;
   int _refreshTick = 0;
 
-  Map<String, dynamic> _copyUser(Map<String, dynamic> d) => <String, dynamic>{
-        'name': d['name'] ?? '',
-        'phone': d['phone'] ?? '',
-        'email': d['email'] ?? '',
-        'password': d['password'] ?? '',
-        'divisions': List<String>.from(d['divisions'] ?? const <String>[]),
-        'areas': List<String>.from(d['areas'] ?? const <String>[]),
-        'role': d['role'] ?? 'fieldCommon',
-        'modes': List<String>.from(d['modes'] ?? const <String>[]),
-        'position': d['position'] ?? '',
-        'currentArea': d['currentArea'],
-        'selectedArea': d['selectedArea'],
-        'englishSelectedAreaName': d['englishSelectedAreaName'],
-        'startTime': d['startTime'],
-        'endTime': d['endTime'],
-        'startTimeByWeekday': Map<String, dynamic>.from(d['startTimeByWeekday'] ?? const <String, dynamic>{}),
-        'endTimeByWeekday': Map<String, dynamic>.from(d['endTimeByWeekday'] ?? const <String, dynamic>{}),
-        'fixedHolidays': List<String>.from(d['fixedHolidays'] ?? const <String>[]),
-        'isSaved': d['isSaved'] ?? false,
-        'isSelected': d['isSelected'] ?? false,
-        'isWorking': d['isWorking'] ?? false,
-        'isActive': d['isActive'] ?? true,
-        'createdAt': d['createdAt'],
-        'updatedAt': d['updatedAt'],
+  Map<String, dynamic> _normalizedWeekMapFromData(
+    Map<String, dynamic> data,
+    String mapKey,
+    String legacyKey,
+  ) {
+    final raw = data[mapKey];
+    if (raw is Map) {
+      return <String, dynamic>{
+        for (final day in _CreateUserAccountDraft.weekdays) day: raw[day],
       };
+    }
+
+    final holidays = List<String>.from(data['fixedHolidays'] ?? const <String>[])
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toSet();
+    final legacy = data[legacyKey];
+    return <String, dynamic>{
+      for (final day in _CreateUserAccountDraft.weekdays)
+        day: holidays.contains(day) ? null : legacy,
+    };
+  }
+
+  Map<String, dynamic> _copyUser(Map<String, dynamic> d) {
+    final startByWeekday = _normalizedWeekMapFromData(
+      d,
+      'startTimeByWeekday',
+      'startTime',
+    );
+    final endByWeekday = _normalizedWeekMapFromData(
+      d,
+      'endTimeByWeekday',
+      'endTime',
+    );
+    final fixedHolidays = <String>[
+      for (final day in _CreateUserAccountDraft.weekdays)
+        if (startByWeekday[day] == null && endByWeekday[day] == null) day,
+    ];
+    return <String, dynamic>{
+      'name': d['name'] ?? '',
+      'phone': d['phone'] ?? '',
+      'email': d['email'] ?? '',
+      'password': d['password'] ?? '',
+      'divisions': List<String>.from(d['divisions'] ?? const <String>[]),
+      'areas': List<String>.from(d['areas'] ?? const <String>[]),
+      'role': d['role'] ?? 'fieldCommon',
+      'modes': List<String>.from(d['modes'] ?? const <String>[]),
+      'position': d['position'] ?? '',
+      'currentArea': d['currentArea'],
+      'selectedArea': d['selectedArea'],
+      'englishSelectedAreaName': d['englishSelectedAreaName'],
+      'startTimeByWeekday': startByWeekday,
+      'endTimeByWeekday': endByWeekday,
+      'fixedHolidays': fixedHolidays,
+      'isSaved': d['isSaved'] ?? false,
+      'isSelected': d['isSelected'] ?? false,
+      'isWorking': d['isWorking'] ?? false,
+      'isActive': d['isActive'] ?? true,
+      'createdAt': d['createdAt'],
+      'updatedAt': d['updatedAt'],
+    };
+  }
 
   Future<List<String>> fetchDivisions() async {
     final snapshot = await FirebaseFirestore.instance
@@ -362,14 +400,27 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
     final newShowDocRef = fs.collection('user_accounts_show').doc(newShowId);
     final oldShowUserDocRef = oldShowDocRef.collection('users').doc(oldId);
     final newShowUserDocRef = newShowDocRef.collection('users').doc(newId);
+    final trace = await DeveloperOperationTrace.start(
+      context: context,
+      title: '운영 계정 수정',
+      initialMessage: '운영 계정 수정 요청을 시작합니다.',
+      useCommonUi: true,
+      developerModeMessage: '개발자 모드 ON: 운영 계정 수정 로그를 debugPrint 코드로 복사할 수 있습니다.',
+      standardModeMessage: '개발자 모드 OFF: 운영 계정 수정 로그를 콘솔에 기록합니다.',
+    );
 
     try {
+      trace.log(
+        '요일별 근무시간 스키마 확인 완료: startTimeByWeekday/endTimeByWeekday만 저장합니다.',
+        progress: 0.12,
+      );
       await _syncAccountCounts(
         showDocRef: newShowDocRef,
         division: newDivision,
         area: newArea,
         strict: true,
       );
+      trace.log('계정 한도 및 대상 지역 메타데이터 확인 완료', progress: 0.3);
       if (moved) {
         await _syncAccountCounts(
           showDocRef: oldShowDocRef,
@@ -379,6 +430,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
         );
       }
 
+      trace.log('Firestore transaction 저장을 시작합니다.', progress: 0.46);
       await fs.runTransaction((tx) async {
         final oldRef = fs.collection('user_accounts').doc(oldId);
         final newRef = fs.collection('user_accounts').doc(newId);
@@ -430,6 +482,8 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
 
           final showPayload = Map<String, dynamic>.from(newData)
             ..remove('id')
+            ..['startTime'] = FieldValue.delete()
+            ..['endTime'] = FieldValue.delete()
             ..['createdAt'] = newShowUserData['createdAt'] ?? oldSnap.data()?['createdAt'] ?? FieldValue.serverTimestamp()
             ..['updatedAt'] = FieldValue.serverTimestamp()
             ..['isActive'] = targetActive;
@@ -437,7 +491,11 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
               ? FieldValue.delete()
               : (newShowUserData['disabledAt'] ?? FieldValue.serverTimestamp());
 
-          tx.update(oldRef, payload);
+          tx.update(oldRef, <String, dynamic>{
+            ...payload,
+            'startTime': FieldValue.delete(),
+            'endTime': FieldValue.delete(),
+          });
           tx.set(
             newShowDocRef,
             <String, dynamic>{
@@ -492,6 +550,8 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
 
         final showPayload = Map<String, dynamic>.from(newData)
           ..remove('id')
+          ..['startTime'] = FieldValue.delete()
+          ..['endTime'] = FieldValue.delete()
           ..['createdAt'] = oldShowUserData['createdAt'] ?? newShowUserData['createdAt'] ?? oldSnap.data()?['createdAt'] ?? FieldValue.serverTimestamp()
           ..['updatedAt'] = FieldValue.serverTimestamp()
           ..['isActive'] = targetActive;
@@ -503,7 +563,11 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
           tx.set(newRef, payload);
           tx.delete(oldRef);
         } else {
-          tx.update(oldRef, payload);
+          tx.update(oldRef, <String, dynamic>{
+            ...payload,
+            'startTime': FieldValue.delete(),
+            'endTime': FieldValue.delete(),
+          });
         }
 
         if (oldShowUserExists) {
@@ -533,13 +597,17 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
       });
 
 
+      trace.log('Firestore 계정 수정 및 legacy 필드 삭제 완료', progress: 0.92);
+      await trace.succeed('운영 계정 수정이 완료되었습니다.');
       if (!mounted) return;
 
-      await StatusDialog.showSuccess(
-        context,
-        title: StatusDialog.userAccountSaveSuccess,
-        useCommonUi: true,
-      );
+      if (!trace.developerMode) {
+        await StatusDialog.showSuccess(
+          context,
+          title: StatusDialog.userAccountSaveSuccess,
+          useCommonUi: true,
+        );
+      }
 
       if (!mounted) return;
 
@@ -547,9 +615,14 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
         _editedUsers.remove(oldId);
         _refreshTick++;
       });
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('❌ 계정 저장 실패: $e');
-      if (!mounted) return;
+      await trace.fail(
+        '운영 계정 수정 중 예외가 발생했습니다.',
+        error: e,
+        stackTrace: st,
+      );
+      if (!mounted || trace.developerMode) return;
 
       await _showAccountLimitFailureDialog(
         e,
@@ -590,8 +663,20 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
     final userRef = fs.collection('user_accounts').doc(id);
     final showDocRef = fs.collection('user_accounts_show').doc(showId);
     final showUserDocRef = showDocRef.collection('users').doc(id);
+    final trace = await DeveloperOperationTrace.start(
+      context: context,
+      title: '운영 계정 생성',
+      initialMessage: '운영 계정 생성 요청을 시작합니다.',
+      useCommonUi: true,
+      developerModeMessage: '개발자 모드 ON: 운영 계정 생성 로그를 debugPrint 코드로 복사할 수 있습니다.',
+      standardModeMessage: '개발자 모드 OFF: 운영 계정 생성 로그를 콘솔에 기록합니다.',
+    );
 
     try {
+      trace.log(
+        '요일별 근무시간 스키마 확인 완료: startTimeByWeekday/endTimeByWeekday만 생성합니다.',
+        progress: 0.12,
+      );
       final englishName = await _fetchEnglishNameByArea(draft.division, draft.area) ?? draft.area;
       await _syncAccountCounts(
         showDocRef: showDocRef,
@@ -599,7 +684,10 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
         area: draft.area,
         strict: true,
       );
+      trace.log('계정 한도 및 대상 지역 메타데이터 확인 완료', progress: 0.3);
 
+
+      trace.log('Firestore transaction 생성을 시작합니다.', progress: 0.46);
       await fs.runTransaction((tx) async {
         final userSnap = await tx.get(userRef);
         if (userSnap.exists) {
@@ -624,6 +712,8 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
           ..['updatedAt'] = FieldValue.serverTimestamp();
 
         final showMap = draft.toShowUserMap(englishName)
+          ..['startTime'] = FieldValue.delete()
+          ..['endTime'] = FieldValue.delete()
           ..['createdAt'] = FieldValue.serverTimestamp()
           ..['updatedAt'] = FieldValue.serverTimestamp();
 
@@ -644,6 +734,8 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
       });
 
 
+      trace.log('Firestore 계정 생성 완료', progress: 0.92);
+      await trace.succeed('운영 계정 생성이 완료되었습니다.');
       if (!mounted) return;
 
       if (widget.selectedDivision != draft.division) {
@@ -653,17 +745,24 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
         widget.onAreaChanged(draft.area);
       }
 
-      await StatusDialog.showSuccess(
-        context,
-        title: StatusDialog.userAccountSaveSuccess,
-        useCommonUi: true,
-      );
+      if (!trace.developerMode) {
+        await StatusDialog.showSuccess(
+          context,
+          title: StatusDialog.userAccountSaveSuccess,
+          useCommonUi: true,
+        );
+      }
 
       if (!mounted) return;
       setState(() => _refreshTick++);
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('❌ 계정 생성 실패: $e');
-      if (!mounted) return;
+      await trace.fail(
+        '운영 계정 생성 중 예외가 발생했습니다.',
+        error: e,
+        stackTrace: st,
+      );
+      if (!mounted || trace.developerMode) return;
 
       await _showAccountLimitFailureDialog(
         e,
@@ -681,16 +780,22 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
   Widget _buildCreateButton({required List<String> divisionList}) {
     return SizedBox(
       width: double.infinity,
-      child: FilledButton.icon(
-        onPressed: _creating ? null : () => _openCreateDialog(divisionList),
-        icon: _creating
-            ? const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : const Icon(Icons.person_add_alt_1),
-        label: Text(_creating ? '계정 생성 중' : '신규 계정 생성'),
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 240),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        child: FilledButton.icon(
+          key: ValueKey<bool>(_creating),
+          onPressed: _creating ? null : () => _openCreateDialog(divisionList),
+          icon: _creating
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.person_add_alt_1),
+          label: Text(_creating ? '계정 생성 중' : '신규 계정 생성'),
+        ),
       ),
     );
   }
@@ -1008,19 +1113,6 @@ class _CreateUserAccountDraft {
     return <String, int>{'hour': time.hour, 'minute': time.minute};
   }
 
-  TimeOfDay? _pickRepresentative(Map<String, TimeOfDay?> map) {
-    final todayIndex = DateTime.now().weekday - 1;
-    if (todayIndex >= 0 && todayIndex < weekdays.length) {
-      final value = map[weekdays[todayIndex]];
-      if (value != null) return value;
-    }
-    for (final day in weekdays) {
-      final value = map[day];
-      if (value != null) return value;
-    }
-    return null;
-  }
-
   Map<String, dynamic> _encodeWeekdayMap(Map<String, TimeOfDay?> map) {
     final out = <String, dynamic>{};
     for (final day in weekdays) {
@@ -1036,9 +1128,11 @@ class _CreateUserAccountDraft {
       'divisions': <String>[division],
       'modes': modes,
       'email': email,
-      'endTime': _timeToMap(_pickRepresentative(endTimeByWeekday)),
       'englishSelectedAreaName': englishSelectedAreaName,
-      'fixedHolidays': const <String>[],
+      'fixedHolidays': <String>[
+        for (final day in weekdays)
+          if (startTimeByWeekday[day] == null && endTimeByWeekday[day] == null) day,
+      ],
       'isSaved': false,
       'isSelected': false,
       'isWorking': false,
@@ -1048,7 +1142,6 @@ class _CreateUserAccountDraft {
       'position': position,
       'role': role,
       'selectedArea': area,
-      'startTime': _timeToMap(_pickRepresentative(startTimeByWeekday)),
       'startTimeByWeekday': _encodeWeekdayMap(startTimeByWeekday),
       'endTimeByWeekday': _encodeWeekdayMap(endTimeByWeekday),
     };
@@ -1112,10 +1205,10 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
         : (widget.roleList.isNotEmpty ? widget.roleList.last : 'fieldCommon');
     _passwordController.text = _generateRandomPassword();
     _startByDay = <String, TimeOfDay?>{
-      for (final day in _days) day: (day == '토' || day == '일') ? null : const TimeOfDay(hour: 9, minute: 0),
+      for (final day in _days) day: null,
     };
     _endByDay = <String, TimeOfDay?>{
-      for (final day in _days) day: (day == '토' || day == '일') ? null : const TimeOfDay(hour: 18, minute: 0),
+      for (final day in _days) day: null,
     };
     _loadAreas(keepInitialArea: true);
   }
@@ -1225,7 +1318,6 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
     if ((_selectedArea ?? '').trim().isEmpty) return '지역을 선택하세요';
     if (_selectedModes.isEmpty) return '허용 모드를 1개 이상 선택하세요';
 
-    var hasWorkingDay = false;
     for (final day in _days) {
       final start = _startByDay[day];
       final end = _endByDay[day];
@@ -1233,14 +1325,12 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
       final hasEnd = end != null;
       if (hasStart != hasEnd) return '$day 요일의 출근/퇴근 시간을 모두 입력하세요';
       if (start != null && end != null) {
-        hasWorkingDay = true;
         if (_toMinutes(start) > _toMinutes(end)) {
           return '$day 요일의 출근/퇴근 시간을 다시 확인하세요';
         }
       }
     }
 
-    if (!hasWorkingDay) return '최소 1개 요일의 근무 시간을 입력하세요';
     return null;
   }
 
@@ -1327,10 +1417,15 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
         const Text('요일별 근무 시간', style: TextStyle(fontWeight: FontWeight.w800)),
         const SizedBox(height: 8),
         for (final day in _days)
-          Container(
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
             margin: const EdgeInsets.only(bottom: 8),
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
+              color: _startByDay[day] != null && _endByDay[day] != null
+                  ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.18)
+                  : Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.18),
               border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
               borderRadius: BorderRadius.circular(12),
             ),
@@ -1344,10 +1439,16 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
                       child: Text(day, style: const TextStyle(fontWeight: FontWeight.w900)),
                     ),
                     Expanded(
-                      child: Text(
-                        _startByDay[day] != null && _endByDay[day] != null
-                            ? '${_formatTime(_startByDay[day])} ~ ${_formatTime(_endByDay[day])}'
-                            : '휴무',
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 180),
+                        child: Text(
+                          _startByDay[day] != null && _endByDay[day] != null
+                              ? '${_formatTime(_startByDay[day])} ~ ${_formatTime(_endByDay[day])}'
+                              : '휴무',
+                          key: ValueKey<String>(
+                            '${day}_${_formatTime(_startByDay[day])}_${_formatTime(_endByDay[day])}',
+                          ),
+                        ),
                       ),
                     ),
                     TextButton(
@@ -1395,23 +1496,33 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (_errorText != null) ...[
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: cs.errorContainer,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    _errorText!,
-                    style: TextStyle(
-                      color: cs.onErrorContainer,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
+              AnimatedSize(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOutCubic,
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 180),
+                  child: _errorText == null
+                      ? const SizedBox.shrink(key: ValueKey<String>('no_error'))
+                      : Padding(
+                          key: ValueKey<String>(_errorText!),
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: cs.errorContainer,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              _errorText!,
+                              style: TextStyle(
+                                color: cs.onErrorContainer,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ),
                 ),
-                const SizedBox(height: 12),
-              ],
+              ),
               _buildTextField(
                 controller: _nameController,
                 label: '이름',

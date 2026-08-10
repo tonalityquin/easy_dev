@@ -1,12 +1,17 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../app/utils/location_debug_status.dart';
 import '../../../app/utils/snackbar_helper.dart';
 import '../../../design_system/common_ui/common_ui_overlays.dart';
 
 import '../../dev/application/area_state.dart';
+import '../../selector/application/dev_auth.dart';
 import '../applications/location_state.dart';
+import '../data/services/location_reservation_integrity_service.dart';
 import '../domain/models/grid_rect.dart';
 import '../domain/models/location_model.dart';
 import '../domain/models/parking_grid_model.dart';
@@ -33,6 +38,17 @@ class _LocationManagementState extends State<LocationManagement> {
   bool _showSelectedChildSlotNumbers = true;
 
   String? _focusedParentKey;
+
+  final LocationReservationIntegrityService _reservationIntegrityService =
+      LocationReservationIntegrityService();
+
+  bool _reservationIntegrityCheckInProgress = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(DevAuth.isDevModeEnabled().then<void>((_) {}));
+  }
 
   static String _normalizeName(String raw) =>
       raw.trim().replaceAll(RegExp(r'\s+'), ' ');
@@ -202,6 +218,187 @@ class _LocationManagementState extends State<LocationManagement> {
     final entries = counts.entries.toList()
       ..sort((a, b) => a.key.compareTo(b.key));
     return entries.map((e) => '${e.key} ${e.value}').join(' · ');
+  }
+
+  String _integrityIssueSummary(LocationReservationIntegrityReport report) {
+    final values = <String>[
+      'normal=${report.normalCount}',
+      'orphan=${report.count(LocationReservationIntegrityIssueType.orphan)}',
+      'missing=${report.count(LocationReservationIntegrityIssueType.missing)}',
+      'wrongOwner=${report.count(LocationReservationIntegrityIssueType.wrongOwner)}',
+      'staleMetadata=${report.count(LocationReservationIntegrityIssueType.staleMetadata)}',
+      'areaMismatch=${report.count(LocationReservationIntegrityIssueType.areaMismatch)}',
+      'invalidParent=${report.count(LocationReservationIntegrityIssueType.invalidParent)}',
+      'invalidArea=${report.count(LocationReservationIntegrityIssueType.invalidArea)}',
+      'duplicateOwner=${report.count(LocationReservationIntegrityIssueType.duplicateOwner)}',
+      'invalidReservation=${report.count(LocationReservationIntegrityIssueType.invalidReservation)}',
+      'documentIdMismatch=${report.count(LocationReservationIntegrityIssueType.documentIdMismatch)}',
+      'duplicateReservation=${report.count(LocationReservationIntegrityIssueType.duplicateReservation)}',
+    ];
+    return values.join(', ');
+  }
+
+  Future<void> _handleReservationIntegrityCheck(BuildContext context) async {
+    if (_reservationIntegrityCheckInProgress) return;
+    setState(() => _reservationIntegrityCheckInProgress = true);
+
+    DeveloperOperationTrace? trace;
+
+    try {
+      final developerMode = await DevAuth.isDevModeEnabled();
+      if (!developerMode) {
+        return;
+      }
+
+      if (!mounted || !context.mounted) return;
+
+      final activeTrace = await DeveloperOperationTrace.start(
+        context: context,
+        title: '예약 정합성 검사',
+        initialMessage: '현재 지역의 Location 예약 정합성 검사를 준비하고 있습니다.',
+        useCommonUi: true,
+        developerModeMessage:
+            '개발자 모드 ON: 검사 로그의 debugPrint 코드를 복사할 수 있습니다.',
+        standardModeMessage: '개발자 모드 OFF',
+      );
+      trace = activeTrace;
+
+      final area = context.read<AreaState>().currentArea.trim();
+      activeTrace.log(
+        '검사 정책: readOnly=true, source=server, locationsSourceOfTruth=true, reservationScope=area+parentId, reservationWrite=false',
+        progress: 0.04,
+      );
+
+      final report = await _reservationIntegrityService.check(
+        area: area,
+        onProgress: (message, progress) {
+          activeTrace.log(message, progress: progress);
+        },
+      );
+
+      activeTrace.log(
+        '검사 범위: area=${report.area}, locations=${report.locationCount}, parents=${report.parentCount}, children=${report.childCount}, expectedReservations=${report.expectedReservationCount}, actualReservations=${report.reservationCount}',
+        progress: 0.88,
+      );
+      activeTrace.log(
+        '검사 요약: ${_integrityIssueSummary(report)}',
+        progress: 0.9,
+      );
+
+      if (report.issues.isNotEmpty) {
+        activeTrace.log(
+          '확인 필요 항목 상세 로그를 출력합니다: count=${report.issues.length}',
+          progress: 0.92,
+        );
+        for (final issue in report.issues) {
+          activeTrace.log(issue.toLogLine(), progress: 0.94);
+        }
+      }
+
+      if (report.hasIssues) {
+        await activeTrace.succeed(
+          '예약 정합성 검사가 완료되었습니다. 확인이 필요한 항목 ${report.issues.length}건을 발견했습니다. 데이터는 변경하지 않았습니다.',
+        );
+      } else {
+        await activeTrace.succeed(
+          '예약 정합성 검사가 완료되었습니다. 문제가 발견되지 않았으며 데이터는 변경하지 않았습니다.',
+        );
+      }
+    } catch (error, stackTrace) {
+      if (trace != null) {
+        await trace.fail(
+          '예약 정합성 검사에 실패했습니다.',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      } else if (mounted && context.mounted) {
+        showFailedSnackbar(
+          context,
+          '예약 정합성 검사에 실패했습니다.',
+          useCommonUi: true,
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _reservationIntegrityCheckInProgress = false);
+      }
+    }
+  }
+
+  Widget _buildReservationIntegrityButton(
+    BuildContext context,
+    ColorScheme colorScheme,
+  ) {
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final duration =
+        reduceMotion ? Duration.zero : const Duration(milliseconds: 220);
+
+    return TweenAnimationBuilder<double>(
+      duration: duration,
+      curve: Curves.easeOutCubic,
+      tween: Tween<double>(begin: 0, end: 1),
+      builder: (context, value, child) {
+        return Opacity(
+          opacity: value,
+          child: Transform.scale(
+            scale: 0.94 + (0.06 * value),
+            child: child,
+          ),
+        );
+      },
+      child: IconButton.filledTonal(
+        tooltip: '예약 정합성 검사',
+        onPressed: _reservationIntegrityCheckInProgress
+            ? null
+            : () => _handleReservationIntegrityCheck(context),
+        icon: AnimatedSwitcher(
+          duration: duration,
+          reverseDuration: duration,
+          switchInCurve: Curves.linear,
+          switchOutCurve: Curves.linear,
+          transitionBuilder: (current, animation) {
+            final fade = CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOutCubic,
+              reverseCurve: Curves.easeInCubic,
+            );
+            final scale = Tween<double>(begin: 0.9, end: 1).animate(
+              CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+                reverseCurve: Curves.easeInCubic,
+              ),
+            );
+            return FadeTransition(
+              opacity: fade,
+              child: ScaleTransition(
+                scale: scale,
+                child: current,
+              ),
+            );
+          },
+          child: _reservationIntegrityCheckInProgress
+              ? SizedBox.square(
+                  key: const ValueKey<String>(
+                    'reservation-integrity-running',
+                  ),
+                  dimension: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: colorScheme.primary,
+                  ),
+                )
+              : Icon(
+                  Icons.fact_check_rounded,
+                  key: const ValueKey<String>(
+                    'reservation-integrity-idle',
+                  ),
+                  color: colorScheme.primary,
+                ),
+        ),
+      ),
+    );
   }
 
   Future<void> _handleRebuildChildSlots(BuildContext context) async {
@@ -821,52 +1018,64 @@ class _LocationManagementState extends State<LocationManagement> {
           onChanged: (value) => setState(() => _query = value),
         ),
         const SizedBox(height: 10),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            OpsFilterChip(
-              label: '전체',
-              selected: _filter == 'all',
-              icon: Icons.grid_view_rounded,
-              onSelected: () => setState(() => _filter = 'all'),
-            ),
-            OpsFilterChip(
-              label: '복합',
-              selected: _filter == 'composite',
-              icon: Icons.account_tree_rounded,
-              onSelected: () => setState(() => _filter = 'composite'),
-            ),
-            OpsFilterChip(
-              label: '선택 자식만',
-              selected: _showOnlySelectedChild,
-              icon: Icons.center_focus_strong_rounded,
-              onSelected: () => setState(() => _showOnlySelectedChild = !_showOnlySelectedChild),
-            ),
-            OpsFilterChip(
-              label: '슬롯번호',
-              selected: _showSelectedChildSlotNumbers,
-              icon: Icons.tag_rounded,
-              onSelected: () => setState(() => _showSelectedChildSlotNumbers = !_showSelectedChildSlotNumbers),
-            ),
-            OpsFilterChip(
-              label: '$visible/$total',
-              selected: false,
-              icon: Icons.filter_alt_rounded,
-              onSelected: () {},
-            ),
-            IconButton.filledTonal(
-              tooltip: '자식 슬롯 재계산',
-              onPressed: () => _handleRebuildChildSlots(context),
-              icon: Icon(Icons.sync_alt_rounded, color: cs.primary),
-            ),
-            IconButton.filledTonal(
-              tooltip: '새로고침',
-              onPressed: () => _handleRefresh(context),
-              icon: Icon(Icons.refresh_rounded, color: cs.primary),
-            ),
-          ],
+        ValueListenableBuilder<bool>(
+          valueListenable: DevAuth.devModeEnabled,
+          builder: (context, developerMode, child) {
+            return Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                OpsFilterChip(
+                  label: '전체',
+                  selected: _filter == 'all',
+                  icon: Icons.grid_view_rounded,
+                  onSelected: () => setState(() => _filter = 'all'),
+                ),
+                OpsFilterChip(
+                  label: '복합',
+                  selected: _filter == 'composite',
+                  icon: Icons.account_tree_rounded,
+                  onSelected: () => setState(() => _filter = 'composite'),
+                ),
+                OpsFilterChip(
+                  label: '선택 자식만',
+                  selected: _showOnlySelectedChild,
+                  icon: Icons.center_focus_strong_rounded,
+                  onSelected: () => setState(
+                    () => _showOnlySelectedChild = !_showOnlySelectedChild,
+                  ),
+                ),
+                OpsFilterChip(
+                  label: '슬롯번호',
+                  selected: _showSelectedChildSlotNumbers,
+                  icon: Icons.tag_rounded,
+                  onSelected: () => setState(
+                    () => _showSelectedChildSlotNumbers =
+                        !_showSelectedChildSlotNumbers,
+                  ),
+                ),
+                OpsFilterChip(
+                  label: '$visible/$total',
+                  selected: false,
+                  icon: Icons.filter_alt_rounded,
+                  onSelected: () {},
+                ),
+                if (developerMode)
+                  _buildReservationIntegrityButton(context, cs),
+                IconButton.filledTonal(
+                  tooltip: '자식 슬롯 재계산',
+                  onPressed: () => _handleRebuildChildSlots(context),
+                  icon: Icon(Icons.sync_alt_rounded, color: cs.primary),
+                ),
+                IconButton.filledTonal(
+                  tooltip: '새로고침',
+                  onPressed: () => _handleRefresh(context),
+                  icon: Icon(Icons.refresh_rounded, color: cs.primary),
+                ),
+              ],
+            );
+          },
         ),
       ],
     );
