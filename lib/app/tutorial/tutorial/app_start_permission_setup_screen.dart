@@ -1,13 +1,13 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../../app/di/routes.dart';
+import '../../../app/init/app_start_debug_trace.dart';
 import '../../../app/init/app_start_flow_prefs.dart';
+import '../../../app/init/app_start_user_purpose.dart';
 import '../../../app/utils/snackbar_helper.dart';
-import '../../../app/utils/status_dialog.dart';
 import '../../../design_system/common_ui/common_ui_components.dart';
 import '../../../design_system/common_ui/common_ui_overlays.dart';
 import '../../../design_system/common_ui/common_ui_theme.dart';
@@ -41,10 +41,11 @@ enum _PermissionStatusTone {
 class _AppStartPermissionSetupScreenState
     extends State<AppStartPermissionSetupScreen> with WidgetsBindingObserver {
   final PageController _pageController = PageController();
-  final List<String> _debugLines = <String>[];
 
   int _index = 0;
   bool _busy = false;
+  bool _profileReady = false;
+  AppStartUserPurpose? _purpose;
 
   PermissionStatus? _notifStatus;
   PermissionStatus? _locationStatus;
@@ -53,14 +54,8 @@ class _AppStartPermissionSetupScreenState
   PermissionStatus? _microphoneStatus;
   bool? _overlayGranted;
 
-  final List<_PermissionStepKind> _steps = const [
+  List<_PermissionStepKind> _steps = const <_PermissionStepKind>[
     _PermissionStepKind.welcome,
-    _PermissionStepKind.notifications,
-    _PermissionStepKind.location,
-    _PermissionStepKind.battery,
-    _PermissionStepKind.camera,
-    _PermissionStepKind.overlay,
-    _PermissionStepKind.microphone,
   ];
 
   bool get _reduceMotion =>
@@ -70,8 +65,9 @@ class _AppStartPermissionSetupScreenState
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    DevAuth.isDevModeEnabled();
     _printDebug('screen_init');
-    _refreshForStep(_steps.first);
+    _initializeProfile();
   }
 
   String _stepLabel(_PermissionStepKind kind) {
@@ -86,72 +82,126 @@ class _AppStartPermissionSetupScreenState
     };
   }
 
-  String _debugMessage(
-    String event, {
-    Map<String, Object?> meta = const <String, Object?>{},
-  }) {
+  Map<String, Object?> _debugMeta(
+    Map<String, Object?> meta,
+  ) {
     final safeIndex = _index < 0
         ? 0
         : _index >= _steps.length
             ? _steps.length - 1
             : _index;
-    final parts = <String>[
-      '[PERMISSION_SETUP]',
-      'timestamp=${DateTime.now().toIso8601String()}',
-      'event=$event',
-      'step=${_stepLabel(_steps[safeIndex])}',
-      'index=${safeIndex + 1}/${_steps.length}',
-    ];
-    for (final entry in meta.entries) {
-      parts.add('${entry.key}=${entry.value}');
-    }
-    return parts.join(' ');
+    return <String, Object?>{
+      'step': _stepLabel(_steps[safeIndex]),
+      'index': '${safeIndex + 1}/${_steps.length}',
+      'purpose': _purpose?.storageValue ?? 'loading',
+      ...meta,
+    };
   }
 
   void _printDebug(
     String event, {
     Map<String, Object?> meta = const <String, Object?>{},
   }) {
-    final line = _debugMessage(event, meta: meta);
-    debugPrint(line);
-    _debugLines.add(line);
-    if (_debugLines.length > 120) {
-      _debugLines.removeRange(0, _debugLines.length - 120);
-    }
+    AppStartDebugTrace.log(
+      'permission_setup',
+      event,
+      meta: _debugMeta(meta),
+    );
   }
 
   Future<void> _showDeveloperDebugStatus() async {
-    final developerMode = await DevAuth.isDevModeEnabled();
-    if (!developerMode || !mounted || !context.mounted) return;
-
+    if (!_profileReady || !mounted) return;
     _printDebug(
-      'developer_status_open',
+      'developer_status_request',
       meta: <String, Object?>{
         'busy': _busy,
         'canProceed': _canProceed(_steps[_index]),
       },
     );
-
-    final code = _debugLines
-        .map((line) => 'debugPrint(${jsonEncode(line)});')
-        .join('\n');
-
-    await HapticFeedback.mediumImpact();
-    if (!mounted || !context.mounted) return;
-    await StatusDialog.showSuccess(
+    await AppStartDebugTrace.showDeveloperStatus(
       context,
       title: '권한 설정 개발자 상태',
-      description: '현재 권한 설정 흐름의 debugPrint 코드를 복사할 수 있습니다.',
-      copyText: code,
-      copyButtonLabel: 'debugPrint 복사',
-      visibleDuration: const Duration(seconds: 30),
-      useCommonUi: true,
+      description: '사용 환경별 권한 설정 흐름의 debugPrint 코드를 복사할 수 있습니다.',
+      scope: 'permission_setup',
     );
+  }
+
+  List<_PermissionStepKind> _stepsForPurpose(AppStartUserPurpose purpose) {
+    const all = <int, _PermissionStepKind>{
+      1: _PermissionStepKind.welcome,
+      2: _PermissionStepKind.notifications,
+      3: _PermissionStepKind.location,
+      4: _PermissionStepKind.battery,
+      5: _PermissionStepKind.camera,
+      6: _PermissionStepKind.overlay,
+      7: _PermissionStepKind.microphone,
+    };
+    return purpose.permissionStepNumbers
+        .map((step) => all[step])
+        .whereType<_PermissionStepKind>()
+        .toList(growable: false);
+  }
+
+  Future<void> _initializeProfile() async {
+    final purpose = await AppStartFlowPrefs.getUserPurpose();
+    if (!mounted) return;
+    if (purpose == null) {
+      _printDebug('missing_user_purpose');
+      Navigator.of(context).pushNamedAndRemoveUntil(
+        AppRoutes.startGate,
+        (route) => false,
+      );
+      return;
+    }
+
+    final noticeDone = await AppStartFlowPrefs.getPermissionNoticeDone();
+    if (!mounted) return;
+    if (!noticeDone) {
+      _printDebug(
+        'permission_notice_not_completed',
+        meta: <String, Object?>{'purpose': purpose.storageValue},
+      );
+      Navigator.of(context).pushNamedAndRemoveUntil(
+        AppRoutes.startGate,
+        (route) => false,
+      );
+      return;
+    }
+
+    final steps = _stepsForPurpose(purpose);
+    if (steps.isEmpty) {
+      _printDebug(
+        'empty_permission_profile',
+        meta: <String, Object?>{'purpose': purpose.storageValue},
+      );
+      Navigator.of(context).pushNamedAndRemoveUntil(
+        AppRoutes.startGate,
+        (route) => false,
+      );
+      return;
+    }
+
+    setState(() {
+      _purpose = purpose;
+      _steps = steps;
+      _index = 0;
+      _profileReady = true;
+    });
+    _printDebug(
+      'permission_profile_loaded',
+      meta: <String, Object?>{
+        'stepCount': steps.length,
+        'steps': steps.map(_stepLabel).join(','),
+        'policyPostSetup':
+            purpose.skipsPolicyAndPostSetup ? 'skip' : 'required',
+      },
+    );
+    await _refreshForStep(_steps.first);
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state != AppLifecycleState.resumed || !mounted) return;
+    if (state != AppLifecycleState.resumed || !mounted || !_profileReady) return;
     _refreshForStep(_steps[_index]);
   }
 
@@ -973,11 +1023,11 @@ class _AppStartPermissionSetupScreenState
       child: Builder(
         builder: (context) {
           final tokens = CommonUiTheme.of(context);
-          final kind = _steps[_index];
-          final isLast = _index == _steps.length - 1;
-          final canNext = _canProceed(kind);
           final iconBrightness =
               tokens.isDark ? Brightness.light : Brightness.dark;
+          final kind = _steps[_index];
+          final isLast = _index == _steps.length - 1;
+          final canNext = _profileReady && _canProceed(kind);
 
           return PopScope(
             canPop: false,
@@ -997,84 +1047,123 @@ class _AppStartPermissionSetupScreenState
                 appBar: AppBar(
                   title: GestureDetector(
                     behavior: HitTestBehavior.opaque,
-                    onLongPress: _showDeveloperDebugStatus,
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                      child: Text('권한 설정'),
+                    onLongPress:
+                        _profileReady ? _showDeveloperDebugStatus : null,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 6,
+                      ),
+                      child: Text(
+                        _purpose == null
+                            ? '권한 설정'
+                            : '${_purpose!.label} 권한 설정',
+                      ),
                     ),
                   ),
                   centerTitle: true,
                   automaticallyImplyLeading: false,
+                  actions: [
+                    ValueListenableBuilder<bool>(
+                      valueListenable: DevAuth.devModeEnabled,
+                      builder: (context, enabled, child) {
+                        if (!enabled || !_profileReady) {
+                          return const SizedBox.shrink();
+                        }
+                        return IconButton(
+                          tooltip: '개발자 상태',
+                          onPressed: _showDeveloperDebugStatus,
+                          icon: const Icon(Icons.terminal_rounded),
+                        );
+                      },
+                    ),
+                    const SizedBox(width: 4),
+                  ],
                 ),
                 body: SafeArea(
                   child: Center(
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 900),
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-                        child: Column(
-                          children: [
-                            _buildProgress(context),
-                            const SizedBox(height: 14),
-                            Expanded(
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  color: tokens.surface,
-                                  borderRadius: BorderRadius.circular(
-                                    CommonUiShapes.dialog,
-                                  ),
-                                  border: Border.all(color: tokens.borderSubtle),
-                                ),
-                                clipBehavior: Clip.antiAlias,
-                                child: PageView.builder(
-                                  controller: _pageController,
-                                  physics:
-                                      const NeverScrollableScrollPhysics(),
-                                  onPageChanged: (index) async {
-                                    setState(() => _index = index);
-                                    _printDebug(
-                                      'step_changed',
-                                      meta: <String, Object?>{
-                                        'targetStep': _stepLabel(_steps[index]),
-                                      },
-                                    );
-                                    await _refreshForStep(_steps[index]);
-                                  },
-                                  itemCount: _steps.length,
-                                  itemBuilder: (context, index) {
-                                    return _buildAnimatedStepPage(
-                                      KeyedSubtree(
-                                        key: ValueKey(_steps[index]),
-                                        child: _buildStep(
-                                          context,
-                                          _steps[index],
+                      child: _profileReady
+                          ? Padding(
+                              padding: const EdgeInsets.fromLTRB(
+                                16,
+                                14,
+                                16,
+                                14,
+                              ),
+                              child: Column(
+                                children: [
+                                  _buildProgress(context),
+                                  const SizedBox(height: 14),
+                                  Expanded(
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: tokens.surface,
+                                        borderRadius: BorderRadius.circular(
+                                          CommonUiShapes.dialog,
+                                        ),
+                                        border: Border.all(
+                                          color: tokens.borderSubtle,
                                         ),
                                       ),
-                                    );
-                                  },
-                                ),
+                                      clipBehavior: Clip.antiAlias,
+                                      child: PageView.builder(
+                                        controller: _pageController,
+                                        physics:
+                                            const NeverScrollableScrollPhysics(),
+                                        onPageChanged: (index) async {
+                                          setState(() => _index = index);
+                                          _printDebug(
+                                            'step_changed',
+                                            meta: <String, Object?>{
+                                              'targetStep':
+                                                  _stepLabel(_steps[index]),
+                                            },
+                                          );
+                                          await _refreshForStep(_steps[index]);
+                                        },
+                                        itemCount: _steps.length,
+                                        itemBuilder: (context, index) {
+                                          return _buildAnimatedStepPage(
+                                            KeyedSubtree(
+                                              key: ValueKey(_steps[index]),
+                                              child: _buildStep(
+                                                context,
+                                                _steps[index],
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: tokens.surfaceRaised,
+                                      borderRadius: BorderRadius.circular(
+                                        CommonUiShapes.card,
+                                      ),
+                                      border: Border.all(
+                                        color: tokens.borderSubtle,
+                                      ),
+                                    ),
+                                    child: _buildNavigation(
+                                      context,
+                                      isLast: isLast,
+                                      canNext: canNext,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : Center(
+                              child: CircularProgressIndicator(
+                                color: tokens.accent,
                               ),
                             ),
-                            const SizedBox(height: 12),
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: tokens.surfaceRaised,
-                                borderRadius: BorderRadius.circular(
-                                  CommonUiShapes.card,
-                                ),
-                                border:
-                                    Border.all(color: tokens.borderSubtle),
-                              ),
-                              child: _buildNavigation(
-                                context,
-                                isLast: isLast,
-                                canNext: canNext,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
                     ),
                   ),
                 ),

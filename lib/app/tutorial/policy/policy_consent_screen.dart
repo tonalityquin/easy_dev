@@ -4,7 +4,9 @@ import 'package:flutter/services.dart';
 import '../../../design_system/common_ui/common_ui_components.dart';
 import '../../../design_system/common_ui/common_ui_theme.dart';
 import '../../di/routes.dart';
+import '../../init/app_start_debug_trace.dart';
 import '../../init/app_start_flow_prefs.dart';
+import '../../../features/selector/application/dev_auth.dart';
 import 'policy_documents.dart';
 
 export 'policy_documents.dart';
@@ -36,8 +38,22 @@ class _PolicyConsentScreenState extends State<PolicyConsentScreen> {
   @override
   void initState() {
     super.initState();
+    DevAuth.isDevModeEnabled();
+    AppStartDebugTrace.log(
+      'policy_consent',
+      'screen_init',
+      meta: <String, Object?>{'kind': _kindValue(widget.kind)},
+    );
     _documentScrollController.addListener(_handleDocumentScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) => _markReadIfNeeded());
+  }
+
+  String _kindValue(PolicyConsentKind kind) {
+    return switch (kind) {
+      PolicyConsentKind.termsOfService => 'terms_of_service',
+      PolicyConsentKind.privacyPolicy => 'privacy_policy',
+      PolicyConsentKind.accountDeletion => 'account_deletion',
+    };
   }
 
   @override
@@ -54,6 +70,13 @@ class _PolicyConsentScreenState extends State<PolicyConsentScreen> {
         : (position.pixels / position.maxScrollExtent).clamp(0.0, 1.0).toDouble();
     final readToEnd = position.maxScrollExtent <= 0 ||
         position.pixels >= position.maxScrollExtent - 24;
+    if (readToEnd && !_readToEnd) {
+      AppStartDebugTrace.log(
+        'policy_consent',
+        'document_read_to_end',
+        meta: <String, Object?>{'kind': _kindValue(widget.kind)},
+      );
+    }
     if ((progress - _scrollProgress).abs() < 0.01 &&
         readToEnd == _readToEnd) {
       return;
@@ -104,16 +127,62 @@ class _PolicyConsentScreenState extends State<PolicyConsentScreen> {
   Future<void> _complete() async {
     if (_busy || !_agreed) return;
     setState(() => _busy = true);
+    final nextRoute = _nextRoute();
+    AppStartDebugTrace.log(
+      'policy_consent',
+      'agreement_save_start',
+      meta: <String, Object?>{
+        'kind': _kindValue(widget.kind),
+        'nextRoute': nextRoute,
+      },
+    );
     try {
       await _saveAgreement();
+      AppStartDebugTrace.log(
+        'policy_consent',
+        'agreement_save_success',
+        meta: <String, Object?>{
+          'kind': _kindValue(widget.kind),
+          'nextRoute': nextRoute,
+        },
+      );
       if (!mounted) return;
       Navigator.of(context).pushNamedAndRemoveUntil(
-        _nextRoute(),
+        nextRoute,
         (route) => false,
+      );
+    } catch (error, stackTrace) {
+      AppStartDebugTrace.log(
+        'policy_consent',
+        'agreement_save_failure',
+        meta: <String, Object?>{
+          'kind': _kindValue(widget.kind),
+          'error': error,
+          'stackTrace': stackTrace,
+        },
       );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<void> _showDeveloperStatus() async {
+    AppStartDebugTrace.log(
+      'policy_consent',
+      'developer_status_request',
+      meta: <String, Object?>{
+        'kind': _kindValue(widget.kind),
+        'readToEnd': _readToEnd,
+        'agreed': _agreed,
+        'busy': _busy,
+      },
+    );
+    await AppStartDebugTrace.showDeveloperStatus(
+      context,
+      title: '정책 동의 개발자 상태',
+      description: '정책 및 후속 설정 흐름의 debugPrint 코드를 복사할 수 있습니다.',
+      scope: 'policy_consent',
+    );
   }
 
   Widget _buildFlowProgress(BuildContext context) {
@@ -375,7 +444,18 @@ class _PolicyConsentScreenState extends State<PolicyConsentScreen> {
             child: CheckboxListTile(
               value: _agreed,
               onChanged: enabled
-                  ? (value) => setState(() => _agreed = value ?? false)
+                  ? (value) {
+                      final agreed = value ?? false;
+                      setState(() => _agreed = agreed);
+                      AppStartDebugTrace.log(
+                        'policy_consent',
+                        'agreement_toggle',
+                        meta: <String, Object?>{
+                          'kind': _kindValue(widget.kind),
+                          'agreed': agreed,
+                        },
+                      );
+                    }
                   : null,
               controlAffinity: ListTileControlAffinity.leading,
               contentPadding: const EdgeInsets.symmetric(
@@ -442,6 +522,20 @@ class _PolicyConsentScreenState extends State<PolicyConsentScreen> {
                   title: Text(_spec.title),
                   centerTitle: true,
                   automaticallyImplyLeading: false,
+                  actions: [
+                    ValueListenableBuilder<bool>(
+                      valueListenable: DevAuth.devModeEnabled,
+                      builder: (context, enabled, child) {
+                        if (!enabled) return const SizedBox.shrink();
+                        return IconButton(
+                          tooltip: '개발자 상태',
+                          onPressed: _showDeveloperStatus,
+                          icon: const Icon(Icons.terminal_rounded),
+                        );
+                      },
+                    ),
+                    const SizedBox(width: 4),
+                  ],
                 ),
                 body: SafeArea(
                   child: Center(

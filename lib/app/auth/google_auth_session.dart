@@ -14,7 +14,6 @@ class AppScopes {
       'https://www.googleapis.com/auth/calendar';
   static const String calendarEvents =
       'https://www.googleapis.com/auth/calendar.events';
-  static const String documents = 'https://www.googleapis.com/auth/documents';
   static const String gmailSend = 'https://www.googleapis.com/auth/gmail.send';
   static const String gcsFullControl =
       'https://www.googleapis.com/auth/devstorage.full_control';
@@ -22,7 +21,6 @@ class AppScopes {
   static const List<String> values = <String>[
     calendar,
     calendarEvents,
-    documents,
     gmailSend,
     gcsFullControl,
   ];

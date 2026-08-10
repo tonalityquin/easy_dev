@@ -21,13 +21,18 @@ import '../../shared/page/pages/double/double_type_page.dart';
 import '../../shared/page/pages/minor/minor_type_page.dart';
 import '../../shared/page/pages/triple/triple_type_page.dart';
 import '../space/practice_space_lab_screen.dart';
+import '../tutorial/policy/app_start_google_services_setup_screen.dart';
 import '../tutorial/policy/policy_consent_screen.dart';
+import '../tutorial/tutorial/app_start_permission_notice_screen.dart';
 import '../tutorial/tutorial/app_start_permission_setup_screen.dart';
+import '../tutorial/tutorial/app_start_user_purpose_screen.dart';
 import '../tutorial/tutorial/start_gate_screen.dart';
 
 class AppRoutes {
   static const startGate = '/';
   static const appStartTutorial = '/app_start_tutorial';
+  static const appStartUserPurpose = '/app_start_user_purpose';
+  static const appStartPermissionNotice = '/app_start_permission_notice';
   static const appStartPermissionSetup = '/app_start_permission_setup';
   static const appStartNextTutorialFull = '/app_start_next_tutorial_full';
   static const appStartNextTutorialQuick = '/app_start_next_tutorial_quick';
@@ -36,6 +41,8 @@ class AppRoutes {
   static const privacyPolicyConsent = '/app_start_privacy_policy_consent';
   static const accountDeletionPolicyConsent =
       '/app_start_account_deletion_policy_consent';
+  static const appStartGoogleServicesSetup =
+      '/app_start_google_services_setup';
   static const selector = '/selector';
   static const descriptionIntro = '/description_intro';
 
@@ -93,7 +100,11 @@ Widget _buildSprintModeLoadingPage(BuildContext context) {
 
 final Map<String, WidgetBuilder> appRoutes = {
   AppRoutes.startGate: (context) => const StartGateScreen(),
-  AppRoutes.appStartTutorial: (context) => const AppStartPermissionSetupScreen(),
+  AppRoutes.appStartTutorial: (context) => const AppStartUserPurposeScreen(),
+  AppRoutes.appStartUserPurpose: (context) =>
+      const AppStartUserPurposeScreen(),
+  AppRoutes.appStartPermissionNotice: (context) =>
+      const AppStartPermissionNoticeScreen(),
   AppRoutes.appStartPermissionSetup: (context) =>
       const AppStartPermissionSetupScreen(),
   AppRoutes.appStartNextTutorialFull: (context) => const StartGateScreen(),
@@ -108,6 +119,8 @@ final Map<String, WidgetBuilder> appRoutes = {
   AppRoutes.accountDeletionPolicyConsent: (context) => const PolicyConsentScreen(
         kind: PolicyConsentKind.accountDeletion,
       ),
+  AppRoutes.appStartGoogleServicesSetup: (context) =>
+      const AppStartGoogleServicesSetupScreen(),
   AppRoutes.selector: (context) => const SelectorHubsPage(),
   AppRoutes.descriptionIntro: (context) => const DescriptionPage(),
   AppRoutes.serviceLogin: (context) => const LoginScreen(),

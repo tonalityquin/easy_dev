@@ -8,7 +8,7 @@ import 'package:provider/provider.dart';
 import '../../app/utils/status_dialog.dart';
 import '../../features/account/applications/user_state.dart';
 import '../../features/dev/application/area_state.dart';
-import '../../features/chat/presentation/area_chat_panel.dart';
+import '../../features/community/widgets/discord/discord_walkie_panel.dart';
 import '../../features/voice/application/voice_appbar_ui_state.dart';
 import '../page/application/common/type_auto_transition_guard.dart';
 import '../page/application/common/type_view_mode_state.dart';
@@ -869,9 +869,9 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
                 );
               },
               child: talkUiEnabled
-                  ? const KeyedSubtree(
-                      key: ValueKey<String>('area-chat-panel'),
-                      child: AreaChatPanel(),
+                  ? KeyedSubtree(
+                      key: const ValueKey<String>('discord-walkie-panel'),
+                      child: DiscordWalkiePanel(areaName: _resolveArea()),
                     )
                   : KeyedSubtree(
                       key: const ValueKey<String>('real-time-tab-content'),
