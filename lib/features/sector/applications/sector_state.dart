@@ -38,11 +38,13 @@ class SectorState extends ChangeNotifier {
   bool _isRefreshing = false;
   String _previousArea = '';
   int _dataToken = 0;
+  Future<void>? _pendingCacheLoad;
 
   List<SectorModel> get sectors => List<SectorModel>.unmodifiable(_sectors);
   String? get selectedSectorId => _selectedSectorId;
   bool get isLoading => _isLoading;
   bool get isSaving => _isSaving;
+  bool get isRefreshing => _isRefreshing;
   bool get isBusy => _isLoading || _isSaving || _isRefreshing;
 
   SectorModel? get selectedSector {
@@ -108,7 +110,52 @@ class SectorState extends ChangeNotifier {
     loadFromSectorCache();
   }
 
-  Future<void> loadFromSectorCache() async {
+  Future<void> waitUntilReady() async {
+    final wait = Stopwatch()..start();
+    var generation = 0;
+    while (true) {
+      final pending = _pendingCacheLoad;
+      if (pending == null) {
+        wait.stop();
+        debugPrint(
+          '[SectorState] waitUntilReady complete '
+          'elapsedMs=${wait.elapsedMilliseconds} generation=$generation '
+          'loading=$_isLoading saving=$_isSaving refreshing=$_isRefreshing '
+          'area=${_areaState.currentArea.trim()} count=${_sectors.length}',
+        );
+        return;
+      }
+      generation += 1;
+      debugPrint(
+        '[SectorState] waitUntilReady await '
+        'generation=$generation area=${_areaState.currentArea.trim()} '
+        'loading=$_isLoading saving=$_isSaving refreshing=$_isRefreshing',
+      );
+      await pending;
+      if (identical(_pendingCacheLoad, pending)) {
+        wait.stop();
+        debugPrint(
+          '[SectorState] waitUntilReady complete '
+          'elapsedMs=${wait.elapsedMilliseconds} generation=$generation '
+          'loading=$_isLoading saving=$_isSaving refreshing=$_isRefreshing '
+          'area=${_areaState.currentArea.trim()} count=${_sectors.length}',
+        );
+        return;
+      }
+      debugPrint(
+        '[SectorState] waitUntilReady cache future changed '
+        'generation=$generation area=${_areaState.currentArea.trim()}',
+      );
+    }
+  }
+
+  Future<void> loadFromSectorCache() {
+    final future = _loadFromSectorCache();
+    _pendingCacheLoad = future;
+    return future;
+  }
+
+  Future<void> _loadFromSectorCache() async {
     final requestedArea = _areaState.currentArea.trim();
     final token = ++_dataToken;
     _isLoading = true;

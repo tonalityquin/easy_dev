@@ -464,6 +464,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
     required String previousSectorName,
     required String selectedSectorId,
     required String selectedSectorName,
+    String? diagnostic,
     Object? error,
     StackTrace? stackTrace,
   }) async {
@@ -503,6 +504,10 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
       'selectedSectorId=$selectedSectorId selectedSectorName=$selectedSectorName',
       progress: .7,
     );
+    final normalizedDiagnostic = diagnostic?.trim() ?? '';
+    if (normalizedDiagnostic.isNotEmpty) {
+      trace.log(normalizedDiagnostic, progress: .78);
+    }
     trace.log(
       'source=SectorState layout=정산상태시트-정산유형상단 firebaseWrite=false',
       progress: .86,
@@ -555,14 +560,54 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
       }
 
       final sectorState = context.read<SectorState>();
+      final cacheWait = Stopwatch()..start();
+      debugPrint(
+        '[ModifyPlateScreen][Sector] cache wait start '
+        'area=$area loading=${sectorState.isLoading} '
+        'saving=${sectorState.isSaving} refreshing=${sectorState.isRefreshing}',
+      );
+      await sectorState.waitUntilReady();
+      cacheWait.stop();
+      if (!mounted) return;
+
+      final currentAreaAfterWait = context.read<AreaState>().currentArea.trim();
+      debugPrint(
+        '[ModifyPlateScreen][Sector] cache wait end '
+        'elapsedMs=${cacheWait.elapsedMilliseconds} requestedArea=$area '
+        'currentArea=$currentAreaAfterWait loading=${sectorState.isLoading} '
+        'saving=${sectorState.isSaving} refreshing=${sectorState.isRefreshing}',
+      );
+
+      if (currentAreaAfterWait != area) {
+        showFailedSnackbar(
+          context,
+          '방문 구역 정보가 변경되었습니다.',
+          useCommonUi: true,
+        );
+        await _showSectorOperationStatus(
+          result: '방문 구역 준비 중 현재 지역이 변경되어 선택을 중단했습니다.',
+          success: false,
+          area: area,
+          canUseSector: true,
+          previousSectorId: previousSectorId,
+          previousSectorName: previousSectorName,
+          selectedSectorId: previousSectorId,
+          selectedSectorName: previousSectorName,
+          diagnostic: 'cacheWaitMs=${cacheWait.elapsedMilliseconds} loading=${sectorState.isLoading} saving=${sectorState.isSaving} refreshing=${sectorState.isRefreshing}',
+          error: StateError(
+            'requestedArea=$area currentArea=$currentAreaAfterWait '
+            'cacheWaitMs=${cacheWait.elapsedMilliseconds}',
+          ),
+        );
+        return;
+      }
+
       if (sectorState.isBusy) {
-        if (mounted) {
-          showFailedSnackbar(
-            context,
-            '방문 구역 정보를 준비하고 있습니다.',
-            useCommonUi: true,
-          );
-        }
+        showFailedSnackbar(
+          context,
+          '방문 구역 정보를 준비하고 있습니다.',
+          useCommonUi: true,
+        );
         await _showSectorOperationStatus(
           result: '방문 구역 로컬 데이터가 준비 중이어서 변경을 중단했습니다.',
           success: false,
@@ -572,6 +617,12 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
           previousSectorName: previousSectorName,
           selectedSectorId: previousSectorId,
           selectedSectorName: previousSectorName,
+          diagnostic: 'cacheWaitMs=${cacheWait.elapsedMilliseconds} loading=${sectorState.isLoading} saving=${sectorState.isSaving} refreshing=${sectorState.isRefreshing}',
+          error: StateError(
+            'cacheWaitMs=${cacheWait.elapsedMilliseconds} '
+            'loading=${sectorState.isLoading} saving=${sectorState.isSaving} '
+            'refreshing=${sectorState.isRefreshing}',
+          ),
         );
         return;
       }
@@ -588,7 +639,8 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
 
       debugPrint(
         '[ModifyPlateScreen][Sector] cacheKey=${SectorState.cacheKeyForArea(area)} '
-        'raw=${rawSectors.length} valid=${validSectors.length} firebaseRead=false',
+        'raw=${rawSectors.length} valid=${validSectors.length} '
+        'cacheWaitMs=${cacheWait.elapsedMilliseconds} firebaseRead=false',
       );
 
       if (rawSectors.length != validSectors.length || validSectors.isEmpty) {
@@ -608,6 +660,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
           previousSectorName: previousSectorName,
           selectedSectorId: previousSectorId,
           selectedSectorName: previousSectorName,
+          diagnostic: 'cacheWaitMs=${cacheWait.elapsedMilliseconds} loading=${sectorState.isLoading} saving=${sectorState.isSaving} refreshing=${sectorState.isRefreshing}',
         );
         return;
       }
@@ -631,6 +684,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
           previousSectorName: previousSectorName,
           selectedSectorId: previousSectorId,
           selectedSectorName: previousSectorName,
+          diagnostic: 'cacheWaitMs=${cacheWait.elapsedMilliseconds} loading=${sectorState.isLoading} saving=${sectorState.isSaving} refreshing=${sectorState.isRefreshing}',
         );
         return;
       }
@@ -658,6 +712,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
           previousSectorName: previousSectorName,
           selectedSectorId: selected.id.trim(),
           selectedSectorName: selected.name.trim(),
+          diagnostic: 'cacheWaitMs=${cacheWait.elapsedMilliseconds} loading=${sectorState.isLoading} saving=${sectorState.isSaving} refreshing=${sectorState.isRefreshing}',
         );
         return;
       }
@@ -679,6 +734,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
         previousSectorName: previousSectorName,
         selectedSectorId: resolved.id.trim(),
         selectedSectorName: resolved.name.trim(),
+        diagnostic: 'cacheWaitMs=${cacheWait.elapsedMilliseconds} loading=${sectorState.isLoading} saving=${sectorState.isSaving} refreshing=${sectorState.isRefreshing}',
       );
     } catch (error, stackTrace) {
       if (mounted) {

@@ -14,6 +14,7 @@ import '../../../../features/dev/application/area_state.dart';
 import '../../../../features/monthly/page/sheets/widgets/keypad/kor_keypad.dart';
 import '../../../../features/monthly/page/sheets/widgets/keypad/num_keypad.dart';
 import '../../../../features/payment/applications/bill_state.dart';
+import '../../../../features/sector/applications/sector_state.dart';
 import '../../../plate/domain/models/plate_status_lookup_result.dart';
 import '../../../plate/domain/models/plate_status_scope.dart';
 import '../../../plate/domain/repositories/plate_repository.dart';
@@ -607,8 +608,29 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     );
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
       final billState = context.read<BillState>();
-      await billState.loadFromBillCache();
+      final sectorState = context.read<SectorState>();
+      final preload = Stopwatch()..start();
+      debugPrint(
+        '[InputPlateScreen][Preload] start '
+        'sectorLoading=${sectorState.isLoading} '
+        'sectorSaving=${sectorState.isSaving} '
+        'sectorRefreshing=${sectorState.isRefreshing}',
+      );
+      await Future.wait<void>(<Future<void>>[
+        billState.loadFromBillCache(),
+        sectorState.waitUntilReady(),
+      ]);
+      preload.stop();
+      debugPrint(
+        '[InputPlateScreen][Preload] complete '
+        'elapsedMs=${preload.elapsedMilliseconds} '
+        'sectorLoading=${sectorState.isLoading} '
+        'sectorSaving=${sectorState.isSaving} '
+        'sectorRefreshing=${sectorState.isRefreshing} '
+        'sectorCount=${sectorState.sectors.length}',
+      );
       if (!mounted) return;
       setState(() {
         controller.isLocationSelected =

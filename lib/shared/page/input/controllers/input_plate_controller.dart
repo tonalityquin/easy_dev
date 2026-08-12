@@ -507,6 +507,66 @@ class InputPlateController {
     }
 
     final sectorState = context.read<SectorState>();
+    final cacheKey = SectorState.cacheKeyForArea(area);
+    final cacheWait = Stopwatch()..start();
+    trace?.add(
+      'sector cache wait start loading=${sectorState.isLoading} '
+      'saving=${sectorState.isSaving} refreshing=${sectorState.isRefreshing}',
+    );
+    debugPrint(
+      '[InputPlateController][Sector] cache wait start '
+      'area=$area key=$cacheKey loading=${sectorState.isLoading} '
+      'saving=${sectorState.isSaving} refreshing=${sectorState.isRefreshing}',
+    );
+
+    await sectorState.waitUntilReady();
+    cacheWait.stop();
+
+    if (!context.mounted) {
+      return const _SectorEntryResolution(proceed: false);
+    }
+
+    final currentAreaAfterWait = areaState.currentArea.trim();
+    trace?.add(
+      'sector cache wait end elapsedMs=${cacheWait.elapsedMilliseconds} '
+      'requestedArea=$area currentArea=$currentAreaAfterWait '
+      'loading=${sectorState.isLoading} saving=${sectorState.isSaving} '
+      'refreshing=${sectorState.isRefreshing}',
+    );
+    debugPrint(
+      '[InputPlateController][Sector] cache wait end '
+      'elapsedMs=${cacheWait.elapsedMilliseconds} requestedArea=$area '
+      'currentArea=$currentAreaAfterWait loading=${sectorState.isLoading} '
+      'saving=${sectorState.isSaving} refreshing=${sectorState.isRefreshing}',
+    );
+
+    if (currentAreaAfterWait != area.trim()) {
+      final error = StateError('방문처 준비 중 현재 지역이 변경되었습니다.');
+      final developerMode = await _reportSectorWorkflow(
+        context: context,
+        initialMessage: '방문처 데이터 준비 결과를 확인하고 있습니다.',
+        lines: <String>[
+          'requestedArea=$area',
+          'currentArea=$currentAreaAfterWait',
+          'cacheKey=$cacheKey',
+          'cacheWaitMs=${cacheWait.elapsedMilliseconds}',
+          'firebaseRead=false',
+        ],
+        success: false,
+        resultMessage: '현재 지역이 변경되어 방문처 선택을 중단했습니다.',
+        error: error,
+      );
+      if (!developerMode && context.mounted) {
+        await StatusDialog.showFailure(
+          context,
+          title: '방문처 선택을 다시 진행해주세요.',
+          description: '현재 지역 또는 로컬 방문처 정보가 변경되었습니다.',
+          useCommonUi: true,
+        );
+      }
+      return const _SectorEntryResolution(proceed: false);
+    }
+
     final rawSectors = sectorState.sectors;
     final validSectors = rawSectors
         .where(
@@ -516,15 +576,16 @@ class InputPlateController {
               sector.area.trim() == area.trim(),
         )
         .toList(growable: false);
-    final cacheKey = SectorState.cacheKeyForArea(area);
     trace?.add(
       'sectorState busy=${sectorState.isBusy} '
-      'count=${rawSectors.length} valid=${validSectors.length}',
+      'count=${rawSectors.length} valid=${validSectors.length} '
+      'cacheWaitMs=${cacheWait.elapsedMilliseconds}',
     );
     debugPrint(
       '[InputPlateController][Sector] local cache check '
       'area=$area key=$cacheKey busy=${sectorState.isBusy} '
-      'count=${rawSectors.length} valid=${validSectors.length}',
+      'count=${rawSectors.length} valid=${validSectors.length} '
+      'cacheWaitMs=${cacheWait.elapsedMilliseconds}',
     );
 
     if (sectorState.isBusy) {
@@ -534,7 +595,11 @@ class InputPlateController {
         lines: <String>[
           'area=$area',
           'cacheKey=$cacheKey',
+          'cacheWaitMs=${cacheWait.elapsedMilliseconds}',
           'sectorState.isBusy=true',
+          'sectorState.isLoading=${sectorState.isLoading}',
+          'sectorState.isSaving=${sectorState.isSaving}',
+          'sectorState.isRefreshing=${sectorState.isRefreshing}',
           'firebaseRead=false',
         ],
         success: false,
@@ -565,6 +630,7 @@ class InputPlateController {
           'cacheKey=$cacheKey',
           'cachedCount=${rawSectors.length}',
           'validCount=${validSectors.length}',
+          'cacheWaitMs=${cacheWait.elapsedMilliseconds}',
           'firebaseRead=false',
         ],
         success: false,
@@ -604,6 +670,7 @@ class InputPlateController {
           'area=$area',
           'cacheKey=$cacheKey',
           'selectionResult=cancel',
+          'cacheWaitMs=${cacheWait.elapsedMilliseconds}',
           'firebaseRead=false',
           'firebaseWrite=false',
         ],
@@ -641,6 +708,7 @@ class InputPlateController {
           'selectedId=${selected.id}',
           'selectedName=${selected.name}',
           'resolved=${resolved != null}',
+          'cacheWaitMs=${cacheWait.elapsedMilliseconds}',
           'firebaseRead=false',
         ],
         success: false,
@@ -671,6 +739,7 @@ class InputPlateController {
         'sectorId=${confirmedSector.id}',
         'sectorName=${confirmedSector.name}',
         'source=SectorState.sectors',
+        'cacheWaitMs=${cacheWait.elapsedMilliseconds}',
         'firebaseRead=false',
         'selectionRequired=true',
       ],

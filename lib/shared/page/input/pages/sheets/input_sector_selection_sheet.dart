@@ -59,10 +59,15 @@ class InputSectorSelectionSheet extends StatefulWidget {
 class _InputSectorSelectionSheetState
     extends State<InputSectorSelectionSheet> {
   String? _selectedId;
+  bool _entered = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _entered) return;
+      setState(() => _entered = true);
+    });
     final initialId = widget.initialSelectedId?.trim() ?? '';
     if (initialId.isEmpty) return;
     final exists = widget.sectors.any((sector) => sector.id == initialId);
@@ -107,7 +112,7 @@ class _InputSectorSelectionSheetState
     final reduceMotion = MediaQuery.of(context).disableAnimations;
     final selected = _selectedSector;
 
-    return CommonSheetScaffold(
+    final content = CommonSheetScaffold(
       title: '어디에 왔나요?',
       icon: Icons.place_rounded,
       onClose: () => Navigator.of(context).pop(),
@@ -292,6 +297,23 @@ class _InputSectorSelectionSheetState
             ),
           ],
         ),
+      ),
+    );
+
+    final entryDuration =
+        reduceMotion ? Duration.zero : CommonUiMotion.component;
+
+    return AnimatedSlide(
+      offset: reduceMotion || _entered
+          ? Offset.zero
+          : const Offset(0, .025),
+      duration: entryDuration,
+      curve: CommonUiMotion.enter,
+      child: AnimatedOpacity(
+        opacity: reduceMotion || _entered ? 1 : 0,
+        duration: entryDuration,
+        curve: CommonUiMotion.enter,
+        child: content,
       ),
     );
   }
