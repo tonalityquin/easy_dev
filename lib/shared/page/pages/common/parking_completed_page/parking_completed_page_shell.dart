@@ -1,14 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-
 import '../../../../../app/init/db_connection_status_section.dart';
 import '../../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../../features/account/applications/user_state.dart';
 import '../../../../../features/dev/application/area_state.dart';
-import '../../../../../features/voice/application/voice_appbar_ui_state.dart';
-import '../../../../../features/voice/presentation/appbar/voice_parking_completed_appbar_panel.dart';
 import '../../../../real_time_table/view_doc_rows_firestore_sync.dart';
 
 double parkingCompletedContrastRatio(Color a, Color b) {
@@ -110,7 +107,6 @@ class ParkingCompletedPageShell extends StatelessWidget {
           final tokens = CommonUiTheme.of(context);
           final reduceMotion =
               MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-          final talkUiEnabled = context.watch<VoiceAppbarUiState>().enabled;
           final isDark = tokens.brightness == Brightness.dark;
           final preferredTint = tokens.accent;
 
@@ -130,24 +126,9 @@ class ParkingCompletedPageShell extends StatelessWidget {
               child: Scaffold(
                 backgroundColor: scaffoldBackgroundColor ?? tokens.canvas,
                 appBar: AppBar(
-                  titleSpacing:
-                      talkUiEnabled ? 8 : NavigationToolbar.kMiddleSpacing,
-                  title: AnimatedSwitcher(
-                    duration: reduceMotion
-                        ? Duration.zero
-                        : CommonUiMotion.component,
-                    switchInCurve: CommonUiMotion.enter,
-                    switchOutCurve: CommonUiMotion.exit,
-                    child: talkUiEnabled
-                        ? const SizedBox.shrink(
-                            key: ValueKey<String>('talk-title'),
-                          )
-                        : KeyedSubtree(
-                            key: const ValueKey<String>('navigation-title'),
-                            child: topNavigation,
-                          ),
-                  ),
-                  centerTitle: !talkUiEnabled,
+                  titleSpacing: NavigationToolbar.kMiddleSpacing,
+                  title: topNavigation,
+                  centerTitle: true,
                   backgroundColor: tokens.surface,
                   foregroundColor: tokens.textPrimary,
                   elevation: 0,
@@ -159,92 +140,66 @@ class ParkingCompletedPageShell extends StatelessWidget {
                   ),
                   flexibleSpace: SafeArea(
                     bottom: false,
-                    child: AnimatedSwitcher(
-                      duration: reduceMotion
-                          ? Duration.zero
-                          : CommonUiMotion.component,
-                      switchInCurve: CommonUiMotion.enter,
-                      switchOutCurve: CommonUiMotion.exit,
-                      transitionBuilder: (child, animation) {
-                        final curved = CurvedAnimation(
-                          parent: animation,
-                          curve: CommonUiMotion.enter,
-                          reverseCurve: CommonUiMotion.exit,
-                        );
-                        return FadeTransition(opacity: curved, child: child);
-                      },
-                      child: talkUiEnabled
-                          ? const VoiceParkingCompletedAppbarPanel(
-                              key: ValueKey<String>('talk-panel'),
-                            )
-                          : Stack(
-                              key: const ValueKey<String>('standard-panel'),
-                              children: [
-                                IgnorePointer(
+                    child: Stack(
+                      children: [
+                        IgnorePointer(
+                          child: Align(
+                            alignment: Alignment.topLeft,
+                            child: Padding(
+                              padding: const EdgeInsets.only(left: 12, top: 4),
+                              child: Semantics(
+                                label: semanticsLabel,
+                                child: ExcludeSemantics(
+                                  child: CommonAnimatedReveal(
+                                    offset: const Offset(-0.035, 0),
+                                    child: ParkingCompletedBrandTintedLogo(
+                                      assetPath: logoAssetPath,
+                                      height: logoHeight,
+                                      preferredColor: preferredTint,
+                                      fallbackColor: tokens.textPrimary,
+                                      minContrast: logoMinContrast,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        if (showDbStatusOnAppBar)
+                          IgnorePointer(
+                            child: Align(
+                              alignment: Alignment.topRight,
+                              child: Padding(
+                                padding: const EdgeInsets.only(
+                                  right: 12,
+                                  top: 4,
+                                  bottom: 4,
+                                ),
+                                child: SizedBox(
+                                  height: kToolbarHeight - 8,
                                   child: Align(
-                                    alignment: Alignment.topLeft,
-                                    child: Padding(
-                                      padding: const EdgeInsets.only(
-                                        left: 12,
-                                        top: 4,
+                                    alignment: Alignment.centerRight,
+                                    child: ConstrainedBox(
+                                      constraints: const BoxConstraints(
+                                        maxWidth: 132,
+                                        maxHeight: kToolbarHeight - 8,
                                       ),
-                                      child: Semantics(
-                                        label: semanticsLabel,
-                                        child: ExcludeSemantics(
-                                          child: CommonAnimatedReveal(
-                                            offset: const Offset(-0.035, 0),
-                                            child:
-                                                ParkingCompletedBrandTintedLogo(
-                                              assetPath: logoAssetPath,
-                                              height: logoHeight,
-                                              preferredColor: preferredTint,
-                                              fallbackColor: tokens.textPrimary,
-                                              minContrast: logoMinContrast,
-                                            ),
-                                          ),
+                                      child: const FittedBox(
+                                        fit: BoxFit.scaleDown,
+                                        alignment: Alignment.centerRight,
+                                        child: DbConnectionStatusAppBarSection(
+                                          liveLabel: 'live DB',
+                                          storageLabel: '스토리지 DB',
+                                          spacing: 4,
                                         ),
                                       ),
                                     ),
                                   ),
                                 ),
-                                if (showDbStatusOnAppBar)
-                                  IgnorePointer(
-                                    child: Align(
-                                      alignment: Alignment.topRight,
-                                      child: Padding(
-                                        padding: const EdgeInsets.only(
-                                          right: 12,
-                                          top: 4,
-                                          bottom: 4,
-                                        ),
-                                        child: SizedBox(
-                                          height: kToolbarHeight - 8,
-                                          child: Align(
-                                            alignment: Alignment.centerRight,
-                                            child: ConstrainedBox(
-                                              constraints: const BoxConstraints(
-                                                maxWidth: 132,
-                                                maxHeight: kToolbarHeight - 8,
-                                              ),
-                                              child: const FittedBox(
-                                                fit: BoxFit.scaleDown,
-                                                alignment:
-                                                    Alignment.centerRight,
-                                                child:
-                                                    DbConnectionStatusAppBarSection(
-                                                  liveLabel: 'live DB',
-                                                  storageLabel: '스토리지 DB',
-                                                  spacing: 4,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                              ],
+                              ),
                             ),
+                          ),
+                      ],
                     ),
                   ),
                 ),

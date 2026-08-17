@@ -13,6 +13,7 @@ Future<T?> showCommonRightSideDock<T>({
   bool useRootNavigator = false,
   double maxWidth = 360,
   double widthFactor = 0.92,
+  bool barrierDismissible = true,
 }) {
   final reduceMotion =
       MediaQuery.maybeOf(context)?.disableAnimations ?? false;
@@ -26,6 +27,7 @@ Future<T?> showCommonRightSideDock<T>({
       reduceMotion: reduceMotion,
       maxWidth: maxWidth,
       widthFactor: widthFactor,
+      scrimDismissible: barrierDismissible,
     ),
   );
 }
@@ -37,6 +39,7 @@ class _CommonRightSideDockRoute<T> extends PopupRoute<T> {
     required this.reduceMotion,
     required this.maxWidth,
     required this.widthFactor,
+    required this.scrimDismissible,
   });
 
   final WidgetBuilder builder;
@@ -44,6 +47,7 @@ class _CommonRightSideDockRoute<T> extends PopupRoute<T> {
   final bool reduceMotion;
   final double maxWidth;
   final double widthFactor;
+  final bool scrimDismissible;
   bool _layoutLogged = false;
   String? _closeSource;
 
@@ -68,6 +72,7 @@ class _CommonRightSideDockRoute<T> extends PopupRoute<T> {
       reduceMotion ? Duration.zero : const Duration(milliseconds: 240);
 
   void _dismissFromScrim(BuildContext context) {
+    if (!scrimDismissible) return;
     _closeSource = 'scrim';
     HapticFeedback.lightImpact();
     debugPrint(
@@ -129,8 +134,8 @@ class _CommonRightSideDockRoute<T> extends PopupRoute<T> {
               children: [
                 Positioned.fill(
                   child: Semantics(
-                    button: true,
-                    label: '$barrierLabelText 닫기',
+                    button: scrimDismissible,
+                    label: scrimDismissible ? '$barrierLabelText 닫기' : barrierLabelText,
                     child: GestureDetector(
                       behavior: HitTestBehavior.opaque,
                       onTap: () => _dismissFromScrim(context),

@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../application/discord/discord_config.dart';
 import '../application/game/game_quick_actions.dart';
-import 'sheets/discord/discord_bottom_sheet.dart';
 
 double _contrastRatio(Color a, Color b) {
   final la = a.computeLuminance();
@@ -62,15 +59,6 @@ class CommunityStubPage extends StatelessWidget {
       'https://sites.google.com/view/parkinworkin4/%ED%99%88';
   static const String _contactFormUrl = 'https://forms.gle/nbwaFeLhJfAKAf6o8';
 
-  Future<bool?> _openWalkieTutorial(BuildContext context) {
-    return showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => DiscordBottomSheet(rootContext: context),
-    );
-  }
-
   Future<bool> _tryOpenExternalUrl(String url) async {
     final uri = Uri.tryParse(url.trim());
     if (uri == null) return false;
@@ -98,28 +86,6 @@ class CommunityStubPage extends StatelessWidget {
     await _openExternalPage(_contactFormUrl);
   }
 
-  Future<void> _openWalkieFlow(BuildContext context) async {
-    final prefs = await SharedPreferences.getInstance();
-    final done = prefs.getBool(discordWalkieTutorialDoneKey) ?? false;
-    final inviteUrl = prefs.getString(discordWalkieInviteUrlKey) ?? '';
-
-    if (done && isDiscordInviteUrl(inviteUrl)) {
-      final ok = await _tryOpenExternalUrl(inviteUrl);
-      if (ok) return;
-    }
-
-    if (!context.mounted) return;
-
-    final completed = await _openWalkieTutorial(context);
-    if (completed != true) return;
-
-    final prefs2 = await SharedPreferences.getInstance();
-    final inviteUrl2 = prefs2.getString(discordWalkieInviteUrlKey) ?? '';
-    if (isDiscordInviteUrl(inviteUrl2)) {
-      await _tryOpenExternalUrl(inviteUrl2);
-    }
-  }
-
   Future<void> _openArcadeSheet(BuildContext context) async {
     await GameQuickActions.openTetrisSheet(context);
   }
@@ -134,14 +100,6 @@ class CommunityStubPage extends StatelessWidget {
     final footerHeight = (isShort || keyboardOpen) ? 72.0 : 112.0;
 
     final actions = <_CommunityAction>[
-      _CommunityAction(
-        icon: Icons.mic_rounded,
-        title: '사내 업무 커뮤니티',
-        accent: cs.secondary,
-        onAccent: cs.onSecondary,
-        onTap: () => _openWalkieFlow(context),
-        onLongPress: () => _openWalkieTutorial(context),
-      ),
       _CommunityAction(
         icon: Icons.videogame_asset_rounded,
         title: '아케이드',
@@ -565,7 +523,6 @@ class _CommunityAction {
     required this.accent,
     required this.onAccent,
     this.onTap,
-    this.onLongPress,
   });
 
   final IconData icon;
@@ -573,7 +530,6 @@ class _CommunityAction {
   final Color accent;
   final Color onAccent;
   final VoidCallback? onTap;
-  final VoidCallback? onLongPress;
 }
 
 class _CommunityActionTile extends StatelessWidget {
@@ -589,7 +545,6 @@ class _CommunityActionTile extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: action.onTap,
-        onLongPress: action.onLongPress,
         borderRadius: BorderRadius.circular(16),
         child: Container(
           padding: const EdgeInsets.all(12),

@@ -188,7 +188,35 @@ class BillState extends ChangeNotifier {
     List<String> ids, {
     void Function(String)? onError,
   }) async {
+    await _deleteBills(
+      ids,
+      rethrowErrors: false,
+      onError: onError,
+    );
+  }
+
+  Future<void> deleteBillStrict(List<String> ids) async {
+    await _deleteBills(ids, rethrowErrors: true);
+  }
+
+  Future<void> _deleteBills(
+    List<String> ids, {
+    required bool rethrowErrors,
+    void Function(String)? onError,
+  }) async {
     final currentArea = _areaState.currentArea.trim();
+    if (currentArea.isEmpty) {
+      final error = StateError('현재 지역 정보가 없습니다.');
+      onError?.call('🚨 정산 데이터 삭제 실패: ${error.message}');
+      if (rethrowErrors) throw error;
+      return;
+    }
+    if (ids.isEmpty) {
+      final error = ArgumentError('삭제할 정산 유형이 없습니다.');
+      onError?.call('🚨 정산 데이터 삭제 실패: ${error.message}');
+      if (rethrowErrors) throw error;
+      return;
+    }
 
     final prevGeneral = List<BillModel>.from(_generalBills);
     final prevRegular = List<RegularBillModel>.from(_regularBills);
@@ -206,23 +234,39 @@ class BillState extends ChangeNotifier {
       }
 
       await _saveCacheForArea(currentArea);
-
       notifyListeners();
-
       await _repository.deleteBill(ids);
-    } catch (e) {
+      debugPrint('✅ 정산 데이터 삭제 완료: ${ids.join(',')}');
+    } catch (e, stackTrace) {
       _generalBills = prevGeneral;
       _regularBills = prevRegular;
       _selectedBillId = prevSelected;
-      await _saveCacheForArea(currentArea);
+      try {
+        await _saveCacheForArea(currentArea);
+      } catch (rollbackError, rollbackStackTrace) {
+        debugPrint('🔥 정산 삭제 롤백 캐시 저장 실패: $rollbackError');
+        debugPrint('🔥 정산 삭제 롤백 스택: $rollbackStackTrace');
+      }
       notifyListeners();
 
-      onError?.call('🚨 정산 데이터 삭제 실패: $e');
+      final message = '🚨 정산 데이터 삭제 실패: $e';
+      debugPrint(message);
+      debugPrint('🔥 정산 삭제 스택: $stackTrace');
+      onError?.call(message);
+      if (rethrowErrors) {
+        Error.throwWithStackTrace(e, stackTrace);
+      }
     }
   }
 
   void toggleBillSelection(String id) {
     _selectedBillId = (_selectedBillId == id) ? null : id;
+    notifyListeners();
+  }
+
+  void clearSelection() {
+    if (_selectedBillId == null) return;
+    _selectedBillId = null;
     notifyListeners();
   }
 

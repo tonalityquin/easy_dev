@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../../../features/dashboard/sheets/double/double_home_dash_board_bottom_sheet.dart';
+import '../../../../features/dashboard/side_docks/double/double_home_dashboard_side_dock.dart';
 import '../../../../features/mode_double/double_parking_completed_page.dart';
 import '../../../../features/mode_double/parking_completed_package/double_parking_completed_control_buttons.dart';
 import '../../../plate/application/double/double_plate_state.dart';
@@ -67,7 +67,7 @@ class DoubleTypePage extends StatelessWidget {
             ),
           );
         },
-        buildDashboardBottomSheet: () => const DoubleHomeDashBoardBottomSheet(),
+        buildDashboardSideDock: () => const DoubleHomeDashboardSideDock(),
         buildInputScreen: () => const InputPlateScreen(),
         debugMeta: const <String, dynamic>{
           'screen': 'lite_type_page',

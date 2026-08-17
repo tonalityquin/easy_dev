@@ -3,6 +3,28 @@ import 'package:flutter/material.dart';
 import '../../../design_system/common_ui/common_ui_components.dart';
 import '../../../design_system/common_ui/common_ui_theme.dart';
 
+class OpsConsolePresentationScope extends InheritedWidget {
+  const OpsConsolePresentationScope({
+    super.key,
+    required this.embedded,
+    required super.child,
+  });
+
+  final bool embedded;
+
+  static bool isEmbedded(BuildContext context) {
+    return context
+            .dependOnInheritedWidgetOfExactType<OpsConsolePresentationScope>()
+            ?.embedded ??
+        false;
+  }
+
+  @override
+  bool updateShouldNotify(OpsConsolePresentationScope oldWidget) {
+    return embedded != oldWidget.embedded;
+  }
+}
+
 class OpsMetric {
   final String label;
   final String value;
@@ -43,6 +65,118 @@ class OpsConsoleScaffold extends StatelessWidget {
     this.loading = false,
   });
 
+  Widget _content(
+    BuildContext context, {
+    required bool embedded,
+    required CommonUiTokens tokens,
+    required bool reduceMotion,
+  }) {
+    final main = Column(
+      children: [
+        CommonAnimatedReveal(
+          child: OpsConsoleHeader(
+            title: title,
+            subtitle: subtitle,
+            icon: icon,
+            areaLabel: areaLabel,
+            metrics: metrics,
+            trailing: trailing,
+          ),
+        ),
+        if (commandBar != null)
+          CommonAnimatedReveal(
+            delay: const Duration(milliseconds: 45),
+            offset: const Offset(0, .025),
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                embedded ? 10 : 16,
+                embedded ? 8 : 12,
+                embedded ? 10 : 16,
+                0,
+              ),
+              child: commandBar!,
+            ),
+          ),
+        Expanded(
+          child: Stack(
+            children: [
+              AnimatedSwitcher(
+                duration:
+                    reduceMotion ? Duration.zero : CommonUiMotion.component,
+                switchInCurve: CommonUiMotion.enter,
+                switchOutCurve: CommonUiMotion.exit,
+                child: KeyedSubtree(
+                  key: ValueKey<bool>(loading),
+                  child: body,
+                ),
+              ),
+              Positioned.fill(
+                child: IgnorePointer(
+                  ignoring: !loading,
+                  child: AnimatedOpacity(
+                    opacity: loading ? 1 : 0,
+                    duration: reduceMotion
+                        ? Duration.zero
+                        : CommonUiMotion.selection,
+                    child: ColoredBox(
+                      color: tokens.scrim.withOpacity(.12),
+                      child: Center(
+                        child: Container(
+                          width: embedded ? 44 : 50,
+                          height: embedded ? 44 : 50,
+                          decoration: BoxDecoration(
+                            color: tokens.surfaceRaised,
+                            borderRadius: BorderRadius.circular(
+                              CommonUiShapes.control,
+                            ),
+                            border: Border.all(color: tokens.borderSubtle),
+                            boxShadow: [
+                              BoxShadow(
+                                color: tokens.shadow,
+                                blurRadius: 18,
+                                offset: const Offset(0, 8),
+                              ),
+                            ],
+                          ),
+                          alignment: Alignment.center,
+                          child: SizedBox(
+                            width: embedded ? 21 : 24,
+                            height: embedded ? 21 : 24,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.6,
+                              color: tokens.accent,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (embedded && bottomBar != null) bottomBar!,
+      ],
+    );
+
+    if (embedded) {
+      return Material(
+        color: tokens.canvas,
+        child: main,
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: tokens.canvas,
+      body: SafeArea(
+        bottom: false,
+        child: main,
+      ),
+      bottomNavigationBar: bottomBar,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return CommonUiScope(
@@ -51,97 +185,12 @@ class OpsConsoleScaffold extends StatelessWidget {
           final tokens = CommonUiTheme.of(context);
           final reduceMotion =
               MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-          return Scaffold(
-            backgroundColor: tokens.canvas,
-            body: SafeArea(
-              bottom: false,
-              child: Column(
-                children: [
-                  CommonAnimatedReveal(
-                    child: OpsConsoleHeader(
-                      title: title,
-                      subtitle: subtitle,
-                      icon: icon,
-                      areaLabel: areaLabel,
-                      metrics: metrics,
-                      trailing: trailing,
-                    ),
-                  ),
-                  if (commandBar != null)
-                    CommonAnimatedReveal(
-                      delay: const Duration(milliseconds: 45),
-                      offset: const Offset(0, .025),
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                        child: commandBar!,
-                      ),
-                    ),
-                  Expanded(
-                    child: Stack(
-                      children: [
-                        AnimatedSwitcher(
-                          duration: reduceMotion
-                              ? Duration.zero
-                              : CommonUiMotion.component,
-                          switchInCurve: CommonUiMotion.enter,
-                          switchOutCurve: CommonUiMotion.exit,
-                          child: KeyedSubtree(
-                            key: ValueKey<bool>(loading),
-                            child: body,
-                          ),
-                        ),
-                        Positioned.fill(
-                          child: IgnorePointer(
-                            ignoring: !loading,
-                            child: AnimatedOpacity(
-                              opacity: loading ? 1 : 0,
-                              duration: reduceMotion
-                                  ? Duration.zero
-                                  : CommonUiMotion.selection,
-                              child: ColoredBox(
-                                color: tokens.scrim.withOpacity(.12),
-                                child: Center(
-                                  child: Container(
-                                    width: 50,
-                                    height: 50,
-                                    decoration: BoxDecoration(
-                                      color: tokens.surfaceRaised,
-                                      borderRadius: BorderRadius.circular(
-                                        CommonUiShapes.control,
-                                      ),
-                                      border: Border.all(
-                                        color: tokens.borderSubtle,
-                                      ),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: tokens.shadow,
-                                          blurRadius: 18,
-                                          offset: const Offset(0, 8),
-                                        ),
-                                      ],
-                                    ),
-                                    alignment: Alignment.center,
-                                    child: SizedBox(
-                                      width: 24,
-                                      height: 24,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2.6,
-                                        color: tokens.accent,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            bottomNavigationBar: bottomBar,
+          final embedded = OpsConsolePresentationScope.isEmbedded(context);
+          return _content(
+            context,
+            embedded: embedded,
+            tokens: tokens,
+            reduceMotion: reduceMotion,
           );
         },
       ),
@@ -172,9 +221,16 @@ class OpsConsoleHeader extends StatelessWidget {
     final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final subtitleText = subtitle?.trim() ?? '';
+    final embedded = OpsConsolePresentationScope.isEmbedded(context);
+    final iconSize = embedded ? 36.0 : 44.0;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      padding: EdgeInsets.fromLTRB(
+        embedded ? 10 : 16,
+        embedded ? 9 : 14,
+        embedded ? 10 : 16,
+        embedded ? 10 : 16,
+      ),
       decoration: BoxDecoration(
         color: tokens.surfaceRaised,
         border: Border(bottom: BorderSide(color: tokens.borderSubtle)),
@@ -185,17 +241,21 @@ class OpsConsoleHeader extends StatelessWidget {
           Row(
             children: [
               Container(
-                width: 44,
-                height: 44,
+                width: iconSize,
+                height: iconSize,
                 decoration: BoxDecoration(
                   color: tokens.accentContainer,
                   borderRadius: BorderRadius.circular(CommonUiShapes.control),
                   border: Border.all(color: tokens.borderSubtle),
                 ),
                 alignment: Alignment.center,
-                child: Icon(icon, color: tokens.onAccentContainer, size: 23),
+                child: Icon(
+                  icon,
+                  color: tokens.onAccentContainer,
+                  size: embedded ? 19 : 23,
+                ),
               ),
-              const SizedBox(width: 12),
+              SizedBox(width: embedded ? 8 : 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -204,45 +264,50 @@ class OpsConsoleHeader extends StatelessWidget {
                       title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: textTheme.titleLarge?.copyWith(
+                      style: (embedded
+                              ? textTheme.titleSmall
+                              : textTheme.titleLarge)
+                          ?.copyWith(
                         color: tokens.textPrimary,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                     if (subtitleText.isNotEmpty) ...[
-                      const SizedBox(height: 3),
+                      const SizedBox(height: 2),
                       Text(
                         subtitleText,
-                        maxLines: 2,
+                        maxLines: embedded ? 1 : 2,
                         overflow: TextOverflow.ellipsis,
                         style: textTheme.bodySmall?.copyWith(
                           color: tokens.textSecondary,
                           fontWeight: FontWeight.w500,
-                          height: 1.35,
+                          height: 1.25,
                         ),
                       ),
                     ],
                   ],
                 ),
               ),
-              if (areaLabel != null && areaLabel!.trim().isNotEmpty) ...[
+              if (!embedded &&
+                  areaLabel != null &&
+                  areaLabel!.trim().isNotEmpty) ...[
                 const SizedBox(width: 10),
                 OpsHeaderPill(text: areaLabel!),
               ],
               if (trailing != null) ...[
-                const SizedBox(width: 8),
+                SizedBox(width: embedded ? 4 : 8),
                 trailing!,
               ],
             ],
           ),
           if (metrics.isNotEmpty) ...[
-            const SizedBox(height: 14),
+            SizedBox(height: embedded ? 8 : 14),
             SizedBox(
-              height: 78,
+              height: embedded ? 68 : 78,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: metrics.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                separatorBuilder: (_, __) => SizedBox(width: embedded ? 6 : 8),
                 itemBuilder: (context, index) => CommonAnimatedReveal(
                   delay: Duration(milliseconds: index * 35),
                   offset: const Offset(.025, 0),
@@ -292,9 +357,15 @@ class OpsMetricCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = CommonUiTheme.of(context);
     final color = metric.color ?? tokens.accent;
+    final embedded = OpsConsolePresentationScope.isEmbedded(context);
     return Container(
-      width: 118,
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      width: embedded ? 100 : 118,
+      padding: EdgeInsets.fromLTRB(
+        embedded ? 9 : 12,
+        embedded ? 8 : 10,
+        embedded ? 9 : 12,
+        embedded ? 8 : 10,
+      ),
       decoration: BoxDecoration(
         color: tokens.surfaceOverlay,
         borderRadius: BorderRadius.circular(CommonUiShapes.control),
@@ -581,12 +652,17 @@ class OpsStatusBadge extends StatelessWidget {
             Icon(icon, size: 13, color: color),
             const SizedBox(width: 4),
           ],
-          Text(
-            label,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: color,
-                  fontWeight: FontWeight.w600,
-                ),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              softWrap: false,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
           ),
         ],
       ),
@@ -617,12 +693,17 @@ class OpsInfoPill extends StatelessWidget {
             Icon(icon, size: 13, color: tokens.iconSecondary),
             const SizedBox(width: 4),
           ],
-          Text(
-            text,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: tokens.textSecondary,
-                  fontWeight: FontWeight.w600,
-                ),
+          Flexible(
+            child: Text(
+              text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              softWrap: false,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: tokens.textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
           ),
         ],
       ),
@@ -705,9 +786,15 @@ class OpsBottomActionBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = CommonUiTheme.of(context);
-    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
+    final embedded = OpsConsolePresentationScope.isEmbedded(context);
+    final bottomInset = embedded ? 0.0 : MediaQuery.viewPaddingOf(context).bottom;
     return Container(
-      padding: EdgeInsets.fromLTRB(16, 10, 16, 12 + bottomInset),
+      padding: EdgeInsets.fromLTRB(
+        embedded ? 10 : 16,
+        embedded ? 8 : 10,
+        embedded ? 10 : 16,
+        (embedded ? 9 : 12) + bottomInset,
+      ),
       decoration: BoxDecoration(
         color: tokens.surfaceRaised,
         border: Border(top: BorderSide(color: tokens.borderSubtle)),
@@ -1065,6 +1152,457 @@ class OpsFormChip extends StatelessWidget {
                       ),
                 ),
               ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class OpsDockStatusSegmentItem<T> {
+  const OpsDockStatusSegmentItem({
+    required this.value,
+    required this.label,
+    required this.count,
+    required this.color,
+  });
+
+  final T value;
+  final String label;
+  final int count;
+  final Color color;
+}
+
+class OpsDockStatusSegments<T> extends StatelessWidget {
+  const OpsDockStatusSegments({
+    super.key,
+    required this.selected,
+    required this.items,
+    required this.onSelected,
+  });
+
+  final T selected;
+  final List<OpsDockStatusSegmentItem<T>> items;
+  final ValueChanged<T> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    return Container(
+      height: 38,
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: tokens.surface,
+        borderRadius: BorderRadius.circular(CommonUiShapes.control),
+        border: Border.all(color: tokens.borderSubtle),
+      ),
+      child: Row(
+        children: [
+          for (final item in items)
+            Expanded(
+              child: _OpsDockStatusSegment<T>(
+                item: item,
+                selected: selected == item.value,
+                onTap: () => onSelected(item.value),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OpsDockStatusSegment<T> extends StatelessWidget {
+  const _OpsDockStatusSegment({
+    required this.item,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final OpsDockStatusSegmentItem<T> item;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(9),
+        child: AnimatedContainer(
+          duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+          curve: CommonUiMotion.standard,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected ? item.color.withOpacity(.13) : Colors.transparent,
+            borderRadius: BorderRadius.circular(9),
+            border: Border.all(
+              color: selected
+                  ? item.color.withOpacity(.34)
+                  : Colors.transparent,
+            ),
+          ),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  item.label,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: selected ? item.color : tokens.textSecondary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+                const SizedBox(width: 4),
+                AnimatedDefaultTextStyle(
+                  duration:
+                      reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: selected ? item.color : tokens.textPrimary,
+                            fontWeight: FontWeight.w900,
+                          ) ??
+                      TextStyle(
+                        color: selected ? item.color : tokens.textPrimary,
+                        fontWeight: FontWeight.w900,
+                      ),
+                  child: Text('${item.count}'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class OpsDockSearchField extends StatelessWidget {
+  const OpsDockSearchField({
+    super.key,
+    required this.controller,
+    required this.query,
+    required this.semanticLabel,
+    required this.onChanged,
+    required this.onClear,
+  });
+
+  final TextEditingController controller;
+  final String query;
+  final String semanticLabel;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    return Semantics(
+      textField: true,
+      label: semanticLabel,
+      child: SizedBox(
+        height: 40,
+        child: TextField(
+          controller: controller,
+          onChanged: onChanged,
+          textInputAction: TextInputAction.search,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: tokens.textPrimary,
+                fontWeight: FontWeight.w700,
+              ),
+          decoration: InputDecoration(
+            isDense: true,
+            filled: true,
+            fillColor: tokens.surfaceRaised,
+            prefixIcon: Icon(
+              Icons.search_rounded,
+              size: 18,
+              color: tokens.iconSecondary,
+            ),
+            prefixIconConstraints: const BoxConstraints(
+              minWidth: 36,
+              minHeight: 36,
+            ),
+            suffixIcon: query.trim().isEmpty
+                ? null
+                : IconButton(
+                    onPressed: onClear,
+                    icon: Icon(
+                      Icons.close_rounded,
+                      size: 17,
+                      color: tokens.iconSecondary,
+                    ),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 34,
+                      minHeight: 34,
+                    ),
+                    tooltip: '검색 초기화',
+                  ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 10,
+              vertical: 10,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(CommonUiShapes.control),
+              borderSide: BorderSide(color: tokens.borderSubtle),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(CommonUiShapes.control),
+              borderSide: BorderSide(color: tokens.accent, width: 1.4),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class OpsDockListSurface extends StatelessWidget {
+  const OpsDockListSurface({
+    super.key,
+    required this.child,
+  });
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(14),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: tokens.surfaceRaised,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: tokens.borderSubtle),
+        ),
+        child: child,
+      ),
+    );
+  }
+}
+
+class OpsDockSelectableRowSurface extends StatefulWidget {
+  const OpsDockSelectableRowSurface({
+    super.key,
+    required this.selected,
+    required this.selectionColor,
+    required this.selectedContainer,
+    required this.onTap,
+    required this.child,
+    this.padding = const EdgeInsets.fromLTRB(11, 10, 13, 10),
+  });
+
+  final bool selected;
+  final Color selectionColor;
+  final Color selectedContainer;
+  final VoidCallback onTap;
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  State<OpsDockSelectableRowSurface> createState() =>
+      _OpsDockSelectableRowSurfaceState();
+}
+
+class _OpsDockSelectableRowSurfaceState
+    extends State<OpsDockSelectableRowSurface> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+
+    return AnimatedScale(
+      duration: reduceMotion ? Duration.zero : CommonUiMotion.press,
+      curve: CommonUiMotion.enter,
+      scale: _pressed ? .985 : 1,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: widget.onTap,
+          onHighlightChanged: (value) {
+            if (!mounted) return;
+            setState(() => _pressed = value);
+          },
+          child: Stack(
+            children: [
+              AnimatedContainer(
+                duration:
+                    reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                curve: CommonUiMotion.standard,
+                color: widget.selected
+                    ? widget.selectedContainer.withOpacity(.55)
+                    : _pressed
+                        ? tokens.surfaceSelected.withOpacity(.55)
+                        : Colors.transparent,
+                padding: widget.padding,
+                child: AnimatedSize(
+                  duration: reduceMotion
+                      ? Duration.zero
+                      : const Duration(milliseconds: 200),
+                  curve: Curves.easeOutCubic,
+                  alignment: Alignment.topCenter,
+                  child: widget.child,
+                ),
+              ),
+              Positioned(
+                top: 8,
+                bottom: 8,
+                right: 0,
+                child: AnimatedContainer(
+                  duration:
+                      reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                  curve: CommonUiMotion.standard,
+                  width: widget.selected ? 3 : 0,
+                  decoration: BoxDecoration(
+                    color: widget.selectionColor,
+                    borderRadius: BorderRadius.circular(CommonUiShapes.pill),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class OpsDockContextFooter extends StatelessWidget {
+  const OpsDockContextFooter({
+    super.key,
+    required this.children,
+  });
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+      decoration: BoxDecoration(
+        color: tokens.surface.withOpacity(.94),
+        border: Border(
+          top: BorderSide(color: tokens.borderSubtle),
+        ),
+      ),
+      child: Row(children: children),
+    );
+  }
+}
+
+class OpsDockContextFooterTransition extends StatelessWidget {
+  const OpsDockContextFooterTransition({
+    super.key,
+    required this.child,
+  });
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    return AnimatedSize(
+      duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+      curve: CommonUiMotion.enter,
+      alignment: Alignment.bottomCenter,
+      child: AnimatedSwitcher(
+        duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+        switchInCurve: CommonUiMotion.enter,
+        switchOutCurve: CommonUiMotion.exit,
+        transitionBuilder: (child, animation) => FadeTransition(
+          opacity: animation,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, .06),
+              end: Offset.zero,
+            ).animate(animation),
+            child: child,
+          ),
+        ),
+        child: child,
+      ),
+    );
+  }
+}
+
+class OpsDockResultSwitcher extends StatelessWidget {
+  const OpsDockResultSwitcher({
+    super.key,
+    required this.child,
+  });
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    return AnimatedSwitcher(
+      duration: reduceMotion
+          ? Duration.zero
+          : const Duration(milliseconds: 160),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      transitionBuilder: (child, animation) => FadeTransition(
+        opacity: animation,
+        child: child,
+      ),
+      child: child,
+    );
+  }
+}
+
+class OpsDockLoadingOverlay extends StatelessWidget {
+  const OpsDockLoadingOverlay({
+    super.key,
+    required this.loading,
+  });
+
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    return Positioned.fill(
+      child: IgnorePointer(
+        ignoring: !loading,
+        child: AnimatedOpacity(
+          duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+          opacity: loading ? 1 : 0,
+          child: ColoredBox(
+            color: tokens.canvas.withOpacity(.82),
+            child: Center(
+              child: Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: tokens.surfaceRaised,
+                  borderRadius: BorderRadius.circular(CommonUiShapes.control),
+                  border: Border.all(color: tokens.borderSubtle),
+                ),
+                alignment: Alignment.center,
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.4,
+                    color: tokens.accent,
+                  ),
+                ),
+              ),
             ),
           ),
         ),

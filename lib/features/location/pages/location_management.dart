@@ -1,12 +1,15 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../app/utils/location_debug_status.dart';
 import '../../../app/utils/snackbar_helper.dart';
+import '../../../design_system/common_ui/common_ui_components.dart';
 import '../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../design_system/common_ui/common_ui_theme.dart';
 
 import '../../dev/application/area_state.dart';
 import '../../selector/application/dev_auth.dart';
@@ -18,11 +21,19 @@ import '../domain/models/parking_grid_model.dart';
 import 'sheets/location_setting.dart';
 import 'sheets/widgets/location_draft.dart';
 import 'sheets/widgets/parking_grid_preview.dart';
+import '../../../shared/secondary/application/secondary_location_workspace_state.dart';
 import '../../../shared/secondary/widgets/ops_console_dialogs.dart';
 import '../../../shared/secondary/widgets/ops_console_widgets.dart';
 
+enum _LocationMaintenanceAction { reservationIntegrity, rebuildChildSlots }
+
 class LocationManagement extends StatefulWidget {
-  const LocationManagement({super.key});
+  const LocationManagement({
+    super.key,
+    this.workspace,
+  });
+
+  final SecondaryLocationWorkspaceState? workspace;
 
   @override
   State<LocationManagement> createState() => _LocationManagementState();
@@ -30,24 +41,48 @@ class LocationManagement extends StatefulWidget {
 
 class _LocationManagementState extends State<LocationManagement> {
   String _filter = 'all';
-
   String _query = '';
-
-  bool _showOnlySelectedChild = false;
-
-  bool _showSelectedChildSlotNumbers = true;
-
-  String? _focusedParentKey;
-
+  late final SecondaryLocationWorkspaceState _localWorkspace;
+  final TextEditingController _searchController = TextEditingController();
   final LocationReservationIntegrityService _reservationIntegrityService =
       LocationReservationIntegrityService();
-
   bool _reservationIntegrityCheckInProgress = false;
+  bool _refreshing = false;
+  bool _selectionValidationScheduled = false;
+  String? _lastArea;
+
+  SecondaryLocationWorkspaceState get _workspace =>
+      widget.workspace ?? _localWorkspace;
+
+  bool get _showOnlySelectedChild => _workspace.showOnlySelectedChild;
+
+  bool get _showSelectedChildSlotNumbers =>
+      _workspace.showSelectedChildSlotNumbers;
+
+  String? get _focusedParentKey => _workspace.focusedParentKey;
 
   @override
   void initState() {
     super.initState();
+    _localWorkspace = SecondaryLocationWorkspaceState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _log('overview_mounted');
+    });
     unawaited(DevAuth.isDevModeEnabled().then<void>((_) {}));
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    if (widget.workspace == null) {
+      _localWorkspace.dispose();
+    }
+    super.dispose();
+  }
+
+  void _log(String message) {
+    _workspace.log(message);
   }
 
   static String _normalizeName(String raw) =>
@@ -107,41 +142,74 @@ class _LocationManagementState extends State<LocationManagement> {
   static const String _miscGroupKey = '__misc__';
 
 
-  void _openFocusedParent(String key, LocationState state) {
-    final selectedId = state.selectedLocationId;
-    if (selectedId != null) {
-      state.toggleLocationSelection(selectedId);
-    }
-    setState(() => _focusedParentKey = key);
+  void _openFocusedParent(
+    String key,
+    LocationState state, {
+    required String parentId,
+    required String title,
+  }) {
+    state.clearSelection();
+    HapticFeedback.selectionClick();
+    _workspace.openParent(
+      key: key,
+      parentId: parentId,
+      title: title,
+      source: 'parent_row',
+    );
   }
 
-  void _closeFocusedParent() {
-    if (_focusedParentKey == null) return;
-    final state = context.read<LocationState>();
-    final selectedId = state.selectedLocationId;
-    if (selectedId != null) {
-      state.toggleLocationSelection(selectedId);
-    }
-    setState(() => _focusedParentKey = null);
+  void _closeFocusedParent({String source = 'back'}) {
+    if (!_workspace.isParentFocus) return;
+    context.read<LocationState>().clearSelection();
+    _workspace.closeParent(source: source);
   }
 
-  LocationModel? _selectedLocation(LocationState state) {
-    final id = state.selectedLocationId;
-    if (id == null) return null;
-    for (final loc in state.locations) {
-      if (loc.id == id) return loc;
+  void _selectFocusedChild(
+    LocationModel child,
+    LocationState state, {
+    required String source,
+  }) {
+    final wasSelected = state.selectedLocationId == child.id;
+    HapticFeedback.selectionClick();
+    state.toggleLocationSelection(child.id);
+    if (wasSelected) {
+      if (_workspace.showOnlySelectedChild ||
+          _workspace.showSelectedChildSlotNumbers) {
+        _workspace.clearChildInspection(source: 'child_deselected');
+      }
+      _log('child_deselected id=${child.id} source=$source');
+      return;
     }
-    return null;
+    _log('child_selected id=${child.id} source=$source');
   }
 
-
-
-  Future<bool> _confirmDelete(BuildContext context) {
+  Future<bool> _confirmDelete(
+    BuildContext context, {
+    required LocationModel target,
+    required int childCount,
+    required int reservationSlotCount,
+  }) {
+    final parent = _isCompositeParent(target);
+    final child = _isCompositeChild(target);
+    final parentName = (target.parent ?? '').trim();
+    final message = parent
+        ? '${target.locationName} 부모 구역을 삭제하면 연결된 자식 구역 $childCount개와 관련 슬롯 예약 정보가 함께 삭제됩니다. 연결 슬롯 $reservationSlotCount개를 확인한 뒤 진행하세요.'
+        : child
+            ? '${target.locationName} 자식 구역을 삭제하면 ${parentName.isEmpty ? '현재 부모 구역' : parentName}의 공간 배치에서 제거되고 관련 슬롯 예약 정보도 함께 정리됩니다. 연결 슬롯 $reservationSlotCount개를 확인한 뒤 진행하세요.'
+            : '${target.locationName} 구역이 운영 목록에서 제거됩니다. 관련 슬롯 예약 정보와 화면 배치를 확인한 뒤 진행하세요.';
     return showOpsConfirmDialog(
       context: context,
-      title: '구역 삭제 확인',
-      message: '선택한 주차 구역이 운영 목록에서 제거됩니다. 연결된 운영 데이터와 화면 배치를 확인한 뒤 진행하세요.',
-      confirmLabel: '삭제',
+      title: parent
+          ? '부모 구역 삭제 확인'
+          : child
+              ? '자식 구역 삭제 확인'
+              : '구역 삭제 확인',
+      message: message,
+      confirmLabel: parent
+          ? '부모 구역 삭제'
+          : child
+              ? '자식 구역 삭제'
+              : '삭제',
       icon: Icons.delete_forever_rounded,
       destructive: true,
     );
@@ -164,21 +232,6 @@ class _LocationManagementState extends State<LocationManagement> {
   }
 
   int _countParkingAreas(ParkingGridModel grid) => grid.parkingAreas.length;
-
-  int _countParkingAreaCells(ParkingGridModel grid) {
-    var sum = 0;
-    for (final a in grid.parkingAreas) {
-      final r0 = a.r0 < a.r1 ? a.r0 : a.r1;
-      final r1 = a.r0 < a.r1 ? a.r1 : a.r0;
-      final c0 = a.c0 < a.c1 ? a.c0 : a.c1;
-      final c1 = a.c0 < a.c1 ? a.c1 : a.c0;
-
-      final h = (r1 - r0 + 1);
-      final w = (c1 - c0 + 1);
-      if (h > 0 && w > 0) sum += h * w;
-    }
-    return sum;
-  }
 
   String _slotLabelForSummary(ChildSlot s) {
     final label = s.label.trim();
@@ -208,18 +261,6 @@ class _LocationManagementState extends State<LocationManagement> {
     return entries.map((e) => '${e.key} ${e.value}').join(' · ');
   }
 
-  String _parkingAreaKindSummary(ParkingGridModel grid) {
-    final counts = <String, int>{};
-    for (final a in grid.parkingAreas) {
-      final label = a.kind.label;
-      counts[label] = (counts[label] ?? 0) + 1;
-    }
-    if (counts.isEmpty) return '';
-    final entries = counts.entries.toList()
-      ..sort((a, b) => a.key.compareTo(b.key));
-    return entries.map((e) => '${e.key} ${e.value}').join(' · ');
-  }
-
   String _integrityIssueSummary(LocationReservationIntegrityReport report) {
     final values = <String>[
       'normal=${report.normalCount}',
@@ -239,6 +280,7 @@ class _LocationManagementState extends State<LocationManagement> {
   }
 
   Future<void> _handleReservationIntegrityCheck(BuildContext context) async {
+    _log('reservation_integrity_started');
     if (_reservationIntegrityCheckInProgress) return;
     setState(() => _reservationIntegrityCheckInProgress = true);
 
@@ -325,115 +367,84 @@ class _LocationManagementState extends State<LocationManagement> {
     }
   }
 
-  Widget _buildReservationIntegrityButton(
-    BuildContext context,
-    ColorScheme colorScheme,
-  ) {
-    final reduceMotion =
-        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    final duration =
-        reduceMotion ? Duration.zero : const Duration(milliseconds: 220);
-
-    return TweenAnimationBuilder<double>(
-      duration: duration,
-      curve: Curves.easeOutCubic,
-      tween: Tween<double>(begin: 0, end: 1),
-      builder: (context, value, child) {
-        return Opacity(
-          opacity: value,
-          child: Transform.scale(
-            scale: 0.94 + (0.06 * value),
-            child: child,
-          ),
-        );
-      },
-      child: IconButton.filledTonal(
-        tooltip: '예약 정합성 검사',
-        onPressed: _reservationIntegrityCheckInProgress
-            ? null
-            : () => _handleReservationIntegrityCheck(context),
-        icon: AnimatedSwitcher(
-          duration: duration,
-          reverseDuration: duration,
-          switchInCurve: Curves.linear,
-          switchOutCurve: Curves.linear,
-          transitionBuilder: (current, animation) {
-            final fade = CurvedAnimation(
-              parent: animation,
-              curve: Curves.easeOutCubic,
-              reverseCurve: Curves.easeInCubic,
-            );
-            final scale = Tween<double>(begin: 0.9, end: 1).animate(
-              CurvedAnimation(
-                parent: animation,
-                curve: Curves.easeOutCubic,
-                reverseCurve: Curves.easeInCubic,
-              ),
-            );
-            return FadeTransition(
-              opacity: fade,
-              child: ScaleTransition(
-                scale: scale,
-                child: current,
-              ),
-            );
-          },
-          child: _reservationIntegrityCheckInProgress
-              ? SizedBox.square(
-                  key: const ValueKey<String>(
-                    'reservation-integrity-running',
-                  ),
-                  dimension: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: colorScheme.primary,
-                  ),
-                )
-              : Icon(
-                  Icons.fact_check_rounded,
-                  key: const ValueKey<String>(
-                    'reservation-integrity-idle',
-                  ),
-                  color: colorScheme.primary,
-                ),
-        ),
-      ),
-    );
-  }
-
   Future<void> _handleRebuildChildSlots(BuildContext context) async {
-    final state = context.read<LocationState>();
-    String? errorMessage;
-
-    final ok = await state.refreshChildSlotsForCurrentArea(
-      onError: (msg) => errorMessage = msg,
+    final confirmed = await showOpsConfirmDialog(
+      context: context,
+      title: '자식 슬롯 재계산 확인',
+      message: '현재 지역의 복합 부모 그리드를 기준으로 자식 슬롯 정보를 다시 계산하고 저장합니다. 운영 중인 공간 구조를 확인한 뒤 진행하세요.',
+      confirmLabel: '재계산',
+      icon: Icons.sync_alt_rounded,
     );
+    if (!confirmed || !mounted || !context.mounted) return;
 
-    if (!mounted) return;
+    final state = context.read<LocationState>();
+    final area = context.read<AreaState>().currentArea.trim();
+    String? errorMessage;
+    DeveloperOperationTrace? trace;
+    _log('child_slots_rebuild_started area=$area');
 
-    if (ok) {
-      showSuccessSnackbar(
-        context,
-        '기존 자식 슬롯을 최신 주차면적으로 재계산했습니다.',
+    try {
+      trace = await DeveloperOperationTrace.start(
+        context: context,
+        title: '자식 슬롯 재계산',
+        initialMessage: '현재 지역의 자식 슬롯 재계산을 준비합니다.',
         useCommonUi: true,
+        developerModeMessage:
+            '개발자 모드 ON: 재계산 로그의 debugPrint 코드를 복사할 수 있습니다.',
+        standardModeMessage: '개발자 모드 OFF',
       );
-    } else {
-      showFailedSnackbar(
-        context,
-        errorMessage ?? '자식 슬롯 재계산에 실패했습니다.',
-        useCommonUi: true,
+      trace.log('재계산 범위 확인: area=$area', progress: .12);
+      final ok = await state.refreshChildSlotsForCurrentArea(
+        onError: (message) {
+          final value = message.trim();
+          if (value.isNotEmpty) errorMessage = value;
+        },
       );
+      if (!ok) {
+        throw StateError(errorMessage ?? '자식 슬롯 재계산에 실패했습니다.');
+      }
+      trace.log('Firestore 및 로컬 상태 반영 완료', progress: .9);
+      await trace.succeed('자식 슬롯 재계산이 완료되었습니다.');
+      _log('child_slots_rebuild_completed area=$area');
+      if (mounted && context.mounted) {
+        showSuccessSnackbar(
+          context,
+          '기존 자식 슬롯을 최신 주차면적으로 재계산했습니다.',
+          useCommonUi: true,
+        );
+      }
+    } catch (error, stackTrace) {
+      _log('child_slots_rebuild_failed area=$area error=$error');
+      if (trace != null) {
+        await trace.fail(
+          '자식 슬롯 재계산에 실패했습니다.',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }
+      if (mounted && context.mounted) {
+        showFailedSnackbar(
+          context,
+          errorMessage ?? '자식 슬롯 재계산에 실패했습니다.',
+          useCommonUi: true,
+        );
+      }
     }
   }
 
   Future<bool> _runWrite(
     BuildContext context,
-    Future<bool> Function(ValueChanged<String> onError) operation,
-  ) async {
+    Future<bool> Function(ValueChanged<String> onError) operation, {
+    bool preserveSelectionOnSuccess = false,
+  }) async {
     String? errorMessage;
     final debugArea = context.read<AreaState>().currentArea.trim();
     final debugSelectedLocationId =
         context.read<LocationState>().selectedLocationId;
+
+    _log(
+      'write_started area=$debugArea selected=${debugSelectedLocationId ?? '-'}',
+    );
 
     try {
       final ok = await operation((message) {
@@ -444,15 +455,37 @@ class _LocationManagementState extends State<LocationManagement> {
       if (!mounted || !context.mounted) return ok;
 
       if (!ok) {
+        _log(
+          'write_failed area=$debugArea selected=${debugSelectedLocationId ?? '-'} message=${errorMessage ?? '-'}',
+        );
         showFailedSnackbar(
           context,
           errorMessage ?? '주차 구역 작업에 실패했습니다.',
           useCommonUi: true,
         );
+      } else {
+        if (preserveSelectionOnSuccess && debugSelectedLocationId != null) {
+          final currentState = context.read<LocationState>();
+          final selectionStillExists = currentState.locations.any(
+            (location) => location.id == debugSelectedLocationId,
+          );
+          if (selectionStillExists) {
+            currentState.selectLocation(debugSelectedLocationId);
+            _log(
+              'selection_restored id=$debugSelectedLocationId source=write_completed',
+            );
+          }
+        }
+        _log(
+          'write_completed area=$debugArea selected=${debugSelectedLocationId ?? '-'} preserveSelection=$preserveSelectionOnSuccess',
+        );
       }
 
       return ok;
     } catch (error, stackTrace) {
+      _log(
+        'write_exception area=$debugArea selected=${debugSelectedLocationId ?? '-'} error=$error',
+      );
       LocationDebugStatus.report(
         context: context,
         title: '주차 구역 작업 실패',
@@ -478,6 +511,7 @@ class _LocationManagementState extends State<LocationManagement> {
   }
 
   Future<void> _handleAddParent(BuildContext context) async {
+    _log('form_opened mode=create_parent');
     final locationState = context.read<LocationState>();
     final currentArea = context.read<AreaState>().currentArea.trim();
     final allInArea = locationState.locations
@@ -521,6 +555,7 @@ class _LocationManagementState extends State<LocationManagement> {
     BuildContext context,
     LocationModel parent,
   ) async {
+    _log('form_opened mode=create_child parentId=${parent.id}');
     if (!_isCompositeParent(parent) || parent.parkingGrid == null) return;
 
     final locationState = context.read<LocationState>();
@@ -599,6 +634,7 @@ class _LocationManagementState extends State<LocationManagement> {
                   isTower: draft.isTower,
                   onError: onError,
                 ),
+                preserveSelectionOnSuccess: true,
               );
             },
           ),
@@ -611,6 +647,7 @@ class _LocationManagementState extends State<LocationManagement> {
     BuildContext context, {
     LocationModel? targetParent,
   }) async {
+    _log('form_opened mode=edit_parent target=${targetParent?.id ?? '-'}');
     final locationState = context.read<LocationState>();
     final currentArea = context.read<AreaState>().currentArea.trim();
 
@@ -715,6 +752,7 @@ class _LocationManagementState extends State<LocationManagement> {
   }
 
   Future<void> _handleEditChild(BuildContext context) async {
+    _log('form_opened mode=edit_child');
     final locationState = context.read<LocationState>();
     final currentArea = context.read<AreaState>().currentArea.trim();
 
@@ -849,6 +887,7 @@ class _LocationManagementState extends State<LocationManagement> {
                   isTower: draft.isTower,
                   onError: onError,
                 ),
+                preserveSelectionOnSuccess: true,
               );
             },
           ),
@@ -858,6 +897,7 @@ class _LocationManagementState extends State<LocationManagement> {
   }
 
   Future<void> _handleEditPlainText(BuildContext context) async {
+    _log('form_opened mode=edit_plain');
     final locationState = context.read<LocationState>();
     final currentArea = context.read<AreaState>().currentArea.trim();
 
@@ -967,13 +1007,52 @@ class _LocationManagementState extends State<LocationManagement> {
   }) async {
     final locationState = context.read<LocationState>();
     final locationId = targetId ?? locationState.selectedLocationId;
+    if (locationId == null) return;
 
-    if (locationId == null) {
+    LocationModel? target;
+    for (final location in locationState.locations) {
+      if (location.id == locationId) {
+        target = location;
+        break;
+      }
+    }
+    if (target == null) return;
+
+    final children = <LocationModel>[];
+    if (_isCompositeParent(target)) {
+      final parentNameKey = _nameKey(target.locationName);
+      for (final location in locationState.locations) {
+        if (!_isCompositeChild(location)) continue;
+        final parentId = (location.parentId ?? '').trim();
+        final parentName = (location.parent ?? '').trim();
+        if ((parentId.isNotEmpty && parentId == target.id) ||
+            (parentId.isEmpty &&
+                parentName.isNotEmpty &&
+                _nameKey(parentName) == parentNameKey)) {
+          children.add(location);
+        }
+      }
+    }
+    final reservationSlotCount = _isCompositeParent(target)
+        ? children.fold<int>(
+            0,
+            (sum, child) => sum + _childAreaIds(child).length,
+          )
+        : _childAreaIds(target).length;
+
+    _log(
+      'delete_confirm_opened id=${target.id} parent=${_isCompositeParent(target)} child=${_isCompositeChild(target)} children=${children.length} slots=$reservationSlotCount',
+    );
+    final confirmed = await _confirmDelete(
+      context,
+      target: target,
+      childCount: children.length,
+      reservationSlotCount: reservationSlotCount,
+    );
+    if (!confirmed) {
+      _log('delete_cancelled id=${target.id}');
       return;
     }
-
-    final confirmed = await _confirmDelete(context);
-    if (!confirmed) return;
 
     final deleted = await _runWrite(
       context,
@@ -983,15 +1062,67 @@ class _LocationManagementState extends State<LocationManagement> {
       ),
     );
 
-    if (deleted && closeFocusedOnSuccess && mounted) {
-      _closeFocusedParent();
+    if (deleted) {
+      _log('delete_completed id=$locationId');
+      if (_isCompositeChild(target) &&
+          (_workspace.showOnlySelectedChild ||
+              _workspace.showSelectedChildSlotNumbers)) {
+        _workspace.clearChildInspection(source: 'child_deleted');
+      }
+      if (closeFocusedOnSuccess && mounted) {
+        _closeFocusedParent(source: 'parent_deleted');
+      }
+    } else {
+      _log('delete_failed id=$locationId');
     }
   }
 
   Future<void> _handleRefresh(BuildContext context) async {
+    if (_refreshing) return;
     final state = context.read<LocationState>();
-    await state.manualLocationRefresh();
-    if (!mounted) return;
+    final area = context.read<AreaState>().currentArea.trim();
+    setState(() => _refreshing = true);
+    _log('refresh_started area=$area');
+    DeveloperOperationTrace? trace;
+    try {
+      trace = await DeveloperOperationTrace.start(
+        context: context,
+        title: '주차 구역 데이터 새로고침',
+        initialMessage: '현재 지역의 주차 구역 데이터를 새로고침합니다.',
+        useCommonUi: true,
+        developerModeMessage:
+            '개발자 모드 ON: 새로고침 로그의 debugPrint 코드를 복사할 수 있습니다.',
+        standardModeMessage: '개발자 모드 OFF',
+      );
+      trace.log('새로고침 범위 확인: area=$area', progress: .14);
+      await state.manualLocationRefreshStrict();
+      trace.log(
+        '새로고침 완료: locations=${state.locations.length}',
+        progress: .9,
+      );
+      await trace.succeed('주차 구역 데이터 새로고침이 완료되었습니다.');
+      _log('refresh_completed area=$area count=${state.locations.length}');
+    } catch (error, stackTrace) {
+      _log('refresh_failed area=$area error=$error');
+      if (trace != null) {
+        await trace.fail(
+          '주차 구역 데이터 새로고침에 실패했습니다.',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }
+      if (mounted && context.mounted) {
+        showFailedSnackbar(
+          context,
+          '주차 구역 데이터 새로고침에 실패했습니다.',
+          useCommonUi: true,
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _refreshing = false);
+      }
+    }
   }
 
   bool _matchesLocationQuery(LocationModel loc) {
@@ -1009,1048 +1140,1313 @@ class _LocationManagementState extends State<LocationManagement> {
     return parts.join(' ').toLowerCase().contains(q);
   }
 
-  Widget _buildCommandBar(BuildContext context, int visible, int total) {
-    final cs = Theme.of(context).colorScheme;
-    return OpsCommandPanel(
-      children: [
-        OpsSearchField(
-          hint: '구역명 · 부모 구역 · 슬롯 타입 검색',
-          onChanged: (value) => setState(() => _query = value),
-        ),
-        const SizedBox(height: 10),
-        ValueListenableBuilder<bool>(
-          valueListenable: DevAuth.devModeEnabled,
-          builder: (context, developerMode, child) {
-            return Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                OpsFilterChip(
-                  label: '전체',
-                  selected: _filter == 'all',
-                  icon: Icons.grid_view_rounded,
-                  onSelected: () => setState(() => _filter = 'all'),
-                ),
-                OpsFilterChip(
-                  label: '복합',
-                  selected: _filter == 'composite',
-                  icon: Icons.account_tree_rounded,
-                  onSelected: () => setState(() => _filter = 'composite'),
-                ),
-                OpsFilterChip(
-                  label: '선택 자식만',
-                  selected: _showOnlySelectedChild,
-                  icon: Icons.center_focus_strong_rounded,
-                  onSelected: () => setState(
-                    () => _showOnlySelectedChild = !_showOnlySelectedChild,
-                  ),
-                ),
-                OpsFilterChip(
-                  label: '슬롯번호',
-                  selected: _showSelectedChildSlotNumbers,
-                  icon: Icons.tag_rounded,
-                  onSelected: () => setState(
-                    () => _showSelectedChildSlotNumbers =
-                        !_showSelectedChildSlotNumbers,
-                  ),
-                ),
-                OpsFilterChip(
-                  label: '$visible/$total',
-                  selected: false,
-                  icon: Icons.filter_alt_rounded,
-                  onSelected: () {},
-                ),
-                if (developerMode)
-                  _buildReservationIntegrityButton(context, cs),
-                IconButton.filledTonal(
-                  tooltip: '자식 슬롯 재계산',
-                  onPressed: () => _handleRebuildChildSlots(context),
-                  icon: Icon(Icons.sync_alt_rounded, color: cs.primary),
-                ),
-                IconButton.filledTonal(
-                  tooltip: '새로고침',
-                  onPressed: () => _handleRefresh(context),
-                  icon: Icon(Icons.refresh_rounded, color: cs.primary),
-                ),
-              ],
-            );
+  void _setQuery(String value) {
+    if (_query == value) return;
+    setState(() => _query = value);
+    _log('query_changed length=${value.trim().length}');
+  }
+
+  void _clearQuery() {
+    if (_query.isEmpty) return;
+    _searchController.clear();
+    setState(() => _query = '');
+    _log('query_cleared');
+  }
+
+  void _setFilter(String value) {
+    if (_filter == value) {
+      _log('filter_reselected value=$value');
+      return;
+    }
+    HapticFeedback.selectionClick();
+    setState(() => _filter = value);
+    _log('filter_changed value=$value');
+  }
+
+  void _scheduleSelectionValidation({
+    required LocationState state,
+    required Set<String> validIds,
+    required String reason,
+  }) {
+    final selectedId = state.selectedLocationId;
+    if (selectedId == null || validIds.contains(selectedId)) return;
+    if (_selectionValidationScheduled) return;
+    _selectionValidationScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _selectionValidationScheduled = false;
+      if (!mounted) return;
+      final currentState = context.read<LocationState>();
+      final currentId = currentState.selectedLocationId;
+      if (currentId == null || validIds.contains(currentId)) return;
+      currentState.clearSelection();
+      if (_workspace.showOnlySelectedChild ||
+          _workspace.showSelectedChildSlotNumbers) {
+        _workspace.clearChildInspection(source: 'selection_cleared');
+      }
+      _log('selection_cleared reason=$reason id=$currentId');
+    });
+  }
+
+  void _scheduleFocusValidation({
+    required String focusedKey,
+    required Set<String> validGroupKeys,
+  }) {
+    if (validGroupKeys.contains(focusedKey)) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _workspace.focusedParentKey != focusedKey) return;
+      context.read<LocationState>().clearSelection();
+      _workspace.closeParent(source: 'missing_after_refresh');
+      _log('parent_focus_cleared reason=missing_after_refresh key=$focusedKey');
+    });
+  }
+
+  Future<void> _handleMaintenanceAction(
+    BuildContext context,
+    _LocationMaintenanceAction action,
+  ) async {
+    _log('maintenance_selected action=${action.name}');
+    switch (action) {
+      case _LocationMaintenanceAction.reservationIntegrity:
+        await _handleReservationIntegrityCheck(context);
+        return;
+      case _LocationMaintenanceAction.rebuildChildSlots:
+        await _handleRebuildChildSlots(context);
+        return;
+    }
+  }
+
+  Widget _buildMaintenanceMenu(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    return ValueListenableBuilder<bool>(
+      valueListenable: DevAuth.devModeEnabled,
+      builder: (context, developerMode, _) {
+        return PopupMenuButton<_LocationMaintenanceAction>(
+          tooltip: '고급 관리',
+          onSelected: (action) {
+            unawaited(_handleMaintenanceAction(context, action));
           },
+          itemBuilder: (context) => <PopupMenuEntry<_LocationMaintenanceAction>>[
+            if (developerMode)
+              const PopupMenuItem<_LocationMaintenanceAction>(
+                value: _LocationMaintenanceAction.reservationIntegrity,
+                child: Row(
+                  children: [
+                    Icon(Icons.fact_check_rounded, size: 18),
+                    SizedBox(width: 9),
+                    Expanded(child: Text('예약 정합성 검사')),
+                  ],
+                ),
+              ),
+            const PopupMenuItem<_LocationMaintenanceAction>(
+              value: _LocationMaintenanceAction.rebuildChildSlots,
+              child: Row(
+                children: [
+                  Icon(Icons.sync_alt_rounded, size: 18),
+                  SizedBox(width: 9),
+                  Expanded(child: Text('현재 지역 자식 슬롯 재계산')),
+                ],
+              ),
+            ),
+          ],
+          child: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: tokens.surface,
+              borderRadius: BorderRadius.circular(CommonUiShapes.control),
+              border: Border.all(color: tokens.borderSubtle),
+            ),
+            alignment: Alignment.center,
+            child: Icon(
+              Icons.more_horiz_rounded,
+              color: tokens.iconSecondary,
+              size: 21,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildOverviewToolbar(
+    BuildContext context, {
+    required bool canCreate,
+  }) {
+    return Row(
+      children: [
+        Expanded(
+          child: OpsDockSearchField(
+            controller: _searchController,
+            query: _query,
+            semanticLabel: '구역 검색',
+            onChanged: _setQuery,
+            onClear: _clearQuery,
+          ),
         ),
+        const SizedBox(width: 6),
+        CommonIconButton(
+          icon: Icons.refresh_rounded,
+          tooltip: '새로고침',
+          onPressed: _refreshing ? null : () => _handleRefresh(context),
+          loading: _refreshing,
+          haptic: CommonHaptic.selection,
+          size: 40,
+          iconSize: 20,
+        ),
+        const SizedBox(width: 4),
+        CommonIconButton(
+          icon: Icons.add_location_alt_rounded,
+          tooltip: '구역 추가',
+          onPressed: canCreate ? () => _handleAddParent(context) : null,
+          haptic: CommonHaptic.selection,
+          size: 40,
+          iconSize: 20,
+        ),
+        const SizedBox(width: 4),
+        _buildMaintenanceMenu(context),
       ],
     );
   }
 
-  Widget _buildBottomBar(BuildContext context, bool hasSelection, bool canEdit, bool canEditParent, bool canEditChild) {
-    if (!hasSelection) {
-      return OpsBottomActionBar(
-        children: [
-          Expanded(
-            child: OpsActionButton(
-              label: '구역 추가',
-              icon: Icons.add_location_alt_rounded,
-              onPressed: () => _handleAddParent(context),
-            ),
-          ),
-        ],
+  Widget _buildOverviewFooter(
+    BuildContext context,
+    LocationModel? selectedPlain,
+  ) {
+    if (selectedPlain == null) {
+      return const SizedBox.shrink(
+        key: ValueKey<String>('location-overview-footer-none'),
       );
     }
-
-    final editLabel = canEditParent ? '부모 수정' : (canEditChild ? '자식 수정' : '구역 수정');
-    return OpsBottomActionBar(
+    return OpsDockContextFooter(
+      key: ValueKey<String>('location-overview-footer-${selectedPlain.id}'),
       children: [
         Expanded(
-          child: OpsActionButton(
-            label: '구역 추가',
-            icon: Icons.add_location_alt_rounded,
-            onPressed: () => _handleAddParent(context),
-            tonal: true,
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: OpsActionButton(
-            label: editLabel,
+          child: CommonButton(
+            label: '수정',
             icon: Icons.edit_location_alt_rounded,
-            onPressed: !canEdit
-                ? null
-                : () {
-                    if (canEditParent) {
-                      _handleEditParent(context);
-                      return;
-                    }
-                    if (canEditChild) {
-                      _handleEditChild(context);
-                      return;
-                    }
-                    _handleEditPlainText(context);
-                  },
+            onPressed: () => _handleEditPlainText(context),
+            variant: CommonButtonVariant.secondary,
+            haptic: CommonHaptic.selection,
+            expand: true,
           ),
         ),
         const SizedBox(width: 8),
         Expanded(
-          child: OpsActionButton(
+          child: CommonButton(
             label: '삭제',
             icon: Icons.delete_forever_rounded,
             onPressed: () => _handleDelete(context),
-            danger: true,
+            variant: CommonButtonVariant.destructive,
+            haptic: CommonHaptic.medium,
+            expand: true,
           ),
         ),
       ],
     );
   }
 
-  Widget _animateFocusedBottomBar({
-    required BuildContext context,
-    required String stateKey,
-    required Widget child,
+  Widget _buildOverview(
+    BuildContext context, {
+    required LocationState state,
+    required String currentArea,
+    required List<LocationModel> allInArea,
+    required List<LocationModel> visibleSingles,
+    required Map<String, LocationModel> parentByKey,
+    required Map<String, List<LocationModel>> groupedChildren,
+    required Map<String, String> groupDisplayNameByKey,
+    required Set<String> visibleGroupKeys,
   }) {
-    final reduceMotion =
-        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    final duration =
-        reduceMotion ? Duration.zero : const Duration(milliseconds: 240);
+    final tokens = CommonUiTheme.of(context);
+    final allSingles = allInArea.where((loc) {
+      final type = loc.type;
+      return type == null || type == 'single';
+    }).toList();
+    final allGroupKeys = <String>{
+      ...parentByKey.keys,
+      ...groupedChildren.keys,
+    };
+    final totalOverviewCount = allSingles.length + allGroupKeys.length;
+    final visibleCount =
+        (_filter == 'composite' ? 0 : visibleSingles.length) + visibleGroupKeys.length;
+    final initialLoading = state.isLoading && allInArea.isEmpty;
+    final selectedId = state.selectedLocationId;
+    LocationModel? selectedPlain;
+    if (selectedId != null && _filter != 'composite') {
+      for (final loc in visibleSingles) {
+        if (loc.id == selectedId) {
+          selectedPlain = loc;
+          break;
+        }
+      }
+    }
+    final validSelectionIds = <String>{
+      if (_filter != 'composite') ...visibleSingles.map((e) => e.id),
+    };
+    _scheduleSelectionValidation(
+      state: state,
+      validIds: validSelectionIds,
+      reason: _query.trim().isEmpty ? 'scope_changed' : 'filtered_out',
+    );
 
-    return AnimatedSwitcher(
-      duration: duration,
-      reverseDuration: duration,
-      switchInCurve: Curves.easeOutCubic,
-      switchOutCurve: Curves.easeInCubic,
-      layoutBuilder: (currentChild, previousChildren) {
-        return Stack(
-          alignment: Alignment.bottomCenter,
-          children: <Widget>[
-            ...previousChildren,
-            if (currentChild != null) currentChild,
+    final bodyKey = visibleCount == 0
+        ? 'location-overview-empty-${_filter}_${_query.trim()}'
+        : 'location-overview-list-${_filter}_${_query.trim()}';
+
+    return Stack(
+      children: [
+        Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 10, 10, 0),
+              child: _buildOverviewToolbar(
+                context,
+                canCreate: currentArea.isNotEmpty,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: OpsDockStatusSegments<String>(
+                selected: _filter,
+                items: [
+                  OpsDockStatusSegmentItem<String>(
+                    value: 'all',
+                    label: '전체',
+                    count: totalOverviewCount,
+                    color: tokens.accent,
+                  ),
+                  OpsDockStatusSegmentItem<String>(
+                    value: 'composite',
+                    label: '복합',
+                    count: allGroupKeys.length,
+                    color: tokens.info,
+                  ),
+                ],
+                onSelected: _setFilter,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  _query.trim().isEmpty
+                      ? '$visibleCount개 표시'
+                      : '$visibleCount개 표시 · 전체 $totalOverviewCount개',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: tokens.textSecondary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 7),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+                child: OpsDockResultSwitcher(
+                  child: visibleCount == 0
+                      ? _LocationDockEmptyState(
+                          key: ValueKey<String>(bodyKey),
+                          icon: allInArea.isEmpty
+                              ? Icons.add_location_alt_rounded
+                              : Icons.search_off_rounded,
+                          title: allInArea.isEmpty
+                              ? '현재 지역에 주차 구역이 없습니다'
+                              : '일치하는 구역이 없습니다',
+                          message: allInArea.isEmpty
+                              ? '부모 구역을 추가해 현장 공간 구조를 등록하세요.'
+                              : '검색 또는 보기 조건을 조정하세요.',
+                          action: allInArea.isEmpty
+                              ? CommonButton(
+                                  label: '구역 추가',
+                                  icon: Icons.add_location_alt_rounded,
+                                  onPressed: currentArea.isEmpty
+                                      ? null
+                                      : () => _handleAddParent(context),
+                                  variant: CommonButtonVariant.primary,
+                                  haptic: CommonHaptic.selection,
+                                )
+                              : _query.trim().isNotEmpty
+                                  ? CommonButton(
+                                      label: '검색 초기화',
+                                      icon: Icons.restart_alt_rounded,
+                                      onPressed: _clearQuery,
+                                      variant: CommonButtonVariant.secondary,
+                                      haptic: CommonHaptic.selection,
+                                    )
+                                  : CommonButton(
+                                      label: '전체 보기',
+                                      icon: Icons.grid_view_rounded,
+                                      onPressed: () => _setFilter('all'),
+                                      variant: CommonButtonVariant.secondary,
+                                      haptic: CommonHaptic.selection,
+                                    ),
+                        )
+                      : OpsDockListSurface(
+                          key: ValueKey<String>(bodyKey),
+                          child: _buildOverviewList(
+                            state: state,
+                            visibleSingles: _filter == 'composite'
+                                ? const <LocationModel>[]
+                                : visibleSingles,
+                            parentByKey: parentByKey,
+                            groupedChildren: groupedChildren,
+                            groupDisplayNameByKey: groupDisplayNameByKey,
+                            visibleGroupKeys: visibleGroupKeys,
+                          ),
+                        ),
+                ),
+              ),
+            ),
+            OpsDockContextFooterTransition(
+              child: _buildOverviewFooter(context, selectedPlain),
+            ),
           ],
-        );
-      },
-      transitionBuilder: (current, animation) {
-        final position = Tween<Offset>(
-          begin: const Offset(0, 0.08),
-          end: Offset.zero,
-        ).animate(
-          CurvedAnimation(
-            parent: animation,
-            curve: Curves.easeOutCubic,
-            reverseCurve: Curves.easeInCubic,
-          ),
-        );
+        ),
+        OpsDockLoadingOverlay(loading: initialLoading),
+      ],
+    );
+  }
 
-        return FadeTransition(
-          opacity: animation,
-          child: SlideTransition(
-            position: position,
-            child: current,
+  Widget _buildOverviewList({
+    required LocationState state,
+    required List<LocationModel> visibleSingles,
+    required Map<String, LocationModel> parentByKey,
+    required Map<String, List<LocationModel>> groupedChildren,
+    required Map<String, String> groupDisplayNameByKey,
+    required Set<String> visibleGroupKeys,
+  }) {
+    final tokens = CommonUiTheme.of(context);
+    final entries = <Widget>[];
+    final sortedSingles = [...visibleSingles]
+      ..sort((a, b) => a.locationName.compareTo(b.locationName));
+    if (sortedSingles.isNotEmpty) {
+      entries.add(const _LocationListSectionLabel(label: '단일 주차 구역'));
+      for (final loc in sortedSingles) {
+        entries.add(_buildPlainLocationRow(loc, state));
+      }
+    }
+
+    final sortedGroupKeys = visibleGroupKeys.toList()
+      ..sort((a, b) {
+        final at = groupDisplayNameByKey[a] ?? a;
+        final bt = groupDisplayNameByKey[b] ?? b;
+        return at.compareTo(bt);
+      });
+    if (sortedGroupKeys.isNotEmpty) {
+      entries.add(const _LocationListSectionLabel(label: '복합 주차 구역'));
+      for (final key in sortedGroupKeys) {
+        final title = groupDisplayNameByKey[key] ?? key;
+        final children = groupedChildren[key] ?? const <LocationModel>[];
+        final parent = parentByKey[key];
+        entries.add(
+          OpsDockSelectableRowSurface(
+            selected: false,
+            selectionColor: tokens.accent,
+            selectedContainer: tokens.accentContainer,
+            onTap: () => _openFocusedParent(
+              key,
+              state,
+              parentId: parent?.id ?? '',
+              title: title,
+            ),
+            child: _buildParentNavigationRowContent(
+              title: title,
+              parent: parent,
+              children: children,
+            ),
           ),
         );
+      }
+    }
+
+    return ListView.separated(
+      padding: EdgeInsets.zero,
+      itemCount: entries.length,
+      separatorBuilder: (context, index) => Divider(
+        height: 1,
+        thickness: 1,
+        color: tokens.borderSubtle,
+      ),
+      itemBuilder: (context, index) => entries[index],
+    );
+  }
+
+  Widget _buildPlainLocationRow(LocationModel loc, LocationState state) {
+    final tokens = CommonUiTheme.of(context);
+    final selected = state.selectedLocationId == loc.id;
+    return OpsDockSelectableRowSurface(
+      selected: selected,
+      selectionColor: tokens.accent,
+      selectedContainer: tokens.accentContainer,
+      onTap: () {
+        HapticFeedback.selectionClick();
+        state.toggleLocationSelection(loc.id);
+        _log(
+          selected
+              ? 'plain_location_deselected id=${loc.id}'
+              : 'plain_location_selected id=${loc.id}',
+        );
       },
-      child: KeyedSubtree(
-        key: ValueKey<String>('focused-bottom-bar-$stateKey'),
-        child: child,
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  loc.locationName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: tokens.textPrimary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  loc.capacity > 0 ? '공간 ${loc.capacity}대' : '공간 미지정',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: tokens.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          _LocationSelectionIcon(selected: selected),
+        ],
       ),
     );
   }
 
-  Widget _buildFocusedBottomBar({
-    required BuildContext context,
-    required LocationModel? parentModel,
+  Widget _buildParentNavigationRowContent({
+    required String title,
+    required LocationModel? parent,
     required List<LocationModel> children,
-    required LocationModel? selectedLocation,
   }) {
-    final selectedId = selectedLocation?.id;
-    final parent = parentModel;
-    final childSelected = selectedId != null &&
-        children.any((child) => child.id == selectedId);
-    final canEditChild = childSelected &&
-        selectedLocation != null &&
-        selectedLocation.childRect != null;
-
-    if (childSelected) {
-      return _animateFocusedBottomBar(
-        context: context,
-        stateKey: 'child-selected-$selectedId',
-        child: OpsBottomActionBar(
-          children: [
-            Expanded(
-              child: OpsActionButton(
-                label: '자식 수정',
-                icon: Icons.edit_location_alt_rounded,
-                onPressed: canEditChild
-                    ? () => _handleEditChild(context)
-                    : null,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: OpsActionButton(
-                label: '삭제',
-                icon: Icons.delete_forever_rounded,
-                onPressed: () => _handleDelete(
-                  context,
-                  targetId: selectedId,
-                ),
-                danger: true,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    if (parent != null) {
-      return _animateFocusedBottomBar(
-        context: context,
-        stateKey: 'parent-focused-${parent.id}',
-        child: OpsBottomActionBar(
-          children: [
-            Expanded(
-              child: OpsActionButton(
-                label: '자식 추가',
-                icon: Icons.add_location_alt_rounded,
-                onPressed: () => _handleAddChild(context, parent),
-                tonal: true,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: OpsActionButton(
-                label: '부모 수정',
-                icon: Icons.edit_location_alt_rounded,
-                onPressed: parent.parkingGrid == null
-                    ? null
-                    : () => _handleEditParent(
-                          context,
-                          targetParent: parent,
+    final tokens = CommonUiTheme.of(context);
+    final totalCapacity = children.fold<int>(0, (sum, loc) => sum + loc.capacity);
+    final grid = parent?.parkingGrid;
+    final meta = <String>[
+      '자식 ${children.length}',
+      '공간 $totalCapacity대',
+      if (grid != null) '${grid.rows}×${grid.cols}',
+      if (grid == null) '도면 없음',
+    ].join(' · ');
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: tokens.textPrimary,
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    '부모',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: tokens.info,
+                          fontWeight: FontWeight.w800,
                         ),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: OpsActionButton(
-                label: '삭제',
-                icon: Icons.delete_forever_rounded,
-                onPressed: () => _handleDelete(
-                  context,
-                  targetId: parent.id,
-                  closeFocusedOnSuccess: true,
-                ),
-                danger: true,
+              const SizedBox(height: 3),
+              Text(
+                meta,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: tokens.textSecondary,
+                      fontWeight: FontWeight.w600,
+                    ),
               ),
-            ),
-          ],
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        Icon(
+          Icons.arrow_forward_ios_rounded,
+          size: 16,
+          color: tokens.iconSecondary,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildParentFocus(
+    BuildContext context, {
+    required LocationState state,
+    required String groupKey,
+    required String groupName,
+    required LocationModel? parent,
+    required List<LocationModel> children,
+  }) {
+    final tokens = CommonUiTheme.of(context);
+    final grid = parent?.parkingGrid;
+    final selectedId = state.selectedLocationId;
+    LocationModel? selectedChild;
+    for (final child in children) {
+      if (child.id == selectedId) {
+        selectedChild = child;
+        break;
+      }
+    }
+    final validSelectionIds = children.map((e) => e.id).toSet();
+    _scheduleSelectionValidation(
+      state: state,
+      validIds: validSelectionIds,
+      reason: 'focus_scope_changed',
+    );
+    final childrenById = <String, LocationModel>{
+      for (final child in children) child.id: child,
+    };
+    final overlays = <ChildRegionOverlay>[];
+    for (final child in children) {
+      final rect = child.childRect;
+      if (rect == null) continue;
+      final isSelected = selectedChild?.id == child.id;
+      if (_showOnlySelectedChild && selectedChild != null && !isSelected) {
+        continue;
+      }
+      overlays.add(
+        ChildRegionOverlay(
+          id: child.id,
+          rect: rect,
+          label: child.locationName.trim(),
+          isSelected: isSelected,
         ),
       );
     }
+    final childSlotsToLabel =
+        selectedChild != null && _showSelectedChildSlotNumbers
+            ? selectedChild.childSlots
+            : const <ChildSlot>[];
+    final totalCapacity = children.fold<int>(0, (sum, child) => sum + child.capacity);
+    final emptyCells = grid == null ? null : _countEmptyCells(grid);
+    final parkingAreas = grid == null ? null : _countParkingAreas(grid);
+    final initialLoading = state.isLoading && children.isEmpty && parent == null;
 
-    return _animateFocusedBottomBar(
-      context: context,
-      stateKey: 'missing-parent',
-      child: OpsBottomActionBar(
-        children: [
-          Expanded(
-            child: OpsActionButton(
-              label: '자식 추가',
-              icon: Icons.add_location_alt_rounded,
-              onPressed: null,
-              tonal: true,
+    return Stack(
+      children: [
+        Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 10, 10, 0),
+              child: Row(
+                children: [
+                  CommonIconButton(
+                    icon: Icons.add_location_alt_rounded,
+                    tooltip: '자식 구역 추가',
+                    onPressed: parent == null
+                        ? null
+                        : () => _handleAddChild(context, parent),
+                    haptic: CommonHaptic.selection,
+                    size: 40,
+                    iconSize: 20,
+                  ),
+                  const SizedBox(width: 4),
+                  CommonIconButton(
+                    icon: Icons.edit_location_alt_rounded,
+                    tooltip: '부모 구역 수정',
+                    onPressed: parent?.parkingGrid == null
+                        ? null
+                        : () => _handleEditParent(
+                              context,
+                              targetParent: parent,
+                            ),
+                    haptic: CommonHaptic.selection,
+                    size: 40,
+                    iconSize: 20,
+                  ),
+                  const SizedBox(width: 4),
+                  CommonIconButton(
+                    icon: Icons.refresh_rounded,
+                    tooltip: '새로고침',
+                    onPressed: _refreshing ? null : () => _handleRefresh(context),
+                    loading: _refreshing,
+                    haptic: CommonHaptic.selection,
+                    size: 40,
+                    iconSize: 20,
+                  ),
+                  const Spacer(),
+                  PopupMenuButton<String>(
+                    tooltip: '부모 구역 작업',
+                    enabled: parent != null,
+                    onSelected: (value) {
+                      if (value == 'delete' && parent != null) {
+                        unawaited(
+                          _handleDelete(
+                            context,
+                            targetId: parent.id,
+                            closeFocusedOnSuccess: true,
+                          ),
+                        );
+                      }
+                    },
+                    itemBuilder: (context) => const [
+                      PopupMenuItem<String>(
+                        value: 'delete',
+                        child: Row(
+                          children: [
+                            Icon(Icons.delete_forever_rounded, size: 18),
+                            SizedBox(width: 9),
+                            Expanded(child: Text('부모 구역 삭제')),
+                          ],
+                        ),
+                      ),
+                    ],
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: tokens.surface,
+                        borderRadius: BorderRadius.circular(CommonUiShapes.control),
+                        border: Border.all(color: tokens.borderSubtle),
+                      ),
+                      alignment: Alignment.center,
+                      child: Icon(
+                        Icons.more_horiz_rounded,
+                        color: parent == null
+                            ? tokens.iconDisabled
+                            : tokens.iconSecondary,
+                        size: 21,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 8),
+            Expanded(
+              child: ListView(
+                key: PageStorageKey<String>('location-focus-$groupKey'),
+                padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Parking Grid',
+                          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                                color: tokens.textPrimary,
+                                fontWeight: FontWeight.w800,
+                              ),
+                        ),
+                      ),
+                      Text(
+                        '자식 ${children.length} · 공간 $totalCapacity대',
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                              color: tokens.textSecondary,
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 7),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: CommonButton(
+                          label: '선택 영역만',
+                          icon: Icons.center_focus_strong_rounded,
+                          selected:
+                              selectedChild != null && _showOnlySelectedChild,
+                          onPressed: selectedChild == null
+                              ? null
+                              : () => _workspace.setShowOnlySelectedChild(
+                                    !_showOnlySelectedChild,
+                                    source: 'grid_control',
+                                  ),
+                          variant: CommonButtonVariant.secondary,
+                          haptic: CommonHaptic.selection,
+                          expand: true,
+                          minHeight: 36,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: CommonButton(
+                          label: '슬롯 번호',
+                          icon: Icons.tag_rounded,
+                          selected: selectedChild != null &&
+                              _showSelectedChildSlotNumbers,
+                          onPressed: selectedChild == null
+                              ? null
+                              : () => _workspace.setShowSelectedChildSlotNumbers(
+                                    !_showSelectedChildSlotNumbers,
+                                    source: 'grid_control',
+                                  ),
+                          variant: CommonButtonVariant.secondary,
+                          haptic: CommonHaptic.selection,
+                          expand: true,
+                          minHeight: 36,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  OpsDockListSurface(
+                    child: Padding(
+                      padding: const EdgeInsets.all(10),
+                      child: grid == null
+                          ? _LocationGridMissingState(parentName: groupName)
+                          : Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '${grid.rows}×${grid.cols} · 빈칸 ${emptyCells ?? 0} · 주차면적 ${parkingAreas ?? 0}',
+                                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                        color: tokens.textSecondary,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                ),
+                                const SizedBox(height: 9),
+                                ParkingGridPreview(
+                                  grid: grid,
+                                  maxExtent: 360,
+                                  showLegend: true,
+                                  showChildRegions: true,
+                                  childRegions: overlays,
+                                  showChildRegionLabels: true,
+                                  showAllChildRegionLabels: false,
+                                  showChildSlotNumbers: selectedChild != null &&
+                                      _showSelectedChildSlotNumbers,
+                                  childSlotsToLabel: childSlotsToLabel,
+                                  onTapChildRegion: (id) {
+                                    final child = childrenById[id];
+                                    if (child == null) {
+                                      _log('grid_child_tap_ignored id=$id reason=missing');
+                                      return;
+                                    }
+                                    _selectFocusedChild(
+                                      child,
+                                      state,
+                                      source: 'grid',
+                                    );
+                                  },
+                                ),
+                              ],
+                            ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (children.isEmpty)
+                    _LocationDockEmptyState(
+                      key: const ValueKey<String>('location-focus-empty'),
+                      icon: Icons.subdirectory_arrow_right_rounded,
+                      title: '등록된 자식 구역이 없습니다',
+                      message: parent == null
+                          ? '부모 구역 정보를 확인하세요.'
+                          : '현재 부모 구역에 자식 구역을 추가할 수 있습니다.',
+                      action: parent == null
+                          ? null
+                          : CommonButton(
+                              label: '자식 구역 추가',
+                              icon: Icons.add_location_alt_rounded,
+                              onPressed: () => _handleAddChild(context, parent),
+                              variant: CommonButtonVariant.secondary,
+                              haptic: CommonHaptic.selection,
+                            ),
+                    )
+                  else
+                    _buildSelectedChildInspection(
+                      context,
+                      selectedChild,
+                      groupName: groupName,
+                    ),
+                ],
+              ),
+            ),
+            OpsDockContextFooterTransition(
+              child: _buildFocusedChildFooter(context, selectedChild),
+            ),
+          ],
+        ),
+        OpsDockLoadingOverlay(loading: initialLoading),
+      ],
+    );
+  }
+
+  Widget _buildSelectedChildInspection(
+    BuildContext context,
+    LocationModel? selectedChild, {
+    required String groupName,
+  }) {
+    final tokens = CommonUiTheme.of(context);
+    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final child = selectedChild;
+    final summary = child == null ? '' : _slotSummaryText(child.childSlots);
+    final rect = child?.childRect;
+    final metadata = child == null
+        ? ''
+        : <String>[
+            if (child.isTowerChild) '타워',
+            if (child.capacity > 0) '공간 ${child.capacity}대',
+            if (rect != null) '영역 ${rect.height}×${rect.width}',
+          ].join(' · ');
+    return AnimatedSize(
+      duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+      curve: CommonUiMotion.standard,
+      child: AnimatedSwitcher(
+        duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+        switchInCurve: CommonUiMotion.enter,
+        switchOutCurve: CommonUiMotion.exit,
+        transitionBuilder: (childWidget, animation) {
+          final slide = Tween<Offset>(
+            begin: const Offset(0, .05),
+            end: Offset.zero,
+          ).animate(animation);
+          return FadeTransition(
+            opacity: animation,
+            child: SlideTransition(position: slide, child: childWidget),
+          );
+        },
+        child: child == null
+            ? const SizedBox.shrink(
+                key: ValueKey<String>('location-child-inspection-none'),
+              )
+            : OpsDockListSurface(
+                key: ValueKey<String>('location-child-inspection-${child.id}'),
+                child: Padding(
+                  padding: const EdgeInsets.all(11),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: tokens.accentContainer.withOpacity(.72),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: tokens.accent.withOpacity(.32),
+                          ),
+                        ),
+                        alignment: Alignment.center,
+                        child: Icon(
+                          child.isTowerChild
+                              ? Icons.apartment_rounded
+                              : Icons.local_parking_rounded,
+                          size: 19,
+                          color: tokens.accent,
+                        ),
+                      ),
+                      const SizedBox(width: 9),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              child.locationName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: tokens.textPrimary,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              groupName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                    color: tokens.textSecondary,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                            ),
+                            if (metadata.isNotEmpty) ...[
+                              const SizedBox(height: 3),
+                              Text(
+                                metadata,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                      color: tokens.accent,
+                                      fontWeight: FontWeight.w700,
+                                      height: 1.25,
+                                    ),
+                              ),
+                            ],
+                            if (summary.isNotEmpty) ...[
+                              const SizedBox(height: 3),
+                              Text(
+                                summary,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                      color: tokens.textSecondary,
+                                      fontWeight: FontWeight.w600,
+                                      height: 1.25,
+                                    ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
       ),
+    );
+  }
+
+  Widget _buildFocusedChildFooter(
+    BuildContext context,
+    LocationModel? selectedChild,
+  ) {
+    if (selectedChild == null) {
+      return const SizedBox.shrink(
+        key: ValueKey<String>('location-focus-footer-none'),
+      );
+    }
+    return OpsDockContextFooter(
+      key: const ValueKey<String>('location-focus-footer-selected'),
+      children: [
+        Expanded(
+          child: CommonButton(
+            label: '수정',
+            icon: Icons.edit_location_alt_rounded,
+            onPressed: selectedChild.childRect == null
+                ? null
+                : () => _handleEditChild(context),
+            variant: CommonButtonVariant.secondary,
+            haptic: CommonHaptic.selection,
+            expand: true,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: CommonButton(
+            label: '삭제',
+            icon: Icons.delete_forever_rounded,
+            onPressed: () => _handleDelete(context),
+            variant: CommonButtonVariant.destructive,
+            haptic: CommonHaptic.medium,
+            expand: true,
+          ),
+        ),
+      ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final locationState = context.watch<LocationState>();
-    final cs = Theme.of(context).colorScheme;
-    final currentArea = context.watch<AreaState>().currentArea.trim();
-    final storageKeyPrefix = 'location_management_${currentArea.toString()}';
+    return AnimatedBuilder(
+      animation: _workspace,
+      builder: (context, _) {
+        final locationState = context.watch<LocationState>();
+        final currentArea = context.watch<AreaState>().currentArea.trim();
+        if (_lastArea == null) {
+          _lastArea = currentArea;
+        } else if (_lastArea != currentArea) {
+          final previous = _lastArea;
+          _lastArea = currentArea;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            context.read<LocationState>().clearSelection();
+            _workspace.reset(source: 'area_changed_${previous}_to_$currentArea');
+            _log('area_changed from=${previous ?? '-'} to=$currentArea');
+          });
+        }
 
-    final allInArea = locationState.locations.where((l) => l.area.trim() == currentArea).toList();
-    final queriedInArea = allInArea.where(_matchesLocationQuery).toList();
-
-    final legacySingles = queriedInArea.where((loc) {
-      final t = loc.type;
-      return t == null || t == 'single';
-    }).toList();
-
-    final parents = queriedInArea.where(_isCompositeParent).toList();
-    final children = queriedInArea.where(_isCompositeChild).toList();
-    final allParents = allInArea.where(_isCompositeParent).toList();
-    final allChildren = allInArea.where(_isCompositeChild).toList();
-
-    final Map<String, LocationModel> parentByKey = {
-      for (final p in allParents) _nameKey(p.locationName): p,
-    };
-    final Map<String, LocationModel> parentById = {
-      for (final p in allParents) p.id: p,
-    };
-
-    final Map<String, String> groupDisplayNameByKey = {
-      for (final p in allParents) _nameKey(p.locationName): _normalizeName(p.locationName),
-    };
-
-    final Map<String, List<LocationModel>> groupedChildren = {};
-    for (final child in children) {
-      final parentTrim = _resolvedParentName(child, parentById);
-
-      if (parentTrim.isEmpty) {
-        groupedChildren.putIfAbsent(_miscGroupKey, () => []).add(child);
-        groupDisplayNameByKey.putIfAbsent(_miscGroupKey, () => '기타');
-        continue;
-      }
-
-      final pKey = _nameKey(parentTrim);
-      final pDisplay = _normalizeName(parentTrim);
-
-      groupedChildren.putIfAbsent(pKey, () => []).add(child);
-      groupDisplayNameByKey.putIfAbsent(pKey, () => pDisplay);
-    }
-
-    final selectedLocation = _selectedLocation(locationState);
-    final hasSelection = selectedLocation != null;
-    final canEditParent = selectedLocation != null && _isCompositeParent(selectedLocation) && selectedLocation.parkingGrid != null;
-    final canEditChild = selectedLocation != null && _isCompositeChild(selectedLocation) && selectedLocation.childRect != null;
-    final canEditPlainText = selectedLocation != null && !_isCompositeParent(selectedLocation) && !_isCompositeChild(selectedLocation);
-    final canEdit = canEditParent || canEditChild || canEditPlainText;
-    final isEmptyAll = allInArea.isEmpty;
-    final visibleCount = legacySingles.length + parents.length + children.length;
-    final totalCount = allInArea.length;
-    final totalCapacity = allInArea.fold<int>(0, (sum, loc) => sum + loc.capacity);
-    final areaLabel = currentArea.isEmpty ? '지역 미설정' : currentArea;
-    final rawFocusedParentKey = _focusedParentKey;
-    final focusedParentKey = rawFocusedParentKey != null && (parentByKey.containsKey(rawFocusedParentKey) || groupedChildren.containsKey(rawFocusedParentKey))
-        ? rawFocusedParentKey
-        : null;
-
-    final listScaffold = OpsConsoleScaffold(
-      key: const ValueKey<String>('location-management-list'),
-      title: '구역 관리',
-      icon: Icons.location_on_rounded,
-      areaLabel: areaLabel,
-      loading: locationState.isLoading,
-      metrics: [
-        OpsMetric(label: '전체', value: '$totalCount', icon: Icons.location_on_rounded, color: cs.onInverseSurface),
-        OpsMetric(label: '부모', value: '${allParents.length}', icon: Icons.account_tree_rounded, color: cs.primary),
-        OpsMetric(label: '자식', value: '${allChildren.length}', icon: Icons.subdirectory_arrow_right_rounded, color: cs.secondary),
-        OpsMetric(label: '공간', value: '$totalCapacity', icon: Icons.local_parking_rounded, color: cs.primary),
-      ],
-      commandBar: _buildCommandBar(context, visibleCount, totalCount),
-      bottomBar: _buildBottomBar(context, hasSelection, canEdit, canEditParent, canEditChild),
-      body: locationState.isLoading
-          ? const SizedBox.shrink()
-          : isEmptyAll
-              ? OpsEmptyState(
-                  icon: Icons.add_location_alt_rounded,
-                  title: '현재 지역에 주차 구역이 없습니다',
-                  message: '구역을 추가해 현장 주차면과 복합 슬롯 구조를 등록하세요.',
-                  action: FilledButton.icon(
-                    onPressed: () => _handleAddParent(context),
-                    icon: const Icon(Icons.add_location_alt_rounded),
-                    label: const Text('구역 추가'),
-                  ),
-                )
-              : visibleCount == 0
-                  ? const OpsEmptyState(
-                      icon: Icons.search_off_rounded,
-                      title: '검색 결과가 없습니다',
-                      message: '검색어와 필터를 조정하세요.',
-                    )
-                  : _filter == 'composite'
-                      ? _buildCompositeList(
-                          parentByKey: parentByKey,
-                          groupedChildren: groupedChildren,
-                          groupDisplayNameByKey: groupDisplayNameByKey,
-                          state: locationState,
-                          cs: cs,
-                          storageKeyPrefix: storageKeyPrefix,
-                        )
-                      : _buildAllListView(
-                          legacySingles: legacySingles,
-                          parentByKey: parentByKey,
-                          groupedChildren: groupedChildren,
-                          groupDisplayNameByKey: groupDisplayNameByKey,
-                          state: locationState,
-                          cs: cs,
-                          storageKeyPrefix: storageKeyPrefix,
-                        ),
-    );
-
-    final focusedScaffold = focusedParentKey == null
-        ? null
-        : _buildFocusedParentScaffold(
-            context: context,
-            keyValue: focusedParentKey,
-            groupName: groupDisplayNameByKey[focusedParentKey] ?? focusedParentKey,
-            parentModel: parentByKey[focusedParentKey],
-            children: [...(groupedChildren[focusedParentKey] ?? const <LocationModel>[])],
-            state: locationState,
-            selectedLocation: selectedLocation,
-            cs: cs,
-            areaLabel: areaLabel,
-            storageKeyPrefix: storageKeyPrefix,
+        final allInArea = locationState.locations
+            .where((location) => location.area.trim() == currentArea)
+            .toList();
+        final allParents = allInArea.where(_isCompositeParent).toList();
+        final allChildren = allInArea.where(_isCompositeChild).toList();
+        final allSingles = allInArea.where((loc) {
+          final type = loc.type;
+          return type == null || type == 'single';
+        }).toList();
+        final parentByKey = <String, LocationModel>{
+          for (final parent in allParents) _nameKey(parent.locationName): parent,
+        };
+        final parentById = <String, LocationModel>{
+          for (final parent in allParents) parent.id: parent,
+        };
+        final groupDisplayNameByKey = <String, String>{
+          for (final parent in allParents)
+            _nameKey(parent.locationName): _normalizeName(parent.locationName),
+        };
+        final groupedChildren = <String, List<LocationModel>>{};
+        for (final child in allChildren) {
+          final parentName = _resolvedParentName(child, parentById);
+          if (parentName.isEmpty) {
+            groupedChildren.putIfAbsent(_miscGroupKey, () => <LocationModel>[])
+              ..add(child);
+            groupDisplayNameByKey.putIfAbsent(_miscGroupKey, () => '기타');
+            continue;
+          }
+          final key = _nameKey(parentName);
+          groupedChildren.putIfAbsent(key, () => <LocationModel>[]).add(child);
+          groupDisplayNameByKey.putIfAbsent(
+            key,
+            () => _normalizeName(parentName),
           );
+        }
 
-    return PopScope(
-      canPop: focusedParentKey == null,
-      onPopInvoked: (didPop) {
-        if (didPop) return;
-        if (_focusedParentKey != null) _closeFocusedParent();
+        final visibleSingles =
+            allSingles.where(_matchesLocationQuery).toList();
+        final allGroupKeys = <String>{
+          ...parentByKey.keys,
+          ...groupedChildren.keys,
+        };
+        final visibleGroupKeys = <String>{};
+        if (_query.trim().isEmpty) {
+          visibleGroupKeys.addAll(allGroupKeys);
+        } else {
+          for (final key in allGroupKeys) {
+            final parentMatches = parentByKey[key] != null &&
+                _matchesLocationQuery(parentByKey[key]!);
+            final childMatches = (groupedChildren[key] ?? const <LocationModel>[])
+                .any(_matchesLocationQuery);
+            if (parentMatches || childMatches) {
+              visibleGroupKeys.add(key);
+            }
+          }
+        }
+
+        final focusedKey = _focusedParentKey;
+        if (focusedKey != null) {
+          _scheduleFocusValidation(
+            focusedKey: focusedKey,
+            validGroupKeys: allGroupKeys,
+          );
+        }
+        final effectiveFocusedKey =
+            focusedKey != null && allGroupKeys.contains(focusedKey)
+                ? focusedKey
+                : null;
+        final reduceMotion =
+            MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+        final Widget activeWorkspace;
+        if (effectiveFocusedKey == null) {
+          activeWorkspace = KeyedSubtree(
+            key: const ValueKey<String>('location-overview-workspace'),
+            child: _buildOverview(
+              context,
+              state: locationState,
+              currentArea: currentArea,
+              allInArea: allInArea,
+              visibleSingles: visibleSingles,
+              parentByKey: parentByKey,
+              groupedChildren: groupedChildren,
+              groupDisplayNameByKey: groupDisplayNameByKey,
+              visibleGroupKeys: visibleGroupKeys,
+            ),
+          );
+        } else {
+          activeWorkspace = KeyedSubtree(
+            key: const ValueKey<String>('location-parent-focus-workspace'),
+            child: _buildParentFocus(
+              context,
+              state: locationState,
+              groupKey: effectiveFocusedKey,
+              groupName: groupDisplayNameByKey[effectiveFocusedKey] ??
+                  effectiveFocusedKey,
+              parent: parentByKey[effectiveFocusedKey],
+              children: [
+                ...(groupedChildren[effectiveFocusedKey] ??
+                    const <LocationModel>[]),
+              ]..sort((a, b) => a.locationName.compareTo(b.locationName)),
+            ),
+          );
+        }
+
+        return PopScope(
+          canPop: effectiveFocusedKey == null,
+          onPopInvoked: (didPop) {
+            if (didPop || effectiveFocusedKey == null) return;
+            _closeFocusedParent(source: 'system_back');
+          },
+          child: AnimatedSwitcher(
+            duration: reduceMotion
+                ? Duration.zero
+                : const Duration(milliseconds: 230),
+            reverseDuration: reduceMotion
+                ? Duration.zero
+                : const Duration(milliseconds: 210),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (child, animation) {
+              if (reduceMotion) return child;
+              final isFocus = child.key ==
+                  const ValueKey<String>('location-parent-focus-workspace');
+              final position = Tween<Offset>(
+                begin: isFocus
+                    ? const Offset(.075, 0)
+                    : const Offset(-.035, 0),
+                end: Offset.zero,
+              ).animate(
+                CurvedAnimation(
+                  parent: animation,
+                  curve: Curves.easeOutCubic,
+                  reverseCurve: Curves.easeInCubic,
+                ),
+              );
+              return FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: position,
+                  child: child,
+                ),
+              );
+            },
+            child: activeWorkspace,
+          ),
+        );
       },
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 260),
-        reverseDuration: const Duration(milliseconds: 220),
-        switchInCurve: Curves.easeOutCubic,
-        switchOutCurve: Curves.easeInCubic,
-        transitionBuilder: (child, animation) {
-          final position = Tween<Offset>(
-            begin: const Offset(.07, 0),
-            end: Offset.zero,
-          ).animate(animation);
-          return FadeTransition(
-            opacity: animation,
-            child: SlideTransition(
-              position: position,
-              child: child,
+    );
+  }
+}
+
+class _LocationListSectionLabel extends StatelessWidget {
+  const _LocationListSectionLabel({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(11, 8, 11, 7),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: tokens.textSecondary,
+              fontWeight: FontWeight.w800,
             ),
-          );
-        },
-        child: focusedScaffold ?? listScaffold,
       ),
     );
   }
+}
 
-  Widget _buildFocusedParentScaffold({
-    required BuildContext context,
-    required String keyValue,
-    required String groupName,
-    required LocationModel? parentModel,
-    required List<LocationModel> children,
-    required LocationState state,
-    required LocationModel? selectedLocation,
-    required ColorScheme cs,
-    required String areaLabel,
-    required String storageKeyPrefix,
-  }) {
-    children.sort((a, b) => a.locationName.compareTo(b.locationName));
-    final totalCapacity = children.fold<int>(0, (sum, loc) => sum + loc.capacity);
-    final grid = parentModel?.parkingGrid;
-    final selectedInFocus = selectedLocation != null && (selectedLocation.id == parentModel?.id || children.any((child) => child.id == selectedLocation.id));
-    final selectedLabel = selectedInFocus ? '선택됨' : '미선택';
+class _LocationSelectionIcon extends StatelessWidget {
+  const _LocationSelectionIcon({required this.selected});
 
-    return OpsConsoleScaffold(
-      key: ValueKey<String>('location-focused-$keyValue'),
-      title: groupName,
-      icon: Icons.account_tree_rounded,
-      areaLabel: areaLabel,
-      loading: state.isLoading,
-      trailing: IconButton.filledTonal(
-        tooltip: '목록으로 돌아가기',
-        onPressed: _closeFocusedParent,
-        icon: const Icon(Icons.close_rounded),
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    return AnimatedSwitcher(
+      duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+      switchInCurve: CommonUiMotion.enter,
+      switchOutCurve: CommonUiMotion.exit,
+      transitionBuilder: (child, animation) => FadeTransition(
+        opacity: animation,
+        child: ScaleTransition(scale: animation, child: child),
       ),
-      metrics: [
-        OpsMetric(label: '자식', value: '${children.length}', icon: Icons.subdirectory_arrow_right_rounded, color: cs.secondary),
-        OpsMetric(label: '공간', value: '$totalCapacity', icon: Icons.local_parking_rounded, color: cs.primary),
-        OpsMetric(label: '그리드', value: grid == null ? '없음' : '${grid.rows}×${grid.cols}', icon: Icons.grid_on_rounded, color: cs.primary),
-        OpsMetric(label: '선택', value: selectedLabel, icon: Icons.check_circle_rounded, color: selectedInFocus ? cs.primary : cs.onInverseSurface),
-      ],
-      bottomBar: _buildFocusedBottomBar(
-        context: context,
-        parentModel: parentModel,
-        children: children,
-        selectedLocation: selectedLocation,
-      ),
-      body: _buildFocusedParentView(
-        groupKey: keyValue,
-        groupName: groupName,
-        parentModel: parentModel,
-        children: children,
-        state: state,
-        cs: cs,
-        storageKeyPrefix: storageKeyPrefix,
+      child: Icon(
+        selected ? Icons.check_circle_rounded : Icons.chevron_right_rounded,
+        key: ValueKey<bool>(selected),
+        size: 19,
+        color: selected ? tokens.accent : tokens.iconSecondary,
       ),
     );
   }
+}
 
-  Widget _buildAllListView({
-    required List<LocationModel> legacySingles,
-    required Map<String, LocationModel> parentByKey,
-    required Map<String, List<LocationModel>> groupedChildren,
-    required Map<String, String> groupDisplayNameByKey,
-    required LocationState state,
-    required ColorScheme cs,
-    required String storageKeyPrefix,
-  }) {
-    final tiles = <Widget>[];
+class _LocationDockEmptyState extends StatelessWidget {
+  const _LocationDockEmptyState({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.message,
+    this.action,
+  });
 
-    if (legacySingles.isNotEmpty) {
-      tiles.add(
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-          child: Text(
-            '텍스트형/단일 주차 구역',
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  color: cs.onSurface,
-                ),
-          ),
-        ),
-      );
-      tiles.addAll(_buildLegacySingleTiles(legacySingles, state, cs));
-    }
+  final IconData icon;
+  final String title;
+  final String message;
+  final Widget? action;
 
-    if (legacySingles.isNotEmpty && groupedChildren.isNotEmpty) {
-      tiles.add(Divider(color: cs.outlineVariant.withOpacity(.55)));
-    }
-
-    if (groupedChildren.isNotEmpty || parentByKey.isNotEmpty) {
-      tiles.add(
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-          child: Text(
-            '복합 주차 구역',
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  color: cs.onSurface,
-                ),
-          ),
-        ),
-      );
-
-      tiles.addAll(_buildCompositeTiles(
-        parentByKey: parentByKey,
-        groupedChildren: groupedChildren,
-        groupDisplayNameByKey: groupDisplayNameByKey,
-        state: state,
-        cs: cs,
-        storageKeyPrefix: storageKeyPrefix,
-      ));
-    }
-
-    return ListView(
-      key: PageStorageKey<String>('${storageKeyPrefix}_all_list'),
-      children: tiles,
-    );
-  }
-
-  Widget _buildCompositeList({
-    required Map<String, LocationModel> parentByKey,
-    required Map<String, List<LocationModel>> groupedChildren,
-    required Map<String, String> groupDisplayNameByKey,
-    required LocationState state,
-    required ColorScheme cs,
-    required String storageKeyPrefix,
-  }) {
-    return ListView(
-      key: PageStorageKey<String>('${storageKeyPrefix}_composite_list'),
-      padding: const EdgeInsets.only(top: 10),
-      children: _buildCompositeTiles(
-        parentByKey: parentByKey,
-        groupedChildren: groupedChildren,
-        groupDisplayNameByKey: groupDisplayNameByKey,
-        state: state,
-        cs: cs,
-        storageKeyPrefix: storageKeyPrefix,
-      ),
-    );
-  }
-
-  List<Widget> _buildLegacySingleTiles(
-    List<LocationModel> list,
-    LocationState state,
-    ColorScheme cs,
-  ) {
-    return List<Widget>.generate(list.length, (index) {
-      final loc = list[index];
-      final isSelected = state.selectedLocationId == loc.id;
-
-      return InkWell(
-        onTap: () => state.toggleLocationSelection(loc.id),
-        borderRadius: BorderRadius.circular(16),
-        child: OpsPanel(
-          selected: isSelected,
-          padding: EdgeInsets.zero,
-          child: Row(
-            children: [
-              Container(
-                width: 6,
-                height: 96,
-                decoration: BoxDecoration(
-                  color: cs.primary,
-                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(16)),
-                ),
-              ),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              loc.locationName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(fontWeight: FontWeight.w900, color: cs.onSurface, fontSize: 16),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          OpsStatusBadge(label: '단일', color: cs.primary, icon: Icons.location_on_rounded),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: [
-                          OpsInfoPill(text: loc.capacity > 0 ? '공간 ${loc.capacity}대' : '공간 미지정', icon: Icons.local_parking_rounded),
-                          OpsInfoPill(text: loc.area.isEmpty ? '지역 미설정' : loc.area, icon: Icons.business_rounded),
-                        ],
-                      ),
-                    ],
+  @override
+  Widget build(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 30, color: tokens.iconSecondary),
+            const SizedBox(height: 9),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: tokens.textPrimary,
+                    fontWeight: FontWeight.w800,
                   ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: Icon(
-                  isSelected ? Icons.check_circle_rounded : Icons.chevron_right_rounded,
-                  color: isSelected ? cs.primary : cs.onSurfaceVariant.withOpacity(.7),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    });
-  }
-
-  List<Widget> _buildCompositeTiles({
-    required Map<String, LocationModel> parentByKey,
-    required Map<String, List<LocationModel>> groupedChildren,
-    required Map<String, String> groupDisplayNameByKey,
-    required LocationState state,
-    required ColorScheme cs,
-    required String storageKeyPrefix,
-  }) {
-    final parentKeysOrdered = parentByKey.keys.toList()
-      ..sort((a, b) {
-        final ad = groupDisplayNameByKey[a] ?? a;
-        final bd = groupDisplayNameByKey[b] ?? b;
-        return ad.compareTo(bd);
-      });
-
-    final remainingKeys = groupedChildren.keys.where((k) => !parentByKey.containsKey(k)).toList()
-      ..sort((a, b) {
-        final ad = groupDisplayNameByKey[a] ?? a;
-        final bd = groupDisplayNameByKey[b] ?? b;
-        return ad.compareTo(bd);
-      });
-
-    final groupKeys = [...parentKeysOrdered, ...remainingKeys];
-
-    return groupKeys.map((gKey) {
-      final groupName = groupDisplayNameByKey[gKey] ?? gKey;
-      final children = [...(groupedChildren[gKey] ?? const <LocationModel>[])]..sort((a, b) => a.locationName.compareTo(b.locationName));
-      final totalCapacity = children.fold<int>(0, (sum, loc) => sum + loc.capacity);
-      final parentModel = parentByKey[gKey];
-      final grid = parentModel?.parkingGrid;
-      final selectedChildCount = children.where((child) => state.selectedLocationId == child.id).length;
-      final accent = selectedChildCount > 0 ? cs.secondary : cs.primary;
-
-      return InkWell(
-        onTap: () => _openFocusedParent(gKey, state),
-        borderRadius: BorderRadius.circular(16),
-        child: OpsPanel(
-          selected: selectedChildCount > 0,
-          padding: EdgeInsets.zero,
-          accentColor: accent,
-          margin: const EdgeInsets.fromLTRB(16, 6, 16, 10),
-          child: Row(
-            children: [
-              Container(
-                width: 6,
-                height: 112,
-                decoration: BoxDecoration(
-                  color: accent,
-                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(16)),
-                ),
-              ),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 13, 10, 13),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              groupName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: cs.onSurface,
-                                fontWeight: FontWeight.w900,
-                                fontSize: 16.5,
-                                letterSpacing: -.2,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          OpsStatusBadge(
-                            label: grid == null ? '도면 없음' : '도면',
-                            color: grid == null ? cs.onSurfaceVariant : cs.primary,
-                            icon: grid == null ? Icons.grid_off_rounded : Icons.grid_on_rounded,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 9),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: [
-                          OpsInfoPill(text: '자식 ${children.length}개', icon: Icons.subdirectory_arrow_right_rounded),
-                          OpsInfoPill(text: '공간 $totalCapacity대', icon: Icons.local_parking_rounded),
-                          OpsInfoPill(text: grid == null ? '그리드 미지정' : '${grid.rows}×${grid.cols}', icon: Icons.grid_view_rounded),
-                          if (selectedChildCount > 0) OpsInfoPill(text: '자식 선택됨', icon: Icons.check_circle_rounded),
-                        ],
-                      ),
-                    ],
+            ),
+            const SizedBox(height: 5),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: tokens.textSecondary,
+                    fontWeight: FontWeight.w500,
+                    height: 1.35,
                   ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: Icon(
-                  Icons.open_in_full_rounded,
-                  color: cs.primary,
-                  size: 20,
-                ),
-              ),
+            ),
+            if (action != null) ...[
+              const SizedBox(height: 12),
+              action!,
             ],
-          ),
+          ],
         ),
-      );
-    }).toList();
+      ),
+    );
   }
+}
 
-  Widget _buildFocusedParentView({
-    required String groupKey,
-    required String groupName,
-    required LocationModel? parentModel,
-    required List<LocationModel> children,
-    required LocationState state,
-    required ColorScheme cs,
-    required String storageKeyPrefix,
-  }) {
-    final selectedId = state.selectedLocationId;
-    final selectedLoc = _selectedLocation(state);
-    final grid = parentModel?.parkingGrid;
+class _LocationGridMissingState extends StatelessWidget {
+  const _LocationGridMissingState({required this.parentName});
 
-    LocationModel? selectedChildInThisGroup;
-    if (selectedLoc != null && _isCompositeChild(selectedLoc)) {
-      final pk = _nameKey((selectedLoc.parent ?? '').trim());
-      if (pk == groupKey) {
-        selectedChildInThisGroup = selectedLoc;
-      }
-    }
+  final String parentName;
 
-    final overlaysAll = <ChildRegionOverlay>[];
-    for (final child in children) {
-      final rect = child.childRect;
-      if (rect == null) continue;
-      overlaysAll.add(
-        ChildRegionOverlay(
-          rect: rect,
-          label: child.locationName.trim(),
-          isSelected: selectedId != null && child.id == selectedId,
-        ),
-      );
-    }
-
-    final overlays = (_showOnlySelectedChild && selectedChildInThisGroup != null) ? overlaysAll.where((o) => o.isSelected).toList() : overlaysAll;
-    final childSlotsToLabel = (selectedChildInThisGroup != null && _showSelectedChildSlotNumbers) ? selectedChildInThisGroup.childSlots : const <ChildSlot>[];
-    final childrenForList = (_showOnlySelectedChild && selectedChildInThisGroup != null) ? children.where((c) => c.id == selectedChildInThisGroup!.id).toList() : children;
-    final emptyCells = grid == null ? null : _countEmptyCells(grid);
-    final parkingAreas = grid == null ? null : _countParkingAreas(grid);
-    final parkingAreaCells = grid == null ? null : _countParkingAreaCells(grid);
-    final parkingKindSummary = grid == null ? '' : _parkingAreaKindSummary(grid);
-    final selectedChildSlotSummary = selectedChildInThisGroup == null ? '' : _slotSummaryText(selectedChildInThisGroup.childSlots);
-
-    return ListView(
-      key: PageStorageKey<String>('${storageKeyPrefix}_focused_$groupKey'),
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
+  @override
+  Widget build(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        OpsCommandPanel(
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '부모 구역 작업 화면',
-                    style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w900, fontSize: 14.5, letterSpacing: -.15),
-                  ),
+        Icon(Icons.grid_off_rounded, color: tokens.danger, size: 20),
+        const SizedBox(width: 9),
+        Expanded(
+          child: Text(
+            '$parentName의 parkingGrid가 없습니다. 저장 상태 또는 마이그레이션 결과를 확인하세요.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: tokens.textSecondary,
+                  fontWeight: FontWeight.w700,
+                  height: 1.35,
                 ),
-                TextButton.icon(
-                  onPressed: _closeFocusedParent,
-                  icon: const Icon(Icons.arrow_back_rounded, size: 18),
-                  label: const Text('목록'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                OpsFilterChip(
-                  label: '선택 자식만',
-                  selected: _showOnlySelectedChild,
-                  icon: Icons.center_focus_strong_rounded,
-                  onSelected: () => setState(() => _showOnlySelectedChild = !_showOnlySelectedChild),
-                ),
-                OpsFilterChip(
-                  label: '슬롯번호',
-                  selected: _showSelectedChildSlotNumbers,
-                  icon: Icons.tag_rounded,
-                  onSelected: () => setState(() => _showSelectedChildSlotNumbers = !_showSelectedChildSlotNumbers),
-                ),
-              ],
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        if (grid != null)
-          OpsPanel(
-            padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        '레이아웃 그리드 ${grid.rows}×${grid.cols}',
-                        style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w900, fontSize: 15.5),
-                      ),
-                    ),
-                    OpsStatusBadge(label: '도면', color: cs.primary, icon: Icons.grid_on_rounded),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: [
-                    OpsInfoPill(text: '빈칸 $emptyCells', icon: Icons.crop_free_rounded),
-                    if ((parkingAreas ?? 0) > 0) OpsInfoPill(text: '주차면적 $parkingAreas', icon: Icons.local_parking_rounded),
-                    if ((parkingAreaCells ?? 0) > 0) OpsInfoPill(text: '면적셀 $parkingAreaCells', icon: Icons.grid_4x4_rounded),
-                  ],
-                ),
-                if (parkingKindSummary.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    parkingKindSummary,
-                    style: TextStyle(color: cs.onSurfaceVariant, fontWeight: FontWeight.w800, fontSize: 12),
-                  ),
-                ],
-                if (selectedChildSlotSummary.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    '선택 자식 슬롯: $selectedChildSlotSummary',
-                    style: TextStyle(color: cs.primary, fontWeight: FontWeight.w900, fontSize: 12),
-                  ),
-                ],
-                const SizedBox(height: 12),
-                ParkingGridPreview(
-                  grid: grid,
-                  maxExtent: 360,
-                  showLegend: true,
-                  showChildRegions: true,
-                  childRegions: overlays,
-                  showChildRegionLabels: true,
-                  showAllChildRegionLabels: false,
-                  showChildSlotNumbers: _showSelectedChildSlotNumbers,
-                  childSlotsToLabel: childSlotsToLabel,
-                ),
-              ],
-            ),
-          )
-        else
-          OpsPanel(
-            accentColor: cs.error,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(Icons.grid_off_rounded, color: cs.error),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    '이 부모 구역은 parkingGrid가 없습니다. 저장 상태나 마이그레이션 결과를 확인하세요.',
-                    style: TextStyle(color: cs.onSurfaceVariant, fontWeight: FontWeight.w800, height: 1.28),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        const SizedBox(height: 6),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(2, 8, 2, 8),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '자식 주차 구역',
-                  style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w900, fontSize: 15.5, letterSpacing: -.15),
-                ),
-              ),
-              OpsStatusBadge(label: '${childrenForList.length}/${children.length}', color: cs.secondary, icon: Icons.segment_rounded),
-            ],
           ),
         ),
-        if (childrenForList.isEmpty)
-          OpsPanel(
-            child: Column(
-              children: [
-                Icon(Icons.subdirectory_arrow_right_rounded, color: cs.onSurfaceVariant, size: 30),
-                const SizedBox(height: 8),
-                Text(
-                  _showOnlySelectedChild ? '선택된 자식 구역이 없습니다' : '등록된 자식 구역이 없습니다',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w900),
-                ),
-              ],
-            ),
-          )
-        else
-          ...childrenForList.map((loc) => _buildFocusedChildTile(loc, state, cs)).toList(),
       ],
-    );
-  }
-
-  Widget _buildFocusedChildTile(LocationModel loc, LocationState state, ColorScheme cs) {
-    final isSelected = state.selectedLocationId == loc.id;
-    final subtitleParts = <String>[];
-    if (loc.isTowerChild) {
-      subtitleParts.add('타워');
-    }
-    if (loc.capacity > 0) {
-      subtitleParts.add('공간 ${loc.capacity}대');
-    }
-    final slotSummary = _slotSummaryText(loc.childSlots);
-    if (!loc.isTowerChild && slotSummary.isNotEmpty) {
-      subtitleParts.add(slotSummary);
-    }
-
-    return InkWell(
-      onTap: () => state.toggleLocationSelection(loc.id),
-      borderRadius: BorderRadius.circular(16),
-      child: OpsPanel(
-        selected: isSelected,
-        accentColor: cs.secondary,
-        padding: EdgeInsets.zero,
-        child: Row(
-          children: [
-            Container(
-              width: 6,
-              height: 94,
-              decoration: BoxDecoration(
-                color: isSelected ? cs.secondary : cs.outlineVariant,
-                borderRadius: const BorderRadius.horizontal(left: Radius.circular(16)),
-              ),
-            ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 12, 10, 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            loc.locationName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w900, fontSize: 15.5),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        OpsStatusBadge(
-                          label: loc.isTowerChild ? '타워' : '자식',
-                          color: isSelected ? cs.secondary : cs.onSurfaceVariant,
-                          icon: loc.isTowerChild ? Icons.view_in_ar_rounded : Icons.subdirectory_arrow_right_rounded,
-                        ),
-                      ],
-                    ),
-                    if (subtitleParts.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: subtitleParts.map((part) => OpsInfoPill(text: part, icon: Icons.info_outline_rounded)).toList(),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: Icon(
-                isSelected ? Icons.check_circle_rounded : Icons.touch_app_rounded,
-                color: isSelected ? cs.secondary : cs.onSurfaceVariant.withOpacity(.7),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

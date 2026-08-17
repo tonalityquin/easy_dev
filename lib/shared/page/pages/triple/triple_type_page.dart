@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../../../features/dashboard/sheets/triple/triple_home_dash_board_bottom_sheet.dart';
+import '../../../../features/dashboard/side_docks/triple/triple_home_dashboard_side_dock.dart';
 import '../../../../features/mode_triple/parking_completed_package/triple_parking_completed_control_buttons.dart';
 import '../../../../features/mode_triple/triple_parking_completed_page.dart';
 import '../../../plate/application/common/driving_recovery_gate.dart';
@@ -71,7 +71,7 @@ class TripleTypePage extends StatelessWidget {
             ),
           );
         },
-        buildDashboardBottomSheet: () => const TripleHomeDashBoardBottomSheet(),
+        buildDashboardSideDock: () => const TripleHomeDashboardSideDock(),
         buildInputScreen: () => const InputPlateScreen(),
         debugMeta: const <String, dynamic>{
           'screen': 'triple_type_page',

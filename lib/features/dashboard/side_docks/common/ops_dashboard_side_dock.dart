@@ -3,25 +3,30 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../app/di/routes.dart';
+import '../../../../app/models/capability.dart';
 import '../../../../app/init/logout_helper.dart';
 import '../../../../app/utils/operational_data_sync_workflow.dart';
 import '../../../../app/utils/developer_operation_status_dialog.dart';
+import '../../../../app/utils/status_dialog.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
-import '../../../../shared/secondary/pages/secondary_page.dart';
+import '../../../../shared/secondary/side_docks/secondary_side_dock.dart';
 import '../../../../shared/sheet_tool/document_box_action.dart';
 import '../../../../shared/sheet_tool/document_box_action_executor.dart';
 import '../../../account/applications/user_state.dart';
 import '../../../camera/photo_transfer_mail_page.dart';
+import '../../../community/application/discord/discord_config.dart';
+import '../../../community/page/sheets/discord/discord_bottom_sheet.dart';
 import '../../../dev/application/area_state.dart';
 import '../../../headquarter/application/fab/hub_quick_actions.dart';
 import '../../../selector/application/dev_auth.dart';
 import '../../../selector/sheets/service_bottom_sheet.dart';
 import '../../widgets/widgets/schedule/dashboard_work_schedule_surface.dart';
 
-class OpsDashboardBottomSheet extends StatefulWidget {
-  const OpsDashboardBottomSheet({
+class OpsDashboardSideDock extends StatefulWidget {
+  const OpsDashboardSideDock({
     super.key,
     required this.modeLabel,
     required this.modeIcon,
@@ -37,12 +42,12 @@ class OpsDashboardBottomSheet extends StatefulWidget {
   ) punchRecorderBuilder;
 
   @override
-  State<OpsDashboardBottomSheet> createState() =>
-      _OpsDashboardBottomSheetState();
+  State<OpsDashboardSideDock> createState() =>
+      _OpsDashboardSideDockState();
 }
 
-class _OpsDashboardBottomSheetState extends State<OpsDashboardBottomSheet> {
-  final ScrollController _panelScrollController = ScrollController();
+class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
+  final ScrollController _dockScrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
   String _lastSearchDebugSignature = '';
@@ -90,7 +95,7 @@ class _OpsDashboardBottomSheetState extends State<OpsDashboardBottomSheet> {
     if (_lastSearchDebugSignature != signature) {
       _lastSearchDebugSignature = signature;
       debugPrint(
-        '[OpsDashboardPanel] search_changed active=${queryLength > 0} queryLength=$queryLength resultCount=${filtered.length} visibleSectionCount=$sectionCount',
+        '[OpsDashboardSideDock] search_changed active=${queryLength > 0} queryLength=$queryLength resultCount=${filtered.length} visibleSectionCount=$sectionCount',
       );
     }
     setState(() {});
@@ -101,13 +106,13 @@ class _OpsDashboardBottomSheetState extends State<OpsDashboardBottomSheet> {
     super.initState();
     _searchController.addListener(_onSearchChanged);
     debugPrint(
-      '[OpsDashboardPanel] mounted mode=${widget.modeLabel} layout=single_scroll',
+      '[OpsDashboardSideDock] mounted mode=${widget.modeLabel} layout=single_scroll',
     );
     _refreshDeveloperMode();
   }
 
   Future<bool> _refreshDeveloperMode() async {
-    debugPrint('[OpsDashboardPanel] developer_mode_check_start');
+    debugPrint('[OpsDashboardSideDock] developer_mode_check_start');
     final enabled = await DevAuth.isDeveloperLoggedIn();
     if (!mounted) return enabled;
     final changed = !_developerModeResolved || _developerMode != enabled;
@@ -118,22 +123,22 @@ class _OpsDashboardBottomSheetState extends State<OpsDashboardBottomSheet> {
       });
     }
     debugPrint(
-      '[OpsDashboardPanel] developer_mode_resolved enabled=$enabled settingsVisible=$enabled communityVisible=$enabled changed=$changed',
+      '[OpsDashboardSideDock] developer_mode_resolved enabled=$enabled settingsVisible=true communityVisible=$enabled changed=$changed',
     );
     return enabled;
   }
 
   @override
   void dispose() {
-    debugPrint('[OpsDashboardPanel] disposed mode=${widget.modeLabel}');
+    debugPrint('[OpsDashboardSideDock] disposed mode=${widget.modeLabel}');
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     _searchFocusNode.dispose();
-    _panelScrollController.dispose();
+    _dockScrollController.dispose();
     super.dispose();
   }
 
-  Future<void> _closeCurrentPanelAndRun(
+  Future<void> _closeCurrentDockAndRun(
     BuildContext context,
     Future<void> Function(BuildContext rootContext) action,
   ) async {
@@ -141,7 +146,7 @@ class _OpsDashboardBottomSheetState extends State<OpsDashboardBottomSheet> {
     final rootNavigator = Navigator.of(context, rootNavigator: true);
     final nav = Navigator.of(context);
     if (nav.canPop()) {
-      debugPrint('[OpsDashboardPanel] close_before_external_action');
+      debugPrint('[OpsDashboardSideDock] close_before_external_action');
       nav.pop();
       await Future<void>.delayed(Duration.zero);
     }
@@ -152,13 +157,13 @@ class _OpsDashboardBottomSheetState extends State<OpsDashboardBottomSheet> {
     BuildContext context,
     DocumentBoxAction action,
   ) async {
-    await _closeCurrentPanelAndRun(context, (rootContext) async {
+    await _closeCurrentDockAndRun(context, (rootContext) async {
       await executeDocumentBoxAction(rootContext, action);
     });
   }
 
   Future<void> _openPhotoTransfer(BuildContext context) async {
-    await _closeCurrentPanelAndRun(context, (rootContext) async {
+    await _closeCurrentDockAndRun(context, (rootContext) async {
       final reduceMotion =
           MediaQuery.maybeOf(rootContext)?.disableAnimations ?? false;
       await Navigator.of(rootContext, rootNavigator: true).push<void>(
@@ -185,7 +190,7 @@ class _OpsDashboardBottomSheetState extends State<OpsDashboardBottomSheet> {
   }
 
   Future<void> _openCommunity(BuildContext context) async {
-    await _closeCurrentPanelAndRun(context, (rootContext) async {
+    await _closeCurrentDockAndRun(context, (rootContext) async {
       await Navigator.of(
         rootContext,
         rootNavigator: true,
@@ -193,8 +198,152 @@ class _OpsDashboardBottomSheetState extends State<OpsDashboardBottomSheet> {
     });
   }
 
+  bool _canUseThirdParty(BuildContext context) {
+    return context
+        .read<AreaState>()
+        .capabilitiesOfCurrentArea
+        .contains(Capability.record);
+  }
+
+  Future<void> _openThirdPartySupport(BuildContext context) async {
+    if (!_canUseThirdParty(context)) {
+      await StatusDialog.showFailure(
+        context,
+        title: '서드파티 연결 권한이 없습니다.',
+        useCommonUi: true,
+      );
+      return;
+    }
+    await _closeCurrentDockAndRun(context, (rootContext) async {
+      debugPrint('[OpsDashboardSideDock] third_party_support_open');
+      await showModalBottomSheet<bool>(
+        context: rootContext,
+        isScrollControlled: true,
+        useSafeArea: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => DiscordBottomSheet(rootContext: rootContext),
+      );
+      debugPrint('[OpsDashboardSideDock] third_party_support_closed');
+    });
+  }
+
+  Future<void> _openThirdPartyChannel(BuildContext context) async {
+    if (!_canUseThirdParty(context)) {
+      await StatusDialog.showFailure(
+        context,
+        title: '서드파티 연결 권한이 없습니다.',
+        useCommonUi: true,
+      );
+      return;
+    }
+    await _closeCurrentDockAndRun(context, (rootContext) async {
+      final trace = await DeveloperOperationTrace.start(
+        context: rootContext,
+        title: '서드파티 채널 연결',
+        initialMessage: '저장된 Discord 채널 연결 정보를 확인합니다.',
+        useCommonUi: true,
+        developerModeMessage: '개발자 모드 ON: 채널 연결 debugPrint 코드를 복사할 수 있습니다.',
+        standardModeMessage: '개발자 모드 OFF',
+        showDialogImmediately: false,
+      );
+      final channelUrl = await loadDiscordChannelUrl();
+      final valid = isDiscordChannelUrl(channelUrl);
+      trace.log(
+        'capability=record enabled=true channelPresent=${channelUrl.isNotEmpty} channelLength=${channelUrl.length} channelValid=$valid',
+        progress: 0.24,
+      );
+      if (!valid) {
+        await trace.fail('저장된 Discord 채널 링크가 없습니다.');
+        if (rootContext.mounted) {
+          await StatusDialog.showFailure(
+            rootContext,
+            title: 'Discord 채널 링크를 먼저 설정해 주세요.',
+            useCommonUi: true,
+          );
+        }
+        if (trace.developerMode && rootContext.mounted) {
+          await trace.showStatusDialog(rootContext);
+        }
+        if (rootContext.mounted) {
+          await showModalBottomSheet<bool>(
+            context: rootContext,
+            isScrollControlled: true,
+            useSafeArea: true,
+            backgroundColor: Colors.transparent,
+            builder: (_) => DiscordBottomSheet(rootContext: rootContext),
+          );
+        }
+        return;
+      }
+
+      final appUrl = discordChannelDeepLink(channelUrl);
+      var opened = false;
+      var destination = 'https_channel';
+      if (appUrl != null) {
+        final appUri = Uri.tryParse(appUrl);
+        if (appUri != null) {
+          try {
+            opened = await launchUrl(
+              appUri,
+              mode: LaunchMode.externalApplication,
+            );
+            trace.log(
+              'discordAppLaunch opened=$opened deepLink=$appUrl',
+              progress: 0.55,
+            );
+          } catch (error, stackTrace) {
+            trace.log('discordAppLaunch error=$error', progress: 0.55);
+            debugPrintStack(
+              label: '[OpsDashboardSideDock] third_party_app_launch',
+              stackTrace: stackTrace,
+            );
+          }
+        }
+        if (opened) destination = 'discord_app_channel';
+      }
+
+      if (!opened) {
+        final uri = Uri.tryParse(channelUrl);
+        if (uri != null) {
+          try {
+            opened = await launchUrl(
+              uri,
+              mode: LaunchMode.externalApplication,
+            );
+          } catch (error, stackTrace) {
+            trace.log('httpsFallback error=$error', progress: 0.72);
+            debugPrintStack(
+              label: '[OpsDashboardSideDock] third_party_https_launch',
+              stackTrace: stackTrace,
+            );
+          }
+        }
+      }
+
+      trace.log(
+        'result opened=$opened destination=$destination launchPolicy=discord_scheme_then_https_fallback',
+        progress: 0.86,
+      );
+      if (opened) {
+        await trace.succeed('Discord 업무 채널을 열었습니다.');
+      } else {
+        await trace.fail('Discord 업무 채널을 열 수 없습니다.');
+        if (rootContext.mounted) {
+          await StatusDialog.showFailure(
+            rootContext,
+            title: 'Discord 채널을 열 수 없습니다.',
+            useCommonUi: true,
+          );
+        }
+      }
+      if (trace.developerMode && rootContext.mounted) {
+        await trace.showStatusDialog(rootContext);
+      }
+    });
+  }
+
   Future<void> _openFaq(BuildContext context) async {
-    await _closeCurrentPanelAndRun(context, (rootContext) async {
+    await _closeCurrentDockAndRun(context, (rootContext) async {
       await Navigator.of(
         rootContext,
         rootNavigator: true,
@@ -203,32 +352,32 @@ class _OpsDashboardBottomSheetState extends State<OpsDashboardBottomSheet> {
   }
 
   Future<void> _openTermsOfService(BuildContext context) async {
-    await _closeCurrentPanelAndRun(context, (rootContext) async {
+    await _closeCurrentDockAndRun(context, (rootContext) async {
       final opened = await HeadHubActions.openTermsOfService(rootContext);
       debugPrint(
-        '[OpsDashboardPanel] support_external_result id=terms opened=$opened',
+        '[OpsDashboardSideDock] support_external_result id=terms opened=$opened',
       );
     });
   }
 
   Future<void> _openPrivacyPolicy(BuildContext context) async {
-    await _closeCurrentPanelAndRun(context, (rootContext) async {
+    await _closeCurrentDockAndRun(context, (rootContext) async {
       final opened = await HeadHubActions.openPrivacyPolicy(rootContext);
       debugPrint(
-        '[OpsDashboardPanel] support_external_result id=privacy opened=$opened',
+        '[OpsDashboardSideDock] support_external_result id=privacy opened=$opened',
       );
     });
   }
 
   Future<void> _openServiceSettings(BuildContext context) async {
-    await _closeCurrentPanelAndRun(context, (rootContext) async {
+    await _closeCurrentDockAndRun(context, (rootContext) async {
       await ServiceBottomSheet.show(context: rootContext);
     });
   }
 
   Future<void> _runOperationalSync(BuildContext context) async {
-    await _closeCurrentPanelAndRun(context, (rootContext) async {
-      debugPrint('[OpsDashboardPanel] operational_sync_start');
+    await _closeCurrentDockAndRun(context, (rootContext) async {
+      debugPrint('[OpsDashboardSideDock] operational_sync_start');
       final result = await OperationalDataSyncWorkflow.run(
         context: rootContext,
         title: '운영 데이터 동기화',
@@ -236,30 +385,28 @@ class _OpsDashboardBottomSheetState extends State<OpsDashboardBottomSheet> {
         useCommonUi: true,
       );
       debugPrint(
-        '[OpsDashboardPanel] operational_sync_result result=${result.name}',
+        '[OpsDashboardSideDock] operational_sync_result result=${result.name}',
       );
     });
   }
 
   Future<void> _logout(BuildContext context) async {
-    await _closeCurrentPanelAndRun(context, (rootContext) async {
-      debugPrint('[OpsDashboardPanel] logout_start');
+    await _closeCurrentDockAndRun(context, (rootContext) async {
+      debugPrint('[OpsDashboardSideDock] logout_start');
       await LogoutHelper.logoutAndGoToLogin(
         rootContext,
         checkWorking: false,
         delay: const Duration(seconds: 1),
         useCommonUi: true,
       );
-      debugPrint('[OpsDashboardPanel] logout_complete');
+      debugPrint('[OpsDashboardSideDock] logout_complete');
     });
   }
 
   Future<void> _openSecondary(BuildContext context) async {
-    await _closeCurrentPanelAndRun(context, (rootContext) async {
-      await Navigator.of(rootContext, rootNavigator: true).push<void>(
-        MaterialPageRoute<void>(builder: (_) => const SecondaryPage()),
-      );
-    });
+    _searchFocusNode.unfocus();
+    debugPrint('[OpsDashboardSideDock] secondary_handoff_request');
+    Navigator.of(context).pop(SecondaryDockRequest.open);
   }
 
   List<_DashboardAction> _actions(
@@ -268,7 +415,30 @@ class _OpsDashboardBottomSheetState extends State<OpsDashboardBottomSheet> {
     required bool developerMode,
   }) {
     final tokens = CommonUiTheme.of(context);
-    final actions = <_DashboardAction>[];
+    final canUseThirdParty = context
+        .read<AreaState>()
+        .capabilitiesOfCurrentArea
+        .contains(Capability.record);
+    final actions = <_DashboardAction>[
+      _DashboardAction(
+        id: 'third_party_connect',
+        category: _DashboardActionCategory.thirdParty,
+        label: '서드 파티 연결',
+        description: canUseThirdParty
+            ? '저장된 Discord 업무 채널을 앱에서 바로 엽니다.'
+            : '현재 지역의 서드파티 연결 capability가 비활성화되어 있습니다.',
+        icon: Icons.forum_rounded,
+        color: canUseThirdParty
+            ? tokens.accentContainer
+            : tokens.surfaceSelected,
+        foreground: canUseThirdParty
+            ? tokens.onAccentContainer
+            : tokens.textDisabled,
+        enabled: canUseThirdParty,
+        disabledReason: '서드파티 연결 capability가 필요합니다.',
+        onPressed: () => _openThirdPartyChannel(context),
+      ),
+    ];
 
     if (!isFieldCommon) {
       actions.addAll([
@@ -425,7 +595,40 @@ class _OpsDashboardBottomSheetState extends State<OpsDashboardBottomSheet> {
       ]);
     }
 
+    if (!isFieldCommon) {
+      actions.add(
+        _DashboardAction(
+          id: 'secondary',
+          category: _DashboardActionCategory.settings,
+          label: '운영 페이지 열기',
+          description: '운영 관리 Side Dock을 엽니다.',
+          icon: Icons.open_in_new_rounded,
+          color: tokens.successContainer,
+          foreground: tokens.onSuccessContainer,
+          onPressed: () => _openSecondary(context),
+        ),
+      );
+    }
+
     actions.addAll([
+      _DashboardAction(
+        id: 'third_party_support',
+        category: _DashboardActionCategory.settings,
+        label: '서드파티 연결 지원',
+        description: canUseThirdParty
+            ? 'Discord 설치, 서버 초대, 업무 채널 링크를 설정합니다.'
+            : '현재 지역의 서드파티 연결 capability가 비활성화되어 있습니다.',
+        icon: Icons.extension_rounded,
+        color: canUseThirdParty
+            ? tokens.accentContainer
+            : tokens.surfaceSelected,
+        foreground: canUseThirdParty
+            ? tokens.onAccentContainer
+            : tokens.textDisabled,
+        enabled: canUseThirdParty,
+        disabledReason: '서드파티 연결 capability가 필요합니다.',
+        onPressed: () => _openThirdPartySupport(context),
+      ),
       _DashboardAction(
         id: 'operational_sync',
         category: _DashboardActionCategory.settings,
@@ -447,21 +650,6 @@ class _OpsDashboardBottomSheetState extends State<OpsDashboardBottomSheet> {
         onPressed: () => _logout(context),
       ),
     ]);
-
-    if (!isFieldCommon) {
-      actions.add(
-        _DashboardAction(
-          id: 'secondary',
-          category: _DashboardActionCategory.settings,
-          label: '보조 페이지 열기',
-          description: '운영 관리 콘솔로 이동합니다.',
-          icon: Icons.open_in_new_rounded,
-          color: tokens.successContainer,
-          foreground: tokens.onSuccessContainer,
-          onPressed: () => _openSecondary(context),
-        ),
-      );
-    }
 
     return actions;
   }
@@ -502,6 +690,8 @@ class _OpsDashboardBottomSheetState extends State<OpsDashboardBottomSheet> {
           ),
         )
         .length;
+    trace.log('component=ops_dashboard_side_dock', progress: 0.03);
+    trace.log('presentation=right_side_dock', progress: 0.045);
     trace.log('container=right_side_dock', progress: 0.06);
     trace.log('direction=right_to_left', progress: 0.12);
     trace.log('uiParity=quick_actions', progress: 0.18);
@@ -537,7 +727,7 @@ class _OpsDashboardBottomSheetState extends State<OpsDashboardBottomSheet> {
     trace.log('fieldCommon=$isFieldCommon', progress: 0.75);
     trace.log('developerMode=$developerMode', progress: 0.77);
     trace.log('developerModeResolved=$_developerModeResolved', progress: 0.79);
-    trace.log('settingsVisible=$developerMode', progress: 0.81);
+    trace.log('settingsVisible=true', progress: 0.81);
     trace.log('communityVisible=$developerMode', progress: 0.82);
     trace.log('myInfoAction=false', progress: 0.83);
     trace.log('documentBox=false', progress: 0.85);
@@ -563,7 +753,7 @@ class _OpsDashboardBottomSheetState extends State<OpsDashboardBottomSheet> {
         behavior: HitTestBehavior.translucent,
         onLongPress: () {
           debugPrint(
-            '[OpsDashboardPanel] developer_status_request source=punch_recorder',
+            '[OpsDashboardSideDock] developer_status_request source=punch_recorder',
           );
           _showDeveloperStatus(
             context,
@@ -664,18 +854,24 @@ class _OpsDashboardBottomSheetState extends State<OpsDashboardBottomSheet> {
                         );
                         if (filtered.isEmpty) return;
                         final action = filtered.first;
+                        if (!action.enabled) {
+                          debugPrint(
+                            '[OpsDashboardSideDock] action_blocked id=${action.id} source=search_submit reason=${action.disabledReason}',
+                          );
+                          return;
+                        }
                         HapticFeedback.selectionClick();
                         debugPrint(
-                          '[OpsDashboardPanel] action_start id=${action.id} category=${action.category.name} source=search_submit',
+                          '[OpsDashboardSideDock] action_start id=${action.id} category=${action.category.name} source=search_submit',
                         );
                         try {
                           await action.onPressed();
                           debugPrint(
-                            '[OpsDashboardPanel] action_complete id=${action.id} source=search_submit',
+                            '[OpsDashboardSideDock] action_complete id=${action.id} source=search_submit',
                           );
                         } catch (error, stackTrace) {
                           debugPrint(
-                            '[OpsDashboardPanel] action_failure id=${action.id} source=search_submit error=$error\nStackTrace:\n$stackTrace',
+                            '[OpsDashboardSideDock] action_failure id=${action.id} source=search_submit error=$error\nStackTrace:\n$stackTrace',
                           );
                           rethrow;
                         }
@@ -875,7 +1071,7 @@ class _OpsDashboardBottomSheetState extends State<OpsDashboardBottomSheet> {
         ];
 
         return SingleChildScrollView(
-          controller: _panelScrollController,
+          controller: _dockScrollController,
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           physics: const ClampingScrollPhysics(),
           padding: EdgeInsets.zero,
@@ -890,6 +1086,7 @@ class _OpsDashboardBottomSheetState extends State<OpsDashboardBottomSheet> {
 }
 
 enum _DashboardActionCategory {
+  thirdParty,
   report,
   submit,
   form,
@@ -900,6 +1097,8 @@ enum _DashboardActionCategory {
 extension _DashboardActionCategoryUi on _DashboardActionCategory {
   String get label {
     switch (this) {
+      case _DashboardActionCategory.thirdParty:
+        return '서드 파티';
       case _DashboardActionCategory.report:
         return '보고';
       case _DashboardActionCategory.submit:
@@ -968,6 +1167,8 @@ class _DashboardAction {
     required this.color,
     required this.foreground,
     required this.onPressed,
+    this.enabled = true,
+    this.disabledReason = '',
   });
 
   final String id;
@@ -978,9 +1179,11 @@ class _DashboardAction {
   final Color color;
   final Color foreground;
   final Future<void> Function() onPressed;
+  final bool enabled;
+  final String disabledReason;
 
   String get searchText =>
-      <String>[id, category.label, label, description].join(' ');
+      <String>[id, category.label, label, description, disabledReason].join(' ');
 }
 
 class _DashboardActionTile extends StatelessWidget {
@@ -996,91 +1199,102 @@ class _DashboardActionTile extends StatelessWidget {
     return Semantics(
       button: true,
       label: action.label,
+      enabled: action.enabled,
       child: Material(
         color: tokens.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(14),
-          onTap: () async {
-            HapticFeedback.selectionClick();
-            debugPrint(
-              '[OpsDashboardPanel] action_start id=${action.id} category=${action.category.name}',
-            );
-            try {
-              await action.onPressed();
-              debugPrint('[OpsDashboardPanel] action_complete id=${action.id}');
-            } catch (error, stackTrace) {
-              debugPrint(
-                '[OpsDashboardPanel] action_failure id=${action.id} error=$error\nStackTrace:\n$stackTrace',
-              );
-              rethrow;
-            }
-          },
-          child: Ink(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            decoration: BoxDecoration(
-              color: tokens.surface,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: tokens.borderSubtle, width: 1),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    color: action.color,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: tokens.shadow,
-                        blurRadius: 8,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  alignment: Alignment.center,
-                  child: Icon(
-                    action.icon,
-                    color: action.foreground,
-                    size: 22,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        action.label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: text.titleSmall?.copyWith(
-                          color: tokens.textPrimary,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.2,
-                        ),
-                      ),
-                      if (action.description.trim().isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          action.description,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: text.bodySmall?.copyWith(
-                            color: tokens.textSecondary,
-                            height: 1.15,
-                          ),
+          onTap: action.enabled
+              ? () async {
+                  HapticFeedback.selectionClick();
+                  debugPrint(
+                    '[OpsDashboardSideDock] action_start id=${action.id} category=${action.category.name}',
+                  );
+                  try {
+                    await action.onPressed();
+                    debugPrint(
+                      '[OpsDashboardSideDock] action_complete id=${action.id}',
+                    );
+                  } catch (error, stackTrace) {
+                    debugPrint(
+                      '[OpsDashboardSideDock] action_failure id=${action.id} error=$error\nStackTrace:\n$stackTrace',
+                    );
+                    rethrow;
+                  }
+                }
+              : null,
+          child: AnimatedOpacity(
+            opacity: action.enabled ? 1 : .52,
+            duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false
+                ? Duration.zero
+                : CommonUiMotion.selection,
+            child: Ink(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              decoration: BoxDecoration(
+                color: tokens.surface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: tokens.borderSubtle, width: 1),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: action.color,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: tokens.shadow,
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
                         ),
                       ],
-                    ],
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(
+                      action.icon,
+                      color: action.foreground,
+                      size: 22,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Icon(
-                  Icons.chevron_right_rounded,
-                  color: tokens.iconSecondary,
-                ),
-              ],
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          action.label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: text.titleSmall?.copyWith(
+                            color: tokens.textPrimary,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                        if (action.description.trim().isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            action.description,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: text.bodySmall?.copyWith(
+                              color: tokens.textSecondary,
+                              height: 1.15,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: tokens.iconSecondary,
+                  ),
+                ],
+              ),
             ),
           ),
         ),

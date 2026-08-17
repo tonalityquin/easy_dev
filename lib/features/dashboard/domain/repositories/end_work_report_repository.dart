@@ -3,6 +3,9 @@ import 'dart:developer' as dev;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
+import '../models/end_work_report_history_type.dart';
+import '../models/end_work_sector_metrics.dart';
+
 class EndWorkReportRepository {
   EndWorkReportRepository({FirebaseFirestore? firestore})
       : _firestore = firestore ?? FirebaseFirestore.instance;
@@ -28,6 +31,8 @@ class EndWorkReportRepository {
     final monthRef = areaRef.collection('months').doc(monthKey);
 
     final historyEntry = <String, dynamic>{
+      'reportType': EndWorkReportHistoryTypes.firstEndReport,
+      'gcsLogVerified': false,
       'date': dateStr,
       'monthKey': monthKey,
       'createdAt': createdAtIso,
@@ -50,6 +55,8 @@ class EndWorkReportRepository {
     };
 
     final dayPayload = <String, dynamic>{
+      'reportType': EndWorkReportHistoryTypes.firstEndReport,
+      'gcsLogVerified': false,
       'division': division,
       'area': area,
       'date': dateStr,
@@ -212,7 +219,7 @@ class EndWorkReportRepository {
       if (dayMap == null) continue;
 
       final day = Map<String, dynamic>.from(dayMap);
-      _applyLatestHistoryIfAny(day);
+      _applyAggregatedHistoryIfAny(day);
       day['date'] = day['date'] ?? dateStr;
       day['area'] = day['area'] ?? area;
       day['division'] = day['division'] ?? (division.isNotEmpty ? division : null);
@@ -328,7 +335,7 @@ class EndWorkReportRepository {
         if (dayMap == null) continue;
 
         final day = Map<String, dynamic>.from(dayMap);
-        _applyLatestHistoryIfAny(day);
+        _applyAggregatedHistoryIfAny(day);
         day['date'] = day['date'] ?? dateStr;
         day['company'] = day['company'] ?? data['company'] ?? data['division'];
         day['division'] = day['division'] ?? data['division'] ?? data['company'];
@@ -375,7 +382,7 @@ class EndWorkReportRepository {
     for (final dateEntry in out.entries) {
       final dateStr = dateEntry.key;
       final day = dateEntry.value;
-      _applyLatestHistoryIfAny(day);
+      _applyAggregatedHistoryIfAny(day);
       day['date'] = day['date'] ?? dateStr;
       day['company'] = day['company'] ?? data['company'] ?? data['division'];
       day['division'] = day['division'] ?? data['division'] ?? data['company'];
@@ -414,33 +421,279 @@ class EndWorkReportRepository {
     }
   }
 
-  void _applyLatestHistoryIfAny(Map<String, dynamic> day) {
+  void _applyAggregatedHistoryIfAny(Map<String, dynamic> day) {
     final historyRaw = day['history'];
-    if (historyRaw is List && historyRaw.isNotEmpty) {
-      Map<String, dynamic>? latest;
-      var latestAt = DateTime.fromMillisecondsSinceEpoch(0);
-      for (final item in historyRaw) {
-        final m = _asMap(item);
-        if (m == null) continue;
-        final dt = _tryParseDateTimeAny(m['createdAt']) ?? DateTime.fromMillisecondsSinceEpoch(0);
-        if (dt.isAfter(latestAt)) {
-          latestAt = dt;
-          latest = m;
-        }
-      }
-      if (latest != null) {
-        day['vehicleCount'] = latest['vehicleCount'] ?? day['vehicleCount'];
-        day['metrics'] = latest['metrics'] ?? day['metrics'];
-        day['createdAt'] = latest['createdAt'] ?? day['createdAt'];
-        day['uploadedBy'] = latest['uploadedBy'] ?? day['uploadedBy'];
-        day['reportUrl'] = latest['reportUrl'] ?? day['reportUrl'];
-        day['logsUrl'] = latest['logsUrl'] ?? day['logsUrl'];
-        day['date'] = latest['date'] ?? day['date'];
-        day['monthKey'] = latest['monthKey'] ?? day['monthKey'];
-        day['division'] = latest['division'] ?? day['division'];
-        day['area'] = latest['area'] ?? day['area'];
+    if (historyRaw is! List || historyRaw.isEmpty) {
+      _applyStandaloneDayMetadata(day);
+      return;
+    }
+
+    final history = <Map<String, dynamic>>[];
+    for (final item in historyRaw) {
+      final map = _asMap(item);
+      if (map != null) {
+        history.add(Map<String, dynamic>.from(map));
       }
     }
+    if (history.isEmpty) return;
+
+    history.sort((a, b) {
+      final aAt = _tryParseDateTimeAny(a['createdAt']) ??
+          DateTime.fromMillisecondsSinceEpoch(0);
+      final bAt = _tryParseDateTimeAny(b['createdAt']) ??
+          DateTime.fromMillisecondsSinceEpoch(0);
+      return aAt.compareTo(bAt);
+    });
+
+    final detailedHistory = history
+        .where(_isDetailedGcsHistoryEntry)
+        .toList(growable: false);
+    final firstHistory = history
+        .where(_isFirstHistoryEntry)
+        .toList(growable: false);
+    final unverifiedDetailedCount = history
+        .where(_isUnverifiedDetailedHistoryEntry)
+        .length;
+    final legacyDetailedCount = detailedHistory
+        .where((entry) => _historyReportType(entry).isEmpty)
+        .length;
+
+    if (detailedHistory.isEmpty) {
+      final fallback = firstHistory.isNotEmpty ? firstHistory.last : history.last;
+      _applyNonGcsFallback(
+        day: day,
+        fallback: fallback,
+        totalHistoryCount: history.length,
+        firstHistoryCount: firstHistory.length,
+        unverifiedDetailedCount: unverifiedDetailedCount,
+      );
+      return;
+    }
+
+    final latest = detailedHistory.last;
+    var vehicleOutput = 0;
+    var snapshotLockedVehicleCount = 0;
+    num snapshotTotalLockedFee = 0;
+    var vehicleOutputFound = false;
+    var lockedVehicleCountFound = false;
+    var lockedFeeFound = false;
+    final sectorMetrics = <EndWorkSectorMetrics>[];
+    final logsUrls = <String>[];
+
+    for (final entry in detailedHistory) {
+      final vehicleCount = _asMap(entry['vehicleCount']);
+      final vehicleOutputValue = _asInt(vehicleCount?['vehicleOutput']);
+      if (vehicleOutputValue != null) {
+        vehicleOutput += vehicleOutputValue;
+        vehicleOutputFound = true;
+      }
+
+      final metrics = _asMap(entry['metrics']);
+      final lockedVehicleValue =
+          _asInt(metrics?['snapshot_lockedVehicleCount']);
+      if (lockedVehicleValue != null) {
+        snapshotLockedVehicleCount += lockedVehicleValue;
+        lockedVehicleCountFound = true;
+      }
+
+      final lockedFeeValue = _asNum(metrics?['snapshot_totalLockedFee']);
+      if (lockedFeeValue != null) {
+        snapshotTotalLockedFee += lockedFeeValue;
+        lockedFeeFound = true;
+      }
+
+      final sector = EndWorkSectorMetrics.fromDynamic(metrics?['sector']);
+      if (sector != null && sector.enabled) {
+        sectorMetrics.add(sector);
+      }
+
+      final logsUrl = _historyLogsUrl(entry);
+      if (logsUrl.isNotEmpty && !logsUrls.contains(logsUrl)) {
+        logsUrls.add(logsUrl);
+      }
+    }
+
+    final mergedVehicleCount =
+        Map<String, dynamic>.from(_asMap(latest['vehicleCount']) ?? const {});
+    if (vehicleOutputFound) {
+      mergedVehicleCount['vehicleOutput'] = vehicleOutput;
+    }
+
+    final mergedMetrics =
+        Map<String, dynamic>.from(_asMap(latest['metrics']) ?? const {});
+    if (lockedVehicleCountFound) {
+      mergedMetrics['snapshot_lockedVehicleCount'] =
+          snapshotLockedVehicleCount;
+    }
+    if (lockedFeeFound) {
+      mergedMetrics['snapshot_totalLockedFee'] = snapshotTotalLockedFee;
+    }
+    if (sectorMetrics.isNotEmpty) {
+      mergedMetrics['sector'] = EndWorkSectorMetrics.merge(sectorMetrics).toMap();
+    } else {
+      mergedMetrics.remove('sector');
+    }
+
+    day['vehicleCount'] = mergedVehicleCount;
+    day['metrics'] = mergedMetrics;
+    day['reportType'] = EndWorkReportHistoryTypes.detailedGcsEndReport;
+    day['gcsLogVerified'] = true;
+    day['_statisticsEligible'] = true;
+    day['createdAt'] = latest['createdAt'] ?? day['createdAt'];
+    day['uploadedBy'] = latest['uploadedBy'] ?? day['uploadedBy'];
+    day['reportUrl'] = latest['reportUrl'] ?? day['reportUrl'];
+    day['logsUrl'] = latest['logsUrl'] ?? day['logsUrl'];
+    day['date'] = latest['date'] ?? day['date'];
+    day['monthKey'] = latest['monthKey'] ?? day['monthKey'];
+    day['division'] = latest['division'] ?? day['division'];
+    day['area'] = latest['area'] ?? day['area'];
+    day['_historyEntryCount'] = history.length;
+    day['_historyDetailedEntryCount'] = detailedHistory.length;
+    day['_historyExcludedEntryCount'] = history.length - detailedHistory.length;
+    day['_historyFirstEntryCount'] = firstHistory.length;
+    day['_historyUnverifiedDetailedEntryCount'] = unverifiedDetailedCount;
+    day['_historyLegacyDetailedEntryCount'] = legacyDetailedCount;
+    day['_historyAggregationMode'] = 'detailedGcsAggregate';
+    day['_historyAggregated'] = detailedHistory.length > 1;
+    day['_historyLogsUrls'] = logsUrls;
+    day['_historyVehicleOutput'] = vehicleOutputFound ? vehicleOutput : null;
+    day['_historyLockedVehicleCount'] =
+        lockedVehicleCountFound ? snapshotLockedVehicleCount : null;
+    day['_historyLockedFee'] =
+        lockedFeeFound ? snapshotTotalLockedFee : null;
+    day['_historySectorEntryCount'] = sectorMetrics.length;
+  }
+
+  void _applyStandaloneDayMetadata(Map<String, dynamic> day) {
+    final entry = Map<String, dynamic>.from(day);
+    final isDetailed = _isDetailedGcsHistoryEntry(entry);
+    final isFirst = _isFirstHistoryEntry(entry);
+    final unverifiedDetailed = _isUnverifiedDetailedHistoryEntry(entry);
+    final logsUrl = isDetailed ? _historyLogsUrl(entry) : '';
+    final metrics =
+        Map<String, dynamic>.from(_asMap(day['metrics']) ?? const {});
+    final sector = EndWorkSectorMetrics.fromDynamic(metrics['sector']);
+
+    if (isDetailed) {
+      day['reportType'] = EndWorkReportHistoryTypes.detailedGcsEndReport;
+      day['gcsLogVerified'] = true;
+      day['_statisticsEligible'] = true;
+    } else {
+      day['_statisticsEligible'] = false;
+      metrics.remove('sector');
+      day['metrics'] = metrics;
+      if (_historyReportType(entry).isEmpty) {
+        day['reportType'] = EndWorkReportHistoryTypes.firstEndReport;
+      }
+      day['gcsLogVerified'] = false;
+      day.remove('logsUrl');
+    }
+
+    day['_historyEntryCount'] = 1;
+    day['_historyDetailedEntryCount'] = isDetailed ? 1 : 0;
+    day['_historyExcludedEntryCount'] = isDetailed ? 0 : 1;
+    day['_historyFirstEntryCount'] = isFirst ? 1 : 0;
+    day['_historyUnverifiedDetailedEntryCount'] = unverifiedDetailed ? 1 : 0;
+    day['_historyLegacyDetailedEntryCount'] =
+        isDetailed && _historyReportType(entry).isEmpty ? 1 : 0;
+    day['_historyAggregationMode'] =
+        isDetailed ? 'standaloneDetailedGcs' : 'nonGcsFallback';
+    day['_historyAggregated'] = false;
+    day['_historyLogsUrls'] =
+        logsUrl.isEmpty ? const <String>[] : <String>[logsUrl];
+    day['_historyVehicleOutput'] =
+        _asInt(_asMap(day['vehicleCount'])?['vehicleOutput']);
+    day['_historyLockedVehicleCount'] =
+        _asInt(metrics['snapshot_lockedVehicleCount']);
+    day['_historyLockedFee'] = _asNum(metrics['snapshot_totalLockedFee']);
+    day['_historySectorEntryCount'] =
+        isDetailed && sector != null && sector.enabled ? 1 : 0;
+  }
+
+  void _applyNonGcsFallback({
+    required Map<String, dynamic> day,
+    required Map<String, dynamic> fallback,
+    required int totalHistoryCount,
+    required int firstHistoryCount,
+    required int unverifiedDetailedCount,
+  }) {
+    final vehicleCount =
+        Map<String, dynamic>.from(_asMap(fallback['vehicleCount']) ?? const {});
+    final metrics =
+        Map<String, dynamic>.from(_asMap(fallback['metrics']) ?? const {});
+    metrics.remove('sector');
+
+    day['vehicleCount'] = vehicleCount;
+    day['metrics'] = metrics;
+    day['reportType'] = _historyReportType(fallback).isEmpty
+        ? EndWorkReportHistoryTypes.firstEndReport
+        : _historyReportType(fallback);
+    day['gcsLogVerified'] = false;
+    day['_statisticsEligible'] = false;
+    day['createdAt'] = fallback['createdAt'] ?? day['createdAt'];
+    day['uploadedBy'] = fallback['uploadedBy'] ?? day['uploadedBy'];
+    day['reportUrl'] = fallback['reportUrl'] ?? day['reportUrl'];
+    day.remove('logsUrl');
+    day['date'] = fallback['date'] ?? day['date'];
+    day['monthKey'] = fallback['monthKey'] ?? day['monthKey'];
+    day['division'] = fallback['division'] ?? day['division'];
+    day['area'] = fallback['area'] ?? day['area'];
+    day['_historyEntryCount'] = totalHistoryCount;
+    day['_historyDetailedEntryCount'] = 0;
+    day['_historyExcludedEntryCount'] = totalHistoryCount;
+    day['_historyFirstEntryCount'] = firstHistoryCount;
+    day['_historyUnverifiedDetailedEntryCount'] = unverifiedDetailedCount;
+    day['_historyLegacyDetailedEntryCount'] = 0;
+    day['_historyAggregationMode'] = 'nonGcsFallback';
+    day['_historyAggregated'] = false;
+    day['_historyLogsUrls'] = const <String>[];
+    day['_historyVehicleOutput'] = _asInt(vehicleCount['vehicleOutput']);
+    day['_historyLockedVehicleCount'] =
+        _asInt(metrics['snapshot_lockedVehicleCount']);
+    day['_historyLockedFee'] = _asNum(metrics['snapshot_totalLockedFee']);
+    day['_historySectorEntryCount'] = 0;
+  }
+
+  bool _isDetailedGcsHistoryEntry(Map<String, dynamic> entry) {
+    final type = _historyReportType(entry);
+    final logsUrl = _historyLogsUrl(entry);
+    if (type == EndWorkReportHistoryTypes.firstEndReport) return false;
+    if (type == EndWorkReportHistoryTypes.detailedGcsEndReport) {
+      if (logsUrl.isEmpty) return false;
+      return entry['gcsLogVerified'] == true;
+    }
+    if (type.isNotEmpty) return false;
+    return logsUrl.isNotEmpty;
+  }
+
+  bool _isFirstHistoryEntry(Map<String, dynamic> entry) {
+    return _historyReportType(entry) ==
+        EndWorkReportHistoryTypes.firstEndReport;
+  }
+
+  bool _isUnverifiedDetailedHistoryEntry(Map<String, dynamic> entry) {
+    if (_historyReportType(entry) !=
+        EndWorkReportHistoryTypes.detailedGcsEndReport) {
+      return false;
+    }
+    final logsUrl = _historyLogsUrl(entry);
+    return logsUrl.isEmpty || entry['gcsLogVerified'] != true;
+  }
+
+  String _historyReportType(Map<String, dynamic> entry) {
+    return entry['reportType']?.toString().trim() ?? '';
+  }
+
+  String _historyLogsUrl(Map<String, dynamic> entry) {
+    return entry['logsUrl']?.toString().trim() ?? '';
+  }
+
+  num? _asNum(dynamic value) {
+    if (value is num) return value;
+    if (value is String) {
+      return num.tryParse(value.replaceAll(',', '').trim());
+    }
+    return null;
   }
 
   String _tryParseAreaFromDocId(String docId) {

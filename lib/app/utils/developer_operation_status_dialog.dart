@@ -49,6 +49,7 @@ class DeveloperOperationTrace extends ChangeNotifier {
     required bool useCommonUi,
     String? developerModeMessage,
     String? standardModeMessage,
+    bool showDialogImmediately = true,
   }) async {
     final developerMode = await DevAuth.isDevModeEnabled();
     final trace = DeveloperOperationTrace._(
@@ -66,8 +67,8 @@ class DeveloperOperationTrace extends ChangeNotifier {
       progress: 0.02,
     );
 
-    if (developerMode && context.mounted) {
-      trace._dialogFuture = trace._show(context);
+    if (developerMode && context.mounted && showDialogImmediately) {
+      unawaited(trace.showStatusDialog(context));
       await Future<void>.delayed(const Duration(milliseconds: 120));
     }
 
@@ -124,6 +125,26 @@ class DeveloperOperationTrace extends ChangeNotifier {
     }
   }
 
+  Future<void> showStatusDialog(BuildContext context) {
+    if (!developerMode || !context.mounted) {
+      return Future<void>.value();
+    }
+
+    final existing = _dialogFuture;
+    if (existing != null) {
+      return existing;
+    }
+
+    late final Future<void> future;
+    future = _show(context).whenComplete(() {
+      if (identical(_dialogFuture, future)) {
+        _dialogFuture = null;
+      }
+    });
+    _dialogFuture = future;
+    return future;
+  }
+
   Future<void> _show(BuildContext context) async {
     Widget builder(BuildContext dialogContext) {
       return _DeveloperOperationStatusDialog(trace: this);
@@ -167,6 +188,7 @@ class _DeveloperOperationStatusDialogState
     with TickerProviderStateMixin {
   late final AnimationController _entryController;
   late final AnimationController _pulseController;
+  late final AnimationController _spinController;
   late final Animation<double> _entryOpacity;
   late final Animation<double> _entryScale;
   Timer? _copyTimer;
@@ -186,6 +208,10 @@ class _DeveloperOperationStatusDialogState
       duration: const Duration(milliseconds: 1100),
       lowerBound: 0.94,
       upperBound: 1.04,
+    );
+    _spinController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
     );
     _entryOpacity = CurvedAnimation(
       parent: _entryController,
@@ -213,6 +239,8 @@ class _DeveloperOperationStatusDialogState
       _entryController.value = 1;
       _pulseController.stop();
       _pulseController.value = 1;
+      _spinController.stop();
+      _spinController.value = 0;
       return;
     }
     if (_entryController.value < 1) {
@@ -220,6 +248,9 @@ class _DeveloperOperationStatusDialogState
     }
     if (!widget.trace.isDone && !_pulseController.isAnimating) {
       _pulseController.repeat(reverse: true);
+    }
+    if (!widget.trace.isDone && !_spinController.isAnimating) {
+      _spinController.repeat();
     }
   }
 
@@ -229,6 +260,7 @@ class _DeveloperOperationStatusDialogState
     widget.trace.removeListener(_handleTraceChanged);
     _entryController.dispose();
     _pulseController.dispose();
+    _spinController.dispose();
     super.dispose();
   }
 
@@ -237,6 +269,10 @@ class _DeveloperOperationStatusDialogState
     if (widget.trace.isDone && _pulseController.isAnimating) {
       _pulseController.stop();
       _pulseController.value = 1;
+    }
+    if (widget.trace.isDone && _spinController.isAnimating) {
+      _spinController.stop();
+      _spinController.value = 0;
     }
     setState(() {});
   }
@@ -337,23 +373,29 @@ class _DeveloperOperationStatusDialogState
                         color: statusColor.withOpacity(0.42),
                       ),
                     ),
-                    child: AnimatedSwitcher(
-                      duration: standardMotion,
-                      transitionBuilder: (child, animation) {
-                        return FadeTransition(
-                          opacity: animation,
-                          child: ScaleTransition(
-                            scale: animation,
-                            child: child,
+                    child: RotationTransition(
+                      turns: widget.trace.state == DeveloperOperationState.running &&
+                              !_reduceMotion
+                          ? _spinController
+                          : const AlwaysStoppedAnimation<double>(0),
+                      child: AnimatedSwitcher(
+                        duration: standardMotion,
+                        transitionBuilder: (child, animation) {
+                          return FadeTransition(
+                            opacity: animation,
+                            child: ScaleTransition(
+                              scale: animation,
+                              child: child,
+                            ),
+                          );
+                        },
+                        child: Icon(
+                          _statusIcon(),
+                          key: ValueKey<DeveloperOperationState>(
+                            widget.trace.state,
                           ),
-                        );
-                      },
-                      child: Icon(
-                        _statusIcon(),
-                        key: ValueKey<DeveloperOperationState>(
-                          widget.trace.state,
+                          color: statusColor,
                         ),
-                        color: statusColor,
                       ),
                     ),
                   ),

@@ -6,11 +6,13 @@ import '../../../domain/models/location_model.dart';
 import '../../../domain/models/parking_grid_model.dart';
 
 class ChildRegionOverlay {
+  final String id;
   final GridRect rect;
   final String label;
   final bool isSelected;
 
   const ChildRegionOverlay({
+    required this.id,
     required this.rect,
     required this.label,
     required this.isSelected,
@@ -35,6 +37,7 @@ class ParkingGridPreview extends StatelessWidget {
 
   final bool showChildSlotNumbers;
   final List<ChildSlot> childSlotsToLabel;
+  final ValueChanged<String>? onTapChildRegion;
 
   const ParkingGridPreview({
     super.key,
@@ -51,7 +54,45 @@ class ParkingGridPreview extends StatelessWidget {
     this.childRegions = const <ChildRegionOverlay>[],
     this.showChildSlotNumbers = true,
     this.childSlotsToLabel = const <ChildSlot>[],
+    this.onTapChildRegion,
   });
+
+  String? _selectedRegionId() {
+    for (final region in childRegions) {
+      if (region.isSelected) return region.id;
+    }
+    return null;
+  }
+
+  String? _regionIdAt(Size size, Offset position) {
+    if (grid.rows <= 0 || grid.cols <= 0) return null;
+    final layout = _GridLayout.fit(
+      size: size,
+      rows: grid.rows,
+      cols: grid.cols,
+      padding: 10,
+      gap: 2,
+    );
+    for (final region in childRegions.reversed) {
+      final rect = region.rect.normalized();
+      if (rect.r0 < 0 ||
+          rect.c0 < 0 ||
+          rect.r1 >= layout.rows ||
+          rect.c1 >= layout.cols) {
+        continue;
+      }
+      final hitRect = layout
+          .rectForCellRange(
+            r0: rect.r0,
+            r1: rect.r1,
+            c0: rect.c0,
+            c1: rect.c1,
+          )
+          .deflate(math.max(1.0, layout.cell * 0.06));
+      if (hitRect.contains(position)) return region.id;
+    }
+    return null;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -135,25 +176,59 @@ class ParkingGridPreview extends StatelessWidget {
           ),
           child: AspectRatio(
             aspectRatio: ratio.isFinite && ratio > 0 ? ratio : 1.0,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: CustomPaint(
-                painter: _ParkingGridPainter(
-                  grid: grid,
-                  colorScheme: cs,
-                  showGates: showGates,
-                  showTowers: showTowers,
-                  showParkingAreas: showParkingAreas,
-                  showParkingAreaLabels: showParkingAreaLabels,
-                  showChildRegions: showChildRegions,
-                  childRegions: childRegions,
-                  showChildRegionLabels: showChildRegionLabels,
-                  showAllChildRegionLabels: showAllChildRegionLabels,
-                  showChildSlotNumbers: showChildSlotNumbers,
-                  childSlotsToLabel: childSlotsToLabel,
-                ),
-                child: const SizedBox.expand(),
-              ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final size = Size(constraints.maxWidth, constraints.maxHeight);
+                final selectedRegionId = _selectedRegionId();
+                final tapChildRegion = onTapChildRegion;
+                final reduceMotion =
+                    MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+                return ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTapUp: !showChildRegions || tapChildRegion == null
+                        ? null
+                        : (details) {
+                            final id = _regionIdAt(size, details.localPosition);
+                            if (id != null) tapChildRegion(id);
+                          },
+                    child: TweenAnimationBuilder<double>(
+                      key: ValueKey<String>(
+                        'parking-grid-selection-${selectedRegionId ?? 'none'}',
+                      ),
+                      tween: Tween<double>(
+                        begin: selectedRegionId == null ? 1 : 0,
+                        end: 1,
+                      ),
+                      duration: reduceMotion
+                          ? Duration.zero
+                          : const Duration(milliseconds: 170),
+                      curve: Curves.easeOutCubic,
+                      builder: (context, selectionProgress, _) {
+                        return CustomPaint(
+                          painter: _ParkingGridPainter(
+                            grid: grid,
+                            colorScheme: cs,
+                            showGates: showGates,
+                            showTowers: showTowers,
+                            showParkingAreas: showParkingAreas,
+                            showParkingAreaLabels: showParkingAreaLabels,
+                            showChildRegions: showChildRegions,
+                            childRegions: childRegions,
+                            showChildRegionLabels: showChildRegionLabels,
+                            showAllChildRegionLabels: showAllChildRegionLabels,
+                            showChildSlotNumbers: showChildSlotNumbers,
+                            childSlotsToLabel: childSlotsToLabel,
+                            selectionProgress: selectionProgress,
+                          ),
+                          child: const SizedBox.expand(),
+                        );
+                      },
+                    ),
+                  ),
+                );
+              },
             ),
           ),
         ),
@@ -280,6 +355,7 @@ class _ParkingGridPainter extends CustomPainter {
 
   final bool showChildSlotNumbers;
   final List<ChildSlot> childSlotsToLabel;
+  final double selectionProgress;
 
   _ParkingGridPainter({
     required this.grid,
@@ -294,6 +370,7 @@ class _ParkingGridPainter extends CustomPainter {
     required this.showAllChildRegionLabels,
     required this.showChildSlotNumbers,
     required this.childSlotsToLabel,
+    required this.selectionProgress,
   });
 
   Color _cellColor(int idx, ParkingGridCellType t) {
@@ -499,20 +576,25 @@ class _ParkingGridPainter extends CustomPainter {
         .rectForCellRange(r0: rr.r0, r1: rr.r1, c0: rr.c0, c1: rr.c1)
         .deflate(math.max(1.0, layout.cell * 0.06));
 
+    final progress = ov.isSelected
+        ? selectionProgress.clamp(0.0, 1.0).toDouble()
+        : 0.0;
+    final baseFill = cs.surfaceVariant.withOpacity(0.10);
+    final selectedFill = cs.tertiaryContainer.withOpacity(0.22);
+    final baseStroke = cs.outlineVariant.withOpacity(0.85);
+    final selectedStroke = cs.tertiary.withOpacity(0.95);
+    final baseStrokeWidth = math.max(1.4, layout.cell * 0.07);
+    final selectedStrokeWidth = math.max(2.2, layout.cell * 0.10);
+
     final fill = Paint()
       ..style = PaintingStyle.fill
-      ..color = (ov.isSelected
-          ? cs.tertiaryContainer.withOpacity(0.22)
-          : cs.surfaceVariant.withOpacity(0.10));
+      ..color = Color.lerp(baseFill, selectedFill, progress) ?? baseFill;
 
     final stroke = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = ov.isSelected
-          ? math.max(2.2, layout.cell * 0.10)
-          : math.max(1.4, layout.cell * 0.07)
-      ..color = (ov.isSelected
-          ? cs.tertiary.withOpacity(0.95)
-          : cs.outlineVariant.withOpacity(0.85));
+      ..strokeWidth = baseStrokeWidth +
+          (selectedStrokeWidth - baseStrokeWidth) * progress
+      ..color = Color.lerp(baseStroke, selectedStroke, progress) ?? baseStroke;
 
     canvas.drawRRect(
         RRect.fromRectAndRadius(
@@ -535,7 +617,7 @@ class _ParkingGridPainter extends CustomPainter {
           fontSize: math.max(11.0, math.min(layout.cell * 0.65, 18.0)),
           fontWeight: FontWeight.w900,
           color: ov.isSelected
-              ? cs.onTertiaryContainer.withOpacity(0.95)
+              ? cs.onTertiaryContainer.withOpacity(0.95 * progress)
               : cs.onSurface.withOpacity(0.80),
         ),
       ),
@@ -746,6 +828,7 @@ class _ParkingGridPainter extends CustomPainter {
         oldDelegate.showChildRegionLabels != showChildRegionLabels ||
         oldDelegate.showAllChildRegionLabels != showAllChildRegionLabels ||
         oldDelegate.showChildSlotNumbers != showChildSlotNumbers ||
-        oldDelegate.childSlotsToLabel != childSlotsToLabel;
+        oldDelegate.childSlotsToLabel != childSlotsToLabel ||
+        oldDelegate.selectionProgress != selectionProgress;
   }
 }

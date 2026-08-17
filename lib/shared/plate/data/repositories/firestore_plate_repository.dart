@@ -160,7 +160,7 @@ List<ViewRowData> _viewRowsFromSnapshot(
     final location = _normalizeViewRowLocation(map['location'] as String?);
     final primaryAt = _viewRowToDate(map[primaryAtField]);
     final updatedAt = _viewRowToDate(map['updatedAt']);
-    final createdAt = primaryAt ?? updatedAt;
+    final createdAt = _viewRowToDate(map[PlateFields.createdAt]);
     final isSelected = map['isSelected'] == true;
     final selectedBy = (map['selectedBy'] as String?)?.trim();
 
@@ -868,6 +868,7 @@ class FirestorePlateRepository implements PlateRepository {
     required String plateNumber,
     required String location,
     required String primaryAtField,
+    required DateTime? createdAt,
   }) async {
     final c = collection.trim();
     final a = area.trim();
@@ -883,6 +884,7 @@ class FirestorePlateRepository implements PlateRepository {
             'plateNumber': plateNumber,
             'location': location.isNotEmpty ? location : _kLocUnknown,
             primaryAtField: FieldValue.serverTimestamp(),
+            PlateFields.createdAt: createdAt ?? FieldValue.delete(),
             'isSelected': false,
             'selectedBy': null,
             'updatedAt': FieldValue.serverTimestamp(),
@@ -890,6 +892,10 @@ class FirestorePlateRepository implements PlateRepository {
         },
       },
       SetOptions(merge: true),
+    );
+
+    debugPrint(
+      '✅ [FirestorePlateRepository.upsertViewItem] collection=$c area=$a plateId=$docId createdAtSource=transition_snapshot createdAtAvailable=${createdAt != null} additionalPlateRead=0',
     );
   }
 
@@ -917,7 +923,7 @@ class FirestorePlateRepository implements PlateRepository {
   }
 
   @override
-  Future<void> transitionPlateType({
+  Future<DateTime?> transitionPlateType({
     required String plateId,
     required String actor,
     required PlateType fromType,

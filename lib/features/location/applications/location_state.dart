@@ -478,6 +478,19 @@ class LocationState extends ChangeNotifier {
     _safeNotify();
   }
 
+  void selectLocation(String id) {
+    final normalized = id.trim();
+    if (normalized.isEmpty || _selectedLocationId == normalized) return;
+    _selectedLocationId = normalized;
+    _safeNotify();
+  }
+
+  void clearSelection() {
+    if (_selectedLocationId == null) return;
+    _selectedLocationId = null;
+    _safeNotify();
+  }
+
   void updatePlateCounts(Map<String, int> countsByDisplayName) {
     final cleaned = <String, int>{};
     for (final e in countsByDisplayName.entries) {

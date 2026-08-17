@@ -10,6 +10,8 @@ import 'package:pdf/widgets.dart' as pw;
 import '../../../../app/config/email_config.dart';
 import '../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../shared/utils/gmail_pdf_mailer.dart';
+import '../../../dashboard/domain/models/end_work_sector_metrics.dart';
+import '../../../dashboard/domain/repositories/end_work_report_repository.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
 import 'statistics_deep_log_service.dart';
 import 'statistics_deep_model.dart';
@@ -37,6 +39,7 @@ class StatisticsSectorAreaComparisonPage extends StatefulWidget {
 class _StatisticsSectorAreaComparisonPageState
     extends State<StatisticsSectorAreaComparisonPage> {
   final StatisticsDeepLogService _service = StatisticsDeepLogService();
+  final EndWorkReportRepository _reportRepository = EndWorkReportRepository();
   late Set<String> _selectedAreas;
   bool _loading = false;
   bool _sending = false;
@@ -740,6 +743,159 @@ class _StatisticsSectorAreaComparisonPageState
     debugPrint('[STAT_AREA_COMPARE] selection=${next.join(',')}');
   }
 
+  _AreaHistorySourceSelection _resolveHistorySource({
+    required String area,
+    required Map<String, Map<String, dynamic>> areaDays,
+  }) {
+    final requestedDates = widget.dates
+        .map((date) => DateTime(date.year, date.month, date.day))
+        .toSet()
+        .toList()
+      ..sort((a, b) => a.compareTo(b));
+    final selectedDates = <DateTime>[];
+    final gcsLogUrls = <String>{};
+    final sectorMetrics = <EndWorkSectorMetrics>[];
+    var reportDays = 0;
+    var detailedEntries = 0;
+    var excludedEntries = 0;
+    var firstEntries = 0;
+    var unverifiedDetailedEntries = 0;
+    var legacyDetailedEntries = 0;
+    var sectorEntries = 0;
+
+    for (final date in requestedDates) {
+      final dateStr = _areaDateOnly(date);
+      final day = areaDays[dateStr];
+      if (day == null) continue;
+      reportDays++;
+      final urls = _areaStringList(day['_historyLogsUrls']);
+      if (urls.isNotEmpty) {
+        selectedDates.add(date);
+        gcsLogUrls.addAll(urls);
+      }
+      detailedEntries += _areaInt(day['_historyDetailedEntryCount']);
+      excludedEntries += _areaInt(day['_historyExcludedEntryCount']);
+      firstEntries += _areaInt(day['_historyFirstEntryCount']);
+      unverifiedDetailedEntries +=
+          _areaInt(day['_historyUnverifiedDetailedEntryCount']);
+      legacyDetailedEntries += _areaInt(day['_historyLegacyDetailedEntryCount']);
+      sectorEntries += _areaInt(day['_historySectorEntryCount']);
+      final metrics = _areaMap(day['metrics']);
+      final sector = EndWorkSectorMetrics.fromDynamic(metrics?['sector']);
+      if (sector != null && sector.enabled && urls.isNotEmpty) {
+        sectorMetrics.add(sector);
+      }
+    }
+
+    final mergedSector = EndWorkSectorMetrics.merge(sectorMetrics);
+    return _AreaHistorySourceSelection(
+      area: area,
+      requestedDateCount: requestedDates.length,
+      reportDayCount: reportDays,
+      dates: List<DateTime>.unmodifiable(selectedDates),
+      gcsLogUrls: List<String>.unmodifiable(gcsLogUrls.toList()..sort()),
+      expectedSector: mergedSector.enabled ? mergedSector : null,
+      detailedEntryCount: detailedEntries,
+      excludedEntryCount: excludedEntries,
+      firstEntryCount: firstEntries,
+      unverifiedDetailedEntryCount: unverifiedDetailedEntries,
+      legacyDetailedEntryCount: legacyDetailedEntries,
+      sectorEntryCount: sectorEntries,
+    );
+  }
+
+  bool _validateAreaSectorCross({
+    required String area,
+    required EndWorkSectorMetrics expected,
+    required StatisticsSectorReport actual,
+    required DeveloperOperationTrace trace,
+  }) {
+    final expectedVehicleById = <String, int>{};
+    final expectedFeeById = <String, int>{};
+    final expectedNamesById = <String, Set<String>>{};
+    for (final item in expected.items) {
+      final id = item.sectorId.trim();
+      if (id.isEmpty) continue;
+      expectedVehicleById[id] =
+          (expectedVehicleById[id] ?? 0) + item.vehicleCount;
+      expectedFeeById[id] =
+          (expectedFeeById[id] ?? 0) + item.totalLockedFee.round();
+      expectedNamesById.putIfAbsent(id, () => <String>{}).add(item.sectorName.trim());
+    }
+    final actualAssignedGroups = actual.groups
+        .where((group) => group.state == StatisticsSectorState.assigned)
+        .toList(growable: false);
+    final actualVehicleById = <String, int>{};
+    final actualFeeById = <String, int>{};
+    for (final group in actualAssignedGroups) {
+      final id = group.sectorId?.trim() ?? '';
+      if (id.isEmpty) continue;
+      actualVehicleById[id] = (actualVehicleById[id] ?? 0) + group.vehicleCount;
+      actualFeeById[id] = (actualFeeById[id] ?? 0) + group.totalLockedFee;
+    }
+
+    final expectedIdentityConflicts = expectedNamesById.entries
+        .where((entry) => entry.value.where((name) => name.isNotEmpty).length > 1)
+        .map((entry) => entry.key)
+        .toList()
+      ..sort();
+    final sectorIdentityValid = expectedIdentityConflicts.isEmpty &&
+        actual.integrity.sectorIdentityConflictCount == 0;
+    final assignedMatched =
+        actual.assignedVehicleCount == expected.assignedVehicleCount;
+    final unassignedMatched =
+        actual.unassignedVehicleCount == expected.unassignedVehicleCount;
+    final invalidMatched =
+        actual.invalidVehicleCount == expected.invalidSectorVehicleCount;
+    final feeMatched = expected.legacyFeeClassification ||
+        actual.totalLockedFee == expected.totalLockedFee.round();
+    var groupsMatched = true;
+    final allIds = <String>{
+      ...expectedVehicleById.keys,
+      ...actualVehicleById.keys,
+    }.toList()
+      ..sort();
+    for (final id in allIds) {
+      final vehicleMatched =
+          (actualVehicleById[id] ?? 0) == (expectedVehicleById[id] ?? 0);
+      final groupFeeMatched = expected.legacyFeeClassification ||
+          (actualFeeById[id] ?? 0) == (expectedFeeById[id] ?? 0);
+      if (!vehicleMatched || !groupFeeMatched) groupsMatched = false;
+      trace.log(
+        'area=$area cross sectorId=$id '
+        'vehicles=${actualVehicleById[id] ?? 0}/${expectedVehicleById[id] ?? 0} '
+        'fee=${actualFeeById[id] ?? 0}/${expectedFeeById[id] ?? 0} '
+        'matched=${vehicleMatched && groupFeeMatched}',
+      );
+    }
+    final expectedInternal = expected.isInternallyConsistent;
+    trace.log('area=$area cross expectedInternal=$expectedInternal');
+    trace.log(
+      'area=$area cross identityValid=$sectorIdentityValid '
+      'expectedConflicts=${expectedIdentityConflicts.join(',')} '
+      'actualConflicts=${actual.integrity.sectorIdentityConflictCount}',
+    );
+    trace.log(
+      'area=$area cross assigned=${actual.assignedVehicleCount}/${expected.assignedVehicleCount} matched=$assignedMatched',
+    );
+    trace.log(
+      'area=$area cross unassigned=${actual.unassignedVehicleCount}/${expected.unassignedVehicleCount} matched=$unassignedMatched',
+    );
+    trace.log(
+      'area=$area cross invalid=${actual.invalidVehicleCount}/${expected.invalidSectorVehicleCount} matched=$invalidMatched',
+    );
+    trace.log(
+      'area=$area cross fee=${actual.totalLockedFee}/${expected.totalLockedFee.round()} matched=$feeMatched legacy=${expected.legacyFeeClassification}',
+    );
+    return expectedInternal &&
+        sectorIdentityValid &&
+        assignedMatched &&
+        unassignedMatched &&
+        invalidMatched &&
+        feeMatched &&
+        groupsMatched;
+  }
+
   Future<void> _load() async {
     if (_loading || _selectedAreas.length < 2) return;
     setState(() => _loading = true);
@@ -748,36 +904,118 @@ class _StatisticsSectorAreaComparisonPageState
       trace = await DeveloperOperationTrace.start(
         context: context,
         title: 'Area 방문 구역 비교',
-        initialMessage: '선택한 Area의 완료 업무 로그를 비교하고 있습니다.',
+        initialMessage: '선택한 Area의 검증된 상세 업무종료 로그를 비교하고 있습니다.',
         useCommonUi: widget.useCommonUi,
         developerModeMessage:
-            '개발자 모드 ON: Area별 조회 및 무결성 로그를 복사할 수 있습니다.',
+            '개발자 모드 ON: Firestore history·연결 GCS·무결성 로그를 복사할 수 있습니다.',
         standardModeMessage:
-            '개발자 모드 OFF: Area별 조회 로그를 콘솔에 기록합니다.',
+            '개발자 모드 OFF: Area별 검증된 history/GCS 조회 로그를 콘솔에 기록합니다.',
       );
       final areas = _selectedAreas.toList()..sort();
       trace.log(
-        'division=${widget.division} areas=${areas.join(',')} dates=${widget.dates.length}',
-        progress: .08,
+        'division=${widget.division} areas=${areas.join(',')} dates=${widget.dates.length} source=verifiedDetailedGcsHistory',
+        progress: .06,
       );
+      final cache = await _reportRepository.buildAreaDateCache(
+        division: widget.division.trim(),
+      );
+      trace.log(
+        'firestore source ready areas=${cache.length}',
+        progress: .12,
+      );
+      final selections = <String, _AreaHistorySourceSelection>{};
+      for (final area in areas) {
+        final selection = _resolveHistorySource(
+          area: area,
+          areaDays: cache[area] ?? const <String, Map<String, dynamic>>{},
+        );
+        selections[area] = selection;
+        trace.log(
+          'area=$area requestedDays=${selection.requestedDateCount} '
+          'reportDays=${selection.reportDayCount} '
+          'linkedDays=${selection.dates.length} '
+          'detailedGcs=${selection.detailedEntryCount} '
+          'excluded=${selection.excludedEntryCount} '
+          'first=${selection.firstEntryCount} '
+          'unverifiedDetailed=${selection.unverifiedDetailedEntryCount} '
+          'legacyDetailed=${selection.legacyDetailedEntryCount} '
+          'sectorEntries=${selection.sectorEntryCount} '
+          'linkedLogs=${selection.gcsLogUrls.length}',
+          progress: .16,
+        );
+      }
+
       final results = <StatisticsSectorAreaResult>[];
       final failures = <StatisticsSectorAreaFailure>[];
       for (int start = 0; start < areas.length; start += 3) {
         final batch = areas.skip(start).take(3).toList();
         final batchResults = await Future.wait(
           batch.map((area) async {
+            final selection = selections[area]!;
+            if (selection.gcsLogUrls.isEmpty || selection.dates.isEmpty) {
+              return StatisticsSectorAreaFailure(
+                area: area,
+                message: '검증된 상세 업무종료 history에 연결된 GCS 로그가 없습니다.',
+              );
+            }
+            if (selection.expectedSector == null) {
+              return StatisticsSectorAreaFailure(
+                area: area,
+                message: '검증된 상세 업무종료 history에 Sector 집계가 없습니다.',
+              );
+            }
             try {
               final deep = await _service.loadByDates(
                 division: widget.division,
                 area: area,
-                dates: widget.dates,
+                dates: selection.dates,
+                scopeLabel: _comparisonRangeLabel(widget.dates),
                 sectorEnabled: true,
+                gcsLogUrls: selection.gcsLogUrls,
+                onLog: (message) {
+                  trace?.log('area=$area $message', progress: .34);
+                },
               );
               final sector = deep.sectorReport;
               if (sector == null) {
                 return StatisticsSectorAreaFailure(
                   area: area,
                   message: '방문 구역 보고서를 생성하지 못했습니다.',
+                );
+              }
+              if (!sector.integrity.isValid) {
+                return StatisticsSectorAreaFailure(
+                  area: area,
+                  message: 'GCS 상세 로그 Sector 무결성 검증에 실패했습니다.',
+                );
+              }
+              if (!sector.sourceFieldComplete) {
+                return StatisticsSectorAreaFailure(
+                  area: area,
+                  message: 'GCS 상세 로그에 Sector 원천 필드가 없는 차량이 있습니다.',
+                );
+              }
+              final activeTrace = trace;
+              if (activeTrace == null) {
+                return StatisticsSectorAreaFailure(
+                  area: area,
+                  message: '통계 검증 로그를 초기화하지 못했습니다.',
+                );
+              }
+              activeTrace.log(
+                'area=$area cross source expected=firestoreVerifiedDetailedGcsHistoryAggregate actual=gcsVerifiedHistoryLinkedCsvMerge',
+                progress: .7,
+              );
+              final crossValid = _validateAreaSectorCross(
+                area: area,
+                expected: selection.expectedSector!,
+                actual: sector,
+                trace: activeTrace,
+              );
+              if (!crossValid) {
+                return StatisticsSectorAreaFailure(
+                  area: area,
+                  message: 'Firestore 상세 history와 연결 GCS Sector 합계가 일치하지 않습니다.',
                 );
               }
               return StatisticsSectorAreaResult(
@@ -803,7 +1041,7 @@ class _StatisticsSectorAreaComparisonPageState
               'analyzable=${result.sectorReport.analyzableVehicleCount} '
               'unavailable=${result.sectorReport.unavailableVehicleCount} '
               'integrity=${result.sectorReport.integrity.isValid}',
-              progress: math.min(.88, .18 + results.length / areas.length * .65).toDouble(),
+              progress: math.min(.9, .24 + results.length / areas.length * .62).toDouble(),
             );
           } else if (result is StatisticsSectorAreaFailure) {
             failures.add(result);
@@ -831,11 +1069,77 @@ class _StatisticsSectorAreaComparisonPageState
           error: e,
           stackTrace: st,
         );
+      } else {
+        debugPrint('[STAT_AREA_COMPARE] load failed error=$e');
+        debugPrint('$st');
       }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
+
+}
+
+Map<String, dynamic>? _areaMap(Object? value) {
+  if (value is Map<String, dynamic>) return value;
+  if (value is Map) {
+    return value.map((key, item) => MapEntry(key.toString(), item));
+  }
+  return null;
+}
+
+int _areaInt(Object? value) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  if (value is String) {
+    return int.tryParse(value.replaceAll(',', '').trim()) ?? 0;
+  }
+  return 0;
+}
+
+List<String> _areaStringList(Object? value) {
+  if (value is! List) return const <String>[];
+  final result = value
+      .map((item) => item?.toString().trim() ?? '')
+      .where((item) => item.isNotEmpty)
+      .toSet()
+      .toList()
+    ..sort();
+  return result;
+}
+
+String _areaDateOnly(DateTime date) {
+  return '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+}
+
+class _AreaHistorySourceSelection {
+  final String area;
+  final int requestedDateCount;
+  final int reportDayCount;
+  final List<DateTime> dates;
+  final List<String> gcsLogUrls;
+  final EndWorkSectorMetrics? expectedSector;
+  final int detailedEntryCount;
+  final int excludedEntryCount;
+  final int firstEntryCount;
+  final int unverifiedDetailedEntryCount;
+  final int legacyDetailedEntryCount;
+  final int sectorEntryCount;
+
+  const _AreaHistorySourceSelection({
+    required this.area,
+    required this.requestedDateCount,
+    required this.reportDayCount,
+    required this.dates,
+    required this.gcsLogUrls,
+    required this.expectedSector,
+    required this.detailedEntryCount,
+    required this.excludedEntryCount,
+    required this.firstEntryCount,
+    required this.unverifiedDetailedEntryCount,
+    required this.legacyDetailedEntryCount,
+    required this.sectorEntryCount,
+  });
 }
 
 class _AreaComparisonMailDraft {

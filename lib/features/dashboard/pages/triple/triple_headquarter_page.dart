@@ -5,7 +5,7 @@ import 'package:provider/provider.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../shared/page/application/triple/triple_page_info.dart';
 import '../../../../shared/plate/application/triple/triple_plate_state.dart';
-import '../../../../shared/secondary/pages/secondary_page.dart';
+import '../../../../shared/secondary/side_docks/secondary_side_dock.dart';
 import '../../../selector/application/dev_auth.dart';
 import '../../applications/triple/triple_hq_state.dart';
 import '../../widgets/headquarter_mode_switch_button.dart';
@@ -96,42 +96,18 @@ class _RefreshableBodyState extends State<RefreshableBody> {
     return restored.devAuthorized;
   }
 
-  PageRouteBuilder<void> _slidePage(Widget page) {
-    final reduceMotion =
-        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    final duration = reduceMotion ? Duration.zero : CommonUiMotion.overlay;
-    return PageRouteBuilder<void>(
-      transitionDuration: duration,
-      reverseTransitionDuration: duration,
-      pageBuilder: (_, __, ___) => page,
-      transitionsBuilder: (_, animation, __, child) {
-        if (reduceMotion) return child;
-        final curved = CurvedAnimation(
-          parent: animation,
-          curve: CommonUiMotion.enter,
-          reverseCurve: CommonUiMotion.exit,
-        );
-        return FadeTransition(
-          opacity: curved,
-          child: SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(0.035, 0),
-              end: Offset.zero,
-            ).animate(curved),
-            child: child,
-          ),
-        );
-      },
-    );
-  }
-
   Future<void> _openSecondaryIfAuthorized() async {
     if (_openingSecondary) return;
     _openingSecondary = true;
     try {
       final ok = await _isDevAuthorized();
       if (!mounted || !ok) return;
-      Navigator.of(context).push(_slidePage(const SecondaryPage()));
+      debugPrint('[HQ-SWIPE] secondary_side_dock_open');
+      await showSecondarySideDock<void>(
+        context: context,
+        barrierLabel: '운영 관리',
+      );
+      debugPrint('[HQ-SWIPE] secondary_side_dock_closed');
     } finally {
       _openingSecondary = false;
     }

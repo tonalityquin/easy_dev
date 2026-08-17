@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -6,6 +8,8 @@ import '../../../../features/account/applications/user_state.dart';
 import '../../domain/enums/plate_type.dart';
 import '../../domain/models/plate_model.dart';
 import '../../domain/repositories/plate_repository.dart';
+
+typedef MovementPlateTraceLog = void Function(String message);
 
 class _ViewSyncGate {
   final String name;
@@ -91,6 +95,14 @@ class MovementPlate extends ChangeNotifier {
 
   String _plateDocId(String plateNumber, String area) => '${plateNumber}_$area';
 
+  void _emitTrace(String message, MovementPlateTraceLog? traceLog) {
+    if (traceLog != null) {
+      traceLog(message);
+      return;
+    }
+    debugPrint(message);
+  }
+
   void _debugOps({
     required String action,
     required String plateNumber,
@@ -101,11 +113,48 @@ class MovementPlate extends ChangeNotifier {
     required int viewWritesMin,
     required int viewWritesMax,
     String? gateReason,
+    MovementPlateTraceLog? traceLog,
   }) {
-    debugPrint(
+    _emitTrace(
       '🧾 [MovementPlate] $action plate=$plateNumber area=$area id=$plateDocId '
       '| 예상 ops: TX_READ=$txReads, TX_WRITE=$txWrites, VIEW_WRITES=$viewWritesMin..$viewWritesMax'
       '${gateReason != null ? " | gate($gateReason)" : ""}',
+      traceLog,
+    );
+  }
+
+  void _reportViewUpsertSuccess({
+    required String collection,
+    required String area,
+    required String plateDocId,
+    required DateTime? createdAt,
+    MovementPlateTraceLog? traceLog,
+  }) {
+    final createdAtAvailable = createdAt != null;
+    _emitTrace(
+      '✅ [MovementPlate.viewUpsert] collection=$collection area=$area plateId=$plateDocId createdAtSource=transition_snapshot createdAtAvailable=$createdAtAvailable additionalPlateRead=0 runtimeHydration=disabled',
+      traceLog,
+    );
+    unawaited(
+      DevFirebaseDebugDialog.show(
+        operation: 'MovementPlate.viewUpsert.success',
+        details: <String, Object?>{
+          'collection': collection,
+          'area': area,
+          'plateDocId': plateDocId,
+          'createdAtSource': 'transition_snapshot',
+          'createdAtAvailable': createdAtAvailable,
+          'createdAtValue': createdAt?.toIso8601String(),
+          'additionalPlateRead': 0,
+          'runtimeHydration': 'disabled',
+          'missingCreatedAtDisplay': 'dash',
+        },
+        title: 'View 동기화 확인',
+        useCommonUi: true,
+        success: true,
+        copyAsDebugPrintCode: true,
+        devModeOnly: true,
+      ),
     );
   }
 
@@ -114,13 +163,17 @@ class MovementPlate extends ChangeNotifier {
     required String plateDocId,
     required String plateNumber,
     required String location,
+    required DateTime? createdAt,
     bool forceViewSync = false,
+    MovementPlateTraceLog? traceLog,
   }) async {
     final should = forceViewSync ? true : await _pcGate.shouldSync();
     if (!should) {
       if (kDebugMode) {
-        debugPrint(
-            '🚫 [MovementPlate] skip parking_completed_view upsert (${await _pcGate.debugReason()})');
+        _emitTrace(
+          '🚫 [MovementPlate] skip parking_completed_view upsert (${await _pcGate.debugReason()})',
+          traceLog,
+        );
       }
       return;
     }
@@ -133,9 +186,17 @@ class MovementPlate extends ChangeNotifier {
         plateNumber: plateNumber,
         location: location,
         primaryAtField: 'parkingCompletedAt',
+        createdAt: createdAt,
+      );
+      _reportViewUpsertSuccess(
+        collection: _parkingCompletedViewCollection,
+        area: area,
+        plateDocId: plateDocId,
+        createdAt: createdAt,
+        traceLog: traceLog,
       );
     } catch (e, st) {
-      debugPrint('⚠️ parking_completed_view upsert 실패: $e');
+      _emitTrace('⚠️ parking_completed_view upsert 실패: $e', traceLog);
       await DevFirebaseDebugDialog.show(
         operation: 'movement.parking_completed_view.upsert',
         error: e,
@@ -147,6 +208,9 @@ class MovementPlate extends ChangeNotifier {
           'location': location,
           'forceViewSync': forceViewSync,
         },
+        useCommonUi: true,
+        copyAsDebugPrintCode: true,
+        devModeOnly: true,
       );
     }
   }
@@ -155,12 +219,15 @@ class MovementPlate extends ChangeNotifier {
     required String area,
     required String plateDocId,
     bool forceViewSync = false,
+    MovementPlateTraceLog? traceLog,
   }) async {
     final should = forceViewSync ? true : await _pcGate.shouldSync();
     if (!should) {
       if (kDebugMode) {
-        debugPrint(
-            '🚫 [MovementPlate] skip parking_completed_view remove (${await _pcGate.debugReason()})');
+        _emitTrace(
+          '🚫 [MovementPlate] skip parking_completed_view remove (${await _pcGate.debugReason()})',
+          traceLog,
+        );
       }
       return;
     }
@@ -172,7 +239,7 @@ class MovementPlate extends ChangeNotifier {
         plateDocId: plateDocId,
       );
     } catch (e, st) {
-      debugPrint('⚠️ parking_completed_view remove 실패: $e');
+      _emitTrace('⚠️ parking_completed_view remove 실패: $e', traceLog);
       await DevFirebaseDebugDialog.show(
         operation: 'movement.parking_completed_view.remove',
         error: e,
@@ -192,13 +259,17 @@ class MovementPlate extends ChangeNotifier {
     required String plateDocId,
     required String plateNumber,
     required String location,
+    required DateTime? createdAt,
     bool forceViewSync = false,
+    MovementPlateTraceLog? traceLog,
   }) async {
     final should = forceViewSync ? true : await _depGate.shouldSync();
     if (!should) {
       if (kDebugMode) {
-        debugPrint(
-            '🚫 [MovementPlate] skip departure_requests_view upsert (${await _depGate.debugReason()})');
+        _emitTrace(
+          '🚫 [MovementPlate] skip departure_requests_view upsert (${await _depGate.debugReason()})',
+          traceLog,
+        );
       }
       return;
     }
@@ -211,9 +282,17 @@ class MovementPlate extends ChangeNotifier {
         plateNumber: plateNumber,
         location: location,
         primaryAtField: 'departureRequestedAt',
+        createdAt: createdAt,
+      );
+      _reportViewUpsertSuccess(
+        collection: _departureRequestsViewCollection,
+        area: area,
+        plateDocId: plateDocId,
+        createdAt: createdAt,
+        traceLog: traceLog,
       );
     } catch (e, st) {
-      debugPrint('⚠️ departure_requests_view upsert 실패: $e');
+      _emitTrace('⚠️ departure_requests_view upsert 실패: $e', traceLog);
       await DevFirebaseDebugDialog.show(
         operation: 'movement.departure_requests_view.upsert',
         error: e,
@@ -225,6 +304,9 @@ class MovementPlate extends ChangeNotifier {
           'location': location,
           'forceViewSync': forceViewSync,
         },
+        useCommonUi: true,
+        copyAsDebugPrintCode: true,
+        devModeOnly: true,
       );
     }
   }
@@ -233,12 +315,15 @@ class MovementPlate extends ChangeNotifier {
     required String area,
     required String plateDocId,
     bool forceViewSync = false,
+    MovementPlateTraceLog? traceLog,
   }) async {
     final should = forceViewSync ? true : await _depGate.shouldSync();
     if (!should) {
       if (kDebugMode) {
-        debugPrint(
-            '🚫 [MovementPlate] skip departure_requests_view remove (${await _depGate.debugReason()})');
+        _emitTrace(
+          '🚫 [MovementPlate] skip departure_requests_view remove (${await _depGate.debugReason()})',
+          traceLog,
+        );
       }
       return;
     }
@@ -250,7 +335,7 @@ class MovementPlate extends ChangeNotifier {
         plateDocId: plateDocId,
       );
     } catch (e, st) {
-      debugPrint('⚠️ departure_requests_view remove 실패: $e');
+      _emitTrace('⚠️ departure_requests_view remove 실패: $e', traceLog);
       await DevFirebaseDebugDialog.show(
         operation: 'movement.departure_requests_view.remove',
         error: e,
@@ -270,13 +355,17 @@ class MovementPlate extends ChangeNotifier {
     required String plateDocId,
     required String plateNumber,
     required String location,
+    required DateTime? createdAt,
     bool forceViewSync = false,
+    MovementPlateTraceLog? traceLog,
   }) async {
     final should = forceViewSync ? true : await _reqGate.shouldSync();
     if (!should) {
       if (kDebugMode) {
-        debugPrint(
-            '🚫 [MovementPlate] skip parking_requests_view upsert (${await _reqGate.debugReason()})');
+        _emitTrace(
+          '🚫 [MovementPlate] skip parking_requests_view upsert (${await _reqGate.debugReason()})',
+          traceLog,
+        );
       }
       return;
     }
@@ -289,9 +378,17 @@ class MovementPlate extends ChangeNotifier {
         plateNumber: plateNumber,
         location: location,
         primaryAtField: 'parkingRequestedAt',
+        createdAt: createdAt,
+      );
+      _reportViewUpsertSuccess(
+        collection: _parkingRequestsViewCollection,
+        area: area,
+        plateDocId: plateDocId,
+        createdAt: createdAt,
+        traceLog: traceLog,
       );
     } catch (e, st) {
-      debugPrint('⚠️ parking_requests_view upsert 실패: $e');
+      _emitTrace('⚠️ parking_requests_view upsert 실패: $e', traceLog);
       await DevFirebaseDebugDialog.show(
         operation: 'movement.parking_requests_view.upsert',
         error: e,
@@ -303,6 +400,9 @@ class MovementPlate extends ChangeNotifier {
           'location': location,
           'forceViewSync': forceViewSync,
         },
+        useCommonUi: true,
+        copyAsDebugPrintCode: true,
+        devModeOnly: true,
       );
     }
   }
@@ -311,12 +411,15 @@ class MovementPlate extends ChangeNotifier {
     required String area,
     required String plateDocId,
     bool forceViewSync = false,
+    MovementPlateTraceLog? traceLog,
   }) async {
     final should = forceViewSync ? true : await _reqGate.shouldSync();
     if (!should) {
       if (kDebugMode) {
-        debugPrint(
-            '🚫 [MovementPlate] skip parking_requests_view remove (${await _reqGate.debugReason()})');
+        _emitTrace(
+          '🚫 [MovementPlate] skip parking_requests_view remove (${await _reqGate.debugReason()})',
+          traceLog,
+        );
       }
       return;
     }
@@ -328,7 +431,7 @@ class MovementPlate extends ChangeNotifier {
         plateDocId: plateDocId,
       );
     } catch (e, st) {
-      debugPrint('⚠️ parking_requests_view remove 실패: $e');
+      _emitTrace('⚠️ parking_requests_view remove 실패: $e', traceLog);
       await DevFirebaseDebugDialog.show(
         operation: 'movement.parking_requests_view.remove',
         error: e,
@@ -349,6 +452,7 @@ class MovementPlate extends ChangeNotifier {
     String location, {
     bool forceOverride = true,
     bool forceViewSync = false,
+    MovementPlateTraceLog? traceLog,
   }) async {
     final actor = _user.name;
     final plateDocId = _plateDocId(plateNumber, area);
@@ -362,11 +466,12 @@ class MovementPlate extends ChangeNotifier {
       txWrites: 1,
       viewWritesMin: 0,
       viewWritesMax: 2,
+      traceLog: traceLog,
       gateReason:
           'pc(${await _pcGate.debugReason()}), req(${await _reqGate.debugReason()})',
     );
 
-    await _repository.transitionPlateType(
+    final createdAt = await _repository.transitionPlateType(
       plateId: plateDocId,
       actor: actor,
       fromType: PlateType.parkingRequests,
@@ -381,13 +486,16 @@ class MovementPlate extends ChangeNotifier {
       area: area,
       plateDocId: plateDocId,
       forceViewSync: forceViewSync,
+      traceLog: traceLog,
     );
     await _upsertParkingCompletedViewItem(
       area: area,
       plateDocId: plateDocId,
       plateNumber: plateNumber,
       location: location,
+      createdAt: createdAt,
       forceViewSync: forceViewSync,
+      traceLog: traceLog,
     );
   }
 
@@ -397,6 +505,7 @@ class MovementPlate extends ChangeNotifier {
     String location, {
     bool forceOverride = true,
     bool forceViewSync = false,
+    MovementPlateTraceLog? traceLog,
   }) async {
     final actor = _user.name;
     final plateDocId = _plateDocId(plateNumber, area);
@@ -410,11 +519,12 @@ class MovementPlate extends ChangeNotifier {
       txWrites: 1,
       viewWritesMin: 0,
       viewWritesMax: 2,
+      traceLog: traceLog,
       gateReason:
           'pc(${await _pcGate.debugReason()}), dep(${await _depGate.debugReason()})',
     );
 
-    await _repository.transitionPlateType(
+    final createdAt = await _repository.transitionPlateType(
       plateId: plateDocId,
       actor: actor,
       fromType: PlateType.parkingCompleted,
@@ -429,13 +539,16 @@ class MovementPlate extends ChangeNotifier {
       area: area,
       plateDocId: plateDocId,
       forceViewSync: forceViewSync,
+      traceLog: traceLog,
     );
     await _upsertDepartureRequestsViewItem(
       area: area,
       plateDocId: plateDocId,
       plateNumber: plateNumber,
       location: location,
+      createdAt: createdAt,
       forceViewSync: forceViewSync,
+      traceLog: traceLog,
     );
   }
 
@@ -445,6 +558,7 @@ class MovementPlate extends ChangeNotifier {
     String location, {
     bool forceOverride = true,
     bool forceViewSync = false,
+    MovementPlateTraceLog? traceLog,
   }) async {
     final actor = _user.name;
     final plateDocId = _plateDocId(plateNumber, area);
@@ -459,6 +573,7 @@ class MovementPlate extends ChangeNotifier {
       txWrites: 1,
       viewWritesMin: 0,
       viewWritesMax: 1,
+      traceLog: traceLog,
       gateReason: 'pc(${await _pcGate.debugReason()})',
     );
 
@@ -477,6 +592,7 @@ class MovementPlate extends ChangeNotifier {
       area: area,
       plateDocId: plateDocId,
       forceViewSync: forceViewSync,
+      traceLog: traceLog,
     );
   }
 
@@ -484,6 +600,7 @@ class MovementPlate extends ChangeNotifier {
     PlateModel selectedPlate, {
     bool forceOverride = true,
     bool forceViewSync = false,
+    MovementPlateTraceLog? traceLog,
   }) async {
     final actor = _user.name;
 
@@ -500,6 +617,7 @@ class MovementPlate extends ChangeNotifier {
       txWrites: 1,
       viewWritesMin: 0,
       viewWritesMax: 1,
+      traceLog: traceLog,
       gateReason: 'dep(${await _depGate.debugReason()})',
     );
 
@@ -518,6 +636,7 @@ class MovementPlate extends ChangeNotifier {
       area: selectedPlate.area,
       plateDocId: plateDocId,
       forceViewSync: forceViewSync,
+      traceLog: traceLog,
     );
   }
 
@@ -527,6 +646,7 @@ class MovementPlate extends ChangeNotifier {
     String location, {
     bool forceOverride = true,
     bool forceViewSync = false,
+    MovementPlateTraceLog? traceLog,
   }) async {
     final actor = _user.name;
     final plateDocId = _plateDocId(plateNumber, area);
@@ -540,11 +660,12 @@ class MovementPlate extends ChangeNotifier {
       txWrites: 1,
       viewWritesMin: 0,
       viewWritesMax: 2,
+      traceLog: traceLog,
       gateReason:
           'dep(${await _depGate.debugReason()}), pc(${await _pcGate.debugReason()})',
     );
 
-    await _repository.transitionPlateType(
+    final createdAt = await _repository.transitionPlateType(
       plateId: plateDocId,
       actor: actor,
       fromType: PlateType.departureRequests,
@@ -559,13 +680,16 @@ class MovementPlate extends ChangeNotifier {
       area: area,
       plateDocId: plateDocId,
       forceViewSync: forceViewSync,
+      traceLog: traceLog,
     );
     await _upsertParkingCompletedViewItem(
       area: area,
       plateDocId: plateDocId,
       plateNumber: plateNumber,
       location: location,
+      createdAt: createdAt,
       forceViewSync: forceViewSync,
+      traceLog: traceLog,
     );
   }
 
@@ -576,6 +700,7 @@ class MovementPlate extends ChangeNotifier {
     required String newLocation,
     bool forceOverride = true,
     bool forceViewSync = false,
+    MovementPlateTraceLog? traceLog,
   }) async {
     final actor = _user.name;
     final plateDocId = _plateDocId(plateNumber, area);
@@ -590,11 +715,12 @@ class MovementPlate extends ChangeNotifier {
       txWrites: 1,
       viewWritesMin: 0,
       viewWritesMax: 2,
+      traceLog: traceLog,
       gateReason:
           'req(${await _reqGate.debugReason()}), pc/dep gates apply if removing',
     );
 
-    await _repository.transitionPlateType(
+    final createdAt = await _repository.transitionPlateType(
       plateId: plateDocId,
       actor: actor,
       fromType: fromType,
@@ -610,12 +736,14 @@ class MovementPlate extends ChangeNotifier {
         area: area,
         plateDocId: plateDocId,
         forceViewSync: forceViewSync,
+        traceLog: traceLog,
       );
     } else if (fromType == PlateType.departureRequests) {
       await _removeDepartureRequestsViewItem(
         area: area,
         plateDocId: plateDocId,
         forceViewSync: forceViewSync,
+        traceLog: traceLog,
       );
     }
 
@@ -624,7 +752,9 @@ class MovementPlate extends ChangeNotifier {
       plateDocId: plateDocId,
       plateNumber: plateNumber,
       location: newLocation,
+      createdAt: createdAt,
       forceViewSync: forceViewSync,
+      traceLog: traceLog,
     );
   }
 }

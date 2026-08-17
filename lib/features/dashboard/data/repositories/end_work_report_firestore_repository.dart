@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
+import '../../domain/models/end_work_report_history_type.dart';
 import '../../../../shared/plate/domain/enums/plate_type.dart';
 import '../../../../shared/plate/domain/models/plate_model.dart';
 
@@ -206,12 +207,15 @@ class EndWorkReportFirestoreRepository {
     required Map<String, dynamic> metrics,
     required String createdAtIso,
     required String uploadedBy,
+    required bool gcsLogVerified,
     String? logsUrl,
   }) async {
     final areaRef = _firestore.collection('end_work_reports').doc('area_$area');
     final monthRef = areaRef.collection('months').doc(monthKey);
 
     final historyEntry = <String, dynamic>{
+      'reportType': EndWorkReportHistoryTypes.detailedGcsEndReport,
+      'gcsLogVerified': gcsLogVerified,
       'date': dateStr,
       'monthKey': monthKey,
       'createdAt': createdAtIso,
@@ -222,6 +226,8 @@ class EndWorkReportFirestoreRepository {
     };
 
     final dayPayload = <String, dynamic>{
+      'reportType': EndWorkReportHistoryTypes.detailedGcsEndReport,
+      'gcsLogVerified': gcsLogVerified,
       'division': division,
       'area': area,
       'monthKey': monthKey,

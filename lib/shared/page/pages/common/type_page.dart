@@ -4,20 +4,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../app/models/capability.dart';
 import '../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../design_system/common_ui/common_ui_side_dock.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../features/account/applications/user_state.dart';
 import '../../../../features/dev/application/area_state.dart';
 import '../../../../features/dev/debug/debug_action_recorder.dart';
-import '../../../../features/voice/application/voice_appbar_ui_state.dart';
-import '../../../../features/voice/controllers/voice_runtime_controller.dart';
+import '../../../secondary/side_docks/secondary_side_dock.dart';
+import '../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../plate/application/common/driving_recovery_gate.dart';
 import '../../../plate/domain/enums/plate_type.dart';
 import '../../../plate/domain/repositories/plate_repository.dart';
 import '../../../tts/application/plate_tts_event_hub.dart';
 import '../../../tts/services/page/tts_view_refresh_service.dart';
+import '../../../real_time_table/real_time_sort_state.dart';
 import '../../application/common/type_auto_transition_guard.dart';
 import '../../application/common/type_view_mode_state.dart';
 import 'type_page_bottom_bars.dart';
@@ -131,7 +131,7 @@ class TypePageConfig<PState, PgState extends ChangeNotifier> {
     required this.clearCurrentSelection,
     required this.buildCurrentPage,
     required this.buildParkingCompletedControlBar,
-    required this.buildDashboardBottomSheet,
+    required this.buildDashboardSideDock,
     required this.buildInputScreen,
     required this.debugMeta,
     this.recoveryMode,
@@ -145,7 +145,7 @@ class TypePageConfig<PState, PgState extends ChangeNotifier> {
   final TypePageCurrentPageBuilder<PgState> buildCurrentPage;
   final TypePageParkingCompletedControlBarBuilder<PgState>
       buildParkingCompletedControlBar;
-  final Widget Function() buildDashboardBottomSheet;
+  final Widget Function() buildDashboardSideDock;
   final Widget Function() buildInputScreen;
   final Map<String, dynamic> debugMeta;
   final DrivingRecoveryMode? recoveryMode;
@@ -167,68 +167,22 @@ class TypePageShell<PState, PgState extends ChangeNotifier>
 
 class _TypePageShellState<PState, PgState extends ChangeNotifier>
     extends State<TypePageShell<PState, PgState>> {
-  final VoiceRuntimeController _talkController =
-      VoiceRuntimeController.instance;
-  final VoiceAppbarUiState _talkUiState = VoiceAppbarUiState();
-
   StreamSubscription<PlateTtsEvent>? _ttsEventSub;
   Timer? _ttsDebounceTimer;
   bool _pendingFull = false;
   bool _pendingDepartureOnly = false;
   String _pendingArea = '';
-  bool _syncingTalkRuntime = false;
-  String _boundTalkArea = '';
-  String _boundTalkUserId = '';
 
   @override
   void initState() {
     super.initState();
-
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       final plateState = context.read<PState>();
       widget.config.enableForTypePages(plateState);
-
       PlateTtsEventHub.ensureStarted();
       _ttsEventSub ??= PlateTtsEventHub.stream.listen(_onTtsEvent);
-      await _syncWorkintalkinRuntime(force: true);
     });
-  }
-
-  String _resolveTalkArea() {
-    final currentArea = context.read<AreaState>().currentArea.trim();
-    if (currentArea.isNotEmpty) {
-      return currentArea;
-    }
-    return context.read<UserState>().currentArea.trim();
-  }
-
-  Future<void> _syncWorkintalkinRuntime({bool force = false}) async {
-    if (_syncingTalkRuntime || !mounted) {
-      return;
-    }
-    final session = context.read<UserState>().session;
-    final area = _resolveTalkArea();
-    if (session == null || area.isEmpty) {
-      _boundTalkArea = '';
-      _boundTalkUserId = '';
-      await _talkController.stop();
-      return;
-    }
-    final alreadyBound = !force &&
-        _boundTalkArea == area &&
-        _boundTalkUserId == session.id &&
-        _talkController.active;
-    if (alreadyBound) {
-      return;
-    }
-    _syncingTalkRuntime = true;
-    try {
-      await _talkController.start(session: session, areaName: area);
-      _boundTalkArea = area;
-      _boundTalkUserId = session.id;
-    } finally {
-      _syncingTalkRuntime = false;
-    }
   }
 
   void _onTtsEvent(PlateTtsEvent event) {
@@ -272,8 +226,6 @@ class _TypePageShellState<PState, PgState extends ChangeNotifier>
     _ttsDebounceTimer = null;
     unawaited(_ttsEventSub?.cancel() ?? Future.value());
     _ttsEventSub = null;
-    unawaited(_talkController.stop());
-    _talkUiState.dispose();
 
     try {
       final plateState = context.read<PState>();
@@ -285,42 +237,6 @@ class _TypePageShellState<PState, PgState extends ChangeNotifier>
 
   @override
   Widget build(BuildContext context) {
-    final activeSession = context.watch<UserState>().session;
-    final currentArea = context.watch<AreaState>().currentArea.trim();
-    final fallbackArea = context.watch<UserState>().currentArea.trim();
-    final normalizedArea = currentArea.isNotEmpty ? currentArea : fallbackArea;
-    final currentUserId = activeSession?.id ?? '';
-    final canUseTalkUi = context
-        .watch<AreaState>()
-        .capabilitiesOfCurrentArea
-        .contains(Capability.record);
-
-    if (!canUseTalkUi && _talkUiState.enabled) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _talkUiState.setEnabled(false);
-      });
-    }
-
-    final shouldResync = activeSession != null &&
-        normalizedArea.isNotEmpty &&
-        (_boundTalkArea != normalizedArea || _boundTalkUserId != currentUserId);
-    if (shouldResync && !_syncingTalkRuntime) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _syncWorkintalkinRuntime();
-      });
-    }
-
-    if (activeSession == null &&
-        _talkController.active &&
-        !_syncingTalkRuntime) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _syncWorkintalkinRuntime(force: true);
-      });
-    }
-
     return CommonUiScope(
       child: MultiProvider(
         providers: [
@@ -330,8 +246,8 @@ class _TypePageShellState<PState, PgState extends ChangeNotifier>
           ChangeNotifierProvider<TypeAutoTransitionGuard>(
             create: (_) => TypeAutoTransitionGuard(),
           ),
-          ChangeNotifierProvider<VoiceAppbarUiState>.value(
-            value: _talkUiState,
+          ChangeNotifierProvider<RealTimeSortState>(
+            create: (_) => RealTimeSortState(),
           ),
           ChangeNotifierProvider<PgState>(
             create: (_) => widget.config.createPageState(),
@@ -371,6 +287,12 @@ class _TypePageShellState<PState, PgState extends ChangeNotifier>
                 canPop: false,
                 onPopInvoked: (didPop) async {
                   if (didPop) return;
+                  if (RealTimeChildFocusBackGuard.handleBack()) {
+                    debugPrint(
+                      '[RealTimeChildFocusBackGuard] system_back consumed=true action=child_to_parent',
+                    );
+                    return;
+                  }
                   await widget.config.clearCurrentSelection(
                     plateState,
                     pageState,
@@ -688,13 +610,27 @@ class TypePageEntryDashboardBar<PState, PgState extends ChangeNotifier>
       '대시보드',
       () async {
         final screen = config.debugMeta['screen']?.toString() ?? 'type_page';
-        debugPrint('[TypePageDashboard] open screen=$screen direction=right_to_left');
-        await showCommonRightSideDock<void>(
+        debugPrint('[TypePageDashboardSideDock] open screen=$screen direction=right_to_left');
+        final result = await showCommonRightSideDock<SecondaryDockRequest>(
           context: context,
           barrierLabel: '대시보드',
-          builder: (_) => config.buildDashboardBottomSheet(),
+          builder: (_) => config.buildDashboardSideDock(),
         );
-        debugPrint('[TypePageDashboard] closed screen=$screen');
+        debugPrint(
+          '[TypePageDashboardSideDock] closed screen=$screen result=${result?.name ?? 'none'}',
+        );
+        if (result == SecondaryDockRequest.open && context.mounted) {
+          debugPrint(
+            '[TypePageDashboardSideDock] secondary_open screen=$screen',
+          );
+          await showSecondarySideDock<void>(
+            context: context,
+            barrierLabel: '운영 관리',
+          );
+          debugPrint(
+            '[TypePageDashboardSideDock] secondary_closed screen=$screen',
+          );
+        }
       },
     );
   }
@@ -709,7 +645,7 @@ class TypePageEntryDashboardBar<PState, PgState extends ChangeNotifier>
             child: TypePageOpenEntryButton<PState, PgState>(config: config),
           ),
           const SizedBox(width: 8),
-          const Expanded(child: TypePageToggleTalkAppBarButton()),
+          const Expanded(child: TypePageSortButton()),
           const SizedBox(width: 8),
           Expanded(
             child: CommonButton(
@@ -727,38 +663,81 @@ class TypePageEntryDashboardBar<PState, PgState extends ChangeNotifier>
   }
 }
 
-class TypePageToggleTalkAppBarButton extends StatelessWidget {
-  const TypePageToggleTalkAppBarButton({super.key});
+class TypePageSortButton extends StatelessWidget {
+  const TypePageSortButton({super.key});
+
+  Future<void> _togglePriority(
+    BuildContext context,
+    RealTimeSortState state,
+  ) async {
+    final guard = context.read<TypeAutoTransitionGuard>();
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final before = state.priorityLabel;
+    final target = state.isZonePriority ? '정렬' : '구역';
+    state.togglePriority(reason: 'type_page_bottom_button');
+    final after = state.priorityLabel;
+    final blockedBySupport = target == '구역' && !state.locationSupported;
+    debugPrint(
+      '[TypePagePriority] source=bottom_button before=$before target=$target after=$after priority=${state.priorityMode.name} order=${state.timeOrderLabel} zoneSupported=${state.locationSupported} zoneBlocked=$blockedBySupport',
+    );
+    final trace = await DeveloperOperationTrace.start(
+      context: context,
+      title: '실시간 보기 전환',
+      initialMessage:
+          'source=type_page_bottom_button before=$before target=$target after=$after zoneSupported=${state.locationSupported}',
+      useCommonUi: true,
+      showDialogImmediately: false,
+      developerModeMessage: '개발자 모드 ON: 전환 상태를 Status Dialog에서 확인할 수 있습니다.',
+      standardModeMessage: '일반 모드: 중앙 버튼 한 번으로 보기를 즉시 전환합니다.',
+    );
+    if (!context.mounted) return;
+    trace.log(
+      'after=$after priority=${state.priorityMode.name} mode=${state.mode.name} order=${state.timeOrderLabel} parent=${state.parent.isEmpty ? '-' : state.parent} child=${state.child.isEmpty ? '-' : state.child} selectedLocation=${state.selectedLocation} zoneSupported=${state.locationSupported} zoneBlocked=$blockedBySupport reducedMotion=$reduceMotion',
+      progress: .82,
+    );
+    await trace.succeed(
+      blockedBySupport
+          ? '구역 미지원 탭이므로 정렬 보기를 유지했습니다.'
+          : '$after 보기로 즉시 전환했습니다.',
+    );
+    if (!context.mounted || !trace.developerMode) return;
+    await guard.runBlocked<void>(
+      '실시간 보기 전환 개발자 상태',
+      () => trace.showStatusDialog(context),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final areaCaps = context.watch<AreaState>().capabilitiesOfCurrentArea;
-    final canUseRecordTalk = areaCaps.contains(Capability.record);
-    final enabled = context.watch<VoiceAppbarUiState>().enabled;
-    final label = canUseRecordTalk
-        ? enabled
-            ? 'OFF'
-            : 'ON'
-        : '비활성';
-    final icon = canUseRecordTalk
-        ? enabled
-            ? Icons.toggle_on_rounded
-            : Icons.toggle_off_rounded
-        : Icons.mic_off_rounded;
-
-    return CommonButton(
-      label: label,
-      icon: icon,
-      onPressed: canUseRecordTalk
-          ? () => context.read<VoiceAppbarUiState>().toggle()
-          : null,
-      variant: enabled && canUseRecordTalk
-          ? CommonButtonVariant.primary
-          : CommonButtonVariant.secondary,
-      selected: enabled && canUseRecordTalk,
-      expand: true,
-      minHeight: 48,
-      haptic: CommonHaptic.selection,
+    final state = context.watch<RealTimeSortState>();
+    final zone = state.isZonePriority;
+    final label = state.priorityLabel;
+    final compact = MediaQuery.sizeOf(context).width < 370;
+    final semantics = zone
+        ? '$label 보기 · 부모 주차 구역'
+        : '$label 보기 · ${state.timeOrderLabel}';
+    return Semantics(
+      button: true,
+      selected: zone,
+      label: semantics,
+      child: Tooltip(
+        message: semantics,
+        child: CommonButton(
+          label: label,
+          icon: compact
+              ? null
+              : zone
+                  ? Icons.grid_view_rounded
+                  : Icons.sort_rounded,
+          onPressed: () => _togglePriority(context, state),
+          variant: CommonButtonVariant.secondary,
+          selected: zone,
+          expand: true,
+          minHeight: 48,
+          haptic: CommonHaptic.selection,
+        ),
+      ),
     );
   }
 }

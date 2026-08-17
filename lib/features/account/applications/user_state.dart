@@ -192,6 +192,14 @@ class UserState extends ChangeNotifier {
   }
 
   Future<void> refreshTabletsBySelectedAreaAndCache() async {
+    try {
+      await refreshTabletsBySelectedAreaAndCacheStrict();
+    } catch (e) {
+      debugPrint('🔥 Error refreshing tablets: $e');
+    }
+  }
+
+  Future<void> refreshTabletsBySelectedAreaAndCacheStrict() async {
     final selectedArea = _areaState.currentArea.trim();
 
     _clearSelectionSilently();
@@ -204,9 +212,10 @@ class UserState extends ChangeNotifier {
       _tabletList = List<TabletModel>.of(data, growable: false);
       _clearSelectionSilently();
       _prevAreaTablets = selectedArea;
-    } catch (e) {
+    } catch (e, st) {
       _clearSelectionSilently();
-      debugPrint('🔥 Error refreshing tablets: $e');
+      debugPrint('🔥 Error refreshing tablets: $e\n$st');
+      rethrow;
     } finally {
       _isLoading = false;
       notifyListeners();

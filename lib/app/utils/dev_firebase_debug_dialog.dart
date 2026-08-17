@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -19,6 +21,9 @@ class DevFirebaseDebugDialog {
     Map<String, Object?> details = const <String, Object?>{},
     String title = 'Firebase 디버그',
     bool useCommonUi = false,
+    bool success = false,
+    bool copyAsDebugPrintCode = false,
+    bool devModeOnly = false,
   }) async {
     final fullText = _buildFullText(
       operation: operation,
@@ -29,7 +34,9 @@ class DevFirebaseDebugDialog {
 
     debugPrint(fullText);
 
-    final enabled = await DevAuth.isDeveloperLoggedIn();
+    final enabled = devModeOnly
+        ? await DevAuth.isDevModeEnabled()
+        : await DevAuth.isDeveloperLoggedIn();
     if (!enabled) return;
 
     if (_showing) return;
@@ -39,14 +46,30 @@ class DevFirebaseDebugDialog {
 
     _showing = true;
     try {
-      await StatusDialog.showFailure(
-        ctx,
-        title: title,
-        description: fullText,
-        copyText: fullText,
-        copyButtonLabel: '전문 복사',
-        useCommonUi: useCommonUi,
-      );
+      final copyText = copyAsDebugPrintCode
+          ? _toDebugPrintCode(fullText)
+          : fullText;
+      if (success && error == null) {
+        await StatusDialog.showSuccess(
+          ctx,
+          title: title,
+          description: fullText,
+          copyText: copyText,
+          copyButtonLabel:
+              copyAsDebugPrintCode ? 'debugPrint 코드 복사' : '전문 복사',
+          useCommonUi: useCommonUi,
+        );
+      } else {
+        await StatusDialog.showFailure(
+          ctx,
+          title: title,
+          description: fullText,
+          copyText: copyText,
+          copyButtonLabel:
+              copyAsDebugPrintCode ? 'debugPrint 코드 복사' : '전문 복사',
+          useCommonUi: useCommonUi,
+        );
+      }
     } finally {
       _showing = false;
     }
@@ -109,5 +132,12 @@ class DevFirebaseDebugDialog {
       return value.map((entry) => _stringify(entry)).join(', ');
     }
     return value.toString();
+  }
+
+  static String _toDebugPrintCode(String value) {
+    return value
+        .split('\n')
+        .map((line) => 'debugPrint(${jsonEncode(line)});')
+        .join('\n');
   }
 }

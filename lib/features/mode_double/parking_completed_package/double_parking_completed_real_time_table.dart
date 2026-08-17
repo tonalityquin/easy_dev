@@ -42,16 +42,14 @@ class DoubleParkingCompletedRealTimeTable extends StatelessWidget {
         syncLocationCounts: false,
         showUnknownInZoneSummary: false,
         labelUsesAccent: true,
-        defaultSortOldFirst: true,
         isEnabled: ParkingCompletedRealtimeTabGate.isEnabled,
         accent: (cs) => cs.primary,
         tableNoStrategy: LinearNoStrategy(),
         dialogNoStrategy: LinearNoStrategy(),
-        openBottomSheet: (ctx, plate) =>
-            showDoubleParkingCompletedStatusBottomSheetFromDialog(
+        openStatusDock: (ctx, request) =>
+            showDoubleParkingCompletedStatusSideDockFromRealtime(
           context: ctx,
-          plate: plate,
-          popParentOnDelete: false,
+          request: request,
         ),
       ),
     ];

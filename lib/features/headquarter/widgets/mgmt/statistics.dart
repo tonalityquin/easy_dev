@@ -9,6 +9,7 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../app/models/capability.dart';
+import '../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../dashboard/domain/models/end_work_sector_metrics.dart';
 import '../../application/area/area_master_cache.dart';
 import '../../../dashboard/domain/repositories/end_work_report_repository.dart';
@@ -68,7 +69,7 @@ class Statistics extends StatefulWidget {
 
 class _StatisticsState extends State<Statistics> {
   static const String _kDivisionPrefsKey = 'division';
-  static const String _kCachePrefix = 'end_work_reports_cache_v4:';
+  static const String _kCachePrefix = 'end_work_reports_cache_v8:';
   static const String _kLastAreaKey = 'statistics_last_area_v1';
   static const String _kLastModeKey = 'statistics_last_mode_v1';
   static const String _kLastDatesKey = 'statistics_last_dates_v1';
@@ -202,6 +203,17 @@ class _StatisticsState extends State<Statistics> {
     return null;
   }
 
+  List<String> _asStringList(dynamic value) {
+    if (value is! Iterable) return const <String>[];
+    final result = <String>[];
+    for (final item in value) {
+      final text = item?.toString().trim() ?? '';
+      if (text.isEmpty || result.contains(text)) continue;
+      result.add(text);
+    }
+    return List<String>.unmodifiable(result);
+  }
+
 
 
   Future<Map<String, bool>> _loadAreaSectorCapabilities({
@@ -261,7 +273,10 @@ class _StatisticsState extends State<Statistics> {
     });
   }
 
-  Future<void> _loadDivisionAndLocalCache({bool keepRefreshFlags = false}) async {
+  Future<void> _loadDivisionAndLocalCache({
+    bool keepRefreshFlags = false,
+    bool autoRefreshIfEmpty = true,
+  }) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final div = (prefs.getString(_kDivisionPrefsKey) ?? '').trim();
@@ -329,7 +344,11 @@ class _StatisticsState extends State<Statistics> {
         }
       }
 
-      final areas = _cacheByArea.keys.toList()..sort();
+      final areas = _cacheByArea.entries
+          .where((entry) => entry.value.values.any(_isStatisticsEligibleDay))
+          .map((entry) => entry.key)
+          .toList()
+        ..sort();
       final areaSectorEnabled = await _loadAreaSectorCapabilities(
         division: div,
         areas: areas,
@@ -366,6 +385,9 @@ class _StatisticsState extends State<Statistics> {
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_pageCtrl.hasClients) _pageCtrl.jumpToPage(0);
+        if (autoRefreshIfEmpty && !hasCache && div.isNotEmpty && mounted) {
+          _handleRefresh();
+        }
       });
     } catch (e) {
       if (!mounted) return;
@@ -441,18 +463,74 @@ class _StatisticsState extends State<Statistics> {
       _refreshError = null;
     });
 
+    DeveloperOperationTrace? trace;
     try {
-      await _loadDivisionAndLocalCache(keepRefreshFlags: true);
+      trace = await DeveloperOperationTrace.start(
+        context: context,
+        title: '통계 데이터 새로고침',
+        initialMessage: '검증된 상세 업무종료 history를 기준으로 통계 캐시를 재구성하고 있습니다.',
+        useCommonUi: widget.useCommonUi,
+        developerModeMessage:
+            '개발자 모드 ON: Firestore 통계 소스와 제외 항목 로그를 복사할 수 있습니다.',
+        standardModeMessage:
+            '개발자 모드 OFF: 통계 새로고침 로그를 콘솔에 기록합니다.',
+      );
+      await _loadDivisionAndLocalCache(
+        keepRefreshFlags: true,
+        autoRefreshIfEmpty: false,
+      );
 
       final div = (_division ?? '').trim();
+      trace.log('division=$div source=verifiedDetailedGcsHistory', progress: .12);
 
       final rebuilt = await _reportRepo.buildAreaDateCache(division: div);
+      var totalDays = 0;
+      var eligibleDays = 0;
+      var excludedDays = 0;
+      var linkedLogs = 0;
+      var unverifiedDetailedEntries = 0;
+      for (final areaEntry in rebuilt.entries) {
+        var areaEligible = 0;
+        var areaExcluded = 0;
+        var areaLogs = 0;
+        var areaUnverifiedDetailedEntries = 0;
+        for (final day in areaEntry.value.values) {
+          totalDays++;
+          final unverifiedCount =
+              _asInt(day['_historyUnverifiedDetailedEntryCount']) ?? 0;
+          unverifiedDetailedEntries += unverifiedCount;
+          areaUnverifiedDetailedEntries += unverifiedCount;
+          if (_isStatisticsEligibleDay(day)) {
+            eligibleDays++;
+            areaEligible++;
+            final count = _asStringList(day['_historyLogsUrls']).length;
+            linkedLogs += count;
+            areaLogs += count;
+          } else {
+            excludedDays++;
+            areaExcluded++;
+          }
+        }
+        trace.log(
+          'area=${areaEntry.key} eligibleDays=$areaEligible excludedDays=$areaExcluded linkedLogs=$areaLogs unverifiedDetailed=$areaUnverifiedDetailedEntries',
+          progress: .38,
+        );
+      }
+      trace.log(
+        'firestore days=$totalDays eligible=$eligibleDays excluded=$excludedDays linkedLogs=$linkedLogs unverifiedDetailed=$unverifiedDetailedEntries',
+        progress: .48,
+      );
 
       if (div.isNotEmpty) {
         await _saveCacheToPrefs(division: div, data: rebuilt);
+        trace.log('cache=stored key=${_cacheKey(div)}', progress: .62);
       }
 
-      final areas = rebuilt.keys.toList()..sort();
+      final areas = rebuilt.entries
+          .where((entry) => entry.value.values.any(_isStatisticsEligibleDay))
+          .map((entry) => entry.key)
+          .toList()
+        ..sort();
       final areaSectorEnabled = await _loadAreaSectorCapabilities(
         division: div,
         areas: areas,
@@ -463,6 +541,7 @@ class _StatisticsState extends State<Statistics> {
         _cacheByArea
           ..clear()
           ..addAll(rebuilt);
+        _savedReports.clear();
 
         _areaOptions = areas;
         _areaSectorEnabled = areaSectorEnabled;
@@ -480,11 +559,25 @@ class _StatisticsState extends State<Statistics> {
         _pageIndex = 0;
       });
 
+      trace.log('savedSelection=cleared reason=sourceRefresh', progress: .88);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_pageCtrl.hasClients) _pageCtrl.jumpToPage(0);
       });
+      await trace.succeed(
+        '통계 새로고침 완료: 집계 대상 $eligibleDays일, 제외 $excludedDays일',
+      );
     } catch (e, st) {
       dev.log('[STAT] refresh failed', name: 'Statistics', error: e, stackTrace: st);
+      if (trace != null) {
+        await trace.fail(
+          '통계 데이터 새로고침에 실패했습니다.',
+          error: e,
+          stackTrace: st,
+        );
+      } else {
+        debugPrint('[STAT] refresh failed error=$e');
+        debugPrint('$st');
+      }
       if (!mounted) return;
       setState(() {
         _refreshLoading = false;
@@ -493,6 +586,11 @@ class _StatisticsState extends State<Statistics> {
     }
   }
 
+
+  bool _isStatisticsEligibleDay(Map<String, dynamic> day) {
+    if (day['_statisticsEligible'] != true) return false;
+    return _asStringList(day['_historyLogsUrls']).isNotEmpty;
+  }
 
   List<Map<String, dynamic>> _buildVisibleCards() {
     final area = (_selectedArea ?? '').trim();
@@ -511,7 +609,7 @@ class _StatisticsState extends State<Statistics> {
       for (final dt in datesSorted) {
         final key = _fmtDateKey(_normalizeDate(dt));
         final day = byDate[key];
-        if (day == null) continue;
+        if (day == null || !_isStatisticsEligibleDay(day)) continue;
         list.add(day);
       }
       return list;
@@ -528,6 +626,7 @@ class _StatisticsState extends State<Statistics> {
 
       final dd = _normalizeDate(d);
       if (dd.isBefore(start) || dd.isAfter(end)) continue;
+      if (!_isStatisticsEligibleDay(entry.value)) continue;
       list.add(entry.value);
     }
 
@@ -650,6 +749,22 @@ class _StatisticsState extends State<Statistics> {
         'date': dateStr,
         '출차': outCount,
         '정산금': lockedFee,
+        'historyEntryCount': _asInt(day['_historyEntryCount']) ?? 1,
+        'historyDetailedEntryCount':
+            _asInt(day['_historyDetailedEntryCount']) ?? 0,
+        'historyExcludedEntryCount':
+            _asInt(day['_historyExcludedEntryCount']) ?? 0,
+        'historyFirstEntryCount': _asInt(day['_historyFirstEntryCount']) ?? 0,
+        'historyUnverifiedDetailedEntryCount':
+            _asInt(day['_historyUnverifiedDetailedEntryCount']) ?? 0,
+        'historyLegacyDetailedEntryCount':
+            _asInt(day['_historyLegacyDetailedEntryCount']) ?? 0,
+        'historyAggregationMode':
+            day['_historyAggregationMode']?.toString() ?? 'unknown',
+        'historyLogsUrls': _asStringList(day['_historyLogsUrls']),
+        'historyAggregated': day['_historyAggregated'] == true,
+        'historySectorEntryCount':
+            _asInt(day['_historySectorEntryCount']) ?? (sectorMetrics == null ? 0 : 1),
         if (sectorMetrics != null) 'sector': sectorMetrics.toMap(),
       });
 
@@ -673,6 +788,22 @@ class _StatisticsState extends State<Statistics> {
       parsedData[date] = <String, dynamic>{
         'vehicleOutput': (report['출차'] as int?) ?? 0,
         'totalLockedFee': (report['정산금'] as int?) ?? 0,
+        'historyEntryCount': _asInt(report['historyEntryCount']) ?? 1,
+        'historyDetailedEntryCount':
+            _asInt(report['historyDetailedEntryCount']) ?? 0,
+        'historyExcludedEntryCount':
+            _asInt(report['historyExcludedEntryCount']) ?? 0,
+        'historyFirstEntryCount': _asInt(report['historyFirstEntryCount']) ?? 0,
+        'historyUnverifiedDetailedEntryCount':
+            _asInt(report['historyUnverifiedDetailedEntryCount']) ?? 0,
+        'historyLegacyDetailedEntryCount':
+            _asInt(report['historyLegacyDetailedEntryCount']) ?? 0,
+        'historyAggregationMode':
+            report['historyAggregationMode']?.toString() ?? 'unknown',
+        'historyLogsUrls': _asStringList(report['historyLogsUrls']),
+        'historyAggregated': report['historyAggregated'] == true,
+        'historySectorEntryCount':
+            _asInt(report['historySectorEntryCount']) ?? (sectorMetrics == null ? 0 : 1),
         if (sectorMetrics != null) 'sector': sectorMetrics.toMap(),
       };
     }
@@ -1267,6 +1398,37 @@ class _StatisticsState extends State<Statistics> {
                                 'date': dateStr,
                                 '출차': outC,
                                 '정산금': feeC,
+                                'historyEntryCount':
+                                    _asInt(day['_historyEntryCount']) ?? 1,
+                                'historyDetailedEntryCount': _asInt(
+                                      day['_historyDetailedEntryCount'],
+                                    ) ??
+                                    0,
+                                'historyExcludedEntryCount': _asInt(
+                                      day['_historyExcludedEntryCount'],
+                                    ) ??
+                                    0,
+                                'historyFirstEntryCount':
+                                    _asInt(day['_historyFirstEntryCount']) ?? 0,
+                                'historyUnverifiedDetailedEntryCount': _asInt(
+                                      day['_historyUnverifiedDetailedEntryCount'],
+                                    ) ??
+                                    0,
+                                'historyLegacyDetailedEntryCount': _asInt(
+                                      day['_historyLegacyDetailedEntryCount'],
+                                    ) ??
+                                    0,
+                                'historyAggregationMode':
+                                    day['_historyAggregationMode']?.toString() ??
+                                        'unknown',
+                                'historyLogsUrls':
+                                    _asStringList(day['_historyLogsUrls']),
+                                'historyAggregated':
+                                    day['_historyAggregated'] == true,
+                                'historySectorEntryCount': _asInt(
+                                      day['_historySectorEntryCount'],
+                                    ) ??
+                                    (selectedSectorMetrics == null ? 0 : 1),
                                 if (selectedSectorMetrics != null)
                                   'sector': selectedSectorMetrics.toMap(),
                               });
@@ -2111,6 +2273,8 @@ class _TopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = CommonUiTheme.of(context);
+    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final motion = reduceMotion ? Duration.zero : CommonUiMotion.component;
     String subLine = '$today입니다.';
     if (refreshLoading) subLine = '데이터 갱신 중...';
     if (refreshError != null) subLine = '갱신 오류';
@@ -2131,13 +2295,31 @@ class _TopBar extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  subLine,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: tokens.textPrimary,
-                    fontWeight: FontWeight.w800,
+                AnimatedSwitcher(
+                  duration: motion,
+                  switchInCurve: CommonUiMotion.enter,
+                  switchOutCurve: CommonUiMotion.exit,
+                  transitionBuilder: (child, animation) {
+                    return FadeTransition(
+                      opacity: animation,
+                      child: SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(0, 0.08),
+                          end: Offset.zero,
+                        ).animate(animation),
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: Text(
+                    subLine,
+                    key: ValueKey<String>(subLine),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: tokens.textPrimary,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
                 if (updateLine != null) ...[
@@ -2163,9 +2345,29 @@ class _TopBar extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                 minimumSize: const Size(44, 44),
               ),
-              child: refreshLoading
-                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.refresh, size: 20),
+              child: AnimatedSwitcher(
+                duration: motion,
+                switchInCurve: CommonUiMotion.enter,
+                switchOutCurve: CommonUiMotion.exit,
+                transitionBuilder: (child, animation) {
+                  return FadeTransition(
+                    opacity: animation,
+                    child: ScaleTransition(scale: animation, child: child),
+                  );
+                },
+                child: refreshLoading
+                    ? const SizedBox(
+                        key: ValueKey<String>('refresh-loading'),
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(
+                        Icons.refresh,
+                        key: ValueKey<String>('refresh-idle'),
+                        size: 20,
+                      ),
+              ),
             ),
           ),
           const SizedBox(width: 8),

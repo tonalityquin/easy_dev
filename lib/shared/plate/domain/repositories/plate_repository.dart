@@ -89,6 +89,7 @@ abstract class PlateRepository {
     required String plateNumber,
     required String location,
     required String primaryAtField,
+    required DateTime? createdAt,
   });
 
   Future<void> removeViewItem({
@@ -97,7 +98,7 @@ abstract class PlateRepository {
     required String plateDocId,
   });
 
-  Future<void> transitionPlateType({
+  Future<DateTime?> transitionPlateType({
     required String plateId,
     required String actor,
     required PlateType fromType,

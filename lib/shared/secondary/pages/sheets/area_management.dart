@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../../../app/utils/snackbar_helper.dart';
 import '../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
+import '../../widgets/ops_console_widgets.dart';
 import 'tabs/add_area_tab.dart';
 import 'tabs/division_management_tab.dart';
 import 'tabs/status_mapping_helper.dart';
@@ -176,6 +177,7 @@ class _AreaManagementState extends State<AreaManagement>
     final tokens = CommonUiTheme.of(context);
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final embedded = OpsConsolePresentationScope.isEmbedded(context);
     final body = TabBarView(
       controller: _tabController,
       children: [
@@ -208,6 +210,220 @@ class _AreaManagementState extends State<AreaManagement>
       ],
     );
 
+    final tabBar = TabBar(
+      controller: _tabController,
+      isScrollable: embedded,
+      indicatorColor: tokens.accent,
+      labelColor: tokens.accent,
+      unselectedLabelColor: tokens.textSecondary,
+      dividerColor: tokens.borderSubtle,
+      labelStyle: Theme.of(context).textTheme.labelSmall?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+      tabs: embedded
+          ? const [
+              Tab(icon: Icon(Icons.location_city, size: 17), text: '지역'),
+              Tab(icon: Icon(Icons.business, size: 17), text: '회사'),
+              Tab(icon: Icon(Icons.manage_accounts, size: 17), text: '계정'),
+              Tab(icon: Icon(Icons.settings, size: 17), text: '리밋'),
+            ]
+          : const [
+              Tab(icon: Icon(Icons.location_city), text: '지역 추가'),
+              Tab(icon: Icon(Icons.business), text: '회사 관리'),
+              Tab(icon: Icon(Icons.manage_accounts), text: '계정 조회/관리'),
+              Tab(icon: Icon(Icons.settings), text: '리밋 설정'),
+            ],
+    );
+
+    final content = Stack(
+      children: [
+        body,
+        Positioned.fill(
+          child: IgnorePointer(
+            ignoring: !_showIntroOverlay,
+            child: AnimatedOpacity(
+              opacity: _showIntroOverlay ? 1 : 0,
+              duration:
+                  reduceMotion ? Duration.zero : CommonUiMotion.component,
+              child: ColoredBox(
+                color: tokens.canvas,
+                child: Center(
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.all(embedded ? 12 : 20),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxWidth: embedded ? 300 : 420,
+                      ),
+                      child: CommonAnimatedReveal(
+                        child: Container(
+                          padding: EdgeInsets.all(embedded ? 14 : 20),
+                          decoration: BoxDecoration(
+                            color: tokens.surfaceRaised,
+                            borderRadius: BorderRadius.circular(
+                              CommonUiShapes.card,
+                            ),
+                            border: Border.all(color: tokens.borderSubtle),
+                            boxShadow: [
+                              BoxShadow(
+                                color: tokens.shadow,
+                                blurRadius: 20,
+                                offset: const Offset(0, 10),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Container(
+                                width: embedded ? 42 : 50,
+                                height: embedded ? 42 : 50,
+                                decoration: BoxDecoration(
+                                  color: tokens.accentContainer,
+                                  borderRadius: BorderRadius.circular(
+                                    CommonUiShapes.control,
+                                  ),
+                                ),
+                                alignment: Alignment.center,
+                                child: Icon(
+                                  Icons.corporate_fare_rounded,
+                                  color: tokens.onAccentContainer,
+                                  size: embedded ? 22 : 26,
+                                ),
+                              ),
+                              SizedBox(height: embedded ? 10 : 14),
+                              Text(
+                                '지역/회사 관리 시작',
+                                style: (embedded
+                                        ? Theme.of(context).textTheme.titleMedium
+                                        : Theme.of(context).textTheme.titleLarge)
+                                    ?.copyWith(
+                                  color: tokens.textPrimary,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              SizedBox(height: embedded ? 12 : 18),
+                              CommonButton(
+                                label: '지역 추가',
+                                icon: Icons.add_location_alt_rounded,
+                                onPressed: () => _openTab(0),
+                                expand: true,
+                                haptic: CommonHaptic.selection,
+                              ),
+                              const SizedBox(height: 8),
+                              CommonButton(
+                                label: '회사 관리',
+                                icon: Icons.business_rounded,
+                                onPressed: () => _openTab(1),
+                                expand: true,
+                                variant: CommonButtonVariant.secondary,
+                                haptic: CommonHaptic.selection,
+                              ),
+                              const SizedBox(height: 8),
+                              CommonButton(
+                                label: '계정 조회/관리',
+                                icon: Icons.manage_accounts_rounded,
+                                onPressed: () => _openTab(2),
+                                expand: true,
+                                variant: CommonButtonVariant.secondary,
+                                haptic: CommonHaptic.selection,
+                              ),
+                              const SizedBox(height: 8),
+                              CommonButton(
+                                label: '리밋 설정',
+                                icon: Icons.tune_rounded,
+                                onPressed: () => _openTab(3),
+                                expand: true,
+                                variant: CommonButtonVariant.tertiary,
+                                haptic: CommonHaptic.selection,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        Positioned.fill(
+          child: IgnorePointer(
+            ignoring: !_isDeletingDivision,
+            child: AnimatedOpacity(
+              opacity: _isDeletingDivision ? 1 : 0,
+              duration:
+                  reduceMotion ? Duration.zero : CommonUiMotion.selection,
+              child: ColoredBox(
+                color: tokens.scrim,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 14,
+                    ),
+                    decoration: BoxDecoration(
+                      color: tokens.surfaceRaised,
+                      borderRadius: BorderRadius.circular(
+                        CommonUiShapes.control,
+                      ),
+                      border: Border.all(color: tokens.borderSubtle),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            color: tokens.accent,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Flexible(
+                          child: Text(
+                            _deletingDivisionName == null
+                                ? '삭제 중'
+                                : '삭제 중: $_deletingDivisionName',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(
+                                  color: tokens.textPrimary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+
+    if (embedded) {
+      return Material(
+        color: tokens.canvas,
+        child: Column(
+          children: [
+            Material(
+              color: tokens.surfaceRaised,
+              child: tabBar,
+            ),
+            Expanded(child: content),
+          ],
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: tokens.canvas,
       appBar: AppBar(
@@ -224,201 +440,10 @@ class _AreaManagementState extends State<AreaManagement>
               ),
         ),
         centerTitle: true,
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: tokens.accent,
-          labelColor: tokens.accent,
-          unselectedLabelColor: tokens.textSecondary,
-          dividerColor: tokens.borderSubtle,
-          tabs: const [
-            Tab(icon: Icon(Icons.location_city), text: '지역 추가'),
-            Tab(icon: Icon(Icons.business), text: '회사 관리'),
-            Tab(icon: Icon(Icons.manage_accounts), text: '계정 조회/관리'),
-            Tab(icon: Icon(Icons.settings), text: '리밋 설정'),
-          ],
-        ),
+        bottom: tabBar,
       ),
-      body: Stack(
-        children: [
-          body,
-          Positioned.fill(
-            child: IgnorePointer(
-              ignoring: !_showIntroOverlay,
-              child: AnimatedOpacity(
-                opacity: _showIntroOverlay ? 1 : 0,
-                duration: reduceMotion
-                    ? Duration.zero
-                    : CommonUiMotion.component,
-                child: ColoredBox(
-                  color: tokens.canvas,
-                  child: Center(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(20),
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 420),
-                        child: CommonAnimatedReveal(
-                          child: Container(
-                            padding: const EdgeInsets.all(20),
-                            decoration: BoxDecoration(
-                              color: tokens.surfaceRaised,
-                              borderRadius: BorderRadius.circular(
-                                CommonUiShapes.card,
-                              ),
-                              border: Border.all(
-                                color: tokens.borderSubtle,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: tokens.shadow,
-                                  blurRadius: 20,
-                                  offset: const Offset(0, 10),
-                                ),
-                              ],
-                            ),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Container(
-                                  width: 50,
-                                  height: 50,
-                                  decoration: BoxDecoration(
-                                    color: tokens.accentContainer,
-                                    borderRadius: BorderRadius.circular(
-                                      CommonUiShapes.control,
-                                    ),
-                                  ),
-                                  alignment: Alignment.center,
-                                  child: Icon(
-                                    Icons.corporate_fare_rounded,
-                                    color: tokens.onAccentContainer,
-                                    size: 26,
-                                  ),
-                                ),
-                                const SizedBox(height: 14),
-                                Text(
-                                  '지역/회사 관리 시작',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .titleLarge
-                                      ?.copyWith(
-                                        color: tokens.textPrimary,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  '관리할 항목을 선택하면 해당 탭으로 이동합니다.',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodyMedium
-                                      ?.copyWith(
-                                        color: tokens.textSecondary,
-                                      ),
-                                ),
-                                const SizedBox(height: 18),
-                                CommonButton(
-                                  label: '지역 추가',
-                                  icon: Icons.add_location_alt_rounded,
-                                  onPressed: () => _openTab(0),
-                                  expand: true,
-                                  haptic: CommonHaptic.selection,
-                                ),
-                                const SizedBox(height: 8),
-                                CommonButton(
-                                  label: '회사 관리',
-                                  icon: Icons.business_rounded,
-                                  onPressed: () => _openTab(1),
-                                  expand: true,
-                                  variant: CommonButtonVariant.secondary,
-                                  haptic: CommonHaptic.selection,
-                                ),
-                                const SizedBox(height: 8),
-                                CommonButton(
-                                  label: '계정 조회/관리',
-                                  icon: Icons.manage_accounts_rounded,
-                                  onPressed: () => _openTab(2),
-                                  expand: true,
-                                  variant: CommonButtonVariant.secondary,
-                                  haptic: CommonHaptic.selection,
-                                ),
-                                const SizedBox(height: 8),
-                                CommonButton(
-                                  label: '리밋 설정',
-                                  icon: Icons.tune_rounded,
-                                  onPressed: () => _openTab(3),
-                                  expand: true,
-                                  variant: CommonButtonVariant.tertiary,
-                                  haptic: CommonHaptic.selection,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          Positioned.fill(
-            child: IgnorePointer(
-              ignoring: !_isDeletingDivision,
-              child: AnimatedOpacity(
-                opacity: _isDeletingDivision ? 1 : 0,
-                duration: reduceMotion
-                    ? Duration.zero
-                    : CommonUiMotion.selection,
-                child: ColoredBox(
-                  color: tokens.scrim,
-                  child: Center(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 18,
-                        vertical: 14,
-                      ),
-                      decoration: BoxDecoration(
-                        color: tokens.surfaceRaised,
-                        borderRadius: BorderRadius.circular(
-                          CommonUiShapes.control,
-                        ),
-                        border: Border.all(color: tokens.borderSubtle),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.5,
-                              color: tokens.accent,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Text(
-                            _deletingDivisionName == null
-                                ? '삭제 중'
-                                : '삭제 중: $_deletingDivisionName',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
-                                ?.copyWith(
-                                  color: tokens.textPrimary,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
+      body: content,
     );
   }
+
 }

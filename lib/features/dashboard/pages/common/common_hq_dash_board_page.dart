@@ -3164,7 +3164,7 @@ IconData _capabilityIcon(Capability capability) {
     case Capability.bill:
       return Icons.receipt_long_rounded;
     case Capability.record:
-      return Icons.record_voice_over_rounded;
+      return Icons.extension_rounded;
   }
 }
 

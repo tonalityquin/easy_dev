@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../design_system/common_ui/common_ui_overlays.dart';
+
 import '../../../account/applications/user_state.dart';
 import '../../../dev/application/area_state.dart';
 import '../../../payment/widgets/billing_bottom_sheet.dart';
@@ -18,9 +19,47 @@ import '../../../../shared/plate/domain/repositories/plate_repository.dart';
 import '../../../../shared/plate/widgets/log_viewer_bottom_sheet.dart';
 import '../../../../shared/plate/widgets/parking_completed_common_dialog.dart';
 import '../../../../shared/plate/widgets/parking_completed_status_widgets.dart';
+import '../../../../shared/real_time_table/real_time_table_spec.dart';
 
 Future<bool> _showDeleteDialog(BuildContext context, PlateModel plate) async {
   return showParkingCompletedDeleteDialog(context, plate);
+}
+
+Future<void> showTripleParkingCompletedStatusSideDockFromRealtime({
+  required BuildContext context,
+  required RealTimePlateDetailRequest request,
+}) async {
+  await showParkingStatusLoadingSideDock<bool>(
+    context: context,
+    mode: '트리플',
+    statusTitle: request.statusTitle,
+    plateId: request.plateId,
+    plateNumber: request.plateNumber,
+    area: request.area,
+    location: request.location,
+    cachedPlate: request.cachedPlate,
+    loadPlate: request.loadPlate,
+    barrierDismissible: false,
+    loadedBuilder: (dockContext, plate) {
+      final division = dockContext.read<UserState>().division;
+      final area = dockContext.read<AreaState>().currentArea;
+      return _StatusSideDockContent(
+        plate: plate,
+        plateNumber: plate.plateNumber,
+        division: division,
+        area: area,
+        onRequestEntry: (traceLog) async {
+          await handleParkingCompletedEntryRequest(
+            dockContext,
+            plate.plateNumber,
+            area,
+            traceLog: traceLog,
+          );
+        },
+        onDelete: () => _showDeleteDialog(dockContext, plate),
+      );
+    },
+  );
 }
 
 Future<void> showTripleParkingCompletedStatusBottomSheetFromDialog({
@@ -31,10 +70,14 @@ Future<void> showTripleParkingCompletedStatusBottomSheetFromDialog({
   final deleted = await showTripleParkingCompletedStatusBottomSheet(
     context: context,
     plate: plate,
-    onRequestEntry: () async {
+    onRequestEntry: (traceLog) async {
       final area = context.read<AreaState>().currentArea;
       await handleParkingCompletedEntryRequest(
-          context, plate.plateNumber, area);
+        context,
+        plate.plateNumber,
+        area,
+        traceLog: traceLog,
+      );
     },
     onDelete: () async {
       return await _showDeleteDialog(context, plate);
@@ -52,7 +95,7 @@ Future<void> showTripleParkingCompletedStatusBottomSheetFromDialog({
 Future<bool?> showTripleParkingCompletedStatusBottomSheet({
   required BuildContext context,
   required PlateModel plate,
-  required Future<void> Function() onRequestEntry,
+  required Future<void> Function(MovementPlateTraceLog? traceLog) onRequestEntry,
   required Future<bool> Function() onDelete,
 }) async {
   final plateNumber = plate.plateNumber;
@@ -65,7 +108,7 @@ Future<bool?> showTripleParkingCompletedStatusBottomSheet({
           ? '출차 요청 상태 처리'
           : '입차 완료 상태 처리';
 
-  await traceParkingStatusSectorSummary(
+  final trace = await traceParkingStatusSectorSummary(
     context: context,
     mode: '트리플',
     statusTitle: statusTitle,
@@ -76,29 +119,28 @@ Future<bool?> showTripleParkingCompletedStatusBottomSheet({
   );
   if (!context.mounted) return null;
 
-  return showCommonOverlayBottomSheet<bool>(
+  trace.log(
+    'presentation=right_side_dock direction=right_to_left management=left_rail footer=status_change_only plate=$plateNumber area=$area status=$statusTitle',
+    progress: .16,
+  );
+
+  return showParkingStatusSideDock<bool>(
+    trace: trace,
     context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    transparentBackground: true,
-    isDismissible: false,
-    enableDrag: false,
-    builder: (_) => FractionallySizedBox(
-      heightFactor: 1,
-      child: _FullHeightSheet(
-        plate: plate,
-        plateNumber: plateNumber,
-        division: division,
-        area: area,
-        onRequestEntry: onRequestEntry,
-        onDelete: onDelete,
-      ),
+    barrierDismissible: false,
+    builder: (_) => _StatusSideDockContent(
+      plate: plate,
+      plateNumber: plateNumber,
+      division: division,
+      area: area,
+      onRequestEntry: onRequestEntry,
+      onDelete: onDelete,
     ),
   );
 }
 
-class _FullHeightSheet extends StatefulWidget {
-  const _FullHeightSheet({
+class _StatusSideDockContent extends StatefulWidget {
+  const _StatusSideDockContent({
     required this.plate,
     required this.plateNumber,
     required this.division,
@@ -111,59 +153,44 @@ class _FullHeightSheet extends StatefulWidget {
   final String plateNumber;
   final String division;
   final String area;
-  final Future<void> Function() onRequestEntry;
+  final Future<void> Function(MovementPlateTraceLog? traceLog) onRequestEntry;
   final Future<bool> Function() onDelete;
 
   @override
-  State<_FullHeightSheet> createState() => _FullHeightSheetState();
+  State<_StatusSideDockContent> createState() => _StatusSideDockContentState();
 }
 
-class _FullHeightSheetState extends State<_FullHeightSheet>
-    with SingleTickerProviderStateMixin {
+class _StatusSideDockContentState extends State<_StatusSideDockContent> {
   late PlateModel _plate;
 
   final ScrollController _scrollController = ScrollController();
 
-  late final AnimationController _attentionCtrl;
-  late final Animation<double> _attentionPulse;
 
-  bool _departureOverrideArmed = false;
-  DateTime? _departureOverrideArmedAt;
-  static const Duration _overrideWindow = Duration(seconds: 12);
 
   bool _primaryBusy = false;
   String? _completionMessage;
 
-  final GlobalKey _billingTileKey = GlobalKey();
 
   @override
   void initState() {
     super.initState();
     _plate = widget.plate;
 
-    _attentionCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 820),
-    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      parkingStatusTraceLog(
+        context,
+        'billing_state=${parkingCompletedBillingStateDebugName(_billingState)} '
+        'billingType=${_billingApplicable ? (_plate.billingType ?? '').trim() : "none"} '
+        'bypass=${_billingState == ParkingCompletedBillingState.notApplicable}',
+      );
+    });
 
-    _attentionPulse = TweenSequence<double>([
-      TweenSequenceItem(
-        tween: Tween<double>(begin: 0, end: 1)
-            .chain(CurveTween(curve: Curves.easeOutCubic)),
-        weight: 45,
-      ),
-      TweenSequenceItem(
-        tween: Tween<double>(begin: 1, end: 0)
-            .chain(CurveTween(curve: Curves.easeInCubic)),
-        weight: 55,
-      ),
-    ]).animate(_attentionCtrl);
   }
 
   @override
   void dispose() {
     _scrollController.dispose();
-    _attentionCtrl.dispose();
     super.dispose();
   }
 
@@ -173,8 +200,18 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
       _type == PlateType.parkingRequests ||
       _type == PlateType.departureRequests;
 
+  ParkingCompletedBillingState get _billingState =>
+      resolveParkingCompletedBillingState(
+        billingType: _plate.billingType,
+        isLocked: _plate.isLockedFee == true,
+      );
+
+  bool get _billingApplicable =>
+      _billingState != ParkingCompletedBillingState.notApplicable;
+
   bool get _needsBilling =>
-      (_type == PlateType.parkingCompleted) && (_plate.isLockedFee != true);
+      (_type == PlateType.parkingCompleted) &&
+      _billingState == ParkingCompletedBillingState.unsettled;
 
   bool get _isFreeBilling =>
       (_plate.basicAmount ?? 0) == 0 && (_plate.addAmount ?? 0) == 0;
@@ -205,23 +242,6 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
 
   bool get _drivingLocked => _isMyDriving;
 
-  bool get _overrideActive {
-    if (!_departureOverrideArmed || _departureOverrideArmedAt == null) {
-      return false;
-    }
-    return DateTime.now().difference(_departureOverrideArmedAt!) <=
-        _overrideWindow;
-  }
-
-  void _resetOverride() {
-    _departureOverrideArmed = false;
-    _departureOverrideArmedAt = null;
-  }
-
-  void _armOverride() {
-    _departureOverrideArmed = true;
-    _departureOverrideArmedAt = DateTime.now();
-  }
 
   String _plateDocId() {
     return resolveParkingCompletedDocId(_plate);
@@ -250,29 +270,15 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
     }
   }
 
-  Future<void> _triggerBillingRequiredAttention() async {
-    final ctx = _billingTileKey.currentContext;
-    if (ctx != null) {
-      await Scrollable.ensureVisible(
-        ctx,
-        duration: const Duration(milliseconds: 320),
-        curve: Curves.easeOut,
-        alignment: 0.12,
-      );
-    } else if (_scrollController.hasClients) {
-      await _scrollController.animateTo(
-        0,
-        duration: const Duration(milliseconds: 320),
-        curve: Curves.easeOut,
-      );
-    }
 
-    _attentionCtrl.forward(from: 0);
-  }
 
   Future<bool> _autoPrebillFreeIfNeeded() async {
     if (_plate.isLockedFee == true) return true;
     if (!_isFreeBilling) return false;
+    parkingStatusTraceLog(
+      context,
+      '무료 자동 정산 시작 plate=${_plate.plateNumber} amount=0 firebaseWrite=true',
+    );
 
     if (_drivingLocked || _isOtherDriving) {
       return false;
@@ -331,9 +337,16 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
       if (!mounted) return false;
       setState(() => _plate = freshPlate);
 
-      _resetOverride();
+      parkingStatusTraceLog(
+        context,
+        '무료 자동 정산 완료 plate=${_plate.plateNumber} amount=0 firebaseWrite=true firebaseRead=true',
+      );
       return true;
-    } catch (_) {
+    } catch (error) {
+      parkingStatusTraceLog(
+        context,
+        '무료 자동 정산 실패 plate=${_plate.plateNumber} error=$error',
+      );
       if (!mounted) return false;
       return false;
     }
@@ -348,6 +361,10 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
   }
 
   Future<void> _goDepartureRequested() async {
+    parkingStatusTraceLog(
+      context,
+      '상태 변경 요청 from=${_type?.name ?? "unknown"} to=departureRequests plate=${_plate.plateNumber}',
+    );
     if (_drivingLocked) return;
 
     if (_isOtherDriving) {
@@ -360,13 +377,22 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
       _plate.plateNumber,
       _plate.area,
       _effectiveLocation,
+      traceLog: (message) => parkingStatusTraceLog(context, message),
     );
 
     if (!mounted) return;
+    parkingStatusTraceLog(
+      context,
+      '상태 변경 완료 to=departureRequests plate=${_plate.plateNumber}',
+    );
     Navigator.pop(context);
   }
 
   Future<void> _goBackToParkingCompleted() async {
+    parkingStatusTraceLog(
+      context,
+      '상태 변경 요청 to=parkingCompleted plate=${_plate.plateNumber}',
+    );
     if (_drivingLocked) return;
     if (_isOtherDriving) return;
 
@@ -374,9 +400,14 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
       context,
       plate: _plate,
       fallbackArea: widget.area,
+      traceLog: (message) => parkingStatusTraceLog(context, message),
     );
 
     if (!mounted) return;
+    parkingStatusTraceLog(
+      context,
+      '상태 변경 완료 to=parkingCompleted plate=${_plate.plateNumber}',
+    );
     Navigator.pop(context);
   }
 
@@ -399,9 +430,20 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
       final movementPlate = context.read<MovementPlate>();
 
       try {
-        await movementPlate.setDepartureCompleted(_plate);
+        parkingStatusTraceLog(
+          context,
+          '상태 변경 시작 mode=skip from=departureRequests to=departureCompleted plate=${_plate.plateNumber}',
+        );
+        await movementPlate.setDepartureCompleted(
+          _plate,
+          traceLog: (message) => parkingStatusTraceLog(context, message),
+        );
 
         if (!mounted) return;
+        parkingStatusTraceLog(
+          context,
+          '상태 변경 완료 mode=skip from=departureRequests to=departureCompleted plate=${_plate.plateNumber}',
+        );
 
         setState(() {
           _plate = _plate.copyWith(isSelected: false, selectedBy: null);
@@ -511,17 +553,29 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
       final isEntry = _type == PlateType.parkingRequests;
 
       try {
+        parkingStatusTraceLog(
+          context,
+          '상태 변경 시작 driving=true from=${_type?.name ?? "unknown"} plate=${_plate.plateNumber}',
+        );
         if (isEntry) {
           await movementPlate.setParkingCompleted(
             _plate.plateNumber,
             _plate.area,
             _effectiveLocation,
+            traceLog: (message) => parkingStatusTraceLog(context, message),
           );
         } else if (_type == PlateType.departureRequests) {
-          await movementPlate.setDepartureCompleted(_plate);
+          await movementPlate.setDepartureCompleted(
+          _plate,
+          traceLog: (message) => parkingStatusTraceLog(context, message),
+        );
         }
 
         if (!mounted) return;
+        parkingStatusTraceLog(
+          context,
+          '상태 변경 완료 driving=true to=${isEntry ? "parkingCompleted" : "departureCompleted"} plate=${_plate.plateNumber}',
+        );
         await _showCompletionFeedback(isEntry ? '입차 완료' : '출차 완료');
         if (!mounted) return;
         Navigator.pop(context);
@@ -583,97 +637,141 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
     });
   }
 
-  Future<void> _handlePrebill() async {
-    if (_drivingLocked) return;
+  Future<ParkingStatusDirectionalGearActionResult> _performPrebill() async {
+    final userName = context.read<UserState>().name;
+    final repo = context.read<PlateRepository>();
+    final plateState = context.read<TriplePlateState>();
 
-    if (_isOtherDriving) {
-      return;
+    final bt = (_plate.billingType ?? '').trim();
+    if (bt.isEmpty) {
+      parkingStatusTraceLog(
+        context,
+        '사전 정산 중단 reason=billingType_empty plate=${_plate.plateNumber}',
+      );
+      return ParkingStatusDirectionalGearActionResult.blocked;
     }
 
-    await _runPrimary(() async {
-      final userName = context.read<UserState>().name;
-      final repo = context.read<PlateRepository>();
-      final plateState = context.read<TriplePlateState>();
+    final now = DateTime.now();
+    final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
+    final entryTime = _plate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
 
-      final bt = (_plate.billingType ?? '').trim();
-      if (bt.isEmpty) {
-        return;
-      }
-
-      final now = DateTime.now();
-      final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
-      final entryTime =
-          _plate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
-
-      final result = await showOnTapBillingBottomSheet(
-        context: context,
-        entryTimeInSeconds: entryTime,
-        currentTimeInSeconds: currentTime,
-        basicStandard: _plate.basicStandard ?? 0,
-        basicAmount: _plate.basicAmount ?? 0,
-        addStandard: _plate.addStandard ?? 0,
-        addAmount: _plate.addAmount ?? 0,
-        billingType: _plate.billingType ?? '변동',
-        regularAmount: _plate.regularAmount,
-        regularDurationValue: _plate.regularDurationValue,
+    final result = await showOnTapBillingBottomSheet(
+      context: context,
+      entryTimeInSeconds: entryTime,
+      currentTimeInSeconds: currentTime,
+      basicStandard: _plate.basicStandard ?? 0,
+      basicAmount: _plate.basicAmount ?? 0,
+      addStandard: _plate.addStandard ?? 0,
+      addAmount: _plate.addAmount ?? 0,
+      billingType: _plate.billingType ?? '변동',
+      regularAmount: _plate.regularAmount,
+      regularDurationValue: _plate.regularDurationValue,
+      traceLog: (message) => parkingStatusTraceLog(context, message),
+    );
+    if (result == null) {
+      parkingStatusTraceLog(
+        context,
+        '사전 정산 취소 reason=user_cancel plate=${_plate.plateNumber}',
       );
-      if (result == null) return;
+      return ParkingStatusDirectionalGearActionResult.cancelled;
+    }
 
-      final id = _plateDocId();
-      final fallbackPlate = _plate.copyWith(
-        isLockedFee: true,
+    final id = _plateDocId();
+    final fallbackPlate = _plate.copyWith(
+      isLockedFee: true,
+      lockedAtTimeInSeconds: currentTime,
+      lockedFeeAmount: result.lockedFee,
+      paymentMethod: result.paymentMethod,
+    );
+
+    try {
+      await repo.settlePlateBilling(
+        documentId: id,
         lockedAtTimeInSeconds: currentTime,
         lockedFeeAmount: result.lockedFee,
         paymentMethod: result.paymentMethod,
+        log: PlateLogModel(
+          action: '사전 정산',
+          area: _plate.area,
+          billingType: _plate.billingType,
+          from: _plate.type,
+          performedBy: userName,
+          plateNumber: _plate.plateNumber,
+          timestamp: now,
+          to: _plate.type,
+          type: _plate.type,
+          lockedFee: result.lockedFee,
+          paymentMethod: result.paymentMethod,
+          reason: result.reason?.trim(),
+        ),
+      );
+      reportParkingCompletedDbSafe(
+        area: _plate.area,
+        action: 'write',
+        source: 'parkingCompletedStatus.prebill.repo.settlePlateBilling',
+        n: 1,
       );
 
-      try {
-        await repo.settlePlateBilling(
-          documentId: id,
-          lockedAtTimeInSeconds: currentTime,
-          lockedFeeAmount: result.lockedFee,
-          paymentMethod: result.paymentMethod,
-          log: PlateLogModel(
-            action: '사전 정산',
-            area: _plate.area,
-            billingType: _plate.billingType,
-            from: _plate.type,
-            performedBy: userName,
-            plateNumber: _plate.plateNumber,
-            timestamp: now,
-            to: _plate.type,
-            type: _plate.type,
-            lockedFee: result.lockedFee,
-            paymentMethod: result.paymentMethod,
-            reason: result.reason?.trim(),
-          ),
-        );
-        reportParkingCompletedDbSafe(
-          area: _plate.area,
-          action: 'write',
-          source: 'parkingCompletedStatus.prebill.repo.settlePlateBilling',
-          n: 1,
-        );
+      final freshPlate = await repo.getPlate(id) ?? fallbackPlate;
 
-        final freshPlate = await repo.getPlate(id) ?? fallbackPlate;
+      await plateState.tripleUpdatePlateLocally(
+        PlateType.parkingCompleted,
+        freshPlate,
+      );
 
-        await plateState.tripleUpdatePlateLocally(
-          PlateType.parkingCompleted,
-          freshPlate,
-        );
-
-        if (!mounted) return;
-
-        setState(() => _plate = freshPlate);
-        _resetOverride();
-      } catch (_) {
-        if (!mounted) return;
-        return;
+      if (!mounted) {
+        return ParkingStatusDirectionalGearActionResult.completed;
       }
+      setState(() => _plate = freshPlate);
+      parkingStatusTraceLog(
+        context,
+        'billing_state_transition from=unsettled to=settled plate=${freshPlate.plateNumber}',
+      );
+      parkingStatusTraceLog(
+        context,
+        '사전 정산 완료 plate=${freshPlate.plateNumber} amount=${result.lockedFee} payment=${result.paymentMethod} firebaseWrite=true firebaseRead=true',
+      );
+      return ParkingStatusDirectionalGearActionResult.completed;
+    } catch (error) {
+      parkingStatusTraceLog(
+        context,
+        '사전 정산 실패 plate=${_plate.plateNumber} error=$error',
+      );
+      return ParkingStatusDirectionalGearActionResult.failed;
+    }
+  }
+
+  Future<void> _handlePrebill() async {
+    if (!_billingApplicable) {
+      parkingStatusTraceLog(
+        context,
+        'billing_action=blocked reason=not_applicable plate=${_plate.plateNumber}',
+      );
+      return;
+    }
+    parkingStatusTraceLog(
+      context,
+      '사전 정산 요청 plate=${_plate.plateNumber}',
+    );
+    if (_drivingLocked || _isOtherDriving) return;
+
+    await _runPrimary(() async {
+      await _performPrebill();
     });
   }
 
   Future<void> _handleCancelPrebill() async {
+    if (!_billingApplicable) {
+      parkingStatusTraceLog(
+        context,
+        'billing_action=blocked reason=not_applicable plate=${_plate.plateNumber}',
+      );
+      return;
+    }
+    parkingStatusTraceLog(
+      context,
+      '사전 정산 취소 요청 plate=${_plate.plateNumber}',
+    );
     if (_drivingLocked) return;
 
     if (_isOtherDriving) {
@@ -686,6 +784,10 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
       final plateState = context.read<TriplePlateState>();
 
       if (_plate.isLockedFee != true) {
+        parkingStatusTraceLog(
+          context,
+          '사전 정산 취소 중단 reason=not_locked plate=${_plate.plateNumber}',
+        );
         return;
       }
 
@@ -693,7 +795,13 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
         context: context,
         builder: (_) => const ConfirmCancelFeeDialog(),
       );
-      if (confirm != true) return;
+      if (confirm != true) {
+        parkingStatusTraceLog(
+          context,
+          '사전 정산 취소 중단 reason=user_cancel plate=${_plate.plateNumber}',
+        );
+        return;
+      }
 
       final now = DateTime.now();
       final id = _plateDocId();
@@ -736,8 +844,19 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
         if (!mounted) return;
 
         setState(() => _plate = freshPlate);
-        _resetOverride();
-      } catch (_) {
+          parkingStatusTraceLog(
+          context,
+          'billing_state_transition from=settled to=unsettled plate=${_plate.plateNumber}',
+        );
+        parkingStatusTraceLog(
+          context,
+          '사전 정산 취소 완료 plate=${_plate.plateNumber} firebaseWrite=true firebaseRead=true',
+        );
+      } catch (error) {
+        parkingStatusTraceLog(
+          context,
+          '사전 정산 취소 실패 plate=${_plate.plateNumber} error=$error',
+        );
         if (!mounted) return;
         return;
       }
@@ -756,82 +875,188 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
     final cs = Theme.of(context).colorScheme;
     final rootContext = Navigator.of(context, rootNavigator: true).context;
 
-    final isLocked = _plate.isLockedFee == true;
-    final lockedFee = _plate.lockedFeeAmount;
-    final paymentMethod = (_plate.paymentMethod ?? '').trim();
-    final billingType = (_plate.billingType ?? '').trim();
-    final location =
-        (_plate.location).trim().isEmpty ? '미지정' : _plate.location.trim();
-
-    final statusMemo = resolveParkingCompletedStatusMemo(_plate);
-
-    IconData primaryIcon = Icons.local_shipping_outlined;
-    String primaryTitle = '출차 요청으로 이동';
-    String primarySubtitle = '차량을 출차 요청 상태로 전환합니다.';
-
-    Future<void> Function() primaryOnPressed = () async {
-      if (_drivingLocked) return;
-
-      if (_isOtherDriving) {
-        return;
+    Future<ParkingStatusDirectionalGearActionResult> Function()
+        primaryOnPressed = () async {
+      if (_drivingLocked || _isOtherDriving) {
+        parkingStatusTraceLog(
+          context,
+          'departure_request_gate=blocked_driving plate=${_plate.plateNumber}',
+        );
+        return ParkingStatusDirectionalGearActionResult.blocked;
       }
 
+      var result = ParkingStatusDirectionalGearActionResult.blocked;
       await _runPrimary(() async {
         if (_needsBilling) {
           if (_isFreeBilling) {
+            parkingStatusTraceLog(
+              context,
+              'departure_request_gate=billing_free_auto plate=${_plate.plateNumber}',
+            );
             final ok = await _autoPrebillFreeIfNeeded();
-            if (!ok) return;
+            if (!ok) {
+              parkingStatusTraceLog(
+                context,
+                'departure_request_gate=billing_free_auto_result success=false plate=${_plate.plateNumber}',
+              );
+              result = ParkingStatusDirectionalGearActionResult.blocked;
+              return;
+            }
+            parkingStatusTraceLog(
+              context,
+              'departure_request_gate=billing_free_auto_result success=true plate=${_plate.plateNumber}',
+            );
             await _goDepartureRequested();
+            result = ParkingStatusDirectionalGearActionResult.completed;
             return;
           }
 
-          if (_overrideActive) {
-            _resetOverride();
+          parkingStatusTraceLog(
+            context,
+            'departure_request_gate=billing_unsettled dialog=shown plate=${_plate.plateNumber}',
+          );
+          final choice = await _showDepartureOverrideDialog();
+          if (!mounted) {
+            result = ParkingStatusDirectionalGearActionResult.cancelled;
+            return;
+          }
 
-            final choice = await _showDepartureOverrideDialog();
-            if (!mounted) return;
+          if (choice == ParkingCompletedOverrideChoice.proceed) {
+            parkingStatusTraceLog(
+              context,
+              'departure_request_gate=override_choice choice=proceed plate=${_plate.plateNumber}',
+            );
+            await _goDepartureRequested();
+            result = ParkingStatusDirectionalGearActionResult.completed;
+            return;
+          }
 
-            if (choice == ParkingCompletedOverrideChoice.proceed) {
+          if (choice == ParkingCompletedOverrideChoice.goBilling) {
+            parkingStatusTraceLog(
+              context,
+              'departure_request_gate=override_choice choice=go_billing plate=${_plate.plateNumber}',
+            );
+            parkingStatusTraceLog(
+              context,
+              'departure_request_gate=billing_open source=override plate=${_plate.plateNumber}',
+            );
+            final billingResult = await _performPrebill();
+            if (!mounted) {
+              result = ParkingStatusDirectionalGearActionResult.cancelled;
+              return;
+            }
+            parkingStatusTraceLog(
+              context,
+              'departure_request_gate=billing_result result=${billingResult.name} plate=${_plate.plateNumber}',
+            );
+            if (billingResult ==
+                ParkingStatusDirectionalGearActionResult.completed) {
+              parkingStatusTraceLog(
+                context,
+                'departure_request_gate=billing_continue target=departure_requests plate=${_plate.plateNumber}',
+              );
               await _goDepartureRequested();
+              result = ParkingStatusDirectionalGearActionResult.completed;
               return;
             }
-
-            if (choice == ParkingCompletedOverrideChoice.goBilling) {
-              await _triggerBillingRequiredAttention();
-              return;
-            }
-
+            result = billingResult;
             return;
           }
 
-          _armOverride();
-          await _triggerBillingRequiredAttention();
+          parkingStatusTraceLog(
+            context,
+            'departure_request_gate=override_choice choice=cancel plate=${_plate.plateNumber}',
+          );
+          result = ParkingStatusDirectionalGearActionResult.cancelled;
           return;
         }
 
-        _resetOverride();
+        parkingStatusTraceLog(
+          context,
+          'departure_request_gate=billing_ready plate=${_plate.plateNumber}',
+        );
         await _goDepartureRequested();
+        result = ParkingStatusDirectionalGearActionResult.completed;
       });
+      return result;
     };
 
     final bool isDrivingPrimary = (_type == PlateType.parkingRequests ||
         _type == PlateType.departureRequests);
+    final bool disableOthers = _drivingLocked;
 
-    if (_type == PlateType.parkingRequests) {
-      primaryIcon = Icons.play_circle_fill;
-      primaryTitle = _isMyDriving ? '입차 주행 계속' : '입차 주행 시작';
-      primarySubtitle = _isMyDriving
-          ? '이전에 시작된 주행 상태가 유지되었습니다. 완료 또는 취소로 정리하세요.'
-          : '기어를 위로 올려 주행을 시작합니다. (주행 중에는 뒤로가기가 잠깁니다)';
+    ParkingStatusDirectionalGearAction? lowerLeftAction;
+    ParkingStatusDirectionalGearAction? lowerRightAction;
+
+    if (_type == PlateType.parkingCompleted) {
+      lowerLeftAction = ParkingStatusDirectionalGearAction(
+        label: '입차 요청',
+        debugAction: 'rollback_parking_request',
+        icon: Icons.undo_rounded,
+        tone: ParkingStatusDirectionalGearTone.warning,
+        onConfirm: () async {
+          if (_isOtherDriving) return;
+          parkingStatusTraceLog(
+            context,
+            '상태 변경 요청 to=parkingRequests plate=${_plate.plateNumber}',
+          );
+          try {
+            await widget.onRequestEntry(
+              (message) => parkingStatusTraceLog(context, message),
+            );
+            if (!mounted) return;
+            parkingStatusTraceLog(
+              context,
+              '상태 변경 완료 to=parkingRequests plate=${_plate.plateNumber}',
+            );
+            Navigator.pop(context);
+          } catch (error) {
+            parkingStatusTraceLog(
+              context,
+              '상태 변경 실패 to=parkingRequests plate=${_plate.plateNumber} error=$error',
+            );
+          }
+        },
+      );
+      lowerRightAction = ParkingStatusDirectionalGearAction(
+        label: '출차 요청',
+        debugAction: 'advance_departure_request',
+        icon: Icons.local_shipping_outlined,
+        onConfirmResult: primaryOnPressed,
+      );
     } else if (_type == PlateType.departureRequests) {
-      primaryIcon = Icons.play_circle_fill;
-      primaryTitle = _isMyDriving ? '출차 주행 계속' : '출차 주행 시작';
-      primarySubtitle = _isMyDriving
-          ? '이전에 시작된 주행 상태가 유지되었습니다. 완료 또는 취소로 정리하세요.'
-          : '기어를 위로 올려 주행을 시작합니다. (주행 중에는 뒤로가기가 잠깁니다)';
+      lowerLeftAction = ParkingStatusDirectionalGearAction(
+        label: '입차 완료',
+        debugAction: 'rollback_parking_completed',
+        icon: Icons.undo_rounded,
+        tone: ParkingStatusDirectionalGearTone.warning,
+        onConfirm: _goBackToParkingCompleted,
+      );
+      lowerRightAction = ParkingStatusDirectionalGearAction(
+        label: '출차 완료',
+        debugAction: 'skip_departure_to_completed',
+        icon: Icons.skip_next_rounded,
+        onConfirm: _skipDepartureDrivingToCompleted,
+      );
     }
 
-    final bool disableOthers = _drivingLocked;
+    final upperDownAction = isDrivingPrimary
+        ? ParkingStatusDirectionalGearAction(
+            label: '주행 취소',
+            debugAction: 'driving_cancel',
+            icon: Icons.keyboard_arrow_down_rounded,
+            tone: ParkingStatusDirectionalGearTone.warning,
+            onConfirm: _cancelDrivingByGear,
+          )
+        : null;
+    final upperRightAction = isDrivingPrimary
+        ? ParkingStatusDirectionalGearAction(
+            label: '주행 완료',
+            debugAction: 'driving_complete',
+            icon: Icons.check_rounded,
+            onConfirm: _completeDrivingByGear,
+          )
+        : null;
 
     final String sheetTitle = () {
       if (_type == PlateType.parkingRequests) return '입차 요청 상태 처리';
@@ -839,309 +1064,144 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
       return '입차 완료 상태 처리';
     }();
 
-    final sheet = PopScope(
-      canPop: !_drivingLocked,
-      onPopInvoked: (didPop) {},
-      child: SafeArea(
-        top: false,
-        child: Container(
-          decoration: BoxDecoration(
-            color: cs.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-            border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
+    final sheet = ParkingStatusSideDockFrame(
+      title: widget.plateNumber,
+      subtitle: parkingStatusHeaderSubtitle(
+        statusTitle: sheetTitle,
+        sectorId: _plate.sectorId,
+        sectorName: _plate.sectorName,
+      ),
+      icon: Icons.directions_car_filled_rounded,
+      closeEnabled: !disableOthers,
+      onClose: _tryClose,
+      leadingRail: ParkingStatusManagementRail(
+        debugTarget: sheetTitle,
+        actions: [
+          ParkingStatusManagementAction(
+            icon: Icons.history,
+            label: '로그 확인',
+            displayLabel: '로그',
+            debugAction: 'history',
+            enabled: !_primaryBusy && !disableOthers,
+            onPressed: () async {
+              await LogViewerBottomSheet.show(
+                context,
+                initialPlateNumber: widget.plateNumber,
+                division: widget.division,
+                area: widget.area,
+                requestTime: _plate.requestTime,
+                plateId: _plate.id.trim().isEmpty ? null : _plate.id.trim(),
+              );
+            },
           ),
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-                child: Column(
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 44,
-                        height: 4,
-                        margin: const EdgeInsets.only(bottom: 12),
-                        decoration: BoxDecoration(
-                          color: cs.outlineVariant.withOpacity(0.85),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      ),
-                    ),
-                    ParkingCompletedSheetTitleRow(
-                      title: sheetTitle,
-                      icon: Icons.settings,
-                      onClose: _tryClose,
-                      closeEnabled: !disableOthers,
-                    ),
-                    const SizedBox(height: 12),
-                  ],
+          if (_billingApplicable)
+            ParkingStatusManagementAction(
+              icon: _billingState == ParkingCompletedBillingState.settled
+                  ? Icons.undo_rounded
+                  : Icons.payments_rounded,
+              label: _billingState == ParkingCompletedBillingState.settled
+                  ? '정산 취소'
+                  : '정산',
+              displayLabel:
+                  _billingState == ParkingCompletedBillingState.settled
+                      ? '취소'
+                      : '정산',
+              debugAction: _billingState == ParkingCompletedBillingState.settled
+                  ? 'billing_cancel'
+                  : 'billing_settle',
+              linkedGroup: 'settlement',
+              linkedReverse:
+                  _billingState == ParkingCompletedBillingState.settled,
+              emphasized: _needsBilling,
+              enabled: !_primaryBusy && !disableOthers && !_isOtherDriving,
+              onPressed: () async {
+                if (_billingState == ParkingCompletedBillingState.settled) {
+                  await _handleCancelPrebill();
+                  return;
+                }
+                await _handlePrebill();
+              },
+            ),
+          ParkingStatusManagementAction(
+            icon: Icons.edit_note_outlined,
+            label: '정보 수정',
+            displayLabel: '수정',
+            debugAction: 'edit',
+            enabled: !_primaryBusy && !disableOthers && !_isOtherDriving,
+            onPressed: () async {
+              if (_isOtherDriving) return;
+              Navigator.pop(context);
+              Navigator.push(
+                rootContext,
+                MaterialPageRoute(
+                  builder: (_) => ModifyPlateScreen(
+                    plate: _plate,
+                    collectionKey: PlateType.parkingCompleted,
+                  ),
                 ),
-              ),
-              Expanded(
-                child: AnimatedBuilder(
-                  animation: _attentionPulse,
-                  builder: (context, _) {
-                    final attention = _attentionPulse.value;
-
-                    return ListView(
-                      controller: _scrollController,
-                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-                      children: [
-                        if (_drivingLocked) ...[
-                          _DrivingLockBanner(
-                            selectedBy: (_plate.selectedBy ?? '').trim(),
-                            phase: (_type == PlateType.parkingRequests)
-                                ? '입차'
-                                : '출차',
-                          ),
-                          const SizedBox(height: 12),
-                        ] else if (_isOtherDriving) ...[
-                          _OtherDrivingBanner(
-                            selectedBy: (_plate.selectedBy ?? '').trim(),
-                            phase: (_type == PlateType.parkingRequests)
-                                ? '입차'
-                                : '출차',
-                          ),
-                          const SizedBox(height: 12),
-                        ],
-                        ParkingCompletedPlateSummaryCard(
-                          plateNumber: widget.plateNumber,
-                          area: _plate.area,
-                          location: location,
-                          billingType: billingType,
-                          isLocked: isLocked,
-                          lockedFee: lockedFee,
-                          paymentMethod: paymentMethod,
-                          statusMemo: statusMemo,
-                          sectorName: _plate.sectorName ?? '',
-                          attention: _needsBilling ? attention : 0,
-                        ),
-                        const SizedBox(height: 14),
-                        ParkingCompletedSectionCard(
-                          title: '핵심 작업',
-                          subtitle: '자주 사용하는 기능을 상단에 배치했습니다.',
-                          child: Column(
-                            children: [
-                              if (isDrivingPrimary)
-                                _GearShiftDrivingControl(
-                                  cs: cs,
-                                  icon: primaryIcon,
-                                  title: primaryTitle,
-                                  subtitle: primarySubtitle,
-                                  locked: _drivingLocked,
-                                  enabled: !_primaryBusy && !_isOtherDriving,
-                                  onEngage: _engageDrivingByGear,
-                                  onComplete: _completeDrivingByGear,
-                                  onCancel: _cancelDrivingByGear,
-                                  upThreshold: 0.86,
-                                  downThreshold: 0.14,
-                                ),
-                              if (!isDrivingPrimary)
-                                ParkingCompletedPrimaryCtaButton(
-                                  icon: primaryIcon,
-                                  title: primaryTitle,
-                                  subtitle: primarySubtitle,
-                                  enabled: !_primaryBusy && !disableOthers,
-                                  onPressed: primaryOnPressed,
-                                ),
-                              if (_type == PlateType.departureRequests) ...[
-                                const SizedBox(height: 10),
-                                ParkingCompletedPrimaryCtaButton(
-                                  icon: Icons.skip_next_rounded,
-                                  title: '주행 스킵 후 출차 완료',
-                                  subtitle: '주행 과정을 생략하고 바로 출차 완료로 변경합니다.',
-                                  enabled: !_primaryBusy &&
-                                      !disableOthers &&
-                                      !_isOtherDriving,
-                                  onPressed: _skipDepartureDrivingToCompleted,
-                                  backgroundColor: cs.tertiary,
-                                  foregroundColor: cs.onTertiary,
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        AbsorbPointer(
-                          absorbing: disableOthers,
-                          child: Opacity(
-                            opacity: disableOthers ? 0.55 : 1.0,
-                            child: ParkingCompletedSectionCard(
-                              title: '기타',
-                              subtitle: disableOthers
-                                  ? '주행 중에는 다른 기능을 사용할 수 없습니다.'
-                                  : (_isOtherDriving
-                                      ? '타 사용자가 주행 중입니다. 변경 기능은 제한될 수 있습니다.'
-                                      : '로그 확인, 정보 수정, 정산/취소, 삭제 등'),
-                              child: Column(
-                                children: [
-                                  Builder(
-                                    builder: (_) {
-                                      final bool blockMutations =
-                                          _isOtherDriving;
-
-                                      final tiles = <Widget>[
-                                        ParkingCompletedSecondaryActionButton(
-                                          icon: Icons.history,
-                                          label: '로그 확인',
-                                          enabled: !_primaryBusy,
-                                          onPressed: () async {
-                                            await LogViewerBottomSheet.show(
-                                              context,
-                                              initialPlateNumber: widget.plateNumber,
-                                              division: widget.division,
-                                              area: widget.area,
-                                              requestTime: _plate.requestTime,
-                                              plateId: _plate.id.trim().isEmpty
-                                                  ? null
-                                                  : _plate.id.trim(),
-                                            );
-                                          },
-                                        ),
-                                        ParkingCompletedSecondaryActionButton(
-                                          icon: Icons.edit_note_outlined,
-                                          label: '정보 수정',
-                                          enabled:
-                                              !_primaryBusy && !blockMutations,
-                                          onPressed: () async {
-                                            if (blockMutations) {
-                                              return;
-                                            }
-                                            Navigator.pop(context);
-                                            Navigator.push(
-                                              rootContext,
-                                              MaterialPageRoute(
-                                                builder: (_) =>
-                                                    ModifyPlateScreen(
-                                                  plate: _plate,
-                                                  collectionKey: PlateType
-                                                      .parkingCompleted,
-                                                ),
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                        KeyedSubtree(
-                                          key: _billingTileKey,
-                                          child:
-                                              ParkingCompletedSecondaryActionButton(
-                                            icon: Icons.receipt_long,
-                                            label: '정산',
-                                            enabled: !_primaryBusy &&
-                                                !blockMutations,
-                                            badgeText:
-                                                _needsBilling ? '필수' : null,
-                                            attention:
-                                                _needsBilling ? attention : 0,
-                                            backgroundColor: _needsBilling
-                                                ? cs.errorContainer
-                                                    .withOpacity(0.35)
-                                                : cs.surfaceContainerLow,
-                                            borderColor: _needsBilling
-                                                ? cs.error.withOpacity(0.45)
-                                                : cs.outlineVariant
-                                                    .withOpacity(0.85),
-                                            foregroundColor: _needsBilling
-                                                ? cs.error
-                                                : cs.onSurface,
-                                            onPressed: _handlePrebill,
-                                          ),
-                                        ),
-                                        ParkingCompletedSecondaryActionButton(
-                                          icon: Icons.lock_open,
-                                          label: '정산 취소',
-                                          enabled:
-                                              !_primaryBusy && !blockMutations,
-                                          badgeText: isLocked ? '잠김' : '비잠김',
-                                          backgroundColor: isLocked
-                                              ? cs.tertiaryContainer
-                                                  .withOpacity(0.45)
-                                              : cs.surfaceContainerLow,
-                                          borderColor: isLocked
-                                              ? cs.tertiary.withOpacity(0.35)
-                                              : cs.outlineVariant
-                                                  .withOpacity(0.85),
-                                          foregroundColor: isLocked
-                                              ? cs.tertiary
-                                              : cs.onSurface,
-                                          onPressed: _handleCancelPrebill,
-                                        ),
-                                        if (_type == PlateType.parkingCompleted)
-                                          ParkingCompletedSecondaryActionButton(
-                                            icon: Icons.undo_rounded,
-                                            label: '입차 요청으로',
-                                            enabled: !_primaryBusy &&
-                                                !blockMutations,
-                                            onPressed: () async {
-                                              if (blockMutations) {
-                                                return;
-                                              }
-                                              Navigator.pop(context);
-                                              await widget.onRequestEntry();
-                                            },
-                                          ),
-                                        if (_type ==
-                                            PlateType.departureRequests)
-                                          ParkingCompletedSecondaryActionButton(
-                                            icon: Icons.undo_rounded,
-                                            label: '입차 완료로',
-                                            enabled: !_primaryBusy &&
-                                                !blockMutations,
-                                            onPressed: () async {
-                                              if (blockMutations) {
-                                                return;
-                                              }
-                                              await _goBackToParkingCompleted();
-                                            },
-                                          ),
-                                      ];
-
-                                      if (tiles.length.isOdd) {
-                                        tiles.add(const SizedBox.shrink());
-                                      }
-
-                                      return GridView.count(
-                                        crossAxisCount: 2,
-                                        shrinkWrap: true,
-                                        physics:
-                                            const NeverScrollableScrollPhysics(),
-                                        crossAxisSpacing: 12,
-                                        mainAxisSpacing: 12,
-                                        childAspectRatio: 2.6,
-                                        children: tiles,
-                                      );
-                                    },
-                                  ),
-                                  const SizedBox(height: 12),
-                                  ParkingCompletedDangerActionButton(
-                                    icon: Icons.delete_forever,
-                                    label: '삭제',
-                                    enabled: !_primaryBusy && !_isOtherDriving,
-                                    onPressed: () async {
-                                      if (_isOtherDriving) {
-                                        return;
-                                      }
-                                      final deleted = await widget.onDelete();
-                                      if (!mounted) return;
-                                      if (deleted) {
-                                        Navigator.of(context).pop(true);
-                                      }
-                                    },
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                      ],
-                    );
-                  },
-                ),
-              ),
-            ],
+              );
+            },
           ),
+          ParkingStatusManagementAction(
+            icon: Icons.delete_forever,
+            label: '삭제',
+            displayLabel: '삭제',
+            debugAction: 'delete',
+            destructive: true,
+            enabled: !_primaryBusy && !disableOthers && !_isOtherDriving,
+            onPressed: () async {
+              if (_isOtherDriving) return;
+              parkingStatusTraceLog(
+                context,
+                '삭제 요청 plate=${_plate.plateNumber}',
+              );
+              final deleted = await widget.onDelete();
+              if (!mounted) return;
+              parkingStatusTraceLog(
+                context,
+                '삭제 결과 plate=${_plate.plateNumber} deleted=$deleted',
+              );
+              if (deleted) {
+                Navigator.of(context).pop(true);
+              }
+            },
+          ),
+        ],
+      ),
+      footer: ParkingStatusPrimaryFooter(
+        debugTarget: sheetTitle,
+        child: ParkingStatusDirectionalGear(
+          debugTarget: sheetTitle,
+          enabled: !_primaryBusy && !_isOtherDriving,
+          busy: _primaryBusy,
+          driving: _drivingLocked,
+          blocked: _isOtherDriving && !_drivingLocked,
+          blockedBy: (_plate.selectedBy ?? '').trim(),
+          onStartDriving: isDrivingPrimary ? _engageDrivingByGear : null,
+          lowerLeft: lowerLeftAction,
+          lowerRight: lowerRightAction,
+          upperDown: upperDownAction,
+          upperRight: upperRightAction,
+          startLabel: _type == PlateType.departureRequests ? '출차 주행' : '입차 주행',
         ),
+      ),
+      child: ParkingStatusAdaptiveRequestBody(
+        plate: _plate,
+        area: widget.area,
+        debugTarget: sheetTitle,
+        scrollController: _scrollController,
+        leading: [
+          if (_drivingLocked)
+            _DrivingLockBanner(
+              selectedBy: (_plate.selectedBy ?? '').trim(),
+              phase: (_type == PlateType.parkingRequests) ? '입차' : '출차',
+            )
+          else if (_isOtherDriving)
+            _OtherDrivingBanner(
+              selectedBy: (_plate.selectedBy ?? '').trim(),
+              phase: (_type == PlateType.parkingRequests) ? '입차' : '출차',
+            ),
+        ],
       ),
     );
 
@@ -1149,7 +1209,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
     return Stack(
-      fit: StackFit.expand,
+      alignment: Alignment.center,
       children: [
         sheet,
         Positioned.fill(
@@ -1327,7 +1387,7 @@ class _DrivingLockBanner extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '선점자: $who · 뒤로가기/닫기 불가\n아래 버튼으로 “주행 완료/취소”를 선택하세요.',
+                  '선점자: $who · 뒤로가기/닫기 불가\n상태 변경 기어에서 아래로 취소, 오른쪽으로 완료를 선택합니다.',
                   style: TextStyle(
                     fontWeight: FontWeight.w700,
                     fontSize: 12,
@@ -1403,498 +1463,6 @@ class _OtherDrivingBanner extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _GearShiftDrivingControl extends StatefulWidget {
-  const _GearShiftDrivingControl({
-    required this.cs,
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.locked,
-    required this.enabled,
-    required this.onEngage,
-    required this.onComplete,
-    required this.onCancel,
-    this.upThreshold = 0.86,
-    this.downThreshold = 0.14,
-  });
-
-  final ColorScheme cs;
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final bool locked;
-  final bool enabled;
-  final Future<bool> Function() onEngage;
-  final Future<void> Function() onComplete;
-  final Future<void> Function() onCancel;
-  final double upThreshold;
-  final double downThreshold;
-
-  @override
-  State<_GearShiftDrivingControl> createState() =>
-      _GearShiftDrivingControlState();
-}
-
-class _GearShiftDrivingControlState extends State<_GearShiftDrivingControl>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
-
-  bool _armedHapticSent = false;
-  bool _busyInternal = false;
-
-  static const double _trackHeight = 132;
-  static const double _trackWidth = 92;
-  static const double _handleHeight = 48;
-  static const double _pad = 12;
-  static const double _slotWidth = 32;
-
-  double get _travel => _trackHeight - (_pad * 2) - _handleHeight;
-
-  double get _slotHeight => _trackHeight - (_pad * 2);
-
-  bool get _canInteract => widget.enabled && !_busyInternal;
-
-  bool get _armedUp => _ctrl.value >= widget.upThreshold;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 210),
-      value: widget.locked ? 1 : 0,
-    );
-  }
-
-  @override
-  void didUpdateWidget(covariant _GearShiftDrivingControl oldWidget) {
-    super.didUpdateWidget(oldWidget);
-
-    if (oldWidget.locked != widget.locked) {
-      _armedHapticSent = false;
-      _animateTo(widget.locked ? 1 : 0);
-    }
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _animateTo(double v) async {
-    try {
-      await _ctrl.animateTo(
-        v.clamp(0.0, 1.0).toDouble(),
-        curve: Curves.easeOutCubic,
-      );
-    } catch (_) {}
-  }
-
-  void _onDragStart(DragStartDetails d) {
-    if (!_canInteract) return;
-    if (widget.locked) return;
-    _armedHapticSent = false;
-  }
-
-  void _onDragUpdate(DragUpdateDetails d) {
-    if (!_canInteract) return;
-    if (widget.locked) return;
-
-    final delta = (-d.delta.dy) / _travel;
-    final next = (_ctrl.value + delta).clamp(0.0, 1.0).toDouble();
-    _ctrl.value = next;
-
-    if (_armedUp && !_armedHapticSent) {
-      _armedHapticSent = true;
-      try {
-        HapticFeedback.selectionClick();
-      } catch (_) {}
-    }
-
-    if (!_armedUp) {
-      _armedHapticSent = false;
-    }
-  }
-
-  Future<void> _onDragEnd(DragEndDetails d) async {
-    if (!_canInteract) return;
-    if (widget.locked) return;
-
-    if (_armedUp) {
-      setState(() => _busyInternal = true);
-      try {
-        try {
-          HapticFeedback.mediumImpact();
-        } catch (_) {}
-
-        await _animateTo(1);
-        final ok = await widget.onEngage();
-
-        if (!ok && mounted) {
-          await _animateTo(0);
-        }
-      } finally {
-        if (mounted) setState(() => _busyInternal = false);
-      }
-      return;
-    }
-
-    await _animateTo(0);
-  }
-
-  Future<void> _runAction(Future<void> Function() fn) async {
-    if (!_canInteract) return;
-    setState(() => _busyInternal = true);
-    try {
-      await fn();
-    } finally {
-      if (mounted) setState(() => _busyInternal = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = widget.cs;
-
-    return AnimatedBuilder(
-      animation: _ctrl,
-      builder: (context, _) {
-        final p = _ctrl.value.clamp(0.0, 1.0).toDouble();
-
-        final active = widget.locked || _armedUp;
-
-        final bg = Color.lerp(
-          cs.primary.withOpacity(0.10),
-          cs.primary.withOpacity(0.18),
-          active ? 1 : 0,
-        )!;
-        final border = Color.lerp(
-          cs.primary.withOpacity(0.28),
-          cs.primary.withOpacity(0.48),
-          active ? 1 : 0,
-        )!;
-
-        final hint = _busyInternal
-            ? '처리 중...'
-            : (widget.locked
-                ? '주행 중: 아래 버튼으로 완료/취소'
-                : (_armedUp ? '놓으면 주행 시작' : '기어를 위로 올려 START'));
-
-        final handleTop = _pad + ((1 - p) * _travel);
-        final fillH = (_slotHeight * p).clamp(0.0, _slotHeight).toDouble();
-        final slotLeft = (_trackWidth - _slotWidth) / 2;
-
-        final bool dragEnabled = _canInteract && !widget.locked;
-
-        return Opacity(
-          opacity: widget.enabled ? 1 : 0.55,
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
-            decoration: BoxDecoration(
-              color: bg,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: border, width: 1.2),
-            ),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    Icon(widget.icon, color: cs.primary),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        widget.title,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w900,
-                          fontSize: 16,
-                          color: cs.onSurface,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    widget.subtitle,
-                    style: TextStyle(
-                      color: cs.onSurfaceVariant,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Center(
-                  child: SizedBox(
-                    width: _trackWidth,
-                    height: _trackHeight,
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onVerticalDragStart: dragEnabled ? _onDragStart : null,
-                      onVerticalDragUpdate: dragEnabled ? _onDragUpdate : null,
-                      onVerticalDragEnd: dragEnabled ? _onDragEnd : null,
-                      child: Stack(
-                        children: [
-                          Positioned.fill(
-                            child: Container(
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(18),
-                                color: cs.surfaceContainerLow,
-                                border: Border.all(
-                                  color: cs.outlineVariant.withOpacity(0.85),
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: cs.shadow.withOpacity(0.12),
-                                    blurRadius: 18,
-                                    offset: const Offset(0, 10),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          Positioned.fill(
-                            child: Padding(
-                              padding: const EdgeInsets.all(10),
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(16),
-                                  color: cs.surface,
-                                  border: Border.all(
-                                    color: cs.outlineVariant.withOpacity(0.50),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          Positioned(
-                            left: slotLeft,
-                            right: slotLeft,
-                            top: _pad,
-                            bottom: _pad,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(999),
-                                color: cs.surfaceContainerHigh,
-                                border: Border.all(
-                                  color: cs.outlineVariant.withOpacity(0.55),
-                                ),
-                              ),
-                            ),
-                          ),
-                          Positioned(
-                            left: slotLeft + 2,
-                            right: slotLeft + 2,
-                            bottom: _pad + 2,
-                            height: (fillH - 4).clamp(0.0, _slotHeight),
-                            child: Container(
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(999),
-                                color: cs.primary.withOpacity(0.18),
-                              ),
-                            ),
-                          ),
-                          Positioned(
-                            top: 6,
-                            left: 0,
-                            right: 0,
-                            child: Center(
-                              child: Text(
-                                widget.locked ? 'LOCKED' : 'START',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 0.8,
-                                  color:
-                                      active ? cs.primary : cs.onSurfaceVariant,
-                                ),
-                              ),
-                            ),
-                          ),
-                          Positioned(
-                            left: 8,
-                            right: 8,
-                            top: handleTop,
-                            height: _handleHeight,
-                            child: _ShifterHandle(
-                              cs: cs,
-                              active: active,
-                              busy: _busyInternal,
-                              locked: widget.locked,
-                            ),
-                          ),
-                          if (_busyInternal)
-                            Positioned.fill(
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  color: cs.scrim.withOpacity(0.05),
-                                  borderRadius: BorderRadius.circular(18),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      widget.locked
-                          ? Icons.directions_car_filled
-                          : Icons.keyboard_arrow_up,
-                      size: 18,
-                      color: active ? cs.primary : cs.onSurfaceVariant,
-                    ),
-                    const SizedBox(width: 6),
-                    Flexible(
-                      child: Text(
-                        hint,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: active ? cs.primary : cs.onSurfaceVariant,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                if (widget.locked) ...[
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: _canInteract
-                              ? () => _runAction(widget.onCancel)
-                              : null,
-                          style: OutlinedButton.styleFrom(
-                            backgroundColor:
-                                cs.errorContainer.withOpacity(0.35),
-                            foregroundColor: cs.error,
-                            side: BorderSide(color: cs.error.withOpacity(0.45)),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                          ),
-                          child: Text(
-                            _busyInternal ? '처리 중...' : '주행 취소',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w900,
-                              color: cs.error,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: FilledButton(
-                          onPressed: _canInteract
-                              ? () => _runAction(widget.onComplete)
-                              : null,
-                          style: FilledButton.styleFrom(
-                            backgroundColor: cs.primary,
-                            foregroundColor: cs.onPrimary,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                          ),
-                          child: Text(
-                            _busyInternal ? '처리 중...' : '주행 완료',
-                            style: const TextStyle(fontWeight: FontWeight.w900),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _ShifterHandle extends StatelessWidget {
-  const _ShifterHandle({
-    required this.cs,
-    required this.active,
-    required this.busy,
-    required this.locked,
-  });
-
-  final ColorScheme cs;
-  final bool active;
-  final bool busy;
-  final bool locked;
-
-  @override
-  Widget build(BuildContext context) {
-    final base = active ? cs.primary : cs.surfaceContainerHigh;
-    final hi = active ? cs.primary.withOpacity(0.92) : cs.surface;
-    final lo = active ? cs.primary.withOpacity(0.82) : cs.surfaceContainerLow;
-
-    final border = active
-        ? cs.primary.withOpacity(0.55)
-        : cs.outlineVariant.withOpacity(0.60);
-
-    final fg = active ? cs.onPrimary : cs.onSurfaceVariant;
-
-    final icon = busy
-        ? Icons.more_horiz
-        : (locked ? Icons.lock_open : Icons.drag_handle_rounded);
-
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [hi, base, lo],
-          stops: const [0.0, 0.55, 1.0],
-        ),
-        border: Border.all(color: border, width: 1.2),
-        boxShadow: [
-          BoxShadow(
-            color: cs.shadow.withOpacity(active ? 0.22 : 0.14),
-            blurRadius: 16,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Align(
-        alignment: Alignment.centerRight,
-        child: Padding(
-          padding: const EdgeInsets.only(right: 10),
-          child: Container(
-            width: 28,
-            height: 28,
-            decoration: BoxDecoration(
-              color: (active ? cs.onPrimary : cs.surface).withOpacity(0.12),
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(
-                color: (active ? cs.onPrimary : cs.onSurfaceVariant)
-                    .withOpacity(0.22),
-              ),
-            ),
-            child: Icon(icon, size: 18, color: fg),
-          ),
-        ),
       ),
     );
   }

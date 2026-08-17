@@ -301,6 +301,9 @@ class PlateWriteService {
       newData = _enforceZeroFeeLock(newData, existing: docSnapshot.data());
 
       final exists = docSnapshot.exists;
+      if (!exists) {
+        newData[PlateFields.createdAt] = FieldValue.serverTimestamp();
+      }
       final existingData = docSnapshot.data() ?? const <String, dynamic>{};
 
       final compOld = Map<String, dynamic>.from(existingData)
@@ -321,11 +324,67 @@ class PlateWriteService {
       await docRef
           .set(newData, SetOptions(merge: true))
           .timeout(const Duration(seconds: 10));
-    } on TimeoutException {
+
+      final action = exists ? 'update' : 'create';
+      final createdAtGuard = exists ? 'preserved' : 'serverTimestamp_assigned';
+      debugPrint(
+        '✅ [PlateWriteService.addOrUpdatePlate] documentId=$documentId action=$action createdAtGuard=$createdAtGuard',
+      );
+
+      unawaited(
+        DevFirebaseDebugDialog.show(
+          operation: 'PlateWriteService.addOrUpdatePlate.$action',
+          details: <String, Object?>{
+            'documentId': documentId,
+            'action': action,
+            'createdAtSource': exists
+                ? 'existing_document_preserved'
+                : 'FieldValue.serverTimestamp()',
+            'createdAtGuard': createdAtGuard,
+            'updatedAtSource': 'FieldValue.serverTimestamp()',
+          },
+          title: 'Plate 저장 확인',
+          useCommonUi: true,
+          success: true,
+          copyAsDebugPrintCode: true,
+          devModeOnly: true,
+        ),
+      );
+    } on TimeoutException catch (error, stackTrace) {
+      await DevFirebaseDebugDialog.show(
+        operation: 'PlateWriteService.addOrUpdatePlate.timeout',
+        error: error,
+        stackTrace: stackTrace,
+        details: <String, Object?>{'documentId': documentId},
+        title: 'Plate 저장 실패',
+        useCommonUi: true,
+        copyAsDebugPrintCode: true,
+        devModeOnly: true,
+      );
       rethrow;
-    } on FirebaseException {
+    } on FirebaseException catch (error, stackTrace) {
+      await DevFirebaseDebugDialog.show(
+        operation: 'PlateWriteService.addOrUpdatePlate.firebase',
+        error: error,
+        stackTrace: stackTrace,
+        details: <String, Object?>{'documentId': documentId},
+        title: 'Plate 저장 실패',
+        useCommonUi: true,
+        copyAsDebugPrintCode: true,
+        devModeOnly: true,
+      );
       rethrow;
-    } catch (_) {
+    } catch (error, stackTrace) {
+      await DevFirebaseDebugDialog.show(
+        operation: 'PlateWriteService.addOrUpdatePlate.unknown',
+        error: error,
+        stackTrace: stackTrace,
+        details: <String, Object?>{'documentId': documentId},
+        title: 'Plate 저장 실패',
+        useCommonUi: true,
+        copyAsDebugPrintCode: true,
+        devModeOnly: true,
+      );
       rethrow;
     }
   }
@@ -452,6 +511,7 @@ class PlateWriteService {
         final bool selectedByChanged = beforeSelectedBy != afterSelectedBy;
         final bool sectorChanged = beforeSectorId != afterSectorId ||
             beforeSectorName != afterSectorName;
+        final dynamic originalCreatedAt = before[PlateFields.createdAt];
 
         final bool affectsViews = typeChanged ||
             areaChanged ||
@@ -505,6 +565,7 @@ class PlateWriteService {
           String? selectedBy,
           String? sectorId,
           String? sectorName,
+          dynamic createdAtValue,
         }) {
           if (area.trim().isEmpty) return;
 
@@ -524,6 +585,8 @@ class PlateWriteService {
                     ? null
                     : sectorName.trim(),
             'updatedAt': FieldValue.serverTimestamp(),
+            if (createdAtValue != null)
+              PlateFields.createdAt: createdAtValue,
             if (primaryTimeField != null)
               primaryTimeField:
                   primaryTimeValue ?? FieldValue.serverTimestamp(),
@@ -597,6 +660,7 @@ class PlateWriteService {
                 location: afterLocation,
                 sectorId: afterSectorId,
                 sectorName: afterSectorName,
+                createdAtValue: originalCreatedAt,
                 primaryTimeField: 'parkingRequestedAt',
                 primaryTimeValue: reqAt,
                 includeSelectionState: true,
@@ -636,6 +700,7 @@ class PlateWriteService {
                 location: afterLocation,
                 sectorId: afterSectorId,
                 sectorName: afterSectorName,
+                createdAtValue: originalCreatedAt,
                 primaryTimeField: 'parkingCompletedAt',
                 primaryTimeValue: pcAt,
               );
@@ -674,6 +739,7 @@ class PlateWriteService {
                 location: afterLocation,
                 sectorId: afterSectorId,
                 sectorName: afterSectorName,
+                createdAtValue: originalCreatedAt,
                 primaryTimeField: 'departureRequestedAt',
                 primaryTimeValue: depAt,
                 includeSelectionState: true,
@@ -788,7 +854,7 @@ class PlateWriteService {
     }
   }
 
-  Future<void> transitionPlateType({
+  Future<DateTime?> transitionPlateType({
     required String plateId,
     required String actor,
     required String fromType,
@@ -799,13 +865,19 @@ class PlateWriteService {
     final docRef = _firestore.collection('plates').doc(plateId);
 
     try {
-      await _firestore.runTransaction((tx) async {
+      final createdAt = await _firestore.runTransaction<DateTime?>((tx) async {
         final snap = await tx.get(docRef);
         if (!snap.exists) {
           throw FirebaseException(plugin: 'cloud_firestore', code: 'not-found');
         }
         final data = snap.data() ?? <String, dynamic>{};
         final currType = (data['type'] as String?) ?? '';
+        final rawCreatedAt = data[PlateFields.createdAt];
+        final createdAt = rawCreatedAt is Timestamp
+            ? rawCreatedAt.toDate()
+            : rawCreatedAt is DateTime
+                ? rawCreatedAt
+                : null;
 
         if (currType != fromType) {
           throw FirebaseException(
@@ -856,11 +928,17 @@ class PlateWriteService {
         };
 
         tx.update(docRef, update);
+        return createdAt;
       });
+
+      debugPrint(
+        '✅ [PlateWriteService.transitionPlateType] plateId=$plateId createdAtSource=transaction_snapshot createdAtAvailable=${createdAt != null}',
+      );
+      return createdAt;
     } on FirebaseException catch (e, st) {
       unawaited(
         DevFirebaseDebugDialog.show(
-          operation: 'plateWrite.transitionPlateType',
+          operation: 'PlateWriteService.transitionPlateType.firebase',
           error: e,
           stackTrace: st,
           details: <String, Object?>{
@@ -872,13 +950,17 @@ class PlateWriteService {
             'extraFields': extraFields?.keys.toList(growable: false),
             'forceOverride': forceOverride,
           },
+          title: 'Plate 상태 전환 실패',
+          useCommonUi: true,
+          copyAsDebugPrintCode: true,
+          devModeOnly: true,
         ),
       );
       rethrow;
     } catch (e, st) {
       unawaited(
         DevFirebaseDebugDialog.show(
-          operation: 'plateWrite.transitionPlateType',
+          operation: 'PlateWriteService.transitionPlateType.unknown',
           error: e,
           stackTrace: st,
           details: <String, Object?>{
@@ -890,6 +972,10 @@ class PlateWriteService {
             'extraFields': extraFields?.keys.toList(growable: false),
             'forceOverride': forceOverride,
           },
+          title: 'Plate 상태 전환 실패',
+          useCommonUi: true,
+          copyAsDebugPrintCode: true,
+          devModeOnly: true,
         ),
       );
       throw Exception("DB 업데이트 실패: $e");
@@ -993,6 +1079,8 @@ class PlateWriteService {
                   'location': location,
                   'departureRequestedAt':
                       depRequestedAt ?? FieldValue.serverTimestamp(),
+                  if (data[PlateFields.createdAt] != null)
+                    PlateFields.createdAt: data[PlateFields.createdAt],
                   'isSelected': isSelected,
                   'selectedBy': selectedByValue == null || selectedByValue.isEmpty
                       ? null
@@ -1033,6 +1121,8 @@ class PlateWriteService {
                   PlateFields.plateNumber: plateNumber,
                   'location': location,
                   'parkingRequestedAt': reqAt ?? FieldValue.serverTimestamp(),
+                  if (data[PlateFields.createdAt] != null)
+                    PlateFields.createdAt: data[PlateFields.createdAt],
                   'isSelected': isSelected,
                   'selectedBy': selectedByValue == null || selectedByValue.isEmpty
                       ? null

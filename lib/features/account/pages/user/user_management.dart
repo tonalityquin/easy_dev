@@ -1,10 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../app/utils/status_dialog.dart';
 import '../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
+import '../../../../shared/secondary/application/secondary_account_workspace_state.dart';
 import '../../../../shared/secondary/widgets/ops_console_dialogs.dart';
 import '../../../../shared/secondary/widgets/ops_console_widgets.dart';
 import '../../../dev/application/area_state.dart';
@@ -32,41 +37,128 @@ class UserManagement extends StatefulWidget {
 }
 
 class _UserManagementState extends State<UserManagement> {
-  bool _isAccountManagementMode = false;
+  final TextEditingController _searchController = TextEditingController();
+  SecondaryAccountWorkspaceState? _workspaceState;
   String _query = '';
   _UserStatusFilter _statusFilter = _UserStatusFilter.all;
+  bool _refreshing = false;
+  bool _selectionClearScheduled = false;
+
+  void _log(String message) {
+    final workspace = _workspaceState;
+    if (workspace != null) {
+      workspace.log(message);
+      return;
+    }
+    debugPrint('[UserManagement] $message');
+  }
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      context.read<UserState>().refreshUsersBySelectedAreaAndCache();
+      unawaited(_initialRefresh());
     });
   }
 
-  Future<void> _refreshUsersForCurrentArea(BuildContext context) async {
-    try {
-      final userState = context.read<UserState>();
-      await userState.refreshUsersBySelectedAreaAndCache();
-      if (!context.mounted) return;
-      _clearSelection(userState);
-    } catch (_) {}
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_workspaceState != null) return;
+    _workspaceState = context.read<SecondaryAccountWorkspaceState>();
+    _log('user_management_mounted');
   }
 
-  void _clearSelection(UserState userState) {
-    final id = userState.selectedUserId;
-    if (id != null) {
-      userState.toggleUserCard(id);
+  @override
+  void dispose() {
+    _log('user_management_disposed');
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _initialRefresh() async {
+    final userState = context.read<UserState>();
+    _log('initial_refresh_started');
+    try {
+      await userState.refreshUsersBySelectedAreaAndCache();
+      if (!mounted) return;
+      _clearSelection(userState, reason: 'initial_refresh');
+      _log('initial_refresh_completed count=${userState.users.length}');
+    } catch (error) {
+      _log('initial_refresh_failed error=$error');
     }
   }
 
-  Future<void> _toggleAccountManagementMode(BuildContext context) async {
+  Future<void> _refreshUsersForCurrentArea(BuildContext context) async {
+    if (_refreshing) return;
     final userState = context.read<UserState>();
-    _clearSelection(userState);
-    if (!mounted) return;
-    setState(() {
-      _isAccountManagementMode = !_isAccountManagementMode;
+    setState(() => _refreshing = true);
+    _log('refresh_started');
+    try {
+      await userState.refreshUsersBySelectedAreaAndCache();
+      if (!context.mounted) return;
+      _clearSelection(userState, reason: 'refresh');
+      _log('refresh_completed count=${userState.users.length}');
+    } catch (error) {
+      _log('refresh_failed error=$error');
+    } finally {
+      if (mounted) {
+        setState(() => _refreshing = false);
+      }
+    }
+  }
+
+  void _clearSelection(
+    UserState userState, {
+    String reason = 'manual',
+  }) {
+    final id = userState.selectedUserId;
+    if (id == null) return;
+    unawaited(userState.toggleUserCard(id));
+    _log('selection_cleared reason=$reason');
+  }
+
+  void _setQuery(String value) {
+    if (_query == value) return;
+    setState(() => _query = value);
+    _log('query_changed length=${value.trim().length}');
+  }
+
+  void _clearQuery() {
+    if (_query.isEmpty && _searchController.text.isEmpty) return;
+    _searchController.clear();
+    setState(() => _query = '');
+    _log('query_cleared');
+  }
+
+  void _setStatusFilter(_UserStatusFilter filter) {
+    if (_statusFilter == filter) return;
+    HapticFeedback.selectionClick();
+    setState(() => _statusFilter = filter);
+    _log('status_filter_changed value=${filter.name}');
+  }
+
+  void _scheduleSelectionValidation(
+    UserState userState,
+    List<UserModel> scopedUsers,
+    List<UserModel> visibleUsers,
+  ) {
+    final selectedId = userState.selectedUserId;
+    if (selectedId == null) return;
+    if (visibleUsers.any((user) => user.id == selectedId)) return;
+    if (_selectionClearScheduled) return;
+    _selectionClearScheduled = true;
+    final inScope = scopedUsers.any((user) => user.id == selectedId);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _selectionClearScheduled = false;
+      if (!mounted) return;
+      final current = context.read<UserState>();
+      if (current.selectedUserId != selectedId) return;
+      _clearSelection(
+        current,
+        reason: inScope ? 'filtered_out' : 'scope_changed',
+      );
     });
   }
 
@@ -219,6 +311,7 @@ class _UserManagementState extends State<UserManagement> {
     final areaState = context.read<AreaState>();
     final currentArea = areaState.currentArea;
     final currentDivision = areaState.currentDivision;
+    _log('form_opened mode=${initialUser == null ? 'create' : 'edit'}');
 
     showCommonOverlayBottomSheet<void>(
       context: context,
@@ -265,9 +358,15 @@ class _UserManagementState extends State<UserManagement> {
     );
   }
 
-  Future<void> _handlePrimaryAction(BuildContext context) async {
+  Future<void> _handlePrimaryAction(
+    BuildContext context, {
+    bool forceCreate = false,
+  }) async {
     final userState = context.read<UserState>();
-    final selectedId = userState.selectedUserId;
+    if (forceCreate) {
+      _clearSelection(userState, reason: 'create_opened');
+    }
+    final selectedId = forceCreate ? null : userState.selectedUserId;
 
     if (selectedId == null) {
       buildUserBottomSheet(
@@ -665,22 +764,80 @@ class _UserManagementState extends State<UserManagement> {
     final selectedId = userState.selectedUserId;
     if (selectedId == null) return;
 
-    final selectedUser = userState.users.firstWhereOrNull((u) => u.id == selectedId);
+    final selectedUser =
+        userState.users.firstWhereOrNull((user) => user.id == selectedId);
     if (selectedUser == null) {
-      _clearSelection(userState);
+      _clearSelection(userState, reason: 'delete_target_missing');
       return;
     }
 
+    _log('delete_confirm_opened name=${_maskName(selectedUser.name)}');
     final ok = await _confirmDeleteUser(context);
-    if (!ok) return;
+    if (!ok) {
+      _log('delete_cancelled name=${_maskName(selectedUser.name)}');
+      return;
+    }
 
-    await userState.deleteUserCard(
-      [selectedId],
-      onError: (_) {},
+    final trace = await DeveloperOperationTrace.start(
+      context: context,
+      title: '계정 삭제',
+      initialMessage: '계정 삭제 요청을 시작합니다.',
+      useCommonUi: true,
+      developerModeMessage:
+          '개발자 모드 ON: 계정 삭제 로그를 debugPrint 코드로 복사할 수 있습니다.',
+      standardModeMessage: '개발자 모드 OFF: 계정 삭제 로그를 콘솔에 기록합니다.',
     );
 
-    if (!context.mounted) return;
-    _clearSelection(userState);
+    String? deleteError;
+    try {
+      trace.log(
+        '삭제 대상 확인: 사용자 ${_maskName(selectedUser.name)}, 전화 ${_maskPhone(selectedUser.phone)}',
+        progress: 0.2,
+      );
+      trace.log('계정 삭제와 사용자 캐시 갱신을 요청합니다.', progress: 0.5);
+      await userState.deleteUserCard(
+        [selectedId],
+        onError: (message) {
+          deleteError = message;
+        },
+      );
+      if (deleteError != null) {
+        trace.log('계정 삭제 실패 응답: $deleteError', progress: 0.9);
+        await trace.fail('계정 삭제에 실패했습니다.');
+        if (!trace.developerMode && context.mounted) {
+          await _showAccountFailureDialog(
+            context,
+            title: '계정 삭제 불가',
+            message: deleteError!,
+            fallbackDescription:
+                '계정을 삭제하는 중 문제가 발생했습니다. 네트워크 상태를 확인한 뒤 다시 시도하세요.',
+          );
+        }
+        return;
+      }
+      trace.log('계정 삭제 및 사용자 캐시 반영 완료', progress: 0.92);
+      await trace.succeed('계정 삭제가 완료되었습니다.');
+      _log('delete_completed name=${_maskName(selectedUser.name)}');
+    } catch (error, stackTrace) {
+      await trace.fail(
+        '계정 삭제 중 예외가 발생했습니다.',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (!trace.developerMode && context.mounted) {
+        await _showAccountFailureDialog(
+          context,
+          title: '계정 삭제 불가',
+          message: '계정 삭제 실패: $error',
+          fallbackDescription:
+              '계정을 삭제하는 중 문제가 발생했습니다. 네트워크 상태를 확인한 뒤 다시 시도하세요.',
+        );
+      }
+    } finally {
+      if (context.mounted) {
+        _clearSelection(userState, reason: 'delete_finished');
+      }
+    }
   }
 
   bool _matchesSearch(UserModel user) {
@@ -710,193 +867,299 @@ class _UserManagementState extends State<UserManagement> {
     }
   }
 
-  Widget _buildUserRow(BuildContext context, UserState userState, UserModel user) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-    final isSelected = userState.selectedUserId == user.id;
-    final statusColor = user.isActive ? cs.primary : cs.error;
-    final modesText = user.modes.isNotEmpty ? user.modes.join(', ') : '모드 없음';
-    final titleStyle = (tt.titleMedium ?? const TextStyle(fontSize: 16)).copyWith(
-      fontWeight: FontWeight.w900,
-      color: cs.onSurface,
-      letterSpacing: -.15,
-    );
+  String _maskEmail(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return '';
+    final at = trimmed.indexOf('@');
+    if (at <= 0 || at == trimmed.length - 1) {
+      return trimmed.length <= 2
+          ? List.filled(trimmed.length, '*').join()
+          : '${trimmed[0]}***${trimmed[trimmed.length - 1]}';
+    }
+    final local = trimmed.substring(0, at);
+    final domain = trimmed.substring(at + 1);
+    final localMasked = local.length <= 1 ? '${local}***' : '${local[0]}***';
+    return '$localMasked@$domain';
+  }
 
-    return InkWell(
-      onTap: () => userState.toggleUserCard(user.id),
-      borderRadius: BorderRadius.circular(16),
-      child: OpsPanel(
-        selected: isSelected,
-        accentColor: statusColor,
-        padding: EdgeInsets.zero,
-        child: Row(
+  Future<void> _selectUser(
+    UserState userState,
+    UserModel user,
+    SecondaryAccountMode mode,
+  ) async {
+    await HapticFeedback.selectionClick();
+    final wasSelected = userState.selectedUserId == user.id;
+    await userState.toggleUserCard(user.id);
+    _log(
+      '${wasSelected ? 'user_deselected' : 'user_selected'} name=${_maskName(user.name)} mode=${mode.name}',
+    );
+  }
+
+  Widget _buildToolbar(
+    BuildContext context, {
+    required bool refreshing,
+    required bool deleteMode,
+  }) {
+    return Row(
+      children: [
+        Expanded(
+          child: OpsDockSearchField(
+            controller: _searchController,
+            query: _query,
+            semanticLabel: '계정 검색',
+            onChanged: _setQuery,
+            onClear: _clearQuery,
+          ),
+        ),
+        const SizedBox(width: 6),
+        CommonIconButton(
+          icon: Icons.refresh_rounded,
+          tooltip: '새로고침',
+          onPressed: refreshing ? null : () => _refreshUsersForCurrentArea(context),
+          loading: refreshing,
+          haptic: CommonHaptic.selection,
+          size: 40,
+          iconSize: 19,
+        ),
+        const SizedBox(width: 4),
+        AnimatedOpacity(
+          duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false
+              ? Duration.zero
+              : CommonUiMotion.selection,
+          opacity: deleteMode ? .34 : 1,
+          child: CommonIconButton(
+            icon: Icons.person_add_alt_1_rounded,
+            tooltip: '계정 등록',
+            onPressed: deleteMode
+                ? null
+                : () => _handlePrimaryAction(context, forceCreate: true),
+            haptic: CommonHaptic.selection,
+            size: 40,
+            iconSize: 19,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStatusSegments({
+    required BuildContext context,
+    required int totalCount,
+    required int activeCount,
+    required int inactiveCount,
+  }) {
+    final tokens = CommonUiTheme.of(context);
+    return OpsDockStatusSegments<_UserStatusFilter>(
+      selected: _statusFilter,
+      items: [
+        OpsDockStatusSegmentItem<_UserStatusFilter>(
+          value: _UserStatusFilter.all,
+          label: '전체',
+          count: totalCount,
+          color: tokens.accent,
+        ),
+        OpsDockStatusSegmentItem<_UserStatusFilter>(
+          value: _UserStatusFilter.active,
+          label: '활성',
+          count: activeCount,
+          color: tokens.success,
+        ),
+        OpsDockStatusSegmentItem<_UserStatusFilter>(
+          value: _UserStatusFilter.inactive,
+          label: '비활성',
+          count: inactiveCount,
+          color: tokens.iconSecondary,
+        ),
+      ],
+      onSelected: _setStatusFilter,
+    );
+  }
+
+  Widget _buildEmptyState(
+    BuildContext context, {
+    required bool scopedEmpty,
+    required bool deleteMode,
+  }) {
+    final tokens = CommonUiTheme.of(context);
+    final textTheme = Theme.of(context).textTheme;
+    final queryActive = _query.trim().isNotEmpty;
+    final filtered = _statusFilter != _UserStatusFilter.all;
+    final title = scopedEmpty
+        ? '등록된 계정이 없습니다'
+        : queryActive
+            ? '일치하는 계정이 없습니다'
+            : filtered
+                ? '${_statusFilter == _UserStatusFilter.active ? '활성' : '비활성'} 계정이 없습니다'
+                : '표시할 계정이 없습니다';
+
+    Widget? action;
+    if (scopedEmpty && !deleteMode) {
+      action = CommonButton(
+        label: '계정 등록',
+        icon: Icons.person_add_alt_1_rounded,
+        onPressed: () => _handlePrimaryAction(context, forceCreate: true),
+        haptic: CommonHaptic.selection,
+        minHeight: 42,
+      );
+    } else if (queryActive) {
+      action = CommonButton(
+        label: '검색 초기화',
+        icon: Icons.search_off_rounded,
+        onPressed: _clearQuery,
+        variant: CommonButtonVariant.secondary,
+        haptic: CommonHaptic.selection,
+        minHeight: 42,
+      );
+    } else if (filtered) {
+      action = CommonButton(
+        label: '전체 보기',
+        icon: Icons.groups_rounded,
+        onPressed: () => _setStatusFilter(_UserStatusFilter.all),
+        variant: CommonButtonVariant.secondary,
+        haptic: CommonHaptic.selection,
+        minHeight: 42,
+      );
+    }
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 6,
-              height: 128,
+              width: 44,
+              height: 44,
               decoration: BoxDecoration(
-                color: statusColor,
-                borderRadius: const BorderRadius.horizontal(left: Radius.circular(16)),
+                color: tokens.surfaceRaised,
+                borderRadius: BorderRadius.circular(CommonUiShapes.control),
+                border: Border.all(color: tokens.borderSubtle),
               ),
-            ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(child: Text(_maskName(user.name), style: titleStyle, maxLines: 1, overflow: TextOverflow.ellipsis)),
-                        const SizedBox(width: 8),
-                        OpsStatusBadge(
-                          label: user.isActive ? '활성' : '비활성',
-                          color: statusColor,
-                          icon: user.isActive ? Icons.check_circle_rounded : Icons.pause_circle_filled_rounded,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      user.email.isEmpty ? '이메일 미등록' : user.email,
-                      style: (tt.bodySmall ?? const TextStyle(fontSize: 12)).copyWith(
-                        color: cs.onSurfaceVariant,
-                        fontWeight: FontWeight.w800,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: [
-                        OpsInfoPill(text: _maskPhone(user.phone).isEmpty ? '전화 미등록' : _maskPhone(user.phone), icon: Icons.phone_rounded),
-                        OpsInfoPill(text: user.role.isEmpty ? '역할 없음' : user.role, icon: Icons.verified_user_rounded),
-                        if (user.position?.isNotEmpty == true) OpsInfoPill(text: user.position!, icon: Icons.badge_rounded),
-                        OpsInfoPill(text: modesText, icon: Icons.widgets_rounded),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(right: 12),
+              alignment: Alignment.center,
               child: Icon(
-                isSelected ? Icons.check_circle_rounded : Icons.chevron_right_rounded,
-                color: isSelected ? statusColor : cs.onSurfaceVariant.withOpacity(.7),
+                queryActive ? Icons.person_search_rounded : Icons.group_off_rounded,
+                color: tokens.iconSecondary,
+                size: 22,
               ),
             ),
+            const SizedBox(height: 10),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: textTheme.bodyMedium?.copyWith(
+                color: tokens.textPrimary,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            if (action != null) ...[
+              const SizedBox(height: 12),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 180),
+                child: action,
+              ),
+            ],
           ],
         ),
       ),
     );
   }
 
-  Widget _buildCommandBar(BuildContext context, int visible, int total) {
-    return OpsCommandPanel(
-      children: [
-        OpsSearchField(
-          hint: '이름 · 전화번호 · 이메일 · 역할 검색',
-          onChanged: (value) => setState(() => _query = value),
-        ),
-        const SizedBox(height: 10),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            OpsFilterChip(
-              label: '전체',
-              selected: _statusFilter == _UserStatusFilter.all,
-              icon: Icons.groups_rounded,
-              onSelected: () => setState(() => _statusFilter = _UserStatusFilter.all),
-            ),
-            OpsFilterChip(
-              label: '활성',
-              selected: _statusFilter == _UserStatusFilter.active,
-              icon: Icons.check_circle_rounded,
-              onSelected: () => setState(() => _statusFilter = _UserStatusFilter.active),
-            ),
-            OpsFilterChip(
-              label: '비활성',
-              selected: _statusFilter == _UserStatusFilter.inactive,
-              icon: Icons.pause_circle_rounded,
-              onSelected: () => setState(() => _statusFilter = _UserStatusFilter.inactive),
-            ),
-            OpsFilterChip(
-              label: _isAccountManagementMode ? '삭제 모드' : '운영 모드',
-              selected: _isAccountManagementMode,
-              icon: _isAccountManagementMode ? Icons.delete_sweep_rounded : Icons.admin_panel_settings_rounded,
-              onSelected: () => _toggleAccountManagementMode(context),
-            ),
-            OpsFilterChip(
-              label: '$visible/$total',
-              selected: false,
-              icon: Icons.filter_alt_rounded,
-              onSelected: () {},
-            ),
-            CommonIconButton(
-              icon: Icons.refresh_rounded,
-              tooltip: '새로고침',
-              onPressed: () => _refreshUsersForCurrentArea(context),
-              haptic: CommonHaptic.selection,
-            ),
-          ],
-        ),
-      ],
+  Widget _buildUserList(
+    BuildContext context, {
+    required UserState userState,
+    required List<UserModel> users,
+    required SecondaryAccountMode mode,
+  }) {
+    final tokens = CommonUiTheme.of(context);
+    return OpsDockListSurface(
+      child: ListView.separated(
+          padding: EdgeInsets.zero,
+          itemCount: users.length,
+          separatorBuilder: (context, index) => Divider(
+            height: 1,
+            thickness: 1,
+            color: tokens.borderSubtle,
+          ),
+          itemBuilder: (context, index) {
+            final user = users[index];
+            return _UserDockRow(
+              key: ValueKey<String>(user.id),
+              name: _maskName(user.name),
+              phone: _maskPhone(user.phone),
+              email: _maskEmail(user.email),
+              role: user.role,
+              position: user.position ?? '',
+              modes: user.modes,
+              active: user.isActive,
+              selected: userState.selectedUserId == user.id,
+              deleteMode: mode == SecondaryAccountMode.delete,
+              onTap: () {
+                unawaited(_selectUser(userState, user, mode));
+              },
+            );
+          },
+      ),
     );
   }
 
-  Widget _buildBottomBar(BuildContext context, bool hasSelection, bool selectedIsActive) {
-    if (_isAccountManagementMode) {
-      return OpsBottomActionBar(
+  Widget _buildContextFooter(
+    BuildContext context, {
+    required UserModel? selectedUser,
+    required SecondaryAccountMode mode,
+  }) {
+    if (selectedUser == null) {
+      return const SizedBox.shrink(key: ValueKey<String>('footer_none'));
+    }
+
+    if (mode == SecondaryAccountMode.delete) {
+      return OpsDockContextFooter(
+        key: const ValueKey<String>('footer_delete'),
         children: [
           Expanded(
-            child: OpsActionButton(
-              label: hasSelection ? '계정 삭제' : '삭제할 계정 선택',
+            child: CommonButton(
+              label: '계정 삭제',
               icon: Icons.delete_forever_rounded,
-              onPressed: hasSelection ? () => _handleDeleteSelectedUser(context) : null,
-              danger: true,
+              onPressed: () => _handleDeleteSelectedUser(context),
+              variant: CommonButtonVariant.destructive,
+              haptic: CommonHaptic.medium,
+              minHeight: 42,
+              expand: true,
             ),
           ),
         ],
       );
     }
 
-    if (!hasSelection) {
-      return OpsBottomActionBar(
-        children: [
-          Expanded(
-            child: OpsActionButton(
-              label: '신규 계정 등록',
-              icon: Icons.person_add_alt_1_rounded,
-              onPressed: () => _handlePrimaryAction(context),
-            ),
-          ),
-        ],
-      );
-    }
-
-    return OpsBottomActionBar(
+    return OpsDockContextFooter(
+      key: ValueKey<String>('footer_operation_${selectedUser.isActive}'),
       children: [
         Expanded(
-          child: OpsActionButton(
+          child: CommonButton(
             label: '수정',
             icon: Icons.edit_rounded,
             onPressed: () => _handlePrimaryAction(context),
-            tonal: true,
+            variant: CommonButtonVariant.secondary,
+            haptic: CommonHaptic.selection,
+            minHeight: 42,
+            expand: true,
           ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 6),
         Expanded(
-          child: OpsActionButton(
-            label: selectedIsActive ? '비활성화' : '활성화',
-            icon: selectedIsActive ? Icons.pause_circle_filled_rounded : Icons.play_circle_fill_rounded,
+          child: CommonButton(
+            label: selectedUser.isActive ? '비활성화' : '활성화',
+            icon: selectedUser.isActive
+                ? Icons.pause_circle_filled_rounded
+                : Icons.play_circle_fill_rounded,
             onPressed: () => _handleToggleActive(context),
-            danger: selectedIsActive,
+            variant: selectedUser.isActive
+                ? CommonButtonVariant.destructive
+                : CommonButtonVariant.primary,
+            haptic: selectedUser.isActive
+                ? CommonHaptic.medium
+                : CommonHaptic.selection,
+            minHeight: 42,
+            expand: true,
           ),
         ),
       ],
@@ -905,59 +1168,291 @@ class _UserManagementState extends State<UserManagement> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final tokens = CommonUiTheme.of(context);
+    final textTheme = Theme.of(context).textTheme;
+    final media = MediaQuery.maybeOf(context);
+    final reduceMotion = media?.disableAnimations ?? false;
     final userState = context.watch<UserState>();
     final areaState = context.watch<AreaState>();
+    final workspace = context.watch<SecondaryAccountWorkspaceState>();
     final currentArea = areaState.currentArea.trim();
     final currentDivision = areaState.currentDivision.trim();
 
-    bool inCurrentScope(UserModel u) {
-      final areaOk = currentArea.isEmpty || u.areas.contains(currentArea);
-      final divisionOk = currentDivision.isEmpty || u.divisions.contains(currentDivision);
+    bool inCurrentScope(UserModel user) {
+      final areaOk = currentArea.isEmpty || user.areas.contains(currentArea);
+      final divisionOk =
+          currentDivision.isEmpty || user.divisions.contains(currentDivision);
       return areaOk && divisionOk;
     }
 
     final scopedUsers = userState.users.where(inCurrentScope).toList();
-    final visibleUsers = scopedUsers.where(_matchesStatus).where(_matchesSearch).toList();
-    final activeCount = scopedUsers.where((u) => u.isActive).length;
+    final visibleUsers =
+        scopedUsers.where(_matchesStatus).where(_matchesSearch).toList();
+    final activeCount = scopedUsers.where((user) => user.isActive).length;
     final inactiveCount = scopedUsers.length - activeCount;
-    final hasSelection = userState.selectedUserId != null;
-    final selectedUser = hasSelection ? userState.users.firstWhereOrNull((u) => u.id == userState.selectedUserId) : null;
-    final selectedIsActive = selectedUser?.isActive ?? true;
-    final areaLabel = currentArea.isEmpty ? '지역 전체' : currentArea;
+    final selectedUser = visibleUsers.firstWhereOrNull(
+      (user) => user.id == userState.selectedUserId,
+    );
+    final initialLoading = userState.isLoading && scopedUsers.isEmpty;
+    final refreshing = _refreshing || (userState.isLoading && !initialLoading);
+    final deleteMode = workspace.mode == SecondaryAccountMode.delete;
 
-    return OpsConsoleScaffold(
-      title: '유저 관리',
-      icon: Icons.manage_accounts_rounded,
-      areaLabel: areaLabel,
-      loading: userState.isLoading,
-      metrics: [
-        OpsMetric(label: '전체', value: '${scopedUsers.length}', icon: Icons.groups_rounded, color: cs.onInverseSurface),
-        OpsMetric(label: '활성', value: '$activeCount', icon: Icons.check_circle_rounded, color: cs.primary),
-        OpsMetric(label: '비활성', value: '$inactiveCount', icon: Icons.pause_circle_rounded, color: cs.error),
-        OpsMetric(label: '선택', value: hasSelection ? '1' : '0', icon: Icons.touch_app_rounded, color: hasSelection ? cs.primary : cs.onInverseSurface),
-      ],
-      commandBar: _buildCommandBar(context, visibleUsers.length, scopedUsers.length),
-      bottomBar: _buildBottomBar(context, hasSelection, selectedIsActive),
-      body: userState.isLoading
-          ? const SizedBox.shrink()
-          : visibleUsers.isEmpty
-              ? OpsEmptyState(
-                  icon: Icons.person_search_rounded,
-                  title: scopedUsers.isEmpty ? '현재 범위에 계정이 없습니다' : '검색 결과가 없습니다',
-                  message: scopedUsers.isEmpty ? '신규 계정을 등록하거나 지점/사업소 범위를 확인하세요.' : '검색어와 활성 상태 필터를 조정하세요.',
-                  action: CommonButton(
-                    label: '신규 계정 등록',
-                    icon: Icons.person_add_alt_1_rounded,
-                    onPressed: () => _handlePrimaryAction(context),
-                    haptic: CommonHaptic.selection,
-                  ),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
-                  itemCount: visibleUsers.length,
-                  itemBuilder: (context, index) => _buildUserRow(context, userState, visibleUsers[index]),
+    _scheduleSelectionValidation(userState, scopedUsers, visibleUsers);
+
+    final listBody = initialLoading
+        ? const SizedBox.expand(key: ValueKey<String>('initial_loading'))
+        : visibleUsers.isEmpty
+            ? KeyedSubtree(
+                key: ValueKey<String>(
+                  'empty_${scopedUsers.isEmpty}_${_query.trim().isNotEmpty}_${_statusFilter.name}',
                 ),
+                child: _buildEmptyState(
+                  context,
+                  scopedEmpty: scopedUsers.isEmpty,
+                  deleteMode: deleteMode,
+                ),
+              )
+            : KeyedSubtree(
+                key: ValueKey<String>(
+                  'account_list_${_statusFilter.name}_${_query.trim().toLowerCase()}_${visibleUsers.length}',
+                ),
+                child: _buildUserList(
+                  context,
+                  userState: userState,
+                  users: visibleUsers,
+                  mode: workspace.mode,
+                ),
+              );
+
+    return Material(
+      color: tokens.canvas,
+      child: Stack(
+        children: [
+          Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(10, 10, 10, 0),
+                child: _buildToolbar(
+                  context,
+                  refreshing: refreshing,
+                  deleteMode: deleteMode,
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
+                child: _buildStatusSegments(
+                  context: context,
+                  totalCount: scopedUsers.length,
+                  activeCount: activeCount,
+                  inactiveCount: inactiveCount,
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 7, 12, 7),
+                child: Row(
+                  children: [
+                    Text(
+                      '${visibleUsers.length}명 표시',
+                      style: textTheme.labelSmall?.copyWith(
+                        color: tokens.textSecondary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const Spacer(),
+                    AnimatedSwitcher(
+                      duration:
+                          reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                      transitionBuilder: (child, animation) => FadeTransition(
+                        opacity: animation,
+                        child: ScaleTransition(
+                          scale: Tween<double>(begin: .96, end: 1).animate(animation),
+                          child: child,
+                        ),
+                      ),
+                      child: Icon(
+                        deleteMode
+                            ? Icons.delete_sweep_rounded
+                            : Icons.admin_panel_settings_rounded,
+                        key: ValueKey<SecondaryAccountMode>(workspace.mode),
+                        size: 16,
+                        color: deleteMode ? tokens.danger : tokens.success,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 0, 10, 0),
+                  child: OpsDockResultSwitcher(child: listBody),
+                ),
+              ),
+              OpsDockContextFooterTransition(
+                child: _buildContextFooter(
+                  context,
+                  selectedUser: selectedUser,
+                  mode: workspace.mode,
+                ),
+              ),
+            ],
+          ),
+          OpsDockLoadingOverlay(loading: initialLoading),
+        ],
+      ),
+    );
+  }
+}
+
+class _UserDockRow extends StatelessWidget {
+  const _UserDockRow({
+    super.key,
+    required this.name,
+    required this.phone,
+    required this.email,
+    required this.role,
+    required this.position,
+    required this.modes,
+    required this.active,
+    required this.selected,
+    required this.deleteMode,
+    required this.onTap,
+  });
+
+  final String name;
+  final String phone;
+  final String email;
+  final String role;
+  final String position;
+  final List<String> modes;
+  final bool active;
+  final bool selected;
+  final bool deleteMode;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    final textTheme = Theme.of(context).textTheme;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final selectionColor = deleteMode ? tokens.danger : tokens.accent;
+    final selectedContainer =
+        deleteMode ? tokens.dangerContainer : tokens.accentContainer;
+    final rolePosition = [
+      if (role.trim().isNotEmpty) role.trim(),
+      if (position.trim().isNotEmpty) position.trim(),
+    ].join(' · ');
+    final modeText = modes.isEmpty ? '모드 없음' : modes.join(' · ');
+
+    return OpsDockSelectableRowSurface(
+      selected: selected,
+      selectionColor: selectionColor,
+      selectedContainer: selectedContainer,
+      onTap: onTap,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              AnimatedContainer(
+                duration:
+                    reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: active ? tokens.success : tokens.iconDisabled,
+                ),
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  name.isEmpty ? '이름 없음' : name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: tokens.textPrimary,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -.1,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                active ? '활성' : '비활성',
+                style: textTheme.labelSmall?.copyWith(
+                  color: active ? tokens.success : tokens.textSecondary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(width: 5),
+              AnimatedSwitcher(
+                duration:
+                    reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                transitionBuilder: (child, animation) => ScaleTransition(
+                  scale: animation,
+                  child: FadeTransition(
+                    opacity: animation,
+                    child: child,
+                  ),
+                ),
+                child: Icon(
+                  selected
+                      ? Icons.check_circle_rounded
+                      : Icons.chevron_right_rounded,
+                  key: ValueKey<bool>(selected),
+                  size: 18,
+                  color: selected ? selectionColor : tokens.iconSecondary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 5),
+          Text(
+            rolePosition.isEmpty ? '역할 없음' : rolePosition,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: textTheme.labelMedium?.copyWith(
+              color: tokens.textSecondary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            phone.isEmpty ? '전화 미등록' : phone,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: textTheme.labelSmall?.copyWith(
+              color: tokens.textSecondary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          if (selected) ...[
+            const SizedBox(height: 8),
+            Container(height: 1, color: tokens.borderSubtle),
+            const SizedBox(height: 7),
+            Text(
+              email.isEmpty ? '이메일 미등록' : email,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: textTheme.labelSmall?.copyWith(
+                color: tokens.textPrimary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              modeText,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: textTheme.labelSmall?.copyWith(
+                color: tokens.textSecondary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

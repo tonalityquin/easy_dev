@@ -249,6 +249,7 @@ class PlateCreationService {
     required String plateDocId,
     required String plateNumber,
     required String location,
+    required dynamic createdAtValue,
     String? sectorId,
     String? sectorName,
   }) {
@@ -262,6 +263,7 @@ class PlateCreationService {
         PlateFields.sectorName:
             (sectorName ?? '').trim().isEmpty ? null : sectorName!.trim(),
         'parkingCompletedAt': FieldValue.serverTimestamp(),
+        if (createdAtValue != null) PlateFields.createdAt: createdAtValue,
         PlateFields.updatedAt: FieldValue.serverTimestamp(),
       },
     };
@@ -271,6 +273,7 @@ class PlateCreationService {
     required String plateDocId,
     required String plateNumber,
     required String location,
+    required dynamic createdAtValue,
     String? sectorId,
     String? sectorName,
   }) {
@@ -284,6 +287,7 @@ class PlateCreationService {
         PlateFields.sectorName:
             (sectorName ?? '').trim().isEmpty ? null : sectorName!.trim(),
         'parkingRequestedAt': FieldValue.serverTimestamp(),
+        if (createdAtValue != null) PlateFields.createdAt: createdAtValue,
         PlateFields.updatedAt: FieldValue.serverTimestamp(),
       },
     };
@@ -749,6 +753,7 @@ class PlateCreationService {
                       plateDocId: plateDocId,
                       plateNumber: plateNumber,
                       location: base.location,
+                      createdAtValue: data?[PlateFields.createdAt],
                       sectorId: base.sectorId,
                       sectorName: base.sectorName,
                     ),
@@ -791,6 +796,7 @@ class PlateCreationService {
                       plateDocId: plateDocId,
                       plateNumber: plateNumber,
                       location: base.location,
+                      createdAtValue: data?[PlateFields.createdAt],
                       sectorId: base.sectorId,
                       sectorName: base.sectorName,
                     ),
@@ -846,10 +852,11 @@ class PlateCreationService {
             }
           }
         } else {
+          final createdAtValue = FieldValue.serverTimestamp();
           final map = plateWithLog.toMap();
           map[PlateFields.company] = normalizedDivision;
           map[PlateFields.division] = normalizedDivision;
-          map[PlateFields.createdAt] = FieldValue.serverTimestamp();
+          map[PlateFields.createdAt] = createdAtValue;
           if (shouldIncrementBillingCount) {
             map[PlateFields.lastBillingCountedAt] = FieldValue.serverTimestamp();
           }
@@ -870,6 +877,7 @@ class PlateCreationService {
                     plateDocId: plateDocId,
                     plateNumber: plateNumber,
                     location: base.location,
+                    createdAtValue: createdAtValue,
                     sectorId: base.sectorId,
                     sectorName: base.sectorName,
                   ),
@@ -897,6 +905,7 @@ class PlateCreationService {
                     plateDocId: plateDocId,
                     plateNumber: plateNumber,
                     location: base.location,
+                    createdAtValue: createdAtValue,
                     sectorId: base.sectorId,
                     sectorName: base.sectorName,
                   ),

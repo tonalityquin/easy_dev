@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 
-import '../common/ops_dashboard_bottom_sheet.dart';
-import 'widgets/double_dashboard_punch_recorder_section.dart';
+import '../common/ops_dashboard_side_dock.dart';
+import '../../sheets/double/widgets/double_dashboard_punch_recorder_section.dart';
 
-class DoubleHomeDashBoardBottomSheet extends StatelessWidget {
-  const DoubleHomeDashBoardBottomSheet({super.key});
+class DoubleHomeDashboardSideDock extends StatelessWidget {
+  const DoubleHomeDashboardSideDock({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return OpsDashboardBottomSheet(
+    return OpsDashboardSideDock(
       modeLabel: '경량형',
       modeIcon: Icons.speed_rounded,
       punchRecorderBuilder: (context, userState, areaState) {

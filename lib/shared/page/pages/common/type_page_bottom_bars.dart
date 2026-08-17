@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../design_system/common_ui/common_ui_theme.dart';
-import '../../../../features/voice/application/voice_appbar_ui_state.dart';
 import '../../application/common/type_view_mode_state.dart';
 
 class TypePageBottomBars extends StatelessWidget {
@@ -25,15 +24,7 @@ class TypePageBottomBars extends StatelessWidget {
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final mode = context.watch<TypeViewModeState>().mode;
-    var talkUiEnabled = false;
-
-    try {
-      talkUiEnabled = context.watch<VoiceAppbarUiState>().enabled;
-    } catch (_) {
-      talkUiEnabled = false;
-    }
-
-    final showTableBars = mode == TypeViewMode.table || talkUiEnabled;
+    final showTableBars = mode == TypeViewMode.table;
     final child = showTableBars
         ? Column(
             key: const ValueKey<String>('bars:table'),

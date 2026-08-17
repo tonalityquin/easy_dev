@@ -17,7 +17,9 @@ class StatisticsDeepLogService {
     required String division,
     required String area,
     required DateTime date,
+    required List<String> gcsLogUrls,
     bool sectorEnabled = false,
+    void Function(String message)? onLog,
   }) {
     return loadByDates(
       division: division,
@@ -25,6 +27,8 @@ class StatisticsDeepLogService {
       dates: <DateTime>[date],
       scopeLabel: _yyyymmdd(DateTime(date.year, date.month, date.day)),
       sectorEnabled: sectorEnabled,
+      gcsLogUrls: gcsLogUrls,
+      onLog: onLog,
     );
   }
 
@@ -33,12 +37,18 @@ class StatisticsDeepLogService {
     required String area,
     required DateTime start,
     required DateTime end,
+    required List<String> gcsLogUrls,
     bool sectorEnabled = false,
+    void Function(String message)? onLog,
   }) {
     final normalizedStart = _normalizeDate(start);
     final normalizedEnd = _normalizeDate(end);
-    final a = normalizedStart.isAfter(normalizedEnd) ? normalizedEnd : normalizedStart;
-    final b = normalizedStart.isAfter(normalizedEnd) ? normalizedStart : normalizedEnd;
+    final a = normalizedStart.isAfter(normalizedEnd)
+        ? normalizedEnd
+        : normalizedStart;
+    final b = normalizedStart.isAfter(normalizedEnd)
+        ? normalizedStart
+        : normalizedEnd;
     final dates = <DateTime>[];
     var cursor = a;
     while (!cursor.isAfter(b)) {
@@ -52,6 +62,8 @@ class StatisticsDeepLogService {
       dates: dates,
       scopeLabel: '${_yyyymmdd(a)} ~ ${_yyyymmdd(b)}',
       sectorEnabled: sectorEnabled,
+      gcsLogUrls: gcsLogUrls,
+      onLog: onLog,
     );
   }
 
@@ -59,12 +71,17 @@ class StatisticsDeepLogService {
     required String division,
     required String area,
     required List<DateTime> dates,
+    required List<String> gcsLogUrls,
     String? scopeLabel,
     bool sectorEnabled = false,
+    void Function(String message)? onLog,
   }) async {
     final trimmedDivision = division.trim();
     final trimmedArea = area.trim();
-    debugPrint('[STAT_DEEP] load start division=$trimmedDivision area=$trimmedArea dates=${dates.length} sectorEnabled=$sectorEnabled');
+    _emitLog(
+      onLog,
+      '[STAT_DEEP] load start division=$trimmedDivision area=$trimmedArea dates=${dates.length} sectorEnabled=$sectorEnabled source=verified-history-linked',
+    );
 
     if (trimmedDivision.isEmpty || trimmedArea.isEmpty) {
       throw StateError('사업부와 지역 정보가 필요합니다.');
@@ -80,13 +97,44 @@ class StatisticsDeepLogService {
       throw StateError('심화 통계를 불러올 날짜가 없습니다.');
     }
 
+    final requestedUrls = gcsLogUrls
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+    if (requestedUrls.isEmpty) {
+      throw StateError('검증된 상세 업무종료 history에 연결된 GCS 로그가 없습니다.');
+    }
+
     final dateStrs = normalizedDates.map(_yyyymmdd).toSet();
-    final monthKeys = normalizedDates.map(_yyyymm).toSet().toList()..sort();
     final label = scopeLabel?.trim().isNotEmpty == true
         ? scopeLabel!.trim()
         : normalizedDates.length == 1
             ? _yyyymmdd(normalizedDates.first)
             : '${_yyyymmdd(normalizedDates.first)} ~ ${_yyyymmdd(normalizedDates.last)}';
+
+    final expectedPrefix = '$trimmedDivision/$trimmedArea/logs/';
+    final resolved = <String>{};
+    for (final url in requestedUrls) {
+      final objectName = _objectNameFromGcsUrl(url);
+      if (objectName == null || objectName.isEmpty) {
+        throw StateError('상세 업무종료 history의 GCS 로그 URL을 해석하지 못했습니다.');
+      }
+      if (!objectName.startsWith(expectedPrefix)) {
+        throw StateError('상세 업무종료 history의 GCS 로그 경로가 사업부/Area와 일치하지 않습니다.');
+      }
+      final dateStr = _extractDateStrFromObjectName(objectName);
+      if (dateStr == null || !dateStrs.contains(dateStr)) {
+        throw StateError('상세 업무종료 history의 GCS 로그 날짜가 통계 범위와 일치하지 않습니다.');
+      }
+      resolved.add(objectName);
+    }
+    final targetNames = resolved.toList()..sort();
+    _emitLog(
+      onLog,
+      '[STAT_DEEP] source mode=verified-history-linked objects=${targetNames.length} urls=${requestedUrls.length}',
+    );
 
     final client = await GoogleAuthV7.authedClient(
       [gcs.StorageApi.devstorageReadOnlyScope],
@@ -94,31 +142,6 @@ class StatisticsDeepLogService {
 
     try {
       final storage = gcs.StorageApi(client);
-      final allNames = <String>{};
-
-      for (final monthKey in monthKeys) {
-        final monthPrefix = '$trimmedDivision/$trimmedArea/logs/$monthKey/';
-        allNames.addAll(
-          await _listAllObjects(
-            storage: storage,
-            prefix: monthPrefix,
-          ),
-        );
-      }
-
-      var targetNames = _filterTargetObjectNames(allNames, dateStrs);
-
-      if (targetNames.isEmpty) {
-        final legacyPrefix = '$trimmedDivision/$trimmedArea/logs/';
-        allNames.addAll(
-          await _listAllObjects(
-            storage: storage,
-            prefix: legacyPrefix,
-          ),
-        );
-        targetNames = _filterTargetObjectNames(allNames, dateStrs);
-      }
-
       final docsByKey = <String, _DeepDocBundle>{};
       var sourceCsvRowCount = 0;
       var duplicateMergedCount = 0;
@@ -132,7 +155,10 @@ class StatisticsDeepLogService {
           objectName: objectName,
         );
         sourceCsvRowCount += rows.length;
-        debugPrint('[STAT_DEEP] csv object=$objectName rows=${rows.length}');
+        _emitLog(
+          onLog,
+          '[STAT_DEEP] csv object=$objectName rows=${rows.length}',
+        );
 
         for (int i = 0; i < rows.length; i++) {
           final row = rows[i];
@@ -223,7 +249,10 @@ class StatisticsDeepLogService {
         sectorFieldMissingCount:
             rows.where((row) => !row.sectorFieldsPresent).length,
       );
-      debugPrint('[STAT_DEEP] load complete objects=${targetNames.length} csvRows=$sourceCsvRowCount vehicles=${rows.length} merged=$duplicateMergedCount sectorConflicts=${diagnostics.sectorConflictCount} sectorFields=${diagnostics.sectorFieldPresentCount}/${rows.length}');
+      _emitLog(
+        onLog,
+        '[STAT_DEEP] load complete objects=${targetNames.length} csvRows=$sourceCsvRowCount vehicles=${rows.length} merged=$duplicateMergedCount sectorConflicts=${diagnostics.sectorConflictCount} sectorFields=${diagnostics.sectorFieldPresentCount}/${rows.length}',
+      );
 
       return StatisticsDeepReport.fromRows(
         division: trimmedDivision,
@@ -240,42 +269,54 @@ class StatisticsDeepLogService {
     }
   }
 
-  List<String> _filterTargetObjectNames(Set<String> names, Set<String> dateStrs) {
-    final result = names.where((name) {
-      final dateStr = _extractDateStrFromObjectName(name);
-      return dateStr != null && dateStrs.contains(dateStr);
-    }).toList()
-      ..sort();
-    return result;
+  void _emitLog(
+    void Function(String message)? onLog,
+    String message,
+  ) {
+    if (onLog != null) {
+      onLog(message);
+      return;
+    }
+    debugPrint(message);
+  }
+
+  String? _objectNameFromGcsUrl(String rawUrl) {
+    final value = rawUrl.trim();
+    if (value.isEmpty) return null;
+    final uri = Uri.tryParse(value);
+    if (uri == null) return null;
+
+    if (uri.scheme == 'gs') {
+      if (uri.host.isNotEmpty && uri.host != bucketName) return null;
+      return _decodeObjectPath(uri.path);
+    }
+
+    if (uri.host == 'storage.googleapis.com') {
+      final prefix = '/$bucketName/';
+      if (!uri.path.startsWith(prefix)) return null;
+      return _decodeObjectPath(uri.path.substring(prefix.length));
+    }
+
+    if (uri.host == '$bucketName.storage.googleapis.com') {
+      return _decodeObjectPath(uri.path);
+    }
+
+    return null;
+  }
+
+  String? _decodeObjectPath(String value) {
+    final path = value.startsWith('/') ? value.substring(1) : value;
+    if (path.isEmpty) return null;
+    try {
+      return Uri.decodeFull(path);
+    } on FormatException {
+      return path;
+    }
   }
 
   String? _extractDateStrFromObjectName(String objectName) {
     final match = RegExp(r'_ToDoLogs_(\d{4}-\d{2}-\d{2})\.csv$').firstMatch(objectName);
     return match?.group(1);
-  }
-
-  Future<List<String>> _listAllObjects({
-    required gcs.StorageApi storage,
-    required String prefix,
-  }) async {
-    final acc = <String>[];
-    String? pageToken;
-
-    do {
-      final res = await storage.objects.list(
-        bucketName,
-        prefix: prefix,
-        pageToken: pageToken,
-      );
-      final items = res.items ?? const <gcs.Object>[];
-      for (final object in items) {
-        final name = object.name;
-        if (name != null && name.isNotEmpty) acc.add(name);
-      }
-      pageToken = res.nextPageToken;
-    } while (pageToken != null && pageToken.isNotEmpty);
-
-    return acc;
   }
 
   Future<List<Map<String, String>>> _loadCsvRowsByObjectName({
@@ -721,9 +762,6 @@ class StatisticsDeepLogService {
   static String _yyyymmdd(DateTime date) => '${date.year.toString().padLeft(4, '0')}-'
       '${date.month.toString().padLeft(2, '0')}-'
       '${date.day.toString().padLeft(2, '0')}';
-
-  static String _yyyymm(DateTime date) => '${date.year.toString().padLeft(4, '0')}'
-      '${date.month.toString().padLeft(2, '0')}';
 }
 
 class _DeepDocBundle {

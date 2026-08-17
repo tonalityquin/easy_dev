@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../../../features/dashboard/sheets/minor/minor_home_dash_board_bottom_sheet.dart';
+import '../../../../features/dashboard/side_docks/minor/minor_home_dashboard_side_dock.dart';
 import '../../../../features/mode_minor/minor_parking_completed_page.dart';
 import '../../../../features/mode_minor/parking_completed_package/minor_parking_completed_control_buttons.dart';
 import '../../../plate/application/common/driving_recovery_gate.dart';
@@ -73,7 +73,7 @@ class MinorTypePage extends StatelessWidget {
             ),
           );
         },
-        buildDashboardBottomSheet: () => const MinorHomeDashBoardBottomSheet(),
+        buildDashboardSideDock: () => const MinorHomeDashboardSideDock(),
         buildInputScreen: () => const InputPlateScreen(isMinorMode: true),
         debugMeta: const <String, dynamic>{
           'screen': 'minor_type_page',

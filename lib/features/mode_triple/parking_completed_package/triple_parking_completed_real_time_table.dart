@@ -56,17 +56,14 @@ class TripleParkingCompletedRealTimeTable extends StatelessWidget {
         syncLocationCounts: true,
         showUnknownInZoneSummary: true,
         labelUsesAccent: false,
-        defaultSortOldFirst: true,
-        detailConfirmMessage: '원본 데이터를 불러옵니다.\n(취소하면 조회 비용이 발생하지 않습니다)',
         isEnabled: ParkingCompletedRealtimeTabGate.isEnabled,
         accent: (cs) => cs.primary,
         tableNoStrategy: no,
         dialogNoStrategy: no,
-        openBottomSheet: (ctx, plate) =>
-            showTripleParkingCompletedStatusBottomSheetFromDialog(
+        openStatusDock: (ctx, request) =>
+            showTripleParkingCompletedStatusSideDockFromRealtime(
           context: ctx,
-          plate: plate,
-          popParentOnDelete: false,
+          request: request,
         ),
       ),
       RealTimeTabSpec(
@@ -77,17 +74,14 @@ class TripleParkingCompletedRealTimeTable extends StatelessWidget {
         syncLocationCounts: true,
         showUnknownInZoneSummary: true,
         labelUsesAccent: false,
-        defaultSortOldFirst: true,
-        detailConfirmMessage: '원본 데이터를 불러옵니다.\n(취소하면 조회 비용이 발생하지 않습니다)',
         isEnabled: DepartureRequestsRealtimeTabGate.isEnabled,
         accent: (cs) => cs.secondary,
         tableNoStrategy: no,
         dialogNoStrategy: no,
-        openBottomSheet: (ctx, plate) =>
-            showTripleParkingCompletedStatusBottomSheetFromDialog(
+        openStatusDock: (ctx, request) =>
+            showTripleParkingCompletedStatusSideDockFromRealtime(
           context: ctx,
-          plate: plate,
-          popParentOnDelete: false,
+          request: request,
         ),
       ),
     ];

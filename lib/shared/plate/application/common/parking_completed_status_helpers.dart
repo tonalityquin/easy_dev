@@ -102,14 +102,16 @@ void reportParkingCompletedDbSafe({
 Future<void> handleParkingCompletedEntryRequest(
   BuildContext context,
   String plateNumber,
-  String area,
-) async {
+  String area, {
+  MovementPlateTraceLog? traceLog,
+}) async {
   final movementPlate = context.read<MovementPlate>();
   await movementPlate.goBackToParkingRequest(
     fromType: PlateType.parkingCompleted,
     plateNumber: plateNumber,
     area: area,
     newLocation: '미지정',
+    traceLog: traceLog,
   );
 }
 
@@ -118,6 +120,7 @@ Future<void> handleParkingCompletedBackToCompletedRequest(
   required PlateModel plate,
   String? fallbackArea,
   String fallbackLocation = '미지정',
+  MovementPlateTraceLog? traceLog,
 }) async {
   final movementPlate = context.read<MovementPlate>();
   final area =
@@ -128,5 +131,6 @@ Future<void> handleParkingCompletedBackToCompletedRequest(
     plate.plateNumber,
     area,
     location,
+    traceLog: traceLog,
   );
 }

@@ -1,4 +1,4 @@
-import '../../../features/location/domain/models/location_model.dart';
+import '../../features/location/domain/models/location_model.dart';
 import 'real_time_table_row_vm.dart';
 
 const String kRealTimeLocationAll = '전체';
@@ -13,6 +13,7 @@ class ZoneVM {
   final int current;
   final int? remaining;
   final List<RealTimeRowVM> rows;
+  final LocationModel source;
 
   const ZoneVM({
     required this.fullName,
@@ -23,11 +24,13 @@ class ZoneVM {
     required this.current,
     required this.remaining,
     required this.rows,
+    required this.source,
   });
 }
 
 class ZoneGroupVM {
   final String group;
+  final LocationModel? parentSource;
   final List<ZoneVM> zones;
   final int totalCapacity;
   final int totalCurrent;
@@ -35,6 +38,7 @@ class ZoneGroupVM {
 
   const ZoneGroupVM({
     required this.group,
+    required this.parentSource,
     required this.zones,
     required this.totalCapacity,
     required this.totalCurrent,
@@ -62,6 +66,38 @@ String parentFromRowLocation(String raw) {
   final seg = splitLocationSegments(raw);
   if (seg.isEmpty) return '';
   return seg[0];
+}
+
+String childFromRowLocation(String raw) {
+  final seg = splitLocationSegments(raw);
+  if (seg.length < 2) return '';
+  return seg[1];
+}
+
+String slotFromRowLocation(String raw) {
+  final seg = splitLocationSegments(raw);
+  if (seg.length < 3) return '';
+  return seg.sublist(2).join(kRealTimeSegSep);
+}
+
+int? slotNumberFromRowLocation(String raw) {
+  final slot = slotFromRowLocation(raw);
+  if (slot.isEmpty) return null;
+  final match = RegExp(r'\d+').firstMatch(slot);
+  if (match == null) return null;
+  return int.tryParse(match.group(0) ?? '');
+}
+
+int compareRowsByLocationSlot(RealTimeRowVM a, RealTimeRowVM b) {
+  final aSlot = slotFromRowLocation(a.location);
+  final bSlot = slotFromRowLocation(b.location);
+  if (aSlot.isEmpty && bSlot.isNotEmpty) return 1;
+  if (aSlot.isNotEmpty && bSlot.isEmpty) return -1;
+  final slotCompare = naturalLocationCompare(aSlot, bSlot);
+  if (slotCompare != 0) return slotCompare;
+  final locationCompare = naturalLocationCompare(a.location, b.location);
+  if (locationCompare != 0) return locationCompare;
+  return naturalLocationCompare(a.plateNumber, b.plateNumber);
 }
 
 String childKeyFromLocation(LocationModel loc) {
@@ -160,48 +196,6 @@ int naturalLocationCompare(String a, String b) {
   return at.length.compareTo(bt.length);
 }
 
-List<String> normalizedLocationFilterOptions(List<String> plateLocations) {
-  final parents = <String>{};
-  final children = <String>{};
-
-  for (final raw in plateLocations) {
-    final seg = splitLocationSegments(raw);
-    if (seg.isEmpty) continue;
-
-    parents.add(seg[0]);
-
-    if (seg.length >= 2) {
-      children.add('${seg[0]}$kRealTimeSegSep${seg[1]}');
-    }
-  }
-
-  final parentList = parents.toList()..sort(naturalLocationCompare);
-  final childList = children.toList()..sort(naturalLocationCompare);
-  return <String>[...parentList, ...childList];
-}
-
-List<String> locationFilterOptions({
-  required List<LocationModel> meta,
-  required List<String> plateLocations,
-}) {
-  final fromRows = normalizedLocationFilterOptions(plateLocations);
-  if (fromRows.isNotEmpty) return fromRows;
-
-  if (meta.isEmpty) return const <String>[];
-
-  final parents = extractParentsFromMeta(meta).toList()
-    ..sort(naturalLocationCompare);
-
-  final children = <String>{};
-  for (final loc in meta) {
-    final k = childKeyFromLocation(loc);
-    if (k.isNotEmpty) children.add(k);
-  }
-
-  final childList = children.toList()..sort(naturalLocationCompare);
-  return <String>[...parents, ...childList];
-}
-
 List<ZoneGroupVM> buildZoneGroups({
   required List<RealTimeRowVM> rows,
   required List<LocationModel> meta,
@@ -217,10 +211,22 @@ List<ZoneGroupVM> buildZoneGroups({
   }
 
   final childrenByParent = <String, List<LocationModel>>{};
+  final parentByRef = <String, LocationModel>{};
   final parents = extractParentsFromMeta(meta);
 
   for (final loc in meta) {
     final t = (loc.type ?? 'single').trim();
+    if (t == 'composite_parent') {
+      final parentName = loc.locationName.trim();
+      final parentId = loc.id.trim();
+      if (parentName.isNotEmpty) {
+        parentByRef[parentName] = loc;
+      }
+      if (parentId.isNotEmpty) {
+        parentByRef[parentId] = loc;
+      }
+      continue;
+    }
     if (t != 'composite_child' && t != 'composite') continue;
 
     final parent = (loc.parent ?? '').trim();
@@ -289,14 +295,19 @@ List<ZoneGroupVM> buildZoneGroups({
       }
 
       final childName = childLoc.locationName.trim();
-      if (!matchSearch(p, childKey, childName)) continue;
 
-      final childRows = List<RealTimeRowVM>.unmodifiable(
+      final childRows = List<RealTimeRowVM>.of(
         childKeyRows[childKey] ?? const <RealTimeRowVM>[],
-      );
+      )..sort(compareRowsByLocationSlot);
+      final locationMatch = matchSearch(p, childKey, childName);
+      final rowMatch = searchTrimmed.isEmpty || childRows.any((row) {
+        return row.plateNumber.toLowerCase().contains(searchTrimmed) ||
+            row.location.toLowerCase().contains(searchTrimmed);
+      });
+      if (!locationMatch && !rowMatch) continue;
       final cap = capacityForChild(childLoc);
       final cur = childRows.length;
-      final rem = cap > 0 ? (cap - cur) : null;
+      final rem = cap > 0 ? ((cap - cur) < 0 ? 0 : cap - cur) : null;
 
       zoneVms.add(
         ZoneVM(
@@ -308,6 +319,7 @@ List<ZoneGroupVM> buildZoneGroups({
           current: cur,
           remaining: rem,
           rows: childRows,
+          source: childLoc,
         ),
       );
     }
@@ -320,11 +332,14 @@ List<ZoneGroupVM> buildZoneGroups({
 
     final totalCap = zoneVms.fold<int>(0, (s, z) => s + z.capacity);
     final totalCur = zoneVms.fold<int>(0, (s, z) => s + z.current);
-    final totalRem = totalCap > 0 ? (totalCap - totalCur) : null;
+    final totalRem = totalCap > 0
+        ? ((totalCap - totalCur) < 0 ? 0 : totalCap - totalCur)
+        : null;
 
     out.add(
       ZoneGroupVM(
         group: p,
+        parentSource: parentByRef[p],
         zones: zoneVms,
         totalCapacity: totalCap,
         totalCurrent: totalCur,

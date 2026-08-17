@@ -2,6 +2,26 @@ import 'package:flutter/material.dart';
 import '../../../shared/plate/domain/models/plate_model.dart';
 import 'real_time_table_no_strategy.dart';
 
+class RealTimePlateDetailRequest {
+  const RealTimePlateDetailRequest({
+    required this.plateId,
+    required this.plateNumber,
+    required this.area,
+    required this.location,
+    required this.statusTitle,
+    required this.cachedPlate,
+    required this.loadPlate,
+  });
+
+  final String plateId;
+  final String plateNumber;
+  final String area;
+  final String location;
+  final String statusTitle;
+  final PlateModel? cachedPlate;
+  final Future<PlateModel?> Function() loadPlate;
+}
+
 class RealTimeTabSpec {
   final String id;
   final String label;
@@ -10,8 +30,6 @@ class RealTimeTabSpec {
   final bool syncLocationCounts;
   final bool showUnknownInZoneSummary;
   final bool labelUsesAccent;
-  final bool defaultSortOldFirst;
-  final String detailConfirmMessage;
 
   final Future<bool> Function() isEnabled;
   final Color Function(ColorScheme cs) accent;
@@ -19,8 +37,10 @@ class RealTimeTabSpec {
   final NoStrategy tableNoStrategy;
   final NoStrategy dialogNoStrategy;
 
-  final Future<void> Function(BuildContext ctx, PlateModel plate)
-      openBottomSheet;
+  final Future<void> Function(
+    BuildContext ctx,
+    RealTimePlateDetailRequest request,
+  ) openStatusDock;
 
   const RealTimeTabSpec({
     required this.id,
@@ -30,13 +50,11 @@ class RealTimeTabSpec {
     required this.syncLocationCounts,
     required this.showUnknownInZoneSummary,
     required this.labelUsesAccent,
-    required this.defaultSortOldFirst,
-    this.detailConfirmMessage = '',
     required this.isEnabled,
     required this.accent,
     required this.tableNoStrategy,
     required this.dialogNoStrategy,
-    required this.openBottomSheet,
+    required this.openStatusDock,
   });
 }
 

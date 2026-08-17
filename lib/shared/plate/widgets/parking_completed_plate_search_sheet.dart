@@ -277,17 +277,29 @@ class _ParkingCompletedPlateSearchSheetState
       BuildContext rootContext,
       PlateModel selected,
       ) async {
-    Future<void> onRequestEntry() async {
+    Future<void> onRequestEntry(MovementPlateTraceLog? traceLog) async {
       if (selected.typeEnum != PlateType.parkingCompleted) return;
 
+      traceLog?.call(
+        '검색 상태 변경 시작 to=parkingRequests plate=${selected.plateNumber} area=${selected.area}',
+      );
       await rootContext.read<MovementPlate>().goBackToParkingRequest(
         fromType: PlateType.parkingCompleted,
         plateNumber: selected.plateNumber,
         area: selected.area,
         newLocation: '미지정',
+        traceLog: traceLog,
       );
-
+      traceLog?.call(
+        '검색 상태 변경 완료 to=parkingRequests plate=${selected.plateNumber} area=${selected.area}',
+      );
+      traceLog?.call(
+        '검색 결과 갱신 시작 plate=${selected.plateNumber} area=${selected.area}',
+      );
       await _refreshSearchResults();
+      traceLog?.call(
+        '검색 결과 갱신 완료 plate=${selected.plateNumber} area=${selected.area}',
+      );
     }
 
     Future<bool> onDelete() => _showDeleteDialog(rootContext, selected);

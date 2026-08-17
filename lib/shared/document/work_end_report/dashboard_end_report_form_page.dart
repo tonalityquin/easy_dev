@@ -23,6 +23,7 @@ import '../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../app/utils/status_dialog.dart';
 import '../../../features/account/applications/user_state.dart';
 import '../../../features/dashboard/data/repositories/end_work_report_firestore_repository.dart';
+import '../../../features/dashboard/domain/models/end_work_report_history_type.dart';
 import '../../../features/dashboard/domain/models/end_work_sector_metrics.dart';
 import '../../../features/dev/application/area_state.dart';
 import '../../../features/dev/debug/debug_api_logger.dart';
@@ -501,7 +502,11 @@ class SimpleEndWorkReportService {
       );
 
       trace?.log(
-        'firestore=end_work_reports start sectorMetrics=${sectorMetrics != null}',
+        'firestore=end_work_reports start '
+        'reportType=${EndWorkReportHistoryTypes.detailedGcsEndReport} '
+        'gcsLogVerified=$gcsLogsUploadOk '
+        'logsLinked=${logsUrl?.trim().isNotEmpty == true} '
+        'sectorMetrics=${sectorMetrics != null}',
         progress: .62,
       );
       await _repo.saveMonthlyEndWorkReport(
@@ -513,10 +518,13 @@ class SimpleEndWorkReportService {
         metrics: (reportLog['metrics'] as Map<String, dynamic>),
         createdAtIso: reportLog['createdAt'] as String,
         uploadedBy: userName,
+        gcsLogVerified: gcsLogsUploadOk,
         logsUrl: logsUrl,
       );
       trace?.log(
-        'firestore=end_work_reports saved',
+        'firestore=end_work_reports saved '
+        'reportType=${EndWorkReportHistoryTypes.detailedGcsEndReport} '
+        'gcsLogVerified=$gcsLogsUploadOk',
         progress: .68,
       );
     } catch (e, st) {

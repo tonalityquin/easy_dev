@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../../app/utils/developer_operation_status_dialog.dart';
@@ -8,6 +11,7 @@ import '../../../design_system/common_ui/common_ui_overlays.dart';
 import '../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../shared/secondary/widgets/ops_console_dialogs.dart';
 import '../../../shared/secondary/widgets/ops_console_widgets.dart';
+import '../../../shared/secondary/widgets/secondary_debug_scope.dart';
 import '../../dev/application/area_state.dart';
 import '../applications/sector_state.dart';
 import '../domain/models/sector_model.dart';
@@ -21,15 +25,46 @@ class SectorManagement extends StatefulWidget {
 }
 
 class _SectorManagementState extends State<SectorManagement> {
+  final TextEditingController _searchController = TextEditingController();
   String _query = '';
+  bool _selectionValidationScheduled = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      context.read<SectorState>().manualSectorRefresh();
+      _log('mounted');
+      unawaited(_initialRefresh());
     });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    debugPrint('[SectorManagement] disposed');
+    super.dispose();
+  }
+
+  void _log(String message) {
+    final output = 'sector_workspace $message';
+    debugPrint('[SectorManagement] $message');
+    if (!mounted) return;
+    SecondaryDebugScope.maybeOf(context)?.call(output);
+  }
+
+  Future<void> _initialRefresh() async {
+    final area = context.read<AreaState>().currentArea.trim();
+    _log('initial_refresh_started area=${area.isEmpty ? '-' : area}');
+    try {
+      await context.read<SectorState>().manualSectorRefresh();
+      if (!mounted) return;
+      final count = context.read<SectorState>().sectors.length;
+      _log('initial_refresh_completed count=$count');
+    } catch (error, stackTrace) {
+      _log('initial_refresh_failed error=$error');
+      debugPrint('[SectorManagement] stackTrace=$stackTrace');
+    }
   }
 
   Future<DeveloperOperationTrace> _startTrace({
@@ -49,8 +84,22 @@ class _SectorManagementState extends State<SectorManagement> {
     );
   }
 
+  void _setQuery(String value) {
+    if (_query == value) return;
+    setState(() => _query = value);
+    _log('query_changed length=${value.trim().length}');
+  }
+
+  void _clearQuery() {
+    if (_query.isEmpty && _searchController.text.isEmpty) return;
+    _searchController.clear();
+    setState(() => _query = '');
+    _log('query_cleared');
+  }
+
   Future<void> _manualRefresh() async {
     final area = context.read<AreaState>().currentArea.trim();
+    _log('refresh_started area=${area.isEmpty ? '-' : area}');
     final trace = await _startTrace(
       title: '섹터 데이터 새로고침',
       initialMessage: '현재 지역의 섹터 데이터를 확인하고 있습니다.',
@@ -68,12 +117,14 @@ class _SectorManagementState extends State<SectorManagement> {
       trace.log('지역별 섹터 캐시 저장을 확인했습니다.', progress: .82);
       await trace.succeed('섹터 데이터 새로고침 완료: $count개');
       if (!mounted) return;
+      _log('refresh_completed count=$count');
       showSuccessSnackbar(
         context,
         '섹터 데이터를 새로고침했습니다.',
         useCommonUi: true,
       );
     } catch (error, stackTrace) {
+      _log('refresh_failed error=$error');
       await trace.fail(
         '섹터 데이터 새로고침에 실패했습니다.',
         error: error,
@@ -130,6 +181,9 @@ class _SectorManagementState extends State<SectorManagement> {
             : '섹터 등록 완료: ${result.name}',
       );
       if (!mounted) return true;
+      _log(
+        '${editing ? 'sector_updated' : 'sector_created'} id=${result.id} name=${result.name}',
+      );
       showSuccessSnackbar(
         context,
         editing ? '섹터를 수정했습니다.' : '섹터를 등록했습니다.',
@@ -137,6 +191,7 @@ class _SectorManagementState extends State<SectorManagement> {
       );
       return true;
     } catch (error, stackTrace) {
+      _log('${editing ? 'sector_update' : 'sector_create'}_failed error=$error');
       await trace.fail(
         editing ? '섹터 수정에 실패했습니다.' : '섹터 등록에 실패했습니다.',
         error: error,
@@ -167,6 +222,7 @@ class _SectorManagementState extends State<SectorManagement> {
       return;
     }
 
+    _log('form_opened mode=${sector == null ? 'create' : 'edit'} id=${sector?.id ?? '-'}');
     await showCommonOverlayBottomSheet<void>(
       context: context,
       useSafeArea: true,
@@ -182,11 +238,8 @@ class _SectorManagementState extends State<SectorManagement> {
     );
   }
 
-  Future<void> _deleteSelected() async {
-    final state = context.read<SectorState>();
-    final selected = state.selectedSector;
-    if (selected == null) return;
-
+  Future<void> _deleteSelected(SectorModel selected) async {
+    _log('delete_confirm_opened id=${selected.id} name=${selected.name}');
     final confirmed = await showOpsConfirmDialog(
       context: context,
       title: '섹터 삭제 확인',
@@ -195,8 +248,12 @@ class _SectorManagementState extends State<SectorManagement> {
       icon: Icons.delete_forever_rounded,
       destructive: true,
     );
-    if (!confirmed || !mounted) return;
+    if (!confirmed || !mounted) {
+      _log('delete_cancelled id=${selected.id}');
+      return;
+    }
 
+    final state = context.read<SectorState>();
     final trace = await _startTrace(
       title: '섹터 삭제',
       initialMessage: '선택한 섹터의 삭제 요청을 확인하고 있습니다.',
@@ -214,12 +271,14 @@ class _SectorManagementState extends State<SectorManagement> {
       trace.log('지역별 섹터 캐시를 갱신했습니다.', progress: .9);
       await trace.succeed('섹터 삭제 완료: ${selected.name}');
       if (!mounted) return;
+      _log('delete_completed id=${selected.id} name=${selected.name}');
       showSuccessSnackbar(
         context,
         '섹터를 삭제했습니다.',
         useCommonUi: true,
       );
     } catch (error, stackTrace) {
+      _log('delete_failed id=${selected.id} error=$error');
       await trace.fail(
         '섹터 삭제에 실패했습니다.',
         error: error,
@@ -254,315 +313,422 @@ class _SectorManagementState extends State<SectorManagement> {
     return '${local.year}.${two(local.month)}.${two(local.day)} ${two(local.hour)}:${two(local.minute)}';
   }
 
-  Widget _buildCommandBar(
-    int visibleCount,
-    int totalCount,
-    bool busy,
+  bool _matchesSearch(SectorModel sector) {
+    final normalizedQuery = _query.trim().toLowerCase();
+    if (normalizedQuery.isEmpty) return true;
+    return sector.name.toLowerCase().contains(normalizedQuery) ||
+        sector.normalizedName.contains(normalizeSectorName(normalizedQuery));
+  }
+
+  SectorModel? _visibleSelection(
+    SectorState state,
+    List<SectorModel> visibleSectors,
   ) {
-    return OpsCommandPanel(
-      children: <Widget>[
-        OpsSearchField(
-          hint: '섹터명 검색',
-          onChanged: (value) => setState(() => _query = value),
-        ),
-        const SizedBox(height: 10),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: <Widget>[
-            OpsFilterChip(
-              label: '$visibleCount/$totalCount',
-              selected: false,
-              icon: Icons.filter_alt_rounded,
-              onSelected: () {},
-            ),
-            CommonIconButton(
-              icon: Icons.refresh_rounded,
-              tooltip: '새로고침',
-              onPressed: busy ? null : _manualRefresh,
-              haptic: CommonHaptic.selection,
-            ),
-          ],
-        ),
-      ],
-    );
+    final selectedId = state.selectedSectorId;
+    if (selectedId == null) return null;
+    for (final sector in visibleSectors) {
+      if (sector.id == selectedId) return sector;
+    }
+    return null;
   }
 
-  Widget _buildBottomBar(SectorState state) {
-    final selected = state.selectedSector;
-    final reduceMotion =
-        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    return OpsBottomActionBar(
-      children: <Widget>[
-        Expanded(
-          child: AnimatedSwitcher(
-            duration:
-                reduceMotion ? Duration.zero : CommonUiMotion.component,
-            switchInCurve: CommonUiMotion.enter,
-            switchOutCurve: CommonUiMotion.exit,
-            transitionBuilder: (child, animation) {
-              final curved = CurvedAnimation(
-                parent: animation,
-                curve: CommonUiMotion.enter,
-                reverseCurve: CommonUiMotion.exit,
-              );
-              return FadeTransition(
-                opacity: curved,
-                child: SlideTransition(
-                  position: Tween<Offset>(
-                    begin: const Offset(0, .08),
-                    end: Offset.zero,
-                  ).animate(curved),
-                  child: child,
-                ),
-              );
-            },
-            child: Row(
-              key: ValueKey<String>(selected?.id ?? 'sector_add_only'),
-              children: <Widget>[
-                Expanded(
-                  child: OpsActionButton(
-                    label: '섹터 등록',
-                    icon: Icons.add_location_alt_rounded,
-                    onPressed: state.isBusy ? null : () => _openSetting(),
-                  ),
-                ),
-                if (selected != null) ...<Widget>[
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: OpsActionButton(
-                      label: '수정',
-                      icon: Icons.edit_location_alt_rounded,
-                      tonal: true,
-                      onPressed: state.isBusy
-                          ? null
-                          : () => _openSetting(sector: selected),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: OpsActionButton(
-                      label: '삭제',
-                      icon: Icons.delete_forever_rounded,
-                      danger: true,
-                      onPressed: state.isBusy ? null : _deleteSelected,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
+  void _scheduleSelectionValidation(
+    SectorState state,
+    List<SectorModel> visibleSectors,
+  ) {
+    final selectedId = state.selectedSectorId;
+    if (selectedId == null ||
+        visibleSectors.any((sector) => sector.id == selectedId) ||
+        _selectionValidationScheduled) {
+      return;
+    }
+    _selectionValidationScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _selectionValidationScheduled = false;
+      if (!mounted) return;
+      final currentState = context.read<SectorState>();
+      final currentSelectedId = currentState.selectedSectorId;
+      if (currentSelectedId == null) return;
+      final currentArea = context.read<AreaState>().currentArea.trim();
+      final currentlyVisible = currentState.sectors
+          .where((sector) => sector.area == currentArea)
+          .where(_matchesSearch)
+          .any((sector) => sector.id == currentSelectedId);
+      if (currentlyVisible) return;
+      currentState.clearSelection();
+      _log('selection_cleared reason=filtered_out id=$currentSelectedId');
+    });
   }
 
-  Widget _buildSectorRow(
+  Future<void> _selectSector(
     SectorState state,
     SectorModel sector,
-    int index,
-  ) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-    final selected = state.selectedSectorId == sector.id;
-    final reduceMotion =
-        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+  ) async {
+    final wasSelected = state.selectedSectorId == sector.id;
+    await HapticFeedback.selectionClick();
+    if (!mounted) return;
+    state.toggleSectorSelection(sector.id);
+    _log(
+      '${wasSelected ? 'sector_deselected' : 'sector_selected'} id=${sector.id} name=${sector.name}',
+    );
+  }
 
-    final row = InkWell(
-      onTap: () => state.toggleSectorSelection(sector.id),
-      borderRadius: BorderRadius.circular(16),
-      child: OpsPanel(
-        selected: selected,
-        padding: EdgeInsets.zero,
-        child: Row(
-          children: <Widget>[
-            AnimatedContainer(
-              duration:
-                  reduceMotion ? Duration.zero : CommonUiMotion.selection,
-              width: 6,
-              height: 108,
+  Widget _buildToolbar(
+    BuildContext context, {
+    required SectorState state,
+  }) {
+    final refreshing = state.isRefreshing;
+    return Row(
+      children: [
+        Expanded(
+          child: OpsDockSearchField(
+            controller: _searchController,
+            query: _query,
+            semanticLabel: '섹터 검색',
+            onChanged: _setQuery,
+            onClear: _clearQuery,
+          ),
+        ),
+        const SizedBox(width: 6),
+        CommonIconButton(
+          icon: Icons.refresh_rounded,
+          tooltip: '새로고침',
+          onPressed: state.isBusy ? null : _manualRefresh,
+          loading: refreshing,
+          haptic: CommonHaptic.selection,
+          size: 40,
+          iconSize: 19,
+        ),
+        const SizedBox(width: 4),
+        CommonIconButton(
+          icon: Icons.add_location_alt_rounded,
+          tooltip: '섹터 등록',
+          onPressed: state.isBusy ? null : () => _openSetting(),
+          haptic: CommonHaptic.selection,
+          size: 40,
+          iconSize: 19,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEmptyState(
+    BuildContext context, {
+    required bool scopedEmpty,
+    required bool busy,
+  }) {
+    final tokens = CommonUiTheme.of(context);
+    final textTheme = Theme.of(context).textTheme;
+    final queryActive = _query.trim().isNotEmpty;
+    final title = scopedEmpty
+        ? '등록된 섹터가 없습니다'
+        : queryActive
+            ? '일치하는 섹터가 없습니다'
+            : '표시할 섹터가 없습니다';
+
+    Widget? action;
+    if (scopedEmpty) {
+      action = CommonButton(
+        label: '섹터 등록',
+        icon: Icons.add_location_alt_rounded,
+        onPressed: busy ? null : () => _openSetting(),
+        haptic: CommonHaptic.selection,
+        minHeight: 42,
+      );
+    } else if (queryActive) {
+      action = CommonButton(
+        label: '검색 초기화',
+        icon: Icons.search_off_rounded,
+        onPressed: _clearQuery,
+        variant: CommonButtonVariant.secondary,
+        haptic: CommonHaptic.selection,
+        minHeight: 42,
+      );
+    }
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 44,
+              height: 44,
               decoration: BoxDecoration(
-                color: selected
-                    ? colorScheme.primary
-                    : colorScheme.secondary.withOpacity(.72),
-                borderRadius: const BorderRadius.horizontal(
-                  left: Radius.circular(16),
-                ),
+                color: tokens.surfaceRaised,
+                borderRadius: BorderRadius.circular(CommonUiShapes.control),
+                border: Border.all(color: tokens.borderSubtle),
+              ),
+              alignment: Alignment.center,
+              child: Icon(
+                queryActive ? Icons.search_off_rounded : Icons.hub_rounded,
+                color: tokens.iconSecondary,
+                size: 22,
               ),
             ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(13, 12, 12, 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: Text(
-                            sector.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: textTheme.titleMedium?.copyWith(
-                              color: colorScheme.onSurface,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        OpsStatusBadge(
-                          label: '방문처',
-                          color: colorScheme.secondary,
-                          icon: Icons.pin_drop_rounded,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 9),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: <Widget>[
-                        OpsInfoPill(
-                          text: sector.area,
-                          icon: Icons.business_rounded,
-                        ),
-                        OpsInfoPill(
-                          text: _formatUpdatedAt(sector.updatedAt),
-                          icon: Icons.update_rounded,
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+            const SizedBox(height: 10),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: textTheme.bodyMedium?.copyWith(
+                color: tokens.textPrimary,
+                fontWeight: FontWeight.w800,
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: AnimatedSwitcher(
-                duration:
-                    reduceMotion ? Duration.zero : CommonUiMotion.selection,
-                child: Icon(
-                  selected
-                      ? Icons.check_circle_rounded
-                      : Icons.chevron_right_rounded,
-                  key: ValueKey<bool>(selected),
-                  color: selected
-                      ? colorScheme.primary
-                      : colorScheme.onSurfaceVariant.withOpacity(.7),
-                ),
+            if (action != null) ...[
+              const SizedBox(height: 12),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 180),
+                child: action,
               ),
-            ),
+            ],
           ],
         ),
       ),
     );
+  }
 
-    return CommonAnimatedReveal(
-      delay: reduceMotion
-          ? Duration.zero
-          : Duration(milliseconds: index.clamp(0, 8).toInt() * 35),
-      offset: const Offset(.025, 0),
-      child: row,
+  Widget _buildSectorList(
+    BuildContext context, {
+    required SectorState state,
+    required List<SectorModel> sectors,
+  }) {
+    final tokens = CommonUiTheme.of(context);
+    return OpsDockListSurface(
+      child: ListView.separated(
+        padding: EdgeInsets.zero,
+        itemCount: sectors.length,
+        separatorBuilder: (context, index) => Divider(
+          height: 1,
+          thickness: 1,
+          color: tokens.borderSubtle,
+        ),
+        itemBuilder: (context, index) {
+          final sector = sectors[index];
+          return _SectorDockRow(
+            key: ValueKey<String>(sector.id),
+            name: sector.name,
+            updatedAt: _formatUpdatedAt(sector.updatedAt),
+            selected: state.selectedSectorId == sector.id,
+            onTap: () {
+              unawaited(_selectSector(state, sector));
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildContextFooter(
+    BuildContext context, {
+    required SectorState state,
+    required SectorModel? selected,
+  }) {
+    if (selected == null) {
+      return const SizedBox.shrink(key: ValueKey<String>('sector_footer_none'));
+    }
+
+    return OpsDockContextFooter(
+      key: ValueKey<String>('sector_footer_${selected.id}'),
+      children: [
+        Expanded(
+          child: CommonButton(
+            label: '수정',
+            icon: Icons.edit_location_alt_rounded,
+            onPressed: state.isBusy ? null : () => _openSetting(sector: selected),
+            variant: CommonButtonVariant.secondary,
+            haptic: CommonHaptic.selection,
+            minHeight: 42,
+            expand: true,
+          ),
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: CommonButton(
+            label: '삭제',
+            icon: Icons.delete_forever_rounded,
+            onPressed: state.isBusy ? null : () => _deleteSelected(selected),
+            variant: CommonButtonVariant.destructive,
+            haptic: CommonHaptic.medium,
+            minHeight: 42,
+            expand: true,
+          ),
+        ),
+      ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    final textTheme = Theme.of(context).textTheme;
     final currentArea = context.watch<AreaState>().currentArea.trim();
-    final areaLabel = currentArea.isEmpty ? '지역 미설정' : currentArea;
-    final colorScheme = Theme.of(context).colorScheme;
+    final state = context.watch<SectorState>();
+    final areaSectors = state.sectors
+        .where((sector) => sector.area == currentArea)
+        .toList(growable: false);
+    final visibleSectors = areaSectors.where(_matchesSearch).toList(growable: false);
+    final selected = _visibleSelection(state, visibleSectors);
+    final initialLoading = state.isLoading && areaSectors.isEmpty;
 
-    return Consumer<SectorState>(
-      builder: (context, state, child) {
-        final areaSectors = state.sectors
-            .where((sector) => sector.area == currentArea)
-            .toList(growable: false);
-        final normalizedQuery = _query.trim().toLowerCase();
-        final visibleSectors = normalizedQuery.isEmpty
-            ? areaSectors
-            : areaSectors
-                .where(
-                  (sector) =>
-                      sector.name.toLowerCase().contains(normalizedQuery) ||
-                      sector.normalizedName.contains(
-                        normalizeSectorName(normalizedQuery),
-                      ),
-                )
-                .toList(growable: false);
-        final hasSelection = state.selectedSector != null;
+    _scheduleSelectionValidation(state, visibleSectors);
 
-        return OpsConsoleScaffold(
-          title: '섹터 관리',
-          subtitle: '차량이 현재 지역에서 방문한 목적지를 관리합니다.',
-          icon: Icons.hub_rounded,
-          areaLabel: areaLabel,
-          loading: state.isLoading || state.isSaving,
-          metrics: <OpsMetric>[
-            OpsMetric(
-              label: '등록',
-              value: '${areaSectors.length}',
-              icon: Icons.pin_drop_rounded,
-              color: colorScheme.primary,
-            ),
-            OpsMetric(
-              label: '검색',
-              value: '${visibleSectors.length}',
-              icon: Icons.search_rounded,
-              color: colorScheme.secondary,
-            ),
-            OpsMetric(
-              label: '선택',
-              value: hasSelection ? '1' : '0',
-              icon: Icons.touch_app_rounded,
-              color: hasSelection
-                  ? colorScheme.primary
-                  : colorScheme.onSurfaceVariant,
-            ),
-            OpsMetric(
-              label: '지역',
-              value: currentArea.isEmpty ? '-' : currentArea,
-              icon: Icons.business_rounded,
-              color: colorScheme.tertiary,
-            ),
-          ],
-          commandBar: _buildCommandBar(
-            visibleSectors.length,
-            areaSectors.length,
-            state.isBusy,
-          ),
-          bottomBar: _buildBottomBar(state),
-          body: state.isLoading
-              ? const SizedBox.shrink()
-              : visibleSectors.isEmpty
-                  ? OpsEmptyState(
-                      icon: Icons.hub_rounded,
-                      title: areaSectors.isEmpty
-                          ? '등록된 섹터가 없습니다'
-                          : '검색 결과가 없습니다',
-                      message: areaSectors.isEmpty
-                          ? '현재 지역에서 차량이 방문할 목적지를 등록하세요.'
-                          : '검색어를 조정하세요.',
-                      action: currentArea.isEmpty
-                          ? null
-                          : CommonButton(
-                              label: '섹터 등록',
-                              icon: Icons.add_location_alt_rounded,
-                              onPressed: () => _openSetting(),
-                              haptic: CommonHaptic.selection,
-                            ),
-                    )
-                  : ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
-                      itemCount: visibleSectors.length,
-                      itemBuilder: (context, index) => _buildSectorRow(
-                        state,
-                        visibleSectors[index],
-                        index,
+    final listBody = initialLoading
+        ? const SizedBox.expand(key: ValueKey<String>('sector_initial_loading'))
+        : visibleSectors.isEmpty
+            ? KeyedSubtree(
+                key: ValueKey<String>(
+                  'sector_empty_${areaSectors.isEmpty}_${_query.trim().isNotEmpty}',
+                ),
+                child: _buildEmptyState(
+                  context,
+                  scopedEmpty: areaSectors.isEmpty,
+                  busy: state.isBusy,
+                ),
+              )
+            : KeyedSubtree(
+                key: ValueKey<String>(
+                  'sector_list_${_query.trim().toLowerCase()}_${visibleSectors.length}',
+                ),
+                child: _buildSectorList(
+                  context,
+                  state: state,
+                  sectors: visibleSectors,
+                ),
+              );
+
+    return Material(
+      color: tokens.canvas,
+      child: Stack(
+        children: [
+          Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(10, 10, 10, 0),
+                child: _buildToolbar(context, state: state),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 7),
+                child: Row(
+                  children: [
+                    Text(
+                      _query.trim().isEmpty || visibleSectors.length == areaSectors.length
+                          ? '${visibleSectors.length}개 표시'
+                          : '${visibleSectors.length}개 표시 · 전체 ${areaSectors.length}개',
+                      style: textTheme.labelSmall?.copyWith(
+                        color: tokens.textSecondary,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-        );
-      },
+                    const Spacer(),
+                    Icon(
+                      Icons.hub_rounded,
+                      size: 16,
+                      color: tokens.iconSecondary,
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 0, 10, 0),
+                  child: OpsDockResultSwitcher(child: listBody),
+                ),
+              ),
+              OpsDockContextFooterTransition(
+                child: _buildContextFooter(
+                  context,
+                  state: state,
+                  selected: selected,
+                ),
+              ),
+            ],
+          ),
+          OpsDockLoadingOverlay(loading: initialLoading),
+        ],
+      ),
+    );
+  }
+}
+
+class _SectorDockRow extends StatelessWidget {
+  const _SectorDockRow({
+    super.key,
+    required this.name,
+    required this.updatedAt,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String name;
+  final String updatedAt;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    final textTheme = Theme.of(context).textTheme;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+
+    return OpsDockSelectableRowSurface(
+      selected: selected,
+      selectionColor: tokens.accent,
+      selectedContainer: tokens.accentContainer,
+      onTap: onTap,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  name.trim().isEmpty ? '이름 없음' : name.trim(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: tokens.textPrimary,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -.1,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              AnimatedSwitcher(
+                duration:
+                    reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                transitionBuilder: (child, animation) => ScaleTransition(
+                  scale: animation,
+                  child: FadeTransition(
+                    opacity: animation,
+                    child: child,
+                  ),
+                ),
+                child: Icon(
+                  selected
+                      ? Icons.check_circle_rounded
+                      : Icons.chevron_right_rounded,
+                  key: ValueKey<bool>(selected),
+                  size: 18,
+                  color: selected ? tokens.accent : tokens.iconSecondary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 5),
+          Text(
+            updatedAt,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: textTheme.labelSmall?.copyWith(
+              color: tokens.textSecondary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

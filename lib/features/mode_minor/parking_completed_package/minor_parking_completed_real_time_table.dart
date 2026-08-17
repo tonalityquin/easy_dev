@@ -59,11 +59,13 @@ class MinorParkingCompletedRealTimeTable extends StatelessWidget {
     final tableNo = DayGroupNoStrategy();
     final dialogNo = LinearNoStrategy();
 
-    Future<void> openSheet(BuildContext ctx, plate) {
-      return showMinorParkingCompletedStatusBottomSheetFromDialog(
+    Future<void> openDock(
+      BuildContext ctx,
+      RealTimePlateDetailRequest request,
+    ) {
+      return showMinorParkingCompletedStatusSideDockFromRealtime(
         context: ctx,
-        plate: plate,
-        popParentOnDelete: false,
+        request: request,
       );
     }
 
@@ -76,12 +78,11 @@ class MinorParkingCompletedRealTimeTable extends StatelessWidget {
         syncLocationCounts: true,
         showUnknownInZoneSummary: false,
         labelUsesAccent: true,
-        defaultSortOldFirst: false,
         isEnabled: ParkingRequestsRealtimeTabGate.isEnabled,
         accent: (cs) => cs.secondary,
         tableNoStrategy: tableNo,
         dialogNoStrategy: dialogNo,
-        openBottomSheet: (ctx, plate) => openSheet(ctx, plate),
+        openStatusDock: (ctx, request) => openDock(ctx, request),
       ),
       RealTimeTabSpec(
         id: 'parking_completed',
@@ -91,12 +92,11 @@ class MinorParkingCompletedRealTimeTable extends StatelessWidget {
         syncLocationCounts: true,
         showUnknownInZoneSummary: false,
         labelUsesAccent: true,
-        defaultSortOldFirst: false,
         isEnabled: ParkingCompletedRealtimeTabGate.isEnabled,
         accent: (cs) => cs.primary,
         tableNoStrategy: tableNo,
         dialogNoStrategy: dialogNo,
-        openBottomSheet: (ctx, plate) => openSheet(ctx, plate),
+        openStatusDock: (ctx, request) => openDock(ctx, request),
       ),
       RealTimeTabSpec(
         id: 'departure_requests',
@@ -106,12 +106,11 @@ class MinorParkingCompletedRealTimeTable extends StatelessWidget {
         syncLocationCounts: true,
         showUnknownInZoneSummary: false,
         labelUsesAccent: true,
-        defaultSortOldFirst: false,
         isEnabled: DepartureRequestsRealtimeTabGate.isEnabled,
         accent: (cs) => cs.tertiary,
         tableNoStrategy: tableNo,
         dialogNoStrategy: dialogNo,
-        openBottomSheet: (ctx, plate) => openSheet(ctx, plate),
+        openStatusDock: (ctx, request) => openDock(ctx, request),
       ),
     ];
 

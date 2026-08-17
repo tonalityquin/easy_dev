@@ -5,8 +5,6 @@ import '../../../features/selector/application/dev_auth.dart';
 import 'secondary_info.dart';
 
 class SecondaryState with ChangeNotifier {
-  int _selectedIndex = 0;
-  List<SecondaryInfo> _pages;
   bool _isLoading = false;
   RoleType _role = RoleType.userCommon;
   CapSet _areaCaps = const <Capability>{};
@@ -15,26 +13,65 @@ class SecondaryState with ChangeNotifier {
   bool _devRefreshScheduled = false;
   int _devRefreshToken = 0;
 
-  SecondaryState({List<SecondaryInfo> pages = const [tabLocalData]})
-      : _pages = pages;
-
-  int get selectedIndex => _selectedIndex;
-
-  List<SecondaryInfo> get pages => _pages;
-
   bool get isLoading => _isLoading;
-
   bool get devLoggedIn => _devLoggedIn;
+  RoleType get role => _role;
+  CapSet get areaCaps => Set<Capability>.unmodifiable(_areaCaps);
 
-  void onItemTapped(int index) {
-    if (index < 0 || index >= _pages.length) {
-      debugPrint('⚠️ 잘못된 인덱스 접근: $index');
-      return;
+  bool roleAllows(Section section) {
+    return (kRolePolicy[_role] ?? const <Section>{}).contains(section);
+  }
+
+  CapSet requiredCapabilities(Section section) {
+    return Set<Capability>.unmodifiable(
+      kSectionRequires[section] ?? const <Capability>{},
+    );
+  }
+
+  bool capabilityAllows(Section section) {
+    return Cap.supports(_areaCaps, requiredCapabilities(section));
+  }
+
+  bool canAccess(Section section) {
+    if (!roleAllows(section)) return false;
+    if (section == Section.backend && !_devLoggedIn) return false;
+    return capabilityAllows(section);
+  }
+
+  String disabledReason(Section section) {
+    if (!roleAllows(section)) {
+      return '현재 계정 권한으로 ${_sectionLabel(section)}을 사용할 수 없습니다.';
     }
-    if (_selectedIndex != index) {
-      _selectedIndex = index;
-      notifyListeners();
+    if (section == Section.backend && !_devLoggedIn) {
+      return '백엔드 컨트롤러를 사용하려면 개발자 로그인이 필요합니다.';
     }
+    if (!capabilityAllows(section)) {
+      final required = requiredCapabilities(section);
+      final labels = required.map((capability) => capability.label).join(' · ');
+      if (labels.isEmpty) {
+        return '현재 지점에서는 ${_sectionLabel(section)}을 사용할 수 없습니다.';
+      }
+      return '현재 지점에 $labels 기능이 활성화되어 있지 않습니다.';
+    }
+    return '';
+  }
+
+  String accessDebugReason(Section section) {
+    if (!roleAllows(section)) {
+      return 'role_denied role=${_role.name} section=${section.name}';
+    }
+    if (section == Section.backend && !_devLoggedIn) {
+      return 'developer_login_required section=${section.name}';
+    }
+    if (!capabilityAllows(section)) {
+      final required = requiredCapabilities(section);
+      final missing = required
+          .where((capability) => !_areaCaps.contains(capability))
+          .map((capability) => capability.name)
+          .join(',');
+      return 'capability_denied section=${section.name} missing=$missing areaCaps=${_areaCaps.map((capability) => capability.name).join(',')}';
+    }
+    return 'allowed section=${section.name}';
   }
 
   void updateAccess({
@@ -51,14 +88,10 @@ class SecondaryState with ChangeNotifier {
       _areaCaps = Set<Capability>.from(areaCaps);
     }
 
-    final newPages = _computePages();
-    final pagesChanged = !_sameByTitle(_pages, newPages);
-
-    if (pagesChanged) {
-      _setPages(newPages, keepIndex: true, notify: false);
-    }
-
-    if (roleChanged || capsChanged || pagesChanged) {
+    if (roleChanged || capsChanged) {
+      debugPrint(
+        '[SecondaryState] access_updated role=${_role.name} caps=${_areaCaps.map((capability) => capability.name).join(',')}',
+      );
       notifyListeners();
     }
 
@@ -88,71 +121,44 @@ class SecondaryState with ChangeNotifier {
     if (token != _devRefreshToken) return;
 
     _hasLoadedDevLogin = true;
+    final changed = _devLoggedIn != loggedIn;
     _devLoggedIn = loggedIn;
-
-    final newPages = _computePages();
-    final pagesChanged = !_sameByTitle(_pages, newPages);
-
     _isLoading = false;
 
-    if (pagesChanged) {
-      _setPages(newPages, keepIndex: true, notify: false);
-    }
-
+    debugPrint(
+      '[SecondaryState] developer_login refreshed=$_devLoggedIn changed=$changed',
+    );
     notifyListeners();
   }
 
-  void updatePages(List<SecondaryInfo> newPages, {bool keepIndex = false}) {
-    _setPages(newPages, keepIndex: keepIndex, notify: true);
-  }
-
-  List<SecondaryInfo> _computePages() {
-    final fallbackPages =
-        _devLoggedIn ? const [tabLocalData, tabBackend] : const [tabLocalData];
-    final allowedSections = kRolePolicy[_role] ?? const <Section>{};
-
-    if (allowedSections.isEmpty) return fallbackPages;
-
-    final pages = <SecondaryInfo>[];
-    for (final section in allowedSections) {
-      if (section == Section.backend && !_devLoggedIn) continue;
-
-      final need = kSectionRequires[section] ?? const <Capability>{};
-      if (Cap.supports(_areaCaps, need)) {
-        final info = kSectionTab[section];
-        if (info != null) pages.add(info);
-      }
+  String _sectionLabel(Section section) {
+    switch (section) {
+      case Section.local:
+        return '설정';
+      case Section.user:
+        return '계정 관리';
+      case Section.sector:
+        return '섹터 관리';
+      case Section.location:
+        return '구역 관리';
+      case Section.tablet:
+        return '태블릿 관리';
+      case Section.monthly:
+        return '정기 주차 관리';
+      case Section.bill:
+        return '정산 관리';
+      case Section.backend:
+        return '백엔드 컨트롤러';
+      case Section.area:
+        return '지역 추가';
     }
-
-    return pages.isEmpty ? fallbackPages : pages;
-  }
-
-  void _setPages(
-    List<SecondaryInfo> newPages, {
-    required bool keepIndex,
-    required bool notify,
-  }) {
-    _pages = newPages;
-    if (!keepIndex || _selectedIndex >= newPages.length) {
-      _selectedIndex = 0;
-    }
-    if (notify) notifyListeners();
-  }
-
-  bool _sameByTitle(List<SecondaryInfo> a, List<SecondaryInfo> b) {
-    if (identical(a, b)) return true;
-    if (a.length != b.length) return false;
-    for (var i = 0; i < a.length; i++) {
-      if (a[i].title != b[i].title) return false;
-    }
-    return true;
   }
 
   bool _sameCaps(CapSet a, CapSet b) {
     if (identical(a, b)) return true;
     if (a.length != b.length) return false;
-    for (final cap in a) {
-      if (!b.contains(cap)) return false;
+    for (final capability in a) {
+      if (!b.contains(capability)) return false;
     }
     return true;
   }

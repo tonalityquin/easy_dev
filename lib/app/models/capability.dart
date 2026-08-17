@@ -38,7 +38,7 @@ extension CapabilityKey on Capability {
       case Capability.bill:
         return '정산';
       case Capability.record:
-        return '채팅&무전기';
+        return '서드파티 연결';
     }
   }
 }
@@ -125,6 +125,10 @@ class Cap {
       case '정산':
         return Capability.bill;
       case 'record':
+      case 'thirdparty':
+      case 'third_party':
+      case 'discord':
+      case '서드파티':
       case 'talk':
       case 'walkie':
       case 'walkietalkie':

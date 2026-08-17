@@ -18,8 +18,6 @@ import '../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../shared/area_remote_settings/application/area_remote_settings_sync.dart';
 import '../../../account/applications/user_state.dart';
-import '../../../community/application/discord/discord_config.dart';
-import '../../../community/page/sheets/discord/discord_bottom_sheet.dart';
 import '../../../dev/domain/repositories/area_repo_package/area_repository.dart';
 import '../../application/area/area_master_cache.dart';
 import '../../page/sheets/head_memo.dart';
@@ -542,11 +540,6 @@ class _HubBubbleState extends State<_HubBubble> {
     _recordDebug(
       'developer_status_back_policy navigation=popup_route routeActive=${panelRoute != null} routeCurrent=${panelRoute?.isCurrent ?? false}',
     );
-    final channelUrl = await loadDiscordChannelUrl();
-    final channelValid = isDiscordChannelUrl(channelUrl);
-    _recordDebug(
-      'developer_status_third_party channelPresent=${channelUrl.isNotEmpty} channelLength=${channelUrl.length} channelValid=$channelValid',
-    );
     final trace = await DeveloperOperationTrace.start(
       context: context,
       title: '빠른 실행 상태',
@@ -570,12 +563,8 @@ class _HubBubbleState extends State<_HubBubble> {
       progress: 0.52,
     );
     trace.log(
-      'work=memo,third_party_use operations=field,attendance,break,statistics support=third_party_support,faq,terms,privacy,contact',
+      'work=memo operations=field,attendance,break,statistics support=faq,terms,privacy,contact thirdParty=moved_to_dashboard',
       progress: 0.58,
-    );
-    trace.log(
-      'thirdPartyChannelPresent=${channelUrl.isNotEmpty}, thirdPartyChannelLength=${channelUrl.length}, thirdPartyChannelValid=$channelValid, launch=discord_scheme_then_https_fallback',
-      progress: 0.63,
     );
     trace.log(
       'backPolicy=popup_route_first, panelRouteActive=${panelRoute != null}, panelRouteCurrent=${panelRoute?.isCurrent ?? false}, closeSources=handle,scrim,action,system_back',
@@ -795,69 +784,6 @@ class _HubBubbleState extends State<_HubBubble> {
         },
       ),
       _DockAction(
-        id: 'third_party_use',
-        category: _QuickActionCategory.work,
-        icon: Icons.forum_rounded,
-        label: '서드 파티 사용',
-        description: '저장된 Discord 채널을 바로 엽니다.',
-        color: tokens.surfaceSelected,
-        foreground: tokens.textPrimary,
-        onTap: () async {
-          await closeMenu();
-          final channelUrl = await loadDiscordChannelUrl();
-          final valid = isDiscordChannelUrl(channelUrl);
-          _recordDebug(
-            'third_party_use_request channelPresent=${channelUrl.isNotEmpty} channelLength=${channelUrl.length} channelValid=$valid',
-          );
-          if (!valid) {
-            final feedbackContext = HeadHubActions._bestContext();
-            if (feedbackContext != null && feedbackContext.mounted) {
-              showFailedSnackbar(
-                feedbackContext,
-                '저장된 디스코드 채널 링크가 없습니다. 지원의 서드파티 연결 지원에서 설정해 주세요.',
-                useCommonUi: true,
-              );
-            }
-            _recordDebug('third_party_use_blocked reason=missing_or_invalid');
-            return;
-          }
-          final appUrl = discordChannelDeepLink(channelUrl);
-          var opened = false;
-          var destination = 'https_channel';
-          if (appUrl != null) {
-            final appUri = Uri.tryParse(appUrl);
-            if (appUri != null) {
-              try {
-                opened = await launchUrl(
-                  appUri,
-                  mode: LaunchMode.externalApplication,
-                );
-                _recordDebug(
-                  'third_party_use_app_launch opened=$opened',
-                );
-              } catch (error, stackTrace) {
-                _recordDebug(
-                  'third_party_use_app_launch_failure error=$error\nStackTrace:\n$stackTrace',
-                );
-              }
-            }
-            if (opened) {
-              destination = 'discord_app_channel';
-            }
-          }
-          if (!opened) {
-            opened = await HeadHubActions._openExternalPage(
-              url: channelUrl,
-              failureMessage: '디스코드 채널을 열 수 없습니다.',
-              context: HeadHubActions._bestContext(),
-            );
-          }
-          _recordDebug(
-            'third_party_use_result opened=$opened destination=$destination',
-          );
-        },
-      ),
-      _DockAction(
         id: 'field',
         category: _QuickActionCategory.operations,
         icon: Icons.map_rounded,
@@ -926,29 +852,6 @@ class _HubBubbleState extends State<_HubBubble> {
               sheetContext,
               useCommonUi: true,
             ),
-          );
-        },
-      ),
-      _DockAction(
-        id: 'third_party_support',
-        category: _QuickActionCategory.support,
-        icon: Icons.extension_rounded,
-        label: '서드파티 연결 지원',
-        description: 'Discord 사내 채널 연결을 설정합니다.',
-        color: tokens.accentContainer,
-        foreground: tokens.onAccentContainer,
-        onTap: () async {
-          await closeMenu();
-          final completed = await openCommonSheet<bool>(
-            (sheetContext) => showModalBottomSheet<bool>(
-              context: sheetContext,
-              isScrollControlled: true,
-              backgroundColor: Colors.transparent,
-              builder: (_) => DiscordBottomSheet(rootContext: sheetContext),
-            ),
-          );
-          _recordDebug(
-            'third_party_support_result completed=${completed == true}',
           );
         },
       ),

@@ -153,42 +153,61 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
     return expected.length == actual.length && expected.containsAll(actual);
   }
 
+  Set<String> _requestDateKeys(_DeepLoadRequest request) {
+    if (!request.isRange) {
+      return request.dates.map(_dateOnly).toSet();
+    }
+    final start = DateTime(
+      request.start!.year,
+      request.start!.month,
+      request.start!.day,
+    );
+    final end = DateTime(
+      request.end!.year,
+      request.end!.month,
+      request.end!.day,
+    );
+    return <String>{
+      for (var cursor = start; !cursor.isAfter(end); cursor = cursor.add(const Duration(days: 1)))
+        _dateOnly(cursor),
+    };
+  }
+
+  List<_ChartARow> _rowsForRequest(
+    _ChartAReport report,
+    _DeepLoadRequest request,
+  ) {
+    final requestedKeys = _requestDateKeys(request);
+    final rows = report.rows
+        .where((row) => requestedKeys.contains(row.dateStr))
+        .toList()
+      ..sort((a, b) => a.date.compareTo(b.date));
+    return rows;
+  }
+
+  List<String> _historyLogUrlsForRequest(
+    _ChartAReport report,
+    _DeepLoadRequest request,
+  ) {
+    final urls = _rowsForRequest(report, request)
+        .expand((row) => row.historyLogsUrls)
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+    return urls;
+  }
+
   EndWorkSectorMetrics? _sectorMetricsForRequest(
     _ChartAReport report,
     _DeepLoadRequest request,
   ) {
-    final requestedKeys = <String>{};
-    if (request.isRange) {
-      var cursor = DateTime(
-        request.start!.year,
-        request.start!.month,
-        request.start!.day,
-      );
-      final end = DateTime(
-        request.end!.year,
-        request.end!.month,
-        request.end!.day,
-      );
-      while (!cursor.isAfter(end)) {
-        requestedKeys.add(_dateOnly(cursor));
-        cursor = cursor.add(const Duration(days: 1));
-      }
-    } else {
-      requestedKeys.addAll(request.dates.map(_dateOnly));
-    }
-
-    final availableKeys = _reportDateKeys(report);
-    if (requestedKeys.isEmpty || !availableKeys.containsAll(requestedKeys)) {
-      debugPrint(
-        '[STAT_SECTOR_CROSS] skipped requested=${requestedKeys.length} '
-        'available=${availableKeys.length} complete=${availableKeys.containsAll(requestedKeys)}',
-      );
+    final selected = _rowsForRequest(report, request);
+    if (selected.isEmpty) {
+      debugPrint('[STAT_SECTOR_CROSS] skipped selectedRows=0');
       return null;
     }
-
-    final selected = report.rows.where(
-      (row) => requestedKeys.contains(row.dateStr),
-    );
     final merged = EndWorkSectorMetrics.merge(
       selected
           .map((row) => row.sectorMetrics)
@@ -248,15 +267,51 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
         'sectorCount=${report.sectorMetrics?.sectorCount ?? 0}',
         progress: .12,
       );
+      final expectedGcsLogUrls = report.rows
+          .expand((row) => row.historyLogsUrls)
+          .map((value) => value.trim())
+          .where((value) => value.isNotEmpty)
+          .toSet()
+          .toList()
+        ..sort();
+      trace.log(
+        'history linkedGcsUrls=${expectedGcsLogUrls.length}',
+        progress: .13,
+      );
+      for (final row in report.rows) {
+        if (!row.historyAggregated && row.historyEntryCount <= 1) continue;
+        trace.log(
+          'history date=${row.dateStr} entries=${row.historyEntryCount} '
+          'detailedGcs=${row.historyDetailedEntryCount} '
+          'excluded=${row.historyExcludedEntryCount} '
+          'first=${row.historyFirstEntryCount} '
+          'unverifiedDetailed=${row.historyUnverifiedDetailedEntryCount} '
+          'legacyDetailed=${row.historyLegacyDetailedEntryCount} '
+          'linkedLogs=${row.historyLogsUrls.length} '
+          'sectorEntries=${row.historySectorEntryCount} '
+          'mode=${row.historyAggregationMode} '
+          'aggregated=${row.historyAggregated}',
+          progress: .14,
+        );
+      }
       StatisticsDeepReport? deepReportForPdf = _deepReport;
-      if (deepReportForPdf != null &&
+      if (expectedGcsLogUrls.isNotEmpty && deepReportForPdf != null) {
+        trace.log('deep=reload reason=historyLinkedObjects');
+        deepReportForPdf = null;
+      } else if (deepReportForPdf != null &&
           !_deepReportMatchesChartReport(deepReportForPdf, report)) {
         trace.log('deep=reload reason=dateScopeMismatch');
         deepReportForPdf = null;
       }
       final area = widget.area.trim();
       final sectorEnabled = widget.areaSectorEnabled[area] == true;
-      if (sectorEnabled && deepReportForPdf == null) {
+      if (sectorEnabled &&
+          report.sectorMetrics != null &&
+          expectedGcsLogUrls.isEmpty) {
+        await trace.fail('상세 업무종료 history에 연결된 GCS 로그가 없어 Sector PDF를 검증할 수 없습니다.');
+        return;
+      }
+      if (sectorEnabled && report.sectorMetrics != null && deepReportForPdf == null) {
         final dates = report.rows
             .map((row) => DateTime.tryParse(row.dateStr))
             .whereType<DateTime>()
@@ -278,6 +333,10 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
           dates: dates,
           scopeLabel: report.rangeLabel,
           sectorEnabled: true,
+          gcsLogUrls: expectedGcsLogUrls,
+          onLog: (message) {
+            trace?.log(message, progress: .17);
+          },
         );
         if (mounted) {
           setState(() {
@@ -287,8 +346,8 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
         }
       }
       final deepSector = deepReportForPdf?.sectorReport;
-      if (sectorEnabled && deepSector == null) {
-        await trace.fail('Sector 지원 Area이지만 공통 Sector 보고서가 없습니다.');
+      if (sectorEnabled && report.sectorMetrics != null && deepSector == null) {
+        await trace.fail('Sector 집계가 존재하지만 연결된 상세 GCS 보고서를 구성하지 못했습니다.');
         return;
       }
       if (deepSector != null) {
@@ -326,6 +385,10 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
         if (expectedSector != null &&
             deepSector.sourceFieldComplete &&
             !expectedSector.legacyFeeClassification) {
+          trace.log(
+            'cross source expected=firestoreVerifiedDetailedGcsHistoryAggregate actual=gcsVerifiedHistoryLinkedCsvMerge',
+            progress: .235,
+          );
           final cross = _crossValidateSectorMetrics(
             expected: expectedSector,
             actual: deepSector,
@@ -334,7 +397,7 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
             trace.log(line, progress: .24);
           }
           if (!cross.isValid) {
-            await trace.fail('보고서와 상세 로그의 Sector 합계가 일치하지 않습니다.');
+            await trace.fail('검증된 상세 업무종료 history와 연결 GCS 로그의 Sector 합계가 일치하지 않습니다.');
             return;
           }
         }
@@ -1472,24 +1535,47 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
         progress: .08,
       );
 
-      final StatisticsDeepReport deep;
-      if (request.isRange) {
-        deep = await _deepLogService.loadByDateRange(
-          division: division,
-          area: area,
-          start: request.start!,
-          end: request.end!,
-          sectorEnabled: sectorEnabled,
-        );
-      } else {
-        deep = await _deepLogService.loadByDates(
-          division: division,
-          area: area,
-          dates: request.dates,
-          scopeLabel: request.label,
-          sectorEnabled: sectorEnabled,
+      final selectedRows = _rowsForRequest(report, request);
+      if (selectedRows.isEmpty) {
+        await trace.fail('선택 범위에 저장된 통계 보고서가 없습니다.');
+        return;
+      }
+      final selectedDates = selectedRows.map((row) => row.date).toList();
+      final linkedGcsLogUrls = _historyLogUrlsForRequest(report, request);
+      for (final row in selectedRows) {
+        trace.log(
+          'history date=${row.dateStr} entries=${row.historyEntryCount} '
+          'detailedGcs=${row.historyDetailedEntryCount} '
+          'excluded=${row.historyExcludedEntryCount} '
+          'first=${row.historyFirstEntryCount} '
+          'unverifiedDetailed=${row.historyUnverifiedDetailedEntryCount} '
+          'legacyDetailed=${row.historyLegacyDetailedEntryCount} '
+          'linkedLogs=${row.historyLogsUrls.length} '
+          'sectorEntries=${row.historySectorEntryCount} '
+          'mode=${row.historyAggregationMode}',
+          progress: .12,
         );
       }
+      trace.log(
+        'source=verifiedDetailedGcsHistory selectedDates=${selectedDates.length} linkedLogs=${linkedGcsLogUrls.length}',
+        progress: .16,
+      );
+      if (linkedGcsLogUrls.isEmpty) {
+        await trace.fail('선택 범위에 검증된 상세 업무종료 GCS 로그가 없습니다.');
+        return;
+      }
+
+      final deep = await _deepLogService.loadByDates(
+        division: division,
+        area: area,
+        dates: selectedDates,
+        scopeLabel: request.label,
+        sectorEnabled: sectorEnabled,
+        gcsLogUrls: linkedGcsLogUrls,
+        onLog: (message) {
+          trace?.log(message, progress: .24);
+        },
+      );
 
       trace.log(
         'objects=${deep.diagnostics.sourceObjectCount} '
@@ -1546,6 +1632,10 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
           expectedSector != null &&
           sector.sourceFieldComplete &&
           !expectedSector.legacyFeeClassification) {
+        trace.log(
+          'cross source expected=firestoreVerifiedDetailedGcsHistoryAggregate actual=gcsVerifiedHistoryLinkedCsvMerge',
+          progress: .83,
+        );
         final cross = _crossValidateSectorMetrics(
           expected: expectedSector,
           actual: sector,
@@ -1554,7 +1644,7 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
           trace.log(line, progress: .84);
         }
         if (!cross.isValid) {
-          await trace.fail('보고서와 상세 로그의 Sector 합계가 일치하지 않습니다.');
+          await trace.fail('검증된 상세 업무종료 history와 연결 GCS 로그의 Sector 합계가 일치하지 않습니다.');
           return;
         }
       }
@@ -2910,6 +3000,19 @@ class _ChartAReport {
           feeDelta: 0,
           departureShare: 0,
           feeShare: 0,
+          historyEntryCount: _chartInt(counts['historyEntryCount']).clamp(1, 1 << 30).toInt(),
+          historyDetailedEntryCount: _chartInt(counts['historyDetailedEntryCount']),
+          historyExcludedEntryCount: _chartInt(counts['historyExcludedEntryCount']),
+          historyFirstEntryCount: _chartInt(counts['historyFirstEntryCount']),
+          historyUnverifiedDetailedEntryCount:
+              _chartInt(counts['historyUnverifiedDetailedEntryCount']),
+          historyLegacyDetailedEntryCount:
+              _chartInt(counts['historyLegacyDetailedEntryCount']),
+          historyAggregationMode:
+              counts['historyAggregationMode']?.toString() ?? 'unknown',
+          historyLogsUrls: _chartStringList(counts['historyLogsUrls']),
+          historyAggregated: counts['historyAggregated'] == true,
+          historySectorEntryCount: _chartInt(counts['historySectorEntryCount']),
           sectorMetrics: sectorMetrics,
         ),
       );
@@ -3091,6 +3194,16 @@ class _ChartARow {
   final int feeDelta;
   final double departureShare;
   final double feeShare;
+  final int historyEntryCount;
+  final int historyDetailedEntryCount;
+  final int historyExcludedEntryCount;
+  final int historyFirstEntryCount;
+  final int historyUnverifiedDetailedEntryCount;
+  final int historyLegacyDetailedEntryCount;
+  final String historyAggregationMode;
+  final List<String> historyLogsUrls;
+  final bool historyAggregated;
+  final int historySectorEntryCount;
   final EndWorkSectorMetrics? sectorMetrics;
 
   const _ChartARow({
@@ -3102,6 +3215,16 @@ class _ChartARow {
     required this.feeDelta,
     required this.departureShare,
     required this.feeShare,
+    required this.historyEntryCount,
+    required this.historyDetailedEntryCount,
+    required this.historyExcludedEntryCount,
+    required this.historyFirstEntryCount,
+    required this.historyUnverifiedDetailedEntryCount,
+    required this.historyLegacyDetailedEntryCount,
+    required this.historyAggregationMode,
+    required this.historyLogsUrls,
+    required this.historyAggregated,
+    required this.historySectorEntryCount,
     required this.sectorMetrics,
   });
 
@@ -3123,6 +3246,17 @@ class _ChartARow {
       feeDelta: feeDelta ?? this.feeDelta,
       departureShare: departureShare ?? this.departureShare,
       feeShare: feeShare ?? this.feeShare,
+      historyEntryCount: historyEntryCount,
+      historyDetailedEntryCount: historyDetailedEntryCount,
+      historyExcludedEntryCount: historyExcludedEntryCount,
+      historyFirstEntryCount: historyFirstEntryCount,
+      historyUnverifiedDetailedEntryCount:
+          historyUnverifiedDetailedEntryCount,
+      historyLegacyDetailedEntryCount: historyLegacyDetailedEntryCount,
+      historyAggregationMode: historyAggregationMode,
+      historyLogsUrls: historyLogsUrls,
+      historyAggregated: historyAggregated,
+      historySectorEntryCount: historySectorEntryCount,
       sectorMetrics: sectorMetrics,
     );
   }
@@ -3297,6 +3431,17 @@ int _chartInt(Object? value) {
     return int.tryParse(value.replaceAll(',', '').trim()) ?? 0;
   }
   return 0;
+}
+
+List<String> _chartStringList(Object? value) {
+  if (value is! Iterable) return const <String>[];
+  final result = <String>[];
+  for (final item in value) {
+    final text = item?.toString().trim() ?? '';
+    if (text.isEmpty || result.contains(text)) continue;
+    result.add(text);
+  }
+  return List<String>.unmodifiable(result);
 }
 
 String _fmt(int value) {

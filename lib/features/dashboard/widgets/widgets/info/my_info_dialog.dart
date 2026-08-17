@@ -10,7 +10,6 @@ import '../../../../dev/application/area_state.dart';
 import '../schedule/weekly_work_schedule_editor.dart';
 
 enum MyInfoEntrySource {
-  opsBottomSheet,
   hqDashboard,
 }
 
@@ -101,8 +100,6 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
 
   String get _sourceKey {
     switch (widget.source) {
-      case MyInfoEntrySource.opsBottomSheet:
-        return 'ops_bottom_sheet';
       case MyInfoEntrySource.hqDashboard:
         return 'hq_dashboard';
     }
