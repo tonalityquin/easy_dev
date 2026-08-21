@@ -3,11 +3,10 @@ import 'package:flutter/material.dart';
 enum BillType { general, regular }
 
 BillType billTypeFromString(String? value) {
-  switch (value) {
+  switch (value?.trim()) {
     case '정기':
-      return BillType.regular;
     case '고정':
-      return BillType.general;
+      return BillType.regular;
     case '변동':
     default:
       return BillType.general;

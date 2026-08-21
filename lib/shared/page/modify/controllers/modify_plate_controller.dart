@@ -185,7 +185,7 @@ class ModifyPlateController {
     locationController.text = plate.location;
 
     selectedBill = plate.billingType;
-    selectedBillType = _determineBillType(plate.billingType);
+    selectedBillType = _determineBillType();
     selectedBillCountType = plate.billingType;
 
     selectedManufacturerName = plate.manufacturerName;
@@ -212,10 +212,16 @@ class ModifyPlateController {
     statusMarkedForDeletion = false;
   }
 
-  String _determineBillType(String? billingType) {
-    if (billingType == null || billingType.isEmpty) return '변동';
-    if (billingType.contains('고정')) return '고정';
+  String _determineBillType() {
+    final explicitPlan = (plate.billingPlanType ?? '').trim();
+    if (explicitPlan == '정기' || explicitPlan == '고정') {
+      return explicitPlan;
+    }
+    if (explicitPlan == '변동') return '변동';
     if ((plate.regularAmount ?? 0) > 0) return '고정';
+    final legacyBillingType = (plate.billingType ?? '').trim();
+    if (legacyBillingType.contains('정기')) return '정기';
+    if (legacyBillingType.contains('고정')) return '고정';
     return '변동';
   }
 
@@ -405,6 +411,7 @@ class ModifyPlateController {
       selectedAddStandard: selectedAddStandard,
       selectedAddAmount: selectedAddAmount,
       selectedBill: selectedBill,
+      selectedBillType: selectedBillType,
       dropdownValue: dropdownValue,
       selectedRegularAmount: selectedRegularAmount,
       selectedRegularDurationHours: selectedRegularDurationHours,
@@ -472,6 +479,9 @@ class ModifyPlateController {
         basicAmount: selectedBasicAmount,
         basicStandard: selectedBasicStandard,
         billingType: newBillingType,
+        billingPlanType: selectedBillType.trim().isEmpty
+            ? plate.billingPlanType
+            : selectedBillType.trim(),
         customStatus: updatedCustomStatus,
         endTime: plate.endTime,
         imageUrls: mergedImageUrls,

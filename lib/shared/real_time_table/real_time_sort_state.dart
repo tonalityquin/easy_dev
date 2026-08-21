@@ -59,21 +59,18 @@ class RealTimeSortState extends ChangeNotifier {
   bool get locationSupported => _locationSupported;
   int get revision => _revision;
 
-  bool get usesLocation => _mode == RealTimeSortMode.locationParent;
-  bool get isCustomized => usesLocation;
+  bool get usesLocation => false;
+  bool get isCustomized => false;
   bool get isNewest => _timeOrder == RealTimeTimeOrder.newest;
   bool get isOldest => _timeOrder == RealTimeTimeOrder.oldest;
   bool get sortOldFirst => isOldest;
-  RealTimePriorityMode get priorityMode =>
-      usesLocation ? RealTimePriorityMode.zone : RealTimePriorityMode.sort;
-  bool get isSortPriority => priorityMode == RealTimePriorityMode.sort;
-  bool get isZonePriority => priorityMode == RealTimePriorityMode.zone;
-  String get priorityLabel => isZonePriority ? '구역' : '정렬';
+  RealTimePriorityMode get priorityMode => RealTimePriorityMode.sort;
+  bool get isSortPriority => true;
+  bool get isZonePriority => false;
+  String get priorityLabel => '정렬';
   String get timeOrderLabel => isOldest ? '오래된순' : '최신순';
   String get selectedLocation => kRealTimeLocationAll;
-  String get summaryLabel => isZonePriority
-      ? '$priorityLabel · 부모 구역'
-      : '$priorityLabel · $timeOrderLabel';
+  String get summaryLabel => '$priorityLabel · $timeOrderLabel';
 
   void setActiveTab({
     required String tabId,
@@ -84,32 +81,30 @@ class RealTimeSortState extends ChangeNotifier {
     final normalizedCollection = collection.trim();
     final changed = _activeTabId != normalized ||
         _activeCollection != normalizedCollection ||
-        _locationSupported != locationSupported;
+        _locationSupported != locationSupported ||
+        _mode != RealTimeSortMode.table;
     _activeTabId = normalized;
     _activeCollection = normalizedCollection;
     _locationSupported = locationSupported;
-    if (!_locationSupported && usesLocation) {
+    if (_mode != RealTimeSortMode.table) {
       _mode = RealTimeSortMode.table;
       _revision += 1;
       debugPrint(
-        '[RealTimePriority] normalized priority=sort order=$timeOrderLabel reason=active_tab_zone_unsupported tab=$_activeTabId revision=$_revision',
+        '[RealTimePriority] normalized priority=sort mode=table reason=table_cell_only tab=$_activeTabId revision=$_revision',
       );
-      notifyListeners();
-      return;
     }
     if (!changed) return;
     debugPrint(
-      '[RealTimePriority] active_tab tab=$_activeTabId collection=${_activeCollection.isEmpty ? '-' : _activeCollection} zoneSupported=$_locationSupported priority=${priorityMode.name} order=$timeOrderLabel',
+      '[RealTimePriority] active_tab tab=$_activeTabId collection=${_activeCollection.isEmpty ? '-' : _activeCollection} tableMode=cell_only zoneButton=disabled order=$timeOrderLabel',
     );
     notifyListeners();
   }
 
   void togglePriority({String reason = 'user'}) {
-    if (isZonePriority) {
-      activateSortPriority(reason: reason);
-    } else {
-      activateZonePriority(reason: reason);
-    }
+    activateSortPriority(reason: 'zone_disabled:$reason');
+    debugPrint(
+      '[RealTimePriority] action=zone_toggle_ignored mode=table tableMode=cell_only zoneButton=disabled reason=$reason',
+    );
   }
 
   void toggleTimeOrder({String reason = 'user'}) {
@@ -117,52 +112,47 @@ class RealTimeSortState extends ChangeNotifier {
     _timeOrder = isNewest
         ? RealTimeTimeOrder.oldest
         : RealTimeTimeOrder.newest;
+    _mode = RealTimeSortMode.table;
     _revision += 1;
     debugPrint(
-      '[RealTimeSortOrder] action=toggle before=$before after=$timeOrderLabel field=createdAt priority=${priorityMode.name} activeTab=${_activeTabId.isEmpty ? '-' : _activeTabId} reason=$reason revision=$_revision',
+      '[RealTimeSortOrder] action=toggle before=$before after=$timeOrderLabel field=createdAt priority=sort activeTab=${_activeTabId.isEmpty ? '-' : _activeTabId} reason=$reason revision=$_revision',
     );
     notifyListeners();
   }
 
   void activateSortPriority({String reason = 'user'}) {
-    _apply(mode: RealTimeSortMode.table, reason: reason);
+    if (_mode == RealTimeSortMode.table) return;
+    _mode = RealTimeSortMode.table;
+    _revision += 1;
+    debugPrint(
+      '[RealTimePriority] apply priority=sort mode=table order=$timeOrderLabel activeTab=${_activeTabId.isEmpty ? '-' : _activeTabId} reason=$reason revision=$_revision',
+    );
+    notifyListeners();
   }
 
   void activateZonePriority({String reason = 'user'}) {
-    if (!_locationSupported) {
-      activateSortPriority(reason: 'zone_unsupported');
-      return;
-    }
-    _apply(mode: RealTimeSortMode.locationParent, reason: reason);
+    activateSortPriority(reason: 'zone_disabled:$reason');
+    debugPrint(
+      '[RealTimePriority] action=zone_activation_ignored mode=table tableMode=cell_only zoneButton=disabled reason=$reason',
+    );
   }
 
   void applyNewest({String reason = 'user'}) {
-    final changed = !isNewest;
+    final changed = !isNewest || _mode != RealTimeSortMode.table;
     _timeOrder = RealTimeTimeOrder.newest;
-    final modeChanged = _mode != RealTimeSortMode.table;
     _mode = RealTimeSortMode.table;
-    if (!changed && !modeChanged) return;
+    if (!changed) return;
     _revision += 1;
     debugPrint(
-      '[RealTimeSortOrder] action=apply_newest order=$timeOrderLabel priority=${priorityMode.name} activeTab=${_activeTabId.isEmpty ? '-' : _activeTabId} reason=$reason revision=$_revision',
+      '[RealTimeSortOrder] action=apply_newest order=$timeOrderLabel priority=sort activeTab=${_activeTabId.isEmpty ? '-' : _activeTabId} reason=$reason revision=$_revision',
     );
     notifyListeners();
   }
 
   void applyAllZones({String reason = 'user'}) {
-    activateZonePriority(reason: reason);
-  }
-
-  void _apply({
-    required RealTimeSortMode mode,
-    required String reason,
-  }) {
-    if (_mode == mode) return;
-    _mode = mode;
-    _revision += 1;
+    activateSortPriority(reason: 'zone_disabled:$reason');
     debugPrint(
-      '[RealTimePriority] apply priority=${priorityMode.name} mode=${_mode.name} order=$timeOrderLabel selectedLocation=$selectedLocation activeTab=${_activeTabId.isEmpty ? '-' : _activeTabId} collection=${_activeCollection.isEmpty ? '-' : _activeCollection} zoneSupported=$_locationSupported reason=$reason revision=$_revision',
+      '[RealTimePriority] action=all_zones_ignored mode=table tableMode=cell_only zoneButton=disabled reason=$reason',
     );
-    notifyListeners();
   }
 }

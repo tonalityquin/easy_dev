@@ -7,16 +7,14 @@ import 'package:provider/provider.dart';
 import '../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../app/utils/status_dialog.dart';
 import '../../../../design_system/common_ui/common_ui_components.dart';
-import '../../../../design_system/common_ui/common_ui_overlays.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../shared/secondary/application/secondary_account_workspace_state.dart';
+import '../../../../shared/secondary/application/secondary_tablet_workspace_state.dart';
 import '../../../../shared/secondary/widgets/ops_console_dialogs.dart';
 import '../../../../shared/secondary/widgets/ops_console_widgets.dart';
 import '../../../dev/application/area_state.dart';
 import '../../applications/user_state.dart';
 import '../../domain/models/tablet/tablet_model.dart';
-import '../../domain/repositories/user_repository.dart';
-import 'sheets/tablet_setting.dart';
 
 enum _TabletStatusFilter { all, working, offline }
 
@@ -272,209 +270,24 @@ class _TabletManagementState extends State<TabletManagement> {
     );
   }
 
-  void _openTabletSetting({
-    required BuildContext context,
-    required void Function(
-      String name,
-      String handle,
-      String email,
-      String role,
-      String password,
-      String area,
-      String division,
-    ) onSave,
-    TabletModel? initialTablet,
-  }) {
-    final areaState = context.read<AreaState>();
-    final currentArea = areaState.currentArea;
-    final currentDivision = areaState.currentDivision;
-    _log('form_opened mode=${initialTablet == null ? 'create' : 'edit'}');
-
-    showCommonOverlayBottomSheet<void>(
-      context: context,
-      useSafeArea: true,
-      builder: (sheetContext) => FractionallySizedBox(
-        heightFactor: 1,
-        child: TabletSettingBottomSheet(
-          onSave: onSave,
-          areaValue: currentArea,
-          division: currentDivision,
-          isEditMode: initialTablet != null,
-          initialUser: initialTablet,
-        ),
-      ),
-    );
-  }
-
-  Future<void> _handleCreate(BuildContext context) async {
+  void _handleCreate(BuildContext context) {
     final userState = context.read<UserState>();
     _clearSelection(userState, reason: 'create_opened');
-    _openTabletSetting(
-      context: context,
-      onSave: (
-        name,
-        handle,
-        email,
-        role,
-        password,
-        area,
-        division,
-      ) async {
-        final trace = await _startTrace(
-          title: '태블릿 등록',
-          initialMessage: '태블릿 계정 등록 요청을 시작합니다.',
+    _log('settings_open_requested mode=create');
+    context.read<SecondaryTabletWorkspaceState>().openCreate(
+          source: 'tablet_management_create',
         );
-        try {
-          trace.log('입력값 확인 완료: name=$name, handle=$handle, role=$role', progress: .12);
-          final englishName = await context.read<UserRepository>().getEnglishNameByArea(area, division);
-          trace.log('지역 메타데이터 조회 완료: area=$area, division=$division', progress: .28);
-          final newTablet = TabletModel(
-            id: '$handle-$area',
-            name: name,
-            handle: handle,
-            email: email,
-            role: role,
-            password: password,
-            position: null,
-            areas: [area],
-            divisions: [division],
-            currentArea: area,
-            selectedArea: area,
-            englishSelectedAreaName: englishName ?? area,
-            isWorking: false,
-            isSaved: false,
-            fixedHolidays: const <String>[],
-          );
-          trace.log('태블릿 모델 구성 완료: Firestore 저장을 요청합니다.', progress: .55);
-          String? saveError;
-          await userState.addTabletCard(
-            newTablet,
-            onError: (message) {
-              saveError = message;
-            },
-          );
-          if (saveError != null) {
-            trace.log('태블릿 등록 실패 응답: $saveError', progress: .9);
-            await trace.fail('태블릿 등록에 실패했습니다.');
-            if (!trace.developerMode && context.mounted) {
-              await _showFailure(
-                context,
-                title: '태블릿 등록 실패',
-                description: saveError!,
-              );
-            }
-            return;
-          }
-          trace.log('Firestore 및 태블릿 캐시 반영 완료', progress: .92);
-          await trace.succeed('태블릿 등록이 완료되었습니다.');
-          _log('tablet_created handle=$handle');
-        } catch (error, stackTrace) {
-          _log('tablet_create_failed error=$error');
-          await trace.fail(
-            '태블릿 등록 중 예외가 발생했습니다.',
-            error: error,
-            stackTrace: stackTrace,
-          );
-          if (!trace.developerMode && context.mounted) {
-            await _showFailure(
-              context,
-              title: '태블릿 등록 실패',
-              description: '태블릿 계정을 등록하는 중 문제가 발생했습니다. 입력값과 네트워크 상태를 확인한 뒤 다시 시도하세요.\n$error',
-            );
-          }
-        } finally {
-          if (context.mounted) {
-            _clearSelection(userState, reason: 'create_finished');
-          }
-        }
-      },
-    );
   }
 
-  Future<void> _handleEdit(
+  void _handleEdit(
     BuildContext context,
     TabletModel selectedTablet,
-  ) async {
-    final userState = context.read<UserState>();
-    _openTabletSetting(
-      context: context,
-      initialTablet: selectedTablet,
-      onSave: (
-        name,
-        handle,
-        email,
-        role,
-        password,
-        area,
-        division,
-      ) async {
-        final trace = await _startTrace(
-          title: '태블릿 수정',
-          initialMessage: '태블릿 계정 수정 요청을 시작합니다.',
+  ) {
+    _log('settings_open_requested mode=edit');
+    context.read<SecondaryTabletWorkspaceState>().openEdit(
+          selectedTablet.id,
+          source: 'tablet_management_edit',
         );
-        try {
-          trace.log('수정 대상 확인: handle=${selectedTablet.handle}, id=${selectedTablet.id}', progress: .12);
-          final englishName = await context.read<UserRepository>().getEnglishNameByArea(area, division);
-          trace.log('지역 메타데이터 조회 완료: area=$area, division=$division', progress: .28);
-          final updatedTablet = selectedTablet.copyWith(
-            id: '$handle-$area',
-            name: name,
-            handle: handle,
-            email: email,
-            role: role,
-            password: password,
-            areas: [area],
-            divisions: [division],
-            currentArea: area,
-            selectedArea: area,
-            englishSelectedAreaName: englishName ?? area,
-          );
-          trace.log('수정 모델 구성 완료: Firestore 저장을 요청합니다.', progress: .56);
-          String? saveError;
-          final saved = await userState.updateTabletCardAsAdmin(
-            updatedTablet,
-            previousId: selectedTablet.id,
-            onError: (message) {
-              saveError = message;
-            },
-          );
-          if (!saved) {
-            final message = saveError ?? '태블릿 수정에 실패했습니다.';
-            trace.log('태블릿 수정 실패 응답: $message', progress: .9);
-            await trace.fail('태블릿 수정에 실패했습니다.');
-            if (!trace.developerMode && context.mounted) {
-              await _showFailure(
-                context,
-                title: '태블릿 수정 실패',
-                description: message,
-              );
-            }
-            return;
-          }
-          trace.log('Firestore 및 태블릿 캐시 반영 완료', progress: .92);
-          await trace.succeed('태블릿 수정이 완료되었습니다.');
-          _log('tablet_updated old=${selectedTablet.handle} new=$handle');
-        } catch (error, stackTrace) {
-          _log('tablet_update_failed error=$error');
-          await trace.fail(
-            '태블릿 수정 중 예외가 발생했습니다.',
-            error: error,
-            stackTrace: stackTrace,
-          );
-          if (!trace.developerMode && context.mounted) {
-            await _showFailure(
-              context,
-              title: '태블릿 수정 실패',
-              description: '태블릿 계정을 수정하는 중 문제가 발생했습니다. 입력값과 네트워크 상태를 확인한 뒤 다시 시도하세요.\n$error',
-            );
-          }
-        } finally {
-          if (context.mounted) {
-            _clearSelection(userState, reason: 'edit_finished');
-          }
-        }
-      },
-    );
   }
 
   Future<bool> _confirmDelete(BuildContext context) {

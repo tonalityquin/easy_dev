@@ -1,30 +1,22 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:ui' show FontFeature;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../app/utils/developer_operation_status_dialog.dart';
-import '../../app/utils/operational_data_sync_workflow.dart';
 import '../../features/account/applications/user_state.dart';
 import '../../features/dev/application/area_state.dart';
 import '../../features/dev/debug/debug_action_recorder.dart';
 import '../../features/location/applications/location_state.dart';
-import '../../features/location/domain/models/location_model.dart';
 import '../plate/application/common/view_doc_rows_store.dart';
 import '../plate/domain/models/plate_model.dart';
 import '../plate/domain/repositories/plate_repository.dart';
-import 'real_time_location_board.dart';
 import 'real_time_sort_state.dart';
 import 'real_time_tab_controller.dart';
 import 'real_time_table_components.dart';
 import 'real_time_table_row_vm.dart';
 import 'real_time_table_spec.dart';
 import 'real_time_table_zone.dart';
-
-enum RealTimeViewMode { plate, zone }
-
 
 class _DrivingBadge extends StatelessWidget {
   const _DrivingBadge({
@@ -100,7 +92,6 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
 
   Timer? _elapsedTicker;
   DateTime _elapsedNow = DateTime.now();
-  String _selectedLocation = kRealTimeLocationAll;
 
   final ScrollController _scrollCtrl = ScrollController();
 
@@ -116,19 +107,8 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
   <String, Future<PlateModel?>>{};
 
   bool _openingDetail = false;
-  bool _zoneNavigationTraceBusy = false;
   bool _sortOrderTraceBusy = false;
   bool _sortOldFirst = false;
-  String _lastLocationBoardDebugSignature = '';
-
-  RealTimeViewMode _viewMode = RealTimeViewMode.plate;
-
-  List<LocationModel> _cachedLocations = <LocationModel>[];
-  int _totalCapacityFromPrefs = 0;
-  String _locationsLoadedArea = '';
-  bool _loadingLocationMeta = false;
-  bool _operationalDataSyncing = false;
-
   Map<String, int>? _pendingPlateCountsByDisplayName;
   bool _plateCountsApplyScheduled = false;
   Map<String, int>? _lastAppliedPlateCountsByDisplayName;
@@ -146,17 +126,6 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
     return a1.isNotEmpty ? a1 : a2;
   }
 
-  bool _rowMatchesSelectedLocation(String rawLocation) {
-    final selected = _selectedLocation.trim();
-    if (selected.isEmpty || selected == kRealTimeLocationAll) return true;
-
-    if (selected.contains(kRealTimeSegSep)) {
-      return zoneKeyFromRowLocation(rawLocation) == selected;
-    }
-
-    return parentFromRowLocation(rawLocation) == selected;
-  }
-
   void _trace(String name, {Map<String, dynamic>? meta}) {
     DebugActionRecorder.instance.recordAction(
       name,
@@ -168,13 +137,17 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
   @override
   void initState() {
     super.initState();
-
-    widget.controller.bind(_refreshFromUser);
-    if (!widget.spec.zoneSupported) {
-      _viewMode = RealTimeViewMode.plate;
-    }
-
+    widget.controller.bind(this, _refreshFromUser);
     _applyFilterAndSort();
+  }
+
+  @override
+  void didUpdateWidget(covariant RealTimeTableBody oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.controller, widget.controller)) {
+      oldWidget.controller.unbind(this);
+      widget.controller.bind(this, _refreshFromUser);
+    }
   }
 
   @override
@@ -183,14 +156,11 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
     _bindProviders();
     _bindSortState();
     _pullFromStore(reason: 'didChangeDependencies');
-    if (widget.spec.zoneSupported) {
-      _ensureLocationMetaLoaded();
-    }
   }
 
   @override
   void dispose() {
-    widget.controller.unbind();
+    widget.controller.unbind(this);
     _elapsedTicker?.cancel();
     _scrollCtrl.dispose();
     _store?.removeListener(_onStoreChanged);
@@ -246,48 +216,36 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
   void _syncDerivedSortState({required bool notify}) {
     final state = _sortState;
     if (state == null) return;
-    final usesLocation = state.usesLocation && widget.spec.zoneSupported;
-    final nextMode = usesLocation ? RealTimeViewMode.zone : RealTimeViewMode.plate;
-    final nextSelected = usesLocation
-        ? state.selectedLocation
-        : kRealTimeLocationAll;
-    final nextSortOldFirst = state.sortOldFirst;
-    final changed = _viewMode != nextMode ||
-        _selectedLocation != nextSelected ||
-        _sortOldFirst != nextSortOldFirst;
-    _viewMode = nextMode;
-    _selectedLocation = nextSelected;
-    _sortOldFirst = nextSortOldFirst;
-    if (usesLocation) {
-      unawaited(_ensureLocationMetaLoaded());
+    if (state.mode != RealTimeSortMode.table) {
+      state.activateSortPriority(reason: 'table_cell_only_normalize');
     }
-    if (!changed) return;
+    final nextSortOldFirst = state.sortOldFirst;
+    if (_sortOldFirst == nextSortOldFirst) return;
+    _sortOldFirst = nextSortOldFirst;
     debugPrint(
-      '[RealTimePriority] screen=${widget.screen} tab=${widget.spec.id} priority=${state.priorityMode.name} mode=${state.mode.name} order=${state.timeOrderLabel} view=${_viewMode.name} selected=$_selectedLocation',
+      '[RealTimeTable] screen=${widget.screen} tab=${widget.spec.id} mode=cell_only order=${state.timeOrderLabel} zoneButton=disabled',
     );
     if (notify) {
       setState(_applyFilterAndSort);
     } else {
       _applyFilterAndSort();
     }
-    if (!usesLocation) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || !_scrollCtrl.hasClients) return;
-        final reduceMotion =
-            MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-        if (reduceMotion) {
-          _scrollCtrl.jumpTo(0);
-        } else {
-          unawaited(
-            _scrollCtrl.animateTo(
-              0,
-              duration: const Duration(milliseconds: 220),
-              curve: Curves.easeOutCubic,
-            ),
-          );
-        }
-      });
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollCtrl.hasClients) return;
+      final reduceMotion =
+          MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+      if (reduceMotion) {
+        _scrollCtrl.jumpTo(0);
+      } else {
+        unawaited(
+          _scrollCtrl.animateTo(
+            0,
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+          ),
+        );
+      }
+    });
   }
 
   void _onAreaChanged() {
@@ -331,10 +289,6 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
 
     setState(() {
       _allRows = List<RealTimeRowVM>.of(rows);
-      if (!widget.spec.zoneSupported) {
-        _viewMode = RealTimeViewMode.plate;
-      }
-
       _applyFilterAndSort();
       _loading = false;
       _hasFetchedFromServer = true;
@@ -345,233 +299,8 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
     }
   }
 
-  Future<void> _ensureLocationMetaLoaded({bool force = false}) async {
-    if (!widget.spec.zoneSupported) return;
-
-    final area = _currentArea.trim();
-    if (area.isEmpty) return;
-
-    if (!force &&
-        _locationsLoadedArea == area &&
-        (_cachedLocations.isNotEmpty || _totalCapacityFromPrefs > 0)) {
-      return;
-    }
-
-    if (_loadingLocationMeta) return;
-    _loadingLocationMeta = true;
-    if (mounted) setState(() {});
-
-    try {
-      try {
-        final ls = context.read<LocationState>().locations;
-        if (ls.isNotEmpty) _cachedLocations = List<LocationModel>.of(ls);
-      } catch (_) {}
-
-      final prefs = await SharedPreferences.getInstance();
-      if (_cachedLocations.isEmpty) {
-        final cachedJson = prefs.getString('cached_locations_$area');
-        if (cachedJson != null && cachedJson.trim().isNotEmpty) {
-          final decoded = json.decode(cachedJson) as List;
-          _cachedLocations = decoded
-              .map(
-                (e) => LocationModel.fromCacheMap(
-              Map<String, dynamic>.from(e as Map),
-            ),
-          )
-              .toList();
-        }
-      }
-
-      _totalCapacityFromPrefs = prefs.getInt('total_capacity_$area') ??
-          _cachedLocations.fold<int>(0, (sum, loc) => sum + loc.capacity);
-
-      _locationsLoadedArea = area;
-
-    } finally {
-      _loadingLocationMeta = false;
-      if (mounted) setState(() {});
-    }
-  }
-
-  String _operationalSyncDebugMessage(
-    String event, {
-    OperationalDataSyncResult? result,
-    Object? error,
-  }) {
-    final parts = <String>[
-      '[REALTIME_ZONE_SYNC]',
-      'timestamp=${DateTime.now().toIso8601String()}',
-      'screen=${widget.screen}',
-      'area=${_currentArea.trim()}',
-      'event=$event',
-      'cacheCount=${_cachedLocations.length}',
-      'syncing=$_operationalDataSyncing',
-    ];
-    if (result != null) parts.add('result=${result.name}');
-    if (error != null) parts.add('error=$error');
-    return parts.join(' ');
-  }
-
-  Future<void> _downloadOperationalDataForCurrentArea() async {
-    if (_operationalDataSyncing) {
-      debugPrint(_operationalSyncDebugMessage('duplicate_tap_ignored'));
-      return;
-    }
-
-    debugPrint(_operationalSyncDebugMessage('download_requested'));
-    _markUserActivity();
-    widget.onAutoPauseStart?.call();
-
-    if (mounted) {
-      setState(() => _operationalDataSyncing = true);
-    }
-
-    try {
-      final result = await OperationalDataSyncWorkflow.run(
-        context: context,
-        title: '현재 지역 데이터 내려받기',
-        message: '현재 지역의 주차 구역, 섹터, 정산 데이터를 로컬에 내려받기 전 요청을 준비하고 있습니다.',
-        useCommonUi: true,
-      );
-
-      debugPrint(
-        _operationalSyncDebugMessage(
-          'download_finished',
-          result: result,
-        ),
-      );
-
-      if (result == OperationalDataSyncResult.completed && mounted) {
-        await _ensureLocationMetaLoaded(force: true);
-      }
-    } catch (error, stackTrace) {
-      debugPrint(
-        _operationalSyncDebugMessage(
-          'download_exception',
-          error: error,
-        ),
-      );
-      debugPrintStack(
-        label: '[REALTIME_ZONE_SYNC] stackTrace',
-        stackTrace: stackTrace,
-      );
-    } finally {
-      widget.onAutoPauseEnd?.call();
-      _markUserActivity();
-      if (mounted) {
-        setState(() => _operationalDataSyncing = false);
-      }
-    }
-  }
-
-  Widget _buildMissingLocationCacheDownload(
-    ColorScheme cs,
-    TextTheme text,
-  ) {
-    final reduceMotion =
-        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-
-    final content = Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 380),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.cloud_download_rounded,
-                size: 38,
-                color: cs.primary,
-              ),
-              const SizedBox(height: 12),
-              Text(
-                '현재 지역에 대한 데이터를 1회 내려받아야 합니다.',
-                textAlign: TextAlign.center,
-                style: text.bodyMedium?.copyWith(
-                  color: cs.onSurfaceVariant,
-                  fontWeight: FontWeight.w700,
-                  height: 1.45,
-                ),
-              ),
-              const SizedBox(height: 16),
-              FilledButton.icon(
-                onPressed: _operationalDataSyncing
-                    ? null
-                    : _downloadOperationalDataForCurrentArea,
-                icon: AnimatedSwitcher(
-                  duration: reduceMotion
-                      ? Duration.zero
-                      : const Duration(milliseconds: 220),
-                  switchInCurve: Curves.easeOutCubic,
-                  switchOutCurve: Curves.easeInCubic,
-                  child: _operationalDataSyncing
-                      ? const SizedBox(
-                          key: ValueKey<String>('syncing'),
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(
-                          Icons.download_rounded,
-                          key: ValueKey<String>('download'),
-                        ),
-                ),
-                label: AnimatedSwitcher(
-                  duration: reduceMotion
-                      ? Duration.zero
-                      : const Duration(milliseconds: 220),
-                  switchInCurve: Curves.easeOutCubic,
-                  switchOutCurve: Curves.easeInCubic,
-                  child: Text(
-                    _operationalDataSyncing ? '내려받는 중' : '지금 내려받기',
-                    key: ValueKey<bool>(_operationalDataSyncing),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-
-    if (reduceMotion) return content;
-
-    return TweenAnimationBuilder<double>(
-      key: const ValueKey<String>('missing_location_cache_download'),
-      tween: Tween<double>(begin: 0, end: 1),
-      duration: const Duration(milliseconds: 360),
-      curve: Curves.easeOutCubic,
-      builder: (context, value, child) {
-        return Opacity(
-          opacity: value,
-          child: Transform.translate(
-            offset: Offset(0, 12 * (1 - value)),
-            child: Transform.scale(
-              scale: 0.985 + (0.015 * value),
-              child: child,
-            ),
-          ),
-        );
-      },
-      child: content,
-    );
-  }
-
   void _applyFilterAndSort() {
-    if (!widget.spec.zoneSupported) {
-      _viewMode = RealTimeViewMode.plate;
-    }
-
-    if (_viewMode != RealTimeViewMode.plate) {
-      _rows = List<RealTimeRowVM>.of(_allRows);
-      _scheduleElapsedTicker();
-      return;
-    }
-
-    _rows = _allRows.where((r) {
-      return _rowMatchesSelectedLocation(r.location);
-    }).toList();
+    _rows = List<RealTimeRowVM>.of(_allRows);
 
     _rows.sort((a, b) {
       final ca = a.createdAt;
@@ -593,7 +322,7 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
 
   void _scheduleElapsedTicker() {
     _elapsedTicker?.cancel();
-    if (!mounted || _viewMode != RealTimeViewMode.plate || _rows.isEmpty) {
+    if (!mounted || _rows.isEmpty) {
       return;
     }
 
@@ -705,7 +434,7 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
 
   Future<void> _openHybridDetailPopup(
     RealTimeRowVM r, {
-    String source = 'sort_priority_table',
+    String source = 'cell_table',
   }) async {
     if (_openingDetail) return;
     _openingDetail = true;
@@ -794,62 +523,6 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
     }
   }
 
-
-  void _onZoneParentPageChanged(String parent, int index, int count) {
-    if (!widget.spec.zoneSupported) return;
-    _markUserActivity();
-    debugPrint(
-      '[RealTimeZonePriority] source=zone_parent_pager action=page_changed parent=$parent index=$index count=$count design=status_dot_map interaction=parent_child_slot parentTap=child_zone parentSlotTap=disabled childViewport=crop_fit childSlotTap=status_dock childFocusAutoPause=true systemBack=parent_overview occupiedLabel=plate_last4 slotHitPolicy=collision_safe_partition gesturePolicy=raw_single_pointer_pager pageViewPhysics=never_scrollable',
-    );
-    unawaited(
-      _showZoneParentPageTrace(
-        parent: parent,
-        index: index,
-        count: count,
-      ),
-    );
-  }
-
-  Future<void> _showZoneParentPageTrace({
-    required String parent,
-    required int index,
-    required int count,
-  }) async {
-    if (_zoneNavigationTraceBusy || !mounted) return;
-    _zoneNavigationTraceBusy = true;
-    try {
-      final state = _sortState;
-      final trace = await DeveloperOperationTrace.start(
-        context: context,
-        title: '구역 부모 전환',
-        initialMessage:
-            'source=zone_parent_pager action=page_changed parent=$parent index=$index count=$count',
-        useCommonUi: true,
-        showDialogImmediately: false,
-        developerModeMessage:
-            '개발자 모드 ON: 부모 DOT MAP 좌우 전환 상태를 확인할 수 있습니다.',
-        standardModeMessage: '일반 모드: 부모 주차 구역을 좌우로 전환합니다.',
-      );
-      trace.log(
-        'priority=${state?.priorityMode.name ?? '-'} mode=${state?.mode.name ?? '-'} order=${state?.timeOrderLabel ?? '-'} parent=$parent page=${index + 1}/$count parentPaging=horizontal gesturePolicy=raw_single_pointer_pager pageViewPhysics=never_scrollable pageSettle=220ms design=status_dot_map interaction=parent_child_slot parentTap=child_zone parentSlotTap=disabled childViewport=crop_fit childSlotTap=status_dock childFocusAutoPause=true systemBack=parent_overview occupiedLabel=plate_last4 slotHitPolicy=collision_safe_partition firebaseAdditionalRead=0',
-        progress: .82,
-      );
-      await trace.succeed('부모 주차 구역 DOT MAP 전환 상태를 반영했습니다.');
-      if (!mounted || !trace.developerMode) return;
-      widget.onAutoPauseStart?.call();
-      try {
-        final rootContext = Navigator.of(context, rootNavigator: true).context;
-        if (rootContext.mounted) {
-          await trace.showStatusDialog(rootContext);
-        }
-      } finally {
-        widget.onAutoPauseEnd?.call();
-        _markUserActivity();
-      }
-    } finally {
-      _zoneNavigationTraceBusy = false;
-    }
-  }
 
   bool _mapsEqual(Map<String, int> a, Map<String, int> b) {
     if (identical(a, b)) return true;
@@ -958,12 +631,9 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
   }
 
   Widget _buildSortSummaryPill(ColorScheme cs, TextTheme text) {
-    final state = _sortState;
-    final zone = state?.isZonePriority ?? false;
-    final summary = state?.summaryLabel ?? '정렬 · 최신순';
+    final summary = _sortState?.summaryLabel ?? '정렬 · 최신순';
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    final accent = zone;
     return Semantics(
       label: '현재 보기 · $summary',
       child: AnimatedContainer(
@@ -972,35 +642,18 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
         curve: Curves.easeOutCubic,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
         decoration: BoxDecoration(
-          color: accent
-              ? cs.primaryContainer.withOpacity(.62)
-              : cs.surfaceContainerLow,
+          color: cs.surfaceContainerLow,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: accent
-                ? cs.primary.withOpacity(.72)
-                : cs.outlineVariant.withOpacity(.65),
+            color: cs.outlineVariant.withOpacity(.65),
           ),
         ),
         child: Row(
           children: [
-            AnimatedSwitcher(
-              duration: reduceMotion
-                  ? Duration.zero
-                  : const Duration(milliseconds: 180),
-              transitionBuilder: (child, animation) => FadeTransition(
-                opacity: animation,
-                child: ScaleTransition(
-                  scale: Tween<double>(begin: .88, end: 1).animate(animation),
-                  child: child,
-                ),
-              ),
-              child: Icon(
-                zone ? Icons.grid_view_rounded : Icons.sort_rounded,
-                key: ValueKey<bool>(zone),
-                size: 18,
-                color: accent ? cs.primary : cs.onSurfaceVariant,
-              ),
+            Icon(
+              Icons.table_rows_rounded,
+              size: 18,
+              color: cs.onSurfaceVariant,
             ),
             const SizedBox(width: 8),
             Expanded(
@@ -1026,7 +679,7 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: text.labelMedium?.copyWith(
-                    color: accent ? cs.primary : cs.onSurfaceVariant,
+                    color: cs.onSurfaceVariant,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
@@ -1058,7 +711,7 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
 
   Future<void> _toggleTimeOrderFromHeader() async {
     final state = _sortState;
-    if (state == null || _viewMode != RealTimeViewMode.plate) return;
+    if (state == null) return;
     _markUserActivity();
     final before = state.timeOrderLabel;
     state.toggleTimeOrder(reason: 'real_time_table_elapsed_header');
@@ -1385,72 +1038,6 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
     );
   }
 
-  Widget _buildLocationBoard(ColorScheme cs, TextTheme text) {
-    if (!widget.spec.zoneSupported) {
-      return const RealTimeExpandedEmpty(
-        message: '해당 탭에서는 구역 보기를 지원하지 않습니다.',
-      );
-    }
-
-    if (_loadingLocationMeta && _cachedLocations.isEmpty) {
-      return const RealTimeExpandedLoading();
-    }
-
-    if (_cachedLocations.isEmpty) {
-      return _buildMissingLocationCacheDownload(cs, text);
-    }
-
-    final state = _sortState;
-    if (state == null || !state.isZonePriority) {
-      return const RealTimeExpandedEmpty(
-        message: '구역 보기 상태를 확인할 수 없습니다.',
-      );
-    }
-
-    final groups = buildZoneGroups(
-      rows: _allRows,
-      meta: _cachedLocations,
-      selected: kRealTimeLocationAll,
-      search: '',
-    );
-
-    if (groups.isEmpty) {
-      return const RealTimeExpandedEmpty(
-        message: '표시할 주차 구역 데이터가 없습니다.',
-      );
-    }
-
-    final parentGridReady = groups
-        .where((item) => item.parentSource?.parkingGrid != null)
-        .length;
-    final occupiedCount =
-        groups.fold<int>(0, (sum, item) => sum + item.totalCurrent);
-    final signature =
-        '${state.revision}|parent_child_dot_map|${groups.length}|$parentGridReady|$occupiedCount';
-    if (_lastLocationBoardDebugSignature != signature) {
-      _lastLocationBoardDebugSignature = signature;
-      debugPrint(
-        '[RealTimeZonePriority] render mode=parent_child_dot_map design=status_dot_map parents=${groups.length} parentGridReady=$parentGridReady occupied=$occupiedCount parentPaging=horizontal gesturePolicy=raw_single_pointer_pager pageViewPhysics=never_scrollable interaction=parent_child_slot parentTap=child_zone parentSlotTap=disabled childViewport=crop_fit childSlotTap=status_dock childFocusAutoPause=true systemBack=parent_overview occupiedLabel=plate_last4 slotHitPolicy=collision_safe_partition firebaseAdditionalRead=0',
-      );
-    }
-
-    return RealTimeLocationBoard(
-      groups: groups,
-      onPlateTap: (row) {
-        unawaited(
-          _openHybridDetailPopup(
-            row,
-            source: 'zone_child_focus_slot',
-          ),
-        );
-      },
-      onParentPageChanged: _onZoneParentPageChanged,
-      onUserActivity: _markUserActivity,
-      onAutoPauseStart: widget.onAutoPauseStart,
-      onAutoPauseEnd: widget.onAutoPauseEnd,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     super.build(context);
@@ -1462,13 +1049,11 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
       color: cs.surface,
       child: Column(
         children: [
-          if (_viewMode == RealTimeViewMode.plate || !widget.spec.zoneSupported) ...[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
-              child: _buildSortSummaryPill(cs, text),
-            ),
-            Divider(height: 1, color: cs.outlineVariant.withOpacity(.7)),
-          ],
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
+            child: _buildSortSummaryPill(cs, text),
+          ),
+          Divider(height: 1, color: cs.outlineVariant.withOpacity(.7)),
           Expanded(
             child: AnimatedSwitcher(
               duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false
@@ -1482,18 +1067,15 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
                   curve: Curves.easeOutCubic,
                   reverseCurve: Curves.easeInCubic,
                 );
-                final mode = _sortState?.mode ?? RealTimeSortMode.table;
-                final horizontalOffset =
-                    mode == RealTimeSortMode.locationParent ? -.025 : 0.0;
                 return FadeTransition(
                   opacity: curved,
                   child: SlideTransition(
                     position: Tween<Offset>(
-                      begin: Offset(horizontalOffset, 0),
+                      begin: const Offset(0, .015),
                       end: Offset.zero,
                     ).animate(curved),
                     child: ScaleTransition(
-                      scale: Tween<double>(begin: .99, end: 1).animate(curved),
+                      scale: Tween<double>(begin: .995, end: 1).animate(curved),
                       child: child,
                     ),
                   ),
@@ -1501,12 +1083,9 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
               },
               child: KeyedSubtree(
                 key: ValueKey<String>(
-                  '${_viewMode.name}:${_selectedLocation}',
+                  'cell_only:${widget.spec.id}:${_sortOldFirst ? 'oldest' : 'newest'}',
                 ),
-                child: (_viewMode == RealTimeViewMode.plate ||
-                        !widget.spec.zoneSupported)
-                    ? _buildTable(cs)
-                    : _buildLocationBoard(cs, text),
+                child: _buildTable(cs),
               ),
             ),
           ),

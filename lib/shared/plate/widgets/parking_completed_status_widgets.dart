@@ -16,6 +16,7 @@ import '../../../features/location/domain/models/parking_grid_model.dart';
 import '../domain/models/plate_model.dart';
 import '../../../design_system/common_ui/common_ui_components.dart';
 import '../../../design_system/common_ui/common_ui_side_dock.dart';
+import '../../../design_system/common_ui/common_ui_side_rail.dart';
 import '../../../design_system/common_ui/common_ui_theme.dart';
 import '../../parking_dot_map/parking_status_dot_map_surface.dart';
 
@@ -56,7 +57,7 @@ Future<DeveloperOperationTrace> traceParkingStatusSectorSummary({
     progress: .14,
   );
   trace.log(
-    'status_information_architecture=deduplicated summary=plate_status_sector management=left_rail management_distribution=visible_actions_equal_fill location=dot_map_and_path billing=compact_single_row memo=conditional footer=status_change_only',
+    'status_information_architecture=deduplicated summary=plate_status_sector management=left_rail railDesign=common_operations railMetricsSource=CommonSideRailMetrics management_distribution=visible_actions_equal_fill location=dot_map_and_path billing=compact_single_row memo=conditional footer=status_change_only',
     progress: .16,
   );
   return trace;
@@ -1243,6 +1244,8 @@ Future<T?> showParkingStatusLoadingSideDock<T>({
   required Future<PlateModel?> Function() loadPlate,
   required ParkingStatusLoadedContentBuilder loadedBuilder,
   bool barrierDismissible = true,
+  bool finalizeTrace = true,
+  Future<void> Function(DeveloperOperationTrace trace, T? result)? onClosed,
 }) async {
   final trace = await traceParkingStatusLoadingSession(
     context: context,
@@ -1256,10 +1259,11 @@ Future<T?> showParkingStatusLoadingSideDock<T>({
   );
   if (!context.mounted) return null;
 
-  return showParkingStatusSideDock<T>(
+  final result = await showParkingStatusSideDock<T>(
     context: context,
     trace: trace,
     barrierDismissible: barrierDismissible,
+    finalizeTrace: finalizeTrace,
     builder: (dockContext) => _ParkingStatusDetailLoader(
       statusTitle: statusTitle,
       plateId: plateId,
@@ -1271,6 +1275,11 @@ Future<T?> showParkingStatusLoadingSideDock<T>({
       trace: trace,
     ),
   );
+  final callback = onClosed;
+  if (callback != null) {
+    await callback(trace, result);
+  }
+  return result;
 }
 
 class _ParkingStatusDetailLoader extends StatefulWidget {
@@ -1841,6 +1850,7 @@ Future<T?> showParkingStatusSideDock<T>({
   DeveloperOperationTrace? trace,
   bool barrierDismissible = true,
   String barrierLabel = '상태 처리',
+  bool finalizeTrace = true,
 }) async {
   trace?.log(
     'status_side_dock=open direction=right_to_left maxWidth=360 widthFactor=0.92',
@@ -1863,12 +1873,14 @@ Future<T?> showParkingStatusSideDock<T>({
 
     if (trace != null) {
       trace.log(
-        'status_side_dock=closed result=${result ?? "null"}',
+        'status_side_dock=closed result=${result ?? "null"} finalizeTrace=$finalizeTrace',
         progress: .92,
       );
-      await trace.succeed('상태 처리 세션이 종료되었습니다.');
-      if (trace.developerMode && context.mounted) {
-        await trace.showStatusDialog(context);
+      if (finalizeTrace) {
+        await trace.succeed('상태 처리 세션이 종료되었습니다.');
+        if (trace.developerMode && context.mounted) {
+          await trace.showStatusDialog(context);
+        }
       }
     }
     return result;
@@ -1934,9 +1946,13 @@ class ParkingStatusAdaptiveMetrics {
     final cardPadding = ultra ? 10.0 : compact ? 11.0 : 12.0;
     final mapMinHeight = ultra ? 108.0 : compact ? 126.0 : 150.0;
     final mapMaxHeight = ultra ? 190.0 : compact ? 218.0 : 280.0;
-    final managementButtonHeight = ultra || compact ? 48.0 : 52.0;
-    final managementRailWidth = ultra ? 48.0 : compact ? 52.0 : 56.0;
-    final managementRailGap = ultra ? 6.0 : compact ? 7.0 : 8.0;
+    final railMetrics = CommonSideRailMetrics.resolve(
+      dockHeight: dockHeight,
+      textScale: textScale,
+    );
+    final managementButtonHeight = railMetrics.minimumButtonExtent;
+    final managementRailWidth = railMetrics.railWidth;
+    final managementRailGap = railMetrics.railGap;
     return ParkingStatusAdaptiveMetrics(
       variant: variant,
       dockHeight: dockHeight,
@@ -2020,14 +2036,14 @@ class ParkingStatusSideDockFrame extends StatelessWidget {
           final dockWidth = constraints.maxWidth.isFinite
               ? constraints.maxWidth
               : media?.size.width ?? 360.0;
-          final effectiveRailWidth = math.min(
-            metrics.managementRailWidth,
-            math.max(44.0, dockWidth * .17),
+          final commonRailMetrics = CommonSideRailMetrics.resolve(
+            dockHeight: dockHeight,
+            textScale: textScale,
           );
-          final effectiveRailGap = math.min(
-            metrics.managementRailGap,
-            math.max(5.0, dockWidth * .025),
-          );
+          final effectiveRailWidth =
+              commonRailMetrics.effectiveRailWidth(dockWidth);
+          final effectiveRailGap =
+              commonRailMetrics.effectiveRailGap(dockWidth);
           final mainColumn = Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -2578,33 +2594,20 @@ class _ParkingStatusManagementRailState
 
   @override
   Widget build(BuildContext context) {
-    final tokens = CommonUiTheme.of(context);
-    final textTheme = Theme.of(context).textTheme;
     final media = MediaQuery.maybeOf(context);
     final reduceMotion = media?.disableAnimations ?? false;
     final adaptive = ParkingStatusAdaptiveLayout.maybeOf(context);
     final textScale = media?.textScaler.scale(1.0) ?? 1.0;
-    final variant = adaptive?.variant ??
-        (textScale >= 1.30
-            ? ParkingStatusPrimaryVariant.ultraCompact
-            : textScale >= 1.15
-                ? ParkingStatusPrimaryVariant.compact
-                : ParkingStatusPrimaryVariant.normal);
-    final compact = variant != ParkingStatusPrimaryVariant.normal;
-    final ultra = variant == ParkingStatusPrimaryVariant.ultraCompact;
-    final minimumButtonExtent = adaptive?.managementButtonHeight ??
-        (ultra || compact ? 48.0 : 52.0);
-    final headerHeight = ultra ? 34.0 : compact ? 36.0 : 38.0;
-    final outerHorizontal = ultra ? 2.0 : 3.0;
-    final outerVertical = ultra ? 6.0 : 7.0;
-    final headerGap = 6.0;
-    final actionInsetHorizontal = ultra ? 2.0 : compact ? 3.0 : 4.0;
-    final actionInsetVertical = ultra ? 2.0 : 3.0;
-    final variantName = switch (variant) {
-      ParkingStatusPrimaryVariant.normal => 'normal',
-      ParkingStatusPrimaryVariant.compact => 'compact',
-      ParkingStatusPrimaryVariant.ultraCompact => 'ultra_compact',
-    };
+    final railMetrics = CommonSideRailMetrics.resolve(
+      dockHeight: adaptive?.dockHeight ?? media?.size.height ?? 720.0,
+      textScale: textScale,
+    );
+    final compact = railMetrics.compact;
+    final minimumButtonExtent =
+        adaptive?.managementButtonHeight ?? railMetrics.minimumButtonExtent;
+    final actionInsetHorizontal = railMetrics.actionInsetHorizontal;
+    final actionInsetVertical = railMetrics.actionInsetVertical;
+    final variantName = railMetrics.variantName;
 
     Widget actionButton(
       ParkingStatusManagementAction action, {
@@ -2665,7 +2668,7 @@ class _ParkingStatusManagementRailState
             .join('/');
         final availableListHeight = math.max(
           0.0,
-          railHeight - outerVertical * 2 - headerHeight - headerGap,
+          railHeight - railMetrics.outerVertical * 2 - railMetrics.headerHeight - railMetrics.headerGap,
         );
         final equalSlotExtent = actionCount == 0
             ? 0.0
@@ -2699,7 +2702,7 @@ class _ParkingStatusManagementRailState
             if (!mounted) return;
             parkingStatusTraceLog(
               context,
-              'vehicle_management_rail=layout target=$_debugTarget position=left width=${railWidth.toStringAsFixed(0)} height=${railHeight.toStringAsFixed(0)} visible_actions=$actionCount enabled_actions=$enabledCount distribution=$distribution basis=visible_actions label_policy=two_chars labels=$visualLabels linked_groups=${linkedGroups.isEmpty ? "none" : linkedGroups} scroll=$scrollable slot_extent=${equalSlotExtent.toStringAsFixed(1)} button_extent=${distributedButtonExtent.toStringAsFixed(1)} inset_x=${actionInsetHorizontal.toStringAsFixed(0)} inset_y=${actionInsetVertical.toStringAsFixed(0)} variant=$variantName',
+              'vehicle_management_rail=layout railDesign=common_operations railMetricsSource=CommonSideRailMetrics target=$_debugTarget position=left width=${railWidth.toStringAsFixed(0)} height=${railHeight.toStringAsFixed(0)} visible_actions=$actionCount enabled_actions=$enabledCount distribution=$distribution basis=visible_actions label_policy=two_chars labels=$visualLabels linked_groups=${linkedGroups.isEmpty ? "none" : linkedGroups} scroll=$scrollable slot_extent=${equalSlotExtent.toStringAsFixed(1)} button_extent=${distributedButtonExtent.toStringAsFixed(1)} inset_x=${actionInsetHorizontal.toStringAsFixed(0)} inset_y=${actionInsetVertical.toStringAsFixed(0)} variant=$variantName',
             );
           });
         }
@@ -2760,99 +2763,41 @@ class _ParkingStatusManagementRailState
                     ],
                   );
 
-        return Semantics(
-          container: true,
-          label: widget.title,
-          child: AnimatedContainer(
-            duration: reduceMotion
-                ? Duration.zero
-                : const Duration(milliseconds: 180),
-            curve: Curves.easeOutCubic,
-            padding: EdgeInsets.symmetric(
-              horizontal: outerHorizontal,
-              vertical: outerVertical,
-            ),
-            decoration: BoxDecoration(
-              color: tokens.surface.withOpacity(.26),
-              border: Border(right: BorderSide(color: tokens.borderSubtle)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SizedBox(
-                  height: headerHeight,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      AnimatedContainer(
-                        duration: reduceMotion
-                            ? Duration.zero
-                            : const Duration(milliseconds: 180),
-                        width: ultra ? 18 : 22,
-                        height: 3,
-                        decoration: BoxDecoration(
-                          color: tokens.iconSecondary,
-                          borderRadius:
-                              BorderRadius.circular(CommonUiShapes.pill),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        widget.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
-                        style: textTheme.labelSmall?.copyWith(
-                          color: tokens.textSecondary,
-                          fontWeight: FontWeight.w900,
-                          height: 1.02,
-                        ),
-                      ),
-                    ],
-                  ),
+        return CommonSideRailSurface(
+          title: widget.title,
+          metrics: railMetrics,
+          child: AnimatedSwitcher(
+            duration:
+                reduceMotion ? Duration.zero : const Duration(milliseconds: 180),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeOutCubic,
+            layoutBuilder: (currentChild, previousChildren) {
+              return Stack(
+                fit: StackFit.expand,
+                alignment: Alignment.center,
+                children: [
+                  ...previousChildren,
+                  if (currentChild != null) currentChild,
+                ],
+              );
+            },
+            transitionBuilder: (child, animation) {
+              return FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0, -.025),
+                    end: Offset.zero,
+                  ).animate(animation),
+                  child: child,
                 ),
-                SizedBox(height: headerGap),
-                Expanded(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: AnimatedSwitcher(
-                      duration: reduceMotion
-                          ? Duration.zero
-                          : const Duration(milliseconds: 180),
-                      switchInCurve: Curves.easeOutCubic,
-                      switchOutCurve: Curves.easeOutCubic,
-                      layoutBuilder: (currentChild, previousChildren) {
-                        return Stack(
-                          fit: StackFit.expand,
-                          alignment: Alignment.center,
-                          children: [
-                            ...previousChildren,
-                            if (currentChild != null) currentChild,
-                          ],
-                        );
-                      },
-                      transitionBuilder: (child, animation) {
-                        return FadeTransition(
-                          opacity: animation,
-                          child: SlideTransition(
-                            position: Tween<Offset>(
-                              begin: const Offset(0, -.025),
-                              end: Offset.zero,
-                            ).animate(animation),
-                            child: child,
-                          ),
-                        );
-                      },
-                      child: KeyedSubtree(
-                        key: ValueKey<String>(
-                          '$distribution|$variantName|$actionCount',
-                        ),
-                        child: actionArea,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+              );
+            },
+            child: KeyedSubtree(
+              key: ValueKey<String>(
+                '$distribution|$variantName|$actionCount',
+              ),
+              child: actionArea,
             ),
           ),
         );
@@ -4066,14 +4011,12 @@ class _ParkingStatusManagementRailButton extends StatefulWidget {
 
 class _ParkingStatusManagementRailButtonState
     extends State<_ParkingStatusManagementRailButton> {
-  bool _pressed = false;
   bool _busy = false;
 
   Future<void> _invoke() async {
     if (!widget.action.enabled || _busy) return;
     setState(() {
       _busy = true;
-      _pressed = false;
     });
     final actionName = widget.action.debugAction.trim().isEmpty
         ? widget.action.label.trim()
@@ -4081,7 +4024,7 @@ class _ParkingStatusManagementRailButtonState
     final linkedGroup = widget.action.linkedGroup.trim();
     parkingStatusTraceLog(
       context,
-      'vehicle_management_rail=interaction action=$actionName visual_label=${widget.action.visualLabel} full_label=${jsonEncode(widget.action.label)} linked_group=${linkedGroup.isEmpty ? "none" : linkedGroup} linked_reverse=${widget.action.linkedReverse} target=${widget.debugTarget}',
+      'vehicle_management_rail=interaction action=$actionName visual_label=${widget.action.visualLabel} full_label=${jsonEncode(widget.action.label)} linked_group=${linkedGroup.isEmpty ? "none" : linkedGroup} linked_reverse=${widget.action.linkedReverse} target=${widget.debugTarget} railDesign=common_operations',
     );
     if (widget.action.destructive) {
       await HapticFeedback.mediumImpact();
@@ -4102,11 +4045,10 @@ class _ParkingStatusManagementRailButtonState
   @override
   Widget build(BuildContext context) {
     final tokens = CommonUiTheme.of(context);
-    final textTheme = Theme.of(context).textTheme;
-    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final enabled = widget.action.enabled && !_busy;
     final linked = widget.action.linkedGroup.trim().isNotEmpty;
-    final visualLabel = widget.action.visualLabel;
     final foreground = widget.action.destructive
         ? tokens.danger
         : linked && enabled
@@ -4116,38 +4058,6 @@ class _ParkingStatusManagementRailButtonState
                 : enabled
                     ? tokens.iconPrimary
                     : tokens.iconDisabled;
-    final background = widget.action.destructive
-        ? tokens.dangerContainer.withOpacity(enabled ? .46 : .22)
-        : linked && enabled
-            ? tokens.accentContainer.withOpacity(
-                widget.action.emphasized
-                    ? (_pressed ? .88 : .68)
-                    : widget.action.linkedReverse
-                        ? (_pressed ? .64 : .38)
-                        : (_pressed ? .72 : .48),
-              )
-            : widget.action.emphasized && enabled
-                ? tokens.accentContainer.withOpacity(_pressed ? .86 : .62)
-                : _pressed && enabled
-                    ? tokens.accentContainer.withOpacity(.72)
-                    : enabled
-                        ? tokens.surfaceRaised
-                        : tokens.surfaceDisabled;
-    final border = widget.action.destructive
-        ? tokens.danger.withOpacity(enabled ? .34 : .16)
-        : linked && enabled
-            ? tokens.accent.withOpacity(
-                widget.action.emphasized
-                    ? (_pressed ? .62 : .44)
-                    : widget.action.linkedReverse
-                        ? (_pressed ? .52 : .34)
-                        : (_pressed ? .56 : .38),
-              )
-            : widget.action.emphasized && enabled
-                ? tokens.accent.withOpacity(_pressed ? .58 : .38)
-                : _pressed && enabled
-                    ? tokens.accent.withOpacity(.42)
-                    : tokens.borderSubtle;
     final textColor = widget.action.destructive
         ? tokens.danger
         : linked && enabled
@@ -4157,20 +4067,78 @@ class _ParkingStatusManagementRailButtonState
                 : enabled
                     ? tokens.textPrimary
                     : tokens.textDisabled;
+    final background = widget.action.destructive
+        ? tokens.dangerContainer.withOpacity(enabled ? .46 : .22)
+        : linked && enabled
+            ? tokens.accentContainer.withOpacity(
+                widget.action.emphasized
+                    ? .68
+                    : widget.action.linkedReverse
+                        ? .38
+                        : .48,
+              )
+            : widget.action.emphasized && enabled
+                ? tokens.accentContainer.withOpacity(.62)
+                : enabled
+                    ? tokens.surfaceRaised
+                    : tokens.surfaceDisabled;
+    final pressedBackground = widget.action.destructive
+        ? tokens.dangerContainer.withOpacity(enabled ? .56 : .22)
+        : linked && enabled
+            ? tokens.accentContainer.withOpacity(
+                widget.action.emphasized
+                    ? .88
+                    : widget.action.linkedReverse
+                        ? .64
+                        : .72,
+              )
+            : widget.action.emphasized && enabled
+                ? tokens.accentContainer.withOpacity(.86)
+                : enabled
+                    ? tokens.accentContainer.withOpacity(.72)
+                    : tokens.surfaceDisabled;
+    final border = widget.action.destructive
+        ? tokens.danger.withOpacity(enabled ? .34 : .16)
+        : linked && enabled
+            ? tokens.accent.withOpacity(
+                widget.action.emphasized
+                    ? .44
+                    : widget.action.linkedReverse
+                        ? .34
+                        : .38,
+              )
+            : widget.action.emphasized && enabled
+                ? tokens.accent.withOpacity(.38)
+                : tokens.borderSubtle;
+    final pressedBorder = widget.action.destructive
+        ? tokens.danger.withOpacity(enabled ? .5 : .16)
+        : linked && enabled
+            ? tokens.accent.withOpacity(
+                widget.action.emphasized
+                    ? .62
+                    : widget.action.linkedReverse
+                        ? .52
+                        : .56,
+              )
+            : widget.action.emphasized && enabled
+                ? tokens.accent.withOpacity(.58)
+                : enabled
+                    ? tokens.accent.withOpacity(.42)
+                    : tokens.borderSubtle;
 
-    Widget actionIcon() {
-      if (_busy) {
-        return SizedBox(
-          key: const ValueKey<String>('busy'),
-          width: 18,
-          height: 18,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            color: foreground,
-          ),
-        );
-      }
-      return SizedBox(
+    Widget iconChild;
+    if (_busy) {
+      iconChild = SizedBox(
+        key: const ValueKey<String>('busy'),
+        width: 18,
+        height: 18,
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          color: foreground,
+        ),
+      );
+    } else {
+      iconChild = SizedBox(
         key: ValueKey<String>(
           'icon:${widget.action.icon.codePoint}:${widget.action.linkedReverse}',
         ),
@@ -4207,126 +4175,25 @@ class _ParkingStatusManagementRailButtonState
       );
     }
 
-    return Semantics(
-      container: true,
-      button: true,
+    return CommonSideRailActionButton(
+      semanticLabel: widget.action.label,
+      visualLabel: widget.action.visualLabel,
+      selected: false,
       enabled: enabled,
-      excludeSemantics: true,
-      label: widget.action.label,
-      child: Tooltip(
-        message: widget.action.label,
-        child: AnimatedOpacity(
-          duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
-          opacity: enabled ? 1 : .56,
-          child: AnimatedScale(
-            duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
-            curve: CommonUiMotion.standard,
-            scale: _pressed && enabled ? .97 : 1,
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(12),
-                onTap: enabled ? _invoke : null,
-                onHighlightChanged: (value) {
-                  if (!mounted) return;
-                  setState(() {
-                    _pressed = enabled && value;
-                  });
-                },
-                child: AnimatedContainer(
-                  duration:
-                      reduceMotion ? Duration.zero : CommonUiMotion.selection,
-                  curve: CommonUiMotion.standard,
-                  width: double.infinity,
-                  height: widget.extent,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 4,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: background,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: border),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      AnimatedSwitcher(
-                        duration: reduceMotion
-                            ? Duration.zero
-                            : const Duration(milliseconds: 180),
-                        switchInCurve: Curves.easeOutCubic,
-                        switchOutCurve: Curves.easeInCubic,
-                        transitionBuilder: (child, animation) {
-                          final scaled = ScaleTransition(
-                            scale: Tween<double>(begin: .82, end: 1).animate(
-                              CurvedAnimation(
-                                parent: animation,
-                                curve: Curves.easeOutBack,
-                              ),
-                            ),
-                            child: child,
-                          );
-                          if (!linked) {
-                            return FadeTransition(
-                              opacity: animation,
-                              child: scaled,
-                            );
-                          }
-                          return RotationTransition(
-                            turns: Tween<double>(begin: -.08, end: 0).animate(
-                              CurvedAnimation(
-                                parent: animation,
-                                curve: Curves.easeOutCubic,
-                              ),
-                            ),
-                            child: FadeTransition(
-                              opacity: animation,
-                              child: scaled,
-                            ),
-                          );
-                        },
-                        child: actionIcon(),
-                      ),
-                      SizedBox(height: widget.compact ? 2 : 3),
-                      AnimatedSwitcher(
-                        duration: reduceMotion
-                            ? Duration.zero
-                            : const Duration(milliseconds: 180),
-                        switchInCurve: Curves.easeOutCubic,
-                        switchOutCurve: Curves.easeInCubic,
-                        transitionBuilder: (child, animation) {
-                          return FadeTransition(
-                            opacity: animation,
-                            child: SlideTransition(
-                              position: Tween<Offset>(
-                                begin: const Offset(0, .16),
-                                end: Offset.zero,
-                              ).animate(animation),
-                              child: child,
-                            ),
-                          );
-                        },
-                        child: Text(
-                          visualLabel,
-                          key: ValueKey<String>('label:$visualLabel'),
-                          maxLines: 1,
-                          overflow: TextOverflow.clip,
-                          textAlign: TextAlign.center,
-                          style: textTheme.labelSmall?.copyWith(
-                            color: textColor,
-                            fontWeight: FontWeight.w800,
-                            height: 1.05,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
+      compact: widget.compact,
+      extent: widget.extent,
+      onTap: () {
+        unawaited(_invoke());
+      },
+      iconChild: iconChild,
+      tooltip: widget.action.label,
+      visuals: CommonSideRailButtonVisuals(
+        foreground: foreground,
+        textColor: textColor,
+        background: background,
+        pressedBackground: pressedBackground,
+        border: border,
+        pressedBorder: pressedBorder,
       ),
     );
   }

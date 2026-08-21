@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../features/dashboard/side_docks/double/double_home_dashboard_side_dock.dart';
+import '../../../../features/mode_double/double_departure_completed_bottom_sheet.dart';
 import '../../../../features/mode_double/double_parking_completed_page.dart';
-import '../../../../features/mode_double/parking_completed_package/double_parking_completed_control_buttons.dart';
 import '../../../plate/application/double/double_plate_state.dart';
 import '../../application/double/double_page_state.dart';
 import '../../input/pages/input_plate_screen.dart';
@@ -59,14 +59,12 @@ class DoubleTypePage extends StatelessWidget {
           final pageInfo = pageState.pages[pageState.selectedIndex];
           return pageInfo.builder(context);
         },
-        buildParkingCompletedControlBar: (context, pageState) {
-          return DoubleParkingCompletedControlButtons(
-            showSearchDialog: () => DoubleParkingCompletedPage.openSearchDialog(
-              pageState.parkingCompletedKey,
-              context,
-            ),
-          );
-        },
+        openSearch: (context, pageState) => DoubleParkingCompletedPage.openSearchDialog(
+          pageState.parkingCompletedKey,
+          context,
+        ),
+        buildDepartureCompletedSheet: () =>
+            const DoubleDepartureCompletedBottomSheet(),
         buildDashboardSideDock: () => const DoubleHomeDashboardSideDock(),
         buildInputScreen: () => const InputPlateScreen(),
         debugMeta: const <String, dynamic>{

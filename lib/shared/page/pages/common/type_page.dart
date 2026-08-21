@@ -4,14 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../design_system/common_ui/common_ui_side_dock.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../features/account/applications/user_state.dart';
+import '../../../../features/dashboard/side_docks/common/dashboard_business_action_runner.dart';
+import '../../../../features/dashboard/side_docks/common/dashboard_dock_request.dart';
 import '../../../../features/dev/application/area_state.dart';
 import '../../../../features/dev/debug/debug_action_recorder.dart';
-import '../../../secondary/side_docks/secondary_side_dock.dart';
 import '../../../../app/utils/developer_operation_status_dialog.dart';
+import '../../../secondary/side_docks/secondary_side_dock.dart';
 import '../../../plate/application/common/driving_recovery_gate.dart';
 import '../../../plate/domain/enums/plate_type.dart';
 import '../../../plate/domain/repositories/plate_repository.dart';
@@ -19,14 +20,13 @@ import '../../../tts/application/plate_tts_event_hub.dart';
 import '../../../tts/services/page/tts_view_refresh_service.dart';
 import '../../../real_time_table/real_time_sort_state.dart';
 import '../../application/common/type_auto_transition_guard.dart';
+import '../../application/common/type_page_quick_action_scope.dart';
 import '../../application/common/type_view_mode_state.dart';
-import 'type_page_bottom_bars.dart';
 
 typedef TypePageCurrentPageBuilder<PgState extends ChangeNotifier> = Widget
     Function(BuildContext context, PgState pageState);
-typedef TypePageParkingCompletedControlBarBuilder<
-        PgState extends ChangeNotifier>
-    = Widget Function(BuildContext context, PgState pageState);
+typedef TypePageSearchAction<PgState extends ChangeNotifier> = Future<void>
+    Function(BuildContext context, PgState pageState);
 typedef TypePageSelectionClearer<PState, PgState extends ChangeNotifier>
     = Future<void> Function(
   PState plateState,
@@ -130,7 +130,8 @@ class TypePageConfig<PState, PgState extends ChangeNotifier> {
     required this.isLoading,
     required this.clearCurrentSelection,
     required this.buildCurrentPage,
-    required this.buildParkingCompletedControlBar,
+    required this.openSearch,
+    required this.buildDepartureCompletedSheet,
     required this.buildDashboardSideDock,
     required this.buildInputScreen,
     required this.debugMeta,
@@ -143,8 +144,8 @@ class TypePageConfig<PState, PgState extends ChangeNotifier> {
   final bool Function(PState plateState) isLoading;
   final TypePageSelectionClearer<PState, PgState> clearCurrentSelection;
   final TypePageCurrentPageBuilder<PgState> buildCurrentPage;
-  final TypePageParkingCompletedControlBarBuilder<PgState>
-      buildParkingCompletedControlBar;
+  final TypePageSearchAction<PgState> openSearch;
+  final Widget Function() buildDepartureCompletedSheet;
   final Widget Function() buildDashboardSideDock;
   final Widget Function() buildInputScreen;
   final Map<String, dynamic> debugMeta;
@@ -235,6 +236,113 @@ class _TypePageShellState<PState, PgState extends ChangeNotifier>
     super.dispose();
   }
 
+
+  Future<void> _runQuickAction(
+    BuildContext context, {
+    required String label,
+    required String actionId,
+    required Future<void> Function() action,
+  }) async {
+    final guard = context.read<TypeAutoTransitionGuard>();
+    final screen = widget.config.debugMeta['screen']?.toString() ?? 'type_page';
+    final trace = await DeveloperOperationTrace.start(
+      context: context,
+      title: 'TypePage Quick Action · $label',
+      initialMessage: '$label 실행을 준비합니다.',
+      useCommonUi: true,
+      developerModeMessage: '개발자 모드 ON: debugPrint 코드를 복사할 수 있습니다.',
+      standardModeMessage: '개발자 모드 OFF',
+      showDialogImmediately: false,
+    );
+    trace.log('action=$actionId screen=$screen source=fixed_quick_actions', progress: 0.08);
+
+    Object? caughtError;
+    StackTrace? caughtStackTrace;
+
+    try {
+      await guard.runBlocked<void>(label, () async {
+        trace.log('blocked_start action=$actionId', progress: 0.2);
+        await action();
+        trace.log('action_return action=$actionId', progress: 0.88);
+      });
+      await trace.succeed('$label 실행을 종료했습니다.');
+    } catch (error, stackTrace) {
+      caughtError = error;
+      caughtStackTrace = stackTrace;
+      await trace.fail(
+        '$label 실행 중 오류가 발생했습니다.',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+
+    if (trace.developerMode && context.mounted) {
+      await trace.showStatusDialog(context);
+    }
+
+    if (caughtError != null && caughtStackTrace != null) {
+      Error.throwWithStackTrace(caughtError, caughtStackTrace);
+    }
+  }
+
+  Future<void> _openDashboardFlow(BuildContext context) async {
+    final screen = widget.config.debugMeta['screen']?.toString() ?? 'type_page';
+    debugPrint(
+      '[TypePageDashboardSideDock] open screen=$screen direction=right_to_left',
+    );
+    final result = await showCommonRightSideDock<DashboardDockRequest>(
+      context: context,
+      barrierLabel: '대시보드',
+      builder: (_) => widget.config.buildDashboardSideDock(),
+    );
+    debugPrint(
+      '[TypePageDashboardSideDock] closed screen=$screen result=${result?.name ?? 'none'}',
+    );
+    if (!context.mounted || result == null) return;
+
+    switch (result) {
+      case DashboardDockRequest.secondary:
+        debugPrint('[TypePageDashboardSideDock] secondary_open screen=$screen');
+        await showSecondarySideDock<void>(
+          context: context,
+          barrierLabel: '운영 관리',
+        );
+        debugPrint('[TypePageDashboardSideDock] secondary_closed screen=$screen');
+        return;
+      case DashboardDockRequest.monthlyParking:
+      case DashboardDockRequest.departureCompleted:
+        await DashboardBusinessActionRunner.run(
+          context: context,
+          request: result,
+          buildDepartureCompletedSheet: widget.config.buildDepartureCompletedSheet,
+          debugMeta: widget.config.debugMeta,
+        );
+        return;
+    }
+  }
+
+  Future<void> _openEntryFlow(BuildContext context) async {
+    DebugActionRecorder.instance.recordAction(
+      '입차 화면 열기',
+      route: ModalRoute.of(context)?.settings.name,
+      meta: <String, dynamic>{...widget.config.debugMeta},
+    );
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    await Navigator.of(context).push<dynamic>(
+      buildTypePageSlideRoute<dynamic>(
+        CommonUiScope(child: widget.config.buildInputScreen()),
+        fromLeft: true,
+        reduceMotion: reduceMotion,
+      ),
+    );
+  }
+
+  Future<void> _openSearchFlow(BuildContext context) async {
+    final pageState = context.read<PgState>();
+    await widget.config.openSearch(context, pageState);
+  }
+
   @override
   Widget build(BuildContext context) {
     return CommonUiScope(
@@ -305,15 +413,26 @@ class _TypePageShellState<PState, PgState extends ChangeNotifier>
                     children: [
                       Scaffold(
                         backgroundColor: tokens.canvas,
-                        body: body,
-                        bottomNavigationBar: TypePageBottomBars(
-                          tableTop: TypePageParkingCompletedControlBar<PgState>(
-                            builder: widget.config.buildParkingCompletedControlBar,
+                        body: TypePageQuickActionScope(
+                          openEntry: () => _runQuickAction(
+                            context,
+                            label: '입차 화면',
+                            actionId: 'entry',
+                            action: () => _openEntryFlow(context),
                           ),
-                          tableMiddle: TypePageEntryDashboardBar(
-                            config: widget.config,
+                          openSearch: () => _runQuickAction(
+                            context,
+                            label: '검색',
+                            actionId: 'search',
+                            action: () => _openSearchFlow(context),
                           ),
-                          modeSwitch: const TypePageModeSwitchBar(),
+                          openDashboard: () => _runQuickAction(
+                            context,
+                            label: '대시보드',
+                            actionId: 'dashboard',
+                            action: () => _openDashboardFlow(context),
+                          ),
+                          child: body,
                         ),
                       ),
                       const TypeAutoTransitionDebugIndicator(),
@@ -575,253 +694,6 @@ class _TypeAutoTransitionDebugContentState
           ),
         ),
       ],
-    );
-  }
-}
-
-class TypePageParkingCompletedControlBar<PgState extends ChangeNotifier>
-    extends StatelessWidget {
-  const TypePageParkingCompletedControlBar({
-    super.key,
-    required this.builder,
-  });
-
-  final TypePageParkingCompletedControlBarBuilder<PgState> builder;
-
-  @override
-  Widget build(BuildContext context) {
-    final pageState = context.read<PgState>();
-    return builder(context, pageState);
-  }
-}
-
-class TypePageEntryDashboardBar<PState, PgState extends ChangeNotifier>
-    extends StatelessWidget {
-  const TypePageEntryDashboardBar({
-    super.key,
-    required this.config,
-  });
-
-  final TypePageConfig<PState, PgState> config;
-
-  Future<void> _openDashboard(BuildContext context) async {
-    final guard = context.read<TypeAutoTransitionGuard>();
-    await guard.runBlocked<void>(
-      '대시보드',
-      () async {
-        final screen = config.debugMeta['screen']?.toString() ?? 'type_page';
-        debugPrint('[TypePageDashboardSideDock] open screen=$screen direction=right_to_left');
-        final result = await showCommonRightSideDock<SecondaryDockRequest>(
-          context: context,
-          barrierLabel: '대시보드',
-          builder: (_) => config.buildDashboardSideDock(),
-        );
-        debugPrint(
-          '[TypePageDashboardSideDock] closed screen=$screen result=${result?.name ?? 'none'}',
-        );
-        if (result == SecondaryDockRequest.open && context.mounted) {
-          debugPrint(
-            '[TypePageDashboardSideDock] secondary_open screen=$screen',
-          );
-          await showSecondarySideDock<void>(
-            context: context,
-            barrierLabel: '운영 관리',
-          );
-          debugPrint(
-            '[TypePageDashboardSideDock] secondary_closed screen=$screen',
-          );
-        }
-      },
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
-      child: Row(
-        children: [
-          Expanded(
-            child: TypePageOpenEntryButton<PState, PgState>(config: config),
-          ),
-          const SizedBox(width: 8),
-          const Expanded(child: TypePageSortButton()),
-          const SizedBox(width: 8),
-          Expanded(
-            child: CommonButton(
-              label: '대시보드',
-              icon: Icons.dashboard_rounded,
-              onPressed: () => _openDashboard(context),
-              expand: true,
-              minHeight: 48,
-              haptic: CommonHaptic.selection,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class TypePageSortButton extends StatelessWidget {
-  const TypePageSortButton({super.key});
-
-  Future<void> _togglePriority(
-    BuildContext context,
-    RealTimeSortState state,
-  ) async {
-    final guard = context.read<TypeAutoTransitionGuard>();
-    final reduceMotion =
-        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    final before = state.priorityLabel;
-    final target = state.isZonePriority ? '정렬' : '구역';
-    state.togglePriority(reason: 'type_page_bottom_button');
-    final after = state.priorityLabel;
-    final blockedBySupport = target == '구역' && !state.locationSupported;
-    debugPrint(
-      '[TypePagePriority] source=bottom_button before=$before target=$target after=$after priority=${state.priorityMode.name} order=${state.timeOrderLabel} zoneSupported=${state.locationSupported} zoneBlocked=$blockedBySupport',
-    );
-    final trace = await DeveloperOperationTrace.start(
-      context: context,
-      title: '실시간 보기 전환',
-      initialMessage:
-          'source=type_page_bottom_button before=$before target=$target after=$after zoneSupported=${state.locationSupported}',
-      useCommonUi: true,
-      showDialogImmediately: false,
-      developerModeMessage: '개발자 모드 ON: 전환 상태를 Status Dialog에서 확인할 수 있습니다.',
-      standardModeMessage: '일반 모드: 중앙 버튼 한 번으로 보기를 즉시 전환합니다.',
-    );
-    if (!context.mounted) return;
-    trace.log(
-      'after=$after priority=${state.priorityMode.name} mode=${state.mode.name} order=${state.timeOrderLabel} parent=${state.parent.isEmpty ? '-' : state.parent} child=${state.child.isEmpty ? '-' : state.child} selectedLocation=${state.selectedLocation} zoneSupported=${state.locationSupported} zoneBlocked=$blockedBySupport reducedMotion=$reduceMotion',
-      progress: .82,
-    );
-    await trace.succeed(
-      blockedBySupport
-          ? '구역 미지원 탭이므로 정렬 보기를 유지했습니다.'
-          : '$after 보기로 즉시 전환했습니다.',
-    );
-    if (!context.mounted || !trace.developerMode) return;
-    await guard.runBlocked<void>(
-      '실시간 보기 전환 개발자 상태',
-      () => trace.showStatusDialog(context),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final state = context.watch<RealTimeSortState>();
-    final zone = state.isZonePriority;
-    final label = state.priorityLabel;
-    final compact = MediaQuery.sizeOf(context).width < 370;
-    final semantics = zone
-        ? '$label 보기 · 부모 주차 구역'
-        : '$label 보기 · ${state.timeOrderLabel}';
-    return Semantics(
-      button: true,
-      selected: zone,
-      label: semantics,
-      child: Tooltip(
-        message: semantics,
-        child: CommonButton(
-          label: label,
-          icon: compact
-              ? null
-              : zone
-                  ? Icons.grid_view_rounded
-                  : Icons.sort_rounded,
-          onPressed: () => _togglePriority(context, state),
-          variant: CommonButtonVariant.secondary,
-          selected: zone,
-          expand: true,
-          minHeight: 48,
-          haptic: CommonHaptic.selection,
-        ),
-      ),
-    );
-  }
-}
-
-class TypePageOpenEntryButton<PState, PgState extends ChangeNotifier>
-    extends StatelessWidget {
-  const TypePageOpenEntryButton({
-    super.key,
-    required this.config,
-  });
-
-  final TypePageConfig<PState, PgState> config;
-
-  void _trace(BuildContext context) {
-    DebugActionRecorder.instance.recordAction(
-      '입차 화면 열기 버튼',
-      route: ModalRoute.of(context)?.settings.name,
-      meta: <String, dynamic>{...config.debugMeta},
-    );
-  }
-
-  Future<void> _openEntryScreen(BuildContext context) async {
-    final reduceMotion =
-        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    await Navigator.of(context).push<dynamic>(
-      buildTypePageSlideRoute<dynamic>(
-        CommonUiScope(child: config.buildInputScreen()),
-        fromLeft: true,
-        reduceMotion: reduceMotion,
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return CommonButton(
-      label: '입차',
-      icon: Icons.add_circle_outline_rounded,
-      onPressed: () async {
-        _trace(context);
-        final guard = context.read<TypeAutoTransitionGuard>();
-        await guard.runBlocked<void>(
-          '입차 화면',
-          () => _openEntryScreen(context),
-        );
-      },
-      variant: CommonButtonVariant.secondary,
-      expand: true,
-      minHeight: 48,
-      haptic: CommonHaptic.selection,
-    );
-  }
-}
-
-class TypePageModeSwitchBar extends StatelessWidget {
-  const TypePageModeSwitchBar({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = CommonUiTheme.of(context);
-    final mode = context.watch<TypeViewModeState>().mode;
-    final isTable = mode == TypeViewMode.table;
-    final label = isTable ? '테이블 보기' : '현황 보기';
-    final icon = isTable ? Icons.table_rows_rounded : Icons.grid_view_rounded;
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: tokens.surface,
-        border: Border(top: BorderSide(color: tokens.borderSubtle)),
-      ),
-      child: SafeArea(
-        top: false,
-        minimum: const EdgeInsets.fromLTRB(12, 7, 12, 8),
-        child: CommonButton(
-          label: label,
-          icon: icon,
-          onPressed: () => context.read<TypeViewModeState>().toggle(),
-          variant: CommonButtonVariant.tertiary,
-          selected: isTable,
-          expand: true,
-          minHeight: 44,
-          haptic: CommonHaptic.selection,
-        ),
-      ),
     );
   }
 }

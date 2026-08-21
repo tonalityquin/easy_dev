@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,16 +8,29 @@ import 'package:provider/provider.dart';
 
 import '../../../app/utils/status_dialog.dart';
 import '../../../design_system/common_ui/common_ui_components.dart';
+import '../../../design_system/common_ui/common_ui_side_dock.dart';
+import '../../../design_system/common_ui/common_ui_side_rail.dart';
 import '../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../features/account/applications/user_state.dart';
+import '../../../features/account/domain/models/tablet/tablet_model.dart';
+import '../../../features/account/domain/models/user/user_model.dart';
+import '../../../features/account/pages/tablet/sheets/tablet_setting.dart';
+import '../../../features/account/pages/user/sheets/user_setting.dart';
 import '../../../features/dev/application/area_state.dart';
+import '../../../features/payment/pages/sheets/bill_bottom_sheet.dart';
+import '../../../features/sector/applications/sector_state.dart';
+import '../../../features/sector/domain/models/sector_model.dart';
+import '../../../features/sector/pages/sheets/sector_setting.dart';
 import '../../../features/location/applications/location_state.dart';
 import '../../../features/location/domain/models/location_model.dart';
 import '../../../features/location/pages/location_management.dart';
 import '../../../features/selector/application/dev_auth.dart';
 import '../application/secondary_account_workspace_state.dart';
+import '../application/secondary_bill_workspace_state.dart';
 import '../application/secondary_info.dart';
 import '../application/secondary_location_workspace_state.dart';
+import '../application/secondary_sector_workspace_state.dart';
+import '../application/secondary_tablet_workspace_state.dart';
 import '../application/secondary_state.dart';
 import '../widgets/ops_console_widgets.dart';
 import '../widgets/secondary_debug_scope.dart';
@@ -33,181 +45,17 @@ Future<T?> showSecondarySideDock<T>({
   final reduceMotion =
       MediaQuery.maybeOf(context)?.disableAnimations ?? false;
   debugPrint(
-    '[SecondarySideDock] route_push label=$barrierLabel reduceMotion=$reduceMotion',
+    '[SecondarySideDock] route_push label=$barrierLabel reduceMotion=$reduceMotion motion=common_operations',
   );
-  return Navigator.of(context, rootNavigator: useRootNavigator).push<T>(
-    _SecondarySideDockRoute<T>(
-      barrierLabelText: barrierLabel,
-      reduceMotion: reduceMotion,
-    ),
+  return showOperationsRightSideDock<T>(
+    context: context,
+    useRootNavigator: useRootNavigator,
+    barrierLabel: barrierLabel,
+    maxWidth: 360,
+    widthFactor: .92,
+    barrierDismissible: true,
+    builder: (_) => const SecondarySideDock(),
   );
-}
-
-class _SecondarySideDockRoute<T> extends PopupRoute<T> {
-  _SecondarySideDockRoute({
-    required this.barrierLabelText,
-    required this.reduceMotion,
-  });
-
-  final String barrierLabelText;
-  final bool reduceMotion;
-  String? _closeSource;
-
-  @override
-  bool get barrierDismissible => false;
-
-  @override
-  Color? get barrierColor => null;
-
-  @override
-  String? get barrierLabel => barrierLabelText;
-
-  @override
-  bool get maintainState => true;
-
-  @override
-  Duration get transitionDuration =>
-      reduceMotion ? Duration.zero : const Duration(milliseconds: 210);
-
-  @override
-  Duration get reverseTransitionDuration =>
-      reduceMotion ? Duration.zero : const Duration(milliseconds: 190);
-
-  void _dismissFromScrim(BuildContext context) {
-    _closeSource = 'scrim';
-    HapticFeedback.lightImpact();
-    Navigator.of(context).pop();
-  }
-
-  @override
-  bool didPop(T? result) {
-    final popped = super.didPop(result);
-    if (popped) {
-      debugPrint(
-        '[SecondarySideDock] route_pop label=$barrierLabelText source=${_closeSource ?? 'route'}',
-      );
-    }
-    return popped;
-  }
-
-  @override
-  Widget buildPage(
-    BuildContext context,
-    Animation<double> animation,
-    Animation<double> secondaryAnimation,
-  ) {
-    final curved = CurvedAnimation(
-      parent: animation,
-      curve: reduceMotion ? Curves.linear : CommonUiMotion.enter,
-      reverseCurve: reduceMotion ? Curves.linear : CommonUiMotion.exit,
-    );
-
-    return CommonUiScope(
-      child: Material(
-        type: MaterialType.transparency,
-        child: AnimatedBuilder(
-          animation: curved,
-          builder: (context, _) {
-            final media = MediaQuery.of(context);
-            final tokens = CommonUiTheme.of(context);
-            final progress = reduceMotion
-                ? 1.0
-                : curved.value.clamp(0.0, 1.0).toDouble();
-            final maxDockWidth = (media.size.width * .92)
-                .clamp(240.0, double.infinity)
-                .toDouble();
-            final dockWidth = maxDockWidth < 360.0 ? maxDockWidth : 360.0;
-            final translateX = 22.0 * (1 - progress);
-            final opacity = .90 + (.10 * progress);
-
-            return Stack(
-              children: [
-                Positioned.fill(
-                  child: Semantics(
-                    button: true,
-                    label: '$barrierLabelText 닫기',
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => _dismissFromScrim(context),
-                      child: ColoredBox(
-                        color: tokens.scrim.withOpacity(.22 * progress),
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  top: 0,
-                  bottom: 0,
-                  right: 0,
-                  width: dockWidth,
-                  child: Transform.translate(
-                    offset: Offset(translateX, 0),
-                    child: Opacity(
-                      opacity: opacity,
-                      child: _SecondaryDockSurface(
-                        width: dockWidth,
-                        child: SafeArea(
-                          child: Padding(
-                            padding: EdgeInsets.only(
-                              bottom: media.viewInsets.bottom,
-                            ),
-                            child: const SecondarySideDock(),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
-      ),
-    );
-  }
-}
-
-class _SecondaryDockSurface extends StatelessWidget {
-  const _SecondaryDockSurface({
-    required this.width,
-    required this.child,
-  });
-
-  final double width;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = CommonUiTheme.of(context);
-    const radius = BorderRadius.only(
-      topLeft: Radius.circular(18),
-      bottomLeft: Radius.circular(18),
-    );
-
-    return ClipRRect(
-      borderRadius: radius,
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-        child: Container(
-          width: width,
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            borderRadius: radius,
-            color: tokens.surface.withOpacity(tokens.isDark ? .86 : .90),
-            border: Border.all(color: tokens.borderSubtle),
-            boxShadow: [
-              BoxShadow(
-                blurRadius: 16,
-                color: tokens.shadow,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: child,
-        ),
-      ),
-    );
-  }
 }
 
 class SecondarySideDock extends StatefulWidget {
@@ -267,6 +115,9 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
 
   final _SecondaryDockDebugLog _debugLog = _SecondaryDockDebugLog();
   late final SecondaryAccountWorkspaceState _accountWorkspace;
+  late final SecondaryTabletWorkspaceState _tabletWorkspace;
+  late final SecondaryBillWorkspaceState _billWorkspace;
+  late final SecondarySectorWorkspaceState _sectorWorkspace;
   late final SecondaryLocationWorkspaceState _locationWorkspace;
   Section _selectedSection = Section.local;
   bool _devModeEnabled = false;
@@ -277,6 +128,9 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
   void initState() {
     super.initState();
     _accountWorkspace = SecondaryAccountWorkspaceState(onDebug: _debugLog.log);
+    _tabletWorkspace = SecondaryTabletWorkspaceState(onDebug: _debugLog.log);
+    _billWorkspace = SecondaryBillWorkspaceState(onDebug: _debugLog.log);
+    _sectorWorkspace = SecondarySectorWorkspaceState(onDebug: _debugLog.log);
     _locationWorkspace = SecondaryLocationWorkspaceState(onDebug: _debugLog.log);
     _debugLog.log('mounted selected=${_selectedSection.name}');
     DevAuth.devModeEnabled.addListener(_handleDevModeNotifier);
@@ -299,6 +153,9 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
     DevAuth.devModeEnabled.removeListener(_handleDevModeNotifier);
     _debugLog.log('disposed selected=${_selectedSection.name}');
     _accountWorkspace.dispose();
+    _tabletWorkspace.dispose();
+    _billWorkspace.dispose();
+    _sectorWorkspace.dispose();
     _locationWorkspace.dispose();
     super.dispose();
   }
@@ -333,6 +190,9 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
             _fallbackScheduled = false;
             if (!mounted) return;
             _accountWorkspace.reset(source: 'selection_fallback');
+            _tabletWorkspace.reset(source: 'selection_fallback');
+            _billWorkspace.reset(source: 'selection_fallback');
+            _sectorWorkspace.reset(source: 'selection_fallback');
             _locationWorkspace.reset(source: 'selection_fallback');
             setState(() => _selectedSection = item.section);
             _debugLog.log(
@@ -404,6 +264,19 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
       _accountWorkspace.reset(
         source: 'section_change_${_selectedSection.name}_to_${section.name}',
       );
+      _tabletWorkspace.reset(
+        source: 'section_change_${_selectedSection.name}_to_${section.name}',
+      );
+    }
+    if (_selectedSection == Section.bill || section == Section.bill) {
+      _billWorkspace.reset(
+        source: 'section_change_${_selectedSection.name}_to_${section.name}',
+      );
+    }
+    if (_selectedSection == Section.sector || section == Section.sector) {
+      _sectorWorkspace.reset(
+        source: 'section_change_${_selectedSection.name}_to_${section.name}',
+      );
     }
     if (_selectedSection == Section.location || section == Section.location) {
       context.read<LocationState>().clearSelection();
@@ -444,15 +317,220 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
     _accountWorkspace.setMode(mode, source: 'rail');
   }
 
+  Future<void> _selectSettingsSection(UserSettingsSection section) async {
+    if (!_accountWorkspace.isSettingsView || _accountWorkspace.settingsSaving) {
+      _debugLog.log(
+        'settings_section_rail_blocked section=${section.name} saving=${_accountWorkspace.settingsSaving}',
+      );
+      return;
+    }
+    await HapticFeedback.selectionClick();
+    if (!mounted) return;
+    _accountWorkspace.requestSettingsSection(
+      section,
+      source: 'secondary_settings_rail',
+    );
+  }
+
+  Future<void> _selectTabletSettingsSection(TabletSettingsSection section) async {
+    if (!_tabletWorkspace.isSettingsView || _tabletWorkspace.settingsSaving) {
+      _debugLog.log(
+        'tablet_settings_section_rail_blocked section=${section.name} saving=${_tabletWorkspace.settingsSaving}',
+      );
+      return;
+    }
+    await HapticFeedback.selectionClick();
+    if (!mounted) return;
+    _tabletWorkspace.requestSettingsSection(
+      section,
+      source: 'secondary_tablet_settings_rail',
+    );
+  }
+
+  Future<void> _selectBillSettingsSection(BillSettingsSection section) async {
+    if (!_billWorkspace.isSettingsView || _billWorkspace.settingsSaving) {
+      _debugLog.log(
+        'bill_settings_section_rail_blocked section=${section.name} saving=${_billWorkspace.settingsSaving}',
+      );
+      return;
+    }
+    await HapticFeedback.selectionClick();
+    if (!mounted) return;
+    _billWorkspace.requestSettingsSection(
+      section,
+      source: 'secondary_bill_settings_rail',
+    );
+  }
+
+  Future<void> _selectSectorSettingsSection(
+    SectorSettingsSection section,
+  ) async {
+    if (!_sectorWorkspace.isSettingsView || _sectorWorkspace.settingsSaving) {
+      _debugLog.log(
+        'sector_settings_section_rail_blocked section=${section.name} saving=${_sectorWorkspace.settingsSaving}',
+      );
+      return;
+    }
+    await HapticFeedback.selectionClick();
+    if (!mounted) return;
+    _sectorWorkspace.requestSettingsSection(
+      section,
+      source: 'secondary_sector_settings_rail',
+    );
+  }
+
+  void _backAccountSettingsWorkspace({String source = 'header_back'}) {
+    if (!_accountWorkspace.isSettingsView || _accountWorkspace.settingsSaving) {
+      return;
+    }
+    _debugLog.log('account_settings_back source=$source');
+    HapticFeedback.selectionClick();
+    _accountWorkspace.returnToManagement(source: source);
+  }
+
+  void _backTabletSettingsWorkspace({String source = 'header_back'}) {
+    if (!_tabletWorkspace.isSettingsView || _tabletWorkspace.settingsSaving) {
+      return;
+    }
+    _debugLog.log('tablet_settings_back source=$source');
+    HapticFeedback.selectionClick();
+    _tabletWorkspace.returnToManagement(source: source);
+  }
+
+  void _backBillSettingsWorkspace({String source = 'header_back'}) {
+    if (!_billWorkspace.isSettingsView || _billWorkspace.settingsSaving) {
+      return;
+    }
+    _debugLog.log('bill_settings_back source=$source');
+    HapticFeedback.selectionClick();
+    _billWorkspace.returnToManagement(source: source);
+  }
+
+  void _backSectorSettingsWorkspace({String source = 'header_back'}) {
+    if (!_sectorWorkspace.isSettingsView || _sectorWorkspace.settingsSaving) {
+      return;
+    }
+    _debugLog.log('sector_settings_back source=$source');
+    HapticFeedback.selectionClick();
+    _sectorWorkspace.returnToManagement(source: source);
+  }
+
+  UserModel? _editingUser(UserState state) {
+    final id = _accountWorkspace.editingUserId;
+    if (id == null || id.isEmpty) return null;
+    for (final user in state.users) {
+      if (user.id == id) return user;
+    }
+    return null;
+  }
+
+  TabletModel? _editingTablet(UserState state) {
+    final id = _tabletWorkspace.editingTabletId;
+    if (id == null || id.isEmpty) return null;
+    for (final tablet in state.tabletUsers) {
+      if (tablet.id == id) return tablet;
+    }
+    return null;
+  }
+
+  SectorModel? _editingSector(SectorState state) {
+    final id = _sectorWorkspace.editingSectorId;
+    if (id == null || id.isEmpty) return null;
+    for (final sector in state.sectors) {
+      if (sector.id == id) return sector;
+    }
+    return null;
+  }
+
   Future<void> _showDeveloperStatus() async {
     if (!_devModeEnabled) return;
     _logAccessSnapshot(context.read<SecondaryState>());
+    if (_accountWorkspace.isSettingsView) {
+      final sectionStates = UserSettingsSection.values
+          .map(
+            (section) =>
+                '${section.name}:${_accountWorkspace.stateFor(section).name}',
+          )
+          .join('|');
+      _debugLog.log(
+        'settings_snapshot mode=${_accountWorkspace.settingsMode.name} active=${_accountWorkspace.activeSettingsSection.name} dirty=${_accountWorkspace.settingsDirty} saving=${_accountWorkspace.settingsSaving} userId=${_accountWorkspace.editingUserId ?? '-'} states=$sectionStates',
+      );
+    }
+    if (_tabletWorkspace.isSettingsView) {
+      final sectionStates = TabletSettingsSection.values
+          .map(
+            (section) =>
+                '${section.name}:${_tabletWorkspace.stateFor(section).name}',
+          )
+          .join('|');
+      _debugLog.log(
+        'tablet_settings_snapshot mode=${_tabletWorkspace.settingsMode.name} active=${_tabletWorkspace.activeSettingsSection.name} dirty=${_tabletWorkspace.settingsDirty} saving=${_tabletWorkspace.settingsSaving} states=$sectionStates',
+      );
+    }
+    if (_billWorkspace.isSettingsView) {
+      final sectionStates = BillSettingsSection.values
+          .map(
+            (section) =>
+                '${section.name}:${_billWorkspace.stateFor(section).name}',
+          )
+          .join('|');
+      _debugLog.log(
+        'bill_settings_snapshot active=${_billWorkspace.activeSettingsSection.name} dirty=${_billWorkspace.settingsDirty} saving=${_billWorkspace.settingsSaving} states=$sectionStates',
+      );
+    }
+    if (_sectorWorkspace.isSettingsView) {
+      final sectionStates = SectorSettingsSection.values
+          .map(
+            (section) =>
+                '${section.name}:${_sectorWorkspace.stateFor(section).name}',
+          )
+          .join('|');
+      _debugLog.log(
+        'sector_settings_snapshot mode=${_sectorWorkspace.settingsMode.name} active=${_sectorWorkspace.activeSettingsSection.name} dirty=${_sectorWorkspace.settingsDirty} saving=${_sectorWorkspace.settingsSaving} sectorId=${_sectorWorkspace.editingSectorId ?? '-'} states=$sectionStates',
+      );
+    }
     _debugLog.log('status_dialog_open');
     await _debugLog.showStatus(context);
   }
 
   void _close() {
     _debugLog.log('close_button selected=${_selectedSection.name}');
+    if (_selectedSection == Section.user && _accountWorkspace.isSettingsView) {
+      if (_accountWorkspace.settingsSaving) {
+        _debugLog.log('account_settings_minimize_blocked saving=true');
+        return;
+      }
+      HapticFeedback.lightImpact();
+      _accountWorkspace.returnToManagement(source: 'header_minimize');
+      return;
+    }
+    if (_selectedSection == Section.tablet && _tabletWorkspace.isSettingsView) {
+      if (_tabletWorkspace.settingsSaving) {
+        _debugLog.log('tablet_settings_minimize_blocked saving=true');
+        return;
+      }
+      HapticFeedback.lightImpact();
+      _tabletWorkspace.returnToManagement(source: 'header_minimize');
+      return;
+    }
+    if (_selectedSection == Section.bill && _billWorkspace.isSettingsView) {
+      if (_billWorkspace.settingsSaving) {
+        _debugLog.log('bill_settings_minimize_blocked saving=true');
+        return;
+      }
+      HapticFeedback.lightImpact();
+      _billWorkspace.returnToManagement(source: 'header_minimize');
+      return;
+    }
+    if (_selectedSection == Section.sector && _sectorWorkspace.isSettingsView) {
+      if (_sectorWorkspace.settingsSaving) {
+        _debugLog.log('sector_settings_minimize_blocked saving=true');
+        return;
+      }
+      HapticFeedback.lightImpact();
+      _sectorWorkspace.returnToManagement(source: 'header_minimize');
+      return;
+    }
     HapticFeedback.lightImpact();
     if (_selectedSection == Section.location && _locationWorkspace.isParentFocus) {
       context.read<LocationState>().clearSelection();
@@ -547,7 +625,166 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
     }
   }
 
-  Widget _contentFor(Section section) {
+  Widget _contentFor(
+    Section section,
+    SecondaryAccountWorkspaceState accountWorkspace,
+    SecondaryTabletWorkspaceState tabletWorkspace,
+    SecondaryBillWorkspaceState billWorkspace,
+    SecondarySectorWorkspaceState sectorWorkspace,
+  ) {
+    if (section == Section.user) {
+      if (accountWorkspace.isSettingsView) {
+        final userState = context.watch<UserState>();
+        final initialUser = accountWorkspace.isEditingSettings
+            ? _editingUser(userState)
+            : null;
+        if (accountWorkspace.isEditingSettings && initialUser == null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted || !accountWorkspace.isSettingsView) return;
+            _debugLog.log('account_settings_edit_target_missing');
+            accountWorkspace.returnToManagement(
+              source: 'edit_target_missing',
+            );
+          });
+        }
+        return OpsConsolePresentationScope(
+          key: const ValueKey<String>('secondary-account-settings'),
+          embedded: true,
+          child: _SecondaryOperationsWorkspaceMotion(
+            child: initialUser == null && accountWorkspace.isEditingSettings
+                ? const OpsEmptyState(
+                    icon: Icons.person_off_rounded,
+                    title: '수정할 계정을 찾을 수 없습니다',
+                    message: '계정 목록으로 돌아가 다시 선택해 주세요.',
+                  )
+                : UserSettingWorkspace(initialUser: initialUser),
+          ),
+        );
+      }
+      final info = kSectionTab[section];
+      return OpsConsolePresentationScope(
+        key: const ValueKey<String>('secondary-account-management'),
+        embedded: true,
+        child: _SecondaryOperationsWorkspaceMotion(
+          child: info?.page ?? const SizedBox.shrink(),
+        ),
+      );
+    }
+
+    if (section == Section.tablet) {
+      if (tabletWorkspace.isSettingsView) {
+        final userState = context.watch<UserState>();
+        final initialTablet = tabletWorkspace.isEditingSettings
+            ? _editingTablet(userState)
+            : null;
+        if (tabletWorkspace.isEditingSettings &&
+            initialTablet == null &&
+            !tabletWorkspace.settingsSaving) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted ||
+                !tabletWorkspace.isSettingsView ||
+                tabletWorkspace.settingsSaving) {
+              return;
+            }
+            _debugLog.log('tablet_settings_edit_target_missing');
+            tabletWorkspace.returnToManagement(
+              source: 'edit_target_missing',
+            );
+          });
+        }
+        return OpsConsolePresentationScope(
+          key: const ValueKey<String>('secondary-tablet-settings'),
+          embedded: true,
+          child: _SecondaryOperationsWorkspaceMotion(
+            child: initialTablet == null &&
+                    tabletWorkspace.isEditingSettings &&
+                    !tabletWorkspace.settingsSaving
+                ? const OpsEmptyState(
+                    icon: Icons.tablet_android_rounded,
+                    title: '수정할 태블릿을 찾을 수 없습니다',
+                    message: '태블릿 목록으로 돌아가 다시 선택해 주세요.',
+                  )
+                : TabletSettingWorkspace(initialTablet: initialTablet),
+          ),
+        );
+      }
+      final info = kSectionTab[section];
+      return OpsConsolePresentationScope(
+        key: const ValueKey<String>('secondary-tablet-management'),
+        embedded: true,
+        child: _SecondaryOperationsWorkspaceMotion(
+          child: info?.page ?? const SizedBox.shrink(),
+        ),
+      );
+    }
+
+    if (section == Section.sector) {
+      if (sectorWorkspace.isSettingsView) {
+        final sectorState = context.watch<SectorState>();
+        final initialSector = sectorWorkspace.isEditingSettings
+            ? _editingSector(sectorState)
+            : null;
+        if (sectorWorkspace.isEditingSettings &&
+            initialSector == null &&
+            !sectorWorkspace.settingsSaving) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted ||
+                !sectorWorkspace.isSettingsView ||
+                sectorWorkspace.settingsSaving) {
+              return;
+            }
+            _debugLog.log('sector_settings_edit_target_missing');
+            sectorWorkspace.returnToManagement(
+              source: 'edit_target_missing',
+            );
+          });
+        }
+        return OpsConsolePresentationScope(
+          key: const ValueKey<String>('secondary-sector-settings'),
+          embedded: true,
+          child: _SecondaryOperationsWorkspaceMotion(
+            child: initialSector == null &&
+                    sectorWorkspace.isEditingSettings &&
+                    !sectorWorkspace.settingsSaving
+                ? const OpsEmptyState(
+                    icon: Icons.hub_rounded,
+                    title: '수정할 섹터를 찾을 수 없습니다',
+                    message: '섹터 목록으로 돌아가 다시 선택해 주세요.',
+                  )
+                : SectorSettingWorkspace(initialSector: initialSector),
+          ),
+        );
+      }
+      final info = kSectionTab[section];
+      return OpsConsolePresentationScope(
+        key: const ValueKey<String>('secondary-sector-management'),
+        embedded: true,
+        child: _SecondaryOperationsWorkspaceMotion(
+          child: info?.page ?? const SizedBox.shrink(),
+        ),
+      );
+    }
+
+    if (section == Section.bill) {
+      if (billWorkspace.isSettingsView) {
+        return const OpsConsolePresentationScope(
+          key: ValueKey<String>('secondary-bill-settings'),
+          embedded: true,
+          child: _SecondaryOperationsWorkspaceMotion(
+            child: BillSettingWorkspace(),
+          ),
+        );
+      }
+      final info = kSectionTab[section];
+      return OpsConsolePresentationScope(
+        key: const ValueKey<String>('secondary-bill-management'),
+        embedded: true,
+        child: _SecondaryOperationsWorkspaceMotion(
+          child: info?.page ?? const SizedBox.shrink(),
+        ),
+      );
+    }
+
     final info = kSectionTab[section];
     if (info == null) {
       return const SizedBox.shrink();
@@ -582,61 +819,204 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
           _locationWorkspace.reset(source: 'area_changed_${previousArea}_to_$area');
         });
       }
+      if (_sectorWorkspace.isSettingsView) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || !_sectorWorkspace.isSettingsView) return;
+          _sectorWorkspace.reset(
+            source: 'area_changed_${previousArea}_to_$area',
+          );
+        });
+      }
     }
 
     return SecondaryDebugScope(
       onLog: _debugLog.log,
-      child: ChangeNotifierProvider<SecondaryAccountWorkspaceState>.value(
-        value: _accountWorkspace,
+      child: MultiProvider(
+        providers: [
+          ChangeNotifierProvider<SecondaryAccountWorkspaceState>.value(
+            value: _accountWorkspace,
+          ),
+          ChangeNotifierProvider<SecondaryTabletWorkspaceState>.value(
+            value: _tabletWorkspace,
+          ),
+          ChangeNotifierProvider<SecondaryBillWorkspaceState>.value(
+            value: _billWorkspace,
+          ),
+          ChangeNotifierProvider<SecondarySectorWorkspaceState>.value(
+            value: _sectorWorkspace,
+          ),
+        ],
         child: AnimatedBuilder(
           animation: _locationWorkspace,
-          builder: (context, _) => Consumer2<SecondaryState, SecondaryAccountWorkspaceState>(
-        builder: (context, state, accountWorkspace, _) {
+          builder: (context, _) => Consumer4<
+              SecondaryState,
+              SecondaryAccountWorkspaceState,
+              SecondaryTabletWorkspaceState,
+              SecondaryBillWorkspaceState>(
+            builder: (context, state, accountWorkspace, tabletWorkspace,
+                billWorkspace, _) {
+          final sectorWorkspace = context.watch<SecondarySectorWorkspaceState>();
           final selected = _effectiveSection(state);
           final selectedTitle = _sectionDisplayTitle(selected);
           final locationFocus =
               selected == Section.location && _locationWorkspace.isParentFocus;
+          final accountSettingsFocus =
+              selected == Section.user && accountWorkspace.isSettingsView;
+          final tabletSettingsFocus =
+              selected == Section.tablet && tabletWorkspace.isSettingsView;
+          final billSettingsFocus =
+              selected == Section.bill && billWorkspace.isSettingsView;
+          final sectorSettingsFocus =
+              selected == Section.sector && sectorWorkspace.isSettingsView;
+          final settingsFocus = accountSettingsFocus ||
+              tabletSettingsFocus ||
+              billSettingsFocus ||
+              sectorSettingsFocus;
+          final settingsSaving =
+              (accountSettingsFocus && accountWorkspace.settingsSaving) ||
+              (tabletSettingsFocus && tabletWorkspace.settingsSaving) ||
+              (billSettingsFocus && billWorkspace.settingsSaving) ||
+              (sectorSettingsFocus && sectorWorkspace.settingsSaving);
           final locationState = context.watch<LocationState>();
           final locationChildren = locationFocus
               ? _focusedLocationChildren(locationState, area)
               : const <LocationModel>[];
           final locationTitle = _locationWorkspace.focusedParentTitle?.trim() ?? '';
+          final accountSettingsTitle = accountWorkspace.isEditingSettings
+              ? '계정 수정'
+              : '신규 계정 등록';
+          final tabletSettingsTitle = tabletWorkspace.isEditingSettings
+              ? '태블릿 수정'
+              : '신규 태블릿 등록';
+          const billSettingsTitle = '신규 정산 유형';
+          final sectorSettingsTitle = sectorWorkspace.isEditingSettings
+              ? '섹터 수정'
+              : '신규 섹터';
           final contextTitle = locationFocus && locationTitle.isNotEmpty
               ? locationTitle
-              : selectedTitle;
+              : accountSettingsFocus
+                  ? accountSettingsTitle
+                  : tabletSettingsFocus
+                      ? tabletSettingsTitle
+                      : billSettingsFocus
+                          ? billSettingsTitle
+                          : sectorSettingsFocus
+                              ? sectorSettingsTitle
+                              : selectedTitle;
           final subtitle = area.isEmpty ? contextTitle : '$area · $contextTitle';
 
-          return LayoutBuilder(
-            builder: (context, constraints) {
+          return PopScope(
+            canPop: !settingsFocus,
+            onPopInvoked: (didPop) {
+              if (didPop || !settingsFocus) return;
+              if (settingsSaving) {
+                _debugLog.log(
+                  'settings_route_pop_blocked saving=true section=${selected.name}',
+                );
+                return;
+              }
+              FocusManager.instance.primaryFocus?.unfocus();
+              _debugLog.log(
+                'settings_route_pop_intercepted section=${selected.name}',
+              );
+              if (accountSettingsFocus) {
+                _backAccountSettingsWorkspace(source: 'settings_system_back');
+                return;
+              }
+              if (tabletSettingsFocus) {
+                _backTabletSettingsWorkspace(source: 'settings_system_back');
+                return;
+              }
+              if (billSettingsFocus) {
+                _backBillSettingsWorkspace(source: 'settings_system_back');
+                return;
+              }
+              if (sectorSettingsFocus) {
+                _backSectorSettingsWorkspace(source: 'settings_system_back');
+              }
+            },
+            child: LayoutBuilder(
+              builder: (context, constraints) {
               final dockHeight = constraints.maxHeight.isFinite
                   ? constraints.maxHeight
                   : media?.size.height ?? 720.0;
               final dockWidth = constraints.maxWidth.isFinite
                   ? constraints.maxWidth
                   : media?.size.width ?? 360.0;
-              final railMetrics = _SecondaryRailMetrics.resolve(
+              final railMetrics = CommonSideRailMetrics.resolve(
                 dockHeight: dockHeight,
                 textScale: textScale,
               );
-              final effectiveRailWidth = math.min(
-                railMetrics.railWidth,
-                math.max(44.0, dockWidth * .17),
-              );
-              final effectiveRailGap = math.min(
-                railMetrics.railGap,
-                math.max(5.0, dockWidth * .025),
-              );
+              final effectiveRailWidth =
+                  railMetrics.effectiveRailWidth(dockWidth);
+              final effectiveRailGap = railMetrics.effectiveRailGap(dockWidth);
 
               return Column(
                 children: [
                   _SecondaryDockHeader(
                     subtitle: subtitle,
-                    loading: state.isLoading,
-                    showBack: locationFocus,
-                    onBack: _backLocationWorkspace,
+                    loading: state.isLoading ||
+                        accountWorkspace.settingsSaving ||
+                        tabletWorkspace.settingsSaving ||
+                        billWorkspace.settingsSaving ||
+                        sectorWorkspace.settingsSaving,
+                    showBack: locationFocus ||
+                        accountSettingsFocus ||
+                        tabletSettingsFocus ||
+                        billSettingsFocus ||
+                        sectorSettingsFocus,
+                    onBack: accountSettingsFocus && accountWorkspace.settingsSaving
+                        ? null
+                        : tabletSettingsFocus && tabletWorkspace.settingsSaving
+                            ? null
+                            : billSettingsFocus && billWorkspace.settingsSaving
+                                ? null
+                                : sectorSettingsFocus && sectorWorkspace.settingsSaving
+                                    ? null
+                                    : accountSettingsFocus
+                                        ? () => _backAccountSettingsWorkspace(source: 'header_back')
+                                        : tabletSettingsFocus
+                                            ? () => _backTabletSettingsWorkspace(source: 'header_back')
+                                            : billSettingsFocus
+                                                ? () => _backBillSettingsWorkspace(source: 'header_back')
+                                                : sectorSettingsFocus
+                                                    ? () => _backSectorSettingsWorkspace(source: 'header_back')
+                                                    : _backLocationWorkspace,
+                    backTooltip: accountSettingsFocus
+                        ? '계정 목록으로'
+                        : tabletSettingsFocus
+                            ? '태블릿 목록으로'
+                            : billSettingsFocus
+                                ? '정산 목록으로'
+                                : sectorSettingsFocus
+                                    ? '섹터 목록으로'
+                                    : '구역 목록으로',
                     showDeveloperStatus: _devModeEnabled,
                     onDeveloperStatus: _showDeveloperStatus,
-                    onClose: _close,
+                    closeIcon: accountSettingsFocus ||
+                            tabletSettingsFocus ||
+                            billSettingsFocus ||
+                            sectorSettingsFocus
+                        ? Icons.keyboard_arrow_down_rounded
+                        : Icons.close_rounded,
+                    closeTooltip: accountSettingsFocus
+                        ? '계정 목록으로 최소화'
+                        : tabletSettingsFocus
+                            ? '태블릿 목록으로 최소화'
+                            : billSettingsFocus
+                                ? '정산 목록으로 최소화'
+                                : sectorSettingsFocus
+                                    ? '섹터 목록으로 최소화'
+                                    : '닫기',
+                    onClose: accountSettingsFocus && accountWorkspace.settingsSaving
+                        ? null
+                        : tabletSettingsFocus && tabletWorkspace.settingsSaving
+                            ? null
+                            : billSettingsFocus && billWorkspace.settingsSaving
+                                ? null
+                                : sectorSettingsFocus && sectorWorkspace.settingsSaving
+                                    ? null
+                                    : _close,
                   ),
                   const SizedBox(height: 10),
                   Expanded(
@@ -650,32 +1030,120 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
                           curve: Curves.easeOutCubic,
                           width: effectiveRailWidth,
                           child: ClipRect(
-                            child: _SecondaryQuickActionRail(
-                              primaryItems: _primaryItems,
-                              bottomItems: _bottomItems,
-                              selectedSection: selected,
-                              accountMode: accountWorkspace.mode,
-                              showAccountModes: selected == Section.user || selected == Section.tablet,
-                              locationChildMode: locationFocus,
-                              locationChildren: locationChildren,
-                              selectedLocationId: locationState.selectedLocationId,
-                              isEnabled: state.canAccess,
-                              disabledReason: state.disabledReason,
-                              metrics: railMetrics,
-                              fullDockHeight: dockHeight,
-                              dockWidth: dockWidth,
-                              effectiveRailWidth: effectiveRailWidth,
-                              effectiveRailGap: effectiveRailGap,
-                              onDebug: _debugLog.log,
-                              onSelect: (section) {
-                                unawaited(_selectSection(state, section));
+                            child: AnimatedSwitcher(
+                              duration: reduceMotion
+                                  ? Duration.zero
+                                  : const Duration(milliseconds: 180),
+                              switchInCurve: Curves.easeOutCubic,
+                              switchOutCurve: Curves.easeInCubic,
+                              transitionBuilder: (child, animation) {
+                                if (reduceMotion) return child;
+                                final enteringSettings = child.key ==
+                                        const ValueKey<String>('secondary-user-settings-rail') ||
+                                    child.key ==
+                                        const ValueKey<String>('secondary-tablet-settings-rail') ||
+                                    child.key ==
+                                        const ValueKey<String>('secondary-bill-settings-rail') ||
+                                    child.key ==
+                                        const ValueKey<String>('secondary-sector-settings-rail');
+                                return FadeTransition(
+                                  opacity: animation,
+                                  child: SlideTransition(
+                                    position: Tween<Offset>(
+                                      begin: enteringSettings
+                                          ? const Offset(.08, 0)
+                                          : const Offset(-.05, 0),
+                                      end: Offset.zero,
+                                    ).animate(animation),
+                                    child: child,
+                                  ),
+                                );
                               },
-                              onSelectAccountMode: (mode) {
-                                unawaited(_selectAccountMode(mode));
-                              },
-                              onSelectLocationChild: (child) {
-                                unawaited(_selectLocationChildFromRail(child));
-                              },
+                              child: KeyedSubtree(
+                                key: ValueKey<String>(
+                                  accountSettingsFocus
+                                      ? 'secondary-user-settings-rail'
+                                      : tabletSettingsFocus
+                                          ? 'secondary-tablet-settings-rail'
+                                          : billSettingsFocus
+                                              ? 'secondary-bill-settings-rail'
+                                              : sectorSettingsFocus
+                                                  ? 'secondary-sector-settings-rail'
+                                                  : 'secondary-global-rail',
+                                ),
+                                child: _SecondaryQuickActionRail(
+                                  primaryItems: _primaryItems,
+                                  bottomItems: _bottomItems,
+                                  selectedSection: selected,
+                                  accountMode: accountWorkspace.mode,
+                                  showAccountModes: !accountSettingsFocus &&
+                                      !tabletSettingsFocus &&
+                                      !billSettingsFocus &&
+                                      !sectorSettingsFocus &&
+                                      (selected == Section.user ||
+                                          selected == Section.tablet),
+                                  locationChildMode: locationFocus,
+                                  userSettingsMode: accountSettingsFocus,
+                                  tabletSettingsMode: tabletSettingsFocus,
+                                  billSettingsMode: billSettingsFocus,
+                                  sectorSettingsMode: sectorSettingsFocus,
+                                  settingsSection:
+                                      accountWorkspace.activeSettingsSection,
+                                  settingsSectionStates:
+                                      accountWorkspace.sectionStates,
+                                  settingsSaving: accountWorkspace.settingsSaving,
+                                  tabletSettingsSection:
+                                      tabletWorkspace.activeSettingsSection,
+                                  tabletSettingsSectionStates:
+                                      tabletWorkspace.sectionStates,
+                                  tabletSettingsSaving:
+                                      tabletWorkspace.settingsSaving,
+                                  billSettingsSection:
+                                      billWorkspace.activeSettingsSection,
+                                  billSettingsSectionStates:
+                                      billWorkspace.sectionStates,
+                                  billSettingsSaving:
+                                      billWorkspace.settingsSaving,
+                                  sectorSettingsSection:
+                                      sectorWorkspace.activeSettingsSection,
+                                  sectorSettingsSectionStates:
+                                      sectorWorkspace.sectionStates,
+                                  sectorSettingsSaving:
+                                      sectorWorkspace.settingsSaving,
+                                  locationChildren: locationChildren,
+                                  selectedLocationId:
+                                      locationState.selectedLocationId,
+                                  isEnabled: state.canAccess,
+                                  disabledReason: state.disabledReason,
+                                  metrics: railMetrics,
+                                  fullDockHeight: dockHeight,
+                                  dockWidth: dockWidth,
+                                  effectiveRailWidth: effectiveRailWidth,
+                                  effectiveRailGap: effectiveRailGap,
+                                  onDebug: _debugLog.log,
+                                  onSelect: (section) {
+                                    unawaited(_selectSection(state, section));
+                                  },
+                                  onSelectAccountMode: (mode) {
+                                    unawaited(_selectAccountMode(mode));
+                                  },
+                                  onSelectLocationChild: (child) {
+                                    unawaited(_selectLocationChildFromRail(child));
+                                  },
+                                  onSelectSettingsSection: (section) {
+                                    unawaited(_selectSettingsSection(section));
+                                  },
+                                  onSelectTabletSettingsSection: (section) {
+                                    unawaited(_selectTabletSettingsSection(section));
+                                  },
+                                  onSelectBillSettingsSection: (section) {
+                                    unawaited(_selectBillSettingsSection(section));
+                                  },
+                                  onSelectSectorSettingsSection: (section) {
+                                    unawaited(_selectSectorSettingsSection(section));
+                                  },
+                                ),
+                              ),
                             ),
                           ),
                         ),
@@ -707,6 +1175,16 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
                                     switchOutCurve: CommonUiMotion.exit,
                                     transitionBuilder: (child, animation) {
                                       if (reduceMotion) return child;
+                                      final isOperationsWorkspace =
+                                          child.key == const ValueKey<String>('secondary-account-management') ||
+                                          child.key == const ValueKey<String>('secondary-account-settings') ||
+                                          child.key == const ValueKey<String>('secondary-tablet-management') ||
+                                          child.key == const ValueKey<String>('secondary-tablet-settings') ||
+                                          child.key == const ValueKey<String>('secondary-bill-management') ||
+                                          child.key == const ValueKey<String>('secondary-bill-settings') ||
+                                          child.key == const ValueKey<String>('secondary-sector-management') ||
+                                          child.key == const ValueKey<String>('secondary-sector-settings');
+                                      if (isOperationsWorkspace) return child;
                                       final curved = CurvedAnimation(
                                         parent: animation,
                                         curve: CommonUiMotion.enter,
@@ -723,7 +1201,13 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
                                         ),
                                       );
                                     },
-                                    child: _contentFor(selected),
+                                    child: _contentFor(
+                                      selected,
+                                      accountWorkspace,
+                                      tabletWorkspace,
+                                      billWorkspace,
+                                      sectorWorkspace,
+                                    ),
                                   ),
                                   Positioned.fill(
                                     child: IgnorePointer(
@@ -775,7 +1259,8 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
                   ),
                 ],
               );
-            },
+              },
+            ),
           );
           },
         ),
@@ -791,18 +1276,24 @@ class _SecondaryDockHeader extends StatelessWidget {
     required this.loading,
     required this.showBack,
     required this.onBack,
+    required this.backTooltip,
     required this.showDeveloperStatus,
     required this.onDeveloperStatus,
+    required this.closeIcon,
+    required this.closeTooltip,
     required this.onClose,
   });
 
   final String subtitle;
   final bool loading;
   final bool showBack;
-  final VoidCallback onBack;
+  final VoidCallback? onBack;
+  final String backTooltip;
   final bool showDeveloperStatus;
   final VoidCallback onDeveloperStatus;
-  final VoidCallback onClose;
+  final IconData closeIcon;
+  final String closeTooltip;
+  final VoidCallback? onClose;
 
   @override
   Widget build(BuildContext context) {
@@ -813,7 +1304,7 @@ class _SecondaryDockHeader extends StatelessWidget {
         if (showBack)
           CommonIconButton(
             icon: Icons.arrow_back_rounded,
-            tooltip: '구역 목록으로',
+            tooltip: backTooltip,
             onPressed: onBack,
             haptic: CommonHaptic.selection,
             size: 40,
@@ -884,84 +1375,12 @@ class _SecondaryDockHeader extends StatelessWidget {
         ],
         const SizedBox(width: 4),
         CommonIconButton(
-          icon: Icons.close_rounded,
-          tooltip: '닫기',
+          icon: closeIcon,
+          tooltip: closeTooltip,
           onPressed: onClose,
           haptic: CommonHaptic.light,
         ),
       ],
-    );
-  }
-}
-
-class _SecondaryRailMetrics {
-  const _SecondaryRailMetrics({
-    required this.variantName,
-    required this.compact,
-    required this.ultra,
-    required this.railWidth,
-    required this.railGap,
-    required this.minimumButtonExtent,
-    required this.headerHeight,
-    required this.outerHorizontal,
-    required this.outerVertical,
-    required this.headerGap,
-    required this.actionInsetHorizontal,
-    required this.actionInsetVertical,
-  });
-
-  final String variantName;
-  final bool compact;
-  final bool ultra;
-  final double railWidth;
-  final double railGap;
-  final double minimumButtonExtent;
-  final double headerHeight;
-  final double outerHorizontal;
-  final double outerVertical;
-  final double headerGap;
-  final double actionInsetHorizontal;
-  final double actionInsetVertical;
-
-  factory _SecondaryRailMetrics.resolve({
-    required double dockHeight,
-    required double textScale,
-  }) {
-    final ultra = dockHeight < 600 || textScale >= 1.30;
-    final compact = !ultra && (dockHeight < 720 || textScale >= 1.15);
-    return _SecondaryRailMetrics(
-      variantName: ultra
-          ? 'ultra_compact'
-          : compact
-              ? 'compact'
-              : 'normal',
-      compact: compact || ultra,
-      ultra: ultra,
-      railWidth: ultra
-          ? 48.0
-          : compact
-              ? 52.0
-              : 56.0,
-      railGap: ultra
-          ? 6.0
-          : compact
-              ? 7.0
-              : 8.0,
-      minimumButtonExtent: ultra || compact ? 48.0 : 52.0,
-      headerHeight: ultra
-          ? 34.0
-          : compact
-              ? 36.0
-              : 38.0,
-      outerHorizontal: ultra ? 2.0 : 3.0,
-      outerVertical: ultra ? 6.0 : 7.0,
-      headerGap: 6.0,
-      actionInsetHorizontal: ultra
-          ? 2.0
-          : compact
-              ? 3.0
-              : 4.0,
-      actionInsetVertical: ultra ? 2.0 : 3.0,
     );
   }
 }
@@ -974,6 +1393,22 @@ class _SecondaryQuickActionRail extends StatefulWidget {
     required this.accountMode,
     required this.showAccountModes,
     required this.locationChildMode,
+    required this.userSettingsMode,
+    required this.tabletSettingsMode,
+    required this.billSettingsMode,
+    required this.sectorSettingsMode,
+    required this.settingsSection,
+    required this.settingsSectionStates,
+    required this.settingsSaving,
+    required this.tabletSettingsSection,
+    required this.tabletSettingsSectionStates,
+    required this.tabletSettingsSaving,
+    required this.billSettingsSection,
+    required this.billSettingsSectionStates,
+    required this.billSettingsSaving,
+    required this.sectorSettingsSection,
+    required this.sectorSettingsSectionStates,
+    required this.sectorSettingsSaving,
     required this.locationChildren,
     required this.selectedLocationId,
     required this.isEnabled,
@@ -987,6 +1422,10 @@ class _SecondaryQuickActionRail extends StatefulWidget {
     required this.onSelect,
     required this.onSelectAccountMode,
     required this.onSelectLocationChild,
+    required this.onSelectSettingsSection,
+    required this.onSelectTabletSettingsSection,
+    required this.onSelectBillSettingsSection,
+    required this.onSelectSectorSettingsSection,
   });
 
   final List<_SecondaryRailItem> primaryItems;
@@ -995,11 +1434,30 @@ class _SecondaryQuickActionRail extends StatefulWidget {
   final SecondaryAccountMode accountMode;
   final bool showAccountModes;
   final bool locationChildMode;
+  final bool userSettingsMode;
+  final bool tabletSettingsMode;
+  final bool billSettingsMode;
+  final bool sectorSettingsMode;
+  final UserSettingsSection settingsSection;
+  final Map<UserSettingsSection, UserSettingsSectionState> settingsSectionStates;
+  final bool settingsSaving;
+  final TabletSettingsSection tabletSettingsSection;
+  final Map<TabletSettingsSection, TabletSettingsSectionState>
+      tabletSettingsSectionStates;
+  final bool tabletSettingsSaving;
+  final BillSettingsSection billSettingsSection;
+  final Map<BillSettingsSection, BillSettingsSectionState>
+      billSettingsSectionStates;
+  final bool billSettingsSaving;
+  final SectorSettingsSection sectorSettingsSection;
+  final Map<SectorSettingsSection, SectorSettingsSectionState>
+      sectorSettingsSectionStates;
+  final bool sectorSettingsSaving;
   final List<LocationModel> locationChildren;
   final String? selectedLocationId;
   final bool Function(Section section) isEnabled;
   final String Function(Section section) disabledReason;
-  final _SecondaryRailMetrics metrics;
+  final CommonSideRailMetrics metrics;
   final double fullDockHeight;
   final double dockWidth;
   final double effectiveRailWidth;
@@ -1008,6 +1466,10 @@ class _SecondaryQuickActionRail extends StatefulWidget {
   final ValueChanged<Section> onSelect;
   final ValueChanged<SecondaryAccountMode> onSelectAccountMode;
   final ValueChanged<LocationModel> onSelectLocationChild;
+  final ValueChanged<UserSettingsSection> onSelectSettingsSection;
+  final ValueChanged<TabletSettingsSection> onSelectTabletSettingsSection;
+  final ValueChanged<BillSettingsSection> onSelectBillSettingsSection;
+  final ValueChanged<SectorSettingsSection> onSelectSectorSettingsSection;
 
   @override
   State<_SecondaryQuickActionRail> createState() =>
@@ -1031,10 +1493,45 @@ class _SecondaryQuickActionRailState extends State<_SecondaryQuickActionRail> {
   @override
   Widget build(BuildContext context) {
     final tokens = CommonUiTheme.of(context);
-    final textTheme = Theme.of(context).textTheme;
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final metrics = widget.metrics;
+    if (widget.userSettingsMode) {
+      return _UserSettingsTableOfContentsRail(
+        metrics: metrics,
+        selectedSection: widget.settingsSection,
+        sectionStates: widget.settingsSectionStates,
+        saving: widget.settingsSaving,
+        onSelect: widget.onSelectSettingsSection,
+      );
+    }
+    if (widget.tabletSettingsMode) {
+      return _TabletSettingsTableOfContentsRail(
+        metrics: metrics,
+        selectedSection: widget.tabletSettingsSection,
+        sectionStates: widget.tabletSettingsSectionStates,
+        saving: widget.tabletSettingsSaving,
+        onSelect: widget.onSelectTabletSettingsSection,
+      );
+    }
+    if (widget.billSettingsMode) {
+      return _BillSettingsTableOfContentsRail(
+        metrics: metrics,
+        selectedSection: widget.billSettingsSection,
+        sectionStates: widget.billSettingsSectionStates,
+        saving: widget.billSettingsSaving,
+        onSelect: widget.onSelectBillSettingsSection,
+      );
+    }
+    if (widget.sectorSettingsMode) {
+      return _SectorSettingsTableOfContentsRail(
+        metrics: metrics,
+        selectedSection: widget.sectorSettingsSection,
+        sectionStates: widget.sectorSettingsSectionStates,
+        saving: widget.sectorSettingsSaving,
+        onSelect: widget.onSelectSectorSettingsSection,
+      );
+    }
     final items = <_SecondaryRailItem>[
       ...widget.primaryItems,
       ...widget.bottomItems,
@@ -1232,7 +1729,7 @@ class _SecondaryQuickActionRailState extends State<_SecondaryQuickActionRail> {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted) return;
             widget.onDebug(
-              'secondary_rail_layout mode=${widget.locationChildMode ? 'location_child' : 'global'} dock_width=${widget.dockWidth.toStringAsFixed(1)} dock_height=${widget.fullDockHeight.toStringAsFixed(1)} rail_height=${railHeight.toStringAsFixed(1)} base_width=${metrics.railWidth.toStringAsFixed(1)} width=${widget.effectiveRailWidth.toStringAsFixed(1)} base_gap=${metrics.railGap.toStringAsFixed(1)} gap=${widget.effectiveRailGap.toStringAsFixed(1)} navigation_actions=$actionCount enabled=$enabledCount reference_actions=$globalActionCount context_actions=${widget.locationChildMode ? 0 : 2} context_visible=${widget.locationChildMode ? false : widget.showAccountModes} account_mode=${widget.accountMode.name} distribution=$distribution scroll=${widget.locationChildMode ? childScrollable : globalScrollable} navigation_slot=${effectiveSlotExtent.toStringAsFixed(1)} button_extent=${effectiveButtonExtent.toStringAsFixed(1)} context_extent=${widget.locationChildMode ? '0.0' : contextAreaExtent.toStringAsFixed(1)} inset_x=${metrics.actionInsetHorizontal.toStringAsFixed(0)} inset_y=${metrics.actionInsetVertical.toStringAsFixed(0)} variant=${metrics.variantName}',
+              'secondary_rail_layout railDesign=common_operations railMetricsSource=CommonSideRailMetrics mode=${widget.locationChildMode ? 'location_child' : 'global'} dock_width=${widget.dockWidth.toStringAsFixed(1)} dock_height=${widget.fullDockHeight.toStringAsFixed(1)} rail_height=${railHeight.toStringAsFixed(1)} base_width=${metrics.railWidth.toStringAsFixed(1)} width=${widget.effectiveRailWidth.toStringAsFixed(1)} base_gap=${metrics.railGap.toStringAsFixed(1)} gap=${widget.effectiveRailGap.toStringAsFixed(1)} navigation_actions=$actionCount enabled=$enabledCount reference_actions=$globalActionCount context_actions=${widget.locationChildMode ? 0 : 2} context_visible=${widget.locationChildMode ? false : widget.showAccountModes} account_mode=${widget.accountMode.name} distribution=$distribution scroll=${widget.locationChildMode ? childScrollable : globalScrollable} navigation_slot=${effectiveSlotExtent.toStringAsFixed(1)} button_extent=${effectiveButtonExtent.toStringAsFixed(1)} context_extent=${widget.locationChildMode ? '0.0' : contextAreaExtent.toStringAsFixed(1)} inset_x=${metrics.actionInsetHorizontal.toStringAsFixed(0)} inset_y=${metrics.actionInsetVertical.toStringAsFixed(0)} variant=${metrics.variantName}',
             );
           });
         }
@@ -1394,108 +1891,843 @@ class _SecondaryQuickActionRailState extends State<_SecondaryQuickActionRail> {
           );
         }
 
-        return Semantics(
-          container: true,
-          label: widget.locationChildMode ? '자식 주차 구역' : '운영 관리',
-          child: AnimatedContainer(
-            duration: reduceMotion
-                ? Duration.zero
-                : const Duration(milliseconds: 180),
-            curve: Curves.easeOutCubic,
-            padding: EdgeInsets.symmetric(
-              horizontal: metrics.outerHorizontal,
-              vertical: metrics.outerVertical,
-            ),
-            decoration: BoxDecoration(
-              color: tokens.surface.withOpacity(.26),
-              border: Border(
-                right: BorderSide(color: tokens.borderSubtle),
+        return CommonSideRailSurface(
+          title: '운영 관리',
+          semanticsLabel:
+              widget.locationChildMode ? '자식 주차 구역' : '운영 관리',
+          metrics: metrics,
+          child: AnimatedSwitcher(
+            duration:
+                reduceMotion ? Duration.zero : const Duration(milliseconds: 180),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeOutCubic,
+            layoutBuilder: (currentChild, previousChildren) {
+              return Stack(
+                fit: StackFit.expand,
+                alignment: Alignment.center,
+                children: [
+                  ...previousChildren,
+                  if (currentChild != null) currentChild,
+                ],
+              );
+            },
+            transitionBuilder: (child, animation) {
+              final begin = widget.locationChildMode
+                  ? const Offset(.08, 0)
+                  : const Offset(-.05, 0);
+              return FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: begin,
+                    end: Offset.zero,
+                  ).animate(animation),
+                  child: child,
+                ),
+              );
+            },
+            child: KeyedSubtree(
+              key: ValueKey<String>(
+                '${widget.locationChildMode ? 'location_child' : 'global'}|$distribution|${metrics.variantName}|$actionCount',
               ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SizedBox(
-                  height: metrics.headerHeight,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      AnimatedContainer(
-                        duration: reduceMotion
-                            ? Duration.zero
-                            : const Duration(milliseconds: 180),
-                        width: metrics.ultra ? 18 : 22,
-                        height: 3,
-                        decoration: BoxDecoration(
-                          color: tokens.iconSecondary,
-                          borderRadius:
-                              BorderRadius.circular(CommonUiShapes.pill),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '운영 관리',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
-                        style: textTheme.labelSmall?.copyWith(
-                          color: tokens.textSecondary,
-                          fontWeight: FontWeight.w900,
-                          height: 1.02,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                SizedBox(height: metrics.headerGap),
-                Expanded(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: AnimatedSwitcher(
-                      duration: reduceMotion
-                          ? Duration.zero
-                          : const Duration(milliseconds: 180),
-                      switchInCurve: Curves.easeOutCubic,
-                      switchOutCurve: Curves.easeOutCubic,
-                      layoutBuilder: (currentChild, previousChildren) {
-                        return Stack(
-                          fit: StackFit.expand,
-                          alignment: Alignment.center,
-                          children: [
-                            ...previousChildren,
-                            if (currentChild != null) currentChild,
-                          ],
-                        );
-                      },
-                      transitionBuilder: (child, animation) {
-                        final begin = widget.locationChildMode
-                            ? const Offset(.08, 0)
-                            : const Offset(-.05, 0);
-                        return FadeTransition(
-                          opacity: animation,
-                          child: SlideTransition(
-                            position: Tween<Offset>(
-                              begin: begin,
-                              end: Offset.zero,
-                            ).animate(animation),
-                            child: child,
-                          ),
-                        );
-                      },
-                      child: KeyedSubtree(
-                        key: ValueKey<String>(
-                          '${widget.locationChildMode ? 'location_child' : 'global'}|$distribution|${metrics.variantName}|$actionCount',
-                        ),
-                        child: actionArea,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+              child: actionArea,
             ),
           ),
         );
       },
+    );
+  }
+}
+
+class _SecondaryOperationsWorkspaceMotion extends StatelessWidget {
+  const _SecondaryOperationsWorkspaceMotion({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (reduceMotion) return child;
+    return TweenAnimationBuilder<double>(
+      duration: const Duration(milliseconds: 210),
+      curve: Curves.easeOutCubic,
+      tween: Tween<double>(begin: 0, end: 1),
+      builder: (context, value, animatedChild) {
+        return Transform.translate(
+          offset: Offset(22 * (1 - value), 0),
+          child: Opacity(
+            opacity: .90 + (.10 * value),
+            child: animatedChild,
+          ),
+        );
+      },
+      child: child,
+    );
+  }
+}
+
+class _UserSettingsTableOfContentsRail extends StatelessWidget {
+  const _UserSettingsTableOfContentsRail({
+    required this.metrics,
+    required this.selectedSection,
+    required this.sectionStates,
+    required this.saving,
+    required this.onSelect,
+  });
+
+  final CommonSideRailMetrics metrics;
+  final UserSettingsSection selectedSection;
+  final Map<UserSettingsSection, UserSettingsSectionState> sectionStates;
+  final bool saving;
+  final ValueChanged<UserSettingsSection> onSelect;
+
+  static const List<_UserSettingsTocItem> _items = <_UserSettingsTocItem>[
+    _UserSettingsTocItem(
+      section: UserSettingsSection.identity,
+      label: '기본',
+      icon: Icons.badge_rounded,
+    ),
+    _UserSettingsTocItem(
+      section: UserSettingsSection.permission,
+      label: '권한',
+      icon: Icons.verified_user_rounded,
+    ),
+    _UserSettingsTocItem(
+      section: UserSettingsSection.position,
+      label: '직책',
+      icon: Icons.work_rounded,
+    ),
+    _UserSettingsTocItem(
+      section: UserSettingsSection.password,
+      label: '암호',
+      icon: Icons.lock_rounded,
+    ),
+    _UserSettingsTocItem(
+      section: UserSettingsSection.schedule,
+      label: '일정',
+      icon: Icons.schedule_rounded,
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return CommonSideRailSurface(
+      title: '계정 설정',
+      semanticsLabel: '계정 설정 입력 목차',
+      metrics: metrics,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final available = constraints.maxHeight.isFinite
+              ? constraints.maxHeight
+              : 420.0;
+          final slot = available / _items.length;
+          final scrollable = slot + .5 < metrics.minimumButtonExtent;
+          final extent = scrollable
+              ? metrics.minimumButtonExtent
+              : math.max(
+                  metrics.minimumButtonExtent,
+                  slot - metrics.actionInsetVertical * 2,
+                );
+          final buttons = <Widget>[
+            for (final item in _items)
+              Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: metrics.actionInsetHorizontal,
+                  vertical: metrics.actionInsetVertical,
+                ),
+                child: _UserSettingsTocButton(
+                  item: item,
+                  state: sectionStates[item.section] ??
+                      UserSettingsSectionState.incomplete,
+                  selected: selectedSection == item.section,
+                  enabled: !saving,
+                  compact: metrics.compact,
+                  extent: extent,
+                  onTap: () => onSelect(item.section),
+                ),
+              ),
+          ];
+          if (scrollable) {
+            return SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: buttons,
+              ),
+            );
+          }
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final button in buttons) Expanded(child: button),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _UserSettingsTocButton extends StatelessWidget {
+  const _UserSettingsTocButton({
+    required this.item,
+    required this.state,
+    required this.selected,
+    required this.enabled,
+    required this.compact,
+    required this.extent,
+    required this.onTap,
+  });
+
+  final _UserSettingsTocItem item;
+  final UserSettingsSectionState state;
+  final bool selected;
+  final bool enabled;
+  final bool compact;
+  final double extent;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final statusColor = switch (state) {
+      UserSettingsSectionState.complete => tokens.success,
+      UserSettingsSectionState.incomplete => tokens.warning,
+      UserSettingsSectionState.error => tokens.danger,
+      UserSettingsSectionState.optional => tokens.textSecondary,
+    };
+    final statusIcon = switch (state) {
+      UserSettingsSectionState.complete => Icons.check_rounded,
+      UserSettingsSectionState.incomplete => Icons.priority_high_rounded,
+      UserSettingsSectionState.error => Icons.error_outline_rounded,
+      UserSettingsSectionState.optional => Icons.remove_rounded,
+    };
+    final stateLabel = switch (state) {
+      UserSettingsSectionState.complete => '입력 완료',
+      UserSettingsSectionState.incomplete => '입력 필요',
+      UserSettingsSectionState.error => '입력 오류',
+      UserSettingsSectionState.optional => '선택 입력',
+    };
+
+    return CommonSideRailActionButton(
+      semanticLabel: '${item.label}, $stateLabel',
+      visualLabel: item.label,
+      selected: selected,
+      enabled: enabled,
+      disabledReason: enabled ? '' : '저장 중에는 목차를 이동할 수 없습니다.',
+      compact: compact,
+      extent: extent,
+      tooltip: '${item.label} · $stateLabel',
+      onTap: onTap,
+      iconChild: SizedBox(
+        width: compact ? 21 : 23,
+        height: compact ? 21 : 23,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Align(
+              alignment: Alignment.center,
+              child: Icon(
+                item.icon,
+                size: compact ? 18 : 19,
+                color: selected ? tokens.accent : tokens.iconPrimary,
+              ),
+            ),
+            Positioned(
+              right: -4,
+              bottom: -4,
+              child: AnimatedScale(
+                duration:
+                    reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                curve: CommonUiMotion.enter,
+                scale: 1,
+                child: AnimatedContainer(
+                  duration:
+                      reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                  width: 14,
+                  height: 14,
+                  decoration: BoxDecoration(
+                    color: tokens.surfaceRaised,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: statusColor, width: 1.4),
+                  ),
+                  alignment: Alignment.center,
+                  child: AnimatedSwitcher(
+                    duration:
+                        reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                    child: Icon(
+                      statusIcon,
+                      key: ValueKey<UserSettingsSectionState>(state),
+                      size: 9,
+                      color: statusColor,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _UserSettingsTocItem {
+  const _UserSettingsTocItem({
+    required this.section,
+    required this.label,
+    required this.icon,
+  });
+
+  final UserSettingsSection section;
+  final String label;
+  final IconData icon;
+}
+
+class _TabletSettingsTableOfContentsRail extends StatelessWidget {
+  const _TabletSettingsTableOfContentsRail({
+    required this.metrics,
+    required this.selectedSection,
+    required this.sectionStates,
+    required this.saving,
+    required this.onSelect,
+  });
+
+  final CommonSideRailMetrics metrics;
+  final TabletSettingsSection selectedSection;
+  final Map<TabletSettingsSection, TabletSettingsSectionState> sectionStates;
+  final bool saving;
+  final ValueChanged<TabletSettingsSection> onSelect;
+
+  static const List<_TabletSettingsTocItem> _items = <_TabletSettingsTocItem>[
+    _TabletSettingsTocItem(
+      section: TabletSettingsSection.identity,
+      label: '식별',
+      icon: Icons.tablet_mac_rounded,
+    ),
+    _TabletSettingsTocItem(
+      section: TabletSettingsSection.permission,
+      label: '권한',
+      icon: Icons.verified_user_rounded,
+    ),
+    _TabletSettingsTocItem(
+      section: TabletSettingsSection.password,
+      label: '암호',
+      icon: Icons.lock_rounded,
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return CommonSideRailSurface(
+      title: '태블릿 설정',
+      semanticsLabel: '태블릿 설정 입력 목차',
+      metrics: metrics,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final available = constraints.maxHeight.isFinite
+              ? constraints.maxHeight
+              : 420.0;
+          final slot = available / _items.length;
+          final scrollable = slot + .5 < metrics.minimumButtonExtent;
+          final extent = scrollable
+              ? metrics.minimumButtonExtent
+              : math.max(
+                  metrics.minimumButtonExtent,
+                  slot - metrics.actionInsetVertical * 2,
+                );
+          final buttons = <Widget>[
+            for (final item in _items)
+              Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: metrics.actionInsetHorizontal,
+                  vertical: metrics.actionInsetVertical,
+                ),
+                child: _TabletSettingsTocButton(
+                  item: item,
+                  state: sectionStates[item.section] ??
+                      TabletSettingsSectionState.incomplete,
+                  selected: selectedSection == item.section,
+                  enabled: !saving,
+                  compact: metrics.compact,
+                  extent: extent,
+                  onTap: () => onSelect(item.section),
+                ),
+              ),
+          ];
+          if (scrollable) {
+            return SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: buttons,
+              ),
+            );
+          }
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final button in buttons) Expanded(child: button),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _TabletSettingsTocButton extends StatelessWidget {
+  const _TabletSettingsTocButton({
+    required this.item,
+    required this.state,
+    required this.selected,
+    required this.enabled,
+    required this.compact,
+    required this.extent,
+    required this.onTap,
+  });
+
+  final _TabletSettingsTocItem item;
+  final TabletSettingsSectionState state;
+  final bool selected;
+  final bool enabled;
+  final bool compact;
+  final double extent;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final statusColor = switch (state) {
+      TabletSettingsSectionState.complete => tokens.success,
+      TabletSettingsSectionState.incomplete => tokens.warning,
+      TabletSettingsSectionState.error => tokens.danger,
+    };
+    final statusIcon = switch (state) {
+      TabletSettingsSectionState.complete => Icons.check_rounded,
+      TabletSettingsSectionState.incomplete => Icons.priority_high_rounded,
+      TabletSettingsSectionState.error => Icons.error_outline_rounded,
+    };
+    final stateLabel = switch (state) {
+      TabletSettingsSectionState.complete => '입력 완료',
+      TabletSettingsSectionState.incomplete => '입력 필요',
+      TabletSettingsSectionState.error => '입력 오류',
+    };
+
+    return CommonSideRailActionButton(
+      semanticLabel: '${item.label}, $stateLabel',
+      visualLabel: item.label,
+      selected: selected,
+      enabled: enabled,
+      disabledReason: enabled ? '' : '저장 중에는 목차를 이동할 수 없습니다.',
+      compact: compact,
+      extent: extent,
+      tooltip: '${item.label} · $stateLabel',
+      onTap: onTap,
+      iconChild: SizedBox(
+        width: compact ? 21 : 23,
+        height: compact ? 21 : 23,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Align(
+              alignment: Alignment.center,
+              child: Icon(
+                item.icon,
+                size: compact ? 18 : 19,
+                color: selected ? tokens.accent : tokens.iconPrimary,
+              ),
+            ),
+            Positioned(
+              right: -4,
+              bottom: -4,
+              child: AnimatedScale(
+                duration:
+                    reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                curve: CommonUiMotion.enter,
+                scale: 1,
+                child: AnimatedContainer(
+                  duration:
+                      reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                  width: 14,
+                  height: 14,
+                  decoration: BoxDecoration(
+                    color: tokens.surfaceRaised,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: statusColor, width: 1.4),
+                  ),
+                  alignment: Alignment.center,
+                  child: AnimatedSwitcher(
+                    duration:
+                        reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                    child: Icon(
+                      statusIcon,
+                      key: ValueKey<TabletSettingsSectionState>(state),
+                      size: 9,
+                      color: statusColor,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TabletSettingsTocItem {
+  const _TabletSettingsTocItem({
+    required this.section,
+    required this.label,
+    required this.icon,
+  });
+
+  final TabletSettingsSection section;
+  final String label;
+  final IconData icon;
+}
+
+class _BillSettingsTableOfContentsRail extends StatelessWidget {
+  const _BillSettingsTableOfContentsRail({
+    required this.metrics,
+    required this.selectedSection,
+    required this.sectionStates,
+    required this.saving,
+    required this.onSelect,
+  });
+
+  final CommonSideRailMetrics metrics;
+  final BillSettingsSection selectedSection;
+  final Map<BillSettingsSection, BillSettingsSectionState> sectionStates;
+  final bool saving;
+  final ValueChanged<BillSettingsSection> onSelect;
+
+  static const List<_BillSettingsTocItem> _items = <_BillSettingsTocItem>[
+    _BillSettingsTocItem(
+      section: BillSettingsSection.identity,
+      label: '유형',
+      icon: Icons.receipt_long_rounded,
+    ),
+    _BillSettingsTocItem(
+      section: BillSettingsSection.pricing,
+      label: '요금',
+      icon: Icons.calculate_rounded,
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return CommonSideRailSurface(
+      title: '정산 설정',
+      semanticsLabel: '정산 유형 설정 입력 목차',
+      metrics: metrics,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final available = constraints.maxHeight.isFinite
+              ? constraints.maxHeight
+              : 420.0;
+          final slot = available / _items.length;
+          final scrollable = slot + .5 < metrics.minimumButtonExtent;
+          final extent = scrollable
+              ? metrics.minimumButtonExtent
+              : math.max(
+                  metrics.minimumButtonExtent,
+                  slot - metrics.actionInsetVertical * 2,
+                );
+          final buttons = <Widget>[
+            for (final item in _items)
+              Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: metrics.actionInsetHorizontal,
+                  vertical: metrics.actionInsetVertical,
+                ),
+                child: _BillSettingsTocButton(
+                  item: item,
+                  state: sectionStates[item.section] ??
+                      BillSettingsSectionState.incomplete,
+                  selected: selectedSection == item.section,
+                  enabled: !saving,
+                  compact: metrics.compact,
+                  extent: extent,
+                  onTap: () => onSelect(item.section),
+                ),
+              ),
+          ];
+          if (scrollable) {
+            return SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: buttons,
+              ),
+            );
+          }
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final button in buttons) Expanded(child: button),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _BillSettingsTocButton extends StatelessWidget {
+  const _BillSettingsTocButton({
+    required this.item,
+    required this.state,
+    required this.selected,
+    required this.enabled,
+    required this.compact,
+    required this.extent,
+    required this.onTap,
+  });
+
+  final _BillSettingsTocItem item;
+  final BillSettingsSectionState state;
+  final bool selected;
+  final bool enabled;
+  final bool compact;
+  final double extent;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final statusColor = switch (state) {
+      BillSettingsSectionState.complete => tokens.success,
+      BillSettingsSectionState.incomplete => tokens.warning,
+      BillSettingsSectionState.error => tokens.danger,
+    };
+    final statusIcon = switch (state) {
+      BillSettingsSectionState.complete => Icons.check_rounded,
+      BillSettingsSectionState.incomplete => Icons.priority_high_rounded,
+      BillSettingsSectionState.error => Icons.error_outline_rounded,
+    };
+    final stateLabel = switch (state) {
+      BillSettingsSectionState.complete => '입력 완료',
+      BillSettingsSectionState.incomplete => '입력 필요',
+      BillSettingsSectionState.error => '입력 오류',
+    };
+
+    return CommonSideRailActionButton(
+      semanticLabel: '${item.label}, $stateLabel',
+      visualLabel: item.label,
+      selected: selected,
+      enabled: enabled,
+      disabledReason: enabled ? '' : '저장 중에는 목차를 이동할 수 없습니다.',
+      compact: compact,
+      extent: extent,
+      tooltip: '${item.label} · $stateLabel',
+      onTap: onTap,
+      iconChild: SizedBox(
+        width: compact ? 21 : 23,
+        height: compact ? 21 : 23,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Align(
+              alignment: Alignment.center,
+              child: Icon(
+                item.icon,
+                size: compact ? 18 : 19,
+                color: selected ? tokens.accent : tokens.iconPrimary,
+              ),
+            ),
+            Positioned(
+              right: -4,
+              bottom: -4,
+              child: AnimatedScale(
+                duration:
+                    reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                curve: CommonUiMotion.enter,
+                scale: 1,
+                child: AnimatedContainer(
+                  duration:
+                      reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                  width: 14,
+                  height: 14,
+                  decoration: BoxDecoration(
+                    color: tokens.surfaceRaised,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: statusColor, width: 1.4),
+                  ),
+                  alignment: Alignment.center,
+                  child: AnimatedSwitcher(
+                    duration:
+                        reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                    child: Icon(
+                      statusIcon,
+                      key: ValueKey<BillSettingsSectionState>(state),
+                      size: 9,
+                      color: statusColor,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BillSettingsTocItem {
+  const _BillSettingsTocItem({
+    required this.section,
+    required this.label,
+    required this.icon,
+  });
+
+  final BillSettingsSection section;
+  final String label;
+  final IconData icon;
+}
+
+class _SectorSettingsTableOfContentsRail extends StatelessWidget {
+  const _SectorSettingsTableOfContentsRail({
+    required this.metrics,
+    required this.selectedSection,
+    required this.sectionStates,
+    required this.saving,
+    required this.onSelect,
+  });
+
+  final CommonSideRailMetrics metrics;
+  final SectorSettingsSection selectedSection;
+  final Map<SectorSettingsSection, SectorSettingsSectionState> sectionStates;
+  final bool saving;
+  final ValueChanged<SectorSettingsSection> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final section = SectorSettingsSection.identity;
+    return CommonSideRailSurface(
+      title: '섹터 설정',
+      semanticsLabel: '섹터 설정 입력 목차',
+      metrics: metrics,
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: metrics.actionInsetHorizontal,
+          vertical: metrics.actionInsetVertical,
+        ),
+        child: _SectorSettingsTocButton(
+          state: sectionStates[section] ?? SectorSettingsSectionState.incomplete,
+          selected: selectedSection == section,
+          enabled: !saving,
+          compact: metrics.compact,
+          extent: metrics.minimumButtonExtent,
+          onTap: () => onSelect(section),
+        ),
+      ),
+    );
+  }
+}
+
+class _SectorSettingsTocButton extends StatelessWidget {
+  const _SectorSettingsTocButton({
+    required this.state,
+    required this.selected,
+    required this.enabled,
+    required this.compact,
+    required this.extent,
+    required this.onTap,
+  });
+
+  final SectorSettingsSectionState state;
+  final bool selected;
+  final bool enabled;
+  final bool compact;
+  final double extent;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final statusColor = switch (state) {
+      SectorSettingsSectionState.complete => tokens.success,
+      SectorSettingsSectionState.incomplete => tokens.warning,
+      SectorSettingsSectionState.error => tokens.danger,
+    };
+    final statusIcon = switch (state) {
+      SectorSettingsSectionState.complete => Icons.check_rounded,
+      SectorSettingsSectionState.incomplete => Icons.priority_high_rounded,
+      SectorSettingsSectionState.error => Icons.error_outline_rounded,
+    };
+    final stateLabel = switch (state) {
+      SectorSettingsSectionState.complete => '입력 완료',
+      SectorSettingsSectionState.incomplete => '입력 필요',
+      SectorSettingsSectionState.error => '입력 오류',
+    };
+
+    return CommonSideRailActionButton(
+      semanticLabel: '기본, $stateLabel',
+      visualLabel: '기본',
+      selected: selected,
+      enabled: enabled,
+      disabledReason: enabled ? '' : '저장 중에는 목차를 이동할 수 없습니다.',
+      compact: compact,
+      extent: extent,
+      tooltip: '기본 · $stateLabel',
+      onTap: onTap,
+      iconChild: SizedBox(
+        width: compact ? 21 : 23,
+        height: compact ? 21 : 23,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Align(
+              alignment: Alignment.center,
+              child: Icon(
+                Icons.hub_rounded,
+                size: compact ? 18 : 19,
+                color: selected ? tokens.accent : tokens.iconPrimary,
+              ),
+            ),
+            Positioned(
+              right: -4,
+              bottom: -4,
+              child: AnimatedContainer(
+                duration:
+                    reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                width: 14,
+                height: 14,
+                decoration: BoxDecoration(
+                  color: tokens.surfaceRaised,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: statusColor, width: 1.4),
+                ),
+                alignment: Alignment.center,
+                child: AnimatedSwitcher(
+                  duration:
+                      reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                  switchInCurve: CommonUiMotion.enter,
+                  switchOutCurve: CommonUiMotion.exit,
+                  child: Icon(
+                    statusIcon,
+                    key: ValueKey<SectorSettingsSectionState>(state),
+                    size: 8.5,
+                    color: statusColor,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -1764,7 +2996,7 @@ class _SecondaryLocationChildRailButton extends StatelessWidget {
   }
 }
 
-class _SecondaryRailActionButton extends StatefulWidget {
+class _SecondaryRailActionButton extends StatelessWidget {
   const _SecondaryRailActionButton({
     required this.semanticLabel,
     required this.visualLabel,
@@ -1788,134 +3020,17 @@ class _SecondaryRailActionButton extends StatefulWidget {
   final VoidCallback onTap;
 
   @override
-  State<_SecondaryRailActionButton> createState() =>
-      _SecondaryRailActionButtonState();
-}
-
-class _SecondaryRailActionButtonState
-    extends State<_SecondaryRailActionButton> {
-  bool _pressed = false;
-
-  @override
   Widget build(BuildContext context) {
-    final tokens = CommonUiTheme.of(context);
-    final textTheme = Theme.of(context).textTheme;
-    final reduceMotion =
-        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    final enabled = widget.enabled;
-    final foreground = widget.selected && enabled
-        ? tokens.accent
-        : enabled
-            ? tokens.iconPrimary
-            : tokens.iconDisabled;
-    final textColor = widget.selected && enabled
-        ? tokens.accent
-        : enabled
-            ? tokens.textPrimary
-            : tokens.textDisabled;
-    final background = widget.selected && enabled
-        ? tokens.accentContainer.withOpacity(_pressed ? .86 : .62)
-        : _pressed && enabled
-            ? tokens.accentContainer.withOpacity(.72)
-            : enabled
-                ? tokens.surfaceRaised
-                : tokens.surfaceDisabled;
-    final border = widget.selected && enabled
-        ? tokens.accent.withOpacity(_pressed ? .58 : .38)
-        : !enabled && _pressed
-            ? tokens.warning
-            : _pressed && enabled
-                ? tokens.accent.withOpacity(.42)
-                : tokens.borderSubtle;
-
-    return Semantics(
-      container: true,
-      button: true,
-      selected: widget.selected,
-      enabled: true,
-      excludeSemantics: true,
-      label: widget.semanticLabel,
-      value: enabled || widget.disabledReason.isEmpty
-          ? null
-          : widget.disabledReason,
-      child: AnimatedOpacity(
-        duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
-        opacity: enabled ? 1 : .56,
-        child: AnimatedScale(
-          duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
-          curve: CommonUiMotion.standard,
-          scale: _pressed ? (enabled ? .97 : .985) : 1,
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(12),
-              onTap: widget.onTap,
-              onHighlightChanged: (value) {
-                if (!mounted) return;
-                setState(() {
-                  _pressed = value;
-                });
-              },
-              child: AnimatedContainer(
-                duration:
-                    reduceMotion ? Duration.zero : CommonUiMotion.selection,
-                curve: CommonUiMotion.standard,
-                width: double.infinity,
-                height: widget.extent,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 4,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: background,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: border),
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    AnimatedScale(
-                      duration: reduceMotion
-                          ? Duration.zero
-                          : const Duration(milliseconds: 180),
-                      curve: Curves.easeOutCubic,
-                      scale: _pressed && enabled ? 1.04 : 1,
-                      child: Icon(
-                        widget.icon,
-                        size: widget.compact ? 19 : 20,
-                        color: foreground,
-                      ),
-                    ),
-                    SizedBox(height: widget.compact ? 2 : 3),
-                    AnimatedDefaultTextStyle(
-                      duration: reduceMotion
-                          ? Duration.zero
-                          : CommonUiMotion.selection,
-                      curve: CommonUiMotion.standard,
-                      style: textTheme.labelSmall?.copyWith(
-                            color: textColor,
-                            fontWeight: FontWeight.w800,
-                            height: 1.05,
-                          ) ??
-                          TextStyle(
-                            color: textColor,
-                            fontWeight: FontWeight.w800,
-                            height: 1.05,
-                          ),
-                      child: Text(
-                        widget.visualLabel,
-                        maxLines: 1,
-                        overflow: TextOverflow.clip,
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
+    return CommonSideRailActionButton(
+      semanticLabel: semanticLabel,
+      visualLabel: visualLabel,
+      icon: icon,
+      selected: selected,
+      enabled: enabled,
+      disabledReason: disabledReason,
+      compact: compact,
+      extent: extent,
+      onTap: onTap,
     );
   }
 }
@@ -1966,8 +3081,9 @@ class _SecondaryDockDebugLog {
       description: visible.join('\n'),
       copyText: debugPrintCode,
       copyButtonLabel: 'debugPrint 코드 복사',
-      visibleDuration: const Duration(seconds: 60),
+      visibleDuration: Duration.zero,
       useCommonUi: true,
+      awaitManualClose: true,
     );
   }
 }

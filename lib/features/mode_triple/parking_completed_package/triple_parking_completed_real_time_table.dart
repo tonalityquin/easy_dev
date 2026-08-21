@@ -103,6 +103,8 @@ class TripleParkingCompletedRealTimeTable extends StatelessWidget {
           ? (ctx, spec, ctrl) => RealTimeStatusPreviewBody(
                 controller: ctrl,
                 area: area,
+                screen: 'triple_reverse_status_dot_map',
+                specs: tabs,
                 overlay: const <ParkingStatusOverlaySpec>[
                   ParkingStatusOverlaySpec(
                     collection: 'parking_completed_view',

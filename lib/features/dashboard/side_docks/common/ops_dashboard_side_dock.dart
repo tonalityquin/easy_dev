@@ -12,7 +12,6 @@ import '../../../../app/utils/operational_data_sync_workflow.dart';
 import '../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../app/utils/status_dialog.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
-import '../../../../shared/secondary/side_docks/secondary_side_dock.dart';
 import '../../../../shared/sheet_tool/document_box_action.dart';
 import '../../../../shared/sheet_tool/document_box_action_executor.dart';
 import '../../../account/applications/user_state.dart';
@@ -23,6 +22,7 @@ import '../../../dev/application/area_state.dart';
 import '../../../headquarter/application/fab/hub_quick_actions.dart';
 import '../../../selector/application/dev_auth.dart';
 import '../../../selector/sheets/service_bottom_sheet.dart';
+import 'dashboard_dock_request.dart';
 import '../../widgets/widgets/schedule/dashboard_work_schedule_surface.dart';
 
 class OpsDashboardSideDock extends StatefulWidget {
@@ -51,6 +51,7 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
   String _lastSearchDebugSignature = '';
+  String _lastBusinessDebugSignature = '';
   bool _developerMode = false;
   bool _developerModeResolved = false;
 
@@ -406,7 +407,7 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
   Future<void> _openSecondary(BuildContext context) async {
     _searchFocusNode.unfocus();
     debugPrint('[OpsDashboardSideDock] secondary_handoff_request');
-    Navigator.of(context).pop(SecondaryDockRequest.open);
+    Navigator.of(context).pop(DashboardDockRequest.secondary);
   }
 
   List<_DashboardAction> _actions(
@@ -697,7 +698,7 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
     trace.log('uiParity=quick_actions', progress: 0.18);
     trace.log('layout=single_scroll', progress: 0.24);
     trace.log(
-      'topContent=work_schedule,punch_recorder,search',
+      'topContent=work_schedule,punch_recorder,business,search',
       progress: 0.3,
     );
     trace.log('scheduleEditor=inline_weekday_editor', progress: 0.36);
@@ -724,7 +725,14 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
               '${category.name}:${actions.where((action) => action.category == category).length}',
         )
         .join(',');
+    final hasMonthlyCapability =
+        areaState.capabilitiesOfCurrentArea.contains(Capability.monthly);
+    final monthlyVisible = hasMonthlyCapability && !isFieldCommon;
     trace.log('fieldCommon=$isFieldCommon', progress: 0.75);
+    trace.log('monthlyCapability=$hasMonthlyCapability', progress: 0.76);
+    trace.log('monthlyVisible=$monthlyVisible', progress: 0.765);
+    trace.log('businessUi=dashboard_action_tile', progress: 0.768);
+    trace.log('businessTileCount=${monthlyVisible ? 2 : 1}', progress: 0.769);
     trace.log('developerMode=$developerMode', progress: 0.77);
     trace.log('developerModeResolved=$_developerModeResolved', progress: 0.79);
     trace.log('settingsVisible=true', progress: 0.81);
@@ -798,6 +806,140 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
           ],
         ),
       ),
+    );
+  }
+
+  void _requestBusinessAction(
+    BuildContext context,
+    DashboardDockRequest request,
+  ) {
+    _searchFocusNode.unfocus();
+    debugPrint(
+      '[OpsDashboardSideDock] business_action_request action=${request.name} mode=${widget.modeLabel}',
+    );
+    Navigator.of(context).pop(request);
+  }
+
+  void _logBusinessVisibility({
+    required bool canUseMonthly,
+    required bool hasMonthlyCapability,
+    required bool isFieldCommon,
+  }) {
+    final signature =
+        '$canUseMonthly:$hasMonthlyCapability:$isFieldCommon:${widget.modeLabel}';
+    if (_lastBusinessDebugSignature == signature) return;
+    _lastBusinessDebugSignature = signature;
+    debugPrint(
+      '[OpsDashboardSideDock] business_section mode=${widget.modeLabel} monthlyVisible=$canUseMonthly monthlyCapability=$hasMonthlyCapability fieldCommon=$isFieldCommon departureVisible=true',
+    );
+  }
+
+  Widget _buildBusinessSection(
+    BuildContext context, {
+    required UserState userState,
+    required AreaState areaState,
+  }) {
+    final tokens = CommonUiTheme.of(context);
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final hasMonthlyCapability =
+        areaState.capabilitiesOfCurrentArea.contains(Capability.monthly);
+    final isFieldCommon = userState.role.trim() == 'fieldCommon';
+    final canUseMonthly = hasMonthlyCapability && !isFieldCommon;
+    _logBusinessVisibility(
+      canUseMonthly: canUseMonthly,
+      hasMonthlyCapability: hasMonthlyCapability,
+      isFieldCommon: isFieldCommon,
+    );
+
+    final actions = <_DashboardAction>[
+      if (canUseMonthly)
+        _DashboardAction(
+          id: 'monthly_parking',
+          category: _DashboardActionCategory.business,
+          label: '정기 주차',
+          description: '',
+          icon: Icons.dashboard_customize_rounded,
+          color: tokens.accentContainer,
+          foreground: tokens.onAccentContainer,
+          onPressed: () async {
+            _requestBusinessAction(
+              context,
+              DashboardDockRequest.monthlyParking,
+            );
+          },
+        ),
+      _DashboardAction(
+        id: 'departure_completed',
+        category: _DashboardActionCategory.business,
+        label: '출차 완료',
+        description: '',
+        icon: Icons.directions_car_filled_rounded,
+        color: tokens.successContainer,
+        foreground: tokens.onSuccessContainer,
+        onPressed: () async {
+          _requestBusinessAction(
+            context,
+            DashboardDockRequest.departureCompleted,
+          );
+        },
+      ),
+    ];
+
+    final tiles = Column(
+      key: ValueKey<String>(
+        canUseMonthly ? 'business:monthly_departure' : 'business:departure',
+      ),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var index = 0; index < actions.length; index++) ...[
+          Padding(
+            padding: const EdgeInsets.only(left: 10),
+            child: _DashboardActionTile(action: actions[index]),
+          ),
+          if (index != actions.length - 1) const SizedBox(height: 10),
+        ],
+      ],
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _sectionHeader(context, '업무'),
+        const SizedBox(height: 8),
+        AnimatedSize(
+          duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
+          curve: CommonUiMotion.standard,
+          alignment: Alignment.topCenter,
+          child: AnimatedSwitcher(
+            duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+            switchInCurve: CommonUiMotion.enter,
+            switchOutCurve: CommonUiMotion.exit,
+            transitionBuilder: (child, animation) {
+              if (reduceMotion) return child;
+              final curved = CurvedAnimation(
+                parent: animation,
+                curve: CommonUiMotion.enter,
+                reverseCurve: CommonUiMotion.exit,
+              );
+              return FadeTransition(
+                opacity: curved,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0, 0.04),
+                    end: Offset.zero,
+                  ).animate(curved),
+                  child: ScaleTransition(
+                    scale: Tween<double>(begin: 0.985, end: 1).animate(curved),
+                    child: child,
+                  ),
+                ),
+              );
+            },
+            child: tiles,
+          ),
+        ),
+      ],
     );
   }
 
@@ -954,7 +1096,7 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
         children: _buildActionSections(
           context,
           filtered,
-          query.isEmpty ? 3 : 0,
+          query.isEmpty ? 4 : 0,
         ),
       );
     }
@@ -1060,8 +1202,19 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
           ),
           const SizedBox(height: 14),
           _DashboardStaggeredReveal(
-            key: const ValueKey<String>('action_search'),
+            key: const ValueKey<String>('business_actions'),
             order: 2,
+            offsetY: 6,
+            child: _buildBusinessSection(
+              context,
+              userState: userState,
+              areaState: areaState,
+            ),
+          ),
+          const SizedBox(height: 14),
+          _DashboardStaggeredReveal(
+            key: const ValueKey<String>('action_search'),
+            order: 3,
             offsetY: 6,
             child: _buildSearchField(context),
           ),
@@ -1086,6 +1239,7 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
 }
 
 enum _DashboardActionCategory {
+  business,
   thirdParty,
   report,
   submit,
@@ -1097,6 +1251,8 @@ enum _DashboardActionCategory {
 extension _DashboardActionCategoryUi on _DashboardActionCategory {
   String get label {
     switch (this) {
+      case _DashboardActionCategory.business:
+        return '업무';
       case _DashboardActionCategory.thirdParty:
         return '서드 파티';
       case _DashboardActionCategory.report:

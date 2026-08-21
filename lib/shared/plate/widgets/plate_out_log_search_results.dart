@@ -1,15 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
+import '../../../app/utils/developer_operation_status_dialog.dart';
+import '../../../design_system/common_ui/common_ui_theme.dart';
+import '../../secondary/widgets/ops_console_widgets.dart';
 import '../domain/models/plate_out_log_search_result.dart';
 
 class PlateOutLogSearchResults extends StatefulWidget {
-  final List<PlateOutLogSearchResult> results;
-
   const PlateOutLogSearchResults({
     super.key,
     required this.results,
+    required this.trace,
   });
+
+  final List<PlateOutLogSearchResult> results;
+  final DeveloperOperationTrace trace;
 
   @override
   State<PlateOutLogSearchResults> createState() =>
@@ -18,74 +24,71 @@ class PlateOutLogSearchResults extends StatefulWidget {
 
 class _PlateOutLogSearchResultsState extends State<PlateOutLogSearchResults> {
   final Map<String, bool> _newestFirstByVehicle = <String, bool>{};
+  String? _expandedVehicleKey;
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final tokens = CommonUiTheme.of(context);
     final groups = _buildVehicleGroups(widget.results);
-    final totalLogs = groups.fold<int>(0, (sum, group) => sum + group.logs.length);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Expanded(
-              child: Text(
-                '검색 결과',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: cs.primaryContainer.withOpacity(0.85),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                '차량 ${groups.length}대 · 로그 $totalLogs건',
-                style: TextStyle(
-                  color: cs.onPrimaryContainer,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ),
-          ],
+    return OpsDockListSurface(
+      child: ListView.separated(
+        padding: EdgeInsets.zero,
+        itemCount: groups.length,
+        separatorBuilder: (context, index) => Divider(
+          height: 1,
+          thickness: 1,
+          color: tokens.borderSubtle,
         ),
-        const SizedBox(height: 10),
-        ListView.separated(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: groups.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 12),
-          itemBuilder: (context, index) {
-            final group = groups[index];
-            final newestFirst = _newestFirstByVehicle[group.key] ?? true;
-            final sortedLogs = List<_PlateOutLogEntry>.from(group.logs)
-              ..sort((a, b) {
-                final ad = a.departureCompletedAt;
-                final bd = b.departureCompletedAt;
-                if (ad == null && bd == null) return 0;
-                if (ad == null) return newestFirst ? 1 : -1;
-                if (bd == null) return newestFirst ? -1 : 1;
-                return newestFirst ? bd.compareTo(ad) : ad.compareTo(bd);
-              });
-
-            return _VehicleOutLogCard(
-              group: group,
-              logs: sortedLogs,
-              newestFirst: newestFirst,
-              onSortChanged: (value) {
-                setState(() {
-                  _newestFirstByVehicle[group.key] = value;
-                });
-              },
-            );
-          },
-        ),
-      ],
+        itemBuilder: (context, index) {
+          final group = groups[index];
+          final expanded = _expandedVehicleKey == group.key;
+          final newestFirst = _newestFirstByVehicle[group.key] ?? true;
+          final sortedLogs = List<_PlateOutLogEntry>.from(group.logs)
+            ..sort((a, b) => _compareDates(a, b, newestFirst));
+          return _VehicleOutLogManagementRow(
+            group: group,
+            logs: sortedLogs,
+            expanded: expanded,
+            newestFirst: newestFirst,
+            onTap: () => _toggleExpanded(group.key),
+            onSortChanged: (value) => _setSort(group.key, value),
+          );
+        },
+      ),
     );
+  }
+
+  int _compareDates(
+    _PlateOutLogEntry a,
+    _PlateOutLogEntry b,
+    bool newestFirst,
+  ) {
+    final ad = a.departureCompletedAt;
+    final bd = b.departureCompletedAt;
+    if (ad == null && bd == null) return 0;
+    if (ad == null) return newestFirst ? 1 : -1;
+    if (bd == null) return newestFirst ? -1 : 1;
+    return newestFirst ? bd.compareTo(ad) : ad.compareTo(bd);
+  }
+
+  void _toggleExpanded(String key) {
+    HapticFeedback.selectionClick();
+    final next = _expandedVehicleKey == key ? null : key;
+    setState(() => _expandedVehicleKey = next);
+    final message =
+        'plate_out_log_vehicle_toggle key=$key expanded=${next == key} presentation=ops_management_row';
+    widget.trace.log(message);
+    debugPrint('[PlateOutLogManagement] $message');
+  }
+
+  void _setSort(String key, bool newestFirst) {
+    HapticFeedback.selectionClick();
+    setState(() => _newestFirstByVehicle[key] = newestFirst);
+    final message =
+        'plate_out_log_sort_changed key=$key newestFirst=$newestFirst presentation=ops_management_row';
+    widget.trace.log(message);
+    debugPrint('[PlateOutLogManagement] $message');
   }
 
   List<_VehicleOutLogGroup> _buildVehicleGroups(
@@ -100,18 +103,14 @@ class _PlateOutLogSearchResultsState extends State<PlateOutLogSearchResults> {
           _stringValue(data, const ['plateNumber', 'plate_number']) ??
               _plateNumberFromDocId(plateDocId);
       final area = _stringValue(data, const ['area']) ?? '-';
-      final fourDigit =
-          _stringValue(data, const ['plate_four_digit']) ?? _lastFourDigits(plateNumber);
       final key = plateDocId.isNotEmpty ? plateDocId : '$plateNumber|$area';
 
       final group = byVehicle.putIfAbsent(
         key,
         () => _VehicleOutLogGroup(
           key: key,
-          plateDocId: plateDocId,
           plateNumber: plateNumber,
           area: area,
-          fourDigit: fourDigit,
           logs: <_PlateOutLogEntry>[],
         ),
       );
@@ -188,11 +187,7 @@ class _PlateOutLogSearchResultsState extends State<PlateOutLogSearchResults> {
         _boolValue(data, const ['lastSectorDataValid']) ??
         true;
 
-    final logKey = _stringValue(log, const ['logKey']) ??
-        '${item.path}|${_safeToken(completedAt)}|${paymentMethod ?? ''}|${lockedFeeAmount ?? ''}';
-
     return _PlateOutLogEntry(
-      logKey: logKey,
       departureCompletedAt: completedAt,
       departureCompletedDateText:
           _stringValue(log, const ['departureCompletedDate']),
@@ -209,8 +204,6 @@ class _PlateOutLogSearchResultsState extends State<PlateOutLogSearchResults> {
       sectorDataValid: sectorDataValid,
     );
   }
-
-  String _safeToken(DateTime? dateTime) => dateTime?.toIso8601String() ?? 'unknown';
 
   String? _stringValue(Map<dynamic, dynamic> data, List<String> keys) {
     for (final key in keys) {
@@ -279,53 +272,28 @@ class _PlateOutLogSearchResultsState extends State<PlateOutLogSearchResults> {
   }
 
   String _plateNumberFromDocId(String docId) {
-    final idx = docId.indexOf('_');
-    if (idx <= 0) return docId;
-    return docId.substring(0, idx);
-  }
-
-  String _lastFourDigits(String plateNumber) {
-    final key = plateNumber.replaceAll('-', '').replaceAll(' ', '').trim();
-    if (key.length <= 4) return key;
-    return key.substring(key.length - 4);
+    final index = docId.indexOf('_');
+    if (index <= 0) return docId;
+    return docId.substring(0, index);
   }
 }
 
 class _VehicleOutLogGroup {
-  final String key;
-  final String plateDocId;
-  final String plateNumber;
-  final String area;
-  final String fourDigit;
-  final List<_PlateOutLogEntry> logs;
-
   _VehicleOutLogGroup({
     required this.key,
-    required this.plateDocId,
     required this.plateNumber,
     required this.area,
-    required this.fourDigit,
     required this.logs,
   });
+
+  final String key;
+  final String plateNumber;
+  final String area;
+  final List<_PlateOutLogEntry> logs;
 }
 
 class _PlateOutLogEntry {
-  final String logKey;
-  final DateTime? departureCompletedAt;
-  final String? departureCompletedDateText;
-  final String? departureCompletedTimeText;
-  final String? paymentMethod;
-  final int? lockedFeeAmount;
-  final String? reason;
-  final String? customStatus;
-  final bool sectorEnabled;
-  final String? sectorId;
-  final String? sectorName;
-  final bool sectorAssigned;
-  final bool sectorDataValid;
-
   const _PlateOutLogEntry({
-    required this.logKey,
     required this.departureCompletedAt,
     required this.departureCompletedDateText,
     required this.departureCompletedTimeText,
@@ -339,557 +307,389 @@ class _PlateOutLogEntry {
     required this.sectorAssigned,
     required this.sectorDataValid,
   });
+
+  final DateTime? departureCompletedAt;
+  final String? departureCompletedDateText;
+  final String? departureCompletedTimeText;
+  final String? paymentMethod;
+  final int? lockedFeeAmount;
+  final String? reason;
+  final String? customStatus;
+  final bool sectorEnabled;
+  final String? sectorId;
+  final String? sectorName;
+  final bool sectorAssigned;
+  final bool sectorDataValid;
 }
 
-class _VehicleOutLogCard extends StatelessWidget {
-  final _VehicleOutLogGroup group;
-  final List<_PlateOutLogEntry> logs;
-  final bool newestFirst;
-  final ValueChanged<bool> onSortChanged;
-
-  const _VehicleOutLogCard({
+class _VehicleOutLogManagementRow extends StatelessWidget {
+  const _VehicleOutLogManagementRow({
     required this.group,
     required this.logs,
+    required this.expanded,
     required this.newestFirst,
+    required this.onTap,
     required this.onSortChanged,
   });
 
+  final _VehicleOutLogGroup group;
+  final List<_PlateOutLogEntry> logs;
+  final bool expanded;
+  final bool newestFirst;
+  final VoidCallback onTap;
+  final ValueChanged<bool> onSortChanged;
+
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final tokens = CommonUiTheme.of(context);
+    final textTheme = Theme.of(context).textTheme;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final latest = logs.isEmpty ? null : logs.first;
+    final latestText = latest == null ? '출차 시각 없음' : _entryTime(latest);
 
-    return Container(
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: cs.outlineVariant.withOpacity(0.9)),
-        boxShadow: [
-          BoxShadow(
-            color: cs.shadow.withOpacity(0.07),
-            blurRadius: 18,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
+    return Semantics(
+      button: true,
+      selected: expanded,
+      label: '${group.plateNumber}, 출차 로그 ${logs.length}건, $latestText',
+      child: OpsDockSelectableRowSurface(
+        selected: expanded,
+        selectionColor: tokens.accent,
+        selectedContainer: tokens.accentContainer,
+        onTap: onTap,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 46,
-                  height: 46,
+                AnimatedContainer(
+                  duration:
+                      reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                  width: 8,
+                  height: 8,
                   decoration: BoxDecoration(
-                    color: cs.primaryContainer,
-                    borderRadius: BorderRadius.circular(17),
-                  ),
-                  child: Icon(
-                    Icons.receipt_long_outlined,
-                    color: cs.onPrimaryContainer,
-                    size: 24,
+                    shape: BoxShape.circle,
+                    color: tokens.info,
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        group.plateNumber,
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w900,
-                          color: cs.onSurface,
-                          letterSpacing: -0.2,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            _SortSegment(
-              newestFirst: newestFirst,
-              onChanged: onSortChanged,
-            ),
-            const SizedBox(height: 12),
-            ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: logs.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 10),
-              itemBuilder: (context, index) {
-                return _OutLogEntryCard(entry: logs[index]);
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SortSegment extends StatelessWidget {
-  final bool newestFirst;
-  final ValueChanged<bool> onChanged;
-
-  const _SortSegment({
-    required this.newestFirst,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest.withOpacity(0.55),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: cs.outlineVariant.withOpacity(0.8)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: _SortOption(
-              selected: newestFirst,
-              label: '최신 순',
-              icon: Icons.south_rounded,
-              onTap: () => onChanged(true),
-            ),
-          ),
-          Expanded(
-            child: _SortOption(
-              selected: !newestFirst,
-              label: '오래된 순',
-              icon: Icons.north_rounded,
-              onTap: () => onChanged(false),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SortOption extends StatelessWidget {
-  final bool selected;
-  final String label;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  const _SortOption({
-    required this.selected,
-    required this.label,
-    required this.icon,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(999),
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          curve: Curves.easeOut,
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          decoration: BoxDecoration(
-            color: selected ? cs.primary : Colors.transparent,
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                icon,
-                size: 15,
-                color: selected ? cs.onPrimary : cs.onSurfaceVariant,
-              ),
-              const SizedBox(width: 5),
-              Text(
-                label,
-                style: TextStyle(
-                  color: selected ? cs.onPrimary : cs.onSurfaceVariant,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _OutLogEntryCard extends StatelessWidget {
-  final _PlateOutLogEntry entry;
-
-  const _OutLogEntryCard({required this.entry});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final currency = NumberFormat('#,###');
-    final dateText = _dateTitle(entry);
-    final timeText = _timeText(entry);
-    final feeText = entry.lockedFeeAmount == null
-        ? '-'
-        : '${currency.format(entry.lockedFeeAmount)}원';
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(19),
-        border: Border.all(color: cs.outlineVariant.withOpacity(0.72)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: cs.tertiaryContainer.withOpacity(0.86),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(
-                  Icons.event_available_rounded,
-                  color: cs.onTertiaryContainer,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      dateText,
-                      style: TextStyle(
-                        color: cs.onSurface,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: -0.2,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      '$timeText · 출차 정산 기록',
-                      style: TextStyle(
-                        color: cs.onSurfaceVariant,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          if (entry.sectorEnabled) ...[
-            const SizedBox(height: 13),
-            _SectorPriorityCard(entry: entry),
-          ],
-          const SizedBox(height: 13),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-            decoration: BoxDecoration(
-              color: cs.surface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: cs.outlineVariant.withOpacity(0.62)),
-            ),
-            child: Row(
-              children: [
-                _PaymentMethodChip(text: _safeText(entry.paymentMethod)),
-                const SizedBox(width: 10),
+                const SizedBox(width: 7),
                 Expanded(
                   child: Text(
-                    feeText,
-                    textAlign: TextAlign.right,
-                    style: TextStyle(
-                      color: cs.primary,
-                      fontSize: 19,
+                    group.plateNumber,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: tokens.textPrimary,
                       fontWeight: FontWeight.w900,
-                      letterSpacing: -0.3,
+                      letterSpacing: -.1,
                     ),
                   ),
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          _DetailCard(
-            label: 'reason',
-            value: _safeText(entry.reason),
-            icon: Icons.notes_rounded,
-          ),
-          const SizedBox(height: 8),
-          _DetailCard(
-            label: '상태 메모',
-            value: _safeText(entry.customStatus),
-            icon: Icons.sticky_note_2_outlined,
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _dateTitle(_PlateOutLogEntry entry) {
-    final date = entry.departureCompletedAt;
-    if (date != null) {
-      return '${date.year}년 ${date.month}월 ${date.day}일';
-    }
-
-    final raw = entry.departureCompletedDateText?.trim();
-    if (raw == null || raw.isEmpty) return '날짜 없음';
-
-    final parsed = DateTime.tryParse(raw);
-    if (parsed != null) {
-      return '${parsed.year}년 ${parsed.month}월 ${parsed.day}일';
-    }
-
-    return raw;
-  }
-
-  String _timeText(_PlateOutLogEntry entry) {
-    final date = entry.departureCompletedAt;
-    if (date != null) {
-      return DateFormat('HH:mm:ss').format(date);
-    }
-
-    final raw = entry.departureCompletedTimeText?.trim();
-    if (raw == null || raw.isEmpty) return '시간 없음';
-    return raw;
-  }
-
-  String _safeText(String? text) {
-    final value = text?.trim();
-    if (value == null || value.isEmpty) return '-';
-    return value;
-  }
-}
-
-class _SectorPriorityCard extends StatelessWidget {
-  final _PlateOutLogEntry entry;
-
-  const _SectorPriorityCard({required this.entry});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final reduceMotion =
-        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    final value = !entry.sectorDataValid
-        ? '데이터 확인 필요'
-        : entry.sectorAssigned
-            ? entry.sectorName?.trim().isNotEmpty == true
-                ? entry.sectorName!.trim()
-                : '미지정'
-            : '미지정';
-
-    return AnimatedContainer(
-      duration: reduceMotion ? Duration.zero : const Duration(milliseconds: 220),
-      curve: Curves.easeOutCubic,
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-      decoration: BoxDecoration(
-        color: entry.sectorDataValid
-            ? cs.primaryContainer.withOpacity(.62)
-            : cs.errorContainer.withOpacity(.62),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: entry.sectorDataValid
-              ? cs.primary.withOpacity(.34)
-              : cs.error.withOpacity(.42),
-        ),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            Icons.grid_view_rounded,
-            size: 19,
-            color: entry.sectorDataValid
-                ? cs.onPrimaryContainer
-                : cs.onErrorContainer,
-          ),
-          const SizedBox(width: 9),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+                const SizedBox(width: 6),
                 Text(
-                  '방문 구역',
-                  style: TextStyle(
-                    color: entry.sectorDataValid
-                        ? cs.onPrimaryContainer.withOpacity(.78)
-                        : cs.onErrorContainer.withOpacity(.78),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                AnimatedSwitcher(
-                  duration: reduceMotion
-                      ? Duration.zero
-                      : const Duration(milliseconds: 210),
-                  switchInCurve: Curves.easeOutCubic,
-                  switchOutCurve: Curves.easeInCubic,
-                  transitionBuilder: (child, animation) {
-                    final offset = Tween<Offset>(
-                      begin: const Offset(0, .12),
-                      end: Offset.zero,
-                    ).animate(animation);
-                    return FadeTransition(
-                      opacity: animation,
-                      child: SlideTransition(position: offset, child: child),
-                    );
-                  },
-                  child: Text(
-                    value,
-                    key: ValueKey<String>(value),
-                    style: TextStyle(
-                      color: entry.sectorDataValid
-                          ? cs.onPrimaryContainer
-                          : cs.onErrorContainer,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (entry.sectorId?.trim().isNotEmpty == true)
-            Text(
-              entry.sectorId!.trim(),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: entry.sectorDataValid
-                    ? cs.onPrimaryContainer.withOpacity(.68)
-                    : cs.onErrorContainer.withOpacity(.68),
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PaymentMethodChip extends StatelessWidget {
-  final String text;
-
-  const _PaymentMethodChip({required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        color: cs.secondaryContainer.withOpacity(0.86),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.credit_card_rounded,
-            size: 14,
-            color: cs.onSecondaryContainer,
-          ),
-          const SizedBox(width: 5),
-          Text(
-            text,
-            style: TextStyle(
-              color: cs.onSecondaryContainer,
-              fontSize: 12,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DetailCard extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-
-  const _DetailCard({
-    required this.label,
-    required this.value,
-    required this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(11),
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: cs.outlineVariant.withOpacity(0.55)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 17, color: cs.onSurfaceVariant),
-          const SizedBox(width: 9),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: cs.onSurfaceVariant,
-                    fontSize: 11,
+                  '로그 ${logs.length}건',
+                  style: textTheme.labelSmall?.copyWith(
+                    color: tokens.info,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
-                const SizedBox(height: 4),
-                SelectableText(
-                  value,
-                  style: TextStyle(
-                    color: cs.onSurface,
-                    fontSize: 13,
-                    height: 1.28,
-                    fontWeight: FontWeight.w700,
+                const SizedBox(width: 5),
+                AnimatedRotation(
+                  duration:
+                      reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                  curve: CommonUiMotion.standard,
+                  turns: expanded ? .25 : 0,
+                  child: Icon(
+                    Icons.chevron_right_rounded,
+                    size: 18,
+                    color: expanded ? tokens.accent : tokens.iconSecondary,
                   ),
                 ),
               ],
             ),
+            const SizedBox(height: 5),
+            Text(
+              '${group.area} · $latestText',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: textTheme.labelMedium?.copyWith(
+                color: tokens.textSecondary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            if (expanded) ...[
+              const SizedBox(height: 9),
+              Container(height: 1, color: tokens.borderSubtle),
+              const SizedBox(height: 7),
+              _LogSortControls(
+                newestFirst: newestFirst,
+                reduceMotion: reduceMotion,
+                onChanged: onSortChanged,
+              ),
+              const SizedBox(height: 6),
+              for (int index = 0; index < logs.length; index++) ...[
+                if (index > 0)
+                  Divider(
+                    height: 13,
+                    thickness: 1,
+                    color: tokens.borderSubtle,
+                  ),
+                _OutLogManagementEntry(entry: logs[index]),
+              ],
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _entryTime(_PlateOutLogEntry entry) {
+    final date = entry.departureCompletedAt;
+    if (date != null) return DateFormat('MM.dd HH:mm').format(date.toLocal());
+    final rawDate = entry.departureCompletedDateText?.trim();
+    final rawTime = entry.departureCompletedTimeText?.trim();
+    if (rawDate?.isNotEmpty == true && rawTime?.isNotEmpty == true) {
+      return '$rawDate $rawTime';
+    }
+    if (rawDate?.isNotEmpty == true) return rawDate!;
+    if (rawTime?.isNotEmpty == true) return rawTime!;
+    return '출차 시각 없음';
+  }
+}
+
+class _LogSortControls extends StatelessWidget {
+  const _LogSortControls({
+    required this.newestFirst,
+    required this.reduceMotion,
+    required this.onChanged,
+  });
+
+  final bool newestFirst;
+  final bool reduceMotion;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: _LogSortAction(
+            selected: newestFirst,
+            label: '최신 순',
+            icon: Icons.south_rounded,
+            reduceMotion: reduceMotion,
+            onTap: () => onChanged(true),
           ),
-        ],
+        ),
+        const SizedBox(width: 5),
+        Expanded(
+          child: _LogSortAction(
+            selected: !newestFirst,
+            label: '오래된 순',
+            icon: Icons.north_rounded,
+            reduceMotion: reduceMotion,
+            onTap: () => onChanged(false),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _LogSortAction extends StatefulWidget {
+  const _LogSortAction({
+    required this.selected,
+    required this.label,
+    required this.icon,
+    required this.reduceMotion,
+    required this.onTap,
+  });
+
+  final bool selected;
+  final String label;
+  final IconData icon;
+  final bool reduceMotion;
+  final VoidCallback onTap;
+
+  @override
+  State<_LogSortAction> createState() => _LogSortActionState();
+}
+
+class _LogSortActionState extends State<_LogSortAction> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    final textTheme = Theme.of(context).textTheme;
+    final foreground =
+        widget.selected ? tokens.accent : tokens.textSecondary;
+
+    return Semantics(
+      button: true,
+      selected: widget.selected,
+      label: widget.label,
+      child: AnimatedScale(
+        duration: widget.reduceMotion ? Duration.zero : CommonUiMotion.press,
+        curve: CommonUiMotion.enter,
+        scale: _pressed ? .97 : 1,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(CommonUiShapes.control),
+            onTap: widget.onTap,
+            onHighlightChanged: (value) {
+              if (!mounted) return;
+              setState(() => _pressed = value);
+            },
+            child: AnimatedContainer(
+              duration: widget.reduceMotion
+                  ? Duration.zero
+                  : CommonUiMotion.selection,
+              curve: CommonUiMotion.standard,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+              decoration: BoxDecoration(
+                color: widget.selected
+                    ? tokens.accentContainer.withOpacity(.58)
+                    : tokens.surfaceOverlay.withOpacity(.36),
+                borderRadius: BorderRadius.circular(CommonUiShapes.control),
+                border: Border.all(
+                  color: widget.selected
+                      ? tokens.accent.withOpacity(.32)
+                      : tokens.borderSubtle,
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(widget.icon, size: 14, color: foreground),
+                  const SizedBox(width: 4),
+                  Flexible(
+                    child: Text(
+                      widget.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: textTheme.labelSmall?.copyWith(
+                        color: foreground,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
 }
 
+class _OutLogManagementEntry extends StatelessWidget {
+  const _OutLogManagementEntry({required this.entry});
+
+  final _PlateOutLogEntry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    final textTheme = Theme.of(context).textTheme;
+    final fee = entry.lockedFeeAmount == null
+        ? '정산 금액 -'
+        : '정산 ₩${NumberFormat('#,###', 'ko_KR').format(entry.lockedFeeAmount)}';
+    final payment = _safeText(entry.paymentMethod, fallback: '결제 수단 없음');
+    final sector = _sectorText(entry);
+    final notes = <String>[
+      if ((entry.reason ?? '').trim().isNotEmpty) (entry.reason ?? '').trim(),
+      if ((entry.customStatus ?? '').trim().isNotEmpty)
+        (entry.customStatus ?? '').trim(),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                _dateTimeText(entry),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: textTheme.labelMedium?.copyWith(
+                  color: tokens.textPrimary,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              fee,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: textTheme.labelSmall?.copyWith(
+                color: tokens.success,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 3),
+        Text(
+          '$sector · $payment',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: textTheme.labelSmall?.copyWith(
+            color: entry.sectorDataValid
+                ? tokens.textSecondary
+                : tokens.danger,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        if (notes.isNotEmpty) ...[
+          const SizedBox(height: 3),
+          Text(
+            notes.join(' · '),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: textTheme.labelSmall?.copyWith(
+              color: tokens.textSecondary,
+              fontWeight: FontWeight.w700,
+              height: 1.25,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  String _dateTimeText(_PlateOutLogEntry entry) {
+    final date = entry.departureCompletedAt;
+    if (date != null) {
+      return DateFormat('yyyy.MM.dd HH:mm:ss').format(date.toLocal());
+    }
+    final rawDate = entry.departureCompletedDateText?.trim();
+    final rawTime = entry.departureCompletedTimeText?.trim();
+    final parts = <String>[
+      if (rawDate?.isNotEmpty == true) rawDate!,
+      if (rawTime?.isNotEmpty == true) rawTime!,
+    ];
+    return parts.isEmpty ? '출차 시각 없음' : parts.join(' ');
+  }
+
+  String _sectorText(_PlateOutLogEntry entry) {
+    if (!entry.sectorEnabled) return '방문 구역 미사용';
+    if (!entry.sectorDataValid) return '방문 구역 데이터 확인 필요';
+    if (!entry.sectorAssigned) return '방문 구역 미지정';
+    final name = entry.sectorName?.trim();
+    if (name?.isNotEmpty == true) return name!;
+    final id = entry.sectorId?.trim();
+    if (id?.isNotEmpty == true) return id!;
+    return '방문 구역 미지정';
+  }
+
+  String _safeText(String? value, {required String fallback}) {
+    final text = value?.trim();
+    if (text == null || text.isEmpty) return fallback;
+    return text;
+  }
+}

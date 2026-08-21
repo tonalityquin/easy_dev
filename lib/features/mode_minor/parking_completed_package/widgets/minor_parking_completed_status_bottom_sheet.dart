@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../app/utils/snackbar_helper.dart';
 
 import '../../../account/applications/user_state.dart';
 import '../../../dev/application/area_state.dart';
@@ -16,7 +17,7 @@ import '../../../../shared/plate/domain/enums/plate_type.dart';
 import '../../../../shared/plate/domain/models/plate_log_model.dart';
 import '../../../../shared/plate/domain/models/plate_model.dart';
 import '../../../../shared/plate/domain/repositories/plate_repository.dart';
-import '../../../../shared/plate/widgets/log_viewer_bottom_sheet.dart';
+import '../../../../shared/plate/widgets/plate_log_side_dock.dart';
 import '../../../../shared/plate/widgets/parking_completed_common_dialog.dart';
 import '../../../../shared/plate/widgets/parking_completed_status_widgets.dart';
 import '../../../../shared/real_time_table/real_time_table_spec.dart';
@@ -30,6 +31,8 @@ Future<void> showMinorParkingCompletedStatusSideDockFromRealtime({
   required BuildContext context,
   required RealTimePlateDetailRequest request,
 }) async {
+  PlateLogSideDockRequest? logRequest;
+  PlateBillingSideDockRequest? billingRequest;
   await showParkingStatusLoadingSideDock<bool>(
     context: context,
     mode: '마이너',
@@ -40,24 +43,95 @@ Future<void> showMinorParkingCompletedStatusSideDockFromRealtime({
     location: request.location,
     cachedPlate: request.cachedPlate,
     loadPlate: request.loadPlate,
+    finalizeTrace: false,
+    onClosed: (trace, _) async {
+      final requestedBilling = billingRequest;
+      if (requestedBilling != null && context.mounted) {
+        trace.log(
+          'realtime_status_billing_handoff sourceDock=parking_status targetDock=plate_billing handoffPolicy=close_then_open overlayStacking=false plate=${requestedBilling.plate.plateNumber}',
+          progress: .52,
+        );
+        final billedPlate = await showPlateBillingSideDock(
+          context: context,
+          request: requestedBilling,
+        );
+        if (!context.mounted) return;
+        if (billedPlate != null && requestedBilling.onAfterSuccess != null) {
+          try {
+            await requestedBilling.onAfterSuccess!(billedPlate);
+            if (!requestedBilling.reopenStatusAfterSuccess) {
+              await trace.succeed('실시간 상태 처리에서 정산 후 요청된 상태 변경까지 완료했습니다.');
+              return;
+            }
+          } catch (error) {
+            trace.log(
+              'realtime_status_billing_after_success_failed plate=${billedPlate.plateNumber} error=$error reopenStatus=true',
+              progress: .66,
+            );
+          }
+        }
+        final reopenPlate = billedPlate ?? requestedBilling.plate;
+        await trace.succeed('실시간 상태 처리에서 정산 후 상태 Side Dock을 다시 엽니다.');
+        if (!context.mounted) return;
+        await showMinorParkingCompletedStatusBottomSheet(
+          context: context,
+          plate: reopenPlate,
+          onRequestEntry: (traceLog) async {
+            final activeArea = context.read<AreaState>().currentArea;
+            await handleParkingCompletedEntryRequest(
+              context,
+              reopenPlate.plateNumber,
+              activeArea,
+              traceLog: traceLog,
+            );
+          },
+          onDelete: () => _showDeleteDialog(context, reopenPlate),
+        );
+        return;
+      }
+
+      final requestedLog = logRequest;
+      if (requestedLog != null && context.mounted) {
+        trace.log(
+          'realtime_status_log_handoff sourceDock=parking_status targetDock=plate_log handoffPolicy=close_then_open overlayStacking=false plate=${requestedLog.plateNumber}',
+          progress: .94,
+        );
+        await trace.succeed('실시간 상태 처리에서 로그 Side Dock으로 handoff합니다.');
+        await showPlateLogSideDock(
+          context: context,
+          request: requestedLog,
+        );
+      } else {
+        await trace.succeed('실시간 상태 처리 세션이 종료되었습니다.');
+        if (trace.developerMode && context.mounted) {
+          await trace.showStatusDialog(context);
+        }
+      }
+    },
     barrierDismissible: false,
-    loadedBuilder: (dockContext, plate) {
+    loadedBuilder: (dockContext, loadedPlate) {
       final division = dockContext.read<UserState>().division;
       final area = dockContext.read<AreaState>().currentArea;
       return _StatusSideDockContent(
-        plate: plate,
-        plateNumber: plate.plateNumber,
+        plate: loadedPlate,
+        plateNumber: loadedPlate.plateNumber,
         division: division,
         area: area,
         onRequestEntry: (traceLog) async {
           await handleParkingCompletedEntryRequest(
             dockContext,
-            plate.plateNumber,
+            loadedPlate.plateNumber,
             area,
             traceLog: traceLog,
           );
         },
-        onDelete: () => _showDeleteDialog(dockContext, plate),
+        onDelete: () => _showDeleteDialog(dockContext, loadedPlate),
+        onLogRequested: (value) {
+          logRequest = value;
+        },
+        onBillingRequested: (value) {
+          billingRequest = value;
+        },
       );
     },
   );
@@ -99,21 +173,16 @@ Future<bool?> showMinorParkingCompletedStatusBottomSheet({
   required Future<void> Function(MovementPlateTraceLog? traceLog) onRequestEntry,
   required Future<bool> Function() onDelete,
 }) async {
-  final plateNumber = plate.plateNumber;
   final division = context.read<UserState>().division;
   final area = context.read<AreaState>().currentArea;
-  final plateType = plate.typeEnum;
-  final statusTitle = plateType == PlateType.parkingRequests
-      ? '입차 요청 상태 처리'
-      : plateType == PlateType.departureRequests
-          ? '출차 요청 상태 처리'
-          : '입차 완료 상태 처리';
+  var currentPlate = plate;
+  final initialStatusTitle = plate.typeEnum == PlateType.parkingRequests ? '입차 요청 상태 처리' : plate.typeEnum == PlateType.departureRequests ? '출차 요청 상태 처리' : '입차 완료 상태 처리';
 
   final trace = await traceParkingStatusSectorSummary(
     context: context,
     mode: '마이너',
-    statusTitle: statusTitle,
-    plateNumber: plateNumber,
+    statusTitle: initialStatusTitle,
+    plateNumber: plate.plateNumber,
     area: plate.area,
     sectorId: plate.sectorId ?? '',
     sectorName: plate.sectorName ?? '',
@@ -121,23 +190,97 @@ Future<bool?> showMinorParkingCompletedStatusBottomSheet({
   if (!context.mounted) return null;
 
   trace.log(
-    'presentation=right_side_dock direction=right_to_left management=left_rail footer=status_change_only plate=$plateNumber area=$area status=$statusTitle',
+    'presentation=right_side_dock direction=right_to_left management=left_rail footer=status_change_only plate=${plate.plateNumber} area=$area status=$initialStatusTitle',
     progress: .16,
   );
 
-  return showParkingStatusSideDock<bool>(
-    trace: trace,
-    context: context,
-    barrierDismissible: false,
-    builder: (_) => _StatusSideDockContent(
-      plate: plate,
-      plateNumber: plateNumber,
-      division: division,
-      area: area,
-      onRequestEntry: onRequestEntry,
-      onDelete: onDelete,
-    ),
-  );
+  while (context.mounted) {
+    PlateLogSideDockRequest? logRequest;
+    PlateBillingSideDockRequest? billingRequest;
+    final currentStatusTitle = currentPlate.typeEnum == PlateType.parkingRequests ? '입차 요청 상태 처리' : currentPlate.typeEnum == PlateType.departureRequests ? '출차 요청 상태 처리' : '입차 완료 상태 처리';
+    final result = await showParkingStatusSideDock<bool>(
+      trace: trace,
+      context: context,
+      finalizeTrace: false,
+      barrierDismissible: false,
+      builder: (_) => _StatusSideDockContent(
+        plate: currentPlate,
+        plateNumber: currentPlate.plateNumber,
+        division: division,
+        area: area,
+        onRequestEntry: onRequestEntry,
+        onDelete: onDelete,
+        onLogRequested: (request) {
+          logRequest = request;
+        },
+        onBillingRequested: (request) {
+          billingRequest = request;
+        },
+      ),
+    );
+
+    final requestedBilling = billingRequest;
+    if (requestedBilling != null && context.mounted) {
+      trace.log(
+        'status_billing_handoff sourceDock=parking_status targetDock=plate_billing handoffPolicy=close_then_open overlayStacking=false plate=${requestedBilling.plate.plateNumber} status=$currentStatusTitle',
+        progress: .52,
+      );
+      final billedPlate = await showPlateBillingSideDock(
+        context: context,
+        request: requestedBilling,
+      );
+      if (!context.mounted) return result;
+      if (billedPlate != null && requestedBilling.onAfterSuccess != null) {
+        try {
+          trace.log(
+            'status_billing_after_success_started plate=${billedPlate.plateNumber} reopenStatus=${requestedBilling.reopenStatusAfterSuccess}',
+            progress: .6,
+          );
+          await requestedBilling.onAfterSuccess!(billedPlate);
+          trace.log(
+            'status_billing_after_success_completed plate=${billedPlate.plateNumber}',
+            progress: .68,
+          );
+          if (!requestedBilling.reopenStatusAfterSuccess) {
+            await trace.succeed('정산 완료 후 요청된 상태 변경까지 완료했습니다.');
+            return result;
+          }
+        } catch (error) {
+          trace.log(
+            'status_billing_after_success_failed plate=${billedPlate.plateNumber} error=$error reopenStatus=true',
+            progress: .66,
+          );
+        }
+      }
+      currentPlate = billedPlate ?? requestedBilling.plate;
+      trace.log(
+        'status_billing_return targetDock=parking_status result=${billedPlate == null ? "cancelled" : "completed"} plate=${currentPlate.plateNumber} settled=${currentPlate.isLockedFee}',
+        progress: .7,
+      );
+      continue;
+    }
+
+    final requestedLog = logRequest;
+    if (requestedLog != null && context.mounted) {
+      trace.log(
+        'status_log_handoff sourceDock=parking_status targetDock=plate_log handoffPolicy=close_then_open overlayStacking=false plate=${requestedLog.plateNumber}',
+        progress: .94,
+      );
+      await trace.succeed('상태 처리에서 로그 Side Dock으로 handoff합니다.');
+      await showPlateLogSideDock(
+        context: context,
+        request: requestedLog,
+      );
+      return result;
+    }
+
+    await trace.succeed('상태 처리 세션이 종료되었습니다.');
+    if (trace.developerMode && context.mounted) {
+      await trace.showStatusDialog(context);
+    }
+    return result;
+  }
+  return null;
 }
 
 class _StatusSideDockContent extends StatefulWidget {
@@ -148,6 +291,8 @@ class _StatusSideDockContent extends StatefulWidget {
     required this.area,
     required this.onRequestEntry,
     required this.onDelete,
+    required this.onLogRequested,
+    required this.onBillingRequested,
   });
 
   final PlateModel plate;
@@ -156,6 +301,8 @@ class _StatusSideDockContent extends StatefulWidget {
   final String area;
   final Future<void> Function(MovementPlateTraceLog? traceLog) onRequestEntry;
   final Future<bool> Function() onDelete;
+  final ValueChanged<PlateLogSideDockRequest> onLogRequested;
+  final ValueChanged<PlateBillingSideDockRequest> onBillingRequested;
 
   @override
   State<_StatusSideDockContent> createState() => _StatusSideDockContentState();
@@ -512,107 +659,96 @@ class _StatusSideDockContentState extends State<_StatusSideDockContent> {
     return v;
   }
 
-  Future<ParkingStatusDirectionalGearActionResult> _performPrebill() async {
-    final userName = context.read<UserState>().name;
-    final repo = context.read<PlateRepository>();
-    final plateState = context.read<MinorPlateState>();
-
-    final bt = (_plate.billingType ?? '').trim();
-    if (bt.isEmpty) {
+  Future<ParkingStatusDirectionalGearActionResult> _performPrebill({
+    bool continueDepartureAfterSuccess = false,
+  }) async {
+    if (!_billingApplicable) {
       parkingStatusTraceLog(
         context,
-        '사전 정산 중단 reason=billingType_empty plate=${_plate.plateNumber}',
+        'billing_action=blocked reason=not_applicable plate=${_plate.plateNumber}',
+      );
+      return ParkingStatusDirectionalGearActionResult.blocked;
+    }
+    if ((_plate.billingType ?? '').trim().isEmpty) {
+      parkingStatusTraceLog(
+        context,
+        'billing_action=blocked reason=billingType_empty plate=${_plate.plateNumber}',
       );
       return ParkingStatusDirectionalGearActionResult.blocked;
     }
 
-    final now = DateTime.now();
-    final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
-    final entryTime = _plate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
-
-    final result = await showOnTapBillingBottomSheet(
-      context: context,
-      entryTimeInSeconds: entryTime,
-      currentTimeInSeconds: currentTime,
-      basicStandard: _plate.basicStandard ?? 0,
-      basicAmount: _plate.basicAmount ?? 0,
-      addStandard: _plate.addStandard ?? 0,
-      addAmount: _plate.addAmount ?? 0,
-      billingType: _plate.billingType ?? '변동',
-      regularAmount: _plate.regularAmount,
-      regularDurationValue: _plate.regularDurationValue,
-      traceLog: (message) => parkingStatusTraceLog(context, message),
-    );
-    if (result == null) {
-      parkingStatusTraceLog(
-        context,
-        '사전 정산 취소 reason=user_cancel plate=${_plate.plateNumber}',
-      );
-      return ParkingStatusDirectionalGearActionResult.cancelled;
-    }
-
-    final updatedPlate = _plate.copyWith(
-      isLockedFee: true,
-      lockedAtTimeInSeconds: currentTime,
-      lockedFeeAmount: result.lockedFee,
-      paymentMethod: result.paymentMethod,
-    );
-
-    try {
-      await repo.settlePlateBilling(
-        documentId: _plate.id,
-        lockedAtTimeInSeconds: currentTime,
-        lockedFeeAmount: result.lockedFee,
-        paymentMethod: result.paymentMethod,
-        log: PlateLogModel(
-          action: '사전 정산',
-          area: _plate.area,
-          billingType: _plate.billingType,
-          from: _plate.type,
-          performedBy: userName,
-          plateNumber: _plate.plateNumber,
-          timestamp: now,
-          to: _plate.type,
-          type: _plate.type,
-          lockedFee: result.lockedFee,
+    final plateSnapshot = _plate;
+    final userName = context.read<UserState>().name;
+    final repo = context.read<PlateRepository>();
+    final plateState = context.read<MinorPlateState>();
+    final movementPlate = continueDepartureAfterSuccess
+        ? context.read<MovementPlate>()
+        : null;
+    final effectiveLocation = _effectiveLocation;
+    final documentId = plateSnapshot.id.trim().isNotEmpty ? plateSnapshot.id.trim() : resolveParkingCompletedDocId(plateSnapshot);
+    final request = PlateBillingSideDockRequest(
+      plate: plateSnapshot,
+      source: 'minor_parking_completed_status',
+      reopenStatusAfterSuccess: !continueDepartureAfterSuccess,
+      onAfterSuccess: continueDepartureAfterSuccess
+          ? (updatedPlate) async {
+              await movementPlate!.setDepartureCompletedDirectFromParkingCompleted(
+                updatedPlate.plateNumber,
+                updatedPlate.area,
+                effectiveLocation,
+              );
+            }
+          : null,
+      onSubmit: (result) async {
+        final now = DateTime.now();
+        final settledAt = now.toUtc().millisecondsSinceEpoch ~/ 1000;
+        final fallbackPlate = plateSnapshot.copyWith(
+          isLockedFee: true,
+          lockedAtTimeInSeconds: settledAt,
+          lockedFeeAmount: result.lockedFee,
           paymentMethod: result.paymentMethod,
-          reason: result.reason,
-        ),
-      );
-      reportParkingCompletedDbSafe(
-        area: _plate.area,
-        action: 'write',
-        source: 'parkingCompletedStatus.prebill.repo.settlePlateBilling',
-        n: 1,
-      );
-
-      final refreshedPlate = await repo.getPlate(_plate.id) ?? updatedPlate;
-
-      await plateState.minorUpdatePlateLocally(
-        PlateType.parkingCompleted,
-        refreshedPlate,
-      );
-
-      if (!mounted) {
-        return ParkingStatusDirectionalGearActionResult.completed;
-      }
-      setState(() => _plate = refreshedPlate);
-      parkingStatusTraceLog(
-        context,
-        'billing_state_transition from=unsettled to=settled plate=${refreshedPlate.plateNumber}',
-      );
-      parkingStatusTraceLog(
-        context,
-        '사전 정산 완료 plate=${refreshedPlate.plateNumber} amount=${result.lockedFee} payment=${result.paymentMethod} firebaseWrite=true firebaseRead=true',
-      );
-      return ParkingStatusDirectionalGearActionResult.completed;
-    } catch (error) {
-      parkingStatusTraceLog(
-        context,
-        '사전 정산 실패 plate=${_plate.plateNumber} error=$error',
-      );
-      return ParkingStatusDirectionalGearActionResult.failed;
-    }
+        );
+        await repo.settlePlateBilling(
+          documentId: documentId,
+          lockedAtTimeInSeconds: settledAt,
+          lockedFeeAmount: result.lockedFee,
+          paymentMethod: result.paymentMethod,
+          log: PlateLogModel(
+            action: '사전 정산',
+            area: plateSnapshot.area,
+            billingType: plateSnapshot.billingType,
+            from: plateSnapshot.type,
+            performedBy: userName,
+            plateNumber: plateSnapshot.plateNumber,
+            timestamp: now,
+            to: plateSnapshot.type,
+            type: plateSnapshot.type,
+            lockedFee: result.lockedFee,
+            paymentMethod: result.paymentMethod,
+            reason: result.reason?.trim(),
+          ),
+        );
+        reportParkingCompletedDbSafe(
+          area: plateSnapshot.area,
+          action: 'write',
+          source: 'parkingCompletedStatus.prebill.repo.settlePlateBilling',
+          n: 1,
+        );
+        final refreshedPlate = await repo.getPlate(documentId) ?? fallbackPlate;
+        await plateState.minorUpdatePlateLocally(
+          PlateType.parkingCompleted,
+          refreshedPlate,
+        );
+        return refreshedPlate;
+      },
+    );
+    parkingStatusTraceLog(
+      context,
+      'billing_handoff_requested sourceDock=parking_status targetDock=plate_billing policy=close_then_open overlay=false continueDepartureAfterSuccess=$continueDepartureAfterSuccess plate=${plateSnapshot.plateNumber}',
+    );
+    widget.onBillingRequested(request);
+    Navigator.of(context).pop();
+    return ParkingStatusDirectionalGearActionResult.cancelled;
   }
 
   Future<void> _handlePrebill() async {
@@ -646,11 +782,10 @@ class _StatusSideDockContentState extends State<_StatusSideDockContent> {
       context,
       '사전 정산 취소 요청 plate=${_plate.plateNumber}',
     );
-    if (_drivingLocked) {
-      return;
-    }
+    if (_drivingLocked) return;
 
     await _runPrimary(() async {
+      final trace = parkingStatusTraceOf(context);
       final userName = context.read<UserState>().name;
       final repo = context.read<PlateRepository>();
       final plateState = context.read<MinorPlateState>();
@@ -663,29 +798,48 @@ class _StatusSideDockContentState extends State<_StatusSideDockContent> {
         return;
       }
 
+      final cancelledFee = _plate.lockedFeeAmount ?? 0;
+      final cancelledPayment = (_plate.paymentMethod ?? '').trim();
+      parkingStatusTraceLog(
+        context,
+        'billing_cancel_review_open plate=${_plate.plateNumber} lockedFee=$cancelledFee payment=${cancelledPayment.isEmpty ? "unrecorded" : cancelledPayment} reviewSeconds=3',
+        progress: .24,
+      );
       final confirm = await showCommonOverlayDialog<bool>(
         context: context,
-        builder: (_) => const ConfirmCancelFeeDialog(),
+        builder: (_) => ConfirmCancelFeeDialog(
+          plateNumber: _plate.plateNumber,
+          lockedFeeAmount: cancelledFee,
+          paymentMethod: cancelledPayment,
+          trace: trace,
+        ),
       );
       if (confirm != true) {
         parkingStatusTraceLog(
           context,
           '사전 정산 취소 중단 reason=user_cancel plate=${_plate.plateNumber}',
+          progress: .38,
         );
         return;
       }
 
       final now = DateTime.now();
+      final documentId = _plate.id;
       final updatedPlate = _plate.copyWith(
         isLockedFee: false,
         lockedAtTimeInSeconds: null,
         lockedFeeAmount: null,
         paymentMethod: null,
       );
+      parkingStatusTraceLog(
+        context,
+        'billing_cancel_persist_started plate=${_plate.plateNumber} documentId=$documentId lockedFee=$cancelledFee payment=${cancelledPayment.isEmpty ? "unrecorded" : cancelledPayment}',
+        progress: .56,
+      );
 
       try {
         await repo.cancelPlateBilling(
-          documentId: _plate.id,
+          documentId: documentId,
           log: PlateLogModel(
             action: '사전 정산 취소',
             area: _plate.area,
@@ -696,6 +850,8 @@ class _StatusSideDockContentState extends State<_StatusSideDockContent> {
             timestamp: now,
             to: _plate.type,
             type: _plate.type,
+            lockedFee: _plate.lockedFeeAmount,
+            paymentMethod: _plate.paymentMethod,
           ),
         );
         reportParkingCompletedDbSafe(
@@ -705,7 +861,7 @@ class _StatusSideDockContentState extends State<_StatusSideDockContent> {
           n: 1,
         );
 
-        final refreshedPlate = await repo.getPlate(_plate.id) ?? updatedPlate;
+        final refreshedPlate = await repo.getPlate(documentId) ?? updatedPlate;
 
         await plateState.minorUpdatePlateLocally(
           PlateType.parkingCompleted,
@@ -713,23 +869,55 @@ class _StatusSideDockContentState extends State<_StatusSideDockContent> {
         );
 
         if (!mounted) return;
-
         setState(() => _plate = refreshedPlate);
-          parkingStatusTraceLog(
+        HapticFeedback.mediumImpact();
+        parkingStatusTraceLog(
           context,
-          'billing_state_transition from=settled to=unsettled plate=${_plate.plateNumber}',
+          'billing_state_transition from=settled to=unsettled plate=${_plate.plateNumber} animation=status_morph_190_230',
+          progress: .86,
         );
         parkingStatusTraceLog(
           context,
-          '사전 정산 취소 완료 plate=${_plate.plateNumber} firebaseWrite=true firebaseRead=true',
+          '사전 정산 취소 완료 plate=${_plate.plateNumber} firebaseWrite=true firebaseRead=true previousLockedFee=$cancelledFee previousPayment=${cancelledPayment.isEmpty ? "unrecorded" : cancelledPayment}',
+          progress: .92,
         );
-      } catch (error) {
+        showSuccessSnackbar(
+          context,
+          '정산이 취소되었습니다. 다음 정산 시 요금이 다시 계산됩니다.',
+          useCommonUi: true,
+        );
+        if (trace?.developerMode == true && mounted) {
+          await trace!.showSnapshotStatusDialog(
+            context,
+            title: '정산 취소 완료',
+            description: '정산 취소가 완료되었습니다. debugPrint 로그를 확인하고 클립보드로 복사할 수 있습니다.',
+          );
+        }
+      } catch (error, stackTrace) {
         parkingStatusTraceLog(
           context,
           '사전 정산 취소 실패 plate=${_plate.plateNumber} error=$error',
+          progress: .72,
+        );
+        parkingStatusTraceLog(
+          context,
+          'billing_cancel_stacktrace $stackTrace',
         );
         if (!mounted) return;
-        return;
+        HapticFeedback.vibrate();
+        showFailedSnackbar(
+          context,
+          '정산 취소에 실패했습니다. 기존 정산은 유지됩니다.',
+          useCommonUi: true,
+        );
+        if (trace?.developerMode == true && mounted) {
+          await trace!.showSnapshotStatusDialog(
+            context,
+            title: '정산 취소 실패',
+            description: '정산 취소에 실패해 기존 정산이 유지됩니다. debugPrint 로그를 확인하고 클립보드로 복사할 수 있습니다.',
+            failure: true,
+          );
+        }
       }
     });
   }
@@ -1146,7 +1334,9 @@ class _StatusSideDockContentState extends State<_StatusSideDockContent> {
               context,
               'departure_request_gate=billing_open source=override plate=${_plate.plateNumber}',
             );
-            final billingResult = await _performPrebill();
+            final billingResult = await _performPrebill(
+                      continueDepartureAfterSuccess: true,
+                    );
             if (!mounted) {
               result = ParkingStatusDirectionalGearActionResult.cancelled;
               return;
@@ -1310,14 +1500,19 @@ class _StatusSideDockContentState extends State<_StatusSideDockContent> {
             debugAction: 'history',
             enabled: !_primaryBusy && !disableOthers,
             onPressed: () async {
-              await LogViewerBottomSheet.show(
-                context,
-                initialPlateNumber: widget.plateNumber,
-                division: widget.division,
+              if (!mounted) return;
+              final request = PlateLogSideDockRequest(
+                plateNumber: widget.plateNumber,
                 area: widget.area,
-                requestTime: _plate.requestTime,
                 plateId: _plate.id.trim().isEmpty ? null : _plate.id.trim(),
+                source: 'minor_parking_completed_status',
               );
+              parkingStatusTraceLog(
+                context,
+                'log_handoff_requested sourceDock=parking_status targetDock=plate_log policy=close_then_open overlay=false plate=${widget.plateNumber}',
+              );
+              widget.onLogRequested(request);
+              Navigator.of(context).pop();
             },
           ),
           if (_billingApplicable)

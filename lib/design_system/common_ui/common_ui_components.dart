@@ -768,9 +768,11 @@ class CommonDialogFrame extends StatefulWidget {
   const CommonDialogFrame({
     super.key,
     required this.child,
+    this.animate = true,
   });
 
   final Widget child;
+  final bool animate;
 
   @override
   State<CommonDialogFrame> createState() => _CommonDialogFrameState();
@@ -795,6 +797,10 @@ class _CommonDialogFrameState extends State<CommonDialogFrame>
     );
     _opacity = Tween<double>(begin: 0, end: 1).animate(curve);
     _scale = Tween<double>(begin: 0.96, end: 1).animate(curve);
+    if (!widget.animate) {
+      _controller.value = 1;
+      return;
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       if (MediaQuery.maybeOf(context)?.disableAnimations ?? false) {

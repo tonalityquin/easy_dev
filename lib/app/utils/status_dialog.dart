@@ -54,6 +54,7 @@ class StatusDialog {
     String? copyText,
     String copyButtonLabel = '전문 복사',
     bool useCommonUi = false,
+    bool awaitManualClose = false,
   }) async {
     if (!context.mounted) return;
 
@@ -112,7 +113,7 @@ class StatusDialog {
       },
     );
 
-    rootNavigator.push<void>(route);
+    final routeFuture = rootNavigator.push<void>(route);
 
     if (visibleDuration > Duration.zero) {
       await Future<void>.delayed(visibleDuration);
@@ -124,6 +125,8 @@ class StatusDialog {
           rootNavigator.removeRoute(route);
         }
       }
+    } else if (awaitManualClose) {
+      await routeFuture;
     }
 
     if (!context.mounted) return;
@@ -146,6 +149,7 @@ class StatusDialog {
     String copyButtonLabel = '전문 복사',
     Duration? visibleDuration,
     bool useCommonUi = false,
+    bool awaitManualClose = false,
   }) {
     final hasCopyText = copyText != null && copyText.trim().isNotEmpty;
 
@@ -164,6 +168,7 @@ class StatusDialog {
                   ? const Duration(milliseconds: 1200)
                   : const Duration(milliseconds: 2600)),
       useCommonUi: useCommonUi,
+      awaitManualClose: awaitManualClose,
     );
   }
 
@@ -176,6 +181,7 @@ class StatusDialog {
     String copyButtonLabel = '전문 복사',
     Duration? visibleDuration,
     bool useCommonUi = false,
+    bool awaitManualClose = false,
   }) {
     final hasCopyText = copyText != null && copyText.trim().isNotEmpty;
 
@@ -194,6 +200,7 @@ class StatusDialog {
                   ? const Duration(milliseconds: 1200)
                   : const Duration(milliseconds: 3200)),
       useCommonUi: useCommonUi,
+      awaitManualClose: awaitManualClose,
     );
   }
 

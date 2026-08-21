@@ -7,15 +7,14 @@ import 'package:provider/provider.dart';
 import '../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../app/utils/snackbar_helper.dart';
 import '../../../design_system/common_ui/common_ui_components.dart';
-import '../../../design_system/common_ui/common_ui_overlays.dart';
 import '../../../design_system/common_ui/common_ui_theme.dart';
+import '../../../shared/secondary/application/secondary_sector_workspace_state.dart';
 import '../../../shared/secondary/widgets/ops_console_dialogs.dart';
 import '../../../shared/secondary/widgets/ops_console_widgets.dart';
 import '../../../shared/secondary/widgets/secondary_debug_scope.dart';
 import '../../dev/application/area_state.dart';
 import '../applications/sector_state.dart';
 import '../domain/models/sector_model.dart';
-import 'sheets/sector_setting.dart';
 
 class SectorManagement extends StatefulWidget {
   const SectorManagement({super.key});
@@ -139,78 +138,6 @@ class _SectorManagementState extends State<SectorManagement> {
     }
   }
 
-  Future<bool> _saveSector({
-    required String name,
-    SectorModel? existing,
-  }) async {
-    final state = context.read<SectorState>();
-    final area = context.read<AreaState>().currentArea.trim();
-    final editing = existing != null;
-    final trace = await _startTrace(
-      title: editing ? '섹터 수정' : '섹터 등록',
-      initialMessage: editing
-          ? '선택한 섹터의 수정 요청을 확인하고 있습니다.'
-          : '새 섹터 등록 요청을 확인하고 있습니다.',
-    );
-
-    try {
-      if (area.isEmpty) {
-        throw StateError('현재 지역 정보가 없습니다.');
-      }
-      trace.log('현재 지역 확인 완료: $area', progress: .14);
-      final targetDocumentId = buildSectorDocumentId(
-        name: name,
-        area: area,
-      );
-      trace.log(
-        '저장 대상: collection=sector, sourceId=${existing?.id ?? '-'}, targetId=$targetDocumentId, area=$area, name=${name.trim()}, normalizedName=${normalizeSectorName(name)}',
-        progress: .28,
-      );
-      trace.log('섹터명 정규화 및 중복 여부를 확인합니다.', progress: .4);
-      final result = existing != null
-          ? await state.updateSector(id: existing.id, name: name)
-          : await state.createSector(name);
-      trace.log(
-        'Firestore sector 문서 저장 완료: ${result.id}',
-        progress: .72,
-      );
-      trace.log('지역별 섹터 캐시 저장을 확인했습니다.', progress: .9);
-      await trace.succeed(
-        editing
-            ? '섹터 수정 완료: ${result.name}'
-            : '섹터 등록 완료: ${result.name}',
-      );
-      if (!mounted) return true;
-      _log(
-        '${editing ? 'sector_updated' : 'sector_created'} id=${result.id} name=${result.name}',
-      );
-      showSuccessSnackbar(
-        context,
-        editing ? '섹터를 수정했습니다.' : '섹터를 등록했습니다.',
-        useCommonUi: true,
-      );
-      return true;
-    } catch (error, stackTrace) {
-      _log('${editing ? 'sector_update' : 'sector_create'}_failed error=$error');
-      await trace.fail(
-        editing ? '섹터 수정에 실패했습니다.' : '섹터 등록에 실패했습니다.',
-        error: error,
-        stackTrace: stackTrace,
-      );
-      if (mounted) {
-        showFailedSnackbar(
-          context,
-          _errorMessage(
-            error,
-            fallback: editing ? '섹터 수정에 실패했습니다.' : '섹터 등록에 실패했습니다.',
-          ),
-          useCommonUi: true,
-        );
-      }
-      rethrow;
-    }
-  }
-
   Future<void> _openSetting({SectorModel? sector}) async {
     final area = context.read<AreaState>().currentArea.trim();
     if (area.isEmpty) {
@@ -222,19 +149,19 @@ class _SectorManagementState extends State<SectorManagement> {
       return;
     }
 
-    _log('form_opened mode=${sector == null ? 'create' : 'edit'} id=${sector?.id ?? '-'}');
-    await showCommonOverlayBottomSheet<void>(
-      context: context,
-      useSafeArea: true,
-      isDismissible: true,
-      enableDrag: true,
-      builder: (sheetContext) {
-        return SectorSetting(
-          currentArea: area,
-          initialSector: sector,
-          onSave: (name) => _saveSector(name: name, existing: sector),
-        );
-      },
+    _log(
+      'settings_open_requested mode=${sector == null ? 'create' : 'edit'} id=${sector?.id ?? '-'}',
+    );
+    await HapticFeedback.selectionClick();
+    if (!mounted) return;
+    final workspace = context.read<SecondarySectorWorkspaceState>();
+    if (sector == null) {
+      workspace.openCreate(source: 'sector_management_create');
+      return;
+    }
+    workspace.openEdit(
+      sector.id,
+      source: 'sector_management_edit',
     );
   }
 

@@ -39,6 +39,7 @@ class ModifyPlateService {
   final int selectedRegularDurationHours;
 
   final String? selectedBill;
+  final String selectedBillType;
   final String dropdownValue;
   final String? manufacturerName;
   final String? modelName;
@@ -69,6 +70,7 @@ class ModifyPlateService {
     required this.selectedAddStandard,
     required this.selectedAddAmount,
     required this.selectedBill,
+    required this.selectedBillType,
     required this.dropdownValue,
     required this.selectedRegularAmount,
     required this.selectedRegularDurationHours,
@@ -392,6 +394,9 @@ class ModifyPlateService {
       basicAmount: selectedBasicAmount,
       basicStandard: selectedBasicStandard,
       billingType: newBillingType,
+      billingPlanType: selectedBillType.trim().isEmpty
+          ? originalPlate.billingPlanType
+          : selectedBillType.trim(),
       customStatus: effectiveCustomStatus,
       endTime: originalPlate.endTime,
       imageUrls: imageUrls,

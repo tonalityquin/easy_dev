@@ -8,8 +8,8 @@ import 'package:provider/provider.dart';
 import '../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../app/utils/snackbar_helper.dart';
 import '../../../design_system/common_ui/common_ui_components.dart';
-import '../../../design_system/common_ui/common_ui_overlays.dart';
 import '../../../design_system/common_ui/common_ui_theme.dart';
+import '../../../shared/secondary/application/secondary_bill_workspace_state.dart';
 import '../../../shared/secondary/widgets/ops_console_dialogs.dart';
 import '../../../shared/secondary/widgets/ops_console_widgets.dart';
 import '../../../shared/secondary/widgets/secondary_debug_scope.dart';
@@ -17,7 +17,6 @@ import '../../dev/application/area_state.dart';
 import '../applications/bill_state.dart';
 import '../domain/models/bill_model.dart';
 import '../domain/models/regular_bill_model.dart';
-import 'sheets/bill_bottom_sheet.dart';
 
 class BillManagement extends StatefulWidget {
   const BillManagement({super.key});
@@ -163,62 +162,6 @@ class _BillManagementState extends State<BillManagement> {
     }
   }
 
-  Future<void> _saveBill(Map<String, dynamic> billData) async {
-    if (_mutating) return;
-    final area = context.read<AreaState>().currentArea.trim();
-    final countType = billData['CountType']?.toString().trim() ?? '';
-    final type = billData['type']?.toString().trim() ?? '';
-    final trace = await _startTrace(
-      title: '정산 유형 등록',
-      initialMessage: '새 정산 유형의 등록 요청을 확인하고 있습니다.',
-    );
-    if (!mounted) return;
-    setState(() => _mutating = true);
-
-    try {
-      if (area.isEmpty) {
-        throw StateError('현재 지역 정보가 없습니다.');
-      }
-      if (countType.isEmpty) {
-        throw ArgumentError('정산 유형명이 없습니다.');
-      }
-      trace.log('현재 지역 확인 완료: $area', progress: .14);
-      trace.log(
-        '저장 대상 확인: type=${type.isEmpty ? '-' : type}, CountType=$countType, area=$area',
-        progress: .28,
-      );
-      trace.log('Firestore 정산 문서 저장을 요청합니다.', progress: .52);
-      await context.read<BillState>().addBillFromMap(billData);
-      if (!mounted) return;
-      trace.log('지역별 정산 캐시 저장을 확인했습니다.', progress: .86);
-      await trace.succeed('정산 유형 등록 완료: $countType');
-      if (!mounted) return;
-      _log('bill_created type=${type.isEmpty ? '-' : type} name=$countType');
-      showSuccessSnackbar(
-        context,
-        '정산 유형을 저장했습니다.',
-        useCommonUi: true,
-      );
-    } catch (error, stackTrace) {
-      _log('bill_create_failed error=$error');
-      await trace.fail(
-        '정산 유형 등록에 실패했습니다.',
-        error: error,
-        stackTrace: stackTrace,
-      );
-      if (!mounted) return;
-      showFailedSnackbar(
-        context,
-        _errorMessage(error, fallback: '정산 유형 저장에 실패했습니다.'),
-        useCommonUi: true,
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _mutating = false);
-      }
-    }
-  }
-
   Future<void> _openBillSetting() async {
     final area = context.read<AreaState>().currentArea.trim();
     if (area.isEmpty) {
@@ -229,19 +172,12 @@ class _BillManagementState extends State<BillManagement> {
       );
       return;
     }
-    _log('form_opened type=general area=$area');
-    await showCommonOverlayBottomSheet<void>(
-      context: context,
-      useSafeArea: true,
-      builder: (sheetContext) {
-        return FractionallySizedBox(
-          heightFactor: 1,
-          child: BillSettingBottomSheet(
-            onSave: (billData) => _saveBill(billData),
-          ),
+    _log('settings_open_requested type=general area=$area');
+    await HapticFeedback.selectionClick();
+    if (!mounted) return;
+    context.read<SecondaryBillWorkspaceState>().openCreate(
+          source: 'bill_management_create',
         );
-      },
-    );
   }
 
   Future<void> _deleteSelectedBill(_BillDockItem selected) async {

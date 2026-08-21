@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import '../../design_system/common_ui/common_ui_overlays.dart';
 import '../../features/selector/application/dev_auth.dart';
+import 'status_dialog.dart';
 
 enum DeveloperOperationState {
   running,
@@ -125,6 +126,42 @@ class DeveloperOperationTrace extends ChangeNotifier {
     }
   }
 
+  Future<void> showSnapshotStatusDialog(
+    BuildContext context, {
+    required String title,
+    required String description,
+    bool failure = false,
+  }) async {
+    if (!developerMode || !context.mounted) return;
+    final code = debugPrintCode.trim();
+    final copyText = code.isEmpty
+        ? 'debugPrint(${jsonEncode("[$title] 기록된 로그가 없습니다.")});'
+        : code;
+    if (failure) {
+      await StatusDialog.showFailure(
+        context,
+        title: title,
+        description: description,
+        copyText: copyText,
+        copyButtonLabel: 'debugPrint 코드 복사',
+        visibleDuration: Duration.zero,
+        useCommonUi: useCommonUi,
+        awaitManualClose: true,
+      );
+      return;
+    }
+    await StatusDialog.showSuccess(
+      context,
+      title: title,
+      description: description,
+      copyText: copyText,
+      copyButtonLabel: 'debugPrint 코드 복사',
+      visibleDuration: Duration.zero,
+      useCommonUi: useCommonUi,
+      awaitManualClose: true,
+    );
+  }
+
   Future<void> showStatusDialog(BuildContext context) {
     if (!developerMode || !context.mounted) {
       return Future<void>.value();
@@ -195,6 +232,7 @@ class _DeveloperOperationStatusDialogState
   bool _copied = false;
   bool _motionConfigured = false;
   bool _reduceMotion = false;
+  bool _traceUpdateScheduled = false;
 
   @override
   void initState() {
@@ -265,16 +303,21 @@ class _DeveloperOperationStatusDialogState
   }
 
   void _handleTraceChanged() {
-    if (!mounted) return;
-    if (widget.trace.isDone && _pulseController.isAnimating) {
-      _pulseController.stop();
-      _pulseController.value = 1;
-    }
-    if (widget.trace.isDone && _spinController.isAnimating) {
-      _spinController.stop();
-      _spinController.value = 0;
-    }
-    setState(() {});
+    if (!mounted || _traceUpdateScheduled) return;
+    _traceUpdateScheduled = true;
+    scheduleMicrotask(() {
+      _traceUpdateScheduled = false;
+      if (!mounted) return;
+      if (widget.trace.isDone && _pulseController.isAnimating) {
+        _pulseController.stop();
+        _pulseController.value = 1;
+      }
+      if (widget.trace.isDone && _spinController.isAnimating) {
+        _spinController.stop();
+        _spinController.value = 0;
+      }
+      setState(() {});
+    });
   }
 
   Future<void> _copyDebugPrintCode() async {

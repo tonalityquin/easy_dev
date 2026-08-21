@@ -492,6 +492,9 @@ class PlateCreationService {
       area: area,
       userName: userName,
       billingType: billingType,
+      billingPlanType: selectedBillType.trim().isEmpty
+          ? null
+          : selectedBillType.trim(),
       basicStandard: basicStandard ?? 0,
       basicAmount: basicAmount ?? 0,
       addStandard: addStandard ?? 0,

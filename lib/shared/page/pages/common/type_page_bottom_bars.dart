@@ -7,14 +7,12 @@ import '../../application/common/type_view_mode_state.dart';
 class TypePageBottomBars extends StatelessWidget {
   const TypePageBottomBars({
     super.key,
-    required this.tableTop,
-    required this.tableMiddle,
+    required this.tableActions,
     required this.modeSwitch,
     this.duration = CommonUiMotion.component,
   });
 
-  final Widget tableTop;
-  final Widget tableMiddle;
+  final Widget tableActions;
   final Widget modeSwitch;
   final Duration duration;
 
@@ -24,14 +22,13 @@ class TypePageBottomBars extends StatelessWidget {
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final mode = context.watch<TypeViewModeState>().mode;
-    final showTableBars = mode == TypeViewMode.table;
-    final child = showTableBars
+    final showTableActions = mode == TypeViewMode.table;
+    final child = showTableActions
         ? Column(
             key: const ValueKey<String>('bars:table'),
             mainAxisSize: MainAxisSize.min,
             children: [
-              tableTop,
-              tableMiddle,
+              tableActions,
               modeSwitch,
             ],
           )
@@ -54,6 +51,7 @@ class TypePageBottomBars extends StatelessWidget {
           switchInCurve: CommonUiMotion.enter,
           switchOutCurve: CommonUiMotion.exit,
           transitionBuilder: (current, animation) {
+            if (reduceMotion) return current;
             final curved = CurvedAnimation(
               parent: animation,
               curve: CommonUiMotion.enter,

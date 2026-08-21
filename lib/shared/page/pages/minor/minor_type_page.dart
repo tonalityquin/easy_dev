@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../features/dashboard/side_docks/minor/minor_home_dashboard_side_dock.dart';
+import '../../../../features/mode_minor/minor_departure_completed_bottom_sheet.dart';
 import '../../../../features/mode_minor/minor_parking_completed_page.dart';
-import '../../../../features/mode_minor/parking_completed_package/minor_parking_completed_control_buttons.dart';
 import '../../../plate/application/common/driving_recovery_gate.dart';
 import '../../../plate/application/minor/minor_plate_state.dart';
 import '../../application/minor/minor_page_state.dart';
@@ -65,14 +65,12 @@ class MinorTypePage extends StatelessWidget {
           final pageInfo = pageState.pages[pageState.selectedIndex];
           return pageInfo.builder(context);
         },
-        buildParkingCompletedControlBar: (context, pageState) {
-          return MinorParkingCompletedControlButtons(
-            showSearchDialog: () => MinorParkingCompletedPage.openSearchDialog(
-              pageState.parkingCompletedKey,
-              context,
-            ),
-          );
-        },
+        openSearch: (context, pageState) => MinorParkingCompletedPage.openSearchDialog(
+          pageState.parkingCompletedKey,
+          context,
+        ),
+        buildDepartureCompletedSheet: () =>
+            const MinorDepartureCompletedBottomSheet(),
         buildDashboardSideDock: () => const MinorHomeDashboardSideDock(),
         buildInputScreen: () => const InputPlateScreen(isMinorMode: true),
         debugMeta: const <String, dynamic>{

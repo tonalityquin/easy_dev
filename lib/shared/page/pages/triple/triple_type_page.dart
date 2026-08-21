@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../features/dashboard/side_docks/triple/triple_home_dashboard_side_dock.dart';
-import '../../../../features/mode_triple/parking_completed_package/triple_parking_completed_control_buttons.dart';
+import '../../../../features/mode_triple/triple_departure_completed_bottom_sheet.dart';
 import '../../../../features/mode_triple/triple_parking_completed_page.dart';
 import '../../../plate/application/common/driving_recovery_gate.dart';
 import '../../../plate/application/triple/triple_plate_state.dart';
@@ -63,14 +63,12 @@ class TripleTypePage extends StatelessWidget {
           final pageInfo = pageState.pages[pageState.selectedIndex];
           return pageInfo.builder(context);
         },
-        buildParkingCompletedControlBar: (context, pageState) {
-          return TripleParkingCompletedControlButtons(
-            showSearchDialog: () => TripleParkingCompletedPage.openSearchDialog(
-              pageState.parkingCompletedKey,
-              context,
-            ),
-          );
-        },
+        openSearch: (context, pageState) => TripleParkingCompletedPage.openSearchDialog(
+          pageState.parkingCompletedKey,
+          context,
+        ),
+        buildDepartureCompletedSheet: () =>
+            const TripleDepartureCompletedBottomSheet(),
         buildDashboardSideDock: () => const TripleHomeDashboardSideDock(),
         buildInputScreen: () => const InputPlateScreen(),
         debugMeta: const <String, dynamic>{

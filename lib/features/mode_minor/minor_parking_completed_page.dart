@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../design_system/common_ui/common_ui_overlays.dart';
 import '../account/applications/user_state.dart';
 import '../dev/application/area_state.dart';
 import '../../shared/page/application/common/type_view_mode_state.dart';
@@ -10,9 +9,9 @@ import '../../shared/page/pages/common/parking_completed_page/parking_completed_
 import '../../shared/page/widget/navigation/minor_top_navigation.dart';
 import '../../shared/plate/application/minor/minor_plate_state.dart';
 import '../../shared/plate/domain/enums/plate_type.dart';
+import '../../shared/plate/widgets/parking_completed_plate_search_sheet.dart';
 import '../../shared/real_time_table/view_doc_rows_firestore_sync.dart';
 import 'parking_completed_package/minor_parking_completed_real_time_table.dart';
-import '../../shared/plate/widgets/parking_completed_plate_search_sheet.dart';
 
 class MinorParkingCompletedPage extends StatefulWidget {
   const MinorParkingCompletedPage({super.key});
@@ -23,7 +22,7 @@ class MinorParkingCompletedPage extends StatefulWidget {
   ) async {
     final state = key.currentState as _MinorParkingCompletedPageState?;
     if (state == null) return;
-    await state._showSearchDialog(context);
+    await state._showSearchSideDock(context);
   }
 
   @override
@@ -38,25 +37,14 @@ class _MinorParkingCompletedPageState extends State<MinorParkingCompletedPage> {
     }
   }
 
-  Future<void> _showSearchDialog(BuildContext context) async {
+  Future<void> _showSearchSideDock(BuildContext context) async {
     final currentArea = context.read<AreaState>().currentArea;
-    _log('open search dialog');
-
-    await showCommonOverlayBottomSheet<void>(
+    _log('open search side dock');
+    await showParkingCompletedPlateSearchSideDock(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: false,
-      transparentBackground: true,
-      builder: (sheetContext) {
-        return SizedBox(
-          height: MediaQuery.of(sheetContext).size.height,
-          child: ParkingCompletedPlateSearchSheet(
-            area: currentArea,
-            variant: ParkingCompletedSearchVariant.minor,
-            onSearch: (_) {},
-          ),
-        );
-      },
+      area: currentArea,
+      variant: ParkingCompletedSearchVariant.minor,
+      onSearch: (_) {},
     );
   }
 

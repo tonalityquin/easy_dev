@@ -71,6 +71,8 @@ class DoubleParkingCompletedRealTimeTable extends StatelessWidget {
           ? (ctx, spec, ctrl) => RealTimeStatusPreviewBody(
                 controller: ctrl,
                 area: area,
+                screen: 'double_parking_completed_status_dot_map',
+                specs: tabs,
                 overlay: const <ParkingStatusOverlaySpec>[
                   ParkingStatusOverlaySpec(
                     collection: 'parking_completed_view',

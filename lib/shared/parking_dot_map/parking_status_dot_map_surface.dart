@@ -94,6 +94,8 @@ class ParkingStatusDotMapSurface extends StatelessWidget {
     this.viewport,
     this.exact = false,
     this.pulse = 1,
+    this.framed = true,
+    this.padding = 9,
   });
 
   final ParkingGridModel grid;
@@ -101,10 +103,26 @@ class ParkingStatusDotMapSurface extends StatelessWidget {
   final GridRect? viewport;
   final bool exact;
   final double pulse;
+  final bool framed;
+  final double padding;
 
   @override
   Widget build(BuildContext context) {
     final tokens = CommonUiTheme.of(context);
+    final content = CustomPaint(
+      painter: ParkingStatusDotMapPainter(
+        grid: grid,
+        targetRect: targetRect,
+        viewport: viewport,
+        exact: exact,
+        pulse: pulse,
+        framed: framed,
+        padding: padding,
+        tokens: tokens,
+      ),
+      child: const SizedBox.expand(),
+    );
+    if (!framed) return content;
     return Container(
       decoration: BoxDecoration(
         color: tokens.surfaceOverlay.withOpacity(.38),
@@ -113,17 +131,7 @@ class ParkingStatusDotMapSurface extends StatelessWidget {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(11),
-        child: CustomPaint(
-          painter: ParkingStatusDotMapPainter(
-            grid: grid,
-            targetRect: targetRect,
-            viewport: viewport,
-            exact: exact,
-            pulse: pulse,
-            tokens: tokens,
-          ),
-          child: const SizedBox.expand(),
-        ),
+        child: content,
       ),
     );
   }
@@ -136,6 +144,8 @@ class ParkingStatusDotMapPainter extends CustomPainter {
     required this.viewport,
     required this.exact,
     required this.pulse,
+    required this.framed,
+    required this.padding,
     required this.tokens,
   });
 
@@ -144,6 +154,8 @@ class ParkingStatusDotMapPainter extends CustomPainter {
   final GridRect? viewport;
   final bool exact;
   final double pulse;
+  final bool framed;
+  final double padding;
   final CommonUiTokens tokens;
 
   @override
@@ -152,24 +164,29 @@ class ParkingStatusDotMapPainter extends CustomPainter {
       size: size,
       grid: grid,
       viewport: viewport,
+      padding: padding,
     );
     if (layout == null) return;
     final scale = layout.scale;
     final origin = layout.origin;
     final mapRect = layout.mapRect;
 
-    final framePaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1
-      ..color = tokens.borderSubtle.withOpacity(.75);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(mapRect, const Radius.circular(8)),
-      framePaint,
-    );
     canvas.save();
-    canvas.clipRRect(
-      RRect.fromRectAndRadius(mapRect, const Radius.circular(8)),
-    );
+    if (framed) {
+      final framePaint = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..color = tokens.borderSubtle.withOpacity(.75);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(mapRect, const Radius.circular(8)),
+        framePaint,
+      );
+      canvas.clipRRect(
+        RRect.fromRectAndRadius(mapRect, const Radius.circular(8)),
+      );
+    } else {
+      canvas.clipRect(mapRect);
+    }
 
     final totalCells = grid.rows * grid.cols;
     final visibleCells = layout.viewport.area;
@@ -425,6 +442,8 @@ class ParkingStatusDotMapPainter extends CustomPainter {
         oldDelegate.viewport != viewport ||
         oldDelegate.exact != exact ||
         oldDelegate.pulse != pulse ||
+        oldDelegate.framed != framed ||
+        oldDelegate.padding != padding ||
         oldDelegate.tokens != tokens;
   }
 }

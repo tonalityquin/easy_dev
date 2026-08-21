@@ -101,6 +101,7 @@ class PlateFields {
   static const String basicAmount = 'basicAmount';
   static const String basicStandard = 'basicStandard';
   static const String billingType = 'billingType';
+  static const String billingPlanType = 'billingPlanType';
   static const String company = 'company';
   static const String division = 'division';
   static const String createdAt = 'createdAt';
@@ -150,6 +151,7 @@ class PlateModel {
   final int? basicAmount;
   final int? basicStandard;
   final String? billingType;
+  final String? billingPlanType;
   final String? customStatus;
   final DateTime? endTime;
   final List<String>? imageUrls;
@@ -192,6 +194,7 @@ class PlateModel {
     this.basicAmount,
     this.basicStandard,
     this.billingType,
+    this.billingPlanType,
     this.customStatus,
     this.endTime,
     this.imageUrls,
@@ -238,6 +241,7 @@ class PlateModel {
       basicAmount: parseInt(data[PlateFields.basicAmount]),
       basicStandard: parseInt(data[PlateFields.basicStandard]),
       billingType: data[PlateFields.billingType],
+      billingPlanType: data[PlateFields.billingPlanType]?.toString().trim(),
       customStatus: data[PlateFields.customStatus],
       endTime: (endTimestamp is Timestamp) ? endTimestamp.toDate() : null,
       imageUrls: List<String>.from(data[PlateFields.imageUrls] ?? []),
@@ -285,6 +289,8 @@ class PlateModel {
       PlateFields.basicAmount: basicAmount,
       PlateFields.basicStandard: basicStandard,
       PlateFields.billingType: billingType,
+      if (billingPlanType != null && billingPlanType!.trim().isNotEmpty)
+        PlateFields.billingPlanType: billingPlanType!.trim(),
       if (customStatus != null) PlateFields.customStatus: customStatus,
       if (endTime != null) PlateFields.endTime: endTime,
       if (imageUrls != null) PlateFields.imageUrls: imageUrls,
@@ -349,6 +355,7 @@ class PlateModel {
     int? basicAmount,
     int? basicStandard,
     String? billingType,
+    String? billingPlanType,
     String? customStatus,
     DateTime? endTime,
     List<String>? imageUrls,
@@ -388,6 +395,7 @@ class PlateModel {
       basicAmount: basicAmount ?? this.basicAmount,
       basicStandard: basicStandard ?? this.basicStandard,
       billingType: billingType ?? this.billingType,
+      billingPlanType: billingPlanType ?? this.billingPlanType,
       customStatus: customStatus ?? this.customStatus,
       endTime: endTime ?? this.endTime,
       imageUrls: imageUrls ?? this.imageUrls,
@@ -475,6 +483,12 @@ class PlateModel {
       changes['billingType'] = {
         'before': billingType,
         'after': other.billingType
+      };
+    }
+    if (billingPlanType != other.billingPlanType) {
+      changes['billingPlanType'] = {
+        'before': billingPlanType,
+        'after': other.billingPlanType
       };
     }
     if (customStatus != other.customStatus) {

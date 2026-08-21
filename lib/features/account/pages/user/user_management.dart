@@ -7,7 +7,6 @@ import 'package:provider/provider.dart';
 import '../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../app/utils/status_dialog.dart';
 import '../../../../design_system/common_ui/common_ui_components.dart';
-import '../../../../design_system/common_ui/common_ui_overlays.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../shared/secondary/application/secondary_account_workspace_state.dart';
 import '../../../../shared/secondary/widgets/ops_console_dialogs.dart';
@@ -15,8 +14,6 @@ import '../../../../shared/secondary/widgets/ops_console_widgets.dart';
 import '../../../dev/application/area_state.dart';
 import '../../applications/user_state.dart';
 import '../../domain/models/user/user_model.dart';
-import '../../domain/repositories/user_repository.dart';
-import 'sheets/user_setting.dart';
 
 extension IterableX<T> on Iterable<T> {
   T? firstWhereOrNull(bool Function(T) test) {
@@ -196,57 +193,6 @@ class _UserManagementState extends State<UserManagement> {
     );
   }
 
-  TimeOfDay? _stringToTimeOfDay(String? timeString) {
-    if (timeString == null) return null;
-    final parts = timeString.split(':');
-    if (parts.length != 2) return null;
-    final hour = int.tryParse(parts[0]);
-    final minute = int.tryParse(parts[1]);
-    if (hour == null || minute == null) return null;
-    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
-    return TimeOfDay(hour: hour, minute: minute);
-  }
-
-  Map<String, TimeOfDay?> _stringWeekMapToTimeMap(Map<String, String?> raw) {
-    final out = <String, TimeOfDay?>{};
-    for (final day in UserModel.weekdays) {
-      out[day] = _stringToTimeOfDay(raw[day]);
-    }
-    return out;
-  }
-
-  List<String> _normalizeDayList(Iterable<String> raw) {
-    final set = raw.map((value) => value.trim()).where((value) => value.isNotEmpty).toSet();
-    return <String>[
-      for (final day in UserModel.weekdays)
-        if (set.contains(day)) day,
-      for (final value in set)
-        if (!UserModel.weekdays.contains(value)) value,
-    ];
-  }
-
-  List<String> _fixedHolidaysFromWeekMaps({
-    required Map<String, TimeOfDay?> startByWeekday,
-    required Map<String, TimeOfDay?> endByWeekday,
-  }) {
-    return <String>[
-      for (final day in UserModel.weekdays)
-        if (startByWeekday[day] == null && endByWeekday[day] == null) day,
-    ];
-  }
-
-  List<String> _normalizeBreakDaysForWorkingMap({
-    required Iterable<String> breakDays,
-    required Map<String, TimeOfDay?> startByWeekday,
-    required Map<String, TimeOfDay?> endByWeekday,
-  }) {
-    final breakSet = _normalizeDayList(breakDays).toSet();
-    return <String>[
-      for (final day in UserModel.weekdays)
-        if (breakSet.contains(day) && startByWeekday[day] != null && endByWeekday[day] != null) day,
-    ];
-  }
-
   String _maskName(String value) {
     final trimmed = value.trim();
     if (trimmed.isEmpty) return '';
@@ -286,49 +232,6 @@ class _UserManagementState extends State<UserManagement> {
     return buffer.toString();
   }
 
-  void buildUserBottomSheet({
-    required BuildContext context,
-    required void Function(
-      String name,
-      String phone,
-      String email,
-      String role,
-      List<String> modes,
-      String password,
-      String area,
-      String division,
-      bool isWorking,
-      bool isSaved,
-      String selectedArea,
-      Map<String, String?> startTimeByWeekday,
-      Map<String, String?> endTimeByWeekday,
-      List<String> fixedHolidays,
-      List<String> breakDays,
-      String position,
-    ) onSave,
-    UserModel? initialUser,
-  }) {
-    final areaState = context.read<AreaState>();
-    final currentArea = areaState.currentArea;
-    final currentDivision = areaState.currentDivision;
-    _log('form_opened mode=${initialUser == null ? 'create' : 'edit'}');
-
-    showCommonOverlayBottomSheet<void>(
-      context: context,
-      useSafeArea: true,
-      builder: (sheetContext) => FractionallySizedBox(
-        heightFactor: 1,
-        child: UserSettingBottomSheet(
-          onSave: onSave,
-          areaValue: currentArea,
-          division: currentDivision,
-          isEditMode: initialUser != null,
-          initialUser: initialUser,
-        ),
-      ),
-    );
-  }
-
   Future<bool> _confirmToggleActive(
     BuildContext context, {
     required bool toActive,
@@ -363,308 +266,40 @@ class _UserManagementState extends State<UserManagement> {
     bool forceCreate = false,
   }) async {
     final userState = context.read<UserState>();
+    final workspace = context.read<SecondaryAccountWorkspaceState>();
     if (forceCreate) {
       _clearSelection(userState, reason: 'create_opened');
+      await HapticFeedback.selectionClick();
+      if (!context.mounted) return;
+      workspace.openCreate(source: 'user_management_create');
+      _log('settings_workspace_opened mode=create');
+      return;
     }
-    final selectedId = forceCreate ? null : userState.selectedUserId;
 
+    final selectedId = userState.selectedUserId;
     if (selectedId == null) {
-      buildUserBottomSheet(
-        context: context,
-        onSave: (
-          name,
-          phone,
-          email,
-          role,
-          modes,
-          password,
-          area,
-          division,
-          isWorking,
-          isSaved,
-          selectedArea,
-          startTimeByWeekday,
-          endTimeByWeekday,
-          fixedHolidays,
-          breakDays,
-          position,
-        ) async {
-          final trace = await DeveloperOperationTrace.start(
-            context: context,
-            title: '계정 생성',
-            initialMessage: '계정 생성 요청을 시작합니다.',
-            useCommonUi: true,
-            developerModeMessage: '개발자 모드 ON: 계정 생성 로그를 debugPrint 코드로 복사할 수 있습니다.',
-            standardModeMessage: '개발자 모드 OFF: 계정 생성 로그를 콘솔에 기록합니다.',
-          );
-
-          try {
-            trace.log(
-              '입력값 검증 통과: 사용자 ${_maskName(name)}, 전화 ${_maskPhone(phone)}, 허용 모드 ${modes.length}개',
-              progress: 0.12,
-            );
-
-            final englishName = await context.read<UserRepository>().getEnglishNameByArea(selectedArea, division);
-            trace.log(
-              '지역 메타데이터 조회 완료: division=$division, area=$selectedArea',
-              progress: 0.24,
-            );
-
-            final parsedStartMap = _stringWeekMapToTimeMap(startTimeByWeekday);
-            final parsedEndMap = _stringWeekMapToTimeMap(endTimeByWeekday);
-            final submittedHolidays = _normalizeDayList(fixedHolidays);
-            final normalizedHolidays = _fixedHolidaysFromWeekMaps(
-              startByWeekday: parsedStartMap,
-              endByWeekday: parsedEndMap,
-            );
-            final normalizedBreakDays = _normalizeBreakDaysForWorkingMap(
-              breakDays: breakDays,
-              startByWeekday: parsedStartMap,
-              endByWeekday: parsedEndMap,
-            );
-            final workingDays = UserModel.weekdays
-                .where((day) => parsedStartMap[day] != null && parsedEndMap[day] != null)
-                .toList(growable: false);
-
-            trace.log(
-              '근무 일정 정규화 완료: 근무일 ${workingDays.length}일, 휴무일 ${normalizedHolidays.length}일, 휴게일 ${normalizedBreakDays.length}일',
-              progress: 0.38,
-            );
-            if (submittedHolidays.join('|') != normalizedHolidays.join('|')) {
-              trace.log(
-                '휴무일 정합성 보정: 요일별 출퇴근 시간 기준으로 휴무일을 재계산했습니다.',
-                progress: 0.42,
-              );
-            }
-            if (workingDays.isEmpty) {
-              trace.log(
-                '전 요일 휴무 일정 확인: 월~일 요일별 근무 시간이 모두 휴무 상태입니다.',
-                progress: 0.44,
-              );
-            }
-
-            final newUser = UserModel(
-              id: '$phone-$area',
-              name: name,
-              phone: phone,
-              email: email,
-              role: role,
-              modes: modes,
-              password: password,
-              position: position,
-              areas: [area],
-              divisions: [division],
-              currentArea: area,
-              selectedArea: selectedArea,
-              englishSelectedAreaName: englishName ?? area,
-              isSelected: false,
-              isWorking: isWorking,
-              isSaved: isSaved,
-              breakDays: normalizedBreakDays,
-              startTimeByWeekday: parsedStartMap,
-              endTimeByWeekday: parsedEndMap,
-            );
-
-            trace.log('계정 모델 구성 완료: Firestore 저장을 요청합니다.', progress: 0.58);
-
-            String? saveError;
-            await userState.addUserCard(
-              newUser,
-              onError: (message) {
-                saveError = message;
-              },
-            );
-
-            if (saveError != null) {
-              trace.log('계정 생성 실패 응답: $saveError', progress: 0.9);
-              await trace.fail('계정 생성에 실패했습니다.');
-              if (!trace.developerMode && context.mounted) {
-                await _showAccountFailureDialog(
-                  context,
-                  title: '계정 생성 불가',
-                  message: saveError!,
-                  fallbackDescription: '계정을 생성하는 중 문제가 발생했습니다. 입력값과 네트워크 상태를 확인한 뒤 다시 시도하세요.',
-                );
-              }
-              return;
-            }
-
-            trace.log('Firestore 및 사용자 캐시 반영 완료', progress: 0.92);
-            await trace.succeed('계정 생성이 완료되었습니다.');
-
-            if (!context.mounted) return;
-            _clearSelection(userState);
-          } catch (error, stackTrace) {
-            await trace.fail(
-              '계정 생성 중 예외가 발생했습니다.',
-              error: error,
-              stackTrace: stackTrace,
-            );
-            if (!trace.developerMode && context.mounted) {
-              await _showAccountFailureDialog(
-                context,
-                title: '계정 생성 불가',
-                message: '사용자 추가 실패: $error',
-                fallbackDescription: '계정을 생성하는 중 문제가 발생했습니다. 입력값과 네트워크 상태를 확인한 뒤 다시 시도하세요.',
-              );
-            }
-            if (!context.mounted) return;
-            _clearSelection(userState);
-          }
-        },
-      );
+      await HapticFeedback.selectionClick();
+      if (!context.mounted) return;
+      workspace.openCreate(source: 'user_management_primary_without_selection');
+      _log('settings_workspace_opened mode=create source=primary_without_selection');
       return;
     }
 
-    final selectedUser = userState.users.firstWhereOrNull((u) => u.id == selectedId);
+    final selectedUser =
+        userState.users.firstWhereOrNull((user) => user.id == selectedId);
     if (selectedUser == null) {
-      _clearSelection(userState);
+      _clearSelection(userState, reason: 'edit_target_missing');
       return;
     }
 
-    buildUserBottomSheet(
-      context: context,
-      initialUser: selectedUser,
-      onSave: (
-        name,
-        phone,
-        email,
-        role,
-        modes,
-        password,
-        area,
-        division,
-        isWorking,
-        isSaved,
-        selectedArea,
-        startTimeByWeekday,
-        endTimeByWeekday,
-        fixedHolidays,
-        breakDays,
-        position,
-      ) async {
-        final trace = await DeveloperOperationTrace.start(
-          context: context,
-          title: '계정 수정',
-          initialMessage: '계정 수정 요청을 시작합니다.',
-          useCommonUi: true,
-          developerModeMessage: '개발자 모드 ON: 계정 수정 로그를 debugPrint 코드로 복사할 수 있습니다.',
-          standardModeMessage: '개발자 모드 OFF: 계정 수정 로그를 콘솔에 기록합니다.',
-        );
-
-        try {
-          trace.log(
-            '수정 대상 확인: 사용자 ${_maskName(selectedUser.name)}, 전화 ${_maskPhone(selectedUser.phone)}',
-            progress: 0.1,
-          );
-
-          final englishName = await context.read<UserRepository>().getEnglishNameByArea(selectedArea, division);
-          trace.log(
-            '지역 메타데이터 조회 완료: division=$division, area=$selectedArea',
-            progress: 0.22,
-          );
-
-          final parsedStartMap = _stringWeekMapToTimeMap(startTimeByWeekday);
-          final parsedEndMap = _stringWeekMapToTimeMap(endTimeByWeekday);
-          final submittedHolidays = _normalizeDayList(fixedHolidays);
-          final normalizedHolidays = _fixedHolidaysFromWeekMaps(
-            startByWeekday: parsedStartMap,
-            endByWeekday: parsedEndMap,
-          );
-          final normalizedBreakDays = _normalizeBreakDaysForWorkingMap(
-            breakDays: breakDays,
-            startByWeekday: parsedStartMap,
-            endByWeekday: parsedEndMap,
-          );
-          final workingDays = UserModel.weekdays
-              .where((day) => parsedStartMap[day] != null && parsedEndMap[day] != null)
-              .toList(growable: false);
-
-          trace.log(
-            '근무 일정 정규화 완료: 근무일 ${workingDays.length}일, 휴무일 ${normalizedHolidays.length}일, 휴게일 ${normalizedBreakDays.length}일',
-            progress: 0.38,
-          );
-          if (submittedHolidays.join('|') != normalizedHolidays.join('|')) {
-            trace.log(
-              '휴무일 정합성 보정: 요일별 출퇴근 시간 기준으로 휴무일을 재계산했습니다.',
-              progress: 0.42,
-            );
-          }
-          if (workingDays.isEmpty) {
-            trace.log(
-              '전 요일 휴무 일정 확인: 월~일 요일별 근무 시간이 모두 휴무 상태입니다.',
-              progress: 0.46,
-            );
-          }
-
-          final updatedUser = UserModel(
-            id: selectedUser.id,
-            name: name,
-            phone: phone,
-            email: email,
-            role: role,
-            modes: modes,
-            password: password,
-            position: position,
-            areas: [area],
-            divisions: [division],
-            currentArea: area,
-            selectedArea: selectedArea,
-            englishSelectedAreaName: englishName ?? area,
-            isSelected: selectedUser.isSelected,
-            isWorking: isWorking,
-            isSaved: isSaved,
-            breakDays: normalizedBreakDays,
-            startTimeByWeekday: parsedStartMap,
-            endTimeByWeekday: parsedEndMap,
-            isActive: selectedUser.isActive,
-          );
-
-          trace.log('수정 모델 구성 완료: Firestore 저장을 요청합니다.', progress: 0.6);
-
-          String? saveError;
-          final saved = await userState.updateUserCardAsAdmin(
-            updatedUser,
-            onError: (message) {
-              saveError = message;
-            },
-          );
-
-          if (!saved) {
-            final message = saveError ?? '사용자 수정에 실패했습니다.';
-            trace.log('계정 수정 실패 응답: $message', progress: 0.9);
-            await trace.fail('계정 수정에 실패했습니다.');
-            if (!trace.developerMode && context.mounted) {
-              await _showAccountFailureDialog(
-                context,
-                title: '계정 저장 불가',
-                message: message,
-                fallbackDescription: '계정 정보를 저장하는 중 문제가 발생했습니다. 입력값과 네트워크 상태를 확인한 뒤 다시 시도하세요.',
-              );
-            }
-            return;
-          }
-
-          trace.log('Firestore 및 사용자 캐시 반영 완료', progress: 0.92);
-          await trace.succeed('계정 수정이 완료되었습니다.');
-        } catch (error, stackTrace) {
-          await trace.fail(
-            '계정 수정 중 예외가 발생했습니다.',
-            error: error,
-            stackTrace: stackTrace,
-          );
-          if (!trace.developerMode && context.mounted) {
-            await _showAccountFailureDialog(
-              context,
-              title: '계정 저장 불가',
-              message: '사용자 수정 실패: $error',
-              fallbackDescription: '계정 정보를 저장하는 중 문제가 발생했습니다. 입력값과 네트워크 상태를 확인한 뒤 다시 시도하세요.',
-            );
-          }
-        } finally {
-          _clearSelection(userState);
-        }
-      },
+    await HapticFeedback.selectionClick();
+    if (!context.mounted) return;
+    workspace.openEdit(
+      selectedUser.id,
+      source: 'user_management_edit',
+    );
+    _log(
+      'settings_workspace_opened mode=edit user=${_maskName(selectedUser.name)}',
     );
   }
 
