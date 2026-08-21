@@ -4,18 +4,23 @@ import 'package:flutter/material.dart';
 import '../../../domain/models/grid_rect.dart';
 import '../../../domain/models/location_model.dart';
 import '../../../domain/models/parking_grid_model.dart';
+import '../../../../../shared/parking_dot_map/effective_child_region_geometry.dart';
 
 class ChildRegionOverlay {
   final String id;
   final GridRect rect;
   final String label;
   final bool isSelected;
+  final bool useEffectiveShape;
+  final Set<String> effectiveParkingAreaIds;
 
   const ChildRegionOverlay({
     required this.id,
     required this.rect,
     required this.label,
     required this.isSelected,
+    this.useEffectiveShape = false,
+    this.effectiveParkingAreaIds = const <String>{},
   });
 }
 
@@ -37,7 +42,13 @@ class ParkingGridPreview extends StatelessWidget {
 
   final bool showChildSlotNumbers;
   final List<ChildSlot> childSlotsToLabel;
+  final Set<String> effectiveParkingAreaIds;
+  final Set<String> occupiedParkingAreaIds;
+  final Set<String> reusableParkingAreaIds;
+  final Set<String> excludedParkingAreaIds;
+  final String? focusedParkingAreaId;
   final ValueChanged<String>? onTapChildRegion;
+  final ValueChanged<String>? onTapParkingArea;
 
   const ParkingGridPreview({
     super.key,
@@ -54,7 +65,13 @@ class ParkingGridPreview extends StatelessWidget {
     this.childRegions = const <ChildRegionOverlay>[],
     this.showChildSlotNumbers = true,
     this.childSlotsToLabel = const <ChildSlot>[],
+    this.effectiveParkingAreaIds = const <String>{},
+    this.occupiedParkingAreaIds = const <String>{},
+    this.reusableParkingAreaIds = const <String>{},
+    this.excludedParkingAreaIds = const <String>{},
+    this.focusedParkingAreaId,
     this.onTapChildRegion,
+    this.onTapParkingArea,
   });
 
   String? _selectedRegionId() {
@@ -89,7 +106,55 @@ class ParkingGridPreview extends StatelessWidget {
             c1: rect.c1,
           )
           .deflate(math.max(1.0, layout.cell * 0.06));
-      if (hitRect.contains(position)) return region.id;
+      if (!hitRect.contains(position)) continue;
+      if (region.useEffectiveShape) {
+        final areaId = _parkingAreaIdAtLayout(layout, position);
+        if (areaId != null &&
+            !region.effectiveParkingAreaIds.contains(areaId)) {
+          continue;
+        }
+      }
+      return region.id;
+    }
+    return null;
+  }
+
+  String? _parkingAreaIdAt(Size size, Offset position) {
+    if (grid.rows <= 0 || grid.cols <= 0) return null;
+    final layout = _GridLayout.fit(
+      size: size,
+      rows: grid.rows,
+      cols: grid.cols,
+      padding: 10,
+      gap: 2,
+    );
+    return _parkingAreaIdAtLayout(layout, position);
+  }
+
+  String? _parkingAreaIdAtLayout(_GridLayout layout, Offset position) {
+    for (final area in grid.parkingAreas.reversed) {
+      final top = area.r0;
+      final left = area.c0;
+      final bottom = area.r1;
+      final right = area.c1;
+      if (top < 0 ||
+          left < 0 ||
+          bottom >= layout.rows ||
+          right >= layout.cols) {
+        continue;
+      }
+      final rect = layout
+          .rectForCellRange(
+            r0: top,
+            r1: bottom,
+            c0: left,
+            c1: right,
+          )
+          .deflate(math.max(1.0, layout.cell * 0.08));
+      if (rect.contains(position)) {
+        final id = area.id.trim();
+        if (id.isNotEmpty) return id;
+      }
     }
     return null;
   }
@@ -183,17 +248,27 @@ class ParkingGridPreview extends StatelessWidget {
                 final size = Size(constraints.maxWidth, constraints.maxHeight);
                 final selectedRegionId = _selectedRegionId();
                 final tapChildRegion = onTapChildRegion;
+                final tapParkingArea = onTapParkingArea;
                 final reduceMotion =
                     MediaQuery.maybeOf(context)?.disableAnimations ?? false;
                 return ClipRRect(
                   borderRadius: BorderRadius.circular(12),
                   child: GestureDetector(
                     behavior: HitTestBehavior.opaque,
-                    onTapUp: !showChildRegions || tapChildRegion == null
+                    onTapUp: tapChildRegion == null && tapParkingArea == null
                         ? null
                         : (details) {
-                            final id = _regionIdAt(size, details.localPosition);
-                            if (id != null) tapChildRegion(id);
+                            final areaId =
+                                _parkingAreaIdAt(size, details.localPosition);
+                            if (areaId != null && tapParkingArea != null) {
+                              tapParkingArea(areaId);
+                              return;
+                            }
+                            if (showChildRegions && tapChildRegion != null) {
+                              final id =
+                                  _regionIdAt(size, details.localPosition);
+                              if (id != null) tapChildRegion(id);
+                            }
                           },
                     child: TweenAnimationBuilder<double>(
                       key: ValueKey<String>(
@@ -208,23 +283,49 @@ class ParkingGridPreview extends StatelessWidget {
                           : const Duration(milliseconds: 170),
                       curve: Curves.easeOutCubic,
                       builder: (context, selectionProgress, _) {
-                        return CustomPaint(
-                          painter: _ParkingGridPainter(
-                            grid: grid,
-                            colorScheme: cs,
-                            showGates: showGates,
-                            showTowers: showTowers,
-                            showParkingAreas: showParkingAreas,
-                            showParkingAreaLabels: showParkingAreaLabels,
-                            showChildRegions: showChildRegions,
-                            childRegions: childRegions,
-                            showChildRegionLabels: showChildRegionLabels,
-                            showAllChildRegionLabels: showAllChildRegionLabels,
-                            showChildSlotNumbers: showChildSlotNumbers,
-                            childSlotsToLabel: childSlotsToLabel,
-                            selectionProgress: selectionProgress,
+                        return TweenAnimationBuilder<double>(
+                          key: ValueKey<String>(
+                            'parking-grid-focus-${focusedParkingAreaId ?? 'none'}',
                           ),
-                          child: const SizedBox.expand(),
+                          tween: Tween<double>(
+                            begin: focusedParkingAreaId == null ? 1 : 0,
+                            end: 1,
+                          ),
+                          duration: reduceMotion
+                              ? Duration.zero
+                              : const Duration(milliseconds: 190),
+                          curve: Curves.easeOutBack,
+                          builder: (context, focusProgress, __) {
+                            return CustomPaint(
+                              painter: _ParkingGridPainter(
+                                grid: grid,
+                                colorScheme: cs,
+                                showGates: showGates,
+                                showTowers: showTowers,
+                                showParkingAreas: showParkingAreas,
+                                showParkingAreaLabels: showParkingAreaLabels,
+                                showChildRegions: showChildRegions,
+                                childRegions: childRegions,
+                                showChildRegionLabels: showChildRegionLabels,
+                                showAllChildRegionLabels:
+                                    showAllChildRegionLabels,
+                                showChildSlotNumbers: showChildSlotNumbers,
+                                childSlotsToLabel: childSlotsToLabel,
+                                effectiveParkingAreaIds:
+                                    effectiveParkingAreaIds,
+                                occupiedParkingAreaIds:
+                                    occupiedParkingAreaIds,
+                                reusableParkingAreaIds:
+                                    reusableParkingAreaIds,
+                                excludedParkingAreaIds:
+                                    excludedParkingAreaIds,
+                                focusedParkingAreaId: focusedParkingAreaId,
+                                selectionProgress: selectionProgress,
+                                focusProgress: focusProgress,
+                              ),
+                              child: const SizedBox.expand(),
+                            );
+                          },
                         );
                       },
                     ),
@@ -358,7 +459,13 @@ class _ParkingGridPainter extends CustomPainter {
 
   final bool showChildSlotNumbers;
   final List<ChildSlot> childSlotsToLabel;
+  final Set<String> effectiveParkingAreaIds;
+  final Set<String> occupiedParkingAreaIds;
+  final Set<String> reusableParkingAreaIds;
+  final Set<String> excludedParkingAreaIds;
+  final String? focusedParkingAreaId;
   final double selectionProgress;
+  final double focusProgress;
 
   _ParkingGridPainter({
     required this.grid,
@@ -373,7 +480,13 @@ class _ParkingGridPainter extends CustomPainter {
     required this.showAllChildRegionLabels,
     required this.showChildSlotNumbers,
     required this.childSlotsToLabel,
+    required this.effectiveParkingAreaIds,
+    required this.occupiedParkingAreaIds,
+    required this.reusableParkingAreaIds,
+    required this.excludedParkingAreaIds,
+    required this.focusedParkingAreaId,
     required this.selectionProgress,
+    required this.focusProgress,
   });
 
   Color _cellColor(int idx, ParkingGridCellType t) {
@@ -569,19 +682,116 @@ class _ParkingGridPainter extends CustomPainter {
     }
   }
 
-  void _drawChildRegion(
-      Canvas canvas, _GridLayout layout, ChildRegionOverlay ov) {
-    final cs = colorScheme;
-    final rr = ov.rect.normalized();
+  void _drawParkingAreaAllocationOverlay(
+    Canvas canvas,
+    _GridLayout layout,
+    ParkingArea area,
+  ) {
+    final id = area.id.trim();
+    if (id.isEmpty) return;
+    final effective = effectiveParkingAreaIds.contains(id);
+    final occupied = occupiedParkingAreaIds.contains(id);
+    final reusable = reusableParkingAreaIds.contains(id);
+    final excluded = excludedParkingAreaIds.contains(id);
+    if (!effective && !occupied && !reusable && !excluded) return;
 
-    if (rr.r0 < 0 || rr.c0 < 0 || rr.r1 >= layout.rows || rr.c1 >= layout.cols)
+    final top = area.r0;
+    final left = area.c0;
+    final bottom = area.r1;
+    final right = area.c1;
+    if (top < 0 || left < 0 || bottom >= layout.rows || right >= layout.cols) {
       return;
+    }
+    final rect = layout
+        .rectForCellRange(r0: top, r1: bottom, c0: left, c1: right)
+        .deflate(math.max(1.0, layout.cell * 0.08));
+    final cs = colorScheme;
+    final fillColor = occupied
+        ? cs.surfaceVariant.withOpacity(.38)
+        : excluded
+            ? cs.errorContainer.withOpacity(.34)
+            : effective
+                ? cs.primaryContainer.withOpacity(.36)
+                : cs.tertiaryContainer.withOpacity(.34);
+    final strokeColor = occupied
+        ? cs.outline.withOpacity(.78)
+        : excluded
+            ? cs.error.withOpacity(.92)
+            : effective
+                ? cs.primary.withOpacity(.94)
+                : cs.tertiary.withOpacity(.94);
+    final rr = RRect.fromRectAndRadius(
+      rect,
+      Radius.circular(math.max(4.0, layout.cell * .17)),
+    );
+    canvas.drawRRect(
+      rr,
+      Paint()
+        ..style = PaintingStyle.fill
+        ..color = fillColor,
+    );
+    canvas.drawRRect(
+      rr,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = math.max(1.7, layout.cell * .09)
+        ..color = strokeColor,
+    );
+    if (occupied || excluded) {
+      final cross = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round
+        ..strokeWidth = math.max(1.3, layout.cell * .06)
+        ..color = strokeColor.withOpacity(.78);
+      final inset = math.max(3.0, layout.cell * .15);
+      canvas.drawLine(
+        Offset(rect.left + inset, rect.top + inset),
+        Offset(rect.right - inset, rect.bottom - inset),
+        cross,
+      );
+      canvas.drawLine(
+        Offset(rect.right - inset, rect.top + inset),
+        Offset(rect.left + inset, rect.bottom - inset),
+        cross,
+      );
+    }
+  }
+
+  void _drawChildRegion(
+    Canvas canvas,
+    _GridLayout layout,
+    ChildRegionOverlay overlay,
+  ) {
+    final cs = colorScheme;
+    final rr = overlay.rect.normalized();
+    if (rr.r0 < 0 ||
+        rr.c0 < 0 ||
+        rr.r1 >= layout.rows ||
+        rr.c1 >= layout.cols) {
+      return;
+    }
 
     final rect = layout
         .rectForCellRange(r0: rr.r0, r1: rr.r1, c0: rr.c0, c1: rr.c1)
         .deflate(math.max(1.0, layout.cell * 0.06));
-
-    final progress = ov.isSelected
+    final radius = Radius.circular(math.max(6.0, layout.cell * 0.22));
+    final rawRegion = RRect.fromRectAndRadius(rect, radius);
+    final shape = buildEffectiveChildRegionPath(
+      grid: grid,
+      childRect: overlay.rect,
+      effectiveParkingAreaIds: overlay.effectiveParkingAreaIds,
+      nominalRegion: rawRegion,
+      useEffectiveShape: overlay.useEffectiveShape,
+      parkingAreaRect: (area) => layout.rectForCellRange(
+        r0: area.r0,
+        r1: area.r1,
+        c0: area.c0,
+        c1: area.c1,
+      ),
+      cutInflate: math.max(.5, layout.cell * .035),
+      cutRadius: math.max(3.0, layout.cell * .13),
+    );
+    final progress = overlay.isSelected
         ? selectionProgress.clamp(0.0, 1.0).toDouble()
         : 0.0;
     final baseFill = cs.surfaceVariant.withOpacity(0.10);
@@ -591,37 +801,44 @@ class _ParkingGridPainter extends CustomPainter {
     final baseStrokeWidth = math.max(1.4, layout.cell * 0.07);
     final selectedStrokeWidth = math.max(2.2, layout.cell * 0.10);
 
-    final fill = Paint()
-      ..style = PaintingStyle.fill
-      ..color = Color.lerp(baseFill, selectedFill, progress) ?? baseFill;
+    if (overlay.useEffectiveShape) {
+      canvas.drawRRect(
+        rawRegion,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = math.max(1.0, layout.cell * .045)
+          ..color = overlay.isSelected
+              ? cs.tertiary.withOpacity(.34)
+              : cs.outlineVariant.withOpacity(.42),
+      );
+    }
 
-    final stroke = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = baseStrokeWidth +
-          (selectedStrokeWidth - baseStrokeWidth) * progress
-      ..color = Color.lerp(baseStroke, selectedStroke, progress) ?? baseStroke;
+    canvas.drawPath(
+      shape,
+      Paint()
+        ..style = PaintingStyle.fill
+        ..color = Color.lerp(baseFill, selectedFill, progress) ?? baseFill,
+    );
+    canvas.drawPath(
+      shape,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = baseStrokeWidth +
+            (selectedStrokeWidth - baseStrokeWidth) * progress
+        ..strokeJoin = StrokeJoin.round
+        ..color = Color.lerp(baseStroke, selectedStroke, progress) ?? baseStroke,
+    );
 
-    canvas.drawRRect(
-        RRect.fromRectAndRadius(
-            rect, Radius.circular(math.max(6.0, layout.cell * 0.22))),
-        fill);
-    canvas.drawRRect(
-        RRect.fromRectAndRadius(
-            rect, Radius.circular(math.max(6.0, layout.cell * 0.22))),
-        stroke);
-
-    final shouldLabel =
-        showChildRegionLabels && (showAllChildRegionLabels || ov.isSelected);
-    if (!shouldLabel) return;
-    if (rect.width < 24 || rect.height < 18) return;
-
+    final shouldLabel = showChildRegionLabels &&
+        (showAllChildRegionLabels || overlay.isSelected);
+    if (!shouldLabel || rect.width < 24 || rect.height < 18) return;
     final tp = TextPainter(
       text: TextSpan(
-        text: ov.label,
+        text: overlay.label,
         style: TextStyle(
           fontSize: math.max(11.0, math.min(layout.cell * 0.65, 18.0)),
           fontWeight: FontWeight.w900,
-          color: ov.isSelected
+          color: overlay.isSelected
               ? cs.onTertiaryContainer.withOpacity(0.95 * progress)
               : cs.onSurface.withOpacity(0.80),
         ),
@@ -630,9 +847,10 @@ class _ParkingGridPainter extends CustomPainter {
       maxLines: 1,
       ellipsis: '…',
     )..layout(maxWidth: rect.width - 6);
-
-    tp.paint(canvas,
-        Offset(rect.center.dx - tp.width / 2, rect.center.dy - tp.height / 2));
+    tp.paint(
+      canvas,
+      Offset(rect.center.dx - tp.width / 2, rect.center.dy - tp.height / 2),
+    );
   }
 
   void _drawChildSlotNumber(Canvas canvas, _GridLayout layout, ChildSlot s) {
@@ -697,6 +915,66 @@ class _ParkingGridPainter extends CustomPainter {
         canvas,
         Offset(
             badge.center.dx - tp.width / 2, badge.center.dy - tp.height / 2));
+  }
+
+  void _drawFocusedParkingArea(Canvas canvas, _GridLayout layout) {
+    final targetId = focusedParkingAreaId?.trim() ?? '';
+    if (targetId.isEmpty) return;
+    ParkingArea? target;
+    for (final area in grid.parkingAreas) {
+      if (area.id.trim() == targetId) {
+        target = area;
+        break;
+      }
+    }
+    if (target == null) return;
+    if (target.r0 < 0 ||
+        target.c0 < 0 ||
+        target.r1 >= layout.rows ||
+        target.c1 >= layout.cols) {
+      return;
+    }
+    final rawRect = layout
+        .rectForCellRange(
+          r0: target.r0,
+          r1: target.r1,
+          c0: target.c0,
+          c1: target.c1,
+        )
+        .deflate(math.max(.5, layout.cell * .035));
+    final progress = focusProgress.clamp(0.0, 1.0).toDouble();
+    final scale = .86 + .14 * progress;
+    final rect = Rect.fromCenter(
+      center: rawRect.center,
+      width: rawRect.width * scale,
+      height: rawRect.height * scale,
+    );
+    final radius = Radius.circular(math.max(5.0, layout.cell * .18));
+    final rr = RRect.fromRectAndRadius(rect, radius);
+    canvas.drawRRect(
+      rr,
+      Paint()
+        ..style = PaintingStyle.fill
+        ..color = colorScheme.primary.withOpacity(.08 * progress),
+    );
+    canvas.drawRRect(
+      rr,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = math.max(2.5, layout.cell * .14)
+        ..color = colorScheme.primary.withOpacity(.96 * progress),
+    );
+    final ring = rect.inflate(math.max(2.0, layout.cell * .06) * progress);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        ring,
+        Radius.circular(math.max(6.0, layout.cell * .22)),
+      ),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = math.max(1.0, layout.cell * .055)
+        ..color = colorScheme.primary.withOpacity(.34 * progress),
+    );
   }
 
   @override
@@ -799,6 +1077,15 @@ class _ParkingGridPainter extends CustomPainter {
       }
     }
 
+    if (effectiveParkingAreaIds.isNotEmpty ||
+        occupiedParkingAreaIds.isNotEmpty ||
+        reusableParkingAreaIds.isNotEmpty ||
+        excludedParkingAreaIds.isNotEmpty) {
+      for (final area in grid.parkingAreas) {
+        _drawParkingAreaAllocationOverlay(canvas, layout, area);
+      }
+    }
+
     if (showGates) {
       _drawRectGates(canvas, layout);
     }
@@ -818,6 +1105,8 @@ class _ParkingGridPainter extends CustomPainter {
         _drawChildSlotNumber(canvas, layout, s);
       }
     }
+
+    _drawFocusedParkingArea(canvas, layout);
   }
 
   @override
@@ -834,6 +1123,12 @@ class _ParkingGridPainter extends CustomPainter {
         oldDelegate.showAllChildRegionLabels != showAllChildRegionLabels ||
         oldDelegate.showChildSlotNumbers != showChildSlotNumbers ||
         oldDelegate.childSlotsToLabel != childSlotsToLabel ||
-        oldDelegate.selectionProgress != selectionProgress;
+        oldDelegate.effectiveParkingAreaIds != effectiveParkingAreaIds ||
+        oldDelegate.occupiedParkingAreaIds != occupiedParkingAreaIds ||
+        oldDelegate.reusableParkingAreaIds != reusableParkingAreaIds ||
+        oldDelegate.excludedParkingAreaIds != excludedParkingAreaIds ||
+        oldDelegate.focusedParkingAreaId != focusedParkingAreaId ||
+        oldDelegate.selectionProgress != selectionProgress ||
+        oldDelegate.focusProgress != focusProgress;
   }
 }

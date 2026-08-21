@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../design_system/common_ui/common_ui_components.dart';
 import '../../../design_system/common_ui/common_ui_theme.dart';
@@ -1290,6 +1291,10 @@ class OpsDockSearchField extends StatelessWidget {
     required this.semanticLabel,
     required this.onChanged,
     required this.onClear,
+    this.keyboardType,
+    this.inputFormatters,
+    this.maxLength,
+    this.onSubmitted,
   });
 
   final TextEditingController controller;
@@ -1297,6 +1302,10 @@ class OpsDockSearchField extends StatelessWidget {
   final String semanticLabel;
   final ValueChanged<String> onChanged;
   final VoidCallback onClear;
+  final TextInputType? keyboardType;
+  final List<TextInputFormatter>? inputFormatters;
+  final int? maxLength;
+  final ValueChanged<String>? onSubmitted;
 
   @override
   Widget build(BuildContext context) {
@@ -1309,12 +1318,17 @@ class OpsDockSearchField extends StatelessWidget {
         child: TextField(
           controller: controller,
           onChanged: onChanged,
+          onSubmitted: onSubmitted,
+          keyboardType: keyboardType,
+          inputFormatters: inputFormatters,
+          maxLength: maxLength,
           textInputAction: TextInputAction.search,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: tokens.textPrimary,
                 fontWeight: FontWeight.w700,
               ),
           decoration: InputDecoration(
+            counterText: '',
             isDense: true,
             filled: true,
             fillColor: tokens.surfaceRaised,

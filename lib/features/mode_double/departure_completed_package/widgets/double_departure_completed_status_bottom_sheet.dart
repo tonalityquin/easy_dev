@@ -1,18 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../../../features/payment/widgets/billing_bottom_sheet.dart';
-import '../../../../../shared/plate/domain/models/plate_log_model.dart';
-import '../../../../../shared/plate/domain/models/plate_model.dart';
-import '../../../../../shared/plate/domain/repositories/plate_repository.dart';
-import '../../../../../shared/plate/widgets/plate_log_side_dock.dart';
-import '../../../../../shared/plate/widgets/parking_completed_status_widgets.dart';
+import '../../../../features/payment/widgets/billing_bottom_sheet.dart';
+import '../../../../shared/plate/domain/models/plate_log_model.dart';
+import '../../../../shared/plate/domain/models/plate_model.dart';
+import '../../../../shared/plate/domain/repositories/plate_repository.dart';
+import '../../../../shared/plate/widgets/plate_log_side_dock.dart';
+import '../../../../shared/plate/widgets/parking_completed_status_widgets.dart';
 
 Future<PlateModel?> showDoubleDepartureCompletedStatusBottomSheet({
   required BuildContext context,
   required PlateModel plate,
   String? performedBy,
 }) async {
-  final who = (performedBy ?? '').trim().isEmpty ? '-' : performedBy!.trim();
+  final normalizedPerformedBy = (performedBy ?? '').trim();
+  final who = normalizedPerformedBy.isEmpty ? '-' : normalizedPerformedBy;
   var currentPlate = plate;
   var latestPlate = plate;
   var changed = false;
@@ -259,8 +260,57 @@ class _DoubleDepartureCompletedStatusDockState
     Navigator.pop(context, _changed ? _plate : null);
   }
 
+  Future<void> _requestLog() async {
+    if (!mounted) return;
+    final request = PlateLogSideDockRequest(
+      plateNumber: _plate.plateNumber,
+      area: _plate.area,
+      plateId: _plate.id.trim().isEmpty ? null : _plate.id.trim(),
+      source: 'double_departure_completed_status',
+    );
+    parkingStatusTraceLog(
+      context,
+      'log_handoff_requested sourceDock=parking_status targetDock=plate_log policy=close_then_open overlay=false plate=${_plate.plateNumber}',
+    );
+    widget.onLogRequested(request);
+    Navigator.of(context).pop(_changed ? _plate : null);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final actions = <ParkingStatusManagementAction>[
+      ParkingStatusManagementAction(
+        icon: Icons.history_rounded,
+        label: '로그',
+        displayLabel: '로그',
+        onPressed: _requestLog,
+        debugAction: 'log',
+      ),
+      if (_billingApplicable)
+        ParkingStatusManagementAction(
+          icon: _isLocked ? Icons.undo_rounded : Icons.receipt_long_rounded,
+          label: _isLocked ? '취소' : '정산',
+          displayLabel: _isLocked ? '취소' : '정산',
+          onPressed: _isLocked ? _handleCancel : _handleSettle,
+          destructive: _isLocked,
+          emphasized: !_isLocked,
+          debugAction: _isLocked ? 'billing_cancel' : 'billing_settle',
+          linkedGroup: 'billing',
+          linkedReverse: _isLocked,
+        ),
+      ParkingStatusManagementAction(
+        icon: Icons.edit_note_rounded,
+        label: '수정',
+        displayLabel: '수정',
+        onPressed: () async {},
+        enabled: false,
+        debugAction: 'edit_disabled',
+      ),
+    ];
+    parkingStatusTraceLog(
+      context,
+      'departure_status_layout=left_management_rail actions=${actions.map((e) => e.visualLabel).join("/")} billingState=${parkingCompletedBillingStateDebugName(_billingState)}',
+    );
     return ParkingStatusSideDockFrame(
       title: _plate.plateNumber,
       subtitle: parkingStatusHeaderSubtitle(
@@ -270,6 +320,11 @@ class _DoubleDepartureCompletedStatusDockState
       ),
       icon: Icons.task_alt_rounded,
       onClose: _close,
+      leadingRail: ParkingStatusManagementRail(
+        actions: actions,
+        title: '차량',
+        debugTarget: 'double_departure_completed_status',
+      ),
       child: ListView(
         padding: const EdgeInsets.fromLTRB(2, 2, 2, 12),
         children: [
@@ -277,53 +332,6 @@ class _DoubleDepartureCompletedStatusDockState
             plate: _plate,
             area: _plate.area,
           ),
-          if (_billingApplicable) ...[
-            const SizedBox(height: 14),
-            ParkingCompletedSectionCard(
-              title: '정산 관리',
-              subtitle: '현재 차량의 사전 정산 상태를 관리합니다.',
-              child: ParkingCompletedBillingActionButton(
-                billingState: _billingState,
-                onSettle: _handleSettle,
-                onCancel: _handleCancel,
-              ),
-            ),
-          ],
-          const SizedBox(height: 14),
-          ParkingCompletedSectionCard(
-            title: '빠른 실행',
-            subtitle: '현재 차량의 관련 기능을 바로 실행합니다.',
-            child: ParkingCompletedActionList(
-              children: [
-                ParkingCompletedSecondaryActionButton(
-                  icon: Icons.history_rounded,
-                  label: '로그 확인',
-                  onPressed: () async {
-                    if (!mounted) return;
-                    final request = PlateLogSideDockRequest(
-                      plateNumber: _plate.plateNumber,
-                      area: _plate.area,
-                      plateId: _plate.id.trim().isEmpty ? null : _plate.id.trim(),
-                      source: 'double_departure_completed_status',
-                    );
-                    parkingStatusTraceLog(
-                      context,
-                      'log_handoff_requested sourceDock=parking_status targetDock=plate_log policy=close_then_open overlay=false plate=${_plate.plateNumber}',
-                    );
-                    widget.onLogRequested(request);
-                    Navigator.of(context).pop(_changed ? _plate : null);
-                  },
-                ),
-                ParkingCompletedSecondaryActionButton(
-                  icon: Icons.edit_note_rounded,
-                  label: '정보 수정',
-                  enabled: false,
-                  onPressed: () async {},
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 10),
         ],
       ),
     );

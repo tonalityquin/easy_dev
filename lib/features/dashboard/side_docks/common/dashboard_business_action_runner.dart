@@ -3,10 +3,11 @@ import 'package:provider/provider.dart';
 
 import '../../../../app/models/capability.dart';
 import '../../../../app/utils/developer_operation_status_dialog.dart';
-import '../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../design_system/common_ui/common_ui_side_dock.dart';
 import '../../../account/applications/user_state.dart';
 import '../../../dev/application/area_state.dart';
-import '../../widgets/productivity_sheet.dart';
+import '../../../../shared/secondary/application/secondary_info.dart';
+import '../../../../shared/secondary/side_docks/secondary_side_dock.dart';
 import 'dashboard_dock_request.dart';
 
 class DashboardBusinessActionRunner {
@@ -28,8 +29,13 @@ class DashboardBusinessActionRunner {
     final userState = context.read<UserState>();
     final hasMonthlyCapability =
         areaState.capabilitiesOfCurrentArea.contains(Capability.monthly);
-    final isFieldCommon = userState.role.trim() == 'fieldCommon';
-    final canUseMonthly = hasMonthlyCapability && !isFieldCommon;
+    final roleName = userState.role.trim();
+    final roleType = RoleType.fromName(roleName);
+    final roleAllowsMonthly =
+        (kRolePolicy[roleType] ?? const <Section>{}).contains(Section.monthly);
+    final isFieldCommon = roleName == 'fieldCommon';
+    final canUseMonthly =
+        hasMonthlyCapability && roleAllowsMonthly && !isFieldCommon;
     final actionLabel = request == DashboardDockRequest.monthlyParking
         ? '정기 주차'
         : '출차 완료';
@@ -44,7 +50,7 @@ class DashboardBusinessActionRunner {
       showDialogImmediately: false,
     );
     trace.log(
-      'request=${request.name} screen=$screen area=${areaState.currentArea.trim()} role=${userState.role.trim()} monthlyCapability=$hasMonthlyCapability monthlyVisible=$canUseMonthly',
+      'request=${request.name} screen=$screen area=${areaState.currentArea.trim()} role=$roleName monthlyCapability=$hasMonthlyCapability monthlyRoleAllowed=$roleAllowsMonthly monthlyVisible=$canUseMonthly',
       progress: 0.12,
     );
 
@@ -55,26 +61,29 @@ class DashboardBusinessActionRunner {
       if (request == DashboardDockRequest.monthlyParking) {
         if (!canUseMonthly) {
           trace.log(
-            'monthly_action_blocked capability=$hasMonthlyCapability fieldCommon=$isFieldCommon',
+            'monthly_action_blocked capability=$hasMonthlyCapability roleAllowed=$roleAllowsMonthly fieldCommon=$isFieldCommon',
             progress: 0.4,
           );
           await trace.fail('정기 주차 표시 조건을 충족하지 않아 실행하지 않았습니다.');
         } else {
-          trace.log('monthly_panel_open', progress: 0.38);
-          await ProductivitySheet.togglePanel();
-          trace.log('monthly_panel_closed', progress: 0.9);
+          trace.log('monthly_operations_open section=${Section.monthly.name}', progress: 0.38);
+          await showSecondarySideDock<void>(
+            context: context,
+            initialSection: Section.monthly,
+          );
+          trace.log('monthly_operations_closed section=${Section.monthly.name}', progress: 0.9);
           await trace.succeed('정기 주차 업무를 종료했습니다.');
         }
       } else {
-        trace.log('departure_completed_sheet_open', progress: 0.38);
-        await showCommonOverlayBottomSheet<void>(
+        trace.log('departure_completed_dock_open presentation=operations_right_side_dock rail=left', progress: 0.38);
+        await showOperationsRightSideDock<void>(
           context: context,
-          isScrollControlled: true,
-          useSafeArea: true,
-          transparentBackground: true,
+          barrierLabel: '출차 완료',
+          maxWidth: 420,
+          widthFactor: .96,
           builder: (_) => buildDepartureCompletedSheet(),
         );
-        trace.log('departure_completed_sheet_closed', progress: 0.9);
+        trace.log('departure_completed_dock_closed presentation=operations_right_side_dock', progress: 0.9);
         await trace.succeed('출차 완료 업무를 종료했습니다.');
       }
     } catch (error, stackTrace) {

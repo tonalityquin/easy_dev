@@ -9,7 +9,8 @@ import '../../../design_system/common_ui/common_ui_theme.dart';
 import '../../account/applications/user_state.dart';
 import '../../dev/application/area_state.dart';
 import '../../monthly/application/monthly_area_resolver.dart';
-import '../../monthly/page/monthly_parking_management.dart';
+import '../../../shared/secondary/application/secondary_info.dart';
+import '../../../shared/secondary/side_docks/secondary_side_dock.dart';
 
 enum ProductivitySheetTab { monthly, focus, todo, calendar, memo }
 
@@ -118,11 +119,16 @@ class _MonthlyProductivityBody extends StatelessWidget {
       userArea: userArea,
       areaStateArea: selectedArea,
     );
-    final canUseMonthly = context.select<AreaState, bool>((state) {
+    final hasCapability = context.select<AreaState, bool>((state) {
       final stateArea = state.currentArea.trim();
       if (stateArea.isEmpty || stateArea != area) return true;
       return state.capabilitiesOfCurrentArea.contains(Capability.monthly);
     });
+    final roleName = context.select<UserState, String>((state) => state.role.trim());
+    final roleType = RoleType.fromName(roleName);
+    final roleAllowed =
+        (kRolePolicy[roleType] ?? const <Section>{}).contains(Section.monthly);
+    final canUseMonthly = hasCapability && roleAllowed && roleName != 'fieldCommon';
 
     return AnimatedSwitcher(
       duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false
@@ -144,8 +150,8 @@ class _MonthlyProductivityBody extends StatelessWidget {
                   title: '정기 주차 권한이 없습니다',
                   message: '현재 지점에서 정기 주차 기능이 열려 있을 때 사용할 수 있습니다.',
                 )
-              : const MonthlyParkingManagement(
-                  key: ValueKey<String>('monthly-management'),
+              : const _MonthlyOperationsLauncher(
+                  key: ValueKey<String>('monthly-operations-launcher'),
                 ),
     );
   }
@@ -213,6 +219,75 @@ class _MonthlyAccessNotice extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+class _MonthlyOperationsLauncher extends StatelessWidget {
+  const _MonthlyOperationsLauncher({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    final textTheme = Theme.of(context).textTheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: tokens.surfaceRaised,
+                  borderRadius: BorderRadius.circular(CommonUiShapes.control),
+                  border: Border.all(color: tokens.borderSubtle),
+                ),
+                child: Icon(
+                  Icons.local_parking_rounded,
+                  size: 22,
+                  color: tokens.accent,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                '정기 주차 관리는 운영 화면에서 통합 관리합니다',
+                textAlign: TextAlign.center,
+                style: textTheme.bodyMedium?.copyWith(
+                  color: tokens.textPrimary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: 180,
+                child: CommonButton(
+                  label: '정기 주차 관리 열기',
+                  icon: Icons.open_in_new_rounded,
+                  haptic: CommonHaptic.selection,
+                  expand: true,
+                  onPressed: () async {
+                    final rootContext =
+                        Navigator.of(context, rootNavigator: true).context;
+                    Navigator.of(context).pop();
+                    await Future<void>.delayed(Duration.zero);
+                    if (!rootContext.mounted) return;
+                    await showSecondarySideDock<void>(
+                      context: rootContext,
+                      initialSection: Section.monthly,
+                    );
+                  },
+                ),
+              ),
+            ],
           ),
         ),
       ),

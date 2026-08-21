@@ -4,6 +4,7 @@ import '../../../app/models/capability.dart';
 import '../../../features/account/pages/tablet/tablet_management.dart';
 import '../../../features/account/pages/user/user_management.dart';
 import '../../../features/location/pages/location_management.dart';
+import '../../../features/monthly/page/monthly_parking_management.dart';
 import '../../../features/payment/pages/bill_management.dart';
 import '../../../features/sector/pages/sector_management.dart';
 import '../pages/sheets/area_management.dart';
@@ -75,6 +76,13 @@ const SecondaryInfo tabTablet = SecondaryInfo(
   TabletManagement(),
   Icon(Icons.tablet_mac),
   requires: {Capability.tablet},
+);
+
+const SecondaryInfo tabMonthly = SecondaryInfo(
+  '정기 주차 관리',
+  MonthlyParkingManagement(),
+  Icon(Icons.local_parking_rounded),
+  requires: {Capability.monthly},
 );
 
 const SecondaryInfo tabBill = SecondaryInfo(
@@ -254,6 +262,7 @@ final Map<Section, SecondaryInfo> kSectionTab = {
   Section.sector: tabSector,
   Section.location: tabLocation,
   Section.tablet: tabTablet,
+  Section.monthly: tabMonthly,
   Section.bill: tabBill,
   Section.area: tabAreaManage,
 };

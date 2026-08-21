@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show setEquals;
 import 'package:flutter/material.dart';
 
 import '../../design_system/common_ui/common_ui_theme.dart';
@@ -92,6 +93,7 @@ class ParkingStatusDotMapSurface extends StatelessWidget {
     required this.grid,
     this.targetRect,
     this.viewport,
+    this.visibleParkingAreaIds,
     this.exact = false,
     this.pulse = 1,
     this.framed = true,
@@ -101,6 +103,7 @@ class ParkingStatusDotMapSurface extends StatelessWidget {
   final ParkingGridModel grid;
   final GridRect? targetRect;
   final GridRect? viewport;
+  final Set<String>? visibleParkingAreaIds;
   final bool exact;
   final double pulse;
   final bool framed;
@@ -114,6 +117,7 @@ class ParkingStatusDotMapSurface extends StatelessWidget {
         grid: grid,
         targetRect: targetRect,
         viewport: viewport,
+        visibleParkingAreaIds: visibleParkingAreaIds,
         exact: exact,
         pulse: pulse,
         framed: framed,
@@ -142,6 +146,7 @@ class ParkingStatusDotMapPainter extends CustomPainter {
     required this.grid,
     required this.targetRect,
     required this.viewport,
+    required this.visibleParkingAreaIds,
     required this.exact,
     required this.pulse,
     required this.framed,
@@ -152,6 +157,7 @@ class ParkingStatusDotMapPainter extends CustomPainter {
   final ParkingGridModel grid;
   final GridRect? targetRect;
   final GridRect? viewport;
+  final Set<String>? visibleParkingAreaIds;
   final bool exact;
   final double pulse;
   final bool framed;
@@ -241,6 +247,11 @@ class ParkingStatusDotMapPainter extends CustomPainter {
       ..style = PaintingStyle.fill
       ..color = tokens.textSecondary.withOpacity(.46);
     for (final area in grid.parkingAreas) {
+      final visibleIds = visibleParkingAreaIds;
+      if (visibleIds != null) {
+        final id = area.id.trim();
+        if (id.isEmpty || !visibleIds.contains(id)) continue;
+      }
       final center = _logicalCenter(
         origin: origin,
         scale: scale,
@@ -446,6 +457,10 @@ class ParkingStatusDotMapPainter extends CustomPainter {
     return oldDelegate.grid != grid ||
         oldDelegate.targetRect != targetRect ||
         oldDelegate.viewport != viewport ||
+        !setEquals(
+          oldDelegate.visibleParkingAreaIds,
+          visibleParkingAreaIds,
+        ) ||
         oldDelegate.exact != exact ||
         oldDelegate.pulse != pulse ||
         oldDelegate.framed != framed ||

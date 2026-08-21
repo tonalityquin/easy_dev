@@ -1,50 +1,139 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../../app/utils/status_dialog.dart';
 import '../../../design_system/common_ui/common_ui_components.dart';
-import '../../../design_system/common_ui/common_ui_overlays.dart';
 import '../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../shared/plate/domain/repositories/plate_repository.dart';
 import '../../../shared/plate/domain/services/plate_status_record.dart';
+import '../../../shared/secondary/application/secondary_monthly_workspace_state.dart';
+import '../../../shared/secondary/widgets/ops_console_widgets.dart';
 import '../../account/applications/user_state.dart';
 import '../../dev/application/area_state.dart';
+import '../../selector/application/dev_auth.dart';
 import '../application/monthly_area_resolver.dart';
-import '../controllers/monthly_plate_controller.dart';
 import '../domain/monthly_parking_options.dart';
-import 'sheets/monthly_plate_bottom_sheet.dart';
-import 'sheets/monthly_plate_payment_bottom_sheet.dart';
 import 'widgets/monthly_common_ui.dart';
 
 class MonthlyParkingManagement extends StatefulWidget {
   const MonthlyParkingManagement({super.key});
 
   @override
-  State<MonthlyParkingManagement> createState() => _MonthlyParkingManagementState();
+  State<MonthlyParkingManagement> createState() =>
+      _MonthlyParkingManagementState();
 }
 
 enum _MonthlyFilter { all, active, expiringSoon, expired, memo }
 
 enum _MonthlySort { updatedDesc, endDateAsc, plateAsc, amountDesc }
 
+enum _MonthlyStatus { active, expiringSoon, expired, unknown }
+
 class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
+  final List<String> _debugLines = <String>[];
   String _query = '';
   _MonthlyFilter _filter = _MonthlyFilter.all;
   _MonthlySort _sort = _MonthlySort.updatedDesc;
   String? _selectedDocId;
+  _MonthlyPlateVM? _selectedHydratedItem;
   List<Map<String, dynamic>> _records = const <Map<String, dynamic>>[];
   String _loadedArea = '';
   String? _pendingArea;
   bool _loading = false;
+  bool _selectionClearScheduled = false;
+  bool _devModeEnabled = false;
   Object? _loadError;
 
   @override
+  void initState() {
+    super.initState();
+    _devModeEnabled = DevAuth.devModeEnabled.value;
+    DevAuth.devModeEnabled.addListener(_handleDevModeChanged);
+    _log('mounted devMode=$_devModeEnabled uiProfile=user_management_ops rowInteraction=select_expand_footer motion=ops_common');
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final enabled = await DevAuth.isDevModeEnabled();
+      if (!mounted) return;
+      if (_devModeEnabled != enabled) {
+        setState(() => _devModeEnabled = enabled);
+      }
+      _log('developer_mode_resolved enabled=$enabled');
+    });
+  }
+
+  @override
   void dispose() {
+    DevAuth.devModeEnabled.removeListener(_handleDevModeChanged);
+    _log('disposed selected=${_selectedDocId ?? '-'}');
     _scrollController.dispose();
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _handleDevModeChanged() {
+    if (!mounted) return;
+    final enabled = DevAuth.devModeEnabled.value;
+    if (_devModeEnabled == enabled) return;
+    setState(() => _devModeEnabled = enabled);
+    _log('developer_mode_changed enabled=$enabled');
+  }
+
+  void _log(String message) {
+    final normalized = message.trim();
+    if (normalized.isEmpty) return;
+    final now = DateTime.now();
+    String two(int value) => value.toString().padLeft(2, '0');
+    String three(int value) => value.toString().padLeft(3, '0');
+    final stamp =
+        '${two(now.hour)}:${two(now.minute)}:${two(now.second)}.${three(now.millisecond)}';
+    final line = '[$stamp] [MonthlyParkingManagement] $normalized';
+    _debugLines.add(line);
+    if (_debugLines.length > 240) {
+      _debugLines.removeRange(0, _debugLines.length - 240);
+    }
+    debugPrint(line);
+  }
+
+  String _dartStringLiteral(String value) {
+    return jsonEncode(value).replaceAll(r'$', r'\$');
+  }
+
+  String get _debugPrintCode {
+    if (_debugLines.isEmpty) {
+      return 'debugPrint(${_dartStringLiteral('[MonthlyParkingManagement] 기록된 로그가 없습니다.')});';
+    }
+    return _debugLines
+        .map((line) => 'debugPrint(${_dartStringLiteral(line)});')
+        .join('\n');
+  }
+
+  Future<void> _showDeveloperStatusDialog() async {
+    final enabled = await DevAuth.isDevModeEnabled();
+    if (!mounted || !enabled) return;
+    final allItems = _toItems(_records);
+    final visibleItems = _filteredSorted(allItems);
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    _log(
+      'developer_status_dialog_open area=${_loadedArea.isEmpty ? '-' : _loadedArea} records=${allItems.length} visible=${visibleItems.length} selected=${_selectedDocId ?? '-'} filter=${_filter.name} sort=${_sort.name} loading=$_loading error=${_loadError != null} reduceMotion=$reduceMotion uiProfile=user_management_ops motion=ops_common',
+    );
+    await StatusDialog.showSuccess(
+      context,
+      title: '정기 주차 Management 디버그',
+      description:
+          'area=${_loadedArea.isEmpty ? '-' : _loadedArea}\nrecords=${allItems.length}\nvisible=${visibleItems.length}\nselected=${_selectedDocId ?? '-'}\nfilter=${_filter.name}\nsort=${_sort.name}\nreduceMotion=$reduceMotion',
+      copyText: _debugPrintCode,
+      copyButtonLabel: 'debugPrint 코드 복사',
+      visibleDuration: Duration.zero,
+      useCommonUi: true,
+      awaitManualClose: true,
+    );
   }
 
   DateTime? _parseDate(String value) {
@@ -114,7 +203,10 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
   _MonthlyPlateVM _toItem(Map<String, dynamic> raw) {
     final data = Map<String, dynamic>.from(raw);
     final docId = (data['docId'] ?? '').toString();
-    final plateNumber = (data['plateNumber'] ?? (docId.split('_').isEmpty ? '' : docId.split('_').first)).toString();
+    final docParts = docId.split('_');
+    final plateNumber =
+        (data['plateNumber'] ?? (docParts.isEmpty ? '' : docParts.first))
+            .toString();
     final endDate = (data['endDate'] ?? '').toString();
     final daysLeft = _daysLeft(endDate);
     return _MonthlyPlateVM(
@@ -124,7 +216,8 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
       countType: (data['countType'] ?? '').toString(),
       regularType: (data['regularType'] ?? '').toString(),
       amount: _asInt(data['regularAmount']),
-      duration: _asInt(data['regularDurationValue'] ?? data['regularDurationHours']),
+      duration:
+          _asInt(data['regularDurationValue'] ?? data['regularDurationHours']),
       periodUnit: (data['periodUnit'] ?? '월').toString(),
       startDate: (data['startDate'] ?? '').toString(),
       endDate: endDate,
@@ -153,12 +246,13 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
 
   List<_MonthlyPlateVM> _filteredSorted(List<_MonthlyPlateVM> items) {
     final query = _query.trim().toLowerCase();
-    var filtered = items.where((item) {
-      if (query.isEmpty) return true;
-      return item.plateNumber.toLowerCase().contains(query) ||
+    final filtered = items.where((item) {
+      final queryMatch = query.isEmpty ||
+          item.plateNumber.toLowerCase().contains(query) ||
           item.countType.toLowerCase().contains(query) ||
-          item.regularType.toLowerCase().contains(query);
-    }).where((item) {
+          item.regularType.toLowerCase().contains(query) ||
+          item.customStatus.toLowerCase().contains(query);
+      if (!queryMatch) return false;
       switch (_filter) {
         case _MonthlyFilter.all:
           return true;
@@ -182,7 +276,10 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
         });
         break;
       case _MonthlySort.endDateAsc:
-        filtered.sort((a, b) => (a.daysLeft ?? (1 << 30)).compareTo(b.daysLeft ?? (1 << 30)));
+        filtered.sort(
+          (a, b) =>
+              (a.daysLeft ?? (1 << 30)).compareTo(b.daysLeft ?? (1 << 30)),
+        );
         break;
       case _MonthlySort.plateAsc:
         filtered.sort((a, b) => a.plateNumber.compareTo(b.plateNumber));
@@ -199,7 +296,8 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
     return _MonthlySummary(
       total: items.length,
       active: items.where((e) => e.status == _MonthlyStatus.active).length,
-      expiringSoon: items.where((e) => e.status == _MonthlyStatus.expiringSoon).length,
+      expiringSoon:
+          items.where((e) => e.status == _MonthlyStatus.expiringSoon).length,
       expired: items.where((e) => e.status == _MonthlyStatus.expired).length,
       memo: items.where((e) => e.hasMemo).length,
     );
@@ -213,7 +311,7 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
       if (!mounted) return;
       final target = _pendingArea ?? safeArea;
       _pendingArea = null;
-      _loadMonthlyPlateView(target);
+      unawaited(_loadMonthlyPlateView(target));
     });
   }
 
@@ -224,36 +322,69 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
       setState(() {
         _records = const <Map<String, dynamic>>[];
         _loadedArea = '';
+        _selectedDocId = null;
+        _selectedHydratedItem = null;
         _loading = false;
         _loadError = null;
       });
+      _log('load_skipped reason=area_empty');
       return;
     }
 
-    setState(() {
-      _loading = true;
-      _loadError = null;
-    });
+    if (mounted) {
+      setState(() {
+        _loading = true;
+        _loadError = null;
+      });
+    }
+    _log('load_started area=$safeArea');
 
     try {
-      final records = await context.read<PlateRepository>().fetchMonthlyPlateStatusView(area: safeArea);
+      final records = await context
+          .read<PlateRepository>()
+          .fetchMonthlyPlateStatusView(area: safeArea);
       if (!mounted) return;
+      final selected = _selectedDocId;
+      final selectedExists = selected == null ||
+          records.any((record) => (record['docId'] ?? '').toString() == selected);
       setState(() {
         _records = records;
         _loadedArea = safeArea;
         _loading = false;
+        if (!selectedExists) {
+          _selectedDocId = null;
+          _selectedHydratedItem = null;
+        } else {
+          _selectedHydratedItem = null;
+        }
       });
-    } catch (e) {
+      _log(
+        'load_completed area=$safeArea count=${records.length} selectionPreserved=$selectedExists',
+      );
+      final selectedId = _selectedDocId;
+      if (selectedId != null) {
+        for (final record in records) {
+          if ((record['docId'] ?? '').toString() == selectedId) {
+            unawaited(_hydrateSelected(_toItem(record)));
+            break;
+          }
+        }
+      }
+    } catch (error, stackTrace) {
       if (!mounted) return;
       setState(() {
         _records = const <Map<String, dynamic>>[];
         _loadedArea = safeArea;
+        _selectedDocId = null;
+        _selectedHydratedItem = null;
         _loading = false;
-        _loadError = e;
+        _loadError = error;
       });
+      _log('load_failed area=$safeArea error=$error');
+      _log('load_stack=$stackTrace');
       showMonthlyCommonMessage(
         context,
-        '정기 주차 목록을 불러오지 못했습니다. 아래로 당겨 다시 시도해주세요.',
+        '정기 주차 목록을 불러오지 못했습니다.',
         tone: MonthlyCommonMessageTone.danger,
       );
     }
@@ -261,6 +392,7 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
 
   Future<void> _refreshMonthlyPlateView() async {
     final area = MonthlyAreaResolver.readCurrentArea(context);
+    _log('refresh_requested area=$area');
     await _loadMonthlyPlateView(area);
   }
 
@@ -272,89 +404,66 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
             plateNumber: item.plateNumber,
             area: area,
           );
-      if (record == null) return item;
+      if (record == null) {
+        _log('hydrate_missing doc=${item.docId} plate=${item.plateNumber}');
+        return item;
+      }
+      _log('hydrate_completed doc=${item.docId} plate=${item.plateNumber}');
       return _toItemFromSourceRecord(record);
-    } catch (_) {
+    } catch (error) {
+      _log('hydrate_failed doc=${item.docId} error=$error');
       return item;
     }
   }
 
-  Future<void> _openAddDialog() async {
-    FocusScope.of(context).unfocus();
-    await showCommonOverlayDialog<void>(
-      context: context,
-      barrierDismissible: true,
-      builder: (_) => const MonthlyPlateBottomSheet(),
+  Future<void> _hydrateSelected(_MonthlyPlateVM item) async {
+    final source = await _hydrateFromSource(item);
+    if (!mounted || _selectedDocId != item.docId) return;
+    setState(() => _selectedHydratedItem = source);
+    _log(
+      'selection_hydrated doc=${item.docId} payments=${source.paymentCount} history=${_paymentHistoryCount(source.data)}',
     );
-    if (mounted) await _refreshMonthlyPlateView();
   }
 
-  Future<void> _openEditDialog(_MonthlyPlateVM item) async {
+  int _paymentHistoryCount(Map<String, dynamic> data) {
+    final raw = data['payment_history'];
+    return raw is List ? raw.length : 0;
+  }
+
+  void _openAddWorkspace() {
     FocusScope.of(context).unfocus();
+    _log('add_workspace_open');
+    context.read<SecondaryMonthlyWorkspaceState>().openCreate(
+          source: 'monthly_management_create',
+        );
+  }
+
+  Future<void> _openEditWorkspace(_MonthlyPlateVM item) async {
+    FocusScope.of(context).unfocus();
+    _log('edit_workspace_open doc=${item.docId} plate=${item.plateNumber}');
     final sourceItem = await _hydrateFromSource(item);
     if (!mounted) return;
-    await showCommonOverlayDialog<void>(
-      context: context,
-      barrierDismissible: true,
-      builder: (_) => MonthlyPlateBottomSheet(
-        isEditMode: true,
-        initialDocId: sourceItem.docId,
-        initialData: sourceItem.data,
-      ),
-    );
-    if (mounted) await _refreshMonthlyPlateView();
+    context.read<SecondaryMonthlyWorkspaceState>().openEdit(
+          docId: sourceItem.docId,
+          initialData: sourceItem.data,
+          source: 'monthly_management_edit',
+        );
   }
 
-  Future<void> _openPaymentDialog(_MonthlyPlateVM item) async {
+  Future<void> _openPaymentWorkspace(_MonthlyPlateVM item) async {
     FocusScope.of(context).unfocus();
-
-    final nameController = TextEditingController();
-    final amountController = TextEditingController();
-    final durationController = TextEditingController();
-    final startDateController = TextEditingController();
-    final endDateController = TextEditingController();
-    final controller = MonthlyPlateController(
-      nameController: nameController,
-      amountController: amountController,
-      durationController: durationController,
-      startDateController: startDateController,
-      endDateController: endDateController,
-      regularAmountController: amountController,
-      regularDurationController: durationController,
-    );
-
+    _log('payment_workspace_open doc=${item.docId} plate=${item.plateNumber}');
     final sourceItem = await _hydrateFromSource(item);
-    await controller.loadExistingData(sourceItem.data, docId: sourceItem.docId);
-    controller.showKeypad = false;
-
-    if (!mounted) {
-      controller.dispose();
-      nameController.dispose();
-      amountController.dispose();
-      durationController.dispose();
-      startDateController.dispose();
-      endDateController.dispose();
-      return;
-    }
-
-    await showCommonOverlayBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      transparentBackground: true,
-      builder: (_) => MonthlyPaymentBottomSheet(controller: controller),
-    );
-
-    controller.dispose();
-    nameController.dispose();
-    amountController.dispose();
-    durationController.dispose();
-    startDateController.dispose();
-    endDateController.dispose();
-    if (mounted) await _refreshMonthlyPlateView();
+    if (!mounted) return;
+    context.read<SecondaryMonthlyWorkspaceState>().openPayment(
+          docId: sourceItem.docId,
+          initialData: sourceItem.data,
+          source: 'monthly_management_payment',
+        );
   }
 
   Future<void> _deleteItem(_MonthlyPlateVM item) async {
+    _log('delete_confirm_open doc=${item.docId} plate=${item.plateNumber}');
     final ok = await showMonthlyCommonConfirmation(
       context: context,
       title: '정기권 삭제',
@@ -364,93 +473,481 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
       icon: Icons.delete_outline_rounded,
     );
 
-    if (!ok || !mounted) return;
+    if (!ok || !mounted) {
+      _log('delete_cancelled doc=${item.docId}');
+      return;
+    }
 
     try {
-      await context.read<PlateRepository>().deleteMonthlyPlateStatus(documentId: item.docId);
+      _log('delete_started doc=${item.docId}');
+      await context
+          .read<PlateRepository>()
+          .deleteMonthlyPlateStatus(documentId: item.docId);
       if (!mounted) return;
       setState(() {
-        if (_selectedDocId == item.docId) _selectedDocId = null;
+        if (_selectedDocId == item.docId) {
+          _selectedDocId = null;
+          _selectedHydratedItem = null;
+        }
       });
+      _log('delete_completed doc=${item.docId}');
       showMonthlyCommonMessage(
         context,
         '정기 주차 정보가 삭제되었습니다.',
         tone: MonthlyCommonMessageTone.success,
       );
       await _refreshMonthlyPlateView();
-    } catch (_) {
+    } catch (error, stackTrace) {
       if (!mounted) return;
+      _log('delete_failed doc=${item.docId} error=$error');
+      _log('delete_stack=$stackTrace');
       showMonthlyCommonMessage(
         context,
-        '삭제에 실패했습니다. 다시 시도해주세요.',
+        '삭제에 실패했습니다.',
         tone: MonthlyCommonMessageTone.danger,
       );
     }
   }
 
-  Future<void> _openDetailSheet(_MonthlyPlateVM item) async {
-    FocusScope.of(context).unfocus();
-    setState(() => _selectedDocId = item.docId);
-    final sourceItem = await _hydrateFromSource(item);
-    if (!mounted) return;
-
-    await showCommonOverlayBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      transparentBackground: true,
-      builder: (_) => _MonthlyDetailPanel(
-        item: sourceItem,
-        onEdit: () async {
-          Navigator.of(context).pop();
-          await _openEditDialog(sourceItem);
-        },
-        onPay: () async {
-          Navigator.of(context).pop();
-          await _openPaymentDialog(sourceItem);
-        },
-        onDelete: () async {
-          Navigator.of(context).pop();
-          await _deleteItem(sourceItem);
-        },
-      ),
-    );
-
-    if (mounted) setState(() {});
+  void _setQuery(String value) {
+    if (_query == value) return;
+    setState(() => _query = value);
+    _log('query_changed length=${value.trim().length}');
   }
 
-  Widget _refreshableBody({
-    required Widget child,
+  void _clearQuery() {
+    if (_query.isEmpty && _searchController.text.isEmpty) return;
+    _searchController.clear();
+    setState(() => _query = '');
+    _log('query_cleared');
+  }
+
+  void _setFilter(_MonthlyFilter filter) {
+    if (_filter == filter) return;
+    unawaited(HapticFeedback.selectionClick());
+    setState(() => _filter = filter);
+    _log('filter_changed value=${filter.name}');
+  }
+
+  void _cycleSort() {
+    final values = _MonthlySort.values;
+    final next = values[(values.indexOf(_sort) + 1) % values.length];
+    unawaited(HapticFeedback.selectionClick());
+    setState(() => _sort = next);
+    _log('sort_changed value=${next.name}');
+  }
+
+
+  void _toggleSelection(_MonthlyPlateVM item) {
+    unawaited(HapticFeedback.selectionClick());
+    final wasSelected = _selectedDocId == item.docId;
+    setState(() {
+      _selectedDocId = wasSelected ? null : item.docId;
+      _selectedHydratedItem = null;
+    });
+    _log(
+      '${wasSelected ? 'row_deselected' : 'row_selected'} doc=${item.docId} plate=${item.plateNumber} status=${item.status.name} payments=${item.paymentCount}',
+    );
+    if (!wasSelected) {
+      unawaited(_hydrateSelected(item));
+    }
+  }
+
+  void _scheduleSelectionValidation(List<_MonthlyPlateVM> visibleItems) {
+    final selected = _selectedDocId;
+    if (selected == null) return;
+    if (visibleItems.any((item) => item.docId == selected)) return;
+    if (_selectionClearScheduled) return;
+    _selectionClearScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _selectionClearScheduled = false;
+      if (!mounted || _selectedDocId != selected) return;
+      setState(() {
+        _selectedDocId = null;
+        _selectedHydratedItem = null;
+      });
+      _log('selection_cleared reason=filtered_or_scope_changed doc=$selected');
+    });
+  }
+
+  String _sortLabel(_MonthlySort sort) {
+    return switch (sort) {
+      _MonthlySort.updatedDesc => '최근 수정',
+      _MonthlySort.endDateAsc => '만료 임박',
+      _MonthlySort.plateAsc => '차량번호',
+      _MonthlySort.amountDesc => '요금 높은순',
+    };
+  }
+
+  Widget _buildToolbar(
+    BuildContext context, {
+    required bool refreshing,
   }) {
-    return RefreshIndicator(
-      onRefresh: _refreshMonthlyPlateView,
-      color: CommonUiTheme.of(context).accent,
-      child: child,
+    return Row(
+      children: [
+        Expanded(
+          child: OpsDockSearchField(
+            controller: _searchController,
+            query: _query,
+            semanticLabel: '정기 주차 검색',
+            onChanged: _setQuery,
+            onClear: _clearQuery,
+          ),
+        ),
+        const SizedBox(width: 6),
+        CommonIconButton(
+          icon: Icons.refresh_rounded,
+          tooltip: '새로고침',
+          onPressed: refreshing ? null : _refreshMonthlyPlateView,
+          loading: refreshing,
+          haptic: CommonHaptic.selection,
+          size: 40,
+          iconSize: 19,
+        ),
+        const SizedBox(width: 4),
+        CommonIconButton(
+          icon: Icons.add_rounded,
+          tooltip: '정기 주차 등록',
+          onPressed: _openAddWorkspace,
+          haptic: CommonHaptic.selection,
+          size: 40,
+          iconSize: 19,
+        ),
+      ],
     );
   }
 
-  Widget _centerScrollBody(Widget child) {
-    return _refreshableBody(
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return SingleChildScrollView(
-            controller: _scrollController,
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minHeight: constraints.maxHeight - 42),
-              child: Center(child: child),
+  Widget _buildStatusSegments(
+    BuildContext context, {
+    required _MonthlySummary summary,
+  }) {
+    final tokens = CommonUiTheme.of(context);
+    return OpsDockStatusSegments<_MonthlyFilter>(
+      selected: _filter,
+      items: [
+        OpsDockStatusSegmentItem<_MonthlyFilter>(
+          value: _MonthlyFilter.all,
+          label: '전체',
+          count: summary.total,
+          color: tokens.accent,
+        ),
+        OpsDockStatusSegmentItem<_MonthlyFilter>(
+          value: _MonthlyFilter.active,
+          label: '정상',
+          count: summary.active,
+          color: tokens.success,
+        ),
+        OpsDockStatusSegmentItem<_MonthlyFilter>(
+          value: _MonthlyFilter.expiringSoon,
+          label: 'D-7',
+          count: summary.expiringSoon,
+          color: tokens.warning,
+        ),
+        OpsDockStatusSegmentItem<_MonthlyFilter>(
+          value: _MonthlyFilter.expired,
+          label: '만료',
+          count: summary.expired,
+          color: tokens.danger,
+        ),
+        OpsDockStatusSegmentItem<_MonthlyFilter>(
+          value: _MonthlyFilter.memo,
+          label: '메모',
+          count: summary.memo,
+          color: tokens.info,
+        ),
+      ],
+      onSelected: _setFilter,
+    );
+  }
+
+  Widget _buildInfoRow(
+    BuildContext context, {
+    required int visibleCount,
+    required String currentArea,
+  }) {
+    final tokens = CommonUiTheme.of(context);
+    final textTheme = Theme.of(context).textTheme;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            '$visibleCount건 표시${currentArea.isEmpty ? '' : ' · $currentArea'}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: textTheme.labelSmall?.copyWith(
+              color: tokens.textSecondary,
+              fontWeight: FontWeight.w700,
             ),
-          );
-        },
+          ),
+        ),
+        if (_devModeEnabled) ...[
+          CommonIconButton(
+            icon: Icons.bug_report_outlined,
+            tooltip: '디버그 상태',
+            onPressed: _showDeveloperStatusDialog,
+            haptic: CommonHaptic.selection,
+            size: 30,
+            iconSize: 15,
+          ),
+          const SizedBox(width: 3),
+        ],
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: _cycleSort,
+            borderRadius: BorderRadius.circular(CommonUiShapes.control),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 6),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.sort_rounded,
+                    size: 14,
+                    color: tokens.iconSecondary,
+                  ),
+                  const SizedBox(width: 4),
+                  AnimatedSwitcher(
+                    duration:
+                        reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                    switchInCurve: CommonUiMotion.enter,
+                    switchOutCurve: CommonUiMotion.exit,
+                    transitionBuilder: (child, animation) => FadeTransition(
+                      opacity: animation,
+                      child: SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(0, .12),
+                          end: Offset.zero,
+                        ).animate(animation),
+                        child: child,
+                      ),
+                    ),
+                    child: Text(
+                      _sortLabel(_sort),
+                      key: ValueKey<_MonthlySort>(_sort),
+                      style: textTheme.labelSmall?.copyWith(
+                        color: tokens.textSecondary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEmptyState(
+    BuildContext context, {
+    required bool noRecords,
+    required bool hasError,
+  }) {
+    final tokens = CommonUiTheme.of(context);
+    final textTheme = Theme.of(context).textTheme;
+    final queryActive = _query.trim().isNotEmpty;
+    final filtered = _filter != _MonthlyFilter.all;
+
+    late final IconData icon;
+    late final String title;
+    Widget? action;
+
+    if (hasError) {
+      icon = Icons.error_outline_rounded;
+      title = '목록을 불러오지 못했습니다';
+      action = CommonButton(
+        label: '다시 시도',
+        icon: Icons.refresh_rounded,
+        onPressed: _refreshMonthlyPlateView,
+        variant: CommonButtonVariant.secondary,
+        haptic: CommonHaptic.selection,
+        minHeight: 42,
+      );
+    } else if (noRecords) {
+      icon = Icons.local_parking_rounded;
+      title = '등록된 정기 주차가 없습니다';
+      action = CommonButton(
+        label: '정기 주차 등록',
+        icon: Icons.add_rounded,
+        onPressed: _openAddWorkspace,
+        haptic: CommonHaptic.selection,
+        minHeight: 42,
+      );
+    } else if (queryActive) {
+      icon = Icons.manage_search_rounded;
+      title = '일치하는 정기 주차가 없습니다';
+      action = CommonButton(
+        label: '검색 초기화',
+        icon: Icons.search_off_rounded,
+        onPressed: _clearQuery,
+        variant: CommonButtonVariant.secondary,
+        haptic: CommonHaptic.selection,
+        minHeight: 42,
+      );
+    } else if (filtered) {
+      icon = Icons.local_parking_outlined;
+      title = switch (_filter) {
+        _MonthlyFilter.active => '정상 정기 주차가 없습니다',
+        _MonthlyFilter.expiringSoon => 'D-7 정기 주차가 없습니다',
+        _MonthlyFilter.expired => '만료된 정기 주차가 없습니다',
+        _MonthlyFilter.memo => '메모가 있는 정기 주차가 없습니다',
+        _MonthlyFilter.all => '표시할 정기 주차가 없습니다',
+      };
+      action = CommonButton(
+        label: '전체 보기',
+        icon: Icons.local_parking_rounded,
+        onPressed: () => _setFilter(_MonthlyFilter.all),
+        variant: CommonButtonVariant.secondary,
+        haptic: CommonHaptic.selection,
+        minHeight: 42,
+      );
+    } else {
+      icon = Icons.local_parking_outlined;
+      title = '표시할 정기 주차가 없습니다';
+    }
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: tokens.surfaceRaised,
+                borderRadius: BorderRadius.circular(CommonUiShapes.control),
+                border: Border.all(color: tokens.borderSubtle),
+              ),
+              alignment: Alignment.center,
+              child: Icon(
+                icon,
+                color: tokens.iconSecondary,
+                size: 22,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: textTheme.bodyMedium?.copyWith(
+                color: tokens.textPrimary,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            if (action != null) ...[
+              const SizedBox(height: 12),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 180),
+                child: action,
+              ),
+            ],
+          ],
+        ),
       ),
+    );
+  }
+
+  Widget _buildList(
+    BuildContext context, {
+    required List<_MonthlyPlateVM> items,
+  }) {
+    final tokens = CommonUiTheme.of(context);
+    return OpsDockListSurface(
+      child: RefreshIndicator(
+        onRefresh: _refreshMonthlyPlateView,
+        color: tokens.accent,
+        child: ListView.separated(
+          controller: _scrollController,
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.zero,
+          itemCount: items.length,
+          separatorBuilder: (context, index) => Divider(
+            height: 1,
+            thickness: 1,
+            color: tokens.borderSubtle,
+          ),
+          itemBuilder: (context, index) {
+            final item = items[index];
+            final selected = _selectedDocId == item.docId;
+            final hydrated = _selectedHydratedItem;
+            final displayItem = selected && hydrated?.docId == item.docId
+                ? hydrated!
+                : item;
+            return _MonthlyDockRow(
+              key: ValueKey<String>(item.docId),
+              item: displayItem,
+              selected: selected,
+              onTap: () => _toggleSelection(item),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContextFooter(
+    BuildContext context, {
+    required _MonthlyPlateVM? selectedItem,
+  }) {
+    if (selectedItem == null) {
+      return const SizedBox.shrink(key: ValueKey<String>('footer_none'));
+    }
+    return OpsDockContextFooter(
+      key: ValueKey<String>('footer_${selectedItem.docId}'),
+      children: [
+        Expanded(
+          child: CommonButton(
+            label: '수정',
+            icon: Icons.edit_rounded,
+            onPressed: () => _openEditWorkspace(selectedItem),
+            variant: CommonButtonVariant.secondary,
+            haptic: CommonHaptic.selection,
+            minHeight: 42,
+            expand: true,
+          ),
+        ),
+        const SizedBox(width: 5),
+        Expanded(
+          child: CommonButton(
+            label: '결제',
+            icon: Icons.payments_rounded,
+            onPressed: () => _openPaymentWorkspace(selectedItem),
+            haptic: CommonHaptic.selection,
+            minHeight: 42,
+            expand: true,
+          ),
+        ),
+        const SizedBox(width: 5),
+        Expanded(
+          child: CommonButton(
+            label: '삭제',
+            icon: Icons.delete_outline_rounded,
+            onPressed: () => _deleteItem(selectedItem),
+            variant: CommonButtonVariant.destructive,
+            haptic: CommonHaptic.medium,
+            minHeight: 42,
+            expand: true,
+          ),
+        ),
+      ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final userArea = context.select<UserState, String>((state) => state.currentArea.trim());
-    final areaStateArea = context.select<AreaState, String>((state) => state.currentArea.trim());
+    final tokens = CommonUiTheme.of(context);
+    final userArea = context.select<UserState, String>(
+      (state) => state.currentArea.trim(),
+    );
+    final areaStateArea = context.select<AreaState, String>(
+      (state) => state.currentArea.trim(),
+    );
     final currentArea = MonthlyAreaResolver.resolve(
       userArea: userArea,
       areaStateArea: areaStateArea,
@@ -461,91 +958,105 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
     final allItems = _toItems(_records);
     final summary = _summaryOf(allItems);
     final visibleItems = _filteredSorted(allItems);
-
-    Widget body;
-    if (_loading && _records.isEmpty) {
-      body = const _MonthlyLoadingView();
-    } else if (_loadError != null && _records.isEmpty) {
-      body = _centerScrollBody(
-        _MonthlyLoadErrorState(onRetry: _refreshMonthlyPlateView),
-      );
-    } else if (_records.isEmpty) {
-      body = _centerScrollBody(_MonthlyEmptyState(onAdd: _openAddDialog));
-    } else if (visibleItems.isEmpty) {
-      body = _centerScrollBody(
-        _MonthlyNoResultState(onReset: () {
-          _searchController.clear();
-          setState(() {
-            _query = '';
-            _filter = _MonthlyFilter.all;
-            _sort = _MonthlySort.updatedDesc;
-          });
-        }),
-      );
-    } else {
-      body = _refreshableBody(
-        child: ListView.separated(
-          controller: _scrollController,
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
-          itemCount: visibleItems.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 10),
-          itemBuilder: (context, index) {
-            final item = visibleItems[index];
-            return _MonthlyPlateOpsRow(
-              item: item,
-              delay: Duration(milliseconds: index.clamp(0, 10).toInt() * 28),
-              selected: _selectedDocId == item.docId,
-              onTap: () => _openDetailSheet(item),
-              onPay: () => _openPaymentDialog(item),
-            );
-          },
-        ),
-      );
+    _MonthlyPlateVM? selectedItem;
+    for (final item in visibleItems) {
+      if (item.docId == _selectedDocId) {
+        final hydrated = _selectedHydratedItem;
+        selectedItem = hydrated?.docId == item.docId ? hydrated : item;
+        break;
+      }
     }
+    final initialLoading = _loading && _records.isEmpty && _loadError == null;
+    final refreshing = _loading && !initialLoading;
 
-    final tokens = CommonUiTheme.of(context);
-    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    _scheduleSelectionValidation(visibleItems);
 
-    return CommonUiScope(
-      child: Scaffold(
-        backgroundColor: tokens.canvas,
-        body: AnimatedSwitcher(
-          duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
-          switchInCurve: CommonUiMotion.enter,
-          switchOutCurve: CommonUiMotion.exit,
-          child: Column(
-            key: ValueKey<String>(currentArea),
+    final listBody = initialLoading
+        ? const SizedBox.expand(key: ValueKey<String>('initial_loading'))
+        : _loadError != null && _records.isEmpty
+            ? KeyedSubtree(
+                key: const ValueKey<String>('load_error'),
+                child: _buildEmptyState(
+                  context,
+                  noRecords: true,
+                  hasError: true,
+                ),
+              )
+            : _records.isEmpty
+                ? KeyedSubtree(
+                    key: const ValueKey<String>('empty_records'),
+                    child: _buildEmptyState(
+                      context,
+                      noRecords: true,
+                      hasError: false,
+                    ),
+                  )
+                : visibleItems.isEmpty
+                    ? KeyedSubtree(
+                        key: ValueKey<String>(
+                          'empty_result_${_filter.name}_${_query.trim().toLowerCase()}',
+                        ),
+                        child: _buildEmptyState(
+                          context,
+                          noRecords: false,
+                          hasError: false,
+                        ),
+                      )
+                    : KeyedSubtree(
+                        key: ValueKey<String>(
+                          'monthly_list_${_filter.name}_${_sort.name}_${_query.trim().toLowerCase()}_${visibleItems.length}',
+                        ),
+                        child: _buildList(context, items: visibleItems),
+                      );
+
+    return Material(
+      color: tokens.canvas,
+      child: Stack(
         children: [
-          _MonthlyOpsHeader(
-            area: currentArea,
-            summary: summary,
-            onAdd: _openAddDialog,
-          ),
-          _MonthlyCommandBar(
-            controller: _searchController,
-            query: _query,
-            filter: _filter,
-            sort: _sort,
-            totalCount: summary.total,
-            visibleCount: visibleItems.length,
-            onQueryChanged: (value) => setState(() => _query = value.trim()),
-            onQueryClear: () {
-              _searchController.clear();
-              setState(() => _query = '');
-            },
-            onFilterChanged: (value) => setState(() => _filter = value),
-            onSortChanged: (value) => setState(() => _sort = value),
-          ),
-              Expanded(child: body),
+          Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(10, 10, 10, 0),
+                child: _buildToolbar(
+                  context,
+                  refreshing: refreshing,
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
+                child: _buildStatusSegments(
+                  context,
+                  summary: summary,
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 7, 12, 7),
+                child: _buildInfoRow(
+                  context,
+                  visibleCount: visibleItems.length,
+                  currentArea: currentArea,
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 0, 10, 0),
+                  child: OpsDockResultSwitcher(child: listBody),
+                ),
+              ),
+              OpsDockContextFooterTransition(
+                child: _buildContextFooter(
+                  context,
+                  selectedItem: selectedItem,
+                ),
+              ),
             ],
           ),
-        ),
+          OpsDockLoadingOverlay(loading: initialLoading),
+        ],
       ),
     );
   }
 }
-
 
 class _MonthlySummary {
   const _MonthlySummary({
@@ -562,8 +1073,6 @@ class _MonthlySummary {
   final int expired;
   final int memo;
 }
-
-enum _MonthlyStatus { active, expiringSoon, expired, unknown }
 
 class _MonthlyPlateVM {
   const _MonthlyPlateVM({
@@ -603,817 +1112,189 @@ class _MonthlyPlateVM {
   final _MonthlyStatus status;
 }
 
-class _MonthlyOpsHeader extends StatelessWidget {
-  const _MonthlyOpsHeader({
-    required this.area,
-    required this.summary,
-    required this.onAdd,
+class _MonthlyDockRow extends StatelessWidget {
+  const _MonthlyDockRow({
+    super.key,
+    required this.item,
+    required this.selected,
+    required this.onTap,
   });
 
-  final String area;
-  final _MonthlySummary summary;
-  final VoidCallback onAdd;
+  final _MonthlyPlateVM item;
+  final bool selected;
+  final VoidCallback onTap;
 
-  @override
-  Widget build(BuildContext context) {
-    final tokens = CommonUiTheme.of(context);
-    final textTheme = Theme.of(context).textTheme;
-
-    return CommonAnimatedReveal(
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-        decoration: BoxDecoration(
-          color: tokens.surfaceRaised,
-          border: Border(bottom: BorderSide(color: tokens.borderSubtle)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 46,
-                  height: 46,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: tokens.accentContainer,
-                    borderRadius: BorderRadius.circular(CommonUiShapes.control),
-                    border: Border.all(
-                      color: tokens.accent.withOpacity(
-                        tokens.isDark ? 0.56 : 0.34,
-                      ),
-                    ),
-                  ),
-                  child: Icon(
-                    Icons.local_parking_rounded,
-                    color: tokens.onAccentContainer,
-                    size: 26,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '정기 주차 관리',
-                        style: textTheme.titleLarge?.copyWith(
-                          color: tokens.textPrimary,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        area.isEmpty ? '현재 지점 미선택' : '$area 운영 현황',
-                        style: textTheme.bodySmall?.copyWith(
-                          color: tokens.textSecondary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                CommonButton(
-                  label: '신규 등록',
-                  icon: Icons.add_rounded,
-                  minHeight: 46,
-                  haptic: CommonHaptic.medium,
-                  onPressed: onAdd,
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _SummaryCell(
-                    label: '전체',
-                    value: summary.total,
-                    icon: Icons.dashboard_customize_outlined,
-                    tone: MonthlyCommonMessageTone.info,
-                  ),
-                  _SummaryCell(
-                    label: '정상',
-                    value: summary.active,
-                    icon: Icons.verified_outlined,
-                    tone: MonthlyCommonMessageTone.success,
-                  ),
-                  _SummaryCell(
-                    label: 'D-7',
-                    value: summary.expiringSoon,
-                    icon: Icons.timer_outlined,
-                    tone: MonthlyCommonMessageTone.warning,
-                  ),
-                  _SummaryCell(
-                    label: '만료',
-                    value: summary.expired,
-                    icon: Icons.warning_amber_rounded,
-                    tone: MonthlyCommonMessageTone.danger,
-                  ),
-                  _SummaryCell(
-                    label: '메모',
-                    value: summary.memo,
-                    icon: Icons.sticky_note_2_outlined,
-                    tone: MonthlyCommonMessageTone.info,
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+  List<Map<String, dynamic>> _paymentHistory() {
+    final raw = item.data['payment_history'];
+    if (raw is! List) return const <Map<String, dynamic>>[];
+    final out = <Map<String, dynamic>>[];
+    for (final value in raw) {
+      if (value is Map<String, dynamic>) {
+        out.add(value);
+      } else if (value is Map) {
+        out.add(Map<String, dynamic>.from(value));
+      }
+    }
+    return out.reversed.toList(growable: false);
   }
-}
-
-class _SummaryCell extends StatelessWidget {
-  const _SummaryCell({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.tone,
-  });
-
-  final String label;
-  final int value;
-  final IconData icon;
-  final MonthlyCommonMessageTone tone;
 
   @override
   Widget build(BuildContext context) {
     final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
-    final foreground = _toneForeground(tokens, tone);
-    final background = _toneBackground(tokens, tone);
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final statusColor = _monthlyStatusColor(tokens, item.status);
+    final statusLabel = _monthlyStatusLabel(item);
+    final won = NumberFormat.decimalPattern('ko_KR');
+    final typeText = [
+      item.countType.trim().isEmpty ? '정기 주차' : item.countType.trim(),
+      item.regularType.trim().isEmpty ? '타입 미지정' : item.regularType.trim(),
+    ].join(' · ');
+    final periodText = item.startDate.trim().isEmpty && item.endDate.trim().isEmpty
+        ? '기간 미지정'
+        : '${item.startDate.trim().isEmpty ? '-' : item.startDate.trim()} ~ ${item.endDate.trim().isEmpty ? '-' : item.endDate.trim()}';
+    final durationText = MonthlyParkingOptions.durationLabel(
+      regularType: item.regularType,
+      duration: item.duration,
+      periodUnit: item.periodUnit,
+    );
+    final history = selected ? _paymentHistory() : const <Map<String, dynamic>>[];
 
-    return Container(
-      width: 104,
-      margin: const EdgeInsets.only(right: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(CommonUiShapes.card),
-        border: Border.all(color: foreground.withOpacity(0.22)),
-      ),
+    return OpsDockSelectableRowSurface(
+      selected: selected,
+      selectionColor: tokens.accent,
+      selectedContainer: tokens.accentContainer,
+      onTap: onTap,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(icon, size: 15, color: foreground),
-              const SizedBox(width: 5),
+              AnimatedContainer(
+                duration:
+                    reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: statusColor,
+                ),
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  item.plateNumber.trim().isEmpty ? '차량번호 없음' : item.plateNumber,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: tokens.textPrimary,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -.1,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
               Text(
-                label,
-                style: textTheme.labelMedium?.copyWith(
-                  color: foreground,
-                  fontWeight: FontWeight.w700,
+                statusLabel,
+                style: textTheme.labelSmall?.copyWith(
+                  color: statusColor,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(width: 5),
+              AnimatedSwitcher(
+                duration:
+                    reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: ScaleTransition(
+                    scale: Tween<double>(begin: .9, end: 1).animate(animation),
+                    child: child,
+                  ),
+                ),
+                child: Icon(
+                  selected
+                      ? Icons.check_circle_rounded
+                      : Icons.chevron_right_rounded,
+                  key: ValueKey<bool>(selected),
+                  size: 17,
+                  color: selected ? tokens.accent : tokens.iconSecondary,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 5),
           Text(
-            value.toString(),
-            style: textTheme.titleLarge?.copyWith(
-              color: foreground,
-              fontWeight: FontWeight.w800,
-              height: 1,
+            typeText,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: textTheme.bodySmall?.copyWith(
+              color: tokens.textSecondary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            periodText,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: textTheme.labelSmall?.copyWith(
+              color: tokens.textSecondary,
+              fontWeight: FontWeight.w600,
               fontFeatures: const [FontFeature.tabularFigures()],
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MonthlyCommandBar extends StatelessWidget {
-  const _MonthlyCommandBar({
-    required this.controller,
-    required this.query,
-    required this.filter,
-    required this.sort,
-    required this.totalCount,
-    required this.visibleCount,
-    required this.onQueryChanged,
-    required this.onQueryClear,
-    required this.onFilterChanged,
-    required this.onSortChanged,
-  });
-
-  final TextEditingController controller;
-  final String query;
-  final _MonthlyFilter filter;
-  final _MonthlySort sort;
-  final int totalCount;
-  final int visibleCount;
-  final ValueChanged<String> onQueryChanged;
-  final VoidCallback onQueryClear;
-  final ValueChanged<_MonthlyFilter> onFilterChanged;
-  final ValueChanged<_MonthlySort> onSortChanged;
-
-  String _filterLabel(_MonthlyFilter value) {
-    return switch (value) {
-      _MonthlyFilter.all => '전체',
-      _MonthlyFilter.active => '정상',
-      _MonthlyFilter.expiringSoon => 'D-7',
-      _MonthlyFilter.expired => '만료',
-      _MonthlyFilter.memo => '메모',
-    };
-  }
-
-  IconData _filterIcon(_MonthlyFilter value) {
-    return switch (value) {
-      _MonthlyFilter.all => Icons.dashboard_customize_outlined,
-      _MonthlyFilter.active => Icons.verified_outlined,
-      _MonthlyFilter.expiringSoon => Icons.timer_outlined,
-      _MonthlyFilter.expired => Icons.warning_amber_rounded,
-      _MonthlyFilter.memo => Icons.sticky_note_2_outlined,
-    };
-  }
-
-  String _sortLabel(_MonthlySort value) {
-    return switch (value) {
-      _MonthlySort.updatedDesc => '최근 업데이트',
-      _MonthlySort.endDateAsc => '종료일 빠른순',
-      _MonthlySort.plateAsc => '번호판 오름차순',
-      _MonthlySort.amountDesc => '요금 높은순',
-    };
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = CommonUiTheme.of(context);
-    final textTheme = Theme.of(context).textTheme;
-
-    return CommonAnimatedReveal(
-      delay: const Duration(milliseconds: 45),
-      child: Container(
-        color: tokens.canvas,
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final compact = constraints.maxWidth < 520;
-                final searchField = TextField(
-                  controller: controller,
-                  onChanged: onQueryChanged,
-                  style: textTheme.bodyLarge?.copyWith(
-                    color: tokens.textPrimary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  decoration: monthlyCommonInputDecoration(
-                    context,
-                    label: '차량번호·정산명 검색',
-                    prefixIcon: Icon(
-                      Icons.search_rounded,
-                      color: tokens.iconSecondary,
-                    ),
-                    suffixIcon: query.isEmpty
-                        ? null
-                        : CommonIconButton(
-                            icon: Icons.close_rounded,
-                            tooltip: '검색어 지우기',
-                            size: 40,
-                            iconSize: 19,
-                            haptic: CommonHaptic.selection,
-                            onPressed: onQueryClear,
-                          ),
-                  ),
-                );
-                final sortField = DropdownButtonFormField<_MonthlySort>(
-                  value: sort,
-                  isExpanded: true,
-                  decoration: monthlyCommonInputDecoration(
-                    context,
-                    label: '정렬',
-                    prefixIcon: Icon(
-                      Icons.swap_vert_rounded,
-                      color: tokens.iconSecondary,
-                    ),
-                  ),
-                  dropdownColor: tokens.surfaceRaised,
-                  iconEnabledColor: tokens.iconSecondary,
-                  style: textTheme.bodyMedium?.copyWith(
-                    color: tokens.textPrimary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  selectedItemBuilder: (_) => _MonthlySort.values
-                      .map(
-                        (value) => Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            _sortLabel(value),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      )
-                      .toList(),
-                  items: _MonthlySort.values
-                      .map(
-                        (value) => DropdownMenuItem<_MonthlySort>(
-                          value: value,
-                          child: Text(
-                            _sortLabel(value),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (value) {
-                    if (value != null) onSortChanged(value);
-                  },
-                );
-
-                if (compact) {
-                  return Column(
-                    children: [
-                      searchField,
-                      const SizedBox(height: 10),
-                      SizedBox(width: double.infinity, child: sortField),
-                    ],
-                  );
-                }
-
-                return Row(
-                  children: [
-                    Expanded(child: searchField),
-                    const SizedBox(width: 10),
-                    SizedBox(width: 200, child: sortField),
-                  ],
-                );
-              },
-            ),
+          if (selected) ...[
             const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        for (final value in _MonthlyFilter.values)
-                          Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: CommonButton(
-                              label: _filterLabel(value),
-                              icon: _filterIcon(value),
-                              minHeight: 40,
-                              selected: filter == value,
-                              variant: filter == value
-                                  ? CommonButtonVariant.secondary
-                                  : CommonButtonVariant.tertiary,
-                              haptic: CommonHaptic.selection,
-                              onPressed: () => onFilterChanged(value),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                MonthlyCommonBadge(
-                  label: '$visibleCount / $totalCount',
-                  icon: Icons.format_list_numbered_rounded,
-                  tone: MonthlyCommonMessageTone.info,
-                ),
-              ],
+            Divider(height: 1, color: tokens.borderSubtle),
+            const SizedBox(height: 9),
+            _MonthlyInlineValue(
+              label: '요금',
+              value: '₩${won.format(item.amount)}',
             ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _MonthlyPlateOpsRow extends StatelessWidget {
-  const _MonthlyPlateOpsRow({
-    required this.item,
-    required this.delay,
-    required this.selected,
-    required this.onTap,
-    required this.onPay,
-  });
-
-  final _MonthlyPlateVM item;
-  final Duration delay;
-  final bool selected;
-  final VoidCallback onTap;
-  final VoidCallback onPay;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = CommonUiTheme.of(context);
-    final textTheme = Theme.of(context).textTheme;
-    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    final won = NumberFormat.decimalPattern('ko_KR');
-    final tone = _statusTone(item.status);
-    final statusColor = _toneForeground(tokens, tone);
-
-    return CommonAnimatedReveal(
-      delay: reduceMotion ? Duration.zero : delay,
-      child: Material(
-        color: tokens.transparent,
-        borderRadius: BorderRadius.circular(CommonUiShapes.card),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: AnimatedContainer(
-            duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
-            curve: CommonUiMotion.standard,
-            decoration: BoxDecoration(
-              color: selected ? tokens.surfaceSelected : tokens.surfaceRaised,
-              border: Border.all(
-                color: selected ? tokens.accent : tokens.borderSubtle,
-                width: selected ? 1.5 : 1,
-              ),
-              borderRadius: BorderRadius.circular(CommonUiShapes.card),
-              boxShadow: [
-                if (selected)
-                  BoxShadow(
-                    color: tokens.shadow,
-                    blurRadius: 14,
-                    offset: const Offset(0, 6),
-                  ),
-              ],
+            _MonthlyInlineValue(
+              label: '기간 단위',
+              value: durationText.trim().isEmpty ? '-' : durationText,
             ),
-            child: IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Container(width: 6, color: statusColor),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  item.plateNumber,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: textTheme.titleMedium?.copyWith(
-                                    color: tokens.textPrimary,
-                                    fontWeight: FontWeight.w800,
-                                    fontFeatures: const [
-                                      FontFeature.tabularFigures(),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              MonthlyCommonBadge(
-                                label: _statusLabel(item),
-                                icon: _statusIcon(item.status),
-                                tone: tone,
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            '${item.countType.isEmpty ? '정기 주차' : item.countType} · ${item.regularType.isEmpty ? '주차 타입 미지정' : item.regularType}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: textTheme.bodyMedium?.copyWith(
-                              color: tokens.textSecondary,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              _InfoPill(
-                                icon: Icons.calendar_month_outlined,
-                                label: '${item.startDate} ~ ${item.endDate}',
-                              ),
-                              _InfoPill(
-                                icon: Icons.payments_outlined,
-                                label: '₩${won.format(item.amount)}',
-                              ),
-                              _InfoPill(
-                                icon: Icons.history_rounded,
-                                label: '결제 ${item.paymentCount}회',
-                              ),
-                              if (item.hasMemo)
-                                const _InfoPill(
-                                  icon: Icons.sticky_note_2_outlined,
-                                  label: '메모 있음',
-                                ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  Container(
-                    width: 70,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      border: Border(left: BorderSide(color: tokens.borderSubtle)),
-                    ),
-                    child: CommonIconButton(
-                      icon: Icons.payments_outlined,
-                      tooltip: '결제',
-                      haptic: CommonHaptic.medium,
-                      onPressed: onPay,
-                    ),
-                  ),
-                ],
-              ),
+            _MonthlyInlineValue(
+              label: '결제',
+              value: '${item.paymentCount}회',
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _InfoPill extends StatelessWidget {
-  const _InfoPill({
-    required this.icon,
-    required this.label,
-  });
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = CommonUiTheme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-      decoration: BoxDecoration(
-        color: tokens.surfaceOverlay,
-        borderRadius: BorderRadius.circular(CommonUiShapes.control),
-        border: Border.all(color: tokens.borderSubtle),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: tokens.iconSecondary),
-          const SizedBox(width: 5),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+            _MonthlyInlineValue(
+              label: '상태 메모',
+              value: item.customStatus.trim().isEmpty
+                  ? '-'
+                  : item.customStatus.trim(),
+            ),
+            if (history.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                '결제 내역 ${history.length}건',
+                style: textTheme.labelSmall?.copyWith(
                   color: tokens.textSecondary,
-                  fontWeight: FontWeight.w600,
-                  fontFeatures: const [FontFeature.tabularFigures()],
+                  fontWeight: FontWeight.w800,
                 ),
-          ),
+              ),
+              const SizedBox(height: 5),
+              for (var index = 0; index < history.length; index++) ...[
+                _MonthlyPaymentHistoryLine(
+                  payment: history[index],
+                  won: won,
+                ),
+                if (index != history.length - 1)
+                  Divider(height: 9, color: tokens.borderSubtle),
+              ],
+            ],
+          ],
         ],
       ),
     );
   }
 }
 
-class _MonthlyDetailPanel extends StatelessWidget {
-  const _MonthlyDetailPanel({
-    required this.item,
-    required this.onEdit,
-    required this.onPay,
-    required this.onDelete,
-  });
-
-  final _MonthlyPlateVM item;
-  final VoidCallback onEdit;
-  final VoidCallback onPay;
-  final VoidCallback onDelete;
-
-  List<Map<String, dynamic>> _paymentHistory() {
-    final rawHistory = item.data['payment_history'];
-    if (rawHistory is! List) return <Map<String, dynamic>>[];
-    final history = <Map<String, dynamic>>[];
-    for (final value in rawHistory) {
-      if (value is Map<String, dynamic>) {
-        history.add(value);
-      } else if (value is Map) {
-        history.add(Map<String, dynamic>.from(value));
-      }
-    }
-    return history.reversed.toList();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final won = NumberFormat.decimalPattern('ko_KR');
-    final history = _paymentHistory();
-
-    return DraggableScrollableSheet(
-      initialChildSize: 0.9,
-      minChildSize: 0.6,
-      maxChildSize: 0.97,
-      builder: (context, scrollController) {
-        final tokens = CommonUiTheme.of(context);
-        return CommonSheetScaffold(
-          title: item.plateNumber,
-          icon: Icons.assignment_turned_in_outlined,
-          onClose: () => Navigator.of(context).pop(),
-          body: Column(
-            children: [
-              Expanded(
-                child: ListView(
-                  controller: scrollController,
-                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
-                  children: [
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: MonthlyCommonBadge(
-                        label: _statusLabel(item),
-                        icon: _statusIcon(item.status),
-                        tone: _statusTone(item.status),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    _OpsPanel(
-                      title: '정기권 정보',
-                      icon: Icons.fact_check_outlined,
-                      children: [
-                        _KV(
-                          label: '정산명',
-                          value: item.countType.isEmpty ? '-' : item.countType,
-                        ),
-                        _KV(
-                          label: '주차 타입',
-                          value: item.regularType.isEmpty
-                              ? '-'
-                              : item.regularType,
-                        ),
-                        _KV(label: '요금', value: '₩${won.format(item.amount)}'),
-                        _KV(
-                          label: '기간 단위',
-                          value: MonthlyParkingOptions.durationLabel(
-                            regularType: item.regularType,
-                            duration: item.duration,
-                            periodUnit: item.periodUnit,
-                          ),
-                        ),
-                        _KV(
-                          label: '사용 기간',
-                          value: '${item.startDate} ~ ${item.endDate}',
-                        ),
-                        _KV(
-                          label: '상태 메모',
-                          value: item.customStatus.trim().isEmpty
-                              ? '-'
-                              : item.customStatus,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    _OpsPanel(
-                      title: '결제 내역',
-                      icon: Icons.receipt_long_outlined,
-                      trailing: MonthlyCommonBadge(
-                        label: '${history.length}건',
-                        icon: Icons.history_rounded,
-                      ),
-                      children: history.isEmpty
-                          ? [
-                              Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 8),
-                                child: Text(
-                                  '아직 저장된 결제 내역이 없습니다.',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodyMedium
-                                      ?.copyWith(
-                                        color: tokens.textSecondary,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                ),
-                              ),
-                            ]
-                          : [
-                              for (var index = 0;
-                                  index < history.length;
-                                  index++)
-                                CommonAnimatedReveal(
-                                  delay: MediaQuery.maybeOf(context)
-                                              ?.disableAnimations ??
-                                          false
-                                      ? Duration.zero
-                                      : Duration(milliseconds: index * 30),
-                                  child: _PaymentHistoryRow(
-                                    payment: history[index],
-                                    won: won,
-                                  ),
-                                ),
-                            ],
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                decoration: BoxDecoration(
-                  color: tokens.surfaceRaised,
-                  border: Border(top: BorderSide(color: tokens.borderSubtle)),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: CommonButton(
-                        label: '수정',
-                        icon: Icons.edit_outlined,
-                        variant: CommonButtonVariant.secondary,
-                        haptic: CommonHaptic.selection,
-                        onPressed: onEdit,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: CommonButton(
-                        label: '결제',
-                        icon: Icons.payments_outlined,
-                        haptic: CommonHaptic.medium,
-                        onPressed: onPay,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: CommonButton(
-                        label: '삭제',
-                        icon: Icons.delete_outline_rounded,
-                        variant: CommonButtonVariant.destructive,
-                        haptic: CommonHaptic.heavy,
-                        onPressed: onDelete,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _OpsPanel extends StatelessWidget {
-  const _OpsPanel({
-    required this.title,
-    required this.icon,
-    required this.children,
-    this.trailing,
-  });
-
-  final String title;
-  final IconData icon;
-  final List<Widget> children;
-  final Widget? trailing;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = CommonUiTheme.of(context);
-    final textTheme = Theme.of(context).textTheme;
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: tokens.surfaceRaised,
-        borderRadius: BorderRadius.circular(CommonUiShapes.card),
-        border: Border.all(color: tokens.borderSubtle),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, color: tokens.iconPrimary, size: 20),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  title,
-                  style: textTheme.titleMedium?.copyWith(
-                    color: tokens.textPrimary,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              if (trailing != null) trailing!,
-            ],
-          ),
-          const SizedBox(height: 12),
-          ...children,
-        ],
-      ),
-    );
-  }
-}
-
-class _KV extends StatelessWidget {
-  const _KV({
+class _MonthlyInlineValue extends StatelessWidget {
+  const _MonthlyInlineValue({
     required this.label,
     required this.value,
   });
@@ -1426,26 +1307,27 @@ class _KV extends StatelessWidget {
     final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 9),
+      padding: const EdgeInsets.only(bottom: 6),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 92,
+            width: 68,
             child: Text(
               label,
-              style: textTheme.bodySmall?.copyWith(
+              style: textTheme.labelSmall?.copyWith(
                 color: tokens.textSecondary,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
           Expanded(
             child: Text(
               value,
-              style: textTheme.bodyMedium?.copyWith(
+              textAlign: TextAlign.right,
+              style: textTheme.labelSmall?.copyWith(
                 color: tokens.textPrimary,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w800,
                 fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
@@ -1456,8 +1338,8 @@ class _KV extends StatelessWidget {
   }
 }
 
-class _PaymentHistoryRow extends StatelessWidget {
-  const _PaymentHistoryRow({
+class _MonthlyPaymentHistoryLine extends StatelessWidget {
+  const _MonthlyPaymentHistoryLine({
     required this.payment,
     required this.won,
   });
@@ -1502,34 +1384,12 @@ class _PaymentHistoryRow extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final amount = _amountValue(payment['paymentAmount'] ?? payment['amount']);
     final paidBy = _textValue(payment['paidBy']);
+    final paidAt = _paidAt(payment['paidAt']);
     final note = _textValue(payment['note'], fallback: '');
     final extended = payment['extended'] == true ||
         payment['extended']?.toString() == 'true';
-    final paidAt = _paidAt(payment['paidAt']);
-    final regularType = _textValue(payment['regularType'], fallback: '');
-    final periodUnit = _textValue(payment['periodUnit'], fallback: '');
-    final duration = _amountValue(
-      payment['durationValue'] ?? payment['regularDurationValue'],
-    );
-    final startDate = _textValue(payment['startDate'], fallback: '');
-    final endDate = _textValue(payment['endDate'], fallback: '');
-    final durationText = duration > 0
-        ? MonthlyParkingOptions.durationLabel(
-            regularType: regularType,
-            duration: duration,
-            periodUnit: periodUnit,
-          )
-        : '';
-    final hasRange = startDate.isNotEmpty && endDate.isNotEmpty;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 9),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: tokens.surfaceOverlay,
-        borderRadius: BorderRadius.circular(CommonUiShapes.control),
-        border: Border.all(color: tokens.borderSubtle),
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1538,56 +1398,38 @@ class _PaymentHistoryRow extends StatelessWidget {
               Expanded(
                 child: Text(
                   '₩${won.format(amount)}',
-                  style: textTheme.titleMedium?.copyWith(
+                  style: textTheme.labelSmall?.copyWith(
                     color: tokens.textPrimary,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w900,
                     fontFeatures: const [FontFeature.tabularFigures()],
                   ),
                 ),
               ),
               if (extended)
-                const MonthlyCommonBadge(
-                  label: '연장',
-                  icon: Icons.update_rounded,
-                  tone: MonthlyCommonMessageTone.success,
+                Text(
+                  '연장',
+                  style: textTheme.labelSmall?.copyWith(
+                    color: tokens.success,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 2),
           Text(
             '$paidAt · $paidBy',
-            style: textTheme.bodySmall?.copyWith(
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: textTheme.labelSmall?.copyWith(
               color: tokens.textSecondary,
               fontWeight: FontWeight.w600,
             ),
           ),
-          if (regularType.isNotEmpty || durationText.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Text(
-              [regularType, durationText]
-                  .where((value) => value.trim().isNotEmpty)
-                  .join(' · '),
-              style: textTheme.bodyMedium?.copyWith(
-                color: tokens.textPrimary,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-          if (hasRange) ...[
-            const SizedBox(height: 5),
-            Text(
-              '적용 기간 $startDate ~ $endDate',
-              style: textTheme.bodySmall?.copyWith(
-                color: tokens.success,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
           if (note.isNotEmpty) ...[
-            const SizedBox(height: 6),
+            const SizedBox(height: 2),
             Text(
               note,
-              style: textTheme.bodyMedium?.copyWith(
+              style: textTheme.labelSmall?.copyWith(
                 color: tokens.textSecondary,
                 fontWeight: FontWeight.w600,
               ),
@@ -1599,215 +1441,21 @@ class _PaymentHistoryRow extends StatelessWidget {
   }
 }
 
-class _MonthlyLoadErrorState extends StatelessWidget {
-  const _MonthlyLoadErrorState({required this.onRetry});
-
-  final Future<void> Function() onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return _MonthlyStateCard(
-      icon: Icons.error_outline_rounded,
-      title: '목록을 불러오지 못했습니다.',
-      message: '아래로 당기거나 다시 시도 버튼을 눌러 갱신하세요.',
-      tone: MonthlyCommonMessageTone.danger,
-      action: CommonButton(
-        label: '다시 시도',
-        icon: Icons.refresh_rounded,
-        variant: CommonButtonVariant.secondary,
-        haptic: CommonHaptic.selection,
-        onPressed: onRetry,
-      ),
-    );
-  }
-}
-
-class _MonthlyLoadingView extends StatelessWidget {
-  const _MonthlyLoadingView();
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = CommonUiTheme.of(context);
-    return Center(
-      child: CommonAnimatedReveal(
-        child: Container(
-          padding: const EdgeInsets.all(22),
-          decoration: BoxDecoration(
-            color: tokens.surfaceRaised,
-            borderRadius: BorderRadius.circular(CommonUiShapes.card),
-            border: Border.all(color: tokens.borderSubtle),
-          ),
-          child: CircularProgressIndicator(color: tokens.accent),
-        ),
-      ),
-    );
-  }
-}
-
-class _MonthlyEmptyState extends StatelessWidget {
-  const _MonthlyEmptyState({required this.onAdd});
-
-  final VoidCallback onAdd;
-
-  @override
-  Widget build(BuildContext context) {
-    return _MonthlyStateCard(
-      icon: Icons.local_parking_outlined,
-      title: '등록된 정기 주차가 없습니다.',
-      message: '신규 등록으로 첫 정기권을 추가하세요.',
-      tone: MonthlyCommonMessageTone.info,
-      action: CommonButton(
-        label: '신규 등록',
-        icon: Icons.add_rounded,
-        haptic: CommonHaptic.medium,
-        onPressed: onAdd,
-      ),
-    );
-  }
-}
-
-class _MonthlyNoResultState extends StatelessWidget {
-  const _MonthlyNoResultState({required this.onReset});
-
-  final VoidCallback onReset;
-
-  @override
-  Widget build(BuildContext context) {
-    return _MonthlyStateCard(
-      icon: Icons.manage_search_rounded,
-      title: '조건에 맞는 정기권이 없습니다.',
-      message: '검색어와 필터를 초기화해보세요.',
-      tone: MonthlyCommonMessageTone.warning,
-      action: CommonButton(
-        label: '초기화',
-        icon: Icons.refresh_rounded,
-        variant: CommonButtonVariant.secondary,
-        haptic: CommonHaptic.selection,
-        onPressed: onReset,
-      ),
-    );
-  }
-}
-
-class _MonthlyStateCard extends StatelessWidget {
-  const _MonthlyStateCard({
-    required this.icon,
-    required this.title,
-    required this.message,
-    required this.tone,
-    required this.action,
-  });
-
-  final IconData icon;
-  final String title;
-  final String message;
-  final MonthlyCommonMessageTone tone;
-  final Widget action;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = CommonUiTheme.of(context);
-    final textTheme = Theme.of(context).textTheme;
-    final foreground = _toneForeground(tokens, tone);
-    final background = _toneBackground(tokens, tone);
-    return CommonAnimatedReveal(
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 420),
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: tokens.surfaceRaised,
-          borderRadius: BorderRadius.circular(CommonUiShapes.card),
-          border: Border.all(color: tokens.borderSubtle),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 62,
-              height: 62,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: background,
-                borderRadius: BorderRadius.circular(CommonUiShapes.card),
-                border: Border.all(color: foreground.withOpacity(0.22)),
-              ),
-              child: Icon(icon, color: foreground, size: 32),
-            ),
-            const SizedBox(height: 14),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: textTheme.titleMedium?.copyWith(
-                color: tokens.textPrimary,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: textTheme.bodyMedium?.copyWith(
-                color: tokens.textSecondary,
-                height: 1.4,
-              ),
-            ),
-            const SizedBox(height: 18),
-            action,
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-MonthlyCommonMessageTone _statusTone(_MonthlyStatus status) {
+Color _monthlyStatusColor(CommonUiTokens tokens, _MonthlyStatus status) {
   return switch (status) {
-    _MonthlyStatus.active => MonthlyCommonMessageTone.success,
-    _MonthlyStatus.expiringSoon => MonthlyCommonMessageTone.warning,
-    _MonthlyStatus.expired => MonthlyCommonMessageTone.danger,
-    _MonthlyStatus.unknown => MonthlyCommonMessageTone.info,
+    _MonthlyStatus.active => tokens.success,
+    _MonthlyStatus.expiringSoon => tokens.warning,
+    _MonthlyStatus.expired => tokens.danger,
+    _MonthlyStatus.unknown => tokens.info,
   };
 }
 
-String _statusLabel(_MonthlyPlateVM item) {
+String _monthlyStatusLabel(_MonthlyPlateVM item) {
   return switch (item.status) {
     _MonthlyStatus.active => item.daysLeft == null ? '정상' : 'D-${item.daysLeft}',
     _MonthlyStatus.expiringSoon =>
       item.daysLeft == 0 ? '오늘 만료' : 'D-${item.daysLeft}',
     _MonthlyStatus.expired => '만료',
     _MonthlyStatus.unknown => '기간 미상',
-  };
-}
-
-IconData _statusIcon(_MonthlyStatus status) {
-  return switch (status) {
-    _MonthlyStatus.active => Icons.verified_outlined,
-    _MonthlyStatus.expiringSoon => Icons.timer_outlined,
-    _MonthlyStatus.expired => Icons.warning_amber_rounded,
-    _MonthlyStatus.unknown => Icons.help_outline_rounded,
-  };
-}
-
-Color _toneForeground(
-  CommonUiTokens tokens,
-  MonthlyCommonMessageTone tone,
-) {
-  return switch (tone) {
-    MonthlyCommonMessageTone.info => tokens.onInfoContainer,
-    MonthlyCommonMessageTone.success => tokens.onSuccessContainer,
-    MonthlyCommonMessageTone.warning => tokens.onWarningContainer,
-    MonthlyCommonMessageTone.danger => tokens.onDangerContainer,
-  };
-}
-
-Color _toneBackground(
-  CommonUiTokens tokens,
-  MonthlyCommonMessageTone tone,
-) {
-  return switch (tone) {
-    MonthlyCommonMessageTone.info => tokens.infoContainer,
-    MonthlyCommonMessageTone.success => tokens.successContainer,
-    MonthlyCommonMessageTone.warning => tokens.warningContainer,
-    MonthlyCommonMessageTone.danger => tokens.dangerContainer,
   };
 }

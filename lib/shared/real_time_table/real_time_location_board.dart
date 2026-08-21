@@ -11,6 +11,7 @@ import '../../features/location/domain/models/grid_rect.dart';
 import '../../features/location/domain/models/location_model.dart';
 import '../../features/location/domain/models/parking_grid_model.dart';
 import '../../features/selector/application/dev_auth.dart';
+import '../parking_dot_map/effective_child_region_geometry.dart';
 import '../parking_dot_map/parking_status_dot_map_surface.dart';
 import 'real_time_sort_state.dart';
 import 'real_time_source_rect_modal.dart';
@@ -125,6 +126,9 @@ class _RealTimeLocationBoardState extends State<RealTimeLocationBoard> {
         'interaction': 'parent_child_dialog_slot',
         'childDialogAutoPause': true,
         'systemBackPolicy': 'dialog_reverse_to_parent',
+        'childRegionShape': 'child_slot_area_ids_difference_path',
+        'childRegionHitTest': 'effective_path_contains',
+        'childDialogParkingDots': 'owned_child_slot_area_ids_only',
         'parentPaging': widget.groups.length > 1
             ? 'circular_sentinel'
             : 'single_parent',
@@ -270,6 +274,11 @@ class _RealTimeLocationBoardState extends State<RealTimeLocationBoard> {
         'parentMapSurface': 'transparent',
         'parentMapClip': 'rect',
         'parentMapReveal': 'fade_scale_220ms',
+        'childRegionShape': 'child_slot_area_ids_difference_path',
+        'childRegionHitTest': 'effective_path_contains',
+        'childRegionMotion': 'fade_scale_220ms_highlight_170ms',
+        'childDialogParkingDots': 'owned_child_slot_area_ids_only',
+        'childDialogEffectiveRegionMotion': 'modal_progress_fade_scale',
         'childDialogBorder': 'hidden',
         'childDialogSurface': 'opacity_0.96',
         'childDialogShape': 'rounded_surface',
@@ -291,8 +300,9 @@ class _RealTimeLocationBoardState extends State<RealTimeLocationBoard> {
         description: _combinedDebugLines.join('\n'),
         copyText: code,
         copyButtonLabel: 'debugPrint 코드 복사',
-        visibleDuration: const Duration(seconds: 45),
+        visibleDuration: Duration.zero,
         useCommonUi: true,
+        awaitManualClose: true,
       );
     } finally {
       widget.onAutoPauseEnd?.call();
@@ -982,7 +992,7 @@ class _ParentMapSlideState extends State<_ParentMapSlide> {
   Future<void> _focusZone(ZoneVM zone, Rect sourceRect) async {
     if (_dialogRouteOpen || _focusedZoneKey != null) return;
     final grid = widget.group.parentSource?.parkingGrid;
-    final viewport = grid == null ? null : _effectiveChildRect(zone, grid);
+    final viewport = grid == null ? null : _resolveNominalChildRect(zone, grid);
     if (grid == null || viewport == null) {
       widget.onDebugLog(
         'child_dialog_rejected',
@@ -996,6 +1006,13 @@ class _ParentMapSlideState extends State<_ParentMapSlide> {
       return;
     }
 
+    final effectiveAreaIds = resolvedChildParkingAreaIds(zone.source);
+    final effectiveStats = effectiveChildRegionStats(
+      grid: grid,
+      childRect: viewport,
+      effectiveParkingAreaIds: effectiveAreaIds,
+    );
+    final useEffectiveShape = !zone.source.isTowerChild;
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final targetRect = realTimeSourceRectModalTargetRect(context);
@@ -1026,6 +1043,16 @@ class _ParentMapSlideState extends State<_ParentMapSlide> {
         'durationMs': duration.inMilliseconds,
         'slots': zone.source.childSlots.length,
         'occupied': zone.rows.length,
+        'effectiveAreaIds': effectiveAreaIds.length,
+        'containedParkingAreas': effectiveStats.containedParkingAreaCount,
+        'ownedParkingAreas': effectiveStats.ownedParkingAreaCount,
+        'cutParkingAreas': effectiveStats.cutParkingAreaCount,
+        'effectiveShape': useEffectiveShape
+            ? 'child_slot_area_ids_difference_path'
+            : 'nominal_rect_tower',
+        'dialogParkingDots': useEffectiveShape
+            ? 'owned_child_slot_area_ids_only'
+            : 'all_in_viewport_tower',
         'firebaseAdditionalRead': 0,
         'autoTransitionPaused': true,
         'dialogBorder': 'hidden',
@@ -1471,6 +1498,7 @@ class _ChildDotMapDialogSurface extends StatelessWidget {
               child: _ChildFocusDotMap(
                 zone: zone,
                 grid: grid,
+                revealProgress: progress,
                 onPlateTap: onPlateTap,
                 reduceMotion: reduceMotion,
                 interactionEnabled: interactionEnabled,
@@ -1741,12 +1769,81 @@ class _ParentOverviewDotMapState extends State<_ParentOverviewDotMap> {
   Offset? _peekAnchor;
   bool _peekVisible = false;
   int _peekEpoch = 0;
+  String? _lastGeometryDebugSignature;
+
+  void _recordResolvedGeometry(List<_ResolvedChildZone> zones) {
+    final signature = zones
+        .map(
+          (entry) => [
+            entry.zone.fullName,
+            entry.useEffectiveShape,
+            entry.containedParkingAreaCount,
+            entry.ownedParkingAreaCount,
+            entry.cutParkingAreaCount,
+            entry.nominalRect.left.toStringAsFixed(1),
+            entry.nominalRect.top.toStringAsFixed(1),
+            entry.nominalRect.right.toStringAsFixed(1),
+            entry.nominalRect.bottom.toStringAsFixed(1),
+          ].join(':'),
+        )
+        .join('|');
+    if (_lastGeometryDebugSignature == signature) return;
+    _lastGeometryDebugSignature = signature;
+    final contained = zones.fold<int>(
+      0,
+      (sum, entry) => sum + entry.containedParkingAreaCount,
+    );
+    final owned = zones.fold<int>(
+      0,
+      (sum, entry) => sum + entry.ownedParkingAreaCount,
+    );
+    final cut = zones.fold<int>(
+      0,
+      (sum, entry) => sum + entry.cutParkingAreaCount,
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _lastGeometryDebugSignature != signature) return;
+      widget.onDebugLog(
+        'child_region_geometry_resolved',
+        <String, Object?>{
+          'parent': widget.group.group,
+          'zones': zones.length,
+          'effectiveZones':
+              zones.where((entry) => entry.useEffectiveShape).length,
+          'towerZones':
+              zones.where((entry) => !entry.useEffectiveShape).length,
+          'containedParkingAreas': contained,
+          'ownedParkingAreas': owned,
+          'cutParkingAreas': cut,
+          'render': 'child_slot_area_ids_difference_path',
+          'hitTest': 'effective_path_contains',
+          'entryMotionMs': widget.reduceMotion ? 0 : 220,
+          'highlightMotionMs': widget.reduceMotion ? 0 : 170,
+        },
+      );
+    });
+  }
 
   void _handleZoneTap(_ResolvedChildZone entry) {
     final renderObject = _mapKey.currentContext?.findRenderObject();
     if (renderObject is! RenderBox || !renderObject.hasSize) return;
     final origin = renderObject.localToGlobal(Offset.zero);
-    final sourceRect = entry.visualRect.shift(origin);
+    final sourceRect = entry.nominalRect.shift(origin);
+    widget.onDebugLog(
+      'child_zone_tapped',
+      <String, Object?>{
+        'parent': entry.zone.group,
+        'child': entry.zone.child,
+        'effectiveShape': entry.useEffectiveShape
+            ? 'child_slot_area_ids_difference_path'
+            : 'nominal_rect_tower',
+        'containedParkingAreas': entry.containedParkingAreaCount,
+        'ownedParkingAreas': entry.ownedParkingAreaCount,
+        'cutParkingAreas': entry.cutParkingAreaCount,
+        'hitTest': 'effective_path_contains',
+        'transitionSource': 'nominal_child_rect',
+      },
+    );
     widget.onZoneTap(entry.zone, sourceRect);
   }
 
@@ -1772,6 +1869,13 @@ class _ParentOverviewDotMapState extends State<_ParentOverviewDotMap> {
         'capacity': entry.zone.capacity,
         'current': entry.zone.current,
         'anchor': '${anchor.dx.toStringAsFixed(1)},${anchor.dy.toStringAsFixed(1)}',
+        'effectiveShape': entry.useEffectiveShape
+            ? 'child_slot_area_ids_difference_path'
+            : 'nominal_rect_tower',
+        'containedParkingAreas': entry.containedParkingAreaCount,
+        'ownedParkingAreas': entry.ownedParkingAreaCount,
+        'cutParkingAreas': entry.cutParkingAreaCount,
+        'hitTest': 'effective_path_contains',
         'action': 'peek_only',
         'childDialogOpened': false,
       },
@@ -1857,6 +1961,7 @@ class _ParentOverviewDotMapState extends State<_ParentOverviewDotMap> {
                 occupied: occupied,
                 layout: layout,
               );
+        _recordResolvedGeometry(zones);
 
         return SizedBox(
           key: _mapKey,
@@ -1922,6 +2027,7 @@ class _ChildFocusDotMap extends StatelessWidget {
   const _ChildFocusDotMap({
     required this.zone,
     required this.grid,
+    required this.revealProgress,
     required this.onPlateTap,
     required this.reduceMotion,
     this.interactionEnabled = true,
@@ -1929,16 +2035,19 @@ class _ChildFocusDotMap extends StatelessWidget {
 
   final ZoneVM zone;
   final ParkingGridModel grid;
+  final double revealProgress;
   final ValueChanged<_OccupiedSlot> onPlateTap;
   final bool reduceMotion;
   final bool interactionEnabled;
 
   @override
   Widget build(BuildContext context) {
-    final viewport = _effectiveChildRect(zone, grid);
+    final viewport = _resolveNominalChildRect(zone, grid);
     if (viewport == null) {
       return const _InlineEmpty(message: '자식 주차 구역 DOT MAP 데이터가 없습니다.');
     }
+    final effectiveAreaIds = resolvedChildParkingAreaIds(zone.source);
+    final useEffectiveShape = !zone.source.isTowerChild;
     final occupied = _occupiedSlotsForZone(zone);
 
     return LayoutBuilder(
@@ -1956,6 +2065,36 @@ class _ChildFocusDotMap extends StatelessWidget {
                 layout: layout,
                 minimum: _kZoneTouchTargetMin,
               );
+        Rect? nominalRect;
+        Path? effectivePath;
+        if (layout != null) {
+          nominalRect = layout.rectFor(viewport).intersect(layout.mapRect);
+          if (!nominalRect.isEmpty) {
+            effectivePath = buildEffectiveChildRegionPath(
+              grid: grid,
+              childRect: viewport,
+              effectiveParkingAreaIds: effectiveAreaIds,
+              nominalRegion: RRect.fromRectAndRadius(
+                nominalRect,
+                const Radius.circular(8),
+              ),
+              useEffectiveShape: useEffectiveShape,
+              parkingAreaRect: (area) => layout.rectFor(
+                GridRect(
+                  r0: area.r0,
+                  c0: area.c0,
+                  r1: area.r1,
+                  c1: area.c1,
+                ),
+              ),
+              cutInflate: math.max(.5, layout.scale * .035),
+              cutRadius: math.max(3.0, layout.scale * .13),
+            );
+          }
+        }
+        final regionProgress = reduceMotion
+            ? 1.0
+            : ((revealProgress - .28) / .72).clamp(0.0, 1.0).toDouble();
 
         return SizedBox(
           width: size.width,
@@ -1967,9 +2106,18 @@ class _ChildFocusDotMap extends StatelessWidget {
                 child: ParkingStatusDotMapSurface(
                   grid: grid,
                   viewport: viewport,
+                  visibleParkingAreaIds:
+                      useEffectiveShape ? effectiveAreaIds : null,
                   framed: false,
                 ),
               ),
+              if (nominalRect != null && effectivePath != null)
+                _ChildFocusRegionOverlay(
+                  nominalRect: nominalRect,
+                  effectivePath: effectivePath,
+                  useEffectiveShape: useEffectiveShape,
+                  progress: regionProgress,
+                ),
               for (final entry in resolved)
                 if (interactionEnabled)
                   _OccupiedSlotOverlay(
@@ -1993,6 +2141,112 @@ class _ChildFocusDotMap extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+class _ChildFocusRegionOverlay extends StatelessWidget {
+  const _ChildFocusRegionOverlay({
+    required this.nominalRect,
+    required this.effectivePath,
+    required this.useEffectiveShape,
+    required this.progress,
+  });
+
+  final Rect nominalRect;
+  final Path effectivePath;
+  final bool useEffectiveShape;
+  final double progress;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: CustomPaint(
+          painter: _ChildFocusRegionPainter(
+            nominalRect: nominalRect,
+            effectivePath: effectivePath,
+            useEffectiveShape: useEffectiveShape,
+            progress: progress,
+            fillColor: cs.primary,
+            strokeColor: cs.primary,
+            nominalStrokeColor: cs.outlineVariant,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ChildFocusRegionPainter extends CustomPainter {
+  const _ChildFocusRegionPainter({
+    required this.nominalRect,
+    required this.effectivePath,
+    required this.useEffectiveShape,
+    required this.progress,
+    required this.fillColor,
+    required this.strokeColor,
+    required this.nominalStrokeColor,
+  });
+
+  final Rect nominalRect;
+  final Path effectivePath;
+  final bool useEffectiveShape;
+  final double progress;
+  final Color fillColor;
+  final Color strokeColor;
+  final Color nominalStrokeColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final eased = Curves.easeOutCubic.transform(
+      progress.clamp(0.0, 1.0).toDouble(),
+    );
+    if (eased <= 0) return;
+    final center = nominalRect.center;
+    final scale = .985 + .015 * eased;
+    canvas.save();
+    canvas.translate(center.dx, center.dy);
+    canvas.scale(scale, scale);
+    canvas.translate(-center.dx, -center.dy);
+    if (useEffectiveShape) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          nominalRect,
+          const Radius.circular(8),
+        ),
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1
+          ..color = nominalStrokeColor.withOpacity(.28 * eased),
+      );
+    }
+    canvas.drawPath(
+      effectivePath,
+      Paint()
+        ..style = PaintingStyle.fill
+        ..color = fillColor.withOpacity(.035 * eased),
+    );
+    canvas.drawPath(
+      effectivePath,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.15 + .45 * eased
+        ..strokeJoin = StrokeJoin.round
+        ..color = strokeColor.withOpacity(.46 * eased),
+    );
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _ChildFocusRegionPainter oldDelegate) {
+    return oldDelegate.nominalRect != nominalRect ||
+        oldDelegate.effectivePath != effectivePath ||
+        oldDelegate.useEffectiveShape != useEffectiveShape ||
+        oldDelegate.progress != progress ||
+        oldDelegate.fillColor != fillColor ||
+        oldDelegate.strokeColor != strokeColor ||
+        oldDelegate.nominalStrokeColor != nominalStrokeColor;
   }
 }
 
@@ -2062,16 +2316,26 @@ class _ResolvedOccupiedSlot {
 class _ResolvedChildZone {
   const _ResolvedChildZone({
     required this.zone,
-    required this.visualRect,
+    required this.nominalRect,
+    required this.effectivePath,
     required this.hitRect,
+    required this.useEffectiveShape,
+    required this.containedParkingAreaCount,
+    required this.ownedParkingAreaCount,
+    required this.cutParkingAreaCount,
   });
 
   final ZoneVM zone;
-  final Rect visualRect;
+  final Rect nominalRect;
+  final Path effectivePath;
   final Rect hitRect;
+  final bool useEffectiveShape;
+  final int containedParkingAreaCount;
+  final int ownedParkingAreaCount;
+  final int cutParkingAreaCount;
 }
 
-class _ChildZoneVisualOverlay extends StatelessWidget {
+class _ChildZoneVisualOverlay extends StatefulWidget {
   const _ChildZoneVisualOverlay({
     super.key,
     required this.entry,
@@ -2086,56 +2350,182 @@ class _ChildZoneVisualOverlay extends StatelessWidget {
   final bool reduceMotion;
 
   @override
+  State<_ChildZoneVisualOverlay> createState() => _ChildZoneVisualOverlayState();
+}
+
+class _ChildZoneVisualOverlayState extends State<_ChildZoneVisualOverlay>
+    with TickerProviderStateMixin {
+  late final AnimationController _entryController;
+  late final AnimationController _highlightController;
+
+  bool get _highlighted => widget.selected || widget.peeked;
+
+  @override
+  void initState() {
+    super.initState();
+    _entryController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 220),
+      value: widget.reduceMotion ? 1 : 0,
+    );
+    _highlightController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 170),
+      value: _highlighted ? 1 : 0,
+    );
+    if (!widget.reduceMotion) {
+      _entryController.forward();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _ChildZoneVisualOverlay oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.reduceMotion) {
+      _entryController.value = 1;
+      _highlightController.value = _highlighted ? 1 : 0;
+      return;
+    }
+    if (oldWidget.reduceMotion && !widget.reduceMotion) {
+      _entryController.value = 1;
+    }
+    final target = _highlighted ? 1.0 : 0.0;
+    if (_highlightController.value != target) {
+      _highlightController.animateTo(
+        target,
+        curve: Curves.easeOutCubic,
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _entryController.dispose();
+    _highlightController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final duration =
-        reduceMotion ? Duration.zero : const Duration(milliseconds: 190);
-    final selectionDuration =
-        reduceMotion ? Duration.zero : const Duration(milliseconds: 120);
-    final highlighted = selected || peeked;
+    final localPath = widget.entry.effectivePath.shift(
+      -widget.entry.nominalRect.topLeft,
+    );
+    final localNominalRect = Offset.zero & widget.entry.nominalRect.size;
 
     return Positioned.fromRect(
-      rect: entry.visualRect,
+      rect: widget.entry.nominalRect,
       child: IgnorePointer(
-        child: TweenAnimationBuilder<double>(
-          tween: Tween<double>(begin: .96, end: 1),
-          duration: duration,
-          curve: Curves.easeOutCubic,
-          builder: (context, value, child) {
-            return Opacity(
-              opacity: value.clamp(0.0, 1.0).toDouble(),
-              child: Transform.scale(scale: value, child: child),
+        child: AnimatedBuilder(
+          animation: _entryController,
+          builder: (context, _) {
+            final entryProgress = Curves.easeOutCubic.transform(
+              _entryController.value.clamp(0.0, 1.0).toDouble(),
+            );
+            return AnimatedBuilder(
+              animation: _highlightController,
+              builder: (context, _) {
+                final highlightProgress = Curves.easeOutCubic.transform(
+                  _highlightController.value.clamp(0.0, 1.0).toDouble(),
+                );
+                final scale =
+                    (.97 + .03 * entryProgress) * (1 + .012 * highlightProgress);
+                return Opacity(
+                  opacity: entryProgress,
+                  child: Transform.scale(
+                    scale: scale,
+                    alignment: Alignment.center,
+                    child: CustomPaint(
+                      painter: _ChildZoneRegionPainter(
+                        nominalRect: localNominalRect,
+                        effectivePath: localPath,
+                        useEffectiveShape: widget.entry.useEffectiveShape,
+                        highlightProgress: highlightProgress,
+                        fillColor: cs.primary,
+                        strokeColor: cs.primary,
+                        nominalStrokeColor: cs.outlineVariant,
+                      ),
+                      child: const SizedBox.expand(),
+                    ),
+                  ),
+                );
+              },
             );
           },
-          child: AnimatedScale(
-            scale: highlighted ? 1.015 : 1,
-            duration: selectionDuration,
-            curve: Curves.easeOutCubic,
-            child: AnimatedContainer(
-              duration: selectionDuration,
-              curve: Curves.easeOutCubic,
-              decoration: BoxDecoration(
-                color: cs.primary.withOpacity(highlighted ? .09 : .045),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: cs.primary.withOpacity(highlighted ? .88 : .46),
-                  width: highlighted ? 2 : 1.2,
-                ),
-                boxShadow: highlighted
-                    ? [
-                        BoxShadow(
-                          color: cs.primary.withOpacity(.12),
-                          blurRadius: 10,
-                          spreadRadius: 1,
-                        ),
-                      ]
-                    : const [],
-              ),
-            ),
-          ),
         ),
       ),
     );
+  }
+}
+
+class _ChildZoneRegionPainter extends CustomPainter {
+  const _ChildZoneRegionPainter({
+    required this.nominalRect,
+    required this.effectivePath,
+    required this.useEffectiveShape,
+    required this.highlightProgress,
+    required this.fillColor,
+    required this.strokeColor,
+    required this.nominalStrokeColor,
+  });
+
+  final Rect nominalRect;
+  final Path effectivePath;
+  final bool useEffectiveShape;
+  final double highlightProgress;
+  final Color fillColor;
+  final Color strokeColor;
+  final Color nominalStrokeColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final highlight =
+        highlightProgress.clamp(0.0, 1.0).toDouble();
+    if (useEffectiveShape) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          nominalRect,
+          const Radius.circular(8),
+        ),
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1
+          ..color = nominalStrokeColor.withOpacity(.34 + .08 * highlight),
+      );
+    }
+    if (highlight > 0) {
+      canvas.drawShadow(
+        effectivePath,
+        strokeColor.withOpacity(.14 * highlight),
+        5 + 3 * highlight,
+        false,
+      );
+    }
+    canvas.drawPath(
+      effectivePath,
+      Paint()
+        ..style = PaintingStyle.fill
+        ..color = fillColor.withOpacity(.045 + .055 * highlight),
+    );
+    canvas.drawPath(
+      effectivePath,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.2 + .8 * highlight
+        ..strokeJoin = StrokeJoin.round
+        ..color = strokeColor.withOpacity(.46 + .42 * highlight),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _ChildZoneRegionPainter oldDelegate) {
+    return oldDelegate.nominalRect != nominalRect ||
+        oldDelegate.effectivePath != effectivePath ||
+        oldDelegate.useEffectiveShape != useEffectiveShape ||
+        oldDelegate.highlightProgress != highlightProgress ||
+        oldDelegate.fillColor != fillColor ||
+        oldDelegate.strokeColor != strokeColor ||
+        oldDelegate.nominalStrokeColor != nominalStrokeColor;
   }
 }
 
@@ -2157,22 +2547,43 @@ class _ChildZoneHitOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final localPath = entry.effectivePath.shift(-entry.hitRect.topLeft);
     return Positioned.fromRect(
       rect: entry.hitRect,
       child: Semantics(
         button: true,
         label: '${entry.zone.group} ${entry.zone.child} 주차 구역',
         child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
+          behavior: HitTestBehavior.deferToChild,
           onTap: onTap,
           onLongPressStart: (details) =>
               onLongPressStart(details.localPosition),
           onLongPressEnd: (_) => onLongPressEnd(),
           onLongPressCancel: onLongPressCancel,
-          child: const SizedBox.expand(),
+          child: CustomPaint(
+            painter: _ChildZoneHitTestPainter(localPath),
+            child: const SizedBox.expand(),
+          ),
         ),
       ),
     );
+  }
+}
+
+class _ChildZoneHitTestPainter extends CustomPainter {
+  const _ChildZoneHitTestPainter(this.path);
+
+  final Path path;
+
+  @override
+  void paint(Canvas canvas, Size size) {}
+
+  @override
+  bool? hitTest(Offset position) => path.contains(position);
+
+  @override
+  bool shouldRepaint(covariant _ChildZoneHitTestPainter oldDelegate) {
+    return oldDelegate.path != path;
   }
 }
 
@@ -2567,28 +2978,65 @@ List<_ResolvedChildZone> _resolveChildZones({
   required double minimum,
 }) {
   final mapped = <ZoneVM>[];
-  final visuals = <Rect>[];
+  final nominalRects = <Rect>[];
+  final effectivePaths = <Path>[];
+  final useEffectiveShapes = <bool>[];
+  final stats = <EffectiveChildRegionStats>[];
   for (final zone in zones) {
-    final childRect = _effectiveChildRect(zone, grid);
+    final childRect = _resolveNominalChildRect(zone, grid);
     if (childRect == null) continue;
-    final visual = layout.rectFor(childRect).intersect(layout.mapRect);
-    if (visual.isEmpty || visual.width <= 0 || visual.height <= 0) continue;
+    final nominalRect = layout.rectFor(childRect).intersect(layout.mapRect);
+    if (nominalRect.isEmpty ||
+        nominalRect.width <= 0 ||
+        nominalRect.height <= 0) {
+      continue;
+    }
+    final effectiveAreaIds = resolvedChildParkingAreaIds(zone.source);
+    final useEffectiveShape = !zone.source.isTowerChild;
+    final regionStats = effectiveChildRegionStats(
+      grid: grid,
+      childRect: childRect,
+      effectiveParkingAreaIds: effectiveAreaIds,
+    );
+    final effectivePath = buildEffectiveChildRegionPath(
+      grid: grid,
+      childRect: childRect,
+      effectiveParkingAreaIds: effectiveAreaIds,
+      nominalRegion: RRect.fromRectAndRadius(
+        nominalRect,
+        const Radius.circular(8),
+      ),
+      useEffectiveShape: useEffectiveShape,
+      parkingAreaRect: (area) => layout.rectFor(
+        GridRect(
+          r0: area.r0,
+          c0: area.c0,
+          r1: area.r1,
+          c1: area.c1,
+        ),
+      ),
+      cutInflate: math.max(.5, layout.scale * .035),
+      cutRadius: math.max(3.0, layout.scale * .13),
+    );
     mapped.add(zone);
-    visuals.add(visual);
+    nominalRects.add(nominalRect);
+    effectivePaths.add(effectivePath);
+    useEffectiveShapes.add(useEffectiveShape);
+    stats.add(regionStats);
   }
 
   final hits = <Rect>[
-    for (final visual in visuals)
-      _minimumHitRect(visual, layout.mapRect, minimum),
+    for (final nominalRect in nominalRects)
+      _minimumHitRect(nominalRect, layout.mapRect, minimum),
   ];
 
   for (var i = 0; i < hits.length; i++) {
     for (var j = i + 1; j < hits.length; j++) {
       if (!hits[i].overlaps(hits[j])) continue;
-      if (visuals[i].overlaps(visuals[j])) continue;
+      if (nominalRects[i].overlaps(nominalRects[j])) continue;
       final separated = _separateHitRects(
-        firstVisual: visuals[i],
-        secondVisual: visuals[j],
+        firstVisual: nominalRects[i],
+        secondVisual: nominalRects[j],
         firstHit: hits[i],
         secondHit: hits[j],
       );
@@ -2602,13 +3050,18 @@ List<_ResolvedChildZone> _resolveChildZones({
       if (!hits[i].isEmpty && hits[i].width > 0 && hits[i].height > 0)
         _ResolvedChildZone(
           zone: mapped[i],
-          visualRect: visuals[i],
+          nominalRect: nominalRects[i],
+          effectivePath: effectivePaths[i],
           hitRect: hits[i],
+          useEffectiveShape: useEffectiveShapes[i],
+          containedParkingAreaCount: stats[i].containedParkingAreaCount,
+          ownedParkingAreaCount: stats[i].ownedParkingAreaCount,
+          cutParkingAreaCount: stats[i].cutParkingAreaCount,
         ),
   ];
 }
 
-GridRect? _effectiveChildRect(ZoneVM zone, ParkingGridModel grid) {
+GridRect? _resolveNominalChildRect(ZoneVM zone, ParkingGridModel grid) {
   GridRect? raw = zone.source.childRect?.normalized();
   if (raw == null && zone.source.childSlots.isNotEmpty) {
     var top = zone.source.childSlots.first.r0;
