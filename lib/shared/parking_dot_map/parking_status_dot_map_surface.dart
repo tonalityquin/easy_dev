@@ -201,6 +201,9 @@ class ParkingStatusDotMapPainter extends CustomPainter {
       final pillarPaint = Paint()
         ..style = PaintingStyle.fill
         ..color = tokens.textSecondary.withOpacity(.34);
+      final wallPaint = Paint()
+        ..style = PaintingStyle.fill
+        ..color = tokens.textPrimary.withOpacity(.52);
       final road2Cells = grid.road2Cells.toSet();
       final view = layout.viewport;
       for (var row = view.top; row <= view.bottom; row++) {
@@ -225,6 +228,9 @@ class ParkingStatusDotMapPainter extends CustomPainter {
           } else if (type == ParkingGridCellType.pillar) {
             final inset = math.min(scale * .22, 1.6);
             canvas.drawRect(rect.deflate(inset), pillarPaint);
+          } else if (type == ParkingGridCellType.wall) {
+            final inset = math.min(scale * .08, .8);
+            canvas.drawRect(rect.deflate(inset), wallPaint);
           }
         }
       }

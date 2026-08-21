@@ -1,16 +1,59 @@
 import 'package:flutter/foundation.dart';
 
+enum SecondaryLocationView { management, parentSettings }
+
+enum LocationParentSettingsMode { create, edit }
+
+enum LocationParentSettingsSection { identity, size, layout }
+
+enum LocationParentSettingsSectionState { complete, incomplete, error }
+
 class SecondaryLocationWorkspaceState extends ChangeNotifier {
   SecondaryLocationWorkspaceState({ValueChanged<String>? onDebug})
       : _onDebug = onDebug;
 
   final ValueChanged<String>? _onDebug;
+  SecondaryLocationView _view = SecondaryLocationView.management;
+  LocationParentSettingsMode _settingsMode =
+      LocationParentSettingsMode.create;
+  LocationParentSettingsSection _activeSettingsSection =
+      LocationParentSettingsSection.identity;
+  String? _editingParentId;
+  bool _settingsSaving = false;
+  bool _settingsDirty = false;
+  int _settingsNavigationRequestId = 0;
+  final Map<LocationParentSettingsSection, LocationParentSettingsSectionState>
+      _sectionStates =
+      <LocationParentSettingsSection, LocationParentSettingsSectionState>{
+    LocationParentSettingsSection.identity:
+        LocationParentSettingsSectionState.incomplete,
+    LocationParentSettingsSection.size:
+        LocationParentSettingsSectionState.complete,
+    LocationParentSettingsSection.layout:
+        LocationParentSettingsSectionState.complete,
+  };
   String? _focusedParentKey;
   String? _focusedParentId;
   String? _focusedParentTitle;
   bool _showOnlySelectedChild = false;
   bool _showSelectedChildSlotNumbers = false;
 
+  SecondaryLocationView get view => _view;
+  LocationParentSettingsMode get settingsMode => _settingsMode;
+  LocationParentSettingsSection get activeSettingsSection =>
+      _activeSettingsSection;
+  String? get editingParentId => _editingParentId;
+  bool get isManagementView => _view == SecondaryLocationView.management;
+  bool get isParentSettingsView =>
+      _view == SecondaryLocationView.parentSettings;
+  bool get isEditingParentSettings =>
+      _settingsMode == LocationParentSettingsMode.edit;
+  bool get settingsSaving => _settingsSaving;
+  bool get settingsDirty => _settingsDirty;
+  int get settingsNavigationRequestId => _settingsNavigationRequestId;
+  Map<LocationParentSettingsSection, LocationParentSettingsSectionState>
+      get sectionStates => Map<LocationParentSettingsSection,
+          LocationParentSettingsSectionState>.unmodifiable(_sectionStates);
   String? get focusedParentKey => _focusedParentKey;
   String? get focusedParentId => _focusedParentId;
   String? get focusedParentTitle => _focusedParentTitle;
@@ -18,19 +61,161 @@ class SecondaryLocationWorkspaceState extends ChangeNotifier {
   bool get showOnlySelectedChild => _showOnlySelectedChild;
   bool get showSelectedChildSlotNumbers => _showSelectedChildSlotNumbers;
 
+  LocationParentSettingsSectionState stateFor(
+    LocationParentSettingsSection section,
+  ) {
+    return _sectionStates[section] ??
+        LocationParentSettingsSectionState.incomplete;
+  }
+
+  int get incompleteSectionCount {
+    return _sectionStates.values.where((state) {
+      return state == LocationParentSettingsSectionState.incomplete ||
+          state == LocationParentSettingsSectionState.error;
+    }).length;
+  }
+
+  void openCreateParent({required String source}) {
+    _clearParentFocus();
+    _view = SecondaryLocationView.parentSettings;
+    _settingsMode = LocationParentSettingsMode.create;
+    _activeSettingsSection = LocationParentSettingsSection.identity;
+    _editingParentId = null;
+    _settingsSaving = false;
+    _settingsDirty = false;
+    _settingsNavigationRequestId = 0;
+    _resetSectionStates(create: true);
+    log('parent_settings_opened mode=create source=$source');
+    notifyListeners();
+  }
+
+  void openEditParent(
+    String parentId, {
+    required String source,
+  }) {
+    final normalizedId = parentId.trim();
+    if (normalizedId.isEmpty) {
+      log('parent_settings_open_edit_ignored reason=empty_parent_id source=$source');
+      return;
+    }
+    _clearParentFocus();
+    _view = SecondaryLocationView.parentSettings;
+    _settingsMode = LocationParentSettingsMode.edit;
+    _activeSettingsSection = LocationParentSettingsSection.identity;
+    _editingParentId = normalizedId;
+    _settingsSaving = false;
+    _settingsDirty = false;
+    _settingsNavigationRequestId = 0;
+    _resetSectionStates(create: false);
+    log('parent_settings_opened mode=edit parentId=$normalizedId source=$source');
+    notifyListeners();
+  }
+
+  void returnToManagement({required String source}) {
+    if (_view == SecondaryLocationView.management) {
+      log('management_reselected source=$source');
+      return;
+    }
+    _view = SecondaryLocationView.management;
+    _settingsMode = LocationParentSettingsMode.create;
+    _activeSettingsSection = LocationParentSettingsSection.identity;
+    _editingParentId = null;
+    _settingsSaving = false;
+    _settingsDirty = false;
+    _settingsNavigationRequestId = 0;
+    _resetSectionStates(create: true);
+    log('parent_settings_closed source=$source');
+    notifyListeners();
+  }
+
+  void requestSettingsSection(
+    LocationParentSettingsSection section, {
+    required String source,
+  }) {
+    if (!isParentSettingsView || _settingsSaving) return;
+    _settingsNavigationRequestId += 1;
+    _activeSettingsSection = section;
+    log(
+      'parent_settings_section_requested section=${section.name} request=$_settingsNavigationRequestId source=$source',
+    );
+    notifyListeners();
+  }
+
+  void selectSettingsSection(
+    LocationParentSettingsSection section, {
+    required String source,
+  }) {
+    if (!isParentSettingsView) return;
+    if (_activeSettingsSection == section) {
+      log('parent_settings_section_reselected section=${section.name} source=$source');
+      return;
+    }
+    final previous = _activeSettingsSection;
+    _activeSettingsSection = section;
+    log(
+      'parent_settings_section_changed from=${previous.name} to=${section.name} source=$source',
+    );
+    notifyListeners();
+  }
+
+  void updateSectionStates(
+    Map<LocationParentSettingsSection, LocationParentSettingsSectionState>
+        states, {
+    required String source,
+  }) {
+    var changed = false;
+    for (final section in LocationParentSettingsSection.values) {
+      final next = states[section];
+      if (next == null || _sectionStates[section] == next) continue;
+      _sectionStates[section] = next;
+      changed = true;
+    }
+    if (!changed) return;
+    final summary = LocationParentSettingsSection.values
+        .map((section) => '${section.name}:${stateFor(section).name}')
+        .join('|');
+    log('parent_settings_section_states source=$source $summary');
+    notifyListeners();
+  }
+
+  void setSettingsSaving(
+    bool value, {
+    required String source,
+  }) {
+    if (_settingsSaving == value) return;
+    _settingsSaving = value;
+    log('parent_settings_saving value=$value source=$source');
+    notifyListeners();
+  }
+
+  void setSettingsDirty(
+    bool value, {
+    required String source,
+  }) {
+    if (_settingsDirty == value) return;
+    _settingsDirty = value;
+    log('parent_settings_dirty value=$value source=$source');
+    notifyListeners();
+  }
+
   void openParent({
     required String key,
     required String parentId,
     required String title,
     required String source,
   }) {
+    if (isParentSettingsView) {
+      log('parent_focus_open_ignored reason=settings_active source=$source');
+      return;
+    }
     final normalizedKey = key.trim();
     final normalizedParentId = parentId.trim();
     final resolvedParentId =
         normalizedParentId.isEmpty ? null : normalizedParentId;
     final normalizedTitle = title.trim();
     if (normalizedKey.isEmpty) return;
-    final resolvedTitle = normalizedTitle.isEmpty ? normalizedKey : normalizedTitle;
+    final resolvedTitle =
+        normalizedTitle.isEmpty ? normalizedKey : normalizedTitle;
     final changed = _focusedParentKey != normalizedKey ||
         _focusedParentId != resolvedParentId ||
         _focusedParentTitle != resolvedTitle;
@@ -39,7 +224,9 @@ class SecondaryLocationWorkspaceState extends ChangeNotifier {
     _focusedParentTitle = resolvedTitle;
     _showOnlySelectedChild = false;
     _showSelectedChildSlotNumbers = false;
-    log('parent_focus_opened key=$normalizedKey parentId=${_focusedParentId ?? '-'} title=${_focusedParentTitle!} source=$source');
+    log(
+      'parent_focus_opened key=$normalizedKey parentId=${_focusedParentId ?? '-'} title=${_focusedParentTitle!} source=$source',
+    );
     if (changed) notifyListeners();
   }
 
@@ -49,11 +236,7 @@ class SecondaryLocationWorkspaceState extends ChangeNotifier {
       log('parent_focus_close_ignored source=$source');
       return;
     }
-    _focusedParentKey = null;
-    _focusedParentId = null;
-    _focusedParentTitle = null;
-    _showOnlySelectedChild = false;
-    _showSelectedChildSlotNumbers = false;
+    _clearParentFocus();
     log('parent_focus_closed key=$previous source=$source');
     notifyListeners();
   }
@@ -87,17 +270,48 @@ class SecondaryLocationWorkspaceState extends ChangeNotifier {
   }
 
   void reset({required String source}) {
-    final hadFocus = _focusedParentKey != null;
-    final optionsChanged =
-        _showOnlySelectedChild || _showSelectedChildSlotNumbers;
+    final changed = _view != SecondaryLocationView.management ||
+        _editingParentId != null ||
+        _settingsSaving ||
+        _settingsDirty ||
+        _focusedParentKey != null ||
+        _showOnlySelectedChild ||
+        _showSelectedChildSlotNumbers;
     final previous = _focusedParentKey;
+    _view = SecondaryLocationView.management;
+    _settingsMode = LocationParentSettingsMode.create;
+    _activeSettingsSection = LocationParentSettingsSection.identity;
+    _editingParentId = null;
+    _settingsSaving = false;
+    _settingsDirty = false;
+    _settingsNavigationRequestId = 0;
+    _clearParentFocus();
+    _resetSectionStates(create: true);
+    log('workspace_reset previous=${previous ?? '-'} source=$source changed=$changed');
+    if (changed) notifyListeners();
+  }
+
+  void _clearParentFocus() {
     _focusedParentKey = null;
     _focusedParentId = null;
     _focusedParentTitle = null;
     _showOnlySelectedChild = false;
     _showSelectedChildSlotNumbers = false;
-    log('workspace_reset previous=${previous ?? '-'} source=$source');
-    if (hadFocus || optionsChanged) notifyListeners();
+  }
+
+  void _resetSectionStates({required bool create}) {
+    _sectionStates
+      ..clear()
+      ..addAll(<LocationParentSettingsSection,
+          LocationParentSettingsSectionState>{
+        LocationParentSettingsSection.identity: create
+            ? LocationParentSettingsSectionState.incomplete
+            : LocationParentSettingsSectionState.complete,
+        LocationParentSettingsSection.size:
+            LocationParentSettingsSectionState.complete,
+        LocationParentSettingsSection.layout:
+            LocationParentSettingsSectionState.complete,
+      });
   }
 
   void log(String message) {

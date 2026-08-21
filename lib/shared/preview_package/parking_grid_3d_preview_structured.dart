@@ -491,7 +491,8 @@ class _ParkingGridModel {
       final c = pg.cells[i];
       if (c == ParkingGridCellType.road) {
         cells.add(road2Set.contains(i) ? _CellKind.road2 : _CellKind.road);
-      } else if (c == ParkingGridCellType.pillar) {
+      } else if (c == ParkingGridCellType.pillar ||
+          c == ParkingGridCellType.wall) {
         cells.add(_CellKind.pillar);
       } else {
         cells.add(_CellKind.empty);

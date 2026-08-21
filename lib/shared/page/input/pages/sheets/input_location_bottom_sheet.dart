@@ -2023,6 +2023,8 @@ class _InteractiveParkingGridPreview extends StatelessWidget {
           return cs.surfaceVariant.withOpacity(0.95);
         case ParkingGridCellType.pillar:
           return cs.errorContainer.withOpacity(0.75);
+        case ParkingGridCellType.wall:
+          return cs.onSurface.withOpacity(0.72);
         case ParkingGridCellType.empty:
           return cs.primaryContainer.withOpacity(0.55);
       }
@@ -2310,6 +2312,7 @@ class _InteractiveParkingGridPreview extends StatelessWidget {
               legendMark(roadMark(false), '도로1'),
               legendMark(roadMark(true), '도로2'),
               legendDot(cellColor(ParkingGridCellType.pillar), '기둥'),
+              legendDot(cellColor(ParkingGridCellType.wall), '벽'),
               legendMark(gateMark(true), '입구'),
               legendMark(gateMark(false), '출구'),
               if (showTowers && towerCount > 0)
@@ -2397,6 +2400,8 @@ class _FixedCellPanGridPreview extends StatelessWidget {
           return cs.surfaceVariant.withOpacity(0.95);
         case ParkingGridCellType.pillar:
           return cs.errorContainer.withOpacity(0.75);
+        case ParkingGridCellType.wall:
+          return cs.onSurface.withOpacity(0.72);
         case ParkingGridCellType.empty:
           return cs.primaryContainer.withOpacity(0.55);
       }
@@ -2628,6 +2633,7 @@ class _FixedCellPanGridPreview extends StatelessWidget {
               legendMark(roadMark(false), '도로1'),
               legendMark(roadMark(true), '도로2'),
               legendDot(cellColor(ParkingGridCellType.pillar), '기둥'),
+              legendDot(cellColor(ParkingGridCellType.wall), '벽'),
               legendMark(gateMark(true), '입구'),
               legendMark(gateMark(false), '출구'),
               if (towerCount > 0) legendMark(towerMark(), '주차 타워'),
@@ -2833,6 +2839,8 @@ class _ParkingGridPainter extends CustomPainter {
         return cs.surfaceVariant.withOpacity(0.95);
       case ParkingGridCellType.pillar:
         return cs.errorContainer.withOpacity(0.75);
+      case ParkingGridCellType.wall:
+        return cs.onSurface.withOpacity(0.72);
       case ParkingGridCellType.empty:
         return cs.primaryContainer.withOpacity(0.55);
     }

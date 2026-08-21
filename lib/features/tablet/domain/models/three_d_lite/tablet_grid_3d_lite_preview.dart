@@ -397,7 +397,9 @@ _GridStaticGeometry _staticGeometryForGrid(ParkingGridModel grid) {
   final pillarCells = <math.Point<int>>[];
   for (int row = 0; row < grid.rows; row++) {
     for (int col = 0; col < grid.cols; col++) {
-      if (_cellAt(grid, row, col) == ParkingGridCellType.pillar) {
+      final cellType = _cellAt(grid, row, col);
+      if (cellType == ParkingGridCellType.pillar ||
+          cellType == ParkingGridCellType.wall) {
         pillarCells.add(math.Point<int>(col, row));
       }
     }

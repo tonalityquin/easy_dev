@@ -511,44 +511,19 @@ class _LocationManagementState extends State<LocationManagement> {
   }
 
   Future<void> _handleAddParent(BuildContext context) async {
-    _log('form_opened mode=create_parent');
-    final locationState = context.read<LocationState>();
-    final currentArea = context.read<AreaState>().currentArea.trim();
-    final allInArea = locationState.locations
-        .where((location) => location.area.trim() == currentArea)
-        .toList();
-    final existingNameKeysInArea =
-        allInArea.map((location) => _nameKey(location.locationName)).toSet();
-
-    await showCommonOverlayBottomSheet<void>(
-      context: context,
-      useSafeArea: true,
-      builder: (_) {
-        return FractionallySizedBox(
-          heightFactor: 1,
-          child: LocationSettingBottomSheet(
-            intent: LocationSettingIntent.createParent,
-            existingNameKeysInArea: existingNameKeysInArea,
-            existingChildCompositeKeysInArea: const <String>{},
-            parentParkingGridsByParentKey:
-                const <String, ParkingGridModel>{},
-            onSave: (draft) async {
-              if (draft is! CompositeParentDraft) return false;
-              final area = context.read<AreaState>().currentArea.trim();
-              return _runWrite(
-                context,
-                (onError) => locationState.createCompositeParent(
-                  draft.parent,
-                  area,
-                  parkingGrid: draft.parkingGrid,
-                  onError: onError,
-                ),
-              );
-            },
-          ),
-        );
-      },
-    );
+    final area = context.read<AreaState>().currentArea.trim();
+    if (area.isEmpty) {
+      showFailedSnackbar(
+        context,
+        '현재 지역 정보가 없어 부모구역을 생성할 수 없습니다.',
+        useCommonUi: true,
+      );
+      return;
+    }
+    _log('parent_settings_open_requested mode=create');
+    await HapticFeedback.selectionClick();
+    if (!mounted) return;
+    _workspace.openCreateParent(source: 'location_management_create_parent');
   }
 
   Future<void> _handleAddChild(
@@ -647,107 +622,37 @@ class _LocationManagementState extends State<LocationManagement> {
     BuildContext context, {
     LocationModel? targetParent,
   }) async {
-    _log('form_opened mode=edit_parent target=${targetParent?.id ?? '-'}');
     final locationState = context.read<LocationState>();
-    final currentArea = context.read<AreaState>().currentArea.trim();
-
     LocationModel? parent = targetParent;
     if (parent == null) {
       final selectedId = locationState.selectedLocationId;
-      if (selectedId == null) {
-        return;
-      }
-      for (final location in locationState.locations) {
-        if (location.id == selectedId) {
-          parent = location;
-          break;
+      if (selectedId != null) {
+        for (final location in locationState.locations) {
+          if (location.id == selectedId) {
+            parent = location;
+            break;
+          }
         }
       }
     }
-
     final resolvedParent = parent;
-    if (resolvedParent == null || !_isCompositeParent(resolvedParent)) {
+    if (resolvedParent == null ||
+        !_isCompositeParent(resolvedParent) ||
+        resolvedParent.parkingGrid == null) {
+      showFailedSnackbar(
+        context,
+        '수정할 부모구역 정보를 찾을 수 없습니다.',
+        useCommonUi: true,
+      );
       return;
     }
-
-    final parentGrid = resolvedParent.parkingGrid;
-    if (parentGrid == null) {
-      return;
-    }
-
-    final allInArea = locationState.locations
-        .where((l) => l.area.trim() == currentArea)
-        .toList();
-
-    final existingNameKeysInArea =
-        allInArea.map((l) => _nameKey(l.locationName)).toSet();
-
-    final existingChildCompositeKeysInArea = allInArea
-        .where((loc) =>
-            _isCompositeChild(loc) && (loc.parent ?? '').trim().isNotEmpty)
-        .map((loc) => _childCompositeKey(loc.parent!, loc.locationName))
-        .toSet();
-
-    final Map<String, ParkingGridModel> parentParkingGridsByParentKey = {};
-    for (final p in allInArea.where(_isCompositeParent)) {
-      final grid = p.parkingGrid;
-      if (grid == null) continue;
-      parentParkingGridsByParentKey[_nameKey(p.locationName)] = grid;
-    }
-
-    final Map<String, List<GridRect>> existingChildRectsByParentKey = {};
-    final Map<String, Set<String>> existingChildAreaIdsByParentKey = {};
-    for (final c in allInArea.where(_isCompositeChild)) {
-      final pName = (c.parent ?? '').trim();
-      if (pName.isEmpty) continue;
-
-      final pk = _nameKey(pName);
-      final areaIds = _childAreaIds(c);
-      if (areaIds.isNotEmpty) {
-        existingChildAreaIdsByParentKey
-            .putIfAbsent(pk, () => <String>{})
-            .addAll(areaIds);
-      }
-
-      final cr = c.childRect;
-      if (cr == null) continue;
-
-      existingChildRectsByParentKey
-          .putIfAbsent(pk, () => <GridRect>[])
-          .add(cr.normalized());
-    }
-
-    await showCommonOverlayBottomSheet<void>(
-      context: context,
-      useSafeArea: true,
-      builder: (_) {
-        return FractionallySizedBox(
-          heightFactor: 1,
-          child: LocationSettingBottomSheet(
-            intent: LocationSettingIntent.editParent,
-            existingNameKeysInArea: existingNameKeysInArea,
-            existingChildCompositeKeysInArea: existingChildCompositeKeysInArea,
-            parentParkingGridsByParentKey: parentParkingGridsByParentKey,
-            existingChildRectsByParentKey: existingChildRectsByParentKey,
-            existingChildAreaIdsByParentKey: existingChildAreaIdsByParentKey,
-            editingParentName: resolvedParent.locationName,
-            editingParentParkingGrid: parentGrid,
-            onSave: (draft) async {
-              if (draft is! CompositeParentUpdateDraft) return false;
-              final area = context.read<AreaState>().currentArea.trim();
-              return _runWrite(
-                context,
-                (onError) => locationState.updateCompositeParent(
-                  parentId: resolvedParent.id,
-                  area: area,
-                  parkingGrid: draft.parkingGrid,
-                  onError: onError,
-                ),
-              );
-            },
-          ),
-        );
-      },
+    _log('parent_settings_open_requested mode=edit parentId=${resolvedParent.id}');
+    await HapticFeedback.selectionClick();
+    if (!mounted) return;
+    locationState.clearSelection();
+    _workspace.openEditParent(
+      resolvedParent.id,
+      source: 'location_management_edit_parent',
     );
   }
 

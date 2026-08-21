@@ -107,6 +107,8 @@ class ParkingGridPreview extends StatelessWidget {
           return road1Color();
         case ParkingGridCellType.pillar:
           return cs.errorContainer.withOpacity(0.75);
+        case ParkingGridCellType.wall:
+          return cs.onSurface.withOpacity(0.72);
         case ParkingGridCellType.empty:
           return cs.primaryContainer.withOpacity(0.55);
       }
@@ -242,6 +244,7 @@ class ParkingGridPreview extends StatelessWidget {
               legendDot(road1Color(), '도로1'),
               legendDot(road2Color(), '도로2'),
               legendDot(cellColor(ParkingGridCellType.pillar), '기둥'),
+              legendDot(cellColor(ParkingGridCellType.wall), '벽'),
               pill('${grid.rows}×${grid.cols}'),
               if (showParkingAreas && parkingAreaCount > 0)
                 pill('주차면적 $parkingAreaCount'),
@@ -382,6 +385,8 @@ class _ParkingGridPainter extends CustomPainter {
             : cs.surfaceVariant.withOpacity(0.95);
       case ParkingGridCellType.pillar:
         return cs.errorContainer.withOpacity(0.75);
+      case ParkingGridCellType.wall:
+        return cs.onSurface.withOpacity(0.72);
       case ParkingGridCellType.empty:
         return cs.primaryContainer.withOpacity(0.55);
     }

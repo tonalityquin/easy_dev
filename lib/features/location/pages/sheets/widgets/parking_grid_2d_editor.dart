@@ -9,6 +9,7 @@ enum GridEditTool {
   road,
   road2,
   pillar,
+  wall,
   parkingCompact12,
   parkingCompact21,
   parkingStandard12,
@@ -113,7 +114,8 @@ class _ParkingGrid2DEditorState extends State<ParkingGrid2DEditor> {
       t == GridEditTool.empty ||
           t == GridEditTool.road ||
           t == GridEditTool.road2 ||
-          t == GridEditTool.pillar;
+          t == GridEditTool.pillar ||
+          t == GridEditTool.wall;
 
   bool _isParkingTool(GridEditTool t) =>
       t == GridEditTool.parkingEraser || _kindForTool(t) != null;
@@ -140,6 +142,8 @@ class _ParkingGrid2DEditorState extends State<ParkingGrid2DEditor> {
         return ParkingGridCellType.road;
       case GridEditTool.pillar:
         return ParkingGridCellType.pillar;
+      case GridEditTool.wall:
+        return ParkingGridCellType.wall;
       default:
         return ParkingGridCellType.empty;
     }
@@ -152,6 +156,8 @@ class _ParkingGrid2DEditorState extends State<ParkingGrid2DEditor> {
       case ParkingGridCellType.road:
         return ParkingGridCellType.pillar;
       case ParkingGridCellType.pillar:
+        return ParkingGridCellType.wall;
+      case ParkingGridCellType.wall:
         return ParkingGridCellType.empty;
     }
   }
@@ -844,6 +850,8 @@ class _ParkingGrid2DPainter extends CustomPainter {
             : cs.surfaceVariant.withOpacity(0.95);
       case ParkingGridCellType.pillar:
         return cs.errorContainer.withOpacity(0.75);
+      case ParkingGridCellType.wall:
+        return cs.onSurface.withOpacity(0.72);
       case ParkingGridCellType.empty:
         return cs.primaryContainer.withOpacity(0.55);
     }

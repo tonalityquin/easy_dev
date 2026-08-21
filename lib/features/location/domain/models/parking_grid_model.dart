@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 
 import 'grid_rect.dart';
 
-enum ParkingGridCellType { empty, road, pillar }
+enum ParkingGridCellType { empty, road, pillar, wall }
 
 String parkingGridCellTypeLabel(ParkingGridCellType t) {
   switch (t) {
@@ -13,6 +13,8 @@ String parkingGridCellTypeLabel(ParkingGridCellType t) {
       return '도로';
     case ParkingGridCellType.pillar:
       return '기둥';
+    case ParkingGridCellType.wall:
+      return '벽';
   }
 }
 
@@ -741,6 +743,7 @@ class ParkingGridModel {
         final s = v.trim().toLowerCase();
         if (s == 'road') return ParkingGridCellType.road;
         if (s == 'pillar') return ParkingGridCellType.pillar;
+        if (s == 'wall') return ParkingGridCellType.wall;
         if (s == 'empty') return ParkingGridCellType.empty;
         final i = int.tryParse(s);
         if (i != null && i >= 0 && i < ParkingGridCellType.values.length) {

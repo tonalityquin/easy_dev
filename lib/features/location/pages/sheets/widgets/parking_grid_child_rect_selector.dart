@@ -826,6 +826,7 @@ class _ParkingGridChildRectPainter extends CustomPainter {
     final pEmpty = Paint()..color = cs.surface.withOpacity(0.98);
     final pRoad = Paint()..color = cs.primaryContainer.withOpacity(0.55);
     final pPillar = Paint()..color = cs.tertiaryContainer.withOpacity(0.75);
+    final pWall = Paint()..color = cs.onSurface.withOpacity(0.72);
 
     for (int r = 0; r < rows; r++) {
       for (int c = 0; c < cols; c++) {
@@ -837,6 +838,8 @@ class _ParkingGridChildRectPainter extends CustomPainter {
           canvas.drawRect(rect, pRoad);
         } else if (t == ParkingGridCellType.pillar) {
           canvas.drawRect(rect, pPillar);
+        } else if (t == ParkingGridCellType.wall) {
+          canvas.drawRect(rect, pWall);
         } else {
           canvas.drawRect(rect, pEmpty);
         }
