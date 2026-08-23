@@ -16,6 +16,7 @@ import '../../../features/location/domain/models/parking_grid_model.dart';
 import '../domain/models/plate_model.dart';
 import '../../../design_system/common_ui/common_ui_components.dart';
 import '../../../design_system/common_ui/common_ui_side_dock.dart';
+import '../../../design_system/common_ui/common_ui_side_dock_frame.dart';
 import '../../../design_system/common_ui/common_ui_side_rail.dart';
 import '../../../design_system/common_ui/common_ui_theme.dart';
 import '../../parking_dot_map/parking_status_dot_map_surface.dart';
@@ -2021,90 +2022,34 @@ class ParkingStatusSideDockFrame extends StatelessWidget {
   Widget build(BuildContext context) {
     final media = MediaQuery.maybeOf(context);
     final textScale = media?.textScaler.scale(1.0) ?? 1.0;
-    final reduceMotion = media?.disableAnimations ?? false;
-    return PopScope(
-      canPop: closeEnabled,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final dockHeight = constraints.maxHeight.isFinite
-              ? constraints.maxHeight
-              : media?.size.height ?? 720.0;
-          final metrics = ParkingStatusAdaptiveMetrics.resolve(
-            dockHeight: dockHeight,
-            textScale: textScale,
-          );
-          final dockWidth = constraints.maxWidth.isFinite
-              ? constraints.maxWidth
-              : media?.size.width ?? 360.0;
-          final commonRailMetrics = CommonSideRailMetrics.resolve(
-            dockHeight: dockHeight,
-            textScale: textScale,
-          );
-          final effectiveRailWidth =
-              commonRailMetrics.effectiveRailWidth(dockWidth);
-          final effectiveRailGap =
-              commonRailMetrics.effectiveRailGap(dockWidth);
-          final mainColumn = Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(child: child),
-              if (footer != null) ...[
-                SizedBox(height: metrics.sectionGap),
-                AnimatedContainer(
-                  duration: reduceMotion
-                      ? Duration.zero
-                      : const Duration(milliseconds: 220),
-                  curve: Curves.easeOutCubic,
-                  height: metrics.footerHeight,
-                  child: footer,
-                ),
-              ],
-            ],
-          );
-          final body = leadingRail == null
-              ? mainColumn
-              : Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    AnimatedContainer(
-                      duration: reduceMotion
-                          ? Duration.zero
-                          : const Duration(milliseconds: 180),
-                      curve: Curves.easeOutCubic,
-                      width: effectiveRailWidth,
-                      child: ClipRect(child: leadingRail!),
-                    ),
-                    AnimatedContainer(
-                      duration: reduceMotion
-                          ? Duration.zero
-                          : const Duration(milliseconds: 180),
-                      curve: Curves.easeOutCubic,
-                      width: effectiveRailGap,
-                    ),
-                    Expanded(child: mainColumn),
-                  ],
-                );
-          final content = Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _ParkingStatusDockHeader(
-                title: title,
-                subtitle: subtitle,
-                icon: icon,
-                closeEnabled: closeEnabled,
-                onClose: onClose,
-                onLongPress: onLongPress,
-              ),
-              SizedBox(height: metrics.sectionGap),
-              Expanded(child: body),
-            ],
-          );
-          return ParkingStatusAdaptiveLayout(
-            metrics: metrics,
-            child: content,
-          );
-        },
-      ),
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final dockHeight = constraints.maxHeight.isFinite
+            ? constraints.maxHeight
+            : media?.size.height ?? 720.0;
+        final metrics = ParkingStatusAdaptiveMetrics.resolve(
+          dockHeight: dockHeight,
+          textScale: textScale,
+        );
+
+        return ParkingStatusAdaptiveLayout(
+          metrics: metrics,
+          child: CommonSideDockFrame(
+            title: title,
+            subtitle: subtitle,
+            icon: icon,
+            child: child,
+            onClose: onClose,
+            closeEnabled: closeEnabled,
+            onLongPress: onLongPress,
+            leadingRail: leadingRail,
+            footer: footer,
+            sectionGap: metrics.sectionGap,
+            footerHeight: footer == null ? null : metrics.footerHeight,
+          ),
+        );
+      },
     );
   }
 }
@@ -4247,134 +4192,6 @@ class ParkingCompletedActionList extends StatelessWidget {
   }
 }
 
-class _ParkingStatusDockHeader extends StatelessWidget {
-  const _ParkingStatusDockHeader({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.closeEnabled,
-    required this.onClose,
-    this.onLongPress,
-  });
-
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final bool closeEnabled;
-  final VoidCallback onClose;
-  final VoidCallback? onLongPress;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = CommonUiTheme.of(context);
-    final textTheme = Theme.of(context).textTheme;
-    final metrics = ParkingStatusAdaptiveLayout.maybeOf(context);
-    final variant = metrics?.variant ?? ParkingStatusPrimaryVariant.normal;
-    final compact = variant != ParkingStatusPrimaryVariant.normal;
-    final ultra = variant == ParkingStatusPrimaryVariant.ultraCompact;
-    final horizontalPadding = ultra ? 10.0 : compact ? 11.0 : 12.0;
-    final verticalPadding = ultra ? 8.0 : compact ? 10.0 : 12.0;
-    final identityIconSize = ultra ? 36.0 : compact ? 39.0 : 42.0;
-    final identityGlyphSize = ultra ? 19.0 : compact ? 20.0 : 22.0;
-    final identityGap = ultra ? 9.0 : compact ? 10.0 : 12.0;
-    final subtitleGap = ultra ? 2.0 : compact ? 3.0 : 4.0;
-    final subtitleMaxLines = compact ? 1 : 2;
-
-    return _ParkingStatusReveal(
-      order: 0,
-      offsetY: 6,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onLongPress: onLongPress,
-        child: AnimatedContainer(
-          duration: MediaQuery.maybeOf(context)?.disableAnimations == true
-              ? Duration.zero
-              : const Duration(milliseconds: 180),
-          curve: Curves.easeOutCubic,
-          padding: EdgeInsets.symmetric(
-            horizontal: horizontalPadding,
-            vertical: verticalPadding,
-          ),
-          decoration: BoxDecoration(
-            color: tokens.surface,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: tokens.borderSubtle),
-          ),
-          child: Row(
-            children: [
-              AnimatedContainer(
-                duration: MediaQuery.maybeOf(context)?.disableAnimations == true
-                    ? Duration.zero
-                    : const Duration(milliseconds: 180),
-                curve: Curves.easeOutCubic,
-                width: identityIconSize,
-                height: identityIconSize,
-                decoration: BoxDecoration(
-                  color: tokens.accentContainer,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: tokens.shadow,
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                alignment: Alignment.center,
-                child: Icon(
-                  icon,
-                  color: tokens.onAccentContainer,
-                  size: identityGlyphSize,
-                ),
-              ),
-              SizedBox(width: identityGap),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: textTheme.titleMedium?.copyWith(
-                        color: tokens.textPrimary,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: .1,
-                      ),
-                    ),
-                    if (subtitle.trim().isNotEmpty) ...[
-                      SizedBox(height: subtitleGap),
-                      Text(
-                        subtitle.trim(),
-                        maxLines: subtitleMaxLines,
-                        overflow: TextOverflow.ellipsis,
-                        style: textTheme.bodySmall?.copyWith(
-                          color: tokens.textSecondary,
-                          height: 1.2,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              CommonIconButton(
-                icon: Icons.close_rounded,
-                tooltip: '닫기',
-                onPressed: closeEnabled ? onClose : null,
-                haptic: CommonHaptic.selection,
-                size: 42,
-                iconSize: 21,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _ParkingStatusReveal extends StatelessWidget {
   const _ParkingStatusReveal({
     required this.order,
@@ -4467,8 +4284,6 @@ class ParkingCompletedSectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = CommonUiTheme.of(context);
-    final textTheme = Theme.of(context).textTheme;
     final displayTitle = title == '핵심 작업'
         ? '상태 변경'
         : title == '빠른 실행'
@@ -4482,58 +4297,12 @@ class ParkingCompletedSectionCard extends StatelessWidget {
       revealOrder = 3;
     }
 
-    return _ParkingStatusReveal(
+    return CommonSideDockSection(
+      title: displayTitle,
+      subtitle: subtitle,
+      accentColor: borderColor,
       order: revealOrder,
-      offsetY: 6,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 3,
-                height: 18,
-                margin: const EdgeInsets.only(top: 1),
-                decoration: BoxDecoration(
-                  color: borderColor ?? tokens.accent,
-                  borderRadius: BorderRadius.circular(CommonUiShapes.pill),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      displayTitle,
-                      style: textTheme.titleSmall?.copyWith(
-                        color: tokens.textPrimary,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    if (subtitle.trim().isNotEmpty) ...[
-                      const SizedBox(height: 3),
-                      Text(
-                        subtitle.trim(),
-                        style: textTheme.bodySmall?.copyWith(
-                          color: tokens.textSecondary,
-                          height: 1.2,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Padding(
-            padding: const EdgeInsets.only(left: 10),
-            child: child,
-          ),
-        ],
-      ),
+      child: child,
     );
   }
 }

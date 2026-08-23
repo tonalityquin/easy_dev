@@ -70,7 +70,10 @@ class TripleTypePage extends StatelessWidget {
         buildDepartureCompletedSheet: () =>
             const TripleDepartureCompletedBottomSheet(),
         buildDashboardSideDock: () => const TripleHomeDashboardSideDock(),
-        buildInputScreen: () => const InputPlateScreen(),
+        buildInputScreen: (launch) => InputPlateScreen(
+          initialOcrSourceRect: launch.sourceRect,
+          sideDockPresentationController: launch.presentationController,
+        ),
         debugMeta: const <String, dynamic>{
           'screen': 'triple_type_page',
           'action': 'open_triple_input_plate_screen',

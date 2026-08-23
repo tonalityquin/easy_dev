@@ -672,11 +672,6 @@ class _ChildSlot {
     );
   }
 
-  String get badgeLabel {
-    final n = no != null && no! > 0 ? no.toString() : '';
-    return n;
-  }
-
   (int sr, int sc) get normalizedSpan {
     int sr = spanR.clamp(1, 2);
     int sc = spanC.clamp(1, 2);

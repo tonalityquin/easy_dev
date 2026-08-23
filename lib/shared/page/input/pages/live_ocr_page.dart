@@ -124,6 +124,10 @@ enum LiveOcrExitType {
   cameraInitFailed,
 }
 
+typedef LiveOcrExitPreparing = Future<void> Function(
+  LiveOcrSessionResult result,
+);
+
 class LiveOcrSessionResult {
   final String sessionId;
   final String? plate;
@@ -450,12 +454,14 @@ class _CropRecoveryOutcome {
 }
 
 class LiveOcrPage extends StatefulWidget {
-  final String sessionId;
-
   const LiveOcrPage({
     super.key,
     required this.sessionId,
+    this.onExitPreparing,
   });
+
+  final String sessionId;
+  final LiveOcrExitPreparing? onExitPreparing;
 
   @override
   State<LiveOcrPage> createState() => _LiveOcrPageState();
@@ -5111,28 +5117,40 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
     }
 
     if (!mounted) return;
-    Navigator.pop(
-      context,
-      LiveOcrSessionResult(
-        sessionId: widget.sessionId,
-        plate: normalizedPlate,
-        exitType: exitType,
-        logs: List<String>.from(_sessionLogs, growable: false),
-        candidateValues: List<String>.from(_candidateChips, growable: false),
-        selectedChipLabel: selectedChipLabel,
-        lastOcrText: _lastText,
-        lastFailureReason: _lastFailureReason,
-        attemptCount: _attempt,
-        usedLearningMid: _usedLearningMidLast,
-        usedLearningRank: _usedLearningRankLast,
-        weakFront: weakFront,
-        weakBack: weakBack,
-        weakObservedValue: weakObservedValue,
-        requiresMidCompletion: requiresMidCompletion,
-        weakMidSuggestions:
-        List<String>.from(weakMidSuggestions, growable: false),
-      ),
+    final result = LiveOcrSessionResult(
+      sessionId: widget.sessionId,
+      plate: normalizedPlate,
+      exitType: exitType,
+      logs: List<String>.from(_sessionLogs, growable: false),
+      candidateValues: List<String>.from(_candidateChips, growable: false),
+      selectedChipLabel: selectedChipLabel,
+      lastOcrText: _lastText,
+      lastFailureReason: _lastFailureReason,
+      attemptCount: _attempt,
+      usedLearningMid: _usedLearningMidLast,
+      usedLearningRank: _usedLearningRankLast,
+      weakFront: weakFront,
+      weakBack: weakBack,
+      weakObservedValue: weakObservedValue,
+      requiresMidCompletion: requiresMidCompletion,
+      weakMidSuggestions:
+          List<String>.from(weakMidSuggestions, growable: false),
     );
+    final onExitPreparing = widget.onExitPreparing;
+    if (onExitPreparing != null) {
+      try {
+        _appendLog('종료 전 목적 화면 준비 시작 type=${exitType.name}');
+        await onExitPreparing(result);
+        _appendLog('종료 전 목적 화면 준비 완료 type=${exitType.name}');
+      } catch (error, stackTrace) {
+        _appendLog('종료 전 목적 화면 준비 오류 $error');
+        debugPrint(
+          '[LiveOCR] exit_prepare_failed type=${exitType.name} error=$error\n$stackTrace',
+        );
+      }
+    }
+    if (!mounted) return;
+    Navigator.pop(context, result);
   }
 
   void _showLearningDialog() {

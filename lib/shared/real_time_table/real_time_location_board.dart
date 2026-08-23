@@ -13,6 +13,7 @@ import '../../features/location/domain/models/parking_grid_model.dart';
 import '../../features/selector/application/dev_auth.dart';
 import '../parking_dot_map/effective_child_region_geometry.dart';
 import '../parking_dot_map/parking_status_dot_map_surface.dart';
+import '../parking_spatial/parking_spatial_geometry.dart';
 import 'real_time_sort_state.dart';
 import 'real_time_source_rect_modal.dart';
 import 'real_time_tab_controller.dart';
@@ -3062,28 +3063,7 @@ List<_ResolvedChildZone> _resolveChildZones({
 }
 
 GridRect? _resolveNominalChildRect(ZoneVM zone, ParkingGridModel grid) {
-  GridRect? raw = zone.source.childRect?.normalized();
-  if (raw == null && zone.source.childSlots.isNotEmpty) {
-    var top = zone.source.childSlots.first.r0;
-    var left = zone.source.childSlots.first.c0;
-    var bottom = zone.source.childSlots.first.r1;
-    var right = zone.source.childSlots.first.c1;
-    for (final slot in zone.source.childSlots.skip(1)) {
-      top = math.min(top, math.min(slot.r0, slot.r1));
-      left = math.min(left, math.min(slot.c0, slot.c1));
-      bottom = math.max(bottom, math.max(slot.r0, slot.r1));
-      right = math.max(right, math.max(slot.c0, slot.c1));
-    }
-    raw = GridRect(r0: top, c0: left, r1: bottom, c1: right);
-  }
-  if (raw == null || grid.rows <= 0 || grid.cols <= 0) return null;
-  final normalized = raw.normalized();
-  final top = normalized.top.clamp(0, grid.rows - 1).toInt();
-  final left = normalized.left.clamp(0, grid.cols - 1).toInt();
-  final bottom = normalized.bottom.clamp(0, grid.rows - 1).toInt();
-  final right = normalized.right.clamp(0, grid.cols - 1).toInt();
-  if (bottom < top || right < left) return null;
-  return GridRect(r0: top, c0: left, r1: bottom, c1: right);
+  return resolveParkingSpatialChildRect(zone.source, grid);
 }
 
 (Rect, Rect) _separateHitRects({
@@ -3092,152 +3072,16 @@ GridRect? _resolveNominalChildRect(ZoneVM zone, ParkingGridModel grid) {
   required Rect firstHit,
   required Rect secondHit,
 }) {
-  if (firstVisual.right <= secondVisual.left) {
-    final boundary = (firstVisual.right + secondVisual.left) / 2;
-    return (
-      Rect.fromLTRB(
-        firstHit.left,
-        firstHit.top,
-        math.max(firstVisual.right, math.min(firstHit.right, boundary)),
-        firstHit.bottom,
-      ),
-      Rect.fromLTRB(
-        math.min(secondVisual.left, math.max(secondHit.left, boundary)),
-        secondHit.top,
-        secondHit.right,
-        secondHit.bottom,
-      ),
-    );
-  }
-  if (secondVisual.right <= firstVisual.left) {
-    final boundary = (secondVisual.right + firstVisual.left) / 2;
-    return (
-      Rect.fromLTRB(
-        math.min(firstVisual.left, math.max(firstHit.left, boundary)),
-        firstHit.top,
-        firstHit.right,
-        firstHit.bottom,
-      ),
-      Rect.fromLTRB(
-        secondHit.left,
-        secondHit.top,
-        math.max(secondVisual.right, math.min(secondHit.right, boundary)),
-        secondHit.bottom,
-      ),
-    );
-  }
-  if (firstVisual.bottom <= secondVisual.top) {
-    final boundary = (firstVisual.bottom + secondVisual.top) / 2;
-    return (
-      Rect.fromLTRB(
-        firstHit.left,
-        firstHit.top,
-        firstHit.right,
-        math.max(firstVisual.bottom, math.min(firstHit.bottom, boundary)),
-      ),
-      Rect.fromLTRB(
-        secondHit.left,
-        math.min(secondVisual.top, math.max(secondHit.top, boundary)),
-        secondHit.right,
-        secondHit.bottom,
-      ),
-    );
-  }
-  if (secondVisual.bottom <= firstVisual.top) {
-    final boundary = (secondVisual.bottom + firstVisual.top) / 2;
-    return (
-      Rect.fromLTRB(
-        firstHit.left,
-        math.min(firstVisual.top, math.max(firstHit.top, boundary)),
-        firstHit.right,
-        firstHit.bottom,
-      ),
-      Rect.fromLTRB(
-        secondHit.left,
-        secondHit.top,
-        secondHit.right,
-        math.max(secondVisual.bottom, math.min(secondHit.bottom, boundary)),
-      ),
-    );
-  }
-
-  final dx = secondVisual.center.dx - firstVisual.center.dx;
-  final dy = secondVisual.center.dy - firstVisual.center.dy;
-  if (dx.abs() >= dy.abs()) {
-    final boundary = (firstVisual.center.dx + secondVisual.center.dx) / 2;
-    if (dx >= 0) {
-      return (
-        Rect.fromLTRB(
-          firstHit.left,
-          firstHit.top,
-          math.max(firstHit.left, math.min(firstHit.right, boundary)),
-          firstHit.bottom,
-        ),
-        Rect.fromLTRB(
-          math.min(secondHit.right, math.max(secondHit.left, boundary)),
-          secondHit.top,
-          secondHit.right,
-          secondHit.bottom,
-        ),
-      );
-    }
-    return (
-      Rect.fromLTRB(
-        math.min(firstHit.right, math.max(firstHit.left, boundary)),
-        firstHit.top,
-        firstHit.right,
-        firstHit.bottom,
-      ),
-      Rect.fromLTRB(
-        secondHit.left,
-        secondHit.top,
-        math.max(secondHit.left, math.min(secondHit.right, boundary)),
-        secondHit.bottom,
-      ),
-    );
-  }
-
-  final boundary = (firstVisual.center.dy + secondVisual.center.dy) / 2;
-  if (dy >= 0) {
-    return (
-      Rect.fromLTRB(
-        firstHit.left,
-        firstHit.top,
-        firstHit.right,
-        math.max(firstHit.top, math.min(firstHit.bottom, boundary)),
-      ),
-      Rect.fromLTRB(
-        secondHit.left,
-        math.min(secondHit.bottom, math.max(secondHit.top, boundary)),
-        secondHit.right,
-        secondHit.bottom,
-      ),
-    );
-  }
-  return (
-    Rect.fromLTRB(
-      firstHit.left,
-      math.min(firstHit.bottom, math.max(firstHit.top, boundary)),
-      firstHit.right,
-      firstHit.bottom,
-    ),
-    Rect.fromLTRB(
-      secondHit.left,
-      secondHit.top,
-      secondHit.right,
-      math.max(secondHit.top, math.min(secondHit.bottom, boundary)),
-    ),
+  return parkingSpatialSeparateHitRects(
+    firstVisual: firstVisual,
+    secondVisual: secondVisual,
+    firstHit: firstHit,
+    secondHit: secondHit,
   );
 }
 
 Rect _minimumHitRect(Rect source, Rect bounds, double minimum) {
-  final width = math.min(bounds.width, math.max(minimum, source.width));
-  final height = math.min(bounds.height, math.max(minimum, source.height));
-  var left = source.center.dx - width / 2;
-  var top = source.center.dy - height / 2;
-  left = left.clamp(bounds.left, bounds.right - width).toDouble();
-  top = top.clamp(bounds.top, bounds.bottom - height).toDouble();
-  return Rect.fromLTWH(left, top, width, height);
+  return parkingSpatialMinimumHitRect(source, bounds, minimum);
 }
 
 Map<int, RealTimeRowVM> _rowsBySlot(List<RealTimeRowVM> rows) {

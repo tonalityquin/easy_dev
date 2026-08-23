@@ -1,0 +1,215 @@
+import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../../../../design_system/common_ui/common_ui_theme.dart';
+import '../../../../shared/page/application/single/single_page_info.dart';
+import '../../../../shared/secondary/side_docks/secondary_side_dock.dart';
+import '../../../selector/application/dev_auth.dart';
+import '../../applications/single/single_hq_state.dart';
+import '../../widgets/headquarter_mode_switch_button.dart';
+
+class SingleHeadquarterPage extends StatelessWidget {
+  const SingleHeadquarterPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (_) => SingleHqState(pages: singleHqPage),
+      child: const CommonUiScope(
+        child: _SingleHeadquarterShell(),
+      ),
+    );
+  }
+}
+
+class _SingleHeadquarterShell extends StatelessWidget {
+  const _SingleHeadquarterShell();
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    return PopScope(
+      canPop: false,
+      child: Scaffold(
+        backgroundColor: tokens.canvas,
+        body: const RefreshableBody(),
+        bottomNavigationBar: const SafeArea(
+          top: false,
+          child: _BottomArea(),
+        ),
+      ),
+    );
+  }
+}
+
+class _BottomArea extends StatelessWidget {
+  const _BottomArea();
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<SingleHqState>();
+    final pages = state.pages;
+    final switchButton = HeadquarterModeSwitchButton(
+      currentModeKey: 'single',
+      currentScreen: 'single_headquarter_page',
+      onBeforeSwitch: () {},
+    );
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: CommonUiTheme.of(context).surface,
+        border: Border(
+          top: BorderSide(color: CommonUiTheme.of(context).borderSubtle),
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (pages.length >= 2) const PageBottomNavigation(),
+          switchButton,
+        ],
+      ),
+    );
+  }
+}
+
+class RefreshableBody extends StatefulWidget {
+  const RefreshableBody({super.key});
+
+  @override
+  State<RefreshableBody> createState() => _RefreshableBodyState();
+}
+
+class _RefreshableBodyState extends State<RefreshableBody> {
+  double _dragDistance = 0;
+  bool _openingSecondary = false;
+
+  static const double _hDistanceThreshold = 80;
+  static const double _hVelocityThreshold = 1000;
+
+  Future<bool> _isDevAuthorized() async {
+    final restored = await DevAuth.restorePrefs();
+    return restored.devAuthorized;
+  }
+
+  Future<void> _openSecondaryIfAuthorized() async {
+    if (_openingSecondary) return;
+    _openingSecondary = true;
+    try {
+      final ok = await _isDevAuthorized();
+      if (!mounted || !ok) return;
+      debugPrint('[HQ-SWIPE] single secondary_side_dock_open');
+      await showSecondarySideDock<void>(
+        context: context,
+        barrierLabel: '운영 관리',
+      );
+      debugPrint('[HQ-SWIPE] single secondary_side_dock_closed');
+    } finally {
+      _openingSecondary = false;
+    }
+  }
+
+  void _handleHorizontalDragEnd(double velocity) {
+    final fired = _dragDistance < -_hDistanceThreshold &&
+        velocity < -_hVelocityThreshold;
+    if (fired) _openSecondaryIfAuthorized();
+    _dragDistance = 0;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      dragStartBehavior: DragStartBehavior.down,
+      onHorizontalDragUpdate: (details) => _dragDistance += details.delta.dx,
+      onHorizontalDragEnd: (details) =>
+          _handleHorizontalDragEnd(details.primaryVelocity ?? 0),
+      child: Consumer<SingleHqState>(
+        builder: (context, state, child) {
+          final pages = state.pages;
+          final safeIndex = pages.isEmpty
+              ? 0
+              : state.selectedIndex.clamp(0, pages.length - 1);
+          final children = pages.isEmpty
+              ? const <Widget>[SizedBox.shrink()]
+              : pages.map((page) => page.page).toList(growable: false);
+          return Stack(
+            children: [
+              IndexedStack(index: safeIndex, children: children),
+              IgnorePointer(
+                ignoring: !state.isLoading,
+                child: AnimatedOpacity(
+                  opacity: state.isLoading ? 1 : 0,
+                  duration:
+                      MediaQuery.maybeOf(context)?.disableAnimations == true
+                          ? Duration.zero
+                          : CommonUiMotion.component,
+                  child: ColoredBox(
+                    color: tokens.scrim.withOpacity(tokens.isDark ? 0.30 : 0.14),
+                    child: Center(
+                      child: Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: tokens.surfaceRaised,
+                          borderRadius:
+                              BorderRadius.circular(CommonUiShapes.card),
+                          border: Border.all(color: tokens.borderSubtle),
+                        ),
+                        alignment: Alignment.center,
+                        child: SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            color: tokens.accent,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class PageBottomNavigation extends StatelessWidget {
+  const PageBottomNavigation({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    return Consumer<SingleHqState>(
+      builder: (context, state, child) {
+        final pages = state.pages;
+        if (pages.length < 2) return const SizedBox.shrink();
+        final currentIndex = state.selectedIndex.clamp(0, pages.length - 1);
+        return BottomNavigationBar(
+          type: BottomNavigationBarType.fixed,
+          currentIndex: currentIndex,
+          onTap: state.onItemTapped,
+          items: pages
+              .map(
+                (pageInfo) => BottomNavigationBarItem(
+                  icon: pageInfo.icon,
+                  label: pageInfo.title,
+                ),
+              )
+              .toList(growable: false),
+          selectedItemColor: tokens.accent,
+          unselectedItemColor: tokens.textSecondary,
+          backgroundColor: tokens.surface,
+          elevation: 0,
+          showUnselectedLabels: true,
+        );
+      },
+    );
+  }
+}

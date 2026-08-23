@@ -38,7 +38,7 @@ class ModifyBillSection extends StatelessWidget {
         builder: (sheetContext, scrollController) {
           final tokens = CommonUiTheme.of(sheetContext);
           return CommonSheetScaffold(
-            title: '${isGeneral ? '변동' : '고정'} 정산 선택',
+            title: '${isGeneral ? '변동' : '정기'} 정산 선택',
             icon: Icons.receipt_long_rounded,
             onClose: () => Navigator.of(sheetContext).pop(),
             body: ListView.separated(
@@ -162,7 +162,7 @@ class ModifyBillSection extends StatelessWidget {
                   border: Border.all(color: tokens.borderSubtle),
                 ),
                 child: Text(
-                  '${isGeneral ? '변동' : '고정'} 정산 유형이 없습니다.',
+                  '${isGeneral ? '변동' : '정기'} 정산 유형이 없습니다.',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: tokens.textSecondary,

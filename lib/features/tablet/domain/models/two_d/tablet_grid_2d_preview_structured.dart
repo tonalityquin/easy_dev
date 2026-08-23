@@ -1328,26 +1328,6 @@ class _ParkingGrid2DPainter extends CustomPainter {
           zKey: topZ + 0.00055,
         );
       }
-
-      final slotLabel = s.badgeLabel;
-      if (slotLabel.isNotEmpty) {
-        final labelPos = _project(Vec3(cx, (yBase - h) - 0.0022, cz));
-        labels.add(
-          _TextAnchor(
-            text: slotLabel,
-            pos: labelPos,
-            zKey: topZ + 0.0020,
-            textColor: _ColorUtil.ensureContrast(
-              cs.onSurface,
-              topColor,
-              fallback: cs.onSurface,
-              target: 2.0,
-            ),
-            bgColor: topColor.withOpacity(0.72),
-            borderColor: cs.outlineVariant.withOpacity(0.82),
-          ),
-        );
-      }
     }
 
     return _EdgeResult(faces: faces, labels: labels, alerts: alerts);

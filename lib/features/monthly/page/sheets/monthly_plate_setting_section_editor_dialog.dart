@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
+import '../../../../shared/plate/editor/widgets/plate_identity_input_panel.dart';
 import '../../../../shared/secondary/application/secondary_monthly_workspace_state.dart';
 import '../../../../shared/secondary/widgets/ops_console_widgets.dart';
 import '../../application/monthly_date_range_calculator.dart';
@@ -120,6 +121,10 @@ class _MonthlyPlateSettingSectionEditorDialogState
     _statusController.dispose();
     _noteController.dispose();
     super.dispose();
+  }
+
+  void _logPlateIdentity(String message) {
+    widget.trace.log('monthly_plate=$message');
   }
 
   String get _title {
@@ -307,6 +312,12 @@ class _MonthlyPlateSettingSectionEditorDialogState
     widget.trace.log(
       '편집 적용: section=${widget.section.name} plateLength=${result.plateNumber.length} type=${result.regularType ?? '-'} amount=${result.regularAmount ?? 0} duration=${result.duration ?? 0}',
     );
+    if (widget.section == MonthlyWorkspaceSection.vehicle &&
+        !widget.isEditMode) {
+      _logPlateIdentity(
+        'identity_editor=monthly_apply region=${result.region} plate=${result.plateNumber}',
+      );
+    }
     widget.onApply(result);
     if (!mounted) return;
     Navigator.of(context, rootNavigator: true).pop(true);
@@ -412,66 +423,26 @@ class _MonthlyPlateSettingSectionEditorDialogState
           },
         ),
         const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              flex: 3,
-              child: TextField(
-                controller: _frontController,
-                keyboardType: TextInputType.number,
-                inputFormatters: <TextInputFormatter>[
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(3),
-                ],
-                decoration: opsInputDecoration(
-                  context,
-                  label: '앞자리',
-                  errorText: _submitted &&
-                          !(_frontController.text.length == 2 ||
-                              _frontController.text.length == 3)
-                      ? '2~3자리'
-                      : null,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              flex: 2,
-              child: TextField(
-                controller: _middleController,
-                inputFormatters: <TextInputFormatter>[
-                  FilteringTextInputFormatter.allow(RegExp(r'[가-힣]')),
-                  LengthLimitingTextInputFormatter(1),
-                ],
-                decoration: opsInputDecoration(
-                  context,
-                  label: '한글',
-                  errorText: _submitted && _middleController.text.length != 1
-                      ? '1자'
-                      : null,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              flex: 4,
-              child: TextField(
-                controller: _backController,
-                keyboardType: TextInputType.number,
-                inputFormatters: <TextInputFormatter>[
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(4),
-                ],
-                decoration: opsInputDecoration(
-                  context,
-                  label: '뒷자리',
-                  errorText: _submitted && _backController.text.length != 4
-                      ? '4자리'
-                      : null,
-                ),
-              ),
-            ),
-          ],
+        PlateIdentityInputPanel(
+          frontController: _frontController,
+          middleController: _middleController,
+          backController: _backController,
+          initialThreeDigit: _frontController.text.trim().isEmpty
+              ? true
+              : _frontController.text.trim().length == 3,
+          showValidationErrors: _submitted,
+          onDebug: _logPlateIdentity,
+          onFrontDigitModeChanged: (threeDigits) {
+            _logPlateIdentity(
+              'identity_editor=monthly_front_mode digits=${threeDigits ? 3 : 2}',
+            );
+          },
+          onFocusTargetChanged: (target) {
+            _logPlateIdentity(
+              'identity_editor=monthly_focus target=${target.name}',
+            );
+          },
+          keypadHeight: 224,
         ),
       ],
     );

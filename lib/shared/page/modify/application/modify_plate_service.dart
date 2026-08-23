@@ -48,6 +48,8 @@ class ModifyPlateService {
   final String? priority3SlotKey;
   final String? selectedSectorId;
   final String? selectedSectorName;
+  final bool canUseBill;
+  final bool canUseSector;
   final PlateStatusScope statusScope;
   final bool statusChanged;
   final PlateStatusDraft expectedOriginalStatus;
@@ -81,6 +83,8 @@ class ModifyPlateService {
     required this.priority3SlotKey,
     required this.selectedSectorId,
     required this.selectedSectorName,
+    required this.canUseBill,
+    required this.canUseSector,
     required this.statusScope,
     required this.statusChanged,
     required this.expectedOriginalStatus,
@@ -368,35 +372,59 @@ class ModifyPlateService {
     final normalizedSectorId = selectedSectorId?.trim() ?? '';
     final normalizedSectorName = selectedSectorName?.trim() ?? '';
 
-    if (normalizedSectorId.isEmpty != normalizedSectorName.isEmpty) {
+    if (canUseSector &&
+        normalizedSectorId.isEmpty != normalizedSectorName.isEmpty) {
       throw ArgumentError('sectorId와 sectorName은 함께 전달되어야 합니다.');
     }
 
-    final hasSector =
-        normalizedSectorId.isNotEmpty && normalizedSectorName.isNotEmpty;
+    final hasSector = canUseSector &&
+        normalizedSectorId.isNotEmpty &&
+        normalizedSectorName.isNotEmpty;
+    final effectiveSectorId = canUseSector
+        ? (hasSector ? normalizedSectorId : null)
+        : originalPlate.sectorId;
+    final effectiveSectorName = canUseSector
+        ? (hasSector ? normalizedSectorName : null)
+        : originalPlate.sectorName;
+    final effectiveBillingType =
+        canUseBill ? newBillingType : originalPlate.billingType;
+    final effectiveBillingPlanType = canUseBill
+        ? (selectedBillType == '정기' ? '정기' : '변동')
+        : originalPlate.billingPlanType;
+    final effectiveBasicStandard =
+        canUseBill ? selectedBasicStandard : originalPlate.basicStandard;
+    final effectiveBasicAmount =
+        canUseBill ? selectedBasicAmount : originalPlate.basicAmount;
+    final effectiveAddStandard =
+        canUseBill ? selectedAddStandard : originalPlate.addStandard;
+    final effectiveAddAmount =
+        canUseBill ? selectedAddAmount : originalPlate.addAmount;
+    final effectiveRegularAmount =
+        canUseBill ? selectedRegularAmount : originalPlate.regularAmount;
+    final effectiveRegularDurationValue = canUseBill
+        ? selectedRegularDurationHours
+        : originalPlate.regularDurationValue;
 
     debugPrint(
-      '[ModifyPlateService][Sector] plate=$plateNumber area=${originalPlate.area} '
+      '[ModifyPlateService][Capabilities] plate=$plateNumber '
+      'area=${originalPlate.area} bill=$canUseBill sector=$canUseSector '
       'previousSectorId=${originalPlate.sectorId ?? ''} '
       'previousSectorName=${originalPlate.sectorName ?? ''} '
       'selectedSectorId=$normalizedSectorId '
-      'selectedSectorName=$normalizedSectorName hasSector=$hasSector',
+      'selectedSectorName=$normalizedSectorName',
     );
 
-    final effectiveCustomStatus = statusChanged
-        ? updatedCustomStatus
-        : originalPlate.customStatus;
+    final effectiveCustomStatus =
+        statusChanged ? updatedCustomStatus : originalPlate.customStatus;
     final updatedPlate = PlateModel(
       id: originalPlate.id,
-      addAmount: selectedAddAmount,
-      addStandard: selectedAddStandard,
+      addAmount: effectiveAddAmount,
+      addStandard: effectiveAddStandard,
       area: originalPlate.area,
-      basicAmount: selectedBasicAmount,
-      basicStandard: selectedBasicStandard,
-      billingType: newBillingType,
-      billingPlanType: selectedBillType.trim().isEmpty
-          ? originalPlate.billingPlanType
-          : selectedBillType.trim(),
+      basicAmount: effectiveBasicAmount,
+      basicStandard: effectiveBasicStandard,
+      billingType: effectiveBillingType,
+      billingPlanType: effectiveBillingPlanType,
       customStatus: effectiveCustomStatus,
       endTime: originalPlate.endTime,
       imageUrls: imageUrls,
@@ -415,8 +443,8 @@ class ModifyPlateService {
       plateFourDigit: originalPlate.plateFourDigit,
       plateNumber: plateNumber,
       region: dropdownValue,
-      regularAmount: selectedRegularAmount,
-      regularDurationValue: selectedRegularDurationHours,
+      regularAmount: effectiveRegularAmount,
+      regularDurationValue: effectiveRegularDurationValue,
       requestTime: originalPlate.requestTime,
       selectedBy: originalPlate.selectedBy,
       type: originalPlate.type,
@@ -424,8 +452,8 @@ class ModifyPlateService {
       userAdjustment: originalPlate.userAdjustment,
       userName: originalPlate.userName,
       feeMode: originalPlate.feeMode,
-      sectorId: hasSector ? normalizedSectorId : null,
-      sectorName: hasSector ? normalizedSectorName : null,
+      sectorId: effectiveSectorId,
+      sectorName: effectiveSectorName,
     );
 
     final changes = originalPlate.diff(updatedPlate);
@@ -451,29 +479,33 @@ class ModifyPlateService {
         '${originalPlate.plateNumber}_${originalPlate.area}',
         <String, dynamic>{
           if (originalPlate.location != newLocation) 'location': newLocation,
-          if (originalPlate.billingType != newBillingType)
-            'billingType': newBillingType,
+          if (canUseBill && originalPlate.billingType != effectiveBillingType)
+            'billingType': effectiveBillingType,
           if (originalPlate.plateNumber != plateNumber)
             'plate_number': plateNumber,
           if (statusChanged) 'customStatus': updatedCustomStatus,
           'imageUrls': imageUrls,
           'region': dropdownValue,
-          'basicStandard': selectedBasicStandard,
-          'basicAmount': selectedBasicAmount,
-          'addStandard': selectedAddStandard,
-          'addAmount': selectedAddAmount,
-          'regularAmount': selectedRegularAmount,
-          'regularDurationValue': selectedRegularDurationHours,
-          'regularDurationHours': selectedRegularDurationHours,
+          if (canUseBill) ...<String, dynamic>{
+            'basicStandard': selectedBasicStandard,
+            'basicAmount': selectedBasicAmount,
+            'addStandard': selectedAddStandard,
+            'addAmount': selectedAddAmount,
+            'regularAmount': selectedRegularAmount,
+            'regularDurationValue': selectedRegularDurationHours,
+            'regularDurationHours': selectedRegularDurationHours,
+          },
           PlateFields.manufacturerName: manufacturerName,
           PlateFields.modelName: modelName,
           PlateFields.parkingPriority1SlotKey: priority1SlotKey,
           PlateFields.parkingPriority2SlotKey: priority2SlotKey,
           PlateFields.parkingPriority3SlotKey: priority3SlotKey,
-          PlateFields.sectorId:
-              hasSector ? normalizedSectorId : FieldValue.delete(),
-          PlateFields.sectorName:
-              hasSector ? normalizedSectorName : FieldValue.delete(),
+          if (canUseSector) ...<String, dynamic>{
+            PlateFields.sectorId:
+                hasSector ? normalizedSectorId : FieldValue.delete(),
+            PlateFields.sectorName:
+                hasSector ? normalizedSectorName : FieldValue.delete(),
+          },
           'isSelected': false,
           'selectedBy': null,
           'updatedAt': DateTime.now().toUtc(),
@@ -507,10 +539,13 @@ class ModifyPlateService {
           'statusScope': statusScope.storageLabel,
           'hasLog': log != null,
           'changedFieldsCount': changes.length,
+          'capabilityBill': canUseBill,
+          'capabilitySector': canUseSector,
           'previousSectorId': originalPlate.sectorId,
           'previousSectorName': originalPlate.sectorName,
-          'selectedSectorId': hasSector ? normalizedSectorId : null,
-          'selectedSectorName': hasSector ? normalizedSectorName : null,
+          'selectedSectorId': canUseSector && hasSector ? normalizedSectorId : null,
+          'selectedSectorName':
+              canUseSector && hasSector ? normalizedSectorName : null,
         },
         tags: const <String>[
           _tPlate,

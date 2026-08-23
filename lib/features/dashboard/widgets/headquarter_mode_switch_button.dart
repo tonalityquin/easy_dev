@@ -6,6 +6,7 @@ import '../../../design_system/common_ui/common_ui_components.dart';
 import '../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../shared/secondary/side_docks/secondary_side_dock.dart';
 import '../../dev/debug/debug_action_recorder.dart';
+import '../../selector/application/dev_auth.dart';
 import '../side_docks/common/headquarter_mode_side_dock.dart';
 
 @immutable
@@ -23,6 +24,12 @@ class HeadquarterModeSwitchButton extends StatelessWidget {
 
   static const List<_HeadquarterModeTarget> _allTargets =
       <_HeadquarterModeTarget>[
+    _HeadquarterModeTarget(
+      title: '싱글 헤드쿼터',
+      routeName: AppRoutes.singleHeadquarterPage,
+      modeKey: 'single',
+      isSprint: false,
+    ),
     _HeadquarterModeTarget(
       title: '더블 헤드쿼터',
       routeName: AppRoutes.doubleHeadquarterPage,
@@ -103,6 +110,22 @@ class HeadquarterModeSwitchButton extends StatelessWidget {
     final target = _targetFor(result.modeKey);
     if (target == null || target.modeKey == currentModeKey) return;
 
+    if (target.isSprint) {
+      final developerMode = await DevAuth.isDevModeEnabled();
+      debugPrint(
+        '[HQ-MODE-SWITCH] sprint_guard enabled=$developerMode screen=$currentScreen mode=$currentModeKey',
+      );
+      if (!developerMode) {
+        if (!context.mounted) return;
+        showFailedSnackbar(
+          context,
+          '스프린트 모드는 개발자 모드에서만 사용할 수 있습니다.',
+          useCommonUi: true,
+        );
+        return;
+      }
+    }
+
     final builder = appRoutes[target.routeName];
     if (builder == null) {
       showFailedSnackbar(
@@ -139,6 +162,8 @@ class HeadquarterModeSwitchButton extends StatelessWidget {
 
   String? _currentHeadquarterRoute() {
     switch (currentModeKey) {
+      case 'single':
+        return AppRoutes.singleHeadquarterPage;
       case 'double':
         return AppRoutes.doubleHeadquarterPage;
       case 'triple':

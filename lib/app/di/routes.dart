@@ -6,6 +6,7 @@ import '../../features/commute/page/minor/minor_commute_in_screen.dart';
 import '../../features/commute/page/triple/triple_commute_in_screen.dart';
 import '../../features/dashboard/pages/double/double_headquarter_page.dart';
 import '../../features/dashboard/pages/minor/minor_headquarter_page.dart';
+import '../../features/dashboard/pages/single/single_headquarter_page.dart';
 import '../../features/dashboard/pages/triple/triple_headquarter_page.dart';
 import '../../features/description/pages/description_page.dart';
 import '../../features/dev/page/dev_stub_page.dart';
@@ -62,6 +63,7 @@ class AppRoutes {
   static const minorCommute = '/minor_commute';
 
   static const headquarterPage = '/headquarter_page';
+  static const singleHeadquarterPage = '/single_headquarter_page';
   static const doubleHeadquarterPage = '/double_headquarter_page';
   static const tripleHeadquarterPage = '/triple_headquarter_page';
   static const minorHeadquarterPage = '/minor_headquarter_page';
@@ -135,6 +137,7 @@ final Map<String, WidgetBuilder> appRoutes = {
   AppRoutes.singleCommute: (context) => const SingleInsideScreen(),
   AppRoutes.tripleCommute: (context) => const TripleCommuteInScreen(),
   AppRoutes.minorCommute: (context) => const MinorCommuteInScreen(),
+  AppRoutes.singleHeadquarterPage: (context) => const SingleHeadquarterPage(),
   AppRoutes.doubleHeadquarterPage: (context) => const DoubleHeadquarterPage(),
   AppRoutes.tripleHeadquarterPage: (context) => const TripleHeadquarterPage(),
   AppRoutes.minorHeadquarterPage: (context) => const MinorHeadquarterPage(),

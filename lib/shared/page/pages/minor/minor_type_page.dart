@@ -72,7 +72,11 @@ class MinorTypePage extends StatelessWidget {
         buildDepartureCompletedSheet: () =>
             const MinorDepartureCompletedBottomSheet(),
         buildDashboardSideDock: () => const MinorHomeDashboardSideDock(),
-        buildInputScreen: () => const InputPlateScreen(isMinorMode: true),
+        buildInputScreen: (launch) => InputPlateScreen(
+          isMinorMode: true,
+          initialOcrSourceRect: launch.sourceRect,
+          sideDockPresentationController: launch.presentationController,
+        ),
         debugMeta: const <String, dynamic>{
           'screen': 'minor_type_page',
           'action': 'open_minor_input_plate_screen',

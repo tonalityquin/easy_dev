@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:provider/provider.dart';
+
+import '../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../app/models/capability.dart';
 import '../../../../app/utils/snackbar_helper.dart';
 import '../../../../features/account/applications/user_state.dart';
@@ -16,13 +18,15 @@ import '../../../plate/domain/models/plate_status_lookup_result.dart';
 import '../../../plate/domain/models/plate_status_scope.dart';
 import '../../../plate/domain/repositories/plate_repository.dart';
 import '../../../plate/domain/services/plate_status_record.dart';
-import '../../../plate/widgets/action_trace_dialog.dart';
 import '../application/modify_plate_service.dart';
 
 class ModifyPlateController {
   final BuildContext context;
   final PlateModel plate;
   final PlateType collectionKey;
+  final String capabilityArea;
+  final bool canUseBill;
+  final bool canUseSector;
 
   final TextEditingController controllerFrontdigit;
   final TextEditingController controllerMidDigit;
@@ -72,9 +76,100 @@ class ModifyPlateController {
         customStatus: customStatusController.text,
       );
 
+  String get currentPlateNumberCompact =>
+      '${controllerFrontdigit.text}${controllerMidDigit.text}${controllerBackDigit.text}'
+          .replaceAll('-', '')
+          .replaceAll(' ', '')
+          .trim();
+
+  String get currentPlateNumberDisplay {
+    final front = controllerFrontdigit.text.trim();
+    final middle = controllerMidDigit.text.trim();
+    final back = controllerBackDigit.text.trim();
+    return <String>[front, middle, back]
+        .where((value) => value.isNotEmpty)
+        .join('-');
+  }
+
+  String get originalPlateNumberCompact =>
+      plate.plateNumber.replaceAll('-', '').replaceAll(' ', '').trim();
+
+  String get originalRegion {
+    final value = plate.region?.trim() ?? '';
+    return value.isEmpty ? '전국' : value;
+  }
+
+  bool get hasPlateNumberChanges =>
+      currentPlateNumberCompact != originalPlateNumberCompact;
+
+  bool get hasRegionChanges => dropdownValue.trim() != originalRegion;
+
+  bool get hasVehicleIdentityChanges =>
+      hasPlateNumberChanges || hasRegionChanges;
+
+  bool get hasLocationChanges {
+    final currentLocation = locationController.text.trim();
+    final originalLocation = plate.location.trim();
+    final currentPriority1 = priority1SlotKey?.trim() ?? '';
+    final currentPriority2 = priority2SlotKey?.trim() ?? '';
+    final currentPriority3 = priority3SlotKey?.trim() ?? '';
+    final originalPriority1 = plate.parkingPriority1SlotKey?.trim() ?? '';
+    final originalPriority2 = plate.parkingPriority2SlotKey?.trim() ?? '';
+    final originalPriority3 = plate.parkingPriority3SlotKey?.trim() ?? '';
+    return currentLocation != originalLocation ||
+        currentPriority1 != originalPriority1 ||
+        currentPriority2 != originalPriority2 ||
+        currentPriority3 != originalPriority3;
+  }
+
+  bool get hasBillingSelection {
+    if (!canUseBill) return false;
+    return (selectedBill?.trim().isNotEmpty ?? false) ||
+        (selectedBillCountType?.trim().isNotEmpty ?? false);
+  }
+
+  bool get hasBillingChanges {
+    if (!canUseBill) return false;
+    final currentBill = selectedBill?.trim() ?? '';
+    final originalBill = plate.billingType?.trim() ?? '';
+    return currentBill != originalBill ||
+        selectedBillType.trim() != _determineBillType() ||
+        selectedBasicStandard != (plate.basicStandard ?? 0) ||
+        selectedBasicAmount != (plate.basicAmount ?? 0) ||
+        selectedAddStandard != (plate.addStandard ?? 0) ||
+        selectedAddAmount != (plate.addAmount ?? 0) ||
+        selectedRegularAmount != (plate.regularAmount ?? 0) ||
+        selectedRegularDurationHours != (plate.regularDurationValue ?? 0);
+  }
+
+  bool get hasSectorChanges {
+    if (!canUseSector) return false;
+    final currentSectorId = selectedSectorId?.trim() ?? '';
+    final originalSectorId = plate.sectorId?.trim() ?? '';
+    final currentSectorName = selectedSectorName?.trim() ?? '';
+    final originalSectorName = plate.sectorName?.trim() ?? '';
+    return currentSectorId != originalSectorId ||
+        currentSectorName != originalSectorName;
+  }
+
+  bool get hasPhotoChanges => capturedImages.isNotEmpty;
+
   bool get hasStatusChanges => !originalStatusDraft.sameAs(statusDraft);
 
   bool get hasOriginalStatus => !originalStatusDraft.isEmpty;
+
+  int get changeCount {
+    var count = 0;
+    if (hasVehicleIdentityChanges) count += 1;
+    if (hasLocationChanges) count += 1;
+    if (hasPhotoChanges) count += 1;
+    if (hasSectorChanges) count += 1;
+    if (hasBillingChanges) count += 1;
+    if (hasStatusChanges) count += 1;
+    return count;
+  }
+
+  bool get hasUnsavedChanges => changeCount > 0;
 
   void handleStatusTextChanged() {
     statusMarkedForDeletion = statusDraft.isEmpty && hasOriginalStatus;
@@ -130,10 +225,38 @@ class ModifyPlateController {
     ];
   }
 
+  void clearParkingSelection() {
+    locationController.clear();
+    isLocationSelected = false;
+    priority1SlotKey = null;
+    priority2SlotKey = null;
+    priority3SlotKey = null;
+  }
+
+  void clearSectorSelection() {
+    selectedSectorId = null;
+    selectedSectorName = null;
+  }
+
+  void clearBillingSelection() {
+    selectedBill = null;
+    selectedBillCountType = null;
+    selectedBillModel = null;
+    selectedBasicStandard = 0;
+    selectedBasicAmount = 0;
+    selectedAddStandard = 0;
+    selectedAddAmount = 0;
+    selectedRegularAmount = 0;
+    selectedRegularDurationHours = 0;
+  }
+
   ModifyPlateController({
     required this.context,
     required this.plate,
     required this.collectionKey,
+    required this.capabilityArea,
+    required this.canUseBill,
+    required this.canUseSector,
     required this.controllerFrontdigit,
     required this.controllerMidDigit,
     required this.controllerBackDigit,
@@ -181,7 +304,8 @@ class ModifyPlateController {
           plateNum.length >= 7 ? plateNum.substring(3) : '';
     }
 
-    dropdownValue = plate.region ?? '전국';
+    final initialRegion = plate.region?.trim() ?? '';
+    dropdownValue = initialRegion.isEmpty ? '전국' : initialRegion;
     locationController.text = plate.location;
 
     selectedBill = plate.billingType;
@@ -214,14 +338,11 @@ class ModifyPlateController {
 
   String _determineBillType() {
     final explicitPlan = (plate.billingPlanType ?? '').trim();
-    if (explicitPlan == '정기' || explicitPlan == '고정') {
-      return explicitPlan;
-    }
+    if (explicitPlan == '정기') return '정기';
     if (explicitPlan == '변동') return '변동';
-    if ((plate.regularAmount ?? 0) > 0) return '고정';
-    final legacyBillingType = (plate.billingType ?? '').trim();
-    if (legacyBillingType.contains('정기')) return '정기';
-    if (legacyBillingType.contains('고정')) return '고정';
+    if ((plate.regularAmount ?? 0) > 0) return '정기';
+    final billingType = (plate.billingType ?? '').trim();
+    if (billingType.contains('정기')) return '정기';
     return '변동';
   }
 
@@ -282,13 +403,6 @@ class ModifyPlateController {
     );
   }
 
-  void onBillTypeChanged(String type) {
-    if (type != selectedBillType) {
-      debugPrint('❌ 정산 유형 변경은 허용되지 않습니다. 기존: $selectedBillType → 시도: $type');
-      return;
-    }
-  }
-
   void applyBillDefaults(dynamic bill) {
     if (bill == null) return;
 
@@ -298,20 +412,16 @@ class ModifyPlateController {
 
     if (bill is BillModel) {
       selectedBillType = '변동';
-
       selectedBasicAmount = bill.basicAmount ?? 0;
       selectedBasicStandard = bill.basicStandard ?? 0;
       selectedAddAmount = bill.addAmount ?? 0;
       selectedAddStandard = bill.addStandard ?? 0;
-
       selectedRegularAmount = 0;
       selectedRegularDurationHours = 0;
     } else if (bill is RegularBillModel) {
-      selectedBillType = '고정';
-
+      selectedBillType = '정기';
       selectedRegularAmount = bill.regularAmount;
       selectedRegularDurationHours = bill.regularDurationValue;
-
       selectedBasicAmount = 0;
       selectedBasicStandard = 0;
       selectedAddAmount = 0;
@@ -319,42 +429,59 @@ class ModifyPlateController {
     }
   }
 
-  Future<bool> handleAction({
-    ActionTraceController? trace,
+  Future<PlateModel?> handleAction({
+    DeveloperOperationTrace? trace,
   }) async {
-    trace?.add('수정 처리 시작');
+    trace?.log('수정 처리 시작');
 
-    final billState = context.read<BillState>();
-    final allBills = [...billState.generalBills, ...billState.regularBills];
-    trace?.add('allBills=${allBills.length}');
+    final areaState = context.read<AreaState>();
+    final currentArea = areaState.currentArea.trim();
+    final currentCapabilities = areaState.capabilitiesOfCurrentArea;
+    final currentHasBill = currentCapabilities.contains(Capability.bill);
+    final currentHasSector = currentCapabilities.contains(Capability.sector);
 
-    final normalizedSelectedBill = selectedBill?.trim();
-    selectedBill =
-        (normalizedSelectedBill == null || normalizedSelectedBill.isEmpty)
-            ? null
-            : normalizedSelectedBill;
-
-    trace?.add(
-      'selectedBillType=$selectedBillType selectedBill=${selectedBill ?? ''}',
+    trace?.log(
+      'modify_capabilities snapshotArea=$capabilityArea currentArea=$currentArea '
+      'bill=$canUseBill/$currentHasBill sector=$canUseSector/$currentHasSector',
+    );
+    debugPrint(
+      '[ModifyPlateController][Capabilities] snapshotArea=$capabilityArea '
+      'currentArea=$currentArea bill=$canUseBill/$currentHasBill '
+      'sector=$canUseSector/$currentHasSector',
     );
 
-    if (allBills.isNotEmpty &&
-        (selectedBill == null || selectedBill!.isEmpty)) {
-      trace?.add('중단: selectedBill 누락');
+    if (currentArea != capabilityArea.trim() ||
+        currentHasBill != canUseBill ||
+        currentHasSector != canUseSector) {
+      trace?.log('중단: 지역 capability 변경 감지');
       if (context.mounted) {
         showFailedSnackbar(
           context,
-          '정산 유형 정보가 비어 있습니다.',
+          '지역 기능 설정이 변경되어 저장하지 않았습니다. 수정 화면을 다시 열어 주세요.',
           useCommonUi: true,
         );
       }
-      return false;
+      return null;
     }
 
-    final areaState = context.read<AreaState>();
-    final canUseSector = areaState.capabilitiesOfCurrentArea.contains(
-      Capability.sector,
-    );
+    if (canUseBill) {
+      final billState = context.read<BillState>();
+      final allBills = [...billState.generalBills, ...billState.regularBills];
+      trace?.log('allBills=${allBills.length}');
+
+      final normalizedSelectedBill = selectedBill?.trim();
+      selectedBill =
+          (normalizedSelectedBill == null || normalizedSelectedBill.isEmpty)
+              ? null
+              : normalizedSelectedBill;
+
+      trace?.log(
+        'selectedBillType=$selectedBillType selectedBill=${selectedBill ?? ''}',
+      );
+
+      trace?.log('billingSelection=${hasBillingSelection ? 'selected' : 'cleared'}');
+    }
+
     final effectiveSectorId = canUseSector ? selectedSectorId : plate.sectorId;
     final effectiveSectorName =
         canUseSector ? selectedSectorName : plate.sectorName;
@@ -362,7 +489,7 @@ class ModifyPlateController {
       try {
         await resolveStatusContext();
       } catch (error) {
-        trace?.add('중단: 상태 저장 범위 확인 실패 error=$error');
+        trace?.log('중단: 상태 저장 범위 확인 실패 error=$error');
         if (context.mounted) {
           showFailedSnackbar(
             context,
@@ -370,21 +497,21 @@ class ModifyPlateController {
             useCommonUi: true,
           );
         }
-        return false;
+        return null;
       }
     }
 
     final resolvedScope = statusScope;
     if (resolvedScope == null) {
-      trace?.add('중단: 상태 저장 범위 없음');
-      return false;
+      trace?.log('중단: 상태 저장 범위 없음');
+      return null;
     }
 
     final draft = statusDraft;
     final statusChanged = hasStatusChanges;
     final userState = context.read<UserState>();
 
-    trace?.add(
+    trace?.log(
       'status memoLength=${draft.customStatus.length} '
       'changed=$statusChanged deletePending=$statusMarkedForDeletion '
       'scope=${resolvedScope.storageLabel}',
@@ -411,7 +538,7 @@ class ModifyPlateController {
       selectedAddStandard: selectedAddStandard,
       selectedAddAmount: selectedAddAmount,
       selectedBill: selectedBill,
-      selectedBillType: selectedBillType,
+      selectedBillType: selectedBillType == '정기' ? '정기' : '변동',
       dropdownValue: dropdownValue,
       selectedRegularAmount: selectedRegularAmount,
       selectedRegularDurationHours: selectedRegularDurationHours,
@@ -422,6 +549,8 @@ class ModifyPlateController {
       priority3SlotKey: priority3SlotKey,
       selectedSectorId: effectiveSectorId,
       selectedSectorName: effectiveSectorName,
+      canUseBill: canUseBill,
+      canUseSector: canUseSector,
       statusScope: resolvedScope,
       statusChanged: statusChanged,
       expectedOriginalStatus: expectedPersistedStatusDraft,
@@ -432,29 +561,29 @@ class ModifyPlateController {
 
     final plateNumber = service.composePlateNumber();
     final newLocation = locationController.text.trim();
-    final newBillingType = selectedBill;
+    final newBillingType = canUseBill ? selectedBill : plate.billingType;
     final updatedCustomStatus = draft.customStatus;
 
-    trace?.add('plateNumber=$plateNumber');
-    trace?.add('newLocation="$newLocation"');
-    trace?.add(
-      'capability.sector=$canUseSector '
+    trace?.log('plateNumber=$plateNumber');
+    trace?.log('newLocation="$newLocation"');
+    trace?.log(
+      'capability.bill=$canUseBill capability.sector=$canUseSector '
       'sectorId=${effectiveSectorId ?? ''} '
       'sectorName=${effectiveSectorName ?? ''}',
     );
     debugPrint(
-      '[ModifyPlateController][Sector] plate=$plateNumber area=${plate.area} '
-      'capability.sector=$canUseSector '
+      '[ModifyPlateController][Capabilities] plate=$plateNumber area=${plate.area} '
+      'capability.bill=$canUseBill capability.sector=$canUseSector '
       'sectorId=${effectiveSectorId ?? ''} '
       'sectorName=${effectiveSectorName ?? ''}',
     );
 
     try {
-      trace?.add('사진 병합 업로드 시작');
+      trace?.log('사진 병합 업로드 시작');
       final mergedImageUrls = await service.uploadAndMergeImages(plateNumber);
-      trace?.add('사진 병합 업로드 완료 count=${mergedImageUrls.length}');
+      trace?.log('사진 병합 업로드 완료 count=${mergedImageUrls.length}');
 
-      trace?.add('차량 정보 업데이트 시작');
+      trace?.log('차량 정보 업데이트 시작');
       final success = await service.updatePlateInfo(
         plateNumber: plateNumber,
         imageUrls: mergedImageUrls,
@@ -462,26 +591,26 @@ class ModifyPlateController {
         newBillingType: newBillingType,
         updatedCustomStatus: updatedCustomStatus,
       );
-      trace?.add('차량 정보 업데이트 결과=$success');
+      trace?.log('차량 정보 업데이트 결과=$success');
 
       if (!success) {
-        trace?.add('중단: updatePlateInfo returned false');
-        return false;
+        trace?.log('중단: updatePlateInfo returned false');
+        return null;
       }
 
-      trace?.add('차량 문서와 상태 문서 transaction 저장 완료');
+      trace?.log('차량 문서와 상태 문서 transaction 저장 완료');
 
       final updatedPlate = PlateModel(
         id: plate.id,
-        addAmount: selectedAddAmount,
-        addStandard: selectedAddStandard,
+        addAmount: canUseBill ? selectedAddAmount : plate.addAmount,
+        addStandard: canUseBill ? selectedAddStandard : plate.addStandard,
         area: plate.area,
-        basicAmount: selectedBasicAmount,
-        basicStandard: selectedBasicStandard,
+        basicAmount: canUseBill ? selectedBasicAmount : plate.basicAmount,
+        basicStandard: canUseBill ? selectedBasicStandard : plate.basicStandard,
         billingType: newBillingType,
-        billingPlanType: selectedBillType.trim().isEmpty
-            ? plate.billingPlanType
-            : selectedBillType.trim(),
+        billingPlanType: canUseBill
+            ? (selectedBillType == '정기' ? '정기' : '변동')
+            : plate.billingPlanType,
         customStatus: updatedCustomStatus,
         endTime: plate.endTime,
         imageUrls: mergedImageUrls,
@@ -500,8 +629,11 @@ class ModifyPlateController {
         plateFourDigit: plate.plateFourDigit,
         plateNumber: plateNumber,
         region: dropdownValue,
-        regularAmount: selectedRegularAmount,
-        regularDurationValue: selectedRegularDurationHours,
+        regularAmount:
+            canUseBill ? selectedRegularAmount : plate.regularAmount,
+        regularDurationValue: canUseBill
+            ? selectedRegularDurationHours
+            : plate.regularDurationValue,
         requestTime: plate.requestTime,
         selectedBy: null,
         type: plate.type,
@@ -514,13 +646,13 @@ class ModifyPlateController {
       );
 
       final plateState = context.read<DoublePlateState>();
-      trace?.add('로컬 상태 반영 시작');
+      trace?.log('로컬 상태 반영 시작');
       await plateState.doubleUpdatePlateLocally(collectionKey, updatedPlate);
-      trace?.add('로컬 상태 반영 완료');
-      trace?.add('수정 처리 성공');
-      return true;
+      trace?.log('로컬 상태 반영 완료');
+      trace?.log('수정 처리 성공');
+      return updatedPlate;
     } catch (e, st) {
-      trace?.add('예외 발생: $e');
+      trace?.log('예외 발생: $e');
       final compactStack = st
           .toString()
           .split('\n')
@@ -528,7 +660,7 @@ class ModifyPlateController {
           .take(6)
           .join(' | ');
       if (compactStack.isNotEmpty) {
-        trace?.add(compactStack);
+        trace?.log(compactStack);
       }
       if (context.mounted) {
         showFailedSnackbar(
@@ -537,7 +669,7 @@ class ModifyPlateController {
           useCommonUi: true,
         );
       }
-      return false;
+      return null;
     }
   }
 

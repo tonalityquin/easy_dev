@@ -29,7 +29,7 @@ class OperationalDataSyncWorkflow {
     required BuildContext context,
     String title = '운영 데이터 동기화',
     String message =
-        '주차 구역, 섹터, 정산 타입, 월정기 사용 여부를 새로고침하기 전 요청을 준비하고 있습니다.',
+        '현재 지역에서 사용하는 운영 데이터와 월정기 사용 여부를 새로고침하기 전 요청을 준비하고 있습니다.',
     bool useCommonUi = false,
   }) async {
     if (_running) {
@@ -44,8 +44,9 @@ class OperationalDataSyncWorkflow {
       final locationState = context.read<LocationState>();
       final billState = context.read<BillState>();
       final sectorState = context.read<SectorState>();
-      final hasSectorCapability =
-          areaState.capabilitiesOfCurrentArea.contains(Capability.sector);
+      final capabilities = areaState.capabilitiesOfCurrentArea;
+      final hasBillCapability = capabilities.contains(Capability.bill);
+      final hasSectorCapability = capabilities.contains(Capability.sector);
       final plateRepository = context.read<PlateRepository>();
       final rootContext = Navigator.of(context, rootNavigator: true).context;
       final trace = await DeveloperOperationTrace.start(
@@ -91,6 +92,11 @@ class OperationalDataSyncWorkflow {
         trace.log('기존 주차 구역 캐시를 삭제하고 있습니다.', progress: 0.18);
         await locationState.clearCurrentAreaCache();
 
+        trace.log(
+          '지역 capability를 확인했습니다: bill=$hasBillCapability sector=$hasSectorCapability',
+          progress: 0.22,
+        );
+
         trace.log('기존 정산 데이터 캐시를 삭제하고 있습니다.', progress: 0.26);
         await billState.clearCurrentAreaCache();
 
@@ -103,8 +109,18 @@ class OperationalDataSyncWorkflow {
         trace.log('최신 주차 구역 데이터를 내려받고 있습니다.', progress: 0.54);
         await locationState.manualLocationRefreshStrict();
 
-        trace.log('최신 정산 타입 데이터를 내려받고 있습니다.', progress: 0.66);
-        await billState.manualBillRefreshStrict();
+        if (hasBillCapability) {
+          trace.log(
+            '최신 정산 타입 데이터를 내려받아 로컬에 저장하고 있습니다.',
+            progress: 0.66,
+          );
+          await billState.manualBillRefreshStrict();
+        } else {
+          trace.log(
+            '현재 지역에 bill 기능이 없어 정산 로컬 다운로드를 건너뜁니다.',
+            progress: 0.66,
+          );
+        }
 
         if (hasSectorCapability) {
           trace.log(
@@ -153,12 +169,12 @@ class OperationalDataSyncWorkflow {
 
         if (trace.developerMode) {
           await trace.succeed(
-            '운영 데이터와 섹터 로컬 다운로드가 완료되었습니다. 개발자 모드에서는 앱을 종료하지 않습니다.',
+            '현재 지역 capability에 맞는 운영 데이터 동기화가 완료되었습니다. 개발자 모드에서는 앱을 종료하지 않습니다.',
           );
           return OperationalDataSyncResult.completed;
         }
 
-        await trace.succeed('운영 데이터와 섹터 로컬 다운로드가 완료되었습니다.');
+        await trace.succeed('현재 지역 capability에 맞는 운영 데이터 동기화가 완료되었습니다.');
 
         if (!rootContext.mounted) {
           throw StateError('완료 안내 화면을 표시할 수 없습니다.');
@@ -168,7 +184,7 @@ class OperationalDataSyncWorkflow {
           return AlertDialog(
             title: const Text('운영 데이터 동기화 완료'),
             content: const Text(
-              '기존 로컬 운영 데이터를 삭제하고 주차 구역, 섹터, 정산 데이터를 최신 상태로 저장했습니다.\n\n변경 사항 적용을 위해 앱을 종료합니다. 앱을 다시 실행해 주세요.',
+              '기존 로컬 운영 데이터를 삭제하고 현재 지역에서 사용하는 운영 데이터를 최신 상태로 저장했습니다.\n\n변경 사항 적용을 위해 앱을 종료합니다. 앱을 다시 실행해 주세요.',
             ),
             actions: <Widget>[
               FilledButton.icon(

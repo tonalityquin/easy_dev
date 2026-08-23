@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../../app/models/capability.dart';
@@ -38,12 +37,8 @@ class _DiscordBottomSheetState extends State<DiscordBottomSheet> {
   final List<String> _debugLines = <String>[];
 
   bool _loading = true;
-  bool _savingInvite = false;
-  bool _savingChannel = false;
   bool _openingApp = false;
   bool _developerMode = false;
-  String _persistedInvite = '';
-  String _persistedChannel = '';
 
   BuildContext get _statusContext =>
       widget.rootContext.mounted ? widget.rootContext : context;
@@ -61,8 +56,6 @@ class _DiscordBottomSheetState extends State<DiscordBottomSheet> {
 
   bool get _inviteValid => isDiscordInviteUrl(_inviteController.text);
   bool get _channelValid => isDiscordChannelUrl(_channelController.text);
-  bool get _inviteDirty => _inviteController.text.trim() != _persistedInvite;
-  bool get _channelDirty => _channelController.text.trim() != _persistedChannel;
 
   @override
   void initState() {
@@ -110,8 +103,6 @@ class _DiscordBottomSheetState extends State<DiscordBottomSheet> {
       final developerMode = await DevAuth.isDevModeEnabled();
       _inviteController.text = invite;
       _channelController.text = channel;
-      _persistedInvite = invite;
-      _persistedChannel = channel;
       _recordDebug(
         'load_complete capability=$_canUseThirdParty invitePresent=${invite.isNotEmpty} inviteValid=${isDiscordInviteUrl(invite)} channelPresent=${channel.isNotEmpty} channelValid=${isDiscordChannelUrl(channel)} developerMode=$developerMode',
       );
@@ -190,145 +181,9 @@ class _DiscordBottomSheetState extends State<DiscordBottomSheet> {
     );
   }
 
-  Future<bool> _persistInvite({required String reason}) async {
-    if (!_canUseThirdParty || _savingInvite) return false;
-    final value = _inviteController.text.trim();
-    if (!isDiscordInviteUrl(value)) {
-      if (_statusContext.mounted) {
-        await StatusDialog.showFailure(
-          _statusContext,
-          title: 'Discord 초대 링크 형식을 확인해 주세요.',
-          useCommonUi: true,
-        );
-      }
-      return false;
-    }
-    setState(() => _savingInvite = true);
-    _recordDebug(
-      'invite_save_start reason=$reason length=${value.length} dirty=$_inviteDirty',
-    );
-    try {
-      await replaceDiscordInviteUrl(value);
-      _persistedInvite = value;
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(discordWalkieTutorialDoneKey, true);
-      _recordDebug('invite_save_success reason=$reason length=${value.length}');
-      if (mounted) setState(() {});
-      return true;
-    } catch (error, stackTrace) {
-      _recordDebug('invite_save_failure reason=$reason error=$error');
-      debugPrintStack(
-        label: '[DiscordConnectionSupport] invite_save_failure',
-        stackTrace: stackTrace,
-      );
-      if (_statusContext.mounted) {
-        await StatusDialog.showFailure(
-          _statusContext,
-          title: 'Discord 초대 링크 저장에 실패했습니다.',
-          useCommonUi: true,
-        );
-      }
-      return false;
-    } finally {
-      if (mounted) setState(() => _savingInvite = false);
-    }
-  }
-
-  Future<bool> _persistChannel({required String reason}) async {
-    if (!_canUseThirdParty || _savingChannel) return false;
-    final value = _channelController.text.trim();
-    if (!isDiscordChannelUrl(value)) {
-      if (_statusContext.mounted) {
-        await StatusDialog.showFailure(
-          _statusContext,
-          title: 'Discord 채널 링크 형식을 확인해 주세요.',
-          useCommonUi: true,
-        );
-      }
-      return false;
-    }
-    setState(() => _savingChannel = true);
-    _recordDebug(
-      'channel_save_start reason=$reason length=${value.length} dirty=$_channelDirty',
-    );
-    try {
-      await replaceDiscordChannelUrl(value);
-      _persistedChannel = value;
-      _recordDebug('channel_save_success reason=$reason length=${value.length}');
-      if (mounted) setState(() {});
-      return true;
-    } catch (error, stackTrace) {
-      _recordDebug('channel_save_failure reason=$reason error=$error');
-      debugPrintStack(
-        label: '[DiscordConnectionSupport] channel_save_failure',
-        stackTrace: stackTrace,
-      );
-      if (_statusContext.mounted) {
-        await StatusDialog.showFailure(
-          _statusContext,
-          title: 'Discord 채널 링크 저장에 실패했습니다.',
-          useCommonUi: true,
-        );
-      }
-      return false;
-    } finally {
-      if (mounted) setState(() => _savingChannel = false);
-    }
-  }
-
-  Future<void> _saveInvite() async {
-    final saved = await _persistInvite(reason: 'manual_save');
-    if (!saved) return;
-    if (_statusContext.mounted) {
-      await StatusDialog.showSuccess(
-        _statusContext,
-        title: 'Discord 초대 링크를 저장했습니다.',
-        useCommonUi: true,
-      );
-    }
-    await _showOperationTrace(
-      title: 'Discord 초대 링크 설정',
-      lines: <String>[
-        'capability=record enabled=$_canUseThirdParty',
-        'invitePresent=${_persistedInvite.isNotEmpty} inviteLength=${_persistedInvite.length} inviteValid=${isDiscordInviteUrl(_persistedInvite)}',
-        'action=replace_invite_url',
-      ],
-      success: true,
-      successMessage: 'Discord 초대 링크 설정이 완료되었습니다.',
-      failureMessage: 'Discord 초대 링크 설정에 실패했습니다.',
-    );
-  }
-
-  Future<void> _saveChannel() async {
-    final saved = await _persistChannel(reason: 'manual_save');
-    if (!saved) return;
-    if (_statusContext.mounted) {
-      await StatusDialog.showSuccess(
-        _statusContext,
-        title: 'Discord 채널 링크를 저장했습니다.',
-        useCommonUi: true,
-      );
-    }
-    await _showOperationTrace(
-      title: 'Discord 채널 링크 설정',
-      lines: <String>[
-        'capability=record enabled=$_canUseThirdParty',
-        'channelPresent=${_persistedChannel.isNotEmpty} channelLength=${_persistedChannel.length} channelValid=${isDiscordChannelUrl(_persistedChannel)}',
-        'action=replace_channel_url',
-      ],
-      success: true,
-      successMessage: 'Discord 채널 링크 설정이 완료되었습니다.',
-      failureMessage: 'Discord 채널 링크 설정에 실패했습니다.',
-    );
-  }
-
   Future<void> _openInvite() async {
     if (!_inviteValid) return;
     HapticFeedback.selectionClick();
-    if (_inviteDirty) {
-      final saved = await _persistInvite(reason: 'open_invite');
-      if (!saved) return;
-    }
     final opened = await _launchExternal(_inviteController.text.trim());
     _recordDebug('invite_open_result opened=$opened');
     if (!opened && _statusContext.mounted) {
@@ -343,10 +198,6 @@ class _DiscordBottomSheetState extends State<DiscordBottomSheet> {
   Future<void> _openChannel() async {
     if (!_channelValid) return;
     HapticFeedback.selectionClick();
-    if (_channelDirty) {
-      final saved = await _persistChannel(reason: 'open_channel');
-      if (!saved) return;
-    }
     final channel = _channelController.text.trim();
     final deepLink = discordChannelDeepLink(channel);
     var opened = false;
@@ -421,8 +272,8 @@ class _DiscordBottomSheetState extends State<DiscordBottomSheet> {
       title: '서드파티 연결 지원 상태',
       lines: <String>[
         'capability=record enabled=$_canUseThirdParty',
-        'invitePresent=${_inviteController.text.trim().isNotEmpty} inviteDirty=$_inviteDirty inviteValid=$_inviteValid',
-        'channelPresent=${_channelController.text.trim().isNotEmpty} channelDirty=$_channelDirty channelValid=$_channelValid',
+        'invitePresent=${_inviteController.text.trim().isNotEmpty} inviteValid=$_inviteValid source=sqlite_snapshot',
+        'channelPresent=${_channelController.text.trim().isNotEmpty} channelValid=$_channelValid source=sqlite_snapshot',
         'layout=connection_support_cards animation=selection190_component230 reducedMotion=${MediaQuery.maybeOf(context)?.disableAnimations ?? false}',
         ..._debugLines,
       ],
@@ -546,15 +397,12 @@ class _DiscordBottomSheetState extends State<DiscordBottomSheet> {
                             index: 2,
                             icon: Icons.group_add_rounded,
                             title: '서버 초대',
-                            description: 'Discord 서버에 참가할 초대 링크를 저장합니다.',
+                            description: '본사 내려받기 SQLite Snapshot의 Discord 초대 링크를 사용합니다.',
                             controller: _inviteController,
                             focusNode: _inviteFocus,
                             label: '초대 링크',
                             valid: _inviteValid,
-                            dirty: _inviteDirty,
                             enabled: canUse,
-                            saving: _savingInvite,
-                            onSave: _saveInvite,
                             onOpen: _inviteValid ? _openInvite : null,
                             openLabel: '초대 열기',
                           ),
@@ -564,15 +412,12 @@ class _DiscordBottomSheetState extends State<DiscordBottomSheet> {
                             icon: Icons.forum_rounded,
                             title: '업무 채널',
                             description:
-                                '서버 ID와 채널 ID가 포함된 Discord 채널 링크를 저장합니다.',
+                                '본사 내려받기 SQLite Snapshot의 Discord 업무 채널 링크를 사용합니다.',
                             controller: _channelController,
                             focusNode: _channelFocus,
                             label: '채널 링크',
                             valid: _channelValid,
-                            dirty: _channelDirty,
                             enabled: canUse,
-                            saving: _savingChannel,
-                            onSave: _saveChannel,
                             onOpen: _channelValid ? _openChannel : null,
                             openLabel: '채널 열기',
                           ),
@@ -714,10 +559,7 @@ class _ConnectionEditorCard extends StatelessWidget {
     required this.focusNode,
     required this.label,
     required this.valid,
-    required this.dirty,
     required this.enabled,
-    required this.saving,
-    required this.onSave,
     required this.onOpen,
     required this.openLabel,
   });
@@ -730,10 +572,7 @@ class _ConnectionEditorCard extends StatelessWidget {
   final FocusNode focusNode;
   final String label;
   final bool valid;
-  final bool dirty;
   final bool enabled;
-  final bool saving;
-  final Future<void> Function() onSave;
   final Future<void> Function()? onOpen;
   final String openLabel;
 
@@ -743,7 +582,6 @@ class _ConnectionEditorCard extends StatelessWidget {
     final text = Theme.of(context).textTheme;
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    final complete = valid && !dirty;
     return AnimatedOpacity(
       opacity: enabled ? 1 : .5,
       duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
@@ -752,12 +590,12 @@ class _ConnectionEditorCard extends StatelessWidget {
         curve: CommonUiMotion.standard,
         padding: const EdgeInsets.fromLTRB(14, 13, 14, 13),
         decoration: BoxDecoration(
-          color: complete
+          color: valid
               ? tokens.accentContainer.withOpacity(.34)
               : tokens.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: complete ? tokens.accent.withOpacity(.7) : tokens.borderSubtle,
+            color: valid ? tokens.accent.withOpacity(.7) : tokens.borderSubtle,
           ),
         ),
         child: Column(
@@ -765,7 +603,7 @@ class _ConnectionEditorCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                _StepIcon(index: index, icon: icon, complete: complete),
+                _StepIcon(index: index, icon: icon, complete: valid),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
@@ -794,16 +632,10 @@ class _ConnectionEditorCard extends StatelessWidget {
                       reduceMotion ? Duration.zero : CommonUiMotion.selection,
                   child: Icon(
                     valid
-                        ? dirty
-                            ? Icons.edit_rounded
-                            : Icons.check_circle_rounded
+                        ? Icons.check_circle_rounded
                         : Icons.info_outline_rounded,
-                    key: ValueKey<String>('$valid:$dirty'),
-                    color: valid
-                        ? dirty
-                            ? tokens.warning
-                            : tokens.success
-                        : tokens.textSecondary,
+                    key: ValueKey<bool>(valid),
+                    color: valid ? tokens.success : tokens.textSecondary,
                   ),
                 ),
               ],
@@ -812,34 +644,18 @@ class _ConnectionEditorCard extends StatelessWidget {
             TextField(
               controller: controller,
               focusNode: focusNode,
-              enabled: enabled && !saving,
+              enabled: enabled,
+              readOnly: true,
+              enableInteractiveSelection: true,
               keyboardType: TextInputType.url,
-              textInputAction: TextInputAction.done,
               autocorrect: false,
               enableSuggestions: false,
               decoration: InputDecoration(
                 labelText: label,
                 prefixIcon: const Icon(Icons.link_rounded),
-                suffixIcon: AnimatedSwitcher(
-                  duration:
-                      reduceMotion ? Duration.zero : CommonUiMotion.selection,
-                  child: saving
-                      ? const Padding(
-                          key: ValueKey<String>('saving'),
-                          padding: EdgeInsets.all(14),
-                          child: SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        )
-                      : Icon(
-                          valid
-                              ? Icons.verified_rounded
-                              : Icons.link_off_rounded,
-                          key: ValueKey<bool>(valid),
-                          color: valid ? tokens.success : tokens.textSecondary,
-                        ),
+                suffixIcon: Icon(
+                  valid ? Icons.verified_rounded : Icons.link_off_rounded,
+                  color: valid ? tokens.success : tokens.textSecondary,
                 ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
@@ -847,26 +663,10 @@ class _ConnectionEditorCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: enabled && valid && !saving ? () => onSave() : null,
-                    icon: const Icon(Icons.save_rounded),
-                    label: Text(dirty ? '변경 저장' : '저장됨'),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: FilledButton.tonalIcon(
-                    onPressed: enabled && onOpen != null && !saving
-                        ? () => onOpen!()
-                        : null,
-                    icon: const Icon(Icons.open_in_new_rounded),
-                    label: Text(openLabel),
-                  ),
-                ),
-              ],
+            FilledButton.tonalIcon(
+              onPressed: enabled && onOpen != null ? () => onOpen!() : null,
+              icon: const Icon(Icons.open_in_new_rounded),
+              label: Text(openLabel),
             ),
           ],
         ),

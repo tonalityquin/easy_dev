@@ -10,15 +10,18 @@ import '../../../shared/google_calendar/google_event_colors.dart';
 import '../../sprint/application/sprint_mode_store.dart';
 import '../../sprint/domain/sprint_models.dart';
 import '../../sprint/pages/sprint_external_event_editor_sheet.dart';
+import '../../sprint/pages/sprint_project_workspace_sheet.dart';
 import '../../sprint/pages/sprint_task_detail_sheet.dart';
 
 class HeadquarterCalendarCard extends StatefulWidget {
   const HeadquarterCalendarCard({
     super.key,
     this.useCommonUi = false,
+    this.showAccountEntry = false,
   });
 
   final bool useCommonUi;
+  final bool showAccountEntry;
 
   @override
   State<HeadquarterCalendarCard> createState() =>
@@ -494,6 +497,244 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard>
     await showDialog<void>(context: context, builder: builder);
   }
 
+  String _calendarStateLabel(SprintCalendarConnectionState state) {
+    switch (state) {
+      case SprintCalendarConnectionState.notConnected:
+        return '연결 안 됨';
+      case SprintCalendarConnectionState.cached:
+        return '연결 정보 준비됨';
+      case SprintCalendarConnectionState.reauthenticationRequired:
+        return '재인증 필요';
+      case SprintCalendarConnectionState.switching:
+        return '계정 전환 중';
+      case SprintCalendarConnectionState.syncing:
+        return '동기화 중';
+      case SprintCalendarConnectionState.connected:
+        return '연결됨';
+      case SprintCalendarConnectionState.failed:
+        return '동기화 실패';
+    }
+  }
+
+  String get _calendarAccountSubtitle {
+    final state = _calendarStateLabel(_store.calendarState);
+    final profiles = _store.calendarProfiles;
+    final defaultProfile = _store.defaultCalendarProfile;
+    if (profiles.isEmpty) return state;
+    final defaultLabel = defaultProfile?.label.trim().isNotEmpty == true
+        ? defaultProfile!.label.trim()
+        : '기본 캘린더 없음';
+    return '$defaultLabel · 총 ${profiles.length}개 · $state';
+  }
+
+  String _calendarAccountDiagnostics() {
+    final defaultProfile = _store.defaultCalendarProfile;
+    return 'initialized=${_store.initialized} '
+        'state=${_store.calendarState.name} '
+        'profiles=${_store.calendarProfiles.length} '
+        'editable=${_store.editableCalendarProfiles.length} '
+        'defaultProfile=${defaultProfile?.id ?? ''} '
+        'defaultCalendar=${defaultProfile?.calendarId ?? ''} '
+        'visible=${_store.visibleCalendarProfileIds.length} '
+        'externalEvents=${_store.externalEvents.length} '
+        'linkedTasks=${_store.tasks.where((task) => task.hasGoogleEvent).length}';
+  }
+
+  Future<void> _showAccountDeveloperStatus() async {
+    final trace = await DeveloperOperationTrace.start(
+      context: context,
+      title: 'Google 캘린더 계정 상태',
+      initialMessage: '본사 Dashboard Google Calendar 계정 상태를 확인합니다.',
+      useCommonUi: widget.useCommonUi,
+      showDialogImmediately: false,
+      developerModeMessage:
+          '개발자 모드 ON: 현재 계정 상태의 debugPrint 코드를 복사할 수 있습니다.',
+      standardModeMessage:
+          '개발자 모드 OFF: 계정 상태 로그만 콘솔에 기록합니다.',
+    );
+    if (!mounted) return;
+    trace.log(_calendarAccountDiagnostics(), progress: 1);
+    await trace.succeed('Google Calendar 계정 상태 확인을 완료했습니다.');
+    if (!mounted || !trace.developerMode) return;
+    await trace.showSnapshotStatusDialog(
+      context,
+      title: 'Google 캘린더 계정 상태',
+      description: '현재 계정 상태의 debugPrint 코드를 복사할 수 있습니다.',
+    );
+  }
+
+  Future<void> _openAccountSheet() async {
+    if (!_store.initialized ||
+        _store.calendarState == SprintCalendarConnectionState.syncing) {
+      return;
+    }
+
+    final trace = await DeveloperOperationTrace.start(
+      context: context,
+      title: 'Google 캘린더 계정',
+      initialMessage: 'Sprint Google Calendar 계정 BottomSheet를 엽니다.',
+      useCommonUi: widget.useCommonUi,
+      showDialogImmediately: false,
+      developerModeMessage:
+          '개발자 모드 ON: 계정 BottomSheet 동작 로그를 완료 후 복사할 수 있습니다.',
+      standardModeMessage:
+          '개발자 모드 OFF: 계정 BottomSheet 동작 로그를 콘솔에 기록합니다.',
+    );
+    if (!mounted) return;
+    trace.log('before ${_calendarAccountDiagnostics()}', progress: 0.18);
+    HapticFeedback.selectionClick();
+
+    try {
+      await showSprintAccountSheet(
+        context: context,
+        store: _store,
+      );
+      if (!mounted) return;
+      _store.ensureCalendarRangeFor(_monthAnchor, immediate: true);
+      trace.log('after ${_calendarAccountDiagnostics()}', progress: 0.86);
+      await trace.succeed('Google Calendar 계정 BottomSheet를 닫았습니다.');
+      if (!mounted || !trace.developerMode) return;
+      await trace.showSnapshotStatusDialog(
+        context,
+        title: 'Google 캘린더 계정',
+        description: '계정 BottomSheet 동작의 debugPrint 코드를 복사할 수 있습니다.',
+      );
+    } catch (error, stackTrace) {
+      await trace.fail(
+        'Google Calendar 계정 BottomSheet 처리에 실패했습니다.',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (!mounted || !trace.developerMode) return;
+      await trace.showSnapshotStatusDialog(
+        context,
+        title: 'Google 캘린더 계정 오류',
+        description: '실패 로그의 debugPrint 코드를 복사할 수 있습니다.',
+        failure: true,
+      );
+    }
+  }
+
+  Widget _buildAccountEntry(
+    BuildContext context, {
+    required Duration duration,
+  }) {
+    final state = _store.calendarState;
+    final profileCount = _store.calendarProfiles.length;
+    final enabled =
+        _store.initialized && state != SprintCalendarConnectionState.syncing;
+    final errorState = state == SprintCalendarConnectionState.failed ||
+        state == SprintCalendarConnectionState.reauthenticationRequired;
+    final cs = Theme.of(context).colorScheme;
+
+    return AnimatedContainer(
+      duration: duration,
+      curve: Curves.easeOutCubic,
+      decoration: BoxDecoration(
+        color: errorState
+            ? cs.errorContainer.withOpacity(.32)
+            : cs.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: errorState
+              ? cs.error.withOpacity(.26)
+              : cs.outlineVariant.withOpacity(.58),
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: enabled ? _openAccountSheet : null,
+          onLongPress: _showAccountDeveloperStatus,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: Row(
+              children: [
+                AnimatedContainer(
+                  duration: duration,
+                  curve: Curves.easeOutCubic,
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: errorState
+                        ? cs.errorContainer
+                        : cs.primaryContainer,
+                    borderRadius: BorderRadius.circular(13),
+                  ),
+                  alignment: Alignment.center,
+                  child: AnimatedSwitcher(
+                    duration: duration,
+                    child: Icon(
+                      profileCount > 1
+                          ? Icons.calendar_view_month_rounded
+                          : Icons.event_available_outlined,
+                      key: ValueKey<int>(profileCount),
+                      color: errorState
+                          ? cs.onErrorContainer
+                          : cs.onPrimaryContainer,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Google 캘린더 계정',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w900,
+                            ),
+                      ),
+                      const SizedBox(height: 3),
+                      AnimatedSwitcher(
+                        duration: duration,
+                        switchInCurve: Curves.easeOutCubic,
+                        switchOutCurve: Curves.easeInCubic,
+                        child: Text(
+                          _calendarAccountSubtitle,
+                          key: ValueKey<String>(_calendarAccountSubtitle),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: cs.onSurfaceVariant,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                AnimatedSwitcher(
+                  duration: duration,
+                  child: state == SprintCalendarConnectionState.syncing
+                      ? const SizedBox(
+                          key: ValueKey<String>('hq-calendar-account-syncing'),
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(strokeWidth: 2.4),
+                        )
+                      : Icon(
+                          Icons.chevron_right_rounded,
+                          key: const ValueKey<String>(
+                            'hq-calendar-account-ready',
+                          ),
+                          color: enabled
+                              ? cs.onSurfaceVariant
+                              : cs.outline.withOpacity(.5),
+                        ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Color _itemColor(BuildContext context, _HeadquarterCalendarItem item) {
     final cs = Theme.of(context).colorScheme;
     if (item.isTask) {
@@ -541,6 +782,10 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (widget.showAccountEntry) ...[
+              _buildAccountEntry(context, duration: duration),
+              const SizedBox(height: 12),
+            ],
             Row(
               children: [
                 IconButton(

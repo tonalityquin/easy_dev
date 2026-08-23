@@ -16,7 +16,6 @@ import '../../../plate/domain/repositories/plate_repository.dart';
 import '../../../plate/widgets/action_trace_dialog.dart';
 import '../application/input_plate_service.dart';
 import '../domain/repositories/ocr_learning_repository.dart';
-import '../pages/sheets/input_sector_selection_sheet.dart';
 
 class _SectorEntryResolution {
   const _SectorEntryResolution({
@@ -69,6 +68,8 @@ class InputPlateController {
 
   String? selectedManufacturerName;
   String? selectedModelName;
+  String? selectedSectorId;
+  String? selectedSectorName;
   String? priority1SlotKey;
   String? priority2SlotKey;
   String? priority3SlotKey;
@@ -339,9 +340,18 @@ class InputPlateController {
     isLocationSelected = false;
   }
 
+  void clearParkingSelection() {
+    clearLocation();
+    priority1SlotKey = null;
+    priority2SlotKey = null;
+    priority3SlotKey = null;
+  }
+
   void clearVehicleInfo() {
     selectedManufacturerName = null;
     selectedModelName = null;
+    selectedSectorId = null;
+    selectedSectorName = null;
     priority1SlotKey = null;
     priority2SlotKey = null;
     priority3SlotKey = null;
@@ -387,6 +397,26 @@ class InputPlateController {
     return validFront &&
         controllerMidDigit.text.length == 1 &&
         controllerBackDigit.text.length == 4;
+  }
+
+  void setSelectedSector(SectorModel sector) {
+    selectedSectorId = sector.id.trim();
+    selectedSectorName = sector.name.trim();
+  }
+
+  void clearSelectedSector() {
+    selectedSectorId = null;
+    selectedSectorName = null;
+  }
+
+  void clearBillingSelection({bool resetType = true}) {
+    if (resetType) selectedBillType = '변동';
+    selectedBill = null;
+    countTypeController.clear();
+    selectedBasicStandard = 0;
+    selectedBasicAmount = 0;
+    selectedAddStandard = 0;
+    selectedAddAmount = 0;
   }
 
   void dispose() {
@@ -490,266 +520,88 @@ class InputPlateController {
     );
 
     if (!canUseSector) {
-      await _reportSectorWorkflow(
-        context: context,
-        initialMessage: '현재 지역의 방문처 기능을 확인하고 있습니다.',
-        lines: <String>[
-          'area=$area',
-          'capability.sector=false',
-          'source=AreaState.capabilitiesOfCurrentArea',
-          'firebaseRead=false',
-          'selectionRequired=false',
-        ],
-        success: true,
-        resultMessage: '방문처 선택 단계를 생략하고 기존 입차 절차를 진행합니다.',
-      );
+      clearSelectedSector();
       return const _SectorEntryResolution(proceed: true);
+    }
+
+    final selectedId = selectedSectorId?.trim() ?? '';
+    final selectedName = selectedSectorName?.trim() ?? '';
+    if (selectedId.isEmpty || selectedName.isEmpty) {
+      trace?.add('중단: Sector 미선택');
+      if (context.mounted) {
+        showFailedSnackbar(
+          context,
+          '방문 구역을 선택해주세요.',
+          useCommonUi: true,
+        );
+      }
+      return const _SectorEntryResolution(proceed: false);
     }
 
     final sectorState = context.read<SectorState>();
     final cacheKey = SectorState.cacheKeyForArea(area);
-    final cacheWait = Stopwatch()..start();
-    trace?.add(
-      'sector cache wait start loading=${sectorState.isLoading} '
-      'saving=${sectorState.isSaving} refreshing=${sectorState.isRefreshing}',
-    );
-    debugPrint(
-      '[InputPlateController][Sector] cache wait start '
-      'area=$area key=$cacheKey loading=${sectorState.isLoading} '
-      'saving=${sectorState.isSaving} refreshing=${sectorState.isRefreshing}',
-    );
-
+    final wait = Stopwatch()..start();
     await sectorState.waitUntilReady();
-    cacheWait.stop();
-
+    wait.stop();
     if (!context.mounted) {
-      return const _SectorEntryResolution(proceed: false);
-    }
-
-    final currentAreaAfterWait = areaState.currentArea.trim();
-    trace?.add(
-      'sector cache wait end elapsedMs=${cacheWait.elapsedMilliseconds} '
-      'requestedArea=$area currentArea=$currentAreaAfterWait '
-      'loading=${sectorState.isLoading} saving=${sectorState.isSaving} '
-      'refreshing=${sectorState.isRefreshing}',
-    );
-    debugPrint(
-      '[InputPlateController][Sector] cache wait end '
-      'elapsedMs=${cacheWait.elapsedMilliseconds} requestedArea=$area '
-      'currentArea=$currentAreaAfterWait loading=${sectorState.isLoading} '
-      'saving=${sectorState.isSaving} refreshing=${sectorState.isRefreshing}',
-    );
-
-    if (currentAreaAfterWait != area.trim()) {
-      final error = StateError('방문처 준비 중 현재 지역이 변경되었습니다.');
-      final developerMode = await _reportSectorWorkflow(
-        context: context,
-        initialMessage: '방문처 데이터 준비 결과를 확인하고 있습니다.',
-        lines: <String>[
-          'requestedArea=$area',
-          'currentArea=$currentAreaAfterWait',
-          'cacheKey=$cacheKey',
-          'cacheWaitMs=${cacheWait.elapsedMilliseconds}',
-          'firebaseRead=false',
-        ],
-        success: false,
-        resultMessage: '현재 지역이 변경되어 방문처 선택을 중단했습니다.',
-        error: error,
-      );
-      if (!developerMode && context.mounted) {
-        await StatusDialog.showFailure(
-          context,
-          title: '방문처 선택을 다시 진행해주세요.',
-          description: '현재 지역 또는 로컬 방문처 정보가 변경되었습니다.',
-          useCommonUi: true,
-        );
-      }
-      return const _SectorEntryResolution(proceed: false);
-    }
-
-    final rawSectors = sectorState.sectors;
-    final validSectors = rawSectors
-        .where(
-          (sector) =>
-              sector.id.trim().isNotEmpty &&
-              sector.name.trim().isNotEmpty &&
-              sector.area.trim() == area.trim(),
-        )
-        .toList(growable: false);
-    trace?.add(
-      'sectorState busy=${sectorState.isBusy} '
-      'count=${rawSectors.length} valid=${validSectors.length} '
-      'cacheWaitMs=${cacheWait.elapsedMilliseconds}',
-    );
-    debugPrint(
-      '[InputPlateController][Sector] local cache check '
-      'area=$area key=$cacheKey busy=${sectorState.isBusy} '
-      'count=${rawSectors.length} valid=${validSectors.length} '
-      'cacheWaitMs=${cacheWait.elapsedMilliseconds}',
-    );
-
-    if (sectorState.isBusy) {
-      final developerMode = await _reportSectorWorkflow(
-        context: context,
-        initialMessage: '로컬 방문처 데이터를 확인하고 있습니다.',
-        lines: <String>[
-          'area=$area',
-          'cacheKey=$cacheKey',
-          'cacheWaitMs=${cacheWait.elapsedMilliseconds}',
-          'sectorState.isBusy=true',
-          'sectorState.isLoading=${sectorState.isLoading}',
-          'sectorState.isSaving=${sectorState.isSaving}',
-          'sectorState.isRefreshing=${sectorState.isRefreshing}',
-          'firebaseRead=false',
-        ],
-        success: false,
-        resultMessage: '방문처 로컬 데이터 처리가 완료되지 않아 입차를 중단했습니다.',
-      );
-      if (!developerMode && context.mounted) {
-        await StatusDialog.showFailure(
-          context,
-          title: '방문처 데이터를 준비하고 있습니다.',
-          description: '잠시 후 입차 버튼을 다시 눌러주세요.',
-          useCommonUi: true,
-        );
-      }
-      return const _SectorEntryResolution(proceed: false);
-    }
-
-    if (rawSectors.length != validSectors.length || validSectors.isEmpty) {
-      final error = StateError(
-        validSectors.isEmpty
-            ? '현재 지역의 로컬 방문처 목록이 비어 있습니다.'
-            : '현재 지역과 일치하지 않는 방문처 데이터가 포함되어 있습니다.',
-      );
-      final developerMode = await _reportSectorWorkflow(
-        context: context,
-        initialMessage: '로컬 방문처 데이터 무결성을 확인하고 있습니다.',
-        lines: <String>[
-          'area=$area',
-          'cacheKey=$cacheKey',
-          'cachedCount=${rawSectors.length}',
-          'validCount=${validSectors.length}',
-          'cacheWaitMs=${cacheWait.elapsedMilliseconds}',
-          'firebaseRead=false',
-        ],
-        success: false,
-        resultMessage: '방문처 로컬 데이터가 올바르지 않아 입차를 중단했습니다.',
-        error: error,
-      );
-      if (!developerMode && context.mounted) {
-        await StatusDialog.showFailure(
-          context,
-          title: '선택할 방문처가 없습니다.',
-          description: '태블릿 설정 또는 내 정보에서 운영 데이터를 다시 내려받아 주세요.',
-          useCommonUi: true,
-        );
-      }
-      return const _SectorEntryResolution(proceed: false);
-    }
-
-    debugPrint(
-      '[InputPlateController][Sector] selection sheet open '
-      'area=$area count=${validSectors.length}',
-    );
-    final selected = await InputSectorSelectionSheet.show(
-      context: context,
-      area: area,
-      sectors: validSectors,
-    );
-    if (!context.mounted) {
-      return const _SectorEntryResolution(proceed: false);
-    }
-
-    if (selected == null) {
-      trace?.add('중단: Sector 선택 취소');
-      await _reportSectorWorkflow(
-        context: context,
-        initialMessage: '방문처 선택 결과를 확인하고 있습니다.',
-        lines: <String>[
-          'area=$area',
-          'cacheKey=$cacheKey',
-          'selectionResult=cancel',
-          'cacheWaitMs=${cacheWait.elapsedMilliseconds}',
-          'firebaseRead=false',
-          'firebaseWrite=false',
-        ],
-        success: false,
-        resultMessage: '사용자가 방문처 선택을 취소하여 입차를 진행하지 않습니다.',
-      );
       return const _SectorEntryResolution(proceed: false);
     }
 
     final currentArea = areaState.currentArea.trim();
     SectorModel? resolved;
     for (final sector in sectorState.sectors) {
-      if (sector.id == selected.id) {
+      if (sector.id.trim() == selectedId) {
         resolved = sector;
         break;
       }
     }
-    final confirmedSector = resolved;
-    final selectionValid =
-        currentArea == area.trim() &&
-        confirmedSector != null &&
-        confirmedSector.area.trim() == currentArea &&
-        confirmedSector.id.trim().isNotEmpty &&
-        confirmedSector.name.trim().isNotEmpty &&
-        confirmedSector.name.trim() == selected.name.trim();
+    final confirmed = resolved;
+    final valid = currentArea == area.trim() &&
+        confirmed != null &&
+        confirmed.area.trim() == currentArea &&
+        confirmed.id.trim() == selectedId &&
+        confirmed.name.trim() == selectedName;
 
-    if (!selectionValid) {
-      final error = StateError('방문처 선택 중 현재 지역 또는 로컬 목록이 변경되었습니다.');
+    debugPrint(
+      '[InputPlateController][Sector] selected validation '
+      'area=$area currentArea=$currentArea cacheKey=$cacheKey '
+      'selectedId=$selectedId selectedName=$selectedName '
+      'resolved=${confirmed != null} waitMs=${wait.elapsedMilliseconds}',
+    );
+
+    if (!valid) {
+      clearSelectedSector();
+      trace?.add('중단: Sector 최신 로컬 목록 재검증 실패');
       final developerMode = await _reportSectorWorkflow(
         context: context,
-        initialMessage: '선택한 방문처를 다시 검증하고 있습니다.',
+        initialMessage: '선택한 방문 구역을 다시 확인하고 있습니다.',
         lines: <String>[
           'requestedArea=$area',
           'currentArea=$currentArea',
-          'selectedId=${selected.id}',
-          'selectedName=${selected.name}',
-          'resolved=${resolved != null}',
-          'cacheWaitMs=${cacheWait.elapsedMilliseconds}',
+          'cacheKey=$cacheKey',
+          'selectedId=$selectedId',
+          'selectedName=$selectedName',
+          'resolved=${confirmed != null}',
+          'cacheWaitMs=${wait.elapsedMilliseconds}',
           'firebaseRead=false',
         ],
         success: false,
-        resultMessage: '선택한 방문처를 확인할 수 없어 입차를 중단했습니다.',
-        error: error,
+        resultMessage: '선택한 방문 구역이 현재 로컬 운영 데이터와 일치하지 않습니다.',
+        error: StateError('방문 구역 선택 정보가 최신 로컬 데이터와 일치하지 않습니다.'),
       );
       if (!developerMode && context.mounted) {
         await StatusDialog.showFailure(
           context,
-          title: '방문처 선택을 다시 진행해주세요.',
-          description: '현재 지역 또는 로컬 방문처 정보가 변경되었습니다.',
+          title: '방문 구역을 다시 선택해주세요.',
+          description: '현재 지역 또는 로컬 방문 구역 정보가 변경되었습니다.',
           useCommonUi: true,
         );
       }
       return const _SectorEntryResolution(proceed: false);
     }
 
-    trace?.add(
-      'sectorId=${confirmedSector.id} sectorName=${confirmedSector.name}',
-    );
-    await _reportSectorWorkflow(
-      context: context,
-      initialMessage: '선택한 방문처를 입차 정보에 연결하고 있습니다.',
-      lines: <String>[
-        'area=$currentArea',
-        'cacheKey=$cacheKey',
-        'capability.sector=true',
-        'sectorId=${confirmedSector.id}',
-        'sectorName=${confirmedSector.name}',
-        'source=SectorState.sectors',
-        'cacheWaitMs=${cacheWait.elapsedMilliseconds}',
-        'firebaseRead=false',
-        'selectionRequired=true',
-      ],
-      success: true,
-      resultMessage: '방문처 선택이 완료되어 기존 입차 절차를 계속합니다.',
-    );
-    return _SectorEntryResolution(
-      proceed: true,
-      sector: confirmedSector,
-    );
+    trace?.add('sectorId=${confirmed.id} sectorName=${confirmed.name}');
+    return _SectorEntryResolution(proceed: true, sector: confirmed);
   }
 
   Future<bool> submitPlateEntry(
@@ -811,12 +663,15 @@ class InputPlateController {
     final division = areaState.currentDivision;
     final userName = context.read<UserState>().name;
     final billState = context.read<BillState>();
-    final hasAnyBill =
-        billState.generalBills.isNotEmpty || billState.regularBills.isNotEmpty;
+    final canUseBill = areaState.capabilitiesOfCurrentArea.contains(
+      Capability.bill,
+    );
+    final hasAnyBill = canUseBill &&
+        (billState.generalBills.isNotEmpty || billState.regularBills.isNotEmpty);
 
     trace?.add('plateNumber=$plateNumber');
     trace?.add('area=$area division=$division');
-    trace?.add('hasAnyBill=$hasAnyBill');
+    trace?.add('canUseBill=$canUseBill hasAnyBill=$hasAnyBill');
 
     final location = locationController.text.trim();
     isLocationSelected = location.isNotEmpty;
@@ -830,7 +685,8 @@ class InputPlateController {
       return false;
     }
 
-    if (selectedBillType == '정기' &&
+    if (canUseBill &&
+        selectedBillType == '정기' &&
         (selectedBill == null || selectedBill!.trim().isEmpty)) {
       final ct = countTypeController.text.trim();
       trace?.add('정기 countType="$ct"');
@@ -948,19 +804,19 @@ class InputPlateController {
         location: isLocationSelected ? location : '',
         isLocationSelected: isLocationSelected,
         imageUrls: uploadResult.uploadedUrls,
-        selectedBill: selectedBill,
+        selectedBill: canUseBill ? selectedBill : null,
         statusWriteRequested: statusWriteRequested,
         statusLookupState: statusLookupState,
         statusEditedByUser: statusEditedByUser,
         expectedOriginalStatus: expectedOriginalStatus,
         expectedStatusSourcePath: expectedStatusSourcePath,
-        basicStandard: selectedBasicStandard,
-        basicAmount: selectedBasicAmount,
-        addStandard: selectedAddStandard,
-        addAmount: selectedAddAmount,
+        basicStandard: canUseBill ? selectedBasicStandard : 0,
+        basicAmount: canUseBill ? selectedBasicAmount : 0,
+        addStandard: canUseBill ? selectedAddStandard : 0,
+        addAmount: canUseBill ? selectedAddAmount : 0,
         region: dropdownValue,
         customStatus: draft.customStatus,
-        selectedBillType: selectedBillType,
+        selectedBillType: canUseBill ? selectedBillType : '변동',
         manufacturerName: selectedManufacturerName,
         modelName: selectedModelName,
         priority1SlotKey: priority1SlotKey,

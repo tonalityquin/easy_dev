@@ -5,7 +5,6 @@ enum BillType { general, regular }
 BillType billTypeFromString(String? value) {
   switch (value?.trim()) {
     case '정기':
-    case '고정':
       return BillType.regular;
     case '변동':
     default:

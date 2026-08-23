@@ -66,7 +66,10 @@ class DoubleTypePage extends StatelessWidget {
         buildDepartureCompletedSheet: () =>
             const DoubleDepartureCompletedBottomSheet(),
         buildDashboardSideDock: () => const DoubleHomeDashboardSideDock(),
-        buildInputScreen: () => const InputPlateScreen(),
+        buildInputScreen: (launch) => InputPlateScreen(
+          initialOcrSourceRect: launch.sourceRect,
+          sideDockPresentationController: launch.presentationController,
+        ),
         debugMeta: const <String, dynamic>{
           'screen': 'lite_type_page',
           'action': 'open_double_input_plate_screen',

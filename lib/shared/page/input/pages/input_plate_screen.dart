@@ -1,99 +1,51 @@
+import 'dart:async';
+
+import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
+
 import '../../../../app/utils/developer_operation_status_dialog.dart';
-import '../../../../app/utils/status_dialog.dart';
 import '../../../../app/utils/snackbar_helper.dart';
+import '../../../../app/utils/status_dialog.dart';
 import '../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../design_system/common_ui/common_ui_side_dock.dart';
+import '../../../../design_system/common_ui/common_ui_side_dock_frame.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
-import '../../../../features/account/applications/user_state.dart';
 import '../../../../features/dev/application/area_state.dart';
-import '../../../../features/monthly/page/sheets/widgets/keypad/kor_keypad.dart';
-import '../../../../features/monthly/page/sheets/widgets/keypad/num_keypad.dart';
 import '../../../../features/payment/applications/bill_state.dart';
+import '../../../../features/payment/domain/models/bill_model.dart';
 import '../../../../features/sector/applications/sector_state.dart';
+import '../../../../features/sector/domain/models/sector_model.dart';
 import '../../../plate/domain/models/plate_status_lookup_result.dart';
 import '../../../plate/domain/models/plate_status_scope.dart';
 import '../../../plate/domain/repositories/plate_repository.dart';
 import '../../../plate/domain/services/plate_status_record.dart';
+import '../../../plate/editor/domain/plate_editor_workspace.dart';
+import '../../../plate/editor/domain/plate_identity_focus_target.dart';
+import '../../../plate/editor/domain/plate_parking_display.dart';
+import '../../../plate/editor/widgets/plate_editor_footer.dart';
+import '../../../plate/editor/widgets/plate_editor_overview.dart';
+import '../../../plate/editor/widgets/plate_editor_rail.dart';
+import '../../../plate/editor/workspaces/plate_billing_workspace.dart';
+import '../../../plate/editor/workspaces/plate_camera_workspace.dart';
+import '../../../plate/editor/workspaces/plate_memo_workspace.dart';
+import '../../../plate/editor/workspaces/plate_parking_workspace.dart';
+import '../../../plate/editor/workspaces/plate_sector_workspace.dart';
+import '../../../plate/editor/dialogs/plate_editor_dialog.dart';
+import '../../../plate/editor/workspaces/plate_identity_workspace.dart';
+import '../application/input_plate_registration_policy.dart';
 import '../controllers/input_plate_controller.dart';
 import 'live_ocr_page.dart';
-import 'sheets/input_bottom_navigation.dart';
+import '../widgets/live_ocr_source_rect_route.dart';
 import 'sheets/input_region_bottom_sheet.dart';
-import 'widgets/input_bill_section.dart';
-import 'widgets/input_bottom_action_section.dart';
-import 'widgets/input_custom_status_section.dart';
-import 'widgets/input_location_section.dart';
-import 'widgets/input_photo_section.dart';
-
-double _contrastRatio(Color a, Color b) {
-  final la = a.computeLuminance();
-  final lb = b.computeLuminance();
-  final l1 = la >= lb ? la : lb;
-  final l2 = la >= lb ? lb : la;
-  return (l1 + 0.05) / (l2 + 0.05);
-}
-
-Color _resolveLogoTint({
-  required Color background,
-  required Color preferred,
-  required Color fallback,
-  double minContrast = 3.0,
-}) {
-  if (_contrastRatio(preferred, background) >= minContrast) return preferred;
-  return fallback;
-}
-
-class _BrandTintedLogo extends StatelessWidget {
-  const _BrandTintedLogo({
-    required this.assetPath,
-    required this.height,
-    required this.preferredColor,
-    required this.fallbackColor,
-    this.minContrast = 3.0,
-  });
-
-  final String assetPath;
-  final double height;
-  final Color preferredColor;
-  final Color fallbackColor;
-  final double minContrast;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final bg = theme.scaffoldBackgroundColor;
-
-    final tint = _resolveLogoTint(
-      background: bg,
-      preferred: preferredColor,
-      fallback: fallbackColor,
-      minContrast: minContrast,
-    );
-
-    return Image.asset(
-      assetPath,
-      fit: BoxFit.contain,
-      height: height,
-      color: tint,
-      colorBlendMode: BlendMode.srcIn,
-    );
-  }
-}
-
-enum _DockField { front, mid, back }
 
 enum _MonthlyFetchFailureType { notFound, inactive, readError }
 
 class _MonthlyFetchResult {
-  final PlateStatusRecord? data;
-  final String? sourcePath;
-  final _MonthlyFetchFailureType? failure;
-  final Object? error;
-
   const _MonthlyFetchResult.success({
     required this.data,
     required this.sourcePath,
@@ -106,542 +58,149 @@ class _MonthlyFetchResult {
   })  : data = null,
         sourcePath = null;
 
+  final PlateStatusRecord? data;
+  final String? sourcePath;
+  final _MonthlyFetchFailureType? failure;
+  final Object? error;
+
   bool get isSuccess => data != null && sourcePath != null;
 }
 
 class InputPlateScreen extends StatefulWidget {
-  final bool isMinorMode;
-
   const InputPlateScreen({
     super.key,
     this.isMinorMode = false,
+    this.initialOcrSourceRect,
+    this.sideDockPresentationController,
   });
+
+  final bool isMinorMode;
+  final Rect? initialOcrSourceRect;
+  final CommonSideDockPresentationController? sideDockPresentationController;
 
   @override
   State<InputPlateScreen> createState() => _InputPlateScreenState();
 }
 
 class _InputPlateScreenState extends State<InputPlateScreen> {
+  static const String _prefsHasMonthlyKey = 'has_monthly_parking';
+
   late final InputPlateController controller;
+  final TextEditingController _identityFrontDraftController =
+      TextEditingController();
+  final TextEditingController _identityMidDraftController =
+      TextEditingController();
+  final TextEditingController _identityBackDraftController =
+      TextEditingController();
+  final TextEditingController _memoDraftController = TextEditingController();
+  final GlobalKey _overviewPlateAnchorKey = GlobalKey();
+  final GlobalKey _identityPlateAnchorKey = GlobalKey();
 
   PlateRepository get _plateRepo => context.read<PlateRepository>();
 
-  static const String screenTag = 'plate input';
-  static const String _kScreenTagAsset = 'assets/images/pelican_text.png';
-  static const double _kScreenTagHeight = 54.0;
-  static const String _prefsHasMonthlyKey = 'has_monthly_parking';
+  PlateEditorWorkspace? _activeDialog;
+  String _policySignature = '';
+  bool _identityPending = false;
+  bool _identityEditing = false;
+  bool _identityAutoApplying = false;
+  bool _syncingIdentityDraft = false;
+  PlateIdentityFocusTarget _identityInitialFocus =
+      PlateIdentityFocusTarget.front;
+  List<String> _identityMiddleSuggestions = const <String>[];
+  bool _memoPending = false;
   bool _hasMonthlyParking = false;
   bool _hasMonthlyLoaded = false;
-
-
-  bool _openedScannerOnce = false;
-
-  final ScrollController _sheetScrollController = ScrollController();
-  bool _sheetOpen = false;
-  bool _sheetAnimating = false;
-
-  _DockField? _dockEditing;
-  bool _singleFieldDockEdit = false;
-
-  String _midBeforeEdit = '';
-  static const double _sheetClosed = 0.16;
-  static const double _sheetOpened = 1.00;
-
   bool _monthlyDocExists = false;
-  bool _monthlyApplying = false;
-  String? _resolvedMonthlyDocId;
-
-  static const int _dockPageBill = 0;
-  static const int _dockPageMemo = 1;
-
-  int _dockPageIndex = _dockPageBill;
-  bool _dockSlideFromRight = true;
-
-  String? _lastPlateStatusDialogKey;
-  bool _plateStatusDialogShowing = false;
   int _statusLookupGeneration = 0;
   int _monthlyLookupGeneration = 0;
-  bool _monthlyLookupInProgress = false;
+  bool _openedScannerOnce = false;
+  bool _scannerActive = false;
+  DeveloperOperationTrace? _editorTrace;
+  int _cameraSessionKey = 0;
+  bool _cameraStartInPreview = false;
+  List<dynamic> _cameraInitialPreviewImages = const <dynamic>[];
+  int _cameraInitialPreviewIndex = 0;
 
-  LiveOcrSessionResult? _lastOcrSessionResult;
+  bool get _busy => controller.isLoading;
 
+  bool get _hasPendingWorkspaceDraft => _memoPending;
 
-  String _safeArea(String area) {
-    final a = area.trim();
-    return a.isEmpty ? 'unknown' : a;
-  }
-
-  String _canonicalPlateNumber(String plateNumber) {
-    final t = plateNumber.trim().replaceAll(' ', '');
-    final raw = t.replaceAll('-', '');
-    final m = RegExp(r'^(\d{2,3})([가-힣])(\d{4})$').firstMatch(raw);
-    if (m == null) return t;
-    return '${m.group(1)}-${m.group(2)}-${m.group(3)}';
-  }
-
-  String _plateDocId(String plateNumber, String area) {
-    final a = _safeArea(area);
-    final p = _canonicalPlateNumber(plateNumber);
-    return '${p}_$a';
-  }
-
-  void _showFloatingMessage(String message) {
-    if (!mounted) return;
-    showSelectedSnackbar(context, message, useCommonUi: true);
-  }
-
-  Future<void> _loadHasMonthlyParkingFlag() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final v = prefs.getBool(_prefsHasMonthlyKey) ?? false;
-
-      if (!mounted) return;
-      if (!_hasMonthlyLoaded || _hasMonthlyParking != v) {
-        setState(() {
-          _hasMonthlyParking = v;
-          _hasMonthlyLoaded = true;
-        });
-      }
-    } catch (e) {
-      debugPrint('has_monthly_parking 로드 실패: $e');
-      if (!mounted) return;
-      if (!_hasMonthlyLoaded) {
-        setState(() {
-          _hasMonthlyParking = false;
-          _hasMonthlyLoaded = true;
-        });
-      }
-    }
-  }
-
-  void _jumpSheetScrollToTop() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      try {
-        if (_sheetScrollController.hasClients) {
-          _sheetScrollController.jumpTo(0);
-        }
-      } catch (_) {}
-    });
-  }
-
-  void _setDockPage(int index) {
-    if (index == _dockPageIndex) return;
-    if (!mounted) return;
-
-    setState(() {
-      _dockSlideFromRight = index > _dockPageIndex;
-      _dockPageIndex = index;
-    });
-
-    _jumpSheetScrollToTop();
-  }
-
-  void _handleDockHorizontalSwipe(DragEndDetails details,
-      {required bool canSwipe}) {
-    if (!canSwipe) return;
-
-    final v = details.primaryVelocity ?? 0.0;
-    if (v.abs() < 250) return;
-
-    if (v < 0) {
-      _setDockPage(_dockPageMemo);
-    } else {
-      _setDockPage(_dockPageBill);
-    }
-  }
-
-  Future<void> _animateSheet({
-    required bool open,
-    int? pageIndex,
-    required String source,
-    bool showDeveloperStatus = true,
-  }) async {
-    if (_sheetAnimating || _sheetOpen == open) {
-      debugPrint(
-        '[InputPlateScreen][TouchSheet] ignored source=$source '
-        'open=$open animating=$_sheetAnimating current=$_sheetOpen',
-      );
-      if (open && pageIndex != null && !_sheetAnimating) {
-        _setDockPage(pageIndex);
-      }
-      return;
-    }
-
-    final previousOpen = _sheetOpen;
-    final target = open ? _sheetOpened : _sheetClosed;
-    final pageLabel = pageIndex == _dockPageMemo ? '상태 메모' : '정산 유형';
-    DeveloperOperationTrace? trace;
-
-    if (mounted) {
-      setState(() {
-        _sheetAnimating = true;
-        _sheetOpen = open;
-        if (open && pageIndex != null) {
-          _dockSlideFromRight = pageIndex > _dockPageIndex;
-          _dockPageIndex = pageIndex;
-        }
-      });
-    }
-
-    try {
-      if (showDeveloperStatus && mounted) {
-        trace = await DeveloperOperationTrace.start(
-          context: context,
-          title: '입차 추가 정보 카드',
-          initialMessage: open
-              ? '터치로 추가 정보 카드를 열고 있습니다.'
-              : '터치로 추가 정보 카드를 닫고 있습니다.',
-          useCommonUi: true,
-          developerModeMessage:
-              '개발자 모드 ON: 카드 제어 로그를 복사할 수 있습니다.',
-          standardModeMessage:
-              '개발자 모드 OFF: 터치 전용 카드 전환을 실행합니다.',
-        );
-        trace.log(
-          'screen=InputPlateScreen source=$source target=${open ? 'open' : 'closed'} '
-          'page=$pageLabel plate=${controller.buildPlateNumber()}',
-          progress: .24,
-        );
-      } else {
-        debugPrint(
-          '[InputPlateScreen][TouchSheet] source=$source '
-          'target=${open ? 'open' : 'closed'} page=$pageLabel',
-        );
-      }
-
-      await HapticFeedback.selectionClick();
-
-      if (!open && _sheetScrollController.hasClients) {
-        _sheetScrollController.jumpTo(0);
-      }
-
-      final reduceMotion =
-          MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-      if (!reduceMotion) {
-        await Future<void>.delayed(CommonUiMotion.layout);
-      }
-
-      if (open) {
-        _jumpSheetScrollToTop();
-      }
-
-      trace?.log(
-        '터치 전용 카드 위치 적용 완료: size=$target layout=AnimatedPositioned dragEnabled=false controllerRequired=false',
-        progress: .82,
-      );
-      if (trace != null) {
-        await trace.succeed(
-          open ? '추가 정보 카드가 열렸습니다.' : '추가 정보 카드가 닫혔습니다.',
-        );
-      } else {
-        debugPrint(
-          '[InputPlateScreen][TouchSheet] completed '
-          'target=${open ? 'open' : 'closed'} size=$target',
-        );
-      }
-    } catch (error, stackTrace) {
-      if (mounted) {
-        setState(() => _sheetOpen = previousOpen);
-      }
-
-      if (trace != null) {
-        await trace.fail(
-          '추가 정보 카드 전환에 실패했습니다.',
-          error: error,
-          stackTrace: stackTrace,
-        );
-      } else {
-        debugPrint(
-          '[InputPlateScreen][TouchSheet] failed error=$error\n$stackTrace',
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _sheetAnimating = false);
-      }
-    }
-  }
-
-  Future<void> _toggleSheet({String source = 'toggle_header'}) {
-    return _animateSheet(
-      open: !_sheetOpen,
-      source: source,
-    );
-  }
-
-  Future<void> _handleDockPageTap(int index) async {
-    final pageLabel = index == _dockPageMemo ? '상태 메모' : '정산 유형';
-    debugPrint(
-      '[InputPlateScreen][TouchSheet] pageTap page=$pageLabel '
-      'sheetOpen=$_sheetOpen animating=$_sheetAnimating',
-    );
-    if (_sheetAnimating) return;
-    if (!_sheetOpen) {
-      await _animateSheet(
-        open: true,
-        pageIndex: index,
-        source: index == _dockPageMemo
-            ? 'closed_memo_segment'
-            : 'closed_bill_segment',
-      );
-      return;
-    }
-    await HapticFeedback.selectionClick();
-    _setDockPage(index);
-  }
-
-  Future<void> _openSheetToMemoPage() async {
-    if (!_sheetOpen) {
-      await _animateSheet(
-        open: true,
-        pageIndex: _dockPageMemo,
-        source: 'plate_status_dialog_memo',
-      );
-      return;
-    }
-    if (!mounted) return;
-    _setDockPage(_dockPageMemo);
-  }
-
-  Future<void> _showPlateStatusLoadedDialog({
-    required String plateNumber,
-    required String area,
-    String? customStatus,
-  }) async {
-    if (!mounted) return;
-
-    final safeArea = _safeArea(area);
-    final customStatusText =
-        (customStatus ?? '').trim().isEmpty ? '-' : customStatus!.trim();
-
-    await showCommonOverlayDialog<void>(
-      context: context,
-      barrierLabel: 'plate_status_loaded',
-      builder: (dialogContext) => _PlateStatusLoadedDialog(
-        safeArea: safeArea,
-        plateNumber: plateNumber,
-        customStatusText: customStatusText,
-        onClose: () => Navigator.of(dialogContext).pop(),
-        onGoMemo: () async {
-          Navigator.of(dialogContext).pop();
-          await _openSheetToMemoPage();
-        },
-      ),
-    );
-  }
-
-  bool _exitInProgress = false;
-  bool _exitPostFrameScheduled = false;
-
-  void _requestExit({bool defer = false}) {
-    if (_exitInProgress) return;
-
-    void doPop() {
-      if (!mounted) return;
-      if (_exitInProgress) return;
-
-      _exitInProgress = true;
-      try {
-        Navigator.of(context).pop(false);
-      } catch (e) {
-        _exitInProgress = false;
-        debugPrint('[InputPlateScreen] pop failed: $e');
-      }
-    }
-
-    if (!defer) {
-      doPop();
-      return;
-    }
-
-    if (_exitPostFrameScheduled) return;
-    _exitPostFrameScheduled = true;
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _exitPostFrameScheduled = false;
-      doPop();
-    });
-  }
-
-  Future<void> _lookupGeneralStatusForCurrentPlate() async {
-    final text = controller.controllerBackDigit.text;
-    if (text.length != 4 || !controller.isInputValid()) {
-      final generation = ++_statusLookupGeneration;
-      if (!mounted) return;
-      setState(() {
-        controller.resetStatusLookupToIdle();
-        _monthlyLookupGeneration++;
-        _monthlyLookupInProgress = false;
-        _monthlyDocExists = false;
-        _resolvedMonthlyDocId = null;
-        _lastPlateStatusDialogKey = null;
-      });
-      debugPrint(
-        '[InputPlateScreen][PlateStatusLookup] reset generation=$generation '
-        'reason=incompletePlate',
-      );
-      return;
-    }
-
-    final plateNumber = controller.buildPlateNumber();
-    final area = context.read<AreaState>().currentArea;
-    final lookupGeneration = ++_statusLookupGeneration;
-    setState(() {
-      controller.beginStatusLookup();
-      _monthlyLookupGeneration++;
-      _monthlyLookupInProgress = false;
-      _monthlyDocExists = false;
-      _resolvedMonthlyDocId = null;
-      _lastPlateStatusDialogKey = null;
-    });
-    debugPrint(
-      '[InputPlateScreen][PlateStatusLookup] loading=true '
-      'plate=$plateNumber area=$area generation=$lookupGeneration',
-    );
-
-    final lookup = await _fetchPlateStatus(plateNumber, area);
-    if (!mounted || lookupGeneration != _statusLookupGeneration) return;
-    if (!controller.isInputValid() ||
-        controller.buildPlateNumber() != plateNumber) {
-      return;
-    }
-
-    if (lookup.isFailed) {
-      setState(controller.applyStatusLookupFailed);
-      _showFloatingMessage(
-        '기존 상태 정보를 확인하지 못했습니다. 저장 시 기존 상태를 보호합니다.',
-      );
-      final trace = await DeveloperOperationTrace.start(
-        context: context,
-        title: '입차 상태 정보 조회',
-        initialMessage: '기존 상태 메모를 확인하고 있습니다.',
-        useCommonUi: true,
-        developerModeMessage:
-            '개발자 모드 ON: 상태 조회 실패 로그를 복사할 수 있습니다.',
-        standardModeMessage:
-            '개발자 모드 OFF: 상태 조회 실패 로그를 콘솔에 기록합니다.',
-      );
-      trace.log(
-        'plate=$plateNumber area=$area lookupState=failed '
-        'preserveExistingStatus=true generation=$lookupGeneration',
-        progress: .62,
-      );
-      await trace.fail(
-        '기존 상태 정보를 확인하지 못해 기존 상태를 보호합니다.',
-        error: lookup.error,
-      );
-      return;
-    }
-
-    if (lookup.isInactive) {
-      setState(controller.applyStatusInactive);
-      _showFloatingMessage('상태 정보의 유효기간을 확인할 수 없습니다.');
-      return;
-    }
-
-    if (lookup.isNotFound) {
-      setState(controller.applyStatusNotFound);
-      if (controller.selectedBillType == '정기') {
-        await _handleMonthlySelectedFetchAndApply();
-      }
-      return;
-    }
-
-    final data = lookup.record!;
-    final fetchedStatus = data.customStatus;
-    final String? fetchedCountType = data.countType;
-    final shouldResolveMonthly = controller.selectedBillType == '정기' ||
-        (fetchedCountType != null && fetchedCountType.isNotEmpty);
-
-    setState(() {
-      controller.applyFetchedStatus(
-        customStatus: fetchedStatus,
-        sourcePath: lookup.sourcePath!,
-      );
-
-      if (fetchedCountType != null && fetchedCountType.isNotEmpty) {
-        controller.countTypeController.text = fetchedCountType;
-        controller.selectedBillType = '정기';
-        controller.selectedBill = fetchedCountType;
-      }
-      _monthlyDocExists = false;
-      _resolvedMonthlyDocId = null;
-    });
-
-    if (shouldResolveMonthly) {
-      await _handleMonthlySelectedFetchAndApply();
-      return;
-    }
-
-    final dialogKey = _plateDocId(plateNumber, area);
-    if (_plateStatusDialogShowing) return;
-    if (_lastPlateStatusDialogKey == dialogKey) return;
-
-    _plateStatusDialogShowing = true;
-    _lastPlateStatusDialogKey = dialogKey;
-
-    try {
-      await _showPlateStatusLoadedDialog(
-        plateNumber: plateNumber,
-        area: area,
-        customStatus: fetchedStatus,
-      );
-    } finally {
-      _plateStatusDialogShowing = false;
-    }
+  bool get _hasEnteredContent {
+    return controller.controllerFrontDigit.text.trim().isNotEmpty ||
+        controller.controllerMidDigit.text.trim().isNotEmpty ||
+        controller.controllerBackDigit.text.trim().isNotEmpty ||
+        controller.locationController.text.trim().isNotEmpty ||
+        controller.capturedImages.isNotEmpty ||
+        controller.customStatusController.text.trim().isNotEmpty ||
+        (controller.selectedBill?.trim().isNotEmpty ?? false) ||
+        (controller.selectedSectorId?.trim().isNotEmpty ?? false) ||
+        _hasPendingWorkspaceDraft;
   }
 
   @override
   void initState() {
     super.initState();
-
     controller = InputPlateController(isMinorMode: widget.isMinorMode);
-
-    _loadHasMonthlyParkingFlag();
-    if (controller.selectedBillType == '고정' ||
-        controller.selectedBillType.trim().isEmpty) {
+    if (controller.selectedBillType.trim().isEmpty) {
       controller.selectedBillType = '변동';
     }
+    _syncIdentityDraftFromCommitted();
+    _memoDraftController.text = controller.customStatusController.text;
+    _identityFrontDraftController.addListener(_handleIdentityDraftChanged);
+    _identityMidDraftController.addListener(_handleIdentityDraftChanged);
+    _identityBackDraftController.addListener(_handleIdentityDraftChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _initializeEditor());
+  }
 
-    controller.controllerBackDigit.addListener(
-      _lookupGeneralStatusForCurrentPlate,
+  Future<void> _initializeEditor() async {
+    if (!mounted) return;
+    final areaState = context.read<AreaState>();
+    final policy = PlateEditorPolicy.fromCapabilities(
+      area: areaState.currentArea,
+      capabilities: areaState.capabilitiesOfCurrentArea,
     );
-
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted) return;
-      final billState = context.read<BillState>();
-      final sectorState = context.read<SectorState>();
-      final preload = Stopwatch()..start();
-      debugPrint(
-        '[InputPlateScreen][Preload] start '
-        'sectorLoading=${sectorState.isLoading} '
-        'sectorSaving=${sectorState.isSaving} '
-        'sectorRefreshing=${sectorState.isRefreshing}',
-      );
-      await Future.wait<void>(<Future<void>>[
-        billState.loadFromBillCache(),
-        sectorState.waitUntilReady(),
-      ]);
-      preload.stop();
-      debugPrint(
-        '[InputPlateScreen][Preload] complete '
-        'elapsedMs=${preload.elapsedMilliseconds} '
-        'sectorLoading=${sectorState.isLoading} '
-        'sectorSaving=${sectorState.isSaving} '
-        'sectorRefreshing=${sectorState.isRefreshing} '
-        'sectorCount=${sectorState.sectors.length}',
-      );
-      if (!mounted) return;
-      setState(() {
-        controller.isLocationSelected =
-            controller.locationController.text.isNotEmpty;
-      });
-    });
-
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (_openedScannerOnce) return;
-      _openedScannerOnce = true;
-      await _openLiveScanner();
+    _policySignature = policy.signature;
+    _editorTrace = await DeveloperOperationTrace.start(
+      context: context,
+      title: '차량 등록',
+      initialMessage: '차량 등록 Side Dock을 준비합니다.',
+      useCommonUi: true,
+      developerModeMessage:
+          '개발자 모드 ON: 등록 흐름의 debugPrint 코드를 Status Dialog에서 복사할 수 있습니다.',
+      standardModeMessage: '개발자 모드 OFF: 등록 흐름을 콘솔에 기록합니다.',
+      showDialogImmediately: false,
+    );
+    if (!mounted) return;
+    setState(() {});
+    _log(
+      'input_editor=open area=${policy.area} bill=${policy.hasBill} sector=${policy.hasSector}',
+      progress: .08,
+    );
+    _log('overview=ready display=list_surface editMode=central', progress: .12);
+    final monthlyFlagFuture = _loadHasMonthlyParkingFlag();
+    final billState = context.read<BillState>();
+    final sectorState = context.read<SectorState>();
+    final preload = Stopwatch()..start();
+    final preloadTasks = <Future<void>>[
+      if (policy.hasBill) billState.loadFromBillCache(),
+      if (policy.hasSector) sectorState.waitUntilReady(),
+    ];
+    final preloadFuture = (preloadTasks.isEmpty
+            ? Future<void>.value()
+            : Future.wait<void>(preloadTasks).then<void>((_) {}))
+        .whenComplete(preload.stop);
+    await _openInitialScannerFirst();
+    if (!mounted) return;
+    await monthlyFlagFuture;
+    await preloadFuture;
+    _log(
+      'preload=complete elapsedMs=${preload.elapsedMilliseconds} billEnabled=${policy.hasBill} billGeneral=${billState.generalBills.length} billRegular=${billState.regularBills.length} sectorEnabled=${policy.hasSector} sectorCount=${sectorState.sectors.length}',
+      progress: .18,
+    );
+    if (!mounted) return;
+    setState(() {
+      controller.isLocationSelected =
+          controller.locationController.text.trim().isNotEmpty;
     });
   }
 
@@ -653,38 +212,599 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
   @override
   void dispose() {
-    _sheetScrollController.dispose();
+    _identityFrontDraftController.removeListener(_handleIdentityDraftChanged);
+    _identityMidDraftController.removeListener(_handleIdentityDraftChanged);
+    _identityBackDraftController.removeListener(_handleIdentityDraftChanged);
+    _identityFrontDraftController.dispose();
+    _identityMidDraftController.dispose();
+    _identityBackDraftController.dispose();
+    _memoDraftController.dispose();
     controller.dispose();
     super.dispose();
   }
 
-  Future<PlateStatusLookupResult> _fetchPlateStatus(
-      String plateNumber, String area) async {
-    final safeArea = _safeArea(area);
-    final docId = _plateDocId(plateNumber, safeArea);
+  void _log(String message, {double? progress}) {
+    final trace = _editorTrace;
+    if (trace != null) {
+      trace.log(message, progress: progress);
+      return;
+    }
+    debugPrint('[InputPlateEditor] $message');
+  }
 
-    debugPrint(
-      '[InputPlateScreen][PlateStatusLookup] start docId=$docId area=$safeArea',
+  String _safeArea(String area) {
+    final value = area.trim();
+    return value.isEmpty ? 'unknown' : value;
+  }
+
+  void _showFloatingMessage(String message) {
+    if (!mounted) return;
+    showSelectedSnackbar(context, message, useCommonUi: true);
+  }
+
+  String _rectDebug(Rect rect) {
+    return '${rect.left.toStringAsFixed(1)},${rect.top.toStringAsFixed(1)},${rect.width.toStringAsFixed(1)},${rect.height.toStringAsFixed(1)}';
+  }
+
+  Rect _fallbackOcrSourceRect() {
+    final size = MediaQuery.sizeOf(context);
+    return Rect.fromCenter(
+      center: size.center(Offset.zero),
+      width: 44,
+      height: 44,
     );
+  }
 
-    final result = await _plateRepo.lookupPlateStatus(
+  Rect? _globalRectForKey(GlobalKey key) {
+    final targetContext = key.currentContext;
+    if (targetContext == null) return null;
+    final renderObject = targetContext.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) return null;
+    final origin = renderObject.localToGlobal(Offset.zero);
+    final rect = origin & renderObject.size;
+    if (rect.isEmpty || !rect.isFinite) return null;
+    return rect;
+  }
+
+  Future<Rect?> _waitForTargetRect(GlobalKey key) async {
+    for (var attempt = 0; attempt < 4; attempt++) {
+      if (!mounted) return null;
+      await WidgetsBinding.instance.endOfFrame;
+      final rect = _globalRectForKey(key);
+      if (rect != null) return rect;
+      await Future<void>.delayed(Duration.zero);
+    }
+    return null;
+  }
+
+  Future<void> _waitForSideDockSettled() async {
+    if (!mounted) return;
+    final animation = ModalRoute.of(context)?.animation;
+    if (animation == null || animation.status == AnimationStatus.completed) {
+      await WidgetsBinding.instance.endOfFrame;
+      return;
+    }
+    if (animation.status == AnimationStatus.dismissed ||
+        animation.status == AnimationStatus.reverse) {
+      return;
+    }
+    final completer = Completer<void>();
+    late AnimationStatusListener listener;
+    listener = (status) {
+      if (completer.isCompleted) return;
+      if (status == AnimationStatus.completed ||
+          status == AnimationStatus.dismissed ||
+          status == AnimationStatus.reverse) {
+        completer.complete();
+      }
+    };
+    animation.addStatusListener(listener);
+    listener(animation.status);
+    try {
+      await completer.future;
+      if (mounted) await WidgetsBinding.instance.endOfFrame;
+    } finally {
+      animation.removeStatusListener(listener);
+    }
+  }
+
+  Future<void> _handleLiveOcrFollowup(
+    PlateIdentityAuxiliaryResult result, {
+    required String source,
+    bool allowScannerActive = false,
+  }) async {
+    if (!mounted) return;
+    if (!result.requiresManualCompletion) {
+      _log(
+        'ocr=followup_identity_skipped reason=identity_complete applied=${result.applied} focus=${result.focusTarget.name} source=$source',
+        progress: .34,
+      );
+      return;
+    }
+    _log(
+      'ocr=followup_identity_wait reason=manual_completion applied=${result.applied} focus=${result.focusTarget.name} suggestions=${result.middleSuggestions.join('|')} source=$source',
+      progress: .31,
+    );
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
+    await Future<void>.delayed(Duration.zero);
+    if (!mounted) return;
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
+    if (_activeDialog != null || _identityEditing) {
+      _log(
+        'ocr=followup_identity_skipped reason=editor_active dialog=${_activeDialog?.name ?? 'none'} identityEditing=$_identityEditing source=$source',
+      );
+      return;
+    }
+    _log(
+      'ocr=followup_identity_open reason=manual_completion focus=${result.focusTarget.name} applied=${result.applied} suggestions=${result.middleSuggestions.join('|')} source=$source',
+      progress: .34,
+    );
+    _enterIdentityEditor(
+      source: '${source}_manual_completion',
+      initialFocus: result.focusTarget,
+      middleSuggestions: result.middleSuggestions,
+      allowScannerActive: allowScannerActive,
+    );
+  }
+
+  Future<void> _openInitialScannerFirst() async {
+    if (!mounted || _openedScannerOnce || _scannerActive) return;
+    final sourceRect = widget.initialOcrSourceRect;
+    if (sourceRect == null || sourceRect.isEmpty || !sourceRect.isFinite) {
+      widget.sideDockPresentationController?.show();
+      _log('ocr=auto_skipped reason=missing_entry_source');
+      return;
+    }
+    _log(
+      'ocr=transition_open source=status_entry rect=${_rectDebug(sourceRect)}',
+      progress: .20,
+    );
+    PlateIdentityAuxiliaryResult? result;
+    try {
+      result = await _openLiveScanner(
+        automatic: true,
+        source: 'status_entry',
+        sourceRect: sourceRect,
+      );
+    } finally {
+      if (mounted) widget.sideDockPresentationController?.show();
+    }
+    if (!mounted) return;
+    if (result == null) {
+      _log('ocr=auto_closed result=none source=status_entry');
+      return;
+    }
+    _log(
+      'ocr=auto_closed applied=${result.applied} manualCompletion=${result.requiresManualCompletion} focus=${result.focusTarget.name}',
+      progress: .36,
+    );
+  }
+
+  Future<void> _openScannerFromRail(Rect sourceRect) async {
+    if (!mounted || _busy || _scannerActive) {
+      _log(
+        'ocr=rail_open_skipped busy=$_busy scannerActive=$_scannerActive',
+      );
+      return;
+    }
+    _log('ocr=transition_open source=rail_ocr rect=${_rectDebug(sourceRect)}');
+    final result = await _openLiveScanner(
+      source: 'rail_action',
+      sourceRect: sourceRect,
+    );
+    if (!mounted || result == null) return;
+    _log(
+      'ocr=rail_result applied=${result.applied} manualCompletion=${result.requiresManualCompletion} focus=${result.focusTarget.name}',
+    );
+  }
+
+  Future<void> _loadHasMonthlyParkingFlag() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final value = prefs.getBool(_prefsHasMonthlyKey) ?? false;
+      if (!mounted) return;
+      if (!_hasMonthlyLoaded || _hasMonthlyParking != value) {
+        setState(() {
+          _hasMonthlyParking = value;
+          _hasMonthlyLoaded = true;
+        });
+      }
+    } catch (error) {
+      _log('monthly_flag=load_failed error=$error');
+      if (!mounted) return;
+      if (!_hasMonthlyLoaded) {
+        setState(() {
+          _hasMonthlyParking = false;
+          _hasMonthlyLoaded = true;
+        });
+      }
+    }
+  }
+
+  void _syncIdentityDraftFromCommitted() {
+    _syncingIdentityDraft = true;
+    _identityFrontDraftController.text = controller.controllerFrontDigit.text;
+    _identityMidDraftController.text = controller.controllerMidDigit.text;
+    _identityBackDraftController.text = controller.controllerBackDigit.text;
+    _identityPending = false;
+    _syncingIdentityDraft = false;
+  }
+
+  void _handleIdentityDraftChanged() {
+    if (!mounted || _syncingIdentityDraft) return;
+    final pending = _identityFrontDraftController.text !=
+            controller.controllerFrontDigit.text ||
+        _identityMidDraftController.text != controller.controllerMidDigit.text ||
+        _identityBackDraftController.text != controller.controllerBackDigit.text;
+    if (_identityPending == pending) {
+      setState(() {});
+      return;
+    }
+    setState(() => _identityPending = pending);
+    _log(
+      'identity=draft_changed pending=$pending frontLength=${_identityFrontDraftController.text.trim().length} middleLength=${_identityMidDraftController.text.trim().length} backLength=${_identityBackDraftController.text.trim().length}',
+    );
+  }
+
+  Future<void> _openRegionPicker({String source = 'overview_region'}) async {
+    if (!mounted || _busy || _activeDialog != null || _identityEditing || _scannerActive) {
+      _log(
+        'identity_region=open_skipped source=$source busy=$_busy dialog=${_activeDialog?.name ?? 'none'} editing=$_identityEditing scanner=$_scannerActive',
+      );
+      return;
+    }
+    await HapticFeedback.selectionClick();
+    _log(
+      'identity_region=picker_open source=$source current=${controller.dropdownValue}',
+    );
+    await inputRegionPickerBottomSheet(
+      context: context,
+      selectedRegion: controller.dropdownValue,
+      regions: controller.regions,
+      useCommonUi: true,
+      onConfirm: (selected) {
+        if (!mounted) return;
+        final next = selected.trim();
+        if (next.isEmpty) return;
+        final previous = controller.dropdownValue;
+        if (previous == next) {
+          _log(
+            'identity_region=unchanged source=$source region=$next',
+          );
+          return;
+        }
+        setState(() => controller.dropdownValue = next);
+        HapticFeedback.selectionClick();
+        _log(
+          'identity_region=applied source=$source previous=$previous current=$next plate=${controller.buildPlateNumber()}',
+        );
+      },
+    );
+  }
+
+  void _syncControllerIdentityFocus(PlateIdentityFocusTarget target) {
+    switch (target) {
+      case PlateIdentityFocusTarget.front:
+        controller.setActiveController(controller.controllerFrontDigit);
+        break;
+      case PlateIdentityFocusTarget.middle:
+        controller.setActiveController(controller.controllerMidDigit);
+        break;
+      case PlateIdentityFocusTarget.back:
+        controller.setActiveController(controller.controllerBackDigit);
+        break;
+    }
+    _log('identity_focus=${target.name}');
+  }
+
+  PlateIdentityFocusTarget _resolveIdentityFocus({
+    PlateIdentityFocusTarget fallback = PlateIdentityFocusTarget.front,
+  }) {
+    return resolvePlateIdentityFocusTarget(
+      front: controller.controllerFrontDigit.text,
+      middle: controller.controllerMidDigit.text,
+      back: controller.controllerBackDigit.text,
+      requiredFrontLength: controller.isThreeDigit ? 3 : 2,
+      fallback: fallback,
+    );
+  }
+
+  bool get _identityDraftValid {
+    final front = _identityFrontDraftController.text.trim();
+    final middle = _identityMidDraftController.text.trim();
+    final back = _identityBackDraftController.text.trim();
+    return RegExp(r'^\d{2,3}$').hasMatch(front) &&
+        RegExp(r'^[가-힣]$').hasMatch(middle) &&
+        RegExp(r'^\d{4}$').hasMatch(back);
+  }
+
+  Future<void> _applyIdentityDraft() async {
+    if (_identityAutoApplying || !_identityEditing || !_identityDraftValid) {
+      _log(
+        'identity=auto_apply_skipped editing=$_identityEditing applying=$_identityAutoApplying valid=$_identityDraftValid',
+      );
+      return;
+    }
+    _identityAutoApplying = true;
+    final front = _identityFrontDraftController.text.trim();
+    final mid = _identityMidDraftController.text.trim();
+    final back = _identityBackDraftController.text.trim();
+    controller.suppressOcrEditCount(true);
+    setState(() {
+      controller.isThreeDigit = front.length == 3;
+      controller.controllerFrontDigit.text = front;
+      controller.controllerMidDigit.text = mid;
+      controller.controllerBackDigit.text = back;
+      _identityPending = false;
+      _identityEditing = false;
+      _identityMiddleSuggestions = const <String>[];
+      _monthlyLookupGeneration++;
+      _monthlyDocExists = false;
+      controller.resetStatusLookupToIdle();
+    });
+    controller.suppressOcrEditCount(false);
+    _identityAutoApplying = false;
+    _log(
+      'identity=auto_applied region=${controller.dropdownValue} plate=${controller.buildPlateNumber()}',
+    );
+    _log('identity_editor=closed reason=auto_apply');
+    _log('identity_editor=exclusive_mode rail=restored overview=restored footer=restored');
+    unawaited(_lookupGeneralStatusForCurrentPlate());
+  }
+
+  void _enterIdentityEditor({
+    required String source,
+    PlateIdentityFocusTarget? initialFocus,
+    List<String> middleSuggestions = const <String>[],
+    bool allowScannerActive = false,
+  }) {
+    if (!mounted ||
+        _busy ||
+        _activeDialog != null ||
+        (_scannerActive && !allowScannerActive)) {
+      _log(
+        'identity_editor=open_skipped source=$source busy=$_busy dialog=${_activeDialog?.name ?? 'none'} scanner=$_scannerActive',
+      );
+      return;
+    }
+    if (!_identityPending) _syncIdentityDraftFromCommitted();
+    final focus = initialFocus ??
+        resolvePlateIdentityFocusTarget(
+          front: _identityFrontDraftController.text,
+          middle: _identityMidDraftController.text,
+          back: _identityBackDraftController.text,
+          requiredFrontLength:
+              _identityFrontDraftController.text.trim().length == 2 ? 2 : 3,
+        );
+    setState(() {
+      _identityEditing = true;
+      _identityAutoApplying = false;
+      _identityInitialFocus = focus;
+      _identityMiddleSuggestions = List<String>.from(
+        middleSuggestions,
+        growable: false,
+      );
+    });
+    _syncControllerIdentityFocus(focus);
+    _log('identity_editor=exclusive_mode rail=collapsed overview=hidden footer=hidden');
+    _log(
+      'identity_editor=open source=$source focus=${focus.name} suggestions=${middleSuggestions.join('|')}',
+    );
+  }
+
+  void _exitIdentityEditor({required String reason}) {
+    if (!_identityEditing || _identityAutoApplying) return;
+    _syncIdentityDraftFromCommitted();
+    setState(() {
+      _identityEditing = false;
+      _identityMiddleSuggestions = const <String>[];
+    });
+    HapticFeedback.selectionClick();
+    _log('identity_editor=closed reason=$reason action=discard');
+    _log('identity_editor=exclusive_mode rail=restored overview=restored footer=restored');
+  }
+
+  void _syncMemoDraftFromCommitted() {
+    if (_memoPending) return;
+    _memoDraftController.text = controller.customStatusController.text;
+  }
+
+  PlateEditorDialogSize _dialogSize(PlateEditorWorkspace workspace) {
+    switch (workspace) {
+      case PlateEditorWorkspace.parking:
+        return PlateEditorDialogSize.wide;
+      case PlateEditorWorkspace.camera:
+        return PlateEditorDialogSize.immersive;
+      case PlateEditorWorkspace.vehicleIdentity:
+        return PlateEditorDialogSize.standard;
+      case PlateEditorWorkspace.sector:
+      case PlateEditorWorkspace.variableBilling:
+      case PlateEditorWorkspace.regularBilling:
+      case PlateEditorWorkspace.memo:
+        return PlateEditorDialogSize.standard;
+      case PlateEditorWorkspace.overview:
+        return PlateEditorDialogSize.compact;
+    }
+  }
+
+  String _dialogLabel(PlateEditorWorkspace workspace) {
+    switch (workspace) {
+      case PlateEditorWorkspace.vehicleIdentity:
+        return '차량 정보';
+      case PlateEditorWorkspace.parking:
+        return '주차 위치';
+      case PlateEditorWorkspace.camera:
+        return '차량 촬영';
+      case PlateEditorWorkspace.sector:
+        return '방문 구역';
+      case PlateEditorWorkspace.variableBilling:
+        return '변동 정산';
+      case PlateEditorWorkspace.regularBilling:
+        return '정기 정산';
+      case PlateEditorWorkspace.memo:
+        return '상태 메모';
+      case PlateEditorWorkspace.overview:
+        return '차량 등록 정보';
+    }
+  }
+
+  Future<void> _openEditorDialog(
+    PlateEditorWorkspace workspace,
+    PlateEditorPolicy policy, {
+    required String source,
+    List<dynamic> previewImages = const <dynamic>[],
+    int previewIndex = 0,
+  }) async {
+    if (_busy || _activeDialog != null || _identityEditing) return;
+    if (workspace == PlateEditorWorkspace.overview || !policy.supports(workspace)) {
+      return;
+    }
+    if (workspace == PlateEditorWorkspace.vehicleIdentity) {
+      _enterIdentityEditor(source: source);
+      return;
+    }
+    if (workspace == PlateEditorWorkspace.regularBilling) {
+      await _activateRegularBilling(source: source);
+      return;
+    }
+    if (workspace == PlateEditorWorkspace.variableBilling &&
+        controller.selectedBillType != '변동') {
+      await _changeBillType('변동');
+      if (!mounted) return;
+    }
+    if (workspace == PlateEditorWorkspace.memo && !_memoPending) {
+      _syncMemoDraftFromCommitted();
+    }
+    if (workspace == PlateEditorWorkspace.camera) {
+      _cameraSessionKey++;
+      _cameraStartInPreview = previewImages.isNotEmpty;
+      _cameraInitialPreviewImages = List<dynamic>.from(previewImages);
+      _cameraInitialPreviewIndex = previewImages.isEmpty
+          ? 0
+          : previewIndex.clamp(0, previewImages.length - 1).toInt();
+    }
+    setState(() => _activeDialog = workspace);
+    _log('dialog=${workspace.name}_open source=$source');
+    try {
+      await showPlateEditorDialog<void>(
+        context: context,
+        barrierLabel: _dialogLabel(workspace),
+        size: _dialogSize(workspace),
+        barrierDismissible: false,
+        builder: (dialogContext) => _buildDialogContent(
+          dialogContext,
+          workspace,
+        ),
+      );
+    } finally {
+      if (mounted && _activeDialog == workspace) {
+        setState(() => _activeDialog = null);
+      }
+      _log('dialog=${workspace.name}_close');
+    }
+  }
+
+  void _syncPolicy(PlateEditorPolicy policy) {
+    if (_policySignature == policy.signature) return;
+    final previous = _policySignature;
+    _policySignature = policy.signature;
+    if (!policy.hasSector) controller.clearSelectedSector();
+    _log('capabilities=changed previous=$previous current=${policy.signature}');
+    final active = _activeDialog;
+    if (active != null && !policy.supports(active)) {
+      _log('dialog=${active.name}_capability_invalidated');
+    }
+  }
+
+  void _applyParking(String location) {
+    setState(() {
+      controller.locationController.text = location.trim();
+      controller.isLocationSelected = location.trim().isNotEmpty;
+    });
+    _log('parking_slot=auto_applied location=${location.trim()}');
+    _log('registration_action=state label=입차 완료 parking=true');
+  }
+
+  void _clearParkingLocation() {
+    final previous = controller.locationController.text.trim();
+    final previousPriorities = controller.selectedParkingPriorities.join('|');
+    setState(() {
+      controller.clearParkingSelection();
+    });
+    HapticFeedback.selectionClick();
+    _log(
+      'parking=cleared previousLocation=$previous previousPriorities=$previousPriorities',
+    );
+    _log('registration_action=state label=입차 요청 parking=false');
+  }
+
+  void _clearSectorSelection() {
+    final previousId = controller.selectedSectorId?.trim() ?? '';
+    final previousName = controller.selectedSectorName?.trim() ?? '';
+    setState(controller.clearSelectedSector);
+    HapticFeedback.selectionClick();
+    _log(
+      'sector=cleared previousSectorId=$previousId previousSectorName=$previousName',
+    );
+  }
+
+  Future<void> _clearBillingSelection(String type) async {
+    final previousType = controller.selectedBillType;
+    final previousValue = controller.selectedBill?.trim().isNotEmpty == true
+        ? controller.selectedBill!.trim()
+        : controller.countTypeController.text.trim();
+    setState(() {
+      controller.clearBillingSelection(resetType: false);
+      controller.selectedBillType = type;
+      _statusLookupGeneration++;
+      _monthlyLookupGeneration++;
+      _monthlyDocExists = false;
+      controller.resetStatusLookupToIdle();
+    });
+    HapticFeedback.selectionClick();
+    _log(
+      'billing=cleared targetType=$type previousType=$previousType previousValue=$previousValue',
+    );
+  }
+
+  Future<void> _applySector(SectorModel sector) async {
+    controller.setSelectedSector(sector);
+    if (!mounted) return;
+    setState(() {});
+    HapticFeedback.selectionClick();
+    _log('sector=selected id=${sector.id} name=${sector.name}');
+  }
+
+  void _applyMemo(String value) {
+    setState(() {
+      controller.customStatusController.text = value;
+      controller.markStatusDraftEdited();
+      _memoPending = false;
+    });
+    HapticFeedback.selectionClick();
+    _log('memo=applied length=${value.trim().length}');
+  }
+
+  Future<PlateStatusLookupResult> _fetchPlateStatus(
+    String plateNumber,
+    String area,
+  ) {
+    return _plateRepo.lookupPlateStatus(
       plateNumber: plateNumber,
-      area: safeArea,
+      area: _safeArea(area),
       scope: PlateStatusScope.history,
     );
-    debugPrint(
-      '[InputPlateScreen][PlateStatusLookup] result=${result.state.name} '
-      'sourcePath=${result.sourcePath ?? ''}',
-    );
-    return result;
   }
 
   Future<_MonthlyFetchResult> _fetchMonthlyPlateStatus(
-      String plateNumber, String area) async {
-    final safeArea = _safeArea(area);
+    String plateNumber,
+    String area,
+  ) async {
     final result = await _plateRepo.lookupPlateStatus(
       plateNumber: plateNumber,
-      area: safeArea,
+      area: _safeArea(area),
       scope: PlateStatusScope.monthly,
     );
     if (result.isFound) {
@@ -709,14 +829,96 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     );
   }
 
+  Future<void> _lookupGeneralStatusForCurrentPlate({
+    bool preserveBillingType = false,
+  }) async {
+    if (!controller.isInputValid()) {
+      final generation = ++_statusLookupGeneration;
+      if (!mounted) return;
+      setState(() {
+        controller.resetStatusLookupToIdle();
+        _monthlyLookupGeneration++;
+        _monthlyDocExists = false;
+      });
+      _log('status_lookup=reset generation=$generation reason=incomplete_plate');
+      return;
+    }
+
+    final plateNumber = controller.buildPlateNumber();
+    final area = context.read<AreaState>().currentArea;
+    final lookupGeneration = ++_statusLookupGeneration;
+    setState(() {
+      controller.beginStatusLookup();
+      _monthlyLookupGeneration++;
+      _monthlyDocExists = false;
+    });
+    _log(
+      'status_lookup=start plate=$plateNumber area=$area generation=$lookupGeneration',
+    );
+
+    final lookup = await _fetchPlateStatus(plateNumber, area);
+    if (!mounted || lookupGeneration != _statusLookupGeneration) return;
+    if (!controller.isInputValid() || controller.buildPlateNumber() != plateNumber) {
+      return;
+    }
+
+    if (lookup.isFailed) {
+      setState(controller.applyStatusLookupFailed);
+      _log('status_lookup=failed plate=$plateNumber area=$area error=${lookup.error}');
+      _showFloatingMessage('기존 상태 정보를 확인하지 못했습니다. 저장 시 기존 상태를 보호합니다.');
+      return;
+    }
+    if (lookup.isInactive) {
+      setState(controller.applyStatusInactive);
+      _log('status_lookup=inactive plate=$plateNumber area=$area');
+      _showFloatingMessage('상태 정보의 유효기간을 확인할 수 없습니다.');
+      return;
+    }
+    if (lookup.isNotFound) {
+      setState(controller.applyStatusNotFound);
+      _syncMemoDraftFromCommitted();
+      _log('status_lookup=not_found plate=$plateNumber area=$area');
+      if (controller.selectedBillType == '정기') {
+        await _handleMonthlySelectedFetchAndApply();
+      }
+      return;
+    }
+
+    final data = lookup.record!;
+    final fetchedStatus = data.customStatus;
+    final fetchedCountType = data.countType;
+    final shouldResolveMonthly = !preserveBillingType &&
+        (controller.selectedBillType == '정기' ||
+            (fetchedCountType != null && fetchedCountType.isNotEmpty));
+    setState(() {
+      controller.applyFetchedStatus(
+        customStatus: fetchedStatus,
+        sourcePath: lookup.sourcePath!,
+      );
+      if (!preserveBillingType &&
+          fetchedCountType != null &&
+          fetchedCountType.isNotEmpty) {
+        controller.countTypeController.text = fetchedCountType;
+        controller.selectedBillType = '정기';
+        controller.selectedBill = fetchedCountType;
+      }
+      _monthlyDocExists = false;
+    });
+    _syncMemoDraftFromCommitted();
+    _log(
+      'status_lookup=found plate=$plateNumber area=$area memoLength=${(fetchedStatus ?? '').trim().length} countType=${fetchedCountType ?? ''}',
+    );
+    if (shouldResolveMonthly) {
+      await _handleMonthlySelectedFetchAndApply();
+    }
+  }
+
   Future<void> _handleMonthlySelectedFetchAndApply() async {
     if (!controller.isInputValid()) {
       if (!mounted) return;
       setState(() {
         _monthlyLookupGeneration++;
-        _monthlyLookupInProgress = false;
         _monthlyDocExists = false;
-        _resolvedMonthlyDocId = null;
       });
       await StatusDialog.showFailure(
         context,
@@ -729,67 +931,33 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     final plateNumber = controller.buildPlateNumber();
     final area = _safeArea(context.read<AreaState>().currentArea);
     final lookupGeneration = ++_monthlyLookupGeneration;
-    DeveloperOperationTrace? trace;
-
     setState(() {
       controller.beginStatusLookup();
-      _monthlyLookupInProgress = true;
       _monthlyDocExists = false;
-      _resolvedMonthlyDocId = null;
     });
+    _log(
+      'monthly_lookup=start plate=$plateNumber area=$area generation=$lookupGeneration',
+    );
 
     try {
-      trace = await DeveloperOperationTrace.start(
-        context: context,
-        title: '정기 상태 정보 조회',
-        initialMessage: '정기 차량의 상태 정보와 유효기간을 확인하고 있습니다.',
-        useCommonUi: true,
-        developerModeMessage:
-            '개발자 모드 ON: 정기 상태 조회 로그를 복사할 수 있습니다.',
-        standardModeMessage:
-            '개발자 모드 OFF: 정기 상태 조회 로그를 콘솔에 기록합니다.',
-      );
-      trace.log(
-        'plate=$plateNumber area=$area generation=$lookupGeneration '
-        'billType=${controller.selectedBillType}',
-        progress: .24,
-      );
-
       final result = await _fetchMonthlyPlateStatus(plateNumber, area);
       if (!mounted) return;
-
-      final currentPlate = controller.isInputValid()
-          ? controller.buildPlateNumber()
-          : '';
+      final currentPlate =
+          controller.isInputValid() ? controller.buildPlateNumber() : '';
       final currentArea = _safeArea(context.read<AreaState>().currentArea);
       final stale = lookupGeneration != _monthlyLookupGeneration ||
           currentPlate != plateNumber ||
           currentArea != area ||
           controller.selectedBillType != '정기';
       if (stale) {
-        debugPrint(
-          '[InputPlateScreen][MonthlyLookup] discarded '
-          'requestedPlate=$plateNumber currentPlate=$currentPlate '
-          'requestedArea=$area currentArea=$currentArea '
-          'requestedGeneration=$lookupGeneration '
-          'currentGeneration=$_monthlyLookupGeneration '
-          'billType=${controller.selectedBillType}',
+        _log(
+          'monthly_lookup=discarded requestedPlate=$plateNumber currentPlate=$currentPlate requestedArea=$area currentArea=$currentArea requestedGeneration=$lookupGeneration currentGeneration=$_monthlyLookupGeneration',
         );
-        trace.log(
-          'discarded=true requestedPlate=$plateNumber currentPlate=$currentPlate '
-          'requestedArea=$area currentArea=$currentArea '
-          'requestedGeneration=$lookupGeneration '
-          'currentGeneration=$_monthlyLookupGeneration',
-          progress: .88,
-        );
-        await trace.succeed('이전 정기 차량 조회 결과를 안전하게 폐기했습니다.');
         return;
       }
-
       if (!result.isSuccess) {
         setState(() {
           _monthlyDocExists = false;
-          _resolvedMonthlyDocId = null;
           if (result.failure == _MonthlyFetchFailureType.readError) {
             controller.applyStatusLookupFailed();
           } else if (result.failure == _MonthlyFetchFailureType.inactive) {
@@ -798,29 +966,23 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
             controller.applyStatusNotFound();
           }
         });
-
+        _syncMemoDraftFromCommitted();
+        _log(
+          'monthly_lookup=failed type=${result.failure?.name ?? 'unknown'} error=${result.error ?? ''}',
+        );
         if (result.failure == _MonthlyFetchFailureType.inactive) {
-          trace.log('result=inactive apply=false', progress: .76);
-          await trace.fail('정기 주차 기간이 만료되어 상태 정보를 적용하지 않았습니다.');
           await StatusDialog.showFailure(
             context,
             title: '정기 주차 기간이 만료되었습니다.',
             useCommonUi: true,
           );
         } else if (result.failure == _MonthlyFetchFailureType.notFound) {
-          trace.log('result=notFound apply=false', progress: .76);
-          await trace.fail('정기 주차 문서를 찾지 못했습니다.');
           await StatusDialog.showFailure(
             context,
             title: StatusDialog.monthlyDocNotFound,
             useCommonUi: true,
           );
         } else {
-          trace.log('result=readError apply=false', progress: .76);
-          await trace.fail(
-            '정기 주차 정보를 불러오지 못했습니다.',
-            error: result.error,
-          );
           _showFloatingMessage('정기 주차 정보를 불러오지 못했습니다.');
         }
         return;
@@ -828,393 +990,219 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
       final data = result.data!;
       final fetchedStatus = data.customStatus;
-        final fetchedCountType = data.countType;
+      final fetchedCountType = data.countType;
       final sourcePath = result.sourcePath!;
-
       setState(() {
         _monthlyDocExists = true;
-        _resolvedMonthlyDocId = _plateDocId(plateNumber, area);
         controller.applyFetchedStatus(
           customStatus: fetchedStatus,
-            sourcePath: sourcePath,
+          sourcePath: sourcePath,
         );
         if (fetchedCountType != null && fetchedCountType.isNotEmpty) {
           controller.countTypeController.text = fetchedCountType;
           controller.selectedBill = fetchedCountType;
         }
       });
-
-      trace.log(
-        'result=found sourcePath=$sourcePath '
-        'memoLength=${(fetchedStatus ?? '').trim().length} apply=true',
-        progress: .86,
+      _syncMemoDraftFromCommitted();
+      _log(
+        'monthly_lookup=found sourcePath=$sourcePath memoLength=${(fetchedStatus ?? '').trim().length} countType=${fetchedCountType ?? ''}',
       );
-      await trace.succeed('정기 차량 상태 정보를 안전하게 적용했습니다.');
-
-      if (!_sheetOpen) {
-        await _animateSheet(
-          open: true,
-          pageIndex: _dockPageBill,
-          source: 'monthly_data_loaded',
-          showDeveloperStatus: false,
-        );
-      }
     } catch (error, stackTrace) {
-      debugPrint('[InputPlateScreen][MonthlyLookup] error=$error');
-      if (trace != null) {
-        await trace.fail(
-          '정기 상태 정보 조회에 실패했습니다.',
-          error: error,
-          stackTrace: stackTrace,
-        );
-      }
-      if (mounted) {
-        _showFloatingMessage('정기 주차 정보를 불러오지 못했습니다.');
-      }
-    } finally {
-      if (mounted && lookupGeneration == _monthlyLookupGeneration) {
-        setState(() => _monthlyLookupInProgress = false);
-      }
+      _log('monthly_lookup=exception error=$error stack=$stackTrace');
+      if (mounted) _showFloatingMessage('정기 주차 정보를 불러오지 못했습니다.');
     }
   }
 
-  Future<void> _applyMonthlyMemoAndStatusOnly() async {
-    if (_monthlyApplying) return;
-
-    if (!controller.isInputValid()) {
-      await StatusDialog.showFailure(
-        context,
-        title: StatusDialog.invalidPlateInput,
-        useCommonUi: true,
-      );
-      return;
-    }
-
-    if (!_monthlyDocExists ||
-        (_resolvedMonthlyDocId == null ||
-            _resolvedMonthlyDocId!.trim().isEmpty)) {
-      return;
-    }
-
-    final plateNumber = controller.buildPlateNumber();
-    final area = _safeArea(context.read<AreaState>().currentArea);
-    final currentDocId = _plateDocId(plateNumber, area);
-    if (_resolvedMonthlyDocId != currentDocId ||
-        controller.selectedBillType != '정기') {
-      debugPrint(
-        '[InputPlateScreen][MonthlyApply] blocked '
-        'resolvedDocId=${_resolvedMonthlyDocId ?? ''} currentDocId=$currentDocId '
-        'billType=${controller.selectedBillType}',
-      );
-      setState(() {
-        _monthlyLookupGeneration++;
-        _monthlyLookupInProgress = false;
-        _monthlyDocExists = false;
-        _resolvedMonthlyDocId = null;
-      });
-      _showFloatingMessage('차량 정보가 변경되어 정기 상태를 다시 확인해야 합니다.');
-      return;
-    }
-
-    final customStatus = controller.customStatusController.text.trim();
-
-    setState(() => _monthlyApplying = true);
-    DeveloperOperationTrace? trace;
-
-    try {
-      trace = await DeveloperOperationTrace.start(
-        context: context,
-        title: '정기 상태 메모 반영',
-        initialMessage: '정기 차량의 상태 메모를 반영하고 있습니다.',
-        useCommonUi: true,
-        developerModeMessage:
-            '개발자 모드 ON: 상태 메모 저장 로그를 복사할 수 있습니다.',
-        standardModeMessage:
-            '개발자 모드 OFF: 상태 메모 저장 로그를 콘솔에 기록합니다.',
-      );
-      trace.log(
-        'plate=$plateNumber area=$area scope=monthly '
-        'memoLength=${customStatus.length}',
-        progress: .34,
-      );
-      final actorName = context.read<UserState>().name.trim();
-      await _plateRepo.setMonthlyMemoAndStatusOnly(
-        plateNumber: plateNumber,
-        area: area,
-        createdBy: actorName.isEmpty ? 'unknown' : actorName,
-        customStatus: customStatus,
-        skipIfDocMissing: false,
-      );
-      if (mounted) {
-        setState(controller.markStatusDraftPersisted);
-      }
-      await trace.succeed('정기 상태 메모를 반영했습니다.');
-    } on MonthlyPlateStatusWriteException catch (e, stackTrace) {
-      if (trace != null) {
-        await trace.fail(
-          '정기 상태 메모 반영에 실패했습니다.',
-          error: e,
-          stackTrace: stackTrace,
-        );
-      }
-      debugPrint('[_applyMonthlyMemoAndStatusOnly] repository error: $e');
-      _showFloatingMessage('정기 메모 반영에 실패했습니다.');
-    } catch (e, stackTrace) {
-      if (trace != null) {
-        await trace.fail(
-          '정기 상태 메모 반영에 실패했습니다.',
-          error: e,
-          stackTrace: stackTrace,
-        );
-      }
-      debugPrint('[_applyMonthlyMemoAndStatusOnly] error: $e');
-      _showFloatingMessage('정기 메모 반영에 실패했습니다.');
-    } finally {
-      if (mounted) setState(() => _monthlyApplying = false);
+  Future<void> _changeBillType(String type) async {
+    if (type == '정기' && _hasMonthlyLoaded && !_hasMonthlyParking) return;
+    setState(() {
+      controller.selectedBillType = type;
+      controller.selectedBill = null;
+      controller.selectedBasicStandard = 0;
+      controller.selectedBasicAmount = 0;
+      controller.selectedAddStandard = 0;
+      controller.selectedAddAmount = 0;
+      if (type != '정기') controller.countTypeController.clear();
+      _statusLookupGeneration++;
+      _monthlyLookupGeneration++;
+      _monthlyDocExists = false;
+      controller.resetStatusLookupToIdle();
+    });
+    _log('billing=type_changed type=$type');
+    if (type == '정기') {
+      await _handleMonthlySelectedFetchAndApply();
+    } else {
+      await _lookupGeneralStatusForCurrentPlate(preserveBillingType: true);
     }
   }
 
-  Widget _buildMonthlyApplyButton() {
-    final cs = Theme.of(context).colorScheme;
-
-    if (controller.selectedBillType != '정기') {
-      return const SizedBox.shrink();
-    }
-
-    final enabled = !_monthlyApplying &&
-        !_monthlyLookupInProgress &&
+  Future<bool> _activateRegularBilling({required String source}) async {
+    _log('billing=regular_selected source=$source');
+    await _changeBillType('정기');
+    if (!mounted) return false;
+    final applied = controller.selectedBillType == '정기' &&
         _monthlyDocExists &&
-        (_resolvedMonthlyDocId != null);
-    final reduceMotion =
-        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    final duration =
-        reduceMotion ? Duration.zero : const Duration(milliseconds: 220);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const SizedBox(height: 10),
-        SizedBox(
-          height: 50,
-          child: ElevatedButton(
-            onPressed: enabled ? _applyMonthlyMemoAndStatusOnly : null,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: enabled ? cs.primary : cs.surfaceContainerLow,
-              foregroundColor: enabled ? cs.onPrimary : cs.onSurfaceVariant,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
-              side: BorderSide(
-                color: enabled
-                    ? cs.primary.withOpacity(0.25)
-                    : cs.outlineVariant.withOpacity(0.85),
-              ),
-            ),
-            child: AnimatedSwitcher(
-              duration: duration,
-              switchInCurve: Curves.easeOutCubic,
-              switchOutCurve: Curves.easeInCubic,
-              child: (_monthlyApplying || _monthlyLookupInProgress)
-                  ? SizedBox(
-                      key: const ValueKey<String>('monthly-status-loading'),
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          enabled ? cs.onPrimary : cs.onSurfaceVariant,
-                        ),
-                      ),
-                    )
-                  : const Text(
-                      '반영',
-                      key: ValueKey<String>('monthly-status-ready'),
-                      style: TextStyle(fontWeight: FontWeight.w900),
-                    ),
-            ),
-          ),
-        ),
-        if (_monthlyLookupInProgress) ...[
-          const SizedBox(height: 8),
-          Text(
-            '정기 주차 상태와 유효기간을 확인하고 있습니다.',
-            style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
-          ),
-        ] else if (!_monthlyDocExists) ...[
-          const SizedBox(height: 8),
-          Text(
-            '활성 정기 주차 문서를 불러온 경우에만 반영할 수 있습니다.',
-            style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
-          ),
-        ],
-      ],
+        _hasRegularBillingSelection;
+    _log(
+      'billing=regular_auto_apply_result source=$source applied=$applied value=${_regularBillingSummary()}',
     );
-  }
-
-  static const List<String> _allowedKoreanMids = [
-    '가',
-    '나',
-    '다',
-    '라',
-    '마',
-    '거',
-    '너',
-    '더',
-    '러',
-    '머',
-    '버',
-    '서',
-    '어',
-    '저',
-    '고',
-    '노',
-    '도',
-    '로',
-    '모',
-    '보',
-    '소',
-    '오',
-    '조',
-    '구',
-    '누',
-    '두',
-    '루',
-    '무',
-    '부',
-    '수',
-    '우',
-    '주',
-    '아',
-    '바',
-    '사',
-    '자',
-    '하',
-    '허',
-    '호',
-    '배'
-  ];
-
-  static const Map<String, String> _charMap = {
-    'O': '0',
-    'o': '0',
-    'I': '1',
-    'l': '1',
-    'B': '8',
-    'S': '5',
-  };
-
-  static const Map<String, String> _midNormalize = {
-    '리': '러',
-    '이': '어',
-    '지': '저',
-    '히': '허',
-    '기': '거',
-    '니': '너',
-    '디': '더',
-    '미': '머',
-    '비': '버',
-    '시': '서',
-  };
-
-  String _normalize(String s) {
-    var t = s.trim().replaceAll(RegExp(r'\s+'), '');
-    _charMap.forEach((k, v) => t = t.replaceAll(k, v));
-    return t;
-  }
-
-  RegExp get _rxStrict {
-    final allowed = _allowedKoreanMids.join();
-    return RegExp(r'^(\d{2,3})([' + allowed + r'])(\d{4})$');
-  }
-
-  final RegExp _rxAnyMid = RegExp(r'^(\d{2,3})(.)(\d{4})$');
-  final RegExp _rxOnly7 = RegExp(r'^\d{7}$');
-  final RegExp _rxOnly6 = RegExp(r'^\d{6}$');
-
-  void _applyPlateWithFallback(String plate, {String? sessionId}) {
-    final raw = _normalize(plate);
-
-    final s = _rxStrict.firstMatch(raw);
-    if (s != null) {
-      final front = s.group(1)!;
-      var mid = s.group(2)!;
-      final back = s.group(3)!;
-
-      mid = _midNormalize[mid] ?? mid;
-      _applyToFields(front: front, mid: mid, back: back, sessionId: sessionId);
-      return;
+    if (applied) {
+      HapticFeedback.mediumImpact();
     }
+    return applied;
+  }
 
-    final a = _rxAnyMid.firstMatch(raw);
-    if (a != null) {
-      final front = a.group(1)!;
-      var mid = a.group(2)!;
-      final back = a.group(3)!;
-
-      if (RegExp(r'^[가-힣]$').hasMatch(mid)) {
-        final fixed = _midNormalize[mid];
-        if (fixed != null) mid = fixed;
+  Future<void> _selectGeneralBill(String value) async {
+    final billState = context.read<BillState>();
+    BillModel? selected;
+    for (final bill in billState.generalBills) {
+      if (bill.countType.trim() == value.trim()) {
+        selected = bill;
+        break;
       }
-
-      _applyToFields(front: front, mid: mid, back: back, sessionId: sessionId);
-      return;
     }
+    setState(() {
+      controller.selectedBill = value.trim();
+      if (selected != null) {
+        controller.selectedBasicStandard = selected.basicStandard ?? 0;
+        controller.selectedBasicAmount = selected.basicAmount ?? 0;
+        controller.selectedAddStandard = selected.addStandard ?? 0;
+        controller.selectedAddAmount = selected.addAmount ?? 0;
+      }
+    });
+    _log(
+      'billing=value_selected type=${controller.selectedBillType} value=${value.trim()}',
+    );
+    await _lookupGeneralStatusForCurrentPlate(preserveBillingType: true);
+  }
 
-    if (_rxOnly7.hasMatch(raw)) {
-      final front = raw.substring(0, 3);
-      final back = raw.substring(3, 7);
-      _applyToFields(
-        front: front,
-        mid: '',
-        back: back,
-        commonMid: true,
-        sessionId: sessionId,
-      );
-      return;
+  String _variableBillingSummary() {
+    if (!_hasVariableBillingSelection) return '';
+    final value = controller.selectedBill!.trim();
+    return '$value · ${controller.selectedBasicStandard}분 · ${controller.selectedBasicAmount}원';
+  }
+
+  String _regularBillingSummary() {
+    if (!_hasRegularBillingSelection) return '';
+    final value = controller.selectedBill?.trim().isNotEmpty == true
+        ? controller.selectedBill!.trim()
+        : controller.countTypeController.text.trim();
+    return value;
+  }
+
+  List<PlateBillingDetailRow> _variableBillingDetailRows() {
+    if (!_hasVariableBillingSelection) {
+      return const <PlateBillingDetailRow>[];
     }
+    final value = controller.selectedBill!.trim();
+    return <PlateBillingDetailRow>[
+      const PlateBillingDetailRow(label: '정산 유형', value: '변동'),
+      PlateBillingDetailRow(label: '적용 기준', value: value),
+      PlateBillingDetailRow(
+        section: '기본',
+        label: '시간',
+        value: '${controller.selectedBasicStandard}분',
+      ),
+      PlateBillingDetailRow(
+        label: '금액',
+        value: '${controller.selectedBasicAmount}원',
+      ),
+      PlateBillingDetailRow(
+        section: '추가',
+        label: '시간',
+        value: '${controller.selectedAddStandard}분',
+      ),
+      PlateBillingDetailRow(
+        label: '금액',
+        value: '${controller.selectedAddAmount}원',
+      ),
+    ];
+  }
 
-    if (_rxOnly6.hasMatch(raw)) {
-      final front = raw.substring(0, 2);
-      final back = raw.substring(2, 6);
-      _applyToFields(
-        front: front,
-        mid: '',
-        back: back,
-        commonMid: true,
-        sessionId: sessionId,
-      );
-      return;
+  String? get _statusError {
+    switch (controller.statusLookupState) {
+      case PlateStatusLookupState.failed:
+        return '기존 상태 정보를 확인하지 못했습니다.';
+      case PlateStatusLookupState.inactive:
+        return '상태 정보의 유효기간을 다시 확인해야 합니다.';
+      case PlateStatusLookupState.idle:
+      case PlateStatusLookupState.loading:
+      case PlateStatusLookupState.found:
+      case PlateStatusLookupState.notFound:
+        return null;
     }
   }
 
-  void _applyToFields({
-    required String front,
-    required String mid,
-    required String back,
-    bool commonMid = false,
-    String? sessionId,
-  }) {
+  Future<void> _retryStatusLookup() async {
+    if (controller.selectedBillType == '정기') {
+      await _handleMonthlySelectedFetchAndApply();
+    } else {
+      await _lookupGeneralStatusForCurrentPlate();
+    }
+  }
+
+  String _normalizeOcr(String value) {
+    var result = value.trim().replaceAll(RegExp(r'\s+'), '');
+    const replacements = <String, String>{
+      'O': '0',
+      'o': '0',
+      'I': '1',
+      'l': '1',
+      'B': '8',
+      'S': '5',
+    };
+    for (final entry in replacements.entries) {
+      result = result.replaceAll(entry.key, entry.value);
+    }
+    return result;
+  }
+
+  String _normalizeMiddle(String value) {
+    const replacements = <String, String>{
+      '리': '러',
+      '이': '어',
+      '지': '저',
+      '히': '허',
+      '기': '거',
+      '니': '너',
+      '디': '더',
+      '미': '머',
+      '비': '버',
+      '시': '서',
+    };
+    return replacements[value] ?? value;
+  }
+
+  bool _applyOcrPlate(String plate, {String? sessionId}) {
+    final raw = _normalizeOcr(plate).replaceAll('-', '');
+    final match = RegExp(r'^(\d{2,3})(.)(\d{4})$').firstMatch(raw);
+    String front = '';
+    String mid = '';
+    String back = '';
+    if (match != null) {
+      front = match.group(1)!;
+      mid = _normalizeMiddle(match.group(2)!);
+      back = match.group(3)!;
+    } else if (RegExp(r'^\d{7}$').hasMatch(raw)) {
+      front = raw.substring(0, 3);
+      back = raw.substring(3);
+    } else if (RegExp(r'^\d{6}$').hasMatch(raw)) {
+      front = raw.substring(0, 2);
+      back = raw.substring(2);
+    } else {
+      _log('ocr=apply_rejected raw=$raw');
+      return false;
+    }
+
     controller.suppressOcrEditCount(true);
     setState(() {
-      _statusLookupGeneration++;
-      controller.resetStatusLookupToIdle();
       controller.isThreeDigit = front.length == 3;
       controller.controllerFrontDigit.text = front;
       controller.controllerMidDigit.text = mid;
       controller.controllerBackDigit.text = back;
-
-      _midBeforeEdit = '';
+      controller.resetStatusLookupToIdle();
       _monthlyLookupGeneration++;
-      _monthlyLookupInProgress = false;
       _monthlyDocExists = false;
-      _resolvedMonthlyDocId = null;
-      _lastPlateStatusDialogKey = null;
-
-      if (commonMid || !controller.isInputValid()) {
-        _activateNextIncompleteFieldOrFinish();
-      } else {
-        _finishPlateEditing();
-      }
     });
     controller.suppressOcrEditCount(false);
     if (sessionId != null && sessionId.isNotEmpty) {
@@ -1222,1651 +1210,871 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     } else {
       controller.clearOcrSession();
     }
-  }
-
-  String _ocrExitTypeLabel(LiveOcrExitType type) {
-    switch (type) {
-      case LiveOcrExitType.autoDirect:
-        return '자동 확정(strict)';
-      case LiveOcrExitType.autoLoose:
-        return '자동 확정(loose)';
-      case LiveOcrExitType.autoForceInsert:
-        return '강제 삽입';
-      case LiveOcrExitType.candidateChipSelected:
-        return '후보 칩 선택';
-      case LiveOcrExitType.userAborted:
-        return '사용자 중도 종료';
-      case LiveOcrExitType.permissionDenied:
-        return '권한 거부';
-      case LiveOcrExitType.cameraInitFailed:
-        return '카메라 초기화 실패';
+    _syncIdentityDraftFromCommitted();
+    final valid = controller.isInputValid();
+    _log(
+      'ocr=applied plate=${controller.buildPlateNumber()} valid=$valid midRequired=${mid.isEmpty}',
+    );
+    if (valid) {
+      _lookupGeneralStatusForCurrentPlate();
     }
+    return true;
   }
 
-  String _buildOcrClipboardText(LiveOcrSessionResult result) {
-    final summary = <String>[
-      'sessionId: ${result.sessionId}',
-      '종료유형: ${_ocrExitTypeLabel(result.exitType)}',
-      '최종번호판: ${result.plate ?? '-'}',
-      '선택칩: ${result.selectedChipLabel ?? '-'}',
-      'attemptCount: ${result.attemptCount}',
-      '마지막 OCR 텍스트: ${result.lastOcrText ?? '-'}',
-      '마지막 실패사유: ${result.lastFailureReason ?? '-'}',
-      '후보값: ${result.candidateValues.isEmpty ? '-' : result.candidateValues.join(', ')}',
-      'usedLearningMid: ${result.usedLearningMid}',
-      'usedLearningRank: ${result.usedLearningRank}',
-      'weakFront: ${result.weakFront ?? '-'}',
-      'weakBack: ${result.weakBack ?? '-'}',
-      'weakObservedValue: ${result.weakObservedValue ?? '-'}',
-      'requiresMidCompletion: ${result.requiresMidCompletion}',
-      'weakMidSuggestions: ${result.weakMidSuggestions.isEmpty ? '-' : result.weakMidSuggestions.join(', ')}',
-      'weakCorrectionWillLinkOnSubmit: ${result.requiresMidCompletion && result.weakObservedValue != null}',
-      '',
-      '----- OCR SESSION LOG -----',
-      result.logText.isEmpty ? '로그가 없습니다.' : result.logText,
-    ];
-    return summary.join('\n');
-  }
-
-  Future<void> _showOcrSessionDialog() async {
-    final result = _lastOcrSessionResult;
-    if (result == null || !mounted) return;
-
-    final tokens = CommonUiTheme.of(context);
-    final text = _buildOcrClipboardText(result);
-
-    await showCommonOverlayDialog<void>(
-      context: context,
-      builder: (dialogContext) => CommonDialogFrame(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 560, maxHeight: 680),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
-                      color: tokens.infoContainer,
-                      borderRadius: BorderRadius.circular(CommonUiShapes.control),
-                      border: Border.all(color: tokens.info.withOpacity(.36)),
-                    ),
-                    alignment: Alignment.center,
-                    child: Icon(Icons.article_outlined, color: tokens.info),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'OCR 세션 로그',
-                      style: Theme.of(dialogContext).textTheme.titleLarge?.copyWith(
-                            color: tokens.textPrimary,
-                            fontWeight: FontWeight.w800,
-                          ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Flexible(
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('종료 유형: ${_ocrExitTypeLabel(result.exitType)}'),
-                      Text('최종 번호판: ${result.plate ?? '-'}'),
-                      Text('선택 칩: ${result.selectedChipLabel ?? '-'}'),
-                      Text('시도 횟수: ${result.attemptCount}'),
-                      Text('마지막 실패 사유: ${result.lastFailureReason ?? '-'}'),
-                      Text('weakFront: ${result.weakFront ?? '-'}'),
-                      Text('weakBack: ${result.weakBack ?? '-'}'),
-                      Text('weakObservedValue: ${result.weakObservedValue ?? '-'}'),
-                      Text('mid 보정 필요: ${result.requiresMidCompletion}'),
-                      Text(
-                        'mid 제안: ${result.weakMidSuggestions.isEmpty ? '-' : result.weakMidSuggestions.join(', ')}',
-                      ),
-                      Text(
-                        '최종 등록 시 보정 학습 연결: ${result.requiresMidCompletion && result.weakObservedValue != null}',
-                      ),
-                      const SizedBox(height: 12),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: tokens.surfaceOverlay,
-                          borderRadius: BorderRadius.circular(CommonUiShapes.control),
-                          border: Border.all(color: tokens.borderSubtle),
-                        ),
-                        child: SelectableText(
-                          result.logText.isEmpty ? '로그가 없습니다.' : result.logText,
-                          style: TextStyle(
-                            fontSize: 12,
-                            height: 1.4,
-                            color: tokens.textPrimary,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: CommonButton(
-                      label: '복사',
-                      icon: Icons.copy_rounded,
-                      variant: CommonButtonVariant.secondary,
-                      onPressed: () async {
-                        await Clipboard.setData(ClipboardData(text: text));
-                        if (!dialogContext.mounted) return;
-                        Navigator.of(dialogContext).pop();
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: CommonButton(
-                      label: '닫기',
-                      onPressed: () => Navigator.of(dialogContext).pop(),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTopRightOcrLogAction(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final hasLog = _lastOcrSessionResult != null;
-
-    return SafeArea(
-      child: Align(
-        alignment: Alignment.topRight,
-        child: Padding(
-          padding: const EdgeInsets.only(right: 6, top: 2),
-          child: Semantics(
-            label: hasLog ? 'ocr_log_available' : 'ocr_log_unavailable',
-            button: true,
-            child: IconButton(
-              tooltip: hasLog ? 'OCR 로그 보기' : 'OCR 로그 없음',
-              onPressed: hasLog ? _showOcrSessionDialog : null,
-              icon: Icon(
-                Icons.article_outlined,
-                color: hasLog
-                    ? cs.onSurface
-                    : cs.onSurfaceVariant.withOpacity(0.40),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _openRegionPicker() {
-    inputRegionPickerBottomSheet(
-      context: context,
-      selectedRegion: controller.dropdownValue,
-      regions: controller.regions,
-      useCommonUi: true,
-      onConfirm: (region) {
-        setState(() {
-          controller.dropdownValue = region;
-        });
-      },
-    );
-  }
-
-  Future<void> _openLiveScanner() async {
-    final sessionId = const Uuid().v4();
-    final reduceMotion =
-        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    debugPrint('[LIVE-OCR][INPUT] open sessionId=$sessionId');
-    final result = await Navigator.of(context).push<LiveOcrSessionResult>(
-      PageRouteBuilder<LiveOcrSessionResult>(
-        pageBuilder: (_, animation, secondaryAnimation) =>
-            LiveOcrPage(sessionId: sessionId),
-        transitionDuration:
-            reduceMotion ? Duration.zero : CommonUiMotion.component,
-        reverseTransitionDuration:
-            reduceMotion ? Duration.zero : CommonUiMotion.selection,
-        transitionsBuilder: (_, animation, secondaryAnimation, child) {
-          final curved = CurvedAnimation(
-            parent: animation,
-            curve: CommonUiMotion.enter,
-            reverseCurve: CommonUiMotion.exit,
-          );
-          return FadeTransition(
-            opacity: curved,
-            child: SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0, .025),
-                end: Offset.zero,
-              ).animate(curved),
-              child: ScaleTransition(
-                scale: Tween<double>(begin: 0.985, end: 1).animate(curved),
-                child: child,
-              ),
-            ),
-          );
-        },
-      ),
-    );
-    if (!mounted || result == null) {
-      debugPrint('[LIVE-OCR][INPUT] result=null sessionId=$sessionId');
-      return;
-    }
-
-    setState(() {
-      _lastOcrSessionResult = result;
-    });
-
-    var applicationResult = 'no_field_change';
-
-    if (result.plate != null && result.plate!.isNotEmpty) {
-      _applyPlateWithFallback(result.plate!, sessionId: result.sessionId);
-      applicationResult = 'plate_applied';
+  PlateIdentityAuxiliaryResult _resolveLiveOcrResult(
+    LiveOcrSessionResult result, {
+    required String source,
+  }) {
+    var applied = false;
+    var middleSuggestions = const <String>[];
+    PlateIdentityFocusTarget focusTarget;
+    if (result.plate?.isNotEmpty == true) {
+      applied = _applyOcrPlate(
+        result.plate!,
+        sessionId: result.sessionId,
+      );
+      focusTarget = _resolveIdentityFocus();
     } else if (result.requiresMidCompletion &&
         result.weakFront != null &&
         result.weakBack != null) {
-      _applyToFields(
-        front: result.weakFront!,
-        mid: '',
-        back: result.weakBack!,
-        commonMid: true,
+      applied = _applyOcrPlate(
+        '${result.weakFront}${result.weakBack}',
         sessionId: result.sessionId,
       );
-      applicationResult = 'weak_plate_applied_mid_required';
-    } else if (result.exitType == LiveOcrExitType.userAborted) {
-      applicationResult = 'user_aborted';
-    } else if (result.exitType == LiveOcrExitType.permissionDenied) {
-      applicationResult = 'permission_denied';
-    } else if (result.exitType == LiveOcrExitType.cameraInitFailed) {
-      applicationResult = 'camera_init_failed';
+      middleSuggestions = List<String>.from(
+        result.weakMidSuggestions,
+        growable: false,
+      );
+      focusTarget = PlateIdentityFocusTarget.middle;
+    } else {
+      focusTarget = _resolveIdentityFocus();
     }
-
-    debugPrint(
-      '[LIVE-OCR][INPUT] result sessionId=${result.sessionId} '
-      'exitType=${result.exitType.name} application=$applicationResult '
-      'plate=${result.plate ?? '-'} attempts=${result.attemptCount}',
+    final completePlate = result.plate?.trim().isNotEmpty == true &&
+        applied &&
+        controller.isInputValid() &&
+        !result.requiresMidCompletion;
+    final requiresManualCompletion = !completePlate;
+    _syncControllerIdentityFocus(focusTarget);
+    _log(
+      'ocr=result sessionId=${result.sessionId} exitType=${result.exitType.name} plate=${result.plate ?? ''} attempts=${result.attemptCount} requiresMidCompletion=${result.requiresMidCompletion} applied=$applied completePlate=$completePlate manualCompletion=$requiresManualCompletion focus=${focusTarget.name} suggestions=${middleSuggestions.join('|')} source=$source',
+      progress: completePlate ? .34 : .30,
     );
-
-    await _showLiveOcrDeveloperStatus(
-      result: result,
-      applicationResult: applicationResult,
+    _log(
+      'ocr=followup_decision sessionId=${result.sessionId} exitType=${result.exitType.name} openIdentityEditor=$requiresManualCompletion source=$source',
+    );
+    if (_editorTrace?.developerMode == true) {
+      final logs = result.logs;
+      final max = logs.length.clamp(0, 40).toInt();
+      if (max > 0) {
+        _log('ocr=diagnostic\n${logs.take(max).join('\n')}');
+      }
+    }
+    return PlateIdentityAuxiliaryResult(
+      applied: applied,
+      focusTarget: focusTarget,
+      middleSuggestions: middleSuggestions,
+      requiresManualCompletion: requiresManualCompletion,
     );
   }
 
-  Future<void> _showLiveOcrDeveloperStatus({
-    required LiveOcrSessionResult result,
-    required String applicationResult,
+  Future<PlateIdentityAuxiliaryResult> _prepareLiveOcrExit(
+    LiveOcrSessionResult result, {
+    required String source,
+    required Rect sourceRect,
+    required LiveOcrSourceRectRouteController<LiveOcrSessionResult>
+        routeController,
   }) async {
-    if (!mounted) return;
-
-    final trace = await DeveloperOperationTrace.start(
-      context: context,
-      title: 'Live OCR 번호판 인식',
-      initialMessage: 'OCR 세션 결과를 확인합니다.',
-      useCommonUi: true,
-      developerModeMessage:
-          '개발자 모드 ON: OCR 진단 로그와 입력 적용 결과를 표시합니다.',
-      standardModeMessage:
-          '개발자 모드 OFF: OCR 진단 Status Dialog를 표시하지 않습니다.',
+    final resolved = _resolveLiveOcrResult(result, source: source);
+    await _handleLiveOcrFollowup(
+      resolved,
+      source: source,
+      allowScannerActive: true,
     );
-
-    trace.log(
-      'sessionId=${result.sessionId} exitType=${result.exitType.name} '
-      'attemptCount=${result.attemptCount}',
-      progress: 0.08,
-    );
-    trace.log(
-      'plate=${result.plate ?? '-'} selectedChip=${result.selectedChipLabel ?? '-'} '
-      'failure=${result.lastFailureReason ?? '-'}',
-      progress: 0.14,
-    );
-    trace.log(
-      'candidates=${result.candidateValues.isEmpty ? '-' : result.candidateValues.join('|')} '
-      'learningMid=${result.usedLearningMid} learningRank=${result.usedLearningRank}',
-      progress: 0.2,
-    );
-    trace.log(
-      'weakFront=${result.weakFront ?? '-'} weakBack=${result.weakBack ?? '-'} '
-      'weakObserved=${result.weakObservedValue ?? '-'} '
-      'requiresMidCompletion=${result.requiresMidCompletion} '
-      'midSuggestions=${result.weakMidSuggestions.isEmpty ? '-' : result.weakMidSuggestions.join('|')}',
-      progress: 0.26,
-    );
-
-    if (trace.developerMode && result.logs.isNotEmpty) {
-      const chunkSize = 20;
-      final chunkCount = (result.logs.length / chunkSize).ceil();
-      for (var chunkIndex = 0; chunkIndex < chunkCount; chunkIndex++) {
-        final start = chunkIndex * chunkSize;
-        final end = (start + chunkSize).clamp(0, result.logs.length).toInt();
-        final chunk = result.logs.sublist(start, end).join('\n');
-        final ratio = (chunkIndex + 1) / chunkCount;
-        trace.log(
-          'OCR 세션 로그 ${chunkIndex + 1}/$chunkCount\n$chunk',
-          progress: 0.26 + (0.48 * ratio),
-        );
-      }
-    }
-
-    trace.log(
-      'inputApplication=$applicationResult '
-      'front=${controller.controllerFrontDigit.text} '
-      'mid=${controller.controllerMidDigit.text} '
-      'back=${controller.controllerBackDigit.text} '
-      'valid=${controller.isInputValid()} keypad=${controller.showKeypad}',
-      progress: 0.86,
-    );
-    trace.log(
-      'lastOcrText=${result.lastOcrText ?? '-'}',
-      progress: 0.93,
-    );
-    await trace.succeed('Live OCR 결과 처리와 진단 기록이 완료되었습니다.');
-  }
-
-  void _beginDockEdit(_DockField field) {
-    final prevMid =
-        field == _DockField.mid ? controller.controllerMidDigit.text : null;
-    final wasPlateComplete = controller.isInputValid();
-    setState(() {
-      _dockEditing = field;
-      _singleFieldDockEdit = wasPlateComplete;
-
-      _statusLookupGeneration++;
-      _monthlyLookupGeneration++;
-      _monthlyLookupInProgress = false;
-      _monthlyDocExists = false;
-      _resolvedMonthlyDocId = null;
-      controller.resetStatusLookupToIdle();
-
-      _lastPlateStatusDialogKey = null;
-
-      switch (field) {
-        case _DockField.front:
-          controller.controllerFrontDigit.clear();
-          controller.setActiveController(controller.controllerFrontDigit);
-          break;
-        case _DockField.mid:
-          _midBeforeEdit = prevMid ?? '';
-          controller.controllerMidDigit.clear();
-          controller.setActiveController(controller.controllerMidDigit);
-          break;
-        case _DockField.back:
-          controller.controllerBackDigit.clear();
-          controller.setActiveController(controller.controllerBackDigit);
-          break;
-      }
-      controller.showKeypad = true;
-    });
-  }
-
-  TextEditingController? _findNextIncompleteController() {
-    final requiredFrontLength = controller.isThreeDigit ? 3 : 2;
-
-    if (controller.controllerFrontDigit.text.length != requiredFrontLength) {
-      return controller.controllerFrontDigit;
-    }
-
-    if (controller.controllerMidDigit.text.length != 1) {
-      return controller.controllerMidDigit;
-    }
-
-    if (controller.controllerBackDigit.text.length != 4) {
-      return controller.controllerBackDigit;
-    }
-
-    return null;
-  }
-
-  TextEditingController _controllerForDockField(_DockField field) {
-    switch (field) {
-      case _DockField.front:
-        return controller.controllerFrontDigit;
-      case _DockField.mid:
-        return controller.controllerMidDigit;
-      case _DockField.back:
-        return controller.controllerBackDigit;
-    }
-  }
-
-  void _finishPlateEditing() {
-    controller.showKeypad = false;
-    _dockEditing = null;
-    _singleFieldDockEdit = false;
-    _midBeforeEdit = '';
-    if (controller.isInputValid() &&
-        controller.statusLookupState == PlateStatusLookupState.idle) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted ||
-            !controller.isInputValid() ||
-            controller.statusLookupState != PlateStatusLookupState.idle) {
-          return;
-        }
-        _lookupGeneralStatusForCurrentPlate();
-      });
-    }
-  }
-
-  void _activateNextIncompleteFieldOrFinish() {
-    final next = _findNextIncompleteController();
-    if (next == null) {
-      _finishPlateEditing();
-      return;
-    }
-    controller.setActiveController(next);
-  }
-
-  void _completeCurrentPlateField() {
-    if (_dockEditing == _DockField.mid &&
-        controller.controllerMidDigit.text.isEmpty &&
-        _midBeforeEdit.isNotEmpty) {
-      controller.controllerMidDigit.text = _midBeforeEdit;
-    }
-
-    if (_dockEditing != null && _singleFieldDockEdit) {
-      if (controller.isInputValid()) {
-        _finishPlateEditing();
-        return;
-      }
-      controller.setActiveController(_controllerForDockField(_dockEditing!));
-      return;
-    }
-
-    _dockEditing = null;
-    _singleFieldDockEdit = false;
-    _midBeforeEdit = '';
-
-    if (controller.isInputValid()) {
-      _finishPlateEditing();
-      return;
-    }
-
-    _activateNextIncompleteFieldOrFinish();
-  }
-
-  Widget _buildKeypad() {
-    final active = controller.activeController;
-
-    if (active == controller.controllerFrontDigit) {
-      return NumKeypad(
-        key: const ValueKey('frontKeypad'),
-        controller: controller.controllerFrontDigit,
-        maxLength: controller.isThreeDigit ? 3 : 2,
-        onComplete: () => setState(_completeCurrentPlateField),
-        onChangeFrontDigitMode: (defaultThree) {
-          setState(() {
-            controller.setFrontDigitMode(defaultThree);
-          });
-        },
-        enableDigitModeSwitch: true,
-      );
-    }
-
-    if (active == controller.controllerMidDigit) {
-      return KorKeypad(
-        key: const ValueKey('midKeypad'),
-        controller: controller.controllerMidDigit,
-        onComplete: () => setState(_completeCurrentPlateField),
-      );
-    }
-
-    return NumKeypad(
-      key: const ValueKey('backKeypad'),
-      controller: controller.controllerBackDigit,
-      maxLength: 4,
-      onComplete: () => setState(_completeCurrentPlateField),
-      enableDigitModeSwitch: false,
-      onReset: () {
-        setState(() {
-          controller.clearInput();
-          controller.setActiveController(controller.controllerFrontDigit);
-          _dockEditing = null;
-          _singleFieldDockEdit = false;
-          _midBeforeEdit = '';
-          _statusLookupGeneration++;
-          _monthlyLookupGeneration++;
-          _monthlyLookupInProgress = false;
-          _monthlyDocExists = false;
-          _resolvedMonthlyDocId = null;
-          controller.resetStatusLookupToIdle();
-          _lastPlateStatusDialogKey = null;
-        });
-      },
-    );
-  }
-
-  Widget _buildDock() {
-    return _PlateDock(
-      controller: controller,
-      selectedRegion: controller.dropdownValue,
-      onTapRegion: _openRegionPicker,
-      onActivateFront: () => _beginDockEdit(_DockField.front),
-      onActivateMid: () => _beginDockEdit(_DockField.mid),
-      onActivateBack: () => _beginDockEdit(_DockField.back),
-    );
-  }
-
-  Widget _buildBottomBar() {
-    final actionButton = InputBottomActionSection(
-      controller: controller,
-      mountedContext: mounted,
-      onStateRefresh: () => setState(() {}),
-    );
-
-    final Widget ocrButton = Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-      child: CommonAnimatedReveal(
-        delay: const Duration(milliseconds: 140),
-        offset: const Offset(0, .025),
-        child: CommonButton(
-          label: '실시간 OCR 다시 스캔',
-          icon: Icons.camera_alt_outlined,
-          variant: CommonButtonVariant.secondary,
-          expand: true,
-          haptic: CommonHaptic.selection,
-          onPressed: _openLiveScanner,
-        ),
-      ),
-    );
-
-    if (controller.showKeypad) {
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          InputBottomNavigation(
-            showKeypad: true,
-            keypad: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildDock(),
-                const SizedBox(height: 8),
-                _buildKeypad(),
-              ],
-            ),
-            actionButton: actionButton,
-          ),
-          ocrButton,
-        ],
-      );
-    }
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Padding(
-          padding:
-              const EdgeInsets.only(left: 12, right: 12, top: 6, bottom: 8),
-          child: _buildDock(),
-        ),
-        InputBottomNavigation(
-          showKeypad: false,
-          keypad: const SizedBox.shrink(),
-          actionButton: actionButton,
-        ),
-        ocrButton,
-      ],
-    );
-  }
-
-  Widget _buildScreenTag(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    final tagPreferredTint = cs.onSurfaceVariant.withOpacity(0.80);
-
-    return SafeArea(
-      child: IgnorePointer(
-        child: Align(
-          alignment: Alignment.topLeft,
-          child: Padding(
-            padding: const EdgeInsets.only(left: 12, top: 4),
-            child: Semantics(
-              label: 'screen_tag: $screenTag',
-              child: ExcludeSemantics(
-                child: _BrandTintedLogo(
-                  assetPath: _kScreenTagAsset,
-                  height: _kScreenTagHeight,
-                  preferredColor: tagPreferredTint,
-                  fallbackColor: cs.onBackground,
-                  minContrast: 3.0,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _handleBackButtonPressed() {
-    if (_sheetOpen) {
-      _animateSheet(
-        open: false,
-        source: 'appbar_back',
-        showDeveloperStatus: false,
-      );
-      return;
-    }
-    _requestExit(defer: false);
-  }
-
-  Widget _buildDockPagedBody({required bool canSwipe}) {
-    final cs = Theme.of(context).colorScheme;
-
-    final Widget page = (_dockPageIndex == _dockPageBill)
-        ? Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (_hasMonthlyLoaded && !_hasMonthlyParking)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: cs.tertiaryContainer.withOpacity(0.55),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                          color: cs.outlineVariant.withOpacity(0.85)),
-                    ),
-                    child: Text(
-                      '정기 주차가 제한된 근무지입니다.',
-                      style: TextStyle(
-                          fontSize: 12, height: 1.25, color: cs.onSurface),
-                    ),
-                  ),
-                ),
-              InputBillSection(
-                selectedBill: controller.selectedBill,
-                onChanged: (value) =>
-                    setState(() => controller.selectedBill = value),
-                selectedBillType: controller.selectedBillType,
-                onTypeChanged: (newType) {
-                  if (newType == '정기' &&
-                      _hasMonthlyLoaded &&
-                      !_hasMonthlyParking) {
-                    return;
-                  }
-
-                  setState(() {
-                    controller.selectedBillType = newType;
-                    _statusLookupGeneration++;
-                    _monthlyLookupGeneration++;
-                    _monthlyLookupInProgress = false;
-                    _monthlyDocExists = false;
-                    _resolvedMonthlyDocId = null;
-                    controller.resetStatusLookupToIdle();
-                  });
-
-                  if (newType == '정기') {
-                    _handleMonthlySelectedFetchAndApply();
-                  } else if (controller.isInputValid()) {
-                    _lookupGeneralStatusForCurrentPlate();
-                  }
-                },
-                countTypeController: controller.countTypeController,
-              ),
-            ],
-          )
-        : Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              InputCustomStatusSection(
-                controller: controller,
-                onChanged: () {
-                  if (mounted) setState(() {});
-                },
-                onStoredStatusDeleted: () {
-                  if (mounted) setState(() {});
-                },
-              ),
-              _buildMonthlyApplyButton(),
-              const SizedBox(height: 8),
-            ],
-          );
-
+    if (!mounted) return resolved;
+    await _waitForSideDockSettled();
+    if (!mounted) return resolved;
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    final content = AnimatedSwitcher(
-      duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
-      switchInCurve: CommonUiMotion.enter,
-      switchOutCurve: CommonUiMotion.exit,
-      transitionBuilder: (child, animation) {
-        final begin = _dockSlideFromRight
-            ? const Offset(0.10, 0)
-            : const Offset(-0.10, 0);
-        final offsetAnim =
-            Tween<Offset>(begin: begin, end: Offset.zero).animate(animation);
-        return SlideTransition(
-          position: offsetAnim,
-          child: FadeTransition(opacity: animation, child: child),
-        );
-      },
-      child: KeyedSubtree(
-        key: ValueKey<int>(_dockPageIndex),
-        child: page,
-      ),
+    if (resolved.requiresManualCompletion && !reduceMotion) {
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      if (!mounted) return resolved;
+    }
+    widget.sideDockPresentationController?.show();
+    final destinationKey = resolved.requiresManualCompletion
+        ? _identityPlateAnchorKey
+        : _overviewPlateAnchorKey;
+    final destination = await _waitForTargetRect(destinationKey) ?? sourceRect;
+    routeController.setExitTargetRect(destination);
+    _log(
+      'ocr=transition_reverse_prepare source=$source destination=${resolved.requiresManualCompletion ? 'identity_editor' : 'overview_plate'} rect=${_rectDebug(destination)}',
+      progress: .35,
     );
-
-    if (!canSwipe) return content;
-
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onHorizontalDragEnd: (d) =>
-          _handleDockHorizontalSwipe(d, canSwipe: canSwipe),
-      child: content,
-    );
+    return resolved;
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return CommonUiScope(
-      child: Builder(builder: _buildCommonScreen),
+  Future<PlateIdentityAuxiliaryResult?> _openLiveScanner({
+    bool automatic = false,
+    String source = 'side_dock',
+    Rect? sourceRect,
+  }) async {
+    if (!mounted) return null;
+    if (_scannerActive) {
+      _log('ocr=open_skipped reason=already_active automatic=$automatic source=$source');
+      return null;
+    }
+    if (automatic && _openedScannerOnce) {
+      _log('ocr=open_skipped reason=automatic_already_opened source=$source');
+      return null;
+    }
+    _openedScannerOnce = true;
+    _scannerActive = true;
+    final sessionId = const Uuid().v4();
+    final routeContext = context;
+    final reduceMotion =
+        MediaQuery.maybeOf(routeContext)?.disableAnimations ?? false;
+    final entryRect = sourceRect ?? _fallbackOcrSourceRect();
+    final morphController = LiveOcrSourceRectRouteController<LiveOcrSessionResult>(
+      entrySourceRect: entryRect,
+      reduceMotion: reduceMotion,
     );
-  }
-
-  Widget _buildCommonScreen(BuildContext context) {
-    final tokens = CommonUiTheme.of(context);
-    final viewInset = MediaQuery.of(context).viewInsets.bottom;
-    final sysBottom = MediaQuery.of(context).padding.bottom;
-    final bottomSafePadding =
-        (controller.showKeypad ? 280.0 : 140.0) + viewInset + sysBottom;
-
-    return PopScope(
-      canPop: false,
-      onPopInvoked: (didPop) async {
-        if (didPop) return;
-
-        if (_sheetOpen) {
-          await _animateSheet(
-            open: false,
-            source: 'system_back',
-            showDeveloperStatus: false,
-          );
-          return;
-        }
-
-        if (mounted) {
-          _requestExit(defer: true);
-        }
-      },
-      child: Scaffold(
-        backgroundColor: tokens.canvas,
-        appBar: AppBar(
-          automaticallyImplyLeading: false,
-          centerTitle: true,
-          backgroundColor: tokens.surface,
-          foregroundColor: tokens.textPrimary,
-          elevation: 0,
-          surfaceTintColor: tokens.transparent,
-          shape: Border(
-            bottom: BorderSide(
-              color: tokens.borderSubtle,
-              width: 1,
-            ),
-          ),
-          flexibleSpace: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: _handleBackButtonPressed,
-            child: Stack(
-              children: [
-                _buildScreenTag(context),
-                SafeArea(
-                  child: Center(
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          '뒤로가기',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: tokens.textSecondary,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Container(
-                          width: 1,
-                          height: 16,
-                          color: tokens.borderSubtle,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          controller.isThreeDigit
-                              ? '현재 앞자리: 세자리'
-                              : '현재 앞자리: 두자리',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w900,
-                            color: tokens.textPrimary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                _buildTopRightOcrLogAction(context),
-              ],
-            ),
-          ),
-        ),
-        body: LayoutBuilder(
-          builder: (context, constraints) {
-            return Stack(
-              children: [
-                Positioned.fill(
-                  child: SingleChildScrollView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    keyboardDismissBehavior:
-                        ScrollViewKeyboardDismissBehavior.onDrag,
-                    padding: EdgeInsets.fromLTRB(16, 16, 16, bottomSafePadding),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        InputLocationSection(
-                          locationController: controller.locationController,
-                        ),
-                        const SizedBox(height: 16),
-                        InputPhotoSection(
-                          capturedImages: controller.capturedImages,
-                          plateNumber: controller.buildPlateNumber(),
-                        ),
-                        const SizedBox(height: 8),
-                      ],
-                    ),
-                  ),
-                ),
-                AnimatedPositioned(
-                  duration: MediaQuery.of(context).disableAnimations
-                      ? Duration.zero
-                      : CommonUiMotion.layout,
-                  curve: CommonUiMotion.standard,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  height: constraints.maxHeight *
-                      (_sheetOpen ? _sheetOpened : _sheetClosed),
-                  child: Builder(
-                    builder: (context) {
-                    final sheetBottomPadding = 16.0 + viewInset;
-
-                    return AnimatedContainer(
-                      duration: MediaQuery.of(context).disableAnimations
-                          ? Duration.zero
-                          : CommonUiMotion.selection,
-                      curve: CommonUiMotion.standard,
-                      decoration: BoxDecoration(
-                        borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(16),
-                        ),
-                        border: Border.all(
-                          color: _sheetOpen
-                              ? tokens.accent
-                              : tokens.borderSubtle,
-                        ),
-                        color: tokens.surfaceRaised,
-                        boxShadow: [
-                          BoxShadow(
-                            color: tokens.shadow,
-                            blurRadius: _sheetOpen ? 18 : 10,
-                            offset: const Offset(0, -4),
-                          ),
-                        ],
-                      ),
-                      child: ClipRRect(
-                        borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(16),
-                        ),
-                        clipBehavior: Clip.antiAlias,
-                        child: SafeArea(
-                          top: true,
-                          bottom: false,
-                          child: CustomScrollView(
-                            controller: _sheetScrollController,
-                            physics: _sheetOpen
-                                ? const ClampingScrollPhysics()
-                                : const NeverScrollableScrollPhysics(),
-                            slivers: [
-                              SliverPersistentHeader(
-                                pinned: true,
-                                delegate: _SheetHeaderDelegate(
-                                  sheetOpen: _sheetOpen,
-                                  sheetAnimating: _sheetAnimating,
-                                  plateText: controller.buildPlateNumber(),
-                                  onToggle: () => _toggleSheet(
-                                    source: 'toggle_header',
-                                  ),
-                                  currentPageIndex: _dockPageIndex,
-                                  onSelectBill: () =>
-                                      _handleDockPageTap(_dockPageBill),
-                                  onSelectMemo: () =>
-                                      _handleDockPageTap(_dockPageMemo),
-                                ),
-                              ),
-                              SliverPadding(
-                                padding: EdgeInsets.fromLTRB(
-                                  16,
-                                  12,
-                                  16,
-                                  sheetBottomPadding,
-                                ),
-                                sliver: SliverList(
-                                  delegate: SliverChildListDelegate(
-                                    [
-                                      _buildDockPagedBody(
-                                        canSwipe: _sheetOpen,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    );
-                  
-                    },
-                  ),
-                ),
-              ],
+    PlateIdentityAuxiliaryResult? preparedResult;
+    _log(
+      'ocr=open sessionId=$sessionId automatic=$automatic source=$source sourceRect=${_rectDebug(entryRect)} transition=source_rect_crop',
+    );
+    try {
+      final route = morphController.buildRoute(
+        builder: (_) => LiveOcrPage(
+          sessionId: sessionId,
+          onExitPreparing: (result) async {
+            preparedResult = await _prepareLiveOcrExit(
+              result,
+              source: source,
+              sourceRect: entryRect,
+              routeController: morphController,
             );
           },
         ),
-        bottomNavigationBar: SafeArea(
-          top: false,
-          left: false,
-          right: false,
-          bottom: true,
-          child: _buildBottomBar(),
-        ),
-      ),
-    );
-  }
-}
-
-class _PlateStatusLoadedDialog extends StatelessWidget {
-  final String safeArea;
-  final String plateNumber;
-  final String customStatusText;
-  final VoidCallback onClose;
-  final VoidCallback onGoMemo;
-
-  const _PlateStatusLoadedDialog({
-    required this.safeArea,
-    required this.plateNumber,
-    required this.customStatusText,
-    required this.onClose,
-    required this.onGoMemo,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = CommonUiTheme.of(context);
-    final textTheme = Theme.of(context).textTheme;
-    return CommonDialogFrame(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 420),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    color: tokens.successContainer,
-                    borderRadius: BorderRadius.circular(CommonUiShapes.control),
-                    border: Border.all(color: tokens.success.withOpacity(.36)),
-                  ),
-                  alignment: Alignment.center,
-                  child: Icon(
-                    Icons.check_rounded,
-                    color: tokens.success,
-                    size: 22,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    '불러오기 완료',
-                    style: textTheme.titleLarge?.copyWith(
-                      color: tokens.textPrimary,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-                CommonIconButton(
-                  icon: Icons.close_rounded,
-                  tooltip: '닫기',
-                  onPressed: onClose,
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '저장된 메모를 화면에 반영했습니다.',
-              style: textTheme.bodyMedium?.copyWith(
-                color: tokens.textSecondary,
-                height: 1.35,
-              ),
-            ),
-            const SizedBox(height: 14),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-              decoration: BoxDecoration(
-                color: tokens.surfaceOverlay,
-                borderRadius: BorderRadius.circular(CommonUiShapes.control),
-                border: Border.all(color: tokens.borderSubtle),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      '지역: $safeArea',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: textTheme.bodySmall?.copyWith(
-                        color: tokens.textPrimary,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Flexible(
-                    child: Text(
-                      '번호판: $plateNumber',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: textTheme.bodySmall?.copyWith(
-                        color: tokens.textSecondary,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: tokens.surfaceOverlay,
-                borderRadius: BorderRadius.circular(CommonUiShapes.control),
-                border: Border.all(color: tokens.borderSubtle),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: tokens.accentContainer,
-                      borderRadius: BorderRadius.circular(CommonUiShapes.control),
-                    ),
-                    alignment: Alignment.center,
-                    child: Icon(
-                      Icons.note_alt_rounded,
-                      size: 19,
-                      color: tokens.onAccentContainer,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '메모',
-                          style: textTheme.labelMedium?.copyWith(
-                            color: tokens.textSecondary,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 5),
-                        Text(
-                          customStatusText,
-                          style: textTheme.bodyMedium?.copyWith(
-                            color: tokens.textPrimary,
-                            fontWeight: FontWeight.w600,
-                            height: 1.4,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: CommonButton(
-                    label: '닫기',
-                    variant: CommonButtonVariant.secondary,
-                    onPressed: onClose,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: CommonButton(
-                    label: '메모 보기',
-                    icon: Icons.note_alt_rounded,
-                    onPressed: onGoMemo,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SheetHeaderDelegate extends SliverPersistentHeaderDelegate {
-  final bool sheetOpen;
-  final bool sheetAnimating;
-  final String plateText;
-  final int currentPageIndex;
-  final VoidCallback onToggle;
-  final VoidCallback onSelectBill;
-  final VoidCallback onSelectMemo;
-
-  _SheetHeaderDelegate({
-    required this.sheetOpen,
-    required this.sheetAnimating,
-    required this.plateText,
-    required this.onToggle,
-    required this.currentPageIndex,
-    required this.onSelectBill,
-    required this.onSelectMemo,
-  });
-
-  @override
-  double get minExtent => 104;
-
-  @override
-  double get maxExtent => 104;
-
-  Widget _segmentButton({
-    required BuildContext context,
-    required String label,
-    required bool selected,
-    required VoidCallback? onTap,
-  }) {
-    final cs = Theme.of(context).colorScheme;
-    final bg = selected
-        ? cs.surfaceContainerLow
-        : CommonUiTheme.of(context).transparent;
-    final border = selected
-        ? cs.primary.withOpacity(.55)
-        : cs.outlineVariant.withOpacity(.85);
-    final fg = selected ? cs.onSurface : cs.onSurfaceVariant;
-
-    return Material(
-      color: CommonUiTheme.of(context).transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
-        child: AnimatedContainer(
-          duration: CommonUiMotion.selection,
-          curve: CommonUiMotion.standard,
-          height: 34,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: bg,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: border,
-              width: selected ? 1.4 : 1,
-            ),
-          ),
-          child: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
-              color: fg,
-              letterSpacing: .2,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(
-    BuildContext context,
-    double shrinkOffset,
-    bool overlapsContent,
-  ) {
-    final cs = Theme.of(context).colorScheme;
-    final billSelected =
-        currentPageIndex == _InputPlateScreenState._dockPageBill;
-    final memoSelected =
-        currentPageIndex == _InputPlateScreenState._dockPageMemo;
-
-    return Material(
-      color: cs.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
-        child: Column(
-          children: [
-            Material(
-              color: CommonUiTheme.of(context).transparent,
-              child: InkWell(
-                onTap: sheetAnimating ? null : onToggle,
-                borderRadius: BorderRadius.circular(12),
-                child: SizedBox(
-                  height: 48,
-                  child: Row(
-                    children: [
-                      AnimatedContainer(
-                        duration: CommonUiMotion.selection,
-                        curve: CommonUiMotion.standard,
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: sheetOpen
-                              ? cs.primaryContainer
-                              : cs.surfaceContainerLow,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: sheetOpen
-                                ? cs.primary.withOpacity(.5)
-                                : cs.outlineVariant,
-                          ),
-                        ),
-                        alignment: Alignment.center,
-                        child: AnimatedSwitcher(
-                          duration: CommonUiMotion.selection,
-                          child: sheetAnimating
-                              ? SizedBox(
-                                  key: const ValueKey('loading'),
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: cs.primary,
-                                  ),
-                                )
-                              : Icon(
-                                  Icons.tune_rounded,
-                                  key: const ValueKey('tune'),
-                                  size: 20,
-                                  color: sheetOpen
-                                      ? cs.onPrimaryContainer
-                                      : cs.onSurfaceVariant,
-                                ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: AnimatedSwitcher(
-                          duration: CommonUiMotion.selection,
-                          child: Column(
-                            key: ValueKey(
-                              '${sheetOpen}_$sheetAnimating',
-                            ),
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                sheetAnimating
-                                    ? sheetOpen
-                                        ? '추가 정보 여는 중'
-                                        : '추가 정보 닫는 중'
-                                    : sheetOpen
-                                        ? '추가 정보 닫기'
-                                        : '추가 정보 보기',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w900,
-                                  color: cs.onSurface,
-                                ),
-                              ),
-                              Text(
-                                sheetOpen
-                                    ? '이 헤더를 한 번 터치하면 닫힙니다.'
-                                    : '이 헤더를 한 번 터치하면 열립니다.',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: cs.onSurfaceVariant,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Text(
-                          plateText,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: cs.onSurfaceVariant,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      AnimatedRotation(
-                        turns: sheetOpen ? .5 : 0,
-                        duration: CommonUiMotion.selection,
-                        curve: CommonUiMotion.standard,
-                        child: Icon(
-                          Icons.expand_less_rounded,
-                          color: cs.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Expanded(
-                  child: _segmentButton(
-                    context: context,
-                    label: '정산 유형',
-                    selected: billSelected,
-                    onTap: sheetAnimating ? null : onSelectBill,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _segmentButton(
-                    context: context,
-                    label: '상태 메모',
-                    selected: memoSelected,
-                    onTap: sheetAnimating ? null : onSelectMemo,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  @override
-  bool shouldRebuild(covariant _SheetHeaderDelegate oldDelegate) {
-    return oldDelegate.sheetOpen != sheetOpen ||
-        oldDelegate.sheetAnimating != sheetAnimating ||
-        oldDelegate.plateText != plateText ||
-        oldDelegate.currentPageIndex != currentPageIndex;
-  }
-}
-
-class _PlateDock extends StatelessWidget {
-  final InputPlateController controller;
-  final String selectedRegion;
-  final VoidCallback onTapRegion;
-  final VoidCallback onActivateFront;
-  final VoidCallback onActivateMid;
-  final VoidCallback onActivateBack;
-
-  const _PlateDock({
-    required this.controller,
-    required this.selectedRegion,
-    required this.onTapRegion,
-    required this.onActivateFront,
-    required this.onActivateMid,
-    required this.onActivateBack,
-  });
-
-  InputDecoration _dec(BuildContext context, bool active, bool compact) {
-    final cs = Theme.of(context).colorScheme;
-
-    return InputDecoration(
-      isDense: true,
-      contentPadding: EdgeInsets.symmetric(
-        horizontal: compact ? 4 : 6,
-        vertical: compact ? 8 : 10,
-      ),
-      filled: true,
-      fillColor: active ? cs.primary.withOpacity(0.08) : cs.surface,
-      counterText: '',
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: BorderSide(
-          color: active
-              ? cs.primary.withOpacity(0.75)
-              : cs.outlineVariant.withOpacity(0.85),
-          width: active ? 2 : 1,
-        ),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: BorderSide(
-          color: cs.primary,
-          width: 2,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRegionBox(BuildContext context, bool compact) {
-    final cs = Theme.of(context).colorScheme;
-
-    return Material(
-      color: CommonUiTheme.of(context).transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(10),
-        onTap: onTapRegion,
-        child: Container(
-          height: compact ? 46 : 50,
-          padding: EdgeInsets.symmetric(horizontal: compact ? 4 : 6),
-          decoration: BoxDecoration(
-            color: cs.surfaceContainerLow,
-            border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Flexible(
-                child: Text(
-                  selectedRegion,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: compact ? 13 : 14,
-                    fontWeight: FontWeight.w900,
-                    color: cs.onSurface,
-                  ),
-                ),
-              ),
-              SizedBox(width: compact ? 1 : 2),
-              Icon(
-                Icons.expand_more,
-                size: compact ? 15 : 17,
-                color: cs.onSurfaceVariant,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEditableField({
-    required BuildContext context,
-    required TextEditingController textController,
-    required bool isActive,
-    required VoidCallback onTap,
-    required int maxLength,
-    required bool compact,
-  }) {
-    final cs = Theme.of(context).colorScheme;
-
-    return GestureDetector(
-      onTap: onTap,
-      child: AbsorbPointer(
-        child: TextField(
-          controller: textController,
-          readOnly: true,
-          maxLength: maxLength,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: compact ? 18 : 20,
-            fontWeight: FontWeight.w900,
-            color: cs.onSurface,
-            height: 1.0,
-          ),
-          decoration: _dec(context, isActive, compact),
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    final isFrontActive =
-        controller.activeController == controller.controllerFrontDigit;
-    final isMidActive =
-        controller.activeController == controller.controllerMidDigit;
-    final isBackActive =
-        controller.activeController == controller.controllerBackDigit;
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final compact = constraints.maxWidth < 340;
-        final gap = compact ? 4.0 : 6.0;
-        final regionWidth = compact ? 54.0 : 62.0;
-        final labelStyle = TextStyle(
-          fontSize: compact ? 10 : 11,
-          fontWeight: FontWeight.w700,
-          color: cs.onSurfaceVariant,
+      );
+      final result =
+          await Navigator.of(routeContext).push<LiveOcrSessionResult>(route);
+      await route.completed;
+      if (!mounted) return preparedResult;
+      _log(
+        'ocr=route_closed sessionId=$sessionId automatic=$automatic source=$source transition=reverse_complete',
+      );
+      if (preparedResult != null) return preparedResult;
+      widget.sideDockPresentationController?.show();
+      if (result == null) {
+        _log(
+          'ocr=closed_without_result sessionId=$sessionId automatic=$automatic source=$source manualCompletion=true',
         );
+        final focusTarget = _resolveIdentityFocus();
+        _syncControllerIdentityFocus(focusTarget);
+        final fallback = PlateIdentityAuxiliaryResult(
+          applied: false,
+          focusTarget: focusTarget,
+          requiresManualCompletion: true,
+        );
+        await _handleLiveOcrFollowup(
+          fallback,
+          source: '${source}_fallback',
+          allowScannerActive: true,
+        );
+        return fallback;
+      }
+      final fallback = _resolveLiveOcrResult(result, source: '${source}_fallback');
+      await _handleLiveOcrFollowup(
+        fallback,
+        source: '${source}_fallback',
+        allowScannerActive: true,
+      );
+      return fallback;
+    } finally {
+      morphController.dispose();
+      _scannerActive = false;
+    }
+  }
 
-        return Container(
-          margin: EdgeInsets.symmetric(horizontal: compact ? 8 : 12),
-          padding: EdgeInsets.symmetric(
-            horizontal: compact ? 8 : 10,
-            vertical: compact ? 8 : 10,
-          ),
-          decoration: BoxDecoration(
-            color: cs.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-            border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
-            boxShadow: [
-              BoxShadow(
-                color: cs.shadow.withOpacity(0.08),
-                blurRadius: 8,
-                offset: const Offset(0, -2),
-              ),
-            ],
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                width: regionWidth,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+  Future<void> _showDeveloperStatus() async {
+    final trace = _editorTrace;
+    if (trace == null || !trace.developerMode || !mounted) return;
+    _log('developer_status_dialog=open source=header_action');
+    await trace.showSnapshotStatusDialog(
+      context,
+      title: '차량 등록 디버그 상태',
+      description: '현재까지 기록된 등록 흐름을 확인합니다.',
+    );
+  }
+
+  Future<void> _handleSubmit() async {
+    if (_busy || _hasPendingWorkspaceDraft) return;
+    _log(
+      'register=start plate=${controller.buildPlateNumber()} area=${context.read<AreaState>().currentArea}',
+      progress: .72,
+    );
+    final success = await controller.submitPlateEntry(
+      context,
+      () {
+        if (mounted) setState(() {});
+      },
+    );
+    if (!mounted) return;
+    if (!success) {
+      _log('register=failed', progress: .88);
+      if (_editorTrace?.developerMode == true) {
+        await _editorTrace!.showSnapshotStatusDialog(
+          context,
+          title: '차량 등록 실패 상태',
+          description: '등록이 중단된 시점까지의 흐름을 확인합니다.',
+          failure: true,
+        );
+      }
+      return;
+    }
+    _log('register=success', progress: .98);
+    final trace = _editorTrace;
+    if (trace != null) {
+      await trace.succeed('차량 등록이 완료되었습니다.');
+      if (trace.developerMode && mounted) {
+        await trace.showStatusDialog(context);
+      }
+    }
+    if (mounted) Navigator.of(context).pop(true);
+  }
+
+  Future<bool> _confirmDiscard() async {
+    if (!mounted) return false;
+    final result = await showCommonOverlayDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        final tokens = CommonUiTheme.of(dialogContext);
+        return CommonDialogFrame(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 360),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
                   children: [
-                    Text('지역', style: labelStyle),
-                    const SizedBox(height: 4),
-                    _buildRegionBox(context, compact),
-                  ],
-                ),
-              ),
-              SizedBox(width: gap),
-              Expanded(
-                flex: 30,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('앞자리', style: labelStyle),
-                    const SizedBox(height: 4),
-                    _buildEditableField(
-                      context: context,
-                      textController: controller.controllerFrontDigit,
-                      isActive: isFrontActive,
-                      onTap: onActivateFront,
-                      maxLength: controller.isThreeDigit ? 3 : 2,
-                      compact: compact,
+                    Icon(
+                      Icons.warning_amber_rounded,
+                      color: tokens.warning,
+                    ),
+                    const SizedBox(width: 9),
+                    Expanded(
+                      child: Text(
+                        '차량 등록을 종료할까요?',
+                        style: Theme.of(dialogContext)
+                            .textTheme
+                            .titleMedium
+                            ?.copyWith(
+                              color: tokens.textPrimary,
+                              fontWeight: FontWeight.w900,
+                            ),
+                      ),
                     ),
                   ],
                 ),
-              ),
-              SizedBox(width: gap),
-              Expanded(
-                flex: 17,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                const SizedBox(height: 10),
+                Text(
+                  '입력한 정보와 촬영한 사진은 저장되지 않습니다.',
+                  style: Theme.of(dialogContext).textTheme.bodyMedium?.copyWith(
+                        color: tokens.textSecondary,
+                      ),
+                ),
+                const SizedBox(height: 16),
+                Row(
                   children: [
-                    Text('한글', style: labelStyle),
-                    const SizedBox(height: 4),
-                    _buildEditableField(
-                      context: context,
-                      textController: controller.controllerMidDigit,
-                      isActive: isMidActive,
-                      onTap: onActivateMid,
-                      maxLength: 1,
-                      compact: compact,
+                    Expanded(
+                      child: CommonButton(
+                        label: '계속 입력',
+                        variant: CommonButtonVariant.secondary,
+                        onPressed: () => Navigator.of(dialogContext).pop(false),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: CommonButton(
+                        label: '종료',
+                        onPressed: () => Navigator.of(dialogContext).pop(true),
+                      ),
                     ),
                   ],
                 ),
-              ),
-              SizedBox(width: gap),
-              Expanded(
-                flex: 40,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('뒷자리', style: labelStyle),
-                    const SizedBox(height: 4),
-                    _buildEditableField(
-                      context: context,
-                      textController: controller.controllerBackDigit,
-                      isActive: isBackActive,
-                      onTap: onActivateBack,
-                      maxLength: 4,
-                      compact: compact,
-                    ),
-                  ],
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },
+    );
+    return result == true;
+  }
+
+  Future<void> _requestClose({required String source}) async {
+    if (_busy) return;
+    _log('close=request source=$source hasContent=$_hasEnteredContent');
+    if (_hasEnteredContent) {
+      final discard = await _confirmDiscard();
+      if (!mounted || !discard) return;
+      _log('close=discard_confirmed source=$source');
+    }
+    final trace = _editorTrace;
+    if (trace != null) {
+      await trace.succeed('차량 등록 Side Dock이 닫혔습니다.');
+      if (trace.developerMode && mounted) {
+        await trace.showStatusDialog(context);
+      }
+    }
+    if (mounted) Navigator.of(context).pop(false);
+  }
+
+  PlateEditorSectionStatus _identityStatus(
+    InputPlateRegistrationPolicy registration,
+  ) {
+    if (controller.statusLookupInProgress) {
+      return PlateEditorSectionStatus.loading;
+    }
+    if (_statusError != null) return PlateEditorSectionStatus.error;
+    if (registration.identityComplete && registration.statusReady) {
+      return PlateEditorSectionStatus.complete;
+    }
+    return PlateEditorSectionStatus.incomplete;
+  }
+
+  bool get _hasVariableBillingSelection =>
+      controller.selectedBillType == '변동' &&
+      controller.selectedBill?.trim().isNotEmpty == true;
+
+  bool get _hasRegularBillingSelection =>
+      controller.selectedBillType == '정기' &&
+      (controller.selectedBill?.trim().isNotEmpty == true ||
+          controller.countTypeController.text.trim().isNotEmpty);
+
+  Future<void> _handleOverviewWorkspaceTap(
+    PlateEditorWorkspace workspace,
+    PlateEditorPolicy policy,
+  ) async {
+    if (_busy || workspace == PlateEditorWorkspace.overview) return;
+    if (!policy.supports(workspace)) return;
+
+    switch (workspace) {
+      case PlateEditorWorkspace.parking:
+        final hasParking =
+            controller.locationController.text.trim().isNotEmpty ||
+                controller.selectedParkingPriorities.isNotEmpty;
+        if (hasParking) {
+          _log('overview=row_tap workspace=parking action=clear');
+          _clearParkingLocation();
+          return;
+        }
+        break;
+      case PlateEditorWorkspace.sector:
+        final hasSector =
+            controller.selectedSectorId?.trim().isNotEmpty == true ||
+                controller.selectedSectorName?.trim().isNotEmpty == true;
+        if (hasSector) {
+          _log('overview=row_tap workspace=sector action=clear');
+          _clearSectorSelection();
+          return;
+        }
+        break;
+      case PlateEditorWorkspace.variableBilling:
+        if (_hasVariableBillingSelection) {
+          _log('overview=row_tap workspace=variableBilling action=clear');
+          await _clearBillingSelection('변동');
+          return;
+        }
+        break;
+      case PlateEditorWorkspace.regularBilling:
+        if (_hasRegularBillingSelection) {
+          _log('overview=row_tap workspace=regularBilling action=clear');
+          await _clearBillingSelection('정기');
+          return;
+        }
+        break;
+      case PlateEditorWorkspace.vehicleIdentity:
+      case PlateEditorWorkspace.camera:
+      case PlateEditorWorkspace.memo:
+      case PlateEditorWorkspace.overview:
+        break;
+    }
+
+    await HapticFeedback.selectionClick();
+    _log('overview=row_tap workspace=${workspace.name} action=open');
+    await _openEditorDialog(
+      workspace,
+      policy,
+      source: 'overview_row_tap',
+    );
+  }
+
+  Widget _buildOverview(
+    PlateEditorPolicy policy,
+    InputPlateRegistrationPolicy registration,
+  ) {
+    final memo = controller.customStatusController.text.trim();
+    final sections = <Widget>[
+      PlateEditorVehicleIdentitySection(
+        region: controller.dropdownValue,
+        plate: controller.isInputValid() ? controller.buildPlateNumber() : '',
+        regionStatus: controller.dropdownValue.trim().isEmpty
+            ? PlateEditorSectionStatus.incomplete
+            : PlateEditorSectionStatus.complete,
+        plateStatus: _identityStatus(registration),
+        onRegionTap: () => unawaited(_openRegionPicker()),
+        plateAnchorKey: _overviewPlateAnchorKey,
+        onPlateTap: () => unawaited(
+          _handleOverviewWorkspaceTap(
+            PlateEditorWorkspace.vehicleIdentity,
+            policy,
+          ),
+        ),
+      ),
+      PlateEditorOverviewSection(
+        icon: Icons.local_parking_rounded,
+        title: '주차',
+        value: controller.locationController.text.trim().isEmpty
+            ? ''
+            : plateParkingOverviewLocation(
+                controller.locationController.text,
+              ),
+        status: registration.parkingComplete
+            ? PlateEditorSectionStatus.complete
+            : PlateEditorSectionStatus.incomplete,
+        onTap: () => unawaited(
+          _handleOverviewWorkspaceTap(
+            PlateEditorWorkspace.parking,
+            policy,
+          ),
+        ),
+      ),
+      PlateEditorOverviewPhotoSection(
+        summary: '신규 ${controller.capturedImages.length}장',
+        status: controller.capturedImages.isEmpty
+            ? PlateEditorSectionStatus.none
+            : PlateEditorSectionStatus.complete,
+        onTap: () => unawaited(
+          _handleOverviewWorkspaceTap(
+            PlateEditorWorkspace.camera,
+            policy,
+          ),
+        ),
+      ),
+      if (policy.hasSector)
+        PlateEditorOverviewSection(
+          icon: Icons.place_rounded,
+          title: '방문 구역',
+          value: controller.selectedSectorName?.trim().isNotEmpty == true
+              ? controller.selectedSectorName!.trim()
+              : '',
+          status: registration.sectorComplete
+              ? PlateEditorSectionStatus.complete
+              : PlateEditorSectionStatus.incomplete,
+          onTap: () => unawaited(
+            _handleOverviewWorkspaceTap(
+              PlateEditorWorkspace.sector,
+              policy,
+            ),
+          ),
+        ),
+      if (policy.hasBill)
+        PlateEditorOverviewSection(
+          icon: Icons.receipt_long_rounded,
+          title: '변동 정산',
+          value: _variableBillingSummary(),
+          status: _hasVariableBillingSelection
+              ? PlateEditorSectionStatus.complete
+              : controller.selectedBillType == '변동' &&
+                      registration.billingRequired
+                  ? PlateEditorSectionStatus.incomplete
+                  : PlateEditorSectionStatus.none,
+          onTap: () => unawaited(
+            _handleOverviewWorkspaceTap(
+              PlateEditorWorkspace.variableBilling,
+              policy,
+            ),
+          ),
+        ),
+      if (policy.hasBill)
+        PlateEditorOverviewSection(
+          icon: Icons.calendar_month_rounded,
+          title: '정기 정산',
+          value: _regularBillingSummary(),
+          status: _hasRegularBillingSelection
+              ? PlateEditorSectionStatus.complete
+              : controller.selectedBillType == '정기' &&
+                      registration.billingRequired
+                  ? PlateEditorSectionStatus.incomplete
+                  : PlateEditorSectionStatus.none,
+          onTap: () => unawaited(
+            _handleOverviewWorkspaceTap(
+              PlateEditorWorkspace.regularBilling,
+              policy,
+            ),
+          ),
+        ),
+      PlateEditorOverviewSection(
+        icon: _statusError == null
+            ? Icons.notes_rounded
+            : Icons.warning_amber_rounded,
+        title: '상태 메모',
+        value: controller.statusLookupInProgress
+            ? '상태 정보 확인 중'
+            : _statusError != null
+                ? _statusError!
+                : memo,
+        status: controller.statusLookupInProgress
+            ? PlateEditorSectionStatus.loading
+            : _statusError != null
+                ? PlateEditorSectionStatus.error
+                : memo.isEmpty
+                    ? PlateEditorSectionStatus.none
+                    : PlateEditorSectionStatus.complete,
+        onTap: () => unawaited(
+          _handleOverviewWorkspaceTap(
+            PlateEditorWorkspace.memo,
+            policy,
+          ),
+        ),
+      ),
+    ];
+
+    return PlateEditorOverview(
+      title: '차량 등록 정보',
+      sections: sections,
+    );
+  }
+
+  void _closeEditorDialog(
+    BuildContext dialogContext,
+    PlateEditorWorkspace workspace, {
+    required String reason,
+  }) {
+    _log('dialog=${workspace.name}_request_close reason=$reason');
+    Navigator.of(dialogContext, rootNavigator: true).pop();
+  }
+
+  Widget _buildVariableBillingWorkspace(
+    BuildContext dialogContext,
+    StateSetter setDialogState,
+  ) {
+    final billState = context.read<BillState>();
+    final options = billState.generalBills
+        .map(
+          (bill) => PlateBillingOption(
+            value: bill.countType,
+            detail:
+                '${bill.basicStandard ?? 0}분 · ${bill.basicAmount ?? 0}원 · 추가 ${bill.addStandard ?? 0}분 ${bill.addAmount ?? 0}원',
+          ),
+        )
+        .toList(growable: false);
+    final value = _hasVariableBillingSelection
+        ? controller.selectedBill!.trim()
+        : '';
+    return PlateBillingWorkspace(
+      onExit: () => _closeEditorDialog(
+        dialogContext,
+        PlateEditorWorkspace.variableBilling,
+        reason: 'variable_billing_exit',
+      ),
+      selectedType: '변동',
+      selectedValue: value,
+      title: '변동 정산',
+      subtitle: '변동 정산',
+      valueOptions: options,
+      detailRows: _variableBillingDetailRows(),
+      loading: billState.isLoading,
+      onValueChanged: (selectedValue) async {
+        final applyFuture = _selectGeneralBill(selectedValue);
+        if (dialogContext.mounted) setDialogState(() {});
+        await applyFuture;
+        if (!mounted) return;
+        _log(
+          'billing=variable_auto_applied value=${selectedValue.trim()}',
+        );
+        HapticFeedback.mediumImpact();
+        if (!dialogContext.mounted) return;
+        _closeEditorDialog(
+          dialogContext,
+          PlateEditorWorkspace.variableBilling,
+          reason: 'variable_billing_auto_apply',
+        );
+      },
+    );
+  }
+
+  Widget _buildDialogContent(
+    BuildContext dialogContext,
+    PlateEditorWorkspace workspace,
+  ) {
+    switch (workspace) {
+      case PlateEditorWorkspace.overview:
+        return const SizedBox.shrink();
+      case PlateEditorWorkspace.vehicleIdentity:
+        return const SizedBox.shrink();
+      case PlateEditorWorkspace.parking:
+        return Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: CommonUiTheme.of(dialogContext).borderSubtle,
+            ),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: PlateParkingWorkspace(
+            currentLocation: controller.locationController.text.trim(),
+            preferredParkingAreas: controller.selectedParkingPriorities,
+            onLocationApplied: _applyParking,
+            onClearLocation:
+                widget.isMinorMode ? _clearParkingLocation : null,
+            onExit: () => _closeEditorDialog(
+              dialogContext,
+              PlateEditorWorkspace.parking,
+              reason: 'parking_exit',
+            ),
+            onDebug: _log,
+          ),
+        );
+      case PlateEditorWorkspace.camera:
+        return PlateCameraWorkspace(
+          key: ValueKey<int>(_cameraSessionKey),
+          plateNumber: controller.isInputValid()
+              ? controller.buildPlateNumber()
+              : 'new_plate',
+          initialCapturedImages: List<XFile>.from(controller.capturedImages),
+          initialPreviewImages: _cameraInitialPreviewImages,
+          initialPreviewIndex: _cameraInitialPreviewIndex,
+          startInPreview: _cameraStartInPreview,
+          onExit: () => _closeEditorDialog(
+            dialogContext,
+            PlateEditorWorkspace.camera,
+            reason: 'camera_exit',
+          ),
+          onImageCaptured: (image) {
+            if (controller.capturedImages.any((item) => item.path == image.path)) {
+              return;
+            }
+            setState(() => controller.capturedImages.add(image));
+            _log(
+              'camera=captured path=${image.path} count=${controller.capturedImages.length}',
+            );
+          },
+          onImageDeleted: (image) {
+            setState(() {
+              controller.capturedImages.removeWhere(
+                (candidate) => candidate.path == image.path,
+              );
+            });
+            _log(
+              'camera=deleted path=${image.path} count=${controller.capturedImages.length}',
+            );
+          },
+          onDebug: _log,
+        );
+      case PlateEditorWorkspace.sector:
+        return PlateSectorWorkspace(
+          selectedId: controller.selectedSectorId,
+          selectedName: controller.selectedSectorName,
+          onSelected: (sector) async {
+            await _applySector(sector);
+            if (!dialogContext.mounted) return;
+            _closeEditorDialog(
+              dialogContext,
+              PlateEditorWorkspace.sector,
+              reason: 'sector_applied',
+            );
+          },
+          onExit: () => _closeEditorDialog(
+            dialogContext,
+            PlateEditorWorkspace.sector,
+            reason: 'sector_exit',
+          ),
+          onDebug: _log,
+        );
+      case PlateEditorWorkspace.variableBilling:
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return _buildVariableBillingWorkspace(
+              dialogContext,
+              setDialogState,
+            );
+          },
+        );
+      case PlateEditorWorkspace.regularBilling:
+        return const SizedBox.shrink();
+      case PlateEditorWorkspace.memo:
+        return PlateMemoWorkspace(
+          controller: _memoDraftController,
+          originalValue: controller.expectedOriginalStatus.customStatus,
+          committedValue: controller.customStatusController.text,
+          statusResolving: controller.statusLookupInProgress,
+          statusError: _statusError,
+          onRetry: _retryStatusLookup,
+          onApplied: (value) {
+            _applyMemo(value);
+            if (!dialogContext.mounted) return;
+            _closeEditorDialog(
+              dialogContext,
+              PlateEditorWorkspace.memo,
+              reason: 'memo_applied',
+            );
+          },
+          onPendingChanged: (pending) {
+            if (_memoPending == pending) return;
+            setState(() => _memoPending = pending);
+          },
+          onExit: () => _closeEditorDialog(
+            dialogContext,
+            PlateEditorWorkspace.memo,
+            reason: 'memo_exit',
+          ),
+          onDebug: _log,
+        );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final areaState = context.watch<AreaState>();
+    final policy = PlateEditorPolicy.fromCapabilities(
+      area: areaState.currentArea,
+      capabilities: areaState.capabilitiesOfCurrentArea,
+    );
+    _syncPolicy(policy);
+    final billState = context.watch<BillState>();
+    final registration = InputPlateRegistrationPolicy.resolve(
+      controller: controller,
+      editorPolicy: policy,
+      billState: billState,
+    );
+    final pending = _hasPendingWorkspaceDraft;
+    final hasParkingLocation =
+        controller.locationController.text.trim().isNotEmpty;
+    final entryActionLabel = hasParkingLocation ? '입차 완료' : '입차 요청';
+    final entryActionIcon = hasParkingLocation
+        ? Icons.check_circle_outline_rounded
+        : Icons.outbox_rounded;
+    final entryActionVariant = hasParkingLocation
+        ? CommonButtonVariant.success
+        : CommonButtonVariant.destructive;
+    final plate = controller.isInputValid() ? controller.buildPlateNumber() : '';
+
+    return CommonUiScope(
+      child: PopScope(
+        canPop: false,
+        onPopInvoked: (didPop) async {
+          if (didPop) return;
+          if (_identityEditing) {
+            _exitIdentityEditor(reason: 'system_back');
+            return;
+          }
+          await _requestClose(source: 'system_back');
+        },
+        child: CommonSideDockFrame(
+          title: _identityEditing
+              ? '차량 식별정보'
+              : plate.isEmpty
+                  ? '신규 차량'
+                  : plate,
+          subtitle: _identityEditing ? '차량번호 입력' : '차량 등록',
+          icon: _identityEditing
+              ? Icons.badge_rounded
+              : Icons.add_circle_rounded,
+          closeEnabled: !_busy && !_identityAutoApplying,
+          onClose: () {
+            if (_identityEditing) {
+              _exitIdentityEditor(reason: 'header_close');
+              return;
+            }
+            _requestClose(source: 'header_close');
+          },
+          onHeaderTap: _identityEditing
+              ? null
+              : () => _enterIdentityEditor(source: 'header_identity'),
+          headerAction: _editorTrace?.developerMode == true
+              ? CommonIconButton(
+                  icon: Icons.bug_report_rounded,
+                  tooltip: '디버그 상태',
+                  size: 38,
+                  iconSize: 19,
+                  haptic: CommonHaptic.selection,
+                  onPressed: _showDeveloperStatus,
+                )
+              : null,
+          leadingRail: PlateEditorRail(
+            enabled: !_busy && !_identityEditing,
+            policy: policy,
+            selectedWorkspace: _activeDialog,
+            onSelected: (workspace) => _openEditorDialog(
+              workspace,
+              policy,
+              source: 'rail',
+            ),
+            onLiveOcr: (sourceRect) =>
+                unawaited(_openScannerFromRail(sourceRect)),
+          ),
+          collapseLeadingRail: _identityEditing,
+          footer: _identityEditing
+              ? null
+              : PlateEditorFooter(
+                  actionLabel: entryActionLabel,
+                  actionIcon: entryActionIcon,
+                  actionVariant: entryActionVariant,
+                  preserveActionVariantWhenDisabled: true,
+                  loading: controller.isLoading,
+                  onPressed: _busy || pending || !registration.canSubmit
+                      ? null
+                      : _handleSubmit,
+                ),
+          child: AnimatedSwitcher(
+            duration: MediaQuery.maybeOf(context)?.disableAnimations == true
+                ? Duration.zero
+                : const Duration(milliseconds: 190),
+            reverseDuration:
+                MediaQuery.maybeOf(context)?.disableAnimations == true
+                    ? Duration.zero
+                    : const Duration(milliseconds: 150),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (child, animation) {
+              final slide = Tween<Offset>(
+                begin: const Offset(.025, 0),
+                end: Offset.zero,
+              ).animate(animation);
+              return FadeTransition(
+                opacity: animation,
+                child: SlideTransition(position: slide, child: child),
+              );
+            },
+            child: _identityEditing
+                ? PlateIdentityWorkspace(
+                    key: ValueKey<String>(
+                      'identity:${_identityInitialFocus.name}:${_identityMiddleSuggestions.join('|')}',
+                    ),
+                    frontController: _identityFrontDraftController,
+                    middleController: _identityMidDraftController,
+                    backController: _identityBackDraftController,
+                    pending: _identityPending,
+                    description: '차량번호의 앞자리, 한글, 뒷자리를 입력합니다.',
+                    initialThreeDigit: controller.isThreeDigit,
+                    initialFocusTarget: _identityInitialFocus,
+                    middleSuggestions: _identityMiddleSuggestions,
+                    plateAnchorKey: _identityPlateAnchorKey,
+                    onFocusTargetChanged: _syncControllerIdentityFocus,
+                    onAutoApply: _applyIdentityDraft,
+                    onExit: () =>
+                        _exitIdentityEditor(reason: 'workspace_back'),
+                    onDebug: _log,
+                  )
+                : KeyedSubtree(
+                    key: const ValueKey<String>('input_overview'),
+                    child: _buildOverview(policy, registration),
+                  ),
+          ),
+        ),
+      ),
     );
   }
 }

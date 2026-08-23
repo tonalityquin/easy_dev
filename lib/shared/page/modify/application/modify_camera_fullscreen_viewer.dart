@@ -4,54 +4,56 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../design_system/common_ui/common_ui_components.dart';
-import '../../../../design_system/common_ui/common_ui_overlays.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
 
-void modifyShowFullScreenImageViewer(
-  BuildContext context,
-  List<dynamic> images,
-  int initialIndex, {
-  bool isUrlList = false,
-}) {
-  if (images.isEmpty) return;
-  final safeIndex = initialIndex.clamp(0, images.length - 1).toInt();
-  showCommonOverlayDialog<void>(
-    context: context,
-    builder: (dialogContext) => _ModifyCommonImageViewer(
-      images: images,
-      initialIndex: safeIndex,
-    ),
-  );
-}
-
-class _ModifyCommonImageViewer extends StatefulWidget {
-  const _ModifyCommonImageViewer({
+class ModifyEmbeddedImageViewerContent extends StatefulWidget {
+  const ModifyEmbeddedImageViewerContent({
+    super.key,
     required this.images,
     required this.initialIndex,
+    this.onBack,
+    this.onPageChanged,
+    this.onDebug,
   });
 
   final List<dynamic> images;
   final int initialIndex;
+  final VoidCallback? onBack;
+  final ValueChanged<int>? onPageChanged;
+  final ValueChanged<String>? onDebug;
 
   @override
-  State<_ModifyCommonImageViewer> createState() =>
-      _ModifyCommonImageViewerState();
+  State<ModifyEmbeddedImageViewerContent> createState() =>
+      _ModifyEmbeddedImageViewerContentState();
 }
 
-class _ModifyCommonImageViewerState
-    extends State<_ModifyCommonImageViewer> {
-  late final PageController _pageController;
+class _ModifyEmbeddedImageViewerContentState
+    extends State<ModifyEmbeddedImageViewerContent> {
+  late PageController _pageController;
   late int _currentIndex;
+
+  int _safeIndex(int value) {
+    if (widget.images.isEmpty) return 0;
+    return value.clamp(0, widget.images.length - 1).toInt();
+  }
 
   @override
   void initState() {
     super.initState();
-    _currentIndex = widget.initialIndex;
+    _currentIndex = _safeIndex(widget.initialIndex);
     _pageController = PageController(initialPage: _currentIndex);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.onDebug?.call(
+        'photo_preview=open index=$_currentIndex count=${widget.images.length}',
+      );
+    });
   }
 
   @override
   void dispose() {
+    widget.onDebug?.call(
+      'photo_preview=close index=$_currentIndex count=${widget.images.length}',
+    );
     _pageController.dispose();
     super.dispose();
   }
@@ -66,8 +68,6 @@ class _ModifyCommonImageViewerState
     if (image is XFile) return image.path;
     return image.toString();
   }
-
-  String _tagOf(dynamic image) => _pathOf(image);
 
   String _metadataOf(dynamic image) {
     if (_isNetwork(image)) {
@@ -128,83 +128,114 @@ class _ModifyCommonImageViewerState
   @override
   Widget build(BuildContext context) {
     final tokens = CommonUiTheme.of(context);
-    return SizedBox.expand(
-      child: Material(
-        color: tokens.canvas,
-        child: Stack(
-          children: [
-            PageView.builder(
-              controller: _pageController,
-              itemCount: widget.images.length,
-              onPageChanged: (index) => setState(() => _currentIndex = index),
-              itemBuilder: (context, index) {
-                final image = widget.images[index];
-                final metadata = _metadataOf(image);
-                return Stack(
-                  children: [
-                    Center(
-                      child: Hero(
-                        tag: _tagOf(image),
-                        child: InteractiveViewer(
-                          minScale: .8,
-                          maxScale: 4,
-                          child: _buildImage(context, image),
-                        ),
-                      ),
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+
+    if (widget.images.isEmpty) {
+      return Center(
+        child: Text(
+          '표시할 사진이 없습니다.',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: tokens.textSecondary,
+              ),
+        ),
+      );
+    }
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        PageView.builder(
+          controller: _pageController,
+          itemCount: widget.images.length,
+          onPageChanged: (index) {
+            setState(() => _currentIndex = index);
+            widget.onPageChanged?.call(index);
+            widget.onDebug?.call(
+              'photo_preview=page_changed index=$index count=${widget.images.length}',
+            );
+          },
+          itemBuilder: (context, index) {
+            final image = widget.images[index];
+            final metadata = _metadataOf(image);
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(8, 46, 8, 8),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Center(
+                    child: InteractiveViewer(
+                      minScale: .8,
+                      maxScale: 4,
+                      child: _buildImage(context, image),
                     ),
-                    if (metadata.isNotEmpty)
-                      Positioned(
-                        left: 18,
-                        right: 18,
-                        bottom: 24,
-                        child: CommonAnimatedReveal(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 11,
-                            ),
-                            decoration: BoxDecoration(
-                              color: tokens.surfaceRaised,
-                              borderRadius: BorderRadius.circular(
-                                CommonUiShapes.control,
-                              ),
-                              border: Border.all(color: tokens.borderSubtle),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: tokens.shadow,
-                                  blurRadius: 14,
-                                  offset: const Offset(0, 6),
+                  ),
+                  if (metadata.isNotEmpty)
+                    Positioned(
+                      left: 10,
+                      right: 10,
+                      bottom: 10,
+                      child: AnimatedOpacity(
+                        duration: reduceMotion
+                            ? Duration.zero
+                            : const Duration(milliseconds: 190),
+                        opacity: 1,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 9,
+                          ),
+                          decoration: BoxDecoration(
+                            color: tokens.surfaceRaised.withOpacity(.94),
+                            borderRadius:
+                                BorderRadius.circular(CommonUiShapes.control),
+                            border: Border.all(color: tokens.borderSubtle),
+                          ),
+                          child: Text(
+                            metadata,
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(
+                                  color: tokens.textPrimary,
+                                  height: 1.35,
+                                  fontWeight: FontWeight.w700,
                                 ),
-                              ],
-                            ),
-                            child: Text(
-                              metadata,
-                              textAlign: TextAlign.center,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
-                                  ?.copyWith(
-                                    color: tokens.textPrimary,
-                                    height: 1.4,
-                                  ),
-                            ),
                           ),
                         ),
                       ),
-                  ],
-                );
-              },
-            ),
-            Positioned(
-              top: 12,
-              left: 12,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
+                    ),
+                ],
+              ),
+            );
+          },
+        ),
+        Positioned(
+          top: 8,
+          left: 8,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (widget.onBack != null) ...[
+                CommonIconButton(
+                  icon: Icons.arrow_back_rounded,
+                  tooltip: '이전',
+                  size: 36,
+                  iconSize: 18,
+                  haptic: CommonHaptic.selection,
+                  onPressed: widget.onBack,
                 ),
+                const SizedBox(width: 6),
+              ],
+              AnimatedContainer(
+                duration: reduceMotion
+                    ? Duration.zero
+                    : const Duration(milliseconds: 180),
+                curve: Curves.easeOutCubic,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: tokens.surfaceRaised,
+                  color: tokens.surfaceRaised.withOpacity(.94),
                   borderRadius: BorderRadius.circular(CommonUiShapes.pill),
                   border: Border.all(color: tokens.borderSubtle),
                 ),
@@ -212,24 +243,14 @@ class _ModifyCommonImageViewerState
                   '${_currentIndex + 1} / ${widget.images.length}',
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
                         color: tokens.textPrimary,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w800,
                       ),
                 ),
               ),
-            ),
-            Positioned(
-              top: 8,
-              right: 8,
-              child: CommonIconButton(
-                icon: Icons.close_rounded,
-                tooltip: '닫기',
-                haptic: CommonHaptic.selection,
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
+      ],
     );
   }
 }

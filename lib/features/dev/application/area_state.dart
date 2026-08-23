@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
-import '../../../app/config/email_config.dart';
+import '../../../shared/area_remote_settings/application/area_snapshot_scope.dart';
 import '../../../app/models/capability.dart';
 import '../domain/repositories/area_repo_package/area_repository.dart';
 
@@ -27,7 +27,6 @@ class AreaState with ChangeNotifier {
   String _currentDivision = '';
   AreaRecord? _currentRecord;
   int _sessionGeneration = 0;
-  Future<void> _recipientSyncQueue = Future<void>.value();
 
   final String _selectedArea = '';
   final String _selectedDivision = '';
@@ -118,102 +117,10 @@ class AreaState with ChangeNotifier {
     _availableAreas
       ..clear()
       ..add(record.name);
-  }
-
-  Future<void> _syncRecipientEmailFromRecord(
-    AreaRecord record, {
-    required String source,
-    required int expectedGeneration,
-    AreaStateLog? onLog,
-    double? progress,
-  }) async {
-    final previous = _recipientSyncQueue;
-    final next = () async {
-      try {
-        await previous;
-      } catch (_) {}
-
-      if (expectedGeneration != _sessionGeneration) {
-        _emit(
-          '[AreaState] areas.email 동기화 폐기: source=$source, expectedGeneration=$expectedGeneration, currentGeneration=$_sessionGeneration',
-          onLog: onLog,
-          progress: progress,
-        );
-        return;
-      }
-
-      final email = record.email.trim();
-      if (email.isEmpty) {
-        _emit(
-          '[AreaState] areas.email 없음: area=${record.name}, division=${record.division}, source=$source',
-          onLog: onLog,
-          progress: progress,
-        );
-        await EmailConfig.clear();
-        return;
-      }
-
-      try {
-        _emit(
-          '[AreaState] areas.email 수신자 동기화 시작: area=${record.name}, division=${record.division}, email=$email, source=$source',
-          onLog: onLog,
-          progress: progress,
-        );
-        await EmailConfig.replaceRecipient(email);
-        _emit(
-          '[AreaState] areas.email 수신자 동기화 완료: area=${record.name}, email=$email, source=$source',
-          onLog: onLog,
-          progress: progress,
-        );
-      } catch (error, stackTrace) {
-        _emit(
-          '[AreaState] areas.email 수신자 동기화 실패: area=${record.name}, email=$email, source=$source, error=$error',
-          onLog: onLog,
-          progress: progress,
-        );
-        _emit(
-          '[AreaState] areas.email 스택 추적: $stackTrace',
-          onLog: onLog,
-          progress: progress,
-        );
-      }
-    }();
-    _recipientSyncQueue = next;
-    await next;
-  }
-
-  Future<void> _clearRecipientEmailForSessionEnd({
-    required String source,
-    AreaStateLog? onLog,
-    double? progress,
-  }) async {
-    final previous = _recipientSyncQueue;
-    final next = () async {
-      try {
-        await previous;
-      } catch (_) {}
-      try {
-        await EmailConfig.clear();
-        _emit(
-          '[AreaState] 로그인 세션 이메일 캐시 초기화 완료: source=$source',
-          onLog: onLog,
-          progress: progress,
-        );
-      } catch (error, stackTrace) {
-        _emit(
-          '[AreaState] 로그인 세션 이메일 캐시 초기화 실패: source=$source, error=$error',
-          onLog: onLog,
-          progress: progress,
-        );
-        _emit(
-          '[AreaState] 로그인 세션 이메일 캐시 초기화 스택 추적: $stackTrace',
-          onLog: onLog,
-          progress: progress,
-        );
-      }
-    }();
-    _recipientSyncQueue = next;
-    await next;
+    AreaSnapshotScope.bind(
+      division: _currentDivision,
+      area: _currentArea,
+    );
   }
 
   Future<AreaRecord?> _fetchCurrentAreaRecord(
@@ -256,10 +163,10 @@ class AreaState with ChangeNotifier {
     _divisionAreaMap.clear();
     notifyListeners();
     _notifyForegroundWithArea();
+    AreaSnapshotScope.clear();
     debugPrint(
       '[AreaState] 세션 캐시 초기화 완료: source=$source, generation=$_sessionGeneration',
     );
-    await _clearRecipientEmailForSessionEnd(source: source);
   }
 
   void setAreaLocalOnly(String area, {String? division}) {
@@ -277,6 +184,10 @@ class AreaState with ChangeNotifier {
       ..clear()
       ..add(trimmed);
     _areaCaps[trimmed] = <Capability>{};
+    AreaSnapshotScope.bind(
+      division: _currentDivision,
+      area: _currentArea,
+    );
 
     notifyListeners();
     _notifyForegroundWithArea();
@@ -307,11 +218,6 @@ class AreaState with ChangeNotifier {
     _availableAreas.clear();
     _divisionAreaMap.clear();
     notifyListeners();
-    await _clearRecipientEmailForSessionEnd(
-      source: 'refreshAreaForLogin.reset',
-      onLog: onLog,
-      progress: 0.12,
-    );
     if (generation != _sessionGeneration) {
       throw StateError('Area 로그인 세션이 변경되어 서버 조회를 시작하지 않습니다.');
     }
@@ -348,14 +254,6 @@ class AreaState with ChangeNotifier {
       '[AreaState] 로그인 AreaRecord 서버 조회 완료: division=${record.division}, area=${record.name}, isHeadquarter=${record.isHeadquarter}, caps=${Cap.human(record.capabilities)}, modes=${record.modes.join(',')}',
       onLog: onLog,
       progress: 0.62,
-    );
-
-    await _syncRecipientEmailFromRecord(
-      record,
-      source: 'refreshAreaForLogin.server',
-      expectedGeneration: generation,
-      onLog: onLog,
-      progress: 0.78,
     );
 
     if (generation != _sessionGeneration) {
@@ -422,13 +320,6 @@ class AreaState with ChangeNotifier {
     }
 
     _applyRecordToState(record);
-    await _syncRecipientEmailFromRecord(
-      record,
-      source: 'resolveIsHeadquarter.fallback',
-      expectedGeneration: generation,
-      onLog: onLog,
-      progress: 0.9,
-    );
     if (generation != _sessionGeneration) {
       throw StateError('Area 세션이 변경되어 본사 여부 fallback 결과를 폐기했습니다.');
     }
@@ -499,11 +390,6 @@ class AreaState with ChangeNotifier {
 
       if (record != null) {
         _applyRecordToState(record);
-        await _syncRecipientEmailFromRecord(
-          record,
-          source: 'initializeArea.remote',
-          expectedGeneration: generation,
-        );
         if (generation != _sessionGeneration) return;
         notifyListeners();
         debugPrint(
@@ -515,6 +401,7 @@ class AreaState with ChangeNotifier {
         _currentRecord = null;
         _currentArea = '';
         _currentDivision = '';
+        AreaSnapshotScope.clear();
         notifyListeners();
       }
     } catch (e, st) {
@@ -522,6 +409,7 @@ class AreaState with ChangeNotifier {
         _currentRecord = null;
         _currentArea = '';
         _currentDivision = '';
+        AreaSnapshotScope.clear();
         notifyListeners();
       }
       debugPrint('[AreaState] 사용자 지역 초기화 실패: $e\n$st');
@@ -550,11 +438,6 @@ class AreaState with ChangeNotifier {
 
       final previousCaps = capabilitiesOfCurrentArea;
       _applyRecordToState(record);
-      await _syncRecipientEmailFromRecord(
-        record,
-        source: 'refreshCurrentAreaCapabilities',
-        expectedGeneration: generation,
-      );
       if (generation != _sessionGeneration) return false;
 
       notifyListeners();
@@ -619,11 +502,6 @@ class AreaState with ChangeNotifier {
 
       if (record != null) {
         _applyRecordToState(record);
-        await _syncRecipientEmailFromRecord(
-          record,
-          source: isSyncing ? 'updateArea.sync' : 'updateArea.user',
-          expectedGeneration: generation,
-        );
         if (generation != _sessionGeneration) return;
         notifyListeners();
         final msg = isSyncing

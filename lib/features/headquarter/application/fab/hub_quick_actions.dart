@@ -16,9 +16,7 @@ import '../../../../app/utils/ops_delayed_refresh_gate.dart';
 import '../../../../app/utils/snackbar_helper.dart';
 import '../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
-import '../../../../shared/area_remote_settings/application/area_remote_settings_sync.dart';
 import '../../../account/applications/user_state.dart';
-import '../../../dev/domain/repositories/area_repo_package/area_repository.dart';
 import '../../application/area/area_master_cache.dart';
 import '../../page/sheets/head_memo.dart';
 import '../../../selector/application/dev_auth.dart';
@@ -215,89 +213,92 @@ class HeadHubActions {
     final currentArea = userState.currentArea.trim();
     final trace = await DeveloperOperationTrace.start(
       context: ctx,
-      title: '지역 마스터 갱신',
-      initialMessage: '지역 마스터 갱신 요청을 확인하고 있습니다.',
+      title: '본사 데이터 내려받기',
+      initialMessage: '본사 다운로드 Snapshot 요청을 확인하고 있습니다.',
       useCommonUi: true,
       developerModeMessage: '개발자 모드 ON: debugPrint 코드를 복사할 수 있습니다.',
       standardModeMessage: '개발자 모드 OFF',
     );
 
     if (division.isEmpty) {
-      const failureMessage = '회사 정보가 없어 지역 마스터를 갱신할 수 없습니다.';
+      const failureMessage = '회사 정보가 없어 본사 데이터를 내려받을 수 없습니다.';
       await trace.fail(failureMessage);
       if (!trace.developerMode && ctx.mounted) {
-        showFailedSnackbar(
-          ctx,
-          failureMessage,
-          useCommonUi: true,
-        );
+        showFailedSnackbar(ctx, failureMessage, useCommonUi: true);
       }
       return;
     }
 
     if (currentArea.isEmpty) {
-      const failureMessage = '현재 지역 정보가 없어 지역 마스터를 갱신할 수 없습니다.';
+      const failureMessage = '현재 지역 정보가 없어 본사 데이터를 내려받을 수 없습니다.';
       await trace.fail(failureMessage);
       if (!trace.developerMode && ctx.mounted) {
-        showFailedSnackbar(
-          ctx,
-          failureMessage,
-          useCommonUi: true,
-        );
+        showFailedSnackbar(ctx, failureMessage, useCommonUi: true);
       }
       return;
     }
 
-    trace.log('회사 정보를 확인했습니다: $division', progress: 0.06);
-    trace.log('현재 로그인 지역을 확인했습니다: $currentArea', progress: 0.1);
-    trace.log('실행 전 갱신 게이트를 확인하고 있습니다.', progress: 0.16);
+    trace.log('회사 정보를 확인했습니다: $division', progress: 0.05);
+    trace.log('현재 로그인 지역을 확인했습니다: $currentArea', progress: 0.09);
+    trace.log('내려받기 실행 게이트를 확인하고 있습니다.', progress: 0.14);
 
     final shouldRefresh = await OpsDelayedRefreshGate.waitIfNeeded(
       context: ctx,
-      title: '지역 마스터 갱신',
-      message: '지역 마스터를 갱신하기 전 요청을 준비하고 있습니다.',
+      title: '본사 데이터 내려받기',
+      message: '본사 데이터를 내려받기 전 요청을 준비하고 있습니다.',
       useCommonUi: true,
     );
     if (!shouldRefresh) {
-      trace.log('사용자가 지역 마스터 갱신을 취소했습니다.');
+      trace.log('사용자가 본사 데이터 내려받기를 취소했습니다.');
       return;
     }
 
     try {
-      trace.log('기존 지역 마스터를 정리하고 있습니다.', progress: 0.3);
-      trace.log('최신 지역 마스터를 내려받고 있습니다.', progress: 0.52);
-      final snapshot = await AreaMasterCache.refreshDivision(division);
       trace.log(
-        '${snapshot.items.length}개 지역 정보를 저장했습니다.',
-        progress: 0.66,
+        'Firebase 데이터를 다운로드한 뒤 하나의 SQLite Snapshot으로 저장합니다.',
+        progress: 0.2,
       );
-      trace.log(
-        '지역 마스터 갱신 후 현재 지역의 경량 연결 데이터 동기화를 시작합니다.',
-        progress: 0.69,
-      );
-
-      final syncResult = await AreaRemoteSettingsSync.sync(
-        repository: ctx.read<AreaRepository>(),
-        division: division,
-        area: currentArea,
+      final snapshot = await AreaMasterCache.refreshDivision(
+        division,
+        requiredArea: currentArea,
         onLog: trace.log,
-        progressStart: 0.7,
-        progressEnd: 0.96,
+        progressStart: 0.22,
+        progressEnd: 0.76,
+      );
+      trace.log(
+        'SQLite Snapshot 저장을 확인했습니다: areas=${snapshot.items.length}, downloadedAt=${snapshot.refreshedAtIso}',
+        progress: 0.8,
       );
 
+      AreaMasterItem? currentItem;
+      for (final item in snapshot.items) {
+        if (item.name.trim() == currentArea) {
+          currentItem = item;
+          break;
+        }
+      }
+      if (currentItem == null) {
+        throw StateError(
+          '다운로드 Snapshot에서 현재 지역을 찾을 수 없습니다: $currentArea',
+        );
+      }
       trace.log(
-        '지역 마스터와 현재 지역 연결 데이터 동기화를 모두 검증했습니다: syncedCount=${syncResult.syncedCount}',
-        progress: 0.98,
+        '현재 지역 연결 데이터는 SharedPreferences에 복제하지 않고 SQLite Snapshot만 사용합니다: emailPresent=${currentItem.email.trim().isNotEmpty}, invitePresent=${currentItem.invite.trim().isNotEmpty}, communicationPresent=${currentItem.communication.trim().isNotEmpty}',
+        progress: 0.9,
+      );
+      trace.log(
+        '기존 Snapshot row 전량 삭제, 0건 검증, 신규 전량 INSERT와 commit을 완료했습니다.',
+        progress: 0.99,
       );
 
       if (trace.developerMode) {
         await trace.succeed(
-          '지역 마스터 갱신이 완료되었습니다. 개발자 모드에서는 앱을 종료하지 않습니다.',
+          '본사 데이터 내려받기가 완료되었습니다. 개발자 모드에서는 앱을 종료하지 않습니다.',
         );
         return;
       }
 
-      await trace.succeed('지역 마스터 갱신이 완료되었습니다.');
+      await trace.succeed('본사 데이터 내려받기가 완료되었습니다.');
       if (!ctx.mounted) return;
 
       await showCommonDialog<void>(
@@ -325,14 +326,14 @@ class HeadHubActions {
                             BorderRadius.circular(CommonUiShapes.control),
                       ),
                       child: Icon(
-                        Icons.cloud_done_rounded,
+                        Icons.download_done_rounded,
                         color: tokens.onSuccessContainer,
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        '지역 마스터 갱신 완료',
+                        '본사 데이터 내려받기 완료',
                         style: text.titleMedium?.copyWith(
                           color: tokens.textPrimary,
                           fontWeight: FontWeight.w800,
@@ -351,13 +352,10 @@ class HeadHubActions {
                     border: Border.all(color: tokens.borderSubtle),
                   ),
                   child: Text(
-                    '기존 지역 마스터를 삭제하고 '
-                    '${snapshot.items.length}개 지역 정보를 새로 저장했습니다.\n\n'
-                    '${syncResult.emailSynced ? '현재 지역($currentArea)의 수신자 이메일을 서버 email 값으로 교체했습니다.' : '현재 지역($currentArea)의 email 값이 없어 기존 수신자 이메일을 유지했습니다.'}\n'
-                    '${syncResult.inviteSynced ? 'Discord 초대 링크를 서버 invite 값으로 교체했습니다.' : 'invite 값이 없어 기존 Discord 초대 링크를 유지했습니다.'}\n'
-                    '${syncResult.communicationSynced ? 'Discord 채널 링크를 서버 communication 값으로 교체했습니다.' : 'communication 값이 없어 기존 Discord 채널 링크를 유지했습니다.'}\n\n'
-                    '변경 사항 적용을 위해 앱을 종료합니다. '
-                    '앱을 다시 실행해 주세요.',
+                    '${snapshot.items.length}개 지역 정보를 SQLite Snapshot으로 저장했습니다.\n\n'
+                    '기준 시각: ${snapshot.refreshedAtIso}\n\n'
+                    '현재 지역($currentArea)의 email · invite · communication도 SQLite Snapshot에 포함되며 SharedPreferences에는 복제하지 않습니다.\n\n'
+                    '변경 사항 적용을 위해 앱을 종료합니다. 앱을 다시 실행해 주세요.',
                     style: text.bodyMedium?.copyWith(
                       color: tokens.textSecondary,
                       height: 1.5,
@@ -376,14 +374,12 @@ class HeadHubActions {
             ),
           );
 
-          if (reduceMotion) {
-            return content;
-          }
+          if (reduceMotion) return content;
 
           return TweenAnimationBuilder<double>(
             tween: Tween<double>(begin: 0, end: 1),
-            duration: const Duration(milliseconds: 320),
-            curve: Curves.easeOutCubic,
+            duration: CommonUiMotion.layout,
+            curve: CommonUiMotion.enter,
             child: content,
             builder: (context, value, child) {
               return Opacity(
@@ -405,18 +401,14 @@ class HeadHubActions {
       if (exitContext == null || !exitContext.mounted) return;
       await AppExitService.exitApp(exitContext, useCommonUi: true);
     } catch (error, stackTrace) {
-      const failureMessage = '지역 마스터 갱신에 실패했습니다.';
+      const failureMessage = '본사 데이터 내려받기에 실패했습니다.';
       await trace.fail(
         failureMessage,
         error: error,
         stackTrace: stackTrace,
       );
       if (!trace.developerMode && ctx.mounted) {
-        showFailedSnackbar(
-          ctx,
-          failureMessage,
-          useCommonUi: true,
-        );
+        showFailedSnackbar(ctx, failureMessage, useCommonUi: true);
       }
     }
   }

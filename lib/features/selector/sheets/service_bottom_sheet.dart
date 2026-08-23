@@ -701,77 +701,44 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
     return _sectionBox(
       context: context,
       icon: Icons.mail_outline,
-      title: '메일 전송 설정 (수신자만)',
-      trailing: CommonIconButton(
-        icon: Icons.restore,
-        tooltip: '기본값으로 초기화',
-        destructive: true,
-        haptic: CommonHaptic.selection,
-        onPressed: () async {
-          await EmailConfig.clear();
-          final cfg = await EmailConfig.load();
-          _mailToCtrl.text = cfg.to;
-          if (!mounted) return;
-          setState(() {});
-        },
-      ),
+      title: '메일 수신자',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           TextField(
             controller: _mailToCtrl,
-            keyboardType: TextInputType.emailAddress,
-            textInputAction: TextInputAction.done,
+            readOnly: true,
+            enableInteractiveSelection: true,
             decoration: const InputDecoration(
-              labelText: '수신자(To)',
+              labelText: 'SQLite Snapshot 수신자(To)',
               border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.person_add_alt_1_outlined),
+              prefixIcon: Icon(Icons.alternate_email_rounded),
             ),
-            onSubmitted: (_) => FocusScope.of(context).unfocus(),
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: CommonButton(
-                  label: '저장',
-                  icon: Icons.check_circle_outline,
-                  variant: CommonButtonVariant.secondary,
-                  expand: true,
-                  haptic: CommonHaptic.medium,
-                  onPressed: () async {
-                    final to = _mailToCtrl.text.trim();
-                    if (!EmailConfig.isValidToList(to)) {
-                      if (!mounted) return;
-                      return;
-                    }
-                    await EmailConfig.save(EmailConfig(to: to));
-                    if (!mounted) return;
-                    setState(() {});
-                  },
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: CommonButton(
-                  label: '설정 복사',
-                  icon: Icons.copy_all_outlined,
-                  variant: CommonButtonVariant.tertiary,
-                  expand: true,
-                  haptic: CommonHaptic.selection,
-                  onPressed: () async {
-                    final raw = 'To: ${_mailToCtrl.text}';
-                    await Clipboard.setData(ClipboardData(text: raw));
+          CommonButton(
+            label: '수신자 복사',
+            icon: Icons.copy_all_outlined,
+            variant: CommonButtonVariant.tertiary,
+            expand: true,
+            haptic: CommonHaptic.selection,
+            onPressed: _mailToCtrl.text.trim().isEmpty
+                ? null
+                : () async {
+                    await Clipboard.setData(
+                      ClipboardData(text: _mailToCtrl.text.trim()),
+                    );
                     if (!mounted) return;
                   },
-                ),
-              ),
-            ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Text(
-            '※ 저장되는 항목은 수신자(To)뿐입니다. 메일 제목·본문은 경위서 화면에서 작성합니다.',
-            style: text.bodySmall?.copyWith(fontSize: 12, color: t.textSecondary),
+            '본사 내려받기에서 저장된 현재 지역 SQLite Snapshot만 사용하며 이 화면에서는 값을 변경하지 않습니다.',
+            style: text.bodySmall?.copyWith(
+              fontSize: 12,
+              color: t.textSecondary,
+              height: 1.45,
+            ),
           ),
         ],
       ),

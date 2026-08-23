@@ -122,6 +122,16 @@ class TypePageRealtimeViewsRefreshService {
   }
 }
 
+class TypePageEntryLaunchData {
+  const TypePageEntryLaunchData({
+    required this.sourceRect,
+    required this.presentationController,
+  });
+
+  final Rect sourceRect;
+  final CommonSideDockPresentationController presentationController;
+}
+
 class TypePageConfig<PState, PgState extends ChangeNotifier> {
   TypePageConfig({
     required this.createPageState,
@@ -147,7 +157,7 @@ class TypePageConfig<PState, PgState extends ChangeNotifier> {
   final TypePageSearchAction<PgState> openSearch;
   final Widget Function() buildDepartureCompletedSheet;
   final Widget Function() buildDashboardSideDock;
-  final Widget Function() buildInputScreen;
+  final Widget Function(TypePageEntryLaunchData launch) buildInputScreen;
   final Map<String, dynamic> debugMeta;
   final DrivingRecoveryMode? recoveryMode;
 }
@@ -321,21 +331,37 @@ class _TypePageShellState<PState, PgState extends ChangeNotifier>
     }
   }
 
-  Future<void> _openEntryFlow(BuildContext context) async {
+  Future<void> _openEntryFlow(BuildContext context, Rect sourceRect) async {
     DebugActionRecorder.instance.recordAction(
       '입차 화면 열기',
       route: ModalRoute.of(context)?.settings.name,
       meta: <String, dynamic>{...widget.config.debugMeta},
     );
-    final reduceMotion =
-        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    await Navigator.of(context).push<dynamic>(
-      buildTypePageSlideRoute<dynamic>(
-        CommonUiScope(child: widget.config.buildInputScreen()),
-        fromLeft: true,
-        reduceMotion: reduceMotion,
-      ),
+    final presentationController =
+        CommonSideDockPresentationController(visible: false);
+    debugPrint(
+      '[TypePageEntryFlow] ocr_first sourceRect=${sourceRect.left.toStringAsFixed(1)},${sourceRect.top.toStringAsFixed(1)},${sourceRect.width.toStringAsFixed(1)},${sourceRect.height.toStringAsFixed(1)}',
     );
+    try {
+      await showCommonRightSideDock<dynamic>(
+        context: context,
+        barrierLabel: '차량 등록',
+        maxWidth: 360,
+        widthFactor: .92,
+        barrierDismissible: false,
+        presentationController: presentationController,
+        builder: (dockContext) => CommonUiScope(
+          child: widget.config.buildInputScreen(
+            TypePageEntryLaunchData(
+              sourceRect: sourceRect,
+              presentationController: presentationController,
+            ),
+          ),
+        ),
+      );
+    } finally {
+      presentationController.dispose();
+    }
   }
 
   Future<void> _openSearchFlow(BuildContext context) async {
@@ -414,11 +440,11 @@ class _TypePageShellState<PState, PgState extends ChangeNotifier>
                       Scaffold(
                         backgroundColor: tokens.canvas,
                         body: TypePageQuickActionScope(
-                          openEntry: () => _runQuickAction(
+                          openEntry: (sourceRect) => _runQuickAction(
                             context,
                             label: '입차 화면',
                             actionId: 'entry',
-                            action: () => _openEntryFlow(context),
+                            action: () => _openEntryFlow(context, sourceRect),
                           ),
                           openSearch: () => _runQuickAction(
                             context,
@@ -774,33 +800,4 @@ class TypePageRefreshableBody<PState, PgState extends ChangeNotifier>
       },
     );
   }
-}
-
-PageRouteBuilder<T> buildTypePageSlideRoute<T>(
-  Widget page, {
-  required bool fromLeft,
-  bool reduceMotion = false,
-}) {
-  final duration = reduceMotion ? Duration.zero : CommonUiMotion.layout;
-  return PageRouteBuilder<T>(
-    transitionDuration: duration,
-    reverseTransitionDuration: duration,
-    pageBuilder: (_, __, ___) => page,
-    transitionsBuilder: (_, animation, __, child) {
-      if (reduceMotion) return child;
-      final curved = CurvedAnimation(
-        parent: animation,
-        curve: CommonUiMotion.enter,
-        reverseCurve: CommonUiMotion.exit,
-      );
-      final position = Tween<Offset>(
-        begin: Offset(fromLeft ? -0.08 : 0.08, 0),
-        end: Offset.zero,
-      ).animate(curved);
-      return FadeTransition(
-        opacity: curved,
-        child: SlideTransition(position: position, child: child),
-      );
-    },
-  );
 }

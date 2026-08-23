@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-
-import '../../../../design_system/common_ui/common_ui_overlays.dart';
-import '../../../../design_system/common_ui/common_ui_theme.dart';
+import 'package:flutter/services.dart';
 
 import '../../../../app/config/email_config.dart';
+import '../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
 
 class MailRecipientSettings extends StatefulWidget {
   const MailRecipientSettings({
@@ -65,23 +65,13 @@ class MailRecipientSettings extends StatefulWidget {
 }
 
 class _MailRecipientSettingsState extends State<MailRecipientSettings> {
-  CommonUiTokens get _tokens => CommonUiTheme.of(context);
-  Color get _base => _tokens.accent;
-  Color get _dark => _tokens.accentPressed;
-  Color get _light => _tokens.accentContainer;
-
-  final TextEditingController _ctrl = TextEditingController();
-  final FocusNode _focus = FocusNode();
-
   String _loaded = '';
   bool _loading = true;
-  bool _saving = false;
 
   @override
   void initState() {
     super.initState();
     _bootstrap();
-    _ctrl.addListener(() => setState(() {}));
   }
 
   Future<void> _bootstrap() async {
@@ -90,224 +80,161 @@ class _MailRecipientSettingsState extends State<MailRecipientSettings> {
       if (!mounted) return;
       setState(() {
         _loaded = cfg.to.trim();
-        _ctrl.text = _loaded;
         _loading = false;
       });
     } catch (_) {
       if (!mounted) return;
-      setState(() => _loading = false);
-    }
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    _focus.dispose();
-    super.dispose();
-  }
-
-  String get _value => _ctrl.text.trim();
-
-  bool get _isValid {
-    final v = _value;
-    if (v.isEmpty) return false;
-    return EmailConfig.isValidToList(v);
-  }
-
-  List<String> get _parsedList {
-    final v = _value;
-    if (v.isEmpty) return const [];
-    return v
-        .split(',')
-        .map((s) => s.trim())
-        .where((s) => s.isNotEmpty)
-        .toList(growable: false);
-  }
-
-  Future<void> _save() async {
-    if (_saving) return;
-
-    final v = _value;
-    if (!EmailConfig.isValidToList(v)) {
-      return;
-    }
-
-    setState(() => _saving = true);
-    try {
-      await EmailConfig.save(EmailConfig(to: v));
-      if (!mounted) return;
-      setState(() {
-        _loaded = v;
-      });
-      _focus.unfocus();
-    } catch (_) {
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
-  }
-
-  Future<void> _clear() async {
-    if (_saving) return;
-
-    setState(() => _saving = true);
-    try {
-      await EmailConfig.clear();
-      if (!mounted) return;
       setState(() {
         _loaded = '';
-        _ctrl.text = '';
+        _loading = false;
       });
-      _focus.unfocus();
-    } catch (_) {
-    } finally {
-      if (mounted) setState(() => _saving = false);
     }
+  }
+
+  Future<void> _copy() async {
+    final value = _loaded.trim();
+    if (value.isEmpty) return;
+    HapticFeedback.selectionClick();
+    await Clipboard.setData(ClipboardData(text: value));
   }
 
   @override
   Widget build(BuildContext context) {
-    final content = _loading
-        ? const Center(child: CircularProgressIndicator())
-        : Padding(
+    final tokens = CommonUiTheme.of(context);
+    final text = Theme.of(context).textTheme;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+
+    final loadedBody = Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _InfoCard(loaded: _loaded, base: _base, light: _light),
-          const SizedBox(height: 12),
-          Card(
-            elevation: 1,
-            surfaceTintColor: _light,
-            shape: RoundedRectangleBorder(
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: tokens.surfaceOverlay,
               borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: tokens.borderSubtle),
             ),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  TextField(
-                    controller: _ctrl,
-                    focusNode: _focus,
-                    keyboardType: TextInputType.emailAddress,
-                    textInputAction: TextInputAction.done,
-                    onSubmitted: (_) => _save(),
-                    decoration: InputDecoration(
-                      labelText: '메일 수신자(To)',
-
-                      isDense: true,
-                      filled: true,
-                      fillColor: _light.withOpacity(.06),
-                      prefixIcon:
-                      const Icon(Icons.alternate_email_rounded),
-                      errorText: _value.isEmpty
-                          ? null
-                          : (_isValid
-                          ? null
-                          : '이메일 형식을 확인하세요. (쉼표로 구분)'),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide:
-                        BorderSide(color: _light.withOpacity(.35)),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide:
-                        BorderSide(color: _base, width: 1.6),
-                      ),
-                    ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                AnimatedContainer(
+                  duration:
+                      reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: _loaded.isEmpty
+                        ? tokens.surfaceDisabled
+                        : tokens.accentContainer,
+                    borderRadius: BorderRadius.circular(14),
                   ),
-                  const SizedBox(height: 12),
-                  if (_parsedList.isNotEmpty)
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: _parsedList
-                          .map(
-                            (e) => Chip(
-                          label: Text(
-                            e,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          backgroundColor: _light.withOpacity(.10),
-                          side: BorderSide(
-                            color: _light.withOpacity(.35),
-                          ),
-                        ),
-                      )
-                          .toList(growable: false),
-                    )
-                  else
-                    Text(
-                      '현재 입력된 수신자가 없습니다.',
-                      style:
-                      TextStyle(color: _tokens.textSecondary),
-                    ),
-                  const SizedBox(height: 16),
-                  Row(
+                  child: Icon(
+                    Icons.mail_outline_rounded,
+                    color: _loaded.isEmpty
+                        ? tokens.textDisabled
+                        : tokens.onAccentContainer,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _saving ? null : _clear,
-                          icon: const Icon(Icons.restart_alt_rounded),
-                          label: const Text('초기화'),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: _dark,
-                            side:
-                            BorderSide(color: _dark.withOpacity(.55)),
-                            padding:
-                            const EdgeInsets.symmetric(vertical: 12),
-                            shape: const StadiumBorder(),
-                          ),
+                      Text(
+                        'SQLite 다운로드 Snapshot',
+                        style: text.titleSmall?.copyWith(
+                          color: tokens.textPrimary,
+                          fontWeight: FontWeight.w900,
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: FilledButton.icon(
-                          onPressed: (_saving || !_isValid) ? null : _save,
-                          icon: _saving
-                              ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                            ),
-                          )
-                              : const Icon(Icons.save_rounded),
-                          label: const Text('저장'),
-                          style: FilledButton.styleFrom(
-                            backgroundColor: _base,
-                            padding:
-                            const EdgeInsets.symmetric(vertical: 12),
-                            shape: const StadiumBorder(),
-                          ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _loaded.isEmpty
+                            ? '현재 지역의 저장된 수신자 이메일이 없습니다.'
+                            : _loaded,
+                        style: text.bodyMedium?.copyWith(
+                          color: _loaded.isEmpty
+                              ? tokens.textSecondary
+                              : tokens.textPrimary,
+                          fontWeight: FontWeight.w700,
+                          height: 1.4,
                         ),
                       ),
                     ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 12),
-          _GuideCard(light: _light),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: tokens.surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: tokens.borderSubtle),
+            ),
+            child: Text(
+              '메일 수신자는 본사 내려받기에서 저장된 현재 지역 SQLite Snapshot만 사용합니다. 이 화면에서는 값을 수정하거나 초기화하지 않습니다.',
+              style: text.bodyMedium?.copyWith(
+                color: tokens.textSecondary,
+                height: 1.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          FilledButton.icon(
+            onPressed: _loaded.isEmpty ? null : _copy,
+            icon: const Icon(Icons.copy_all_rounded),
+            label: const Text('수신자 복사'),
+          ),
         ],
       ),
     );
 
+    final content = AnimatedSwitcher(
+      duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
+      switchInCurve: CommonUiMotion.enter,
+      switchOutCurve: CommonUiMotion.exit,
+      transitionBuilder: (child, animation) {
+        return FadeTransition(
+          opacity: animation,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, .025),
+              end: Offset.zero,
+            ).animate(animation),
+            child: child,
+          ),
+        );
+      },
+      child: _loading
+          ? const Padding(
+              key: ValueKey<String>('loading'),
+              padding: EdgeInsets.all(32),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          : KeyedSubtree(
+              key: const ValueKey<String>('loaded'),
+              child: loadedBody,
+            ),
+    );
+
     if (!widget.asBottomSheet) {
       return Scaffold(
-        backgroundColor: _tokens.canvas,
+        backgroundColor: tokens.canvas,
         appBar: AppBar(
-          backgroundColor: _tokens.canvas,
-          surfaceTintColor: _tokens.transparent,
+          backgroundColor: tokens.canvas,
+          surfaceTintColor: tokens.transparent,
           elevation: 0,
-          foregroundColor: _tokens.textPrimary,
+          foregroundColor: tokens.textPrimary,
           centerTitle: true,
           title: const Text(
-            '메일 수신자 설정',
+            '메일 수신자',
             style: TextStyle(fontWeight: FontWeight.w800),
           ),
           bottom: const PreferredSize(
@@ -320,100 +247,21 @@ class _MailRecipientSettingsState extends State<MailRecipientSettings> {
     }
 
     return _SheetScaffold(
-      title: '메일 수신자 설정',
+      title: '메일 수신자',
       onClose: () => Navigator.of(context).maybePop(),
       body: SingleChildScrollView(child: content),
       trailingActions: [
         IconButton(
-          tooltip: '초기화',
-          icon: const Icon(Icons.restart_alt_rounded),
-          onPressed: _saving ? null : _clear,
-        ),
-        IconButton(
-          tooltip: '저장',
-          icon: const Icon(Icons.save_rounded),
-          onPressed: (_saving || !_isValid) ? null : _save,
+          tooltip: '새로 읽기',
+          icon: const Icon(Icons.refresh_rounded),
+          onPressed: _loading
+              ? null
+              : () {
+                  setState(() => _loading = true);
+                  _bootstrap();
+                },
         ),
       ],
-    );
-  }
-}
-
-class _InfoCard extends StatelessWidget {
-  const _InfoCard({
-    required this.loaded,
-    required this.base,
-    required this.light,
-  });
-
-  final String loaded;
-  final Color base;
-  final Color light;
-
-  @override
-  Widget build(BuildContext context) {
-    final has = loaded.trim().isNotEmpty;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      decoration: BoxDecoration(
-        color: light.withOpacity(.06),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: light.withOpacity(.24)),
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            backgroundColor: base,
-            foregroundColor: CommonUiTheme.of(context).onAccent,
-            child: const Icon(Icons.mail_outline_rounded),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              has
-                  ? '저장된 수신자(To): $loaded'
-                  : '저장된 수신자(To): 없음 (메일 발송 전 반드시 설정)',
-              style: const TextStyle(fontWeight: FontWeight.w700),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _GuideCard extends StatelessWidget {
-  const _GuideCard({required this.light});
-
-  final Color light;
-
-  @override
-  Widget build(BuildContext context) {
-    Text t(String s) => Text(
-      s,
-      style: TextStyle(color: CommonUiTheme.of(context).textSecondary),
-    );
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      decoration: BoxDecoration(
-        color: light.withOpacity(.04),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: light.withOpacity(.18)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('입력 규칙', style: TextStyle(fontWeight: FontWeight.w900)),
-          const SizedBox(height: 8),
-          t('• 여러 명에게 보내려면 쉼표(,)로 구분합니다.'),
-          t('• 예) hr@company.com, manager@company.com'),
-          const SizedBox(height: 6),
-          t('• 저장되면 SharedPreferences 키 mail.to 로 보관됩니다.'),
-          t('• 값이 비어 있으면 메일 발송이 차단됩니다.'),
-        ],
-      ),
     );
   }
 }
@@ -431,7 +279,7 @@ class _BottomSheetFrame extends StatelessWidget {
   Widget build(BuildContext context) {
     return FractionallySizedBox(
       heightFactor: heightFactor,
-      widthFactor: 1.0,
+      widthFactor: 1,
       child: SafeArea(
         top: false,
         bottom: true,

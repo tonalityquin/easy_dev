@@ -16,11 +16,12 @@ class ModifyLocationField extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
-    final screenWidth = MediaQuery.sizeOf(context).width;
-    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final safeWidthFactor = widthFactor.clamp(.1, 1.0).toDouble();
 
-    return SizedBox(
-      width: screenWidth * widthFactor,
+    return FractionallySizedBox(
+      widthFactor: safeWidthFactor,
       child: ValueListenableBuilder<TextEditingValue>(
         valueListenable: controller,
         builder: (context, value, child) {
@@ -54,7 +55,7 @@ class ModifyLocationField extends StatelessWidget {
                     switchOutCurve: CommonUiMotion.exit,
                     child: Text(
                       isEmpty ? '선택되지 않음' : text,
-                      key: ValueKey(text),
+                      key: ValueKey<String>(text),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.center,

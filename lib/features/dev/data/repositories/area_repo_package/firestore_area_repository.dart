@@ -107,17 +107,21 @@ class FirestoreAreaRepository implements AreaRepository {
   }
 
   @override
-  Future<List<AreaRecord>> getAreasByDivision(String division) async {
+  Future<List<AreaRecord>> getAreasByDivision(
+    String division, {
+    bool serverOnly = false,
+  }) async {
     final trimmedDivision = division.trim();
 
     if (trimmedDivision.isEmpty) {
       return const <AreaRecord>[];
     }
 
-    final qs = await _firestore
+    final query = _firestore
         .collection('areas')
-        .where('division', isEqualTo: trimmedDivision)
-        .get();
+        .where('division', isEqualTo: trimmedDivision);
+    final options = _getOptions(serverOnly);
+    final qs = options == null ? await query.get() : await query.get(options);
 
     final records = qs.docs
         .map((doc) => _toAreaRecord(doc.data()))

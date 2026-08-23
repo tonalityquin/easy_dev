@@ -1,6 +1,9 @@
+import 'dart:ui' show Rect;
+
 import 'package:flutter/widgets.dart';
 
 typedef TypePageQuickAction = Future<void> Function();
+typedef TypePageEntryQuickAction = Future<void> Function(Rect sourceRect);
 
 class TypePageQuickActionScope extends InheritedWidget {
   const TypePageQuickActionScope({
@@ -11,7 +14,7 @@ class TypePageQuickActionScope extends InheritedWidget {
     required super.child,
   });
 
-  final TypePageQuickAction openEntry;
+  final TypePageEntryQuickAction openEntry;
   final TypePageQuickAction openSearch;
   final TypePageQuickAction openDashboard;
 

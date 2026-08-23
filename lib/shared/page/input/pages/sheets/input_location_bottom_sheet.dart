@@ -15,6 +15,44 @@ import '../../../../plate/domain/repositories/plate_repository.dart';
 
 enum _BlockedSlotKind { parked, departureRequest }
 
+class _ParkingStageCropClipper extends CustomClipper<Rect> {
+  const _ParkingStageCropClipper({
+    required this.progress,
+    required this.alignment,
+    required this.minWidthFactor,
+    required this.minHeightFactor,
+  });
+
+  final double progress;
+  final Alignment alignment;
+  final double minWidthFactor;
+  final double minHeightFactor;
+
+  @override
+  Rect getClip(Size size) {
+    final t = progress.clamp(0.0, 1.0).toDouble();
+    final width = size.width * (minWidthFactor + ((1 - minWidthFactor) * t));
+    final height =
+        size.height * (minHeightFactor + ((1 - minHeightFactor) * t));
+    final xFactor = ((alignment.x + 1) / 2).clamp(0.0, 1.0).toDouble();
+    final yFactor = ((alignment.y + 1) / 2).clamp(0.0, 1.0).toDouble();
+    return Rect.fromLTWH(
+      (size.width - width) * xFactor,
+      (size.height - height) * yFactor,
+      width,
+      height,
+    );
+  }
+
+  @override
+  bool shouldReclip(covariant _ParkingStageCropClipper oldClipper) {
+    return oldClipper.progress != progress ||
+        oldClipper.alignment != alignment ||
+        oldClipper.minWidthFactor != minWidthFactor ||
+        oldClipper.minHeightFactor != minHeightFactor;
+  }
+}
+
 int? _parseFirstInt(String raw) {
   final m = RegExp(r'(\d+)').firstMatch(raw);
   if (m == null) return null;
@@ -240,12 +278,18 @@ class InputLocationBottomSheet extends StatefulWidget {
   final TextEditingController locationController;
   final Function(String) onLocationSelected;
   final List<String> preferredParkingAreas;
+  final bool embedded;
+  final VoidCallback? onRequestClose;
+  final ValueChanged<String>? onDebug;
 
   const InputLocationBottomSheet({
     super.key,
     required this.locationController,
     required this.onLocationSelected,
     this.preferredParkingAreas = const <String>[],
+    this.embedded = false,
+    this.onRequestClose,
+    this.onDebug,
   });
 
   static Future<void> show(
@@ -309,18 +353,181 @@ class _InputLocationBottomSheetState extends State<InputLocationBottomSheet> {
     return p.isNotEmpty;
   }
 
+  void _debug(String message) {
+    widget.onDebug?.call(message);
+  }
+
+  void _close() {
+    final callback = widget.onRequestClose;
+    if (callback != null) {
+      callback();
+      return;
+    }
+    Navigator.of(context).pop();
+  }
+
   void _applyAndClose(String fullName) {
+    _debug('parking_picker=apply location=$fullName');
     widget.locationController.text = fullName;
     widget.onLocationSelected(fullName);
-    Navigator.of(context).pop();
+    _close();
+  }
+
+  Widget _buildPickerContent(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final currentArea =
+        context.select<AreaState, String>((s) => s.currentArea.trim());
+
+    return Consumer<LocationState>(
+      builder: (context, locationState, _) {
+        if (locationState.isLoading) {
+          return Center(
+            child: CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
+            ),
+          );
+        }
+
+        final all = locationState.locations;
+        final locations =
+            all.where((l) => l.area.trim() == currentArea).toList();
+
+        if (locations.isEmpty) {
+          return _EmptyState(
+            title: '주차 구역 데이터가 없습니다.',
+            message:
+                '현재 지역(${currentArea.isEmpty ? "미설정" : currentArea})에 해당하는 주차 구역이 없습니다.\n데이터 동기화 후 다시 시도하세요.',
+            onClose: _close,
+          );
+        }
+
+        final topLevels = locations.where((l) => !_isCompositeChild(l)).toList()
+          ..sort((a, b) => a.locationName.compareTo(b.locationName));
+        final children = locations.where(_isCompositeChild).toList()
+          ..sort((a, b) => a.locationName.compareTo(b.locationName));
+
+        if (topLevels.isEmpty) {
+          return _EmptyState(
+            title: '표시할 주차 구역이 없습니다.',
+            message:
+                '현재 지역(${currentArea.isEmpty ? "미설정" : currentArea})에서 상위 구역 문서가 없습니다.',
+            onClose: _close,
+          );
+        }
+
+        Widget content;
+        if (_selectedParentName != null) {
+          final parentKey = _nameKey(_selectedParentName!);
+          LocationModel? parentDoc;
+          for (final parent in topLevels) {
+            if (_nameKey(parent.locationName) == parentKey) {
+              parentDoc = parent;
+              break;
+            }
+          }
+
+          final parentGrid = parentDoc?.parkingGrid;
+          if (parentGrid == null || parentGrid.rows <= 0 || parentGrid.cols <= 0) {
+            content = _GridError(
+              title: '부모 그리드가 없습니다.',
+              message: '선택한 부모 구역의 그리드 정보를 확인할 수 없습니다.',
+              onBack: () => setState(() => _selectedParentName = null),
+            );
+          } else {
+            final parentName = _selectedParentName!;
+            final childDocs = children
+                .where((c) => _nameKey(c.parent ?? '') == parentKey)
+                .toList()
+              ..sort((a, b) => a.locationName.compareTo(b.locationName));
+            content = _ParentChildViewportSlotFlow(
+              key: ValueKey<String>('parent:$parentName'),
+              parentName: parentName,
+              parentGrid: parentGrid,
+              childDocs: childDocs,
+              preferredParkingAreas: widget.preferredParkingAreas,
+              animateCrop: widget.embedded,
+              onDebug: widget.onDebug,
+              onBackToParents: () => setState(() => _selectedParentName = null),
+              onPickFinal: _applyAndClose,
+            );
+          }
+        } else {
+          content = _LocationListPicker(
+            key: const ValueKey<String>('parent_overview'),
+            currentArea: currentArea,
+            topLevels: topLevels,
+            childDocs: children,
+            embedded: widget.embedded,
+            onPickLocation: (loc) {
+              final grid = loc.parkingGrid;
+              final hasGrid = grid != null && grid.rows > 0 && grid.cols > 0;
+              if (!hasGrid) {
+                _debug('parking_parent=blocked_no_grid parent=${loc.locationName}');
+                return;
+              }
+              _debug('parking_parent=selected parent=${loc.locationName}');
+              setState(() => _selectedParentName = loc.locationName);
+            },
+            onClose: _close,
+          );
+        }
+
+        final reduceMotion =
+            MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+        final animateCrop = widget.embedded && !reduceMotion;
+        return AnimatedSwitcher(
+          duration: animateCrop ? const Duration(milliseconds: 240) : Duration.zero,
+          reverseDuration:
+              animateCrop ? const Duration(milliseconds: 190) : Duration.zero,
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          transitionBuilder: (child, animation) {
+            final curved = CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOutCubic,
+              reverseCurve: Curves.easeInCubic,
+            );
+            return AnimatedBuilder(
+              animation: curved,
+              child: child,
+              builder: (context, animatedChild) {
+                final value = curved.value;
+                return ClipRect(
+                  clipper: _ParkingStageCropClipper(
+                    progress: value,
+                    alignment: Alignment.centerLeft,
+                    minWidthFactor: .18,
+                    minHeightFactor: .16,
+                  ),
+                  child: Opacity(
+                    opacity: value,
+                    child: Transform.scale(
+                      alignment: Alignment.centerLeft,
+                      scale: .97 + (.03 * value),
+                      child: animatedChild,
+                    ),
+                  ),
+                );
+              },
+            );
+          },
+          child: content,
+        );
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final tokens = CommonUiTheme.of(context);
-    final cs = Theme.of(context).colorScheme;
-    final currentArea =
-        context.select<AreaState, String>((s) => s.currentArea.trim());
+    final content = _buildPickerContent(context);
+
+    if (widget.embedded) {
+      return Material(
+        color: tokens.surfaceRaised,
+        child: content,
+      );
+    }
 
     return WillPopScope(
       onWillPop: () async {
@@ -336,121 +543,21 @@ class _InputLocationBottomSheetState extends State<InputLocationBottomSheet> {
           child: Material(
             color: tokens.transparent,
             child: Container(
-            height: MediaQuery.of(context).size.height * 0.92,
-            decoration: BoxDecoration(
-              color: tokens.surfaceRaised,
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(22)),
-              border: Border.all(color: tokens.borderSubtle),
-              boxShadow: [
-                BoxShadow(
-                  color: tokens.shadow,
-                  blurRadius: 18,
-                  offset: const Offset(0, -8),
-                ),
-              ],
-            ),
-            child: Consumer<LocationState>(
-              builder: (context, locationState, _) {
-                if (locationState.isLoading) {
-                  return Center(
-                    child: CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
-                    ),
-                  );
-                }
-
-                final all = locationState.locations;
-                final locations =
-                    all.where((l) => l.area.trim() == currentArea).toList();
-
-                if (locations.isEmpty) {
-                  return _EmptyState(
-                    title: '주차 구역 데이터가 없습니다.',
-                    message:
-                        '현재 지역(${currentArea.isEmpty ? "미설정" : currentArea})에 해당하는 주차 구역이 없습니다.\n'
-                        '데이터 동기화 후 다시 시도하세요.',
-                    onClose: () => Navigator.of(context).pop(),
-                  );
-                }
-
-                final topLevels = locations
-                    .where((l) => !_isCompositeChild(l))
-                    .toList()
-                  ..sort((a, b) => a.locationName.compareTo(b.locationName));
-
-                final children = locations.where(_isCompositeChild).toList()
-                  ..sort((a, b) => a.locationName.compareTo(b.locationName));
-
-                if (topLevels.isEmpty) {
-                  return _EmptyState(
-                    title: '표시할 주차 구역이 없습니다.',
-                    message:
-                        '현재 지역(${currentArea.isEmpty ? "미설정" : currentArea})에서\n'
-                        '상위(Top-level) 구역 문서가 없습니다.\n'
-                        '데이터 구조를 확인하세요. (child 문서만 있는 상태일 수 있습니다)',
-                    onClose: () => Navigator.of(context).pop(),
-                  );
-                }
-
-                if (_selectedParentName != null) {
-                  final parentKey = _nameKey(_selectedParentName!);
-
-                  LocationModel? parentDoc;
-                  for (final p in topLevels) {
-                    if (_nameKey(p.locationName) == parentKey) {
-                      parentDoc = p;
-                      break;
-                    }
-                  }
-
-                  final parentGrid = parentDoc?.parkingGrid;
-                  if (parentGrid == null ||
-                      parentGrid.rows <= 0 ||
-                      parentGrid.cols <= 0) {
-                    return _GridError(
-                      title: '부모 그리드가 없습니다.',
-                      message:
-                          '선택한 부모 구역에 parkingGrid가 없거나 rows/cols가 올바르지 않습니다.',
-                      onBack: () => setState(() => _selectedParentName = null),
-                    );
-                  }
-
-                  final parentName = _selectedParentName!;
-                  final childDocs = children
-                      .where((c) => _nameKey((c.parent ?? '')) == parentKey)
-                      .toList()
-                    ..sort((a, b) => a.locationName.compareTo(b.locationName));
-
-                  return _ParentChildViewportSlotFlow(
-                    parentName: parentName,
-                    parentGrid: parentGrid,
-                    childDocs: childDocs,
-                    preferredParkingAreas: widget.preferredParkingAreas,
-                    onBackToParents: () =>
-                        setState(() => _selectedParentName = null),
-                    onPickFinal: (full) => _applyAndClose(full),
-                  );
-                }
-
-                return _LocationListPicker(
-                  currentArea: currentArea,
-                  topLevels: topLevels,
-                  onPickLocation: (loc) {
-                    final grid = loc.parkingGrid;
-                    final hasGrid =
-                        grid != null && grid.rows > 0 && grid.cols > 0;
-
-                    if (hasGrid) {
-                      setState(() => _selectedParentName = loc.locationName);
-                    } else {
-                      _applyAndClose(loc.locationName);
-                    }
-                  },
-                  onClose: () => Navigator.of(context).pop(),
-                );
-              },
-            ),
+              height: MediaQuery.of(context).size.height * .92,
+              decoration: BoxDecoration(
+                color: tokens.surfaceRaised,
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(22)),
+                border: Border.all(color: tokens.borderSubtle),
+                boxShadow: [
+                  BoxShadow(
+                    color: tokens.shadow,
+                    blurRadius: 18,
+                    offset: const Offset(0, -8),
+                  ),
+                ],
+              ),
+              child: content,
             ),
           ),
         ),
@@ -536,12 +643,17 @@ class _EmptyState extends StatelessWidget {
 class _LocationListPicker extends StatelessWidget {
   final String currentArea;
   final List<LocationModel> topLevels;
+  final List<LocationModel> childDocs;
+  final bool embedded;
   final ValueChanged<LocationModel> onPickLocation;
   final VoidCallback onClose;
 
   const _LocationListPicker({
+    super.key,
     required this.currentArea,
     required this.topLevels,
+    required this.childDocs,
+    this.embedded = false,
     required this.onPickLocation,
     required this.onClose,
   });
@@ -553,23 +665,26 @@ class _LocationListPicker extends StatelessWidget {
 
     return Column(
       children: [
-        const SizedBox(height: 10),
-        Container(
-          width: 44,
-          height: 5,
-          decoration: BoxDecoration(
-            color: cs.outlineVariant.withOpacity(0.9),
-            borderRadius: BorderRadius.circular(999),
+        if (!embedded) ...[
+          const SizedBox(height: 10),
+          Container(
+            width: 44,
+            height: 5,
+            decoration: BoxDecoration(
+              color: cs.outlineVariant.withOpacity(0.9),
+              borderRadius: BorderRadius.circular(999),
+            ),
           ),
-        ),
-        const SizedBox(height: 10),
+          const SizedBox(height: 10),
+        ] else
+          const SizedBox(height: 6),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
             children: [
               Expanded(
                 child: Text(
-                  '주차 구역 선택',
+                  embedded ? '주차 현황' : '주차 구역 선택',
                   style: (tt.titleMedium ?? const TextStyle(fontSize: 16))
                       .copyWith(
                     fontWeight: FontWeight.w900,
@@ -581,12 +696,14 @@ class _LocationListPicker extends StatelessWidget {
                 text: currentArea.isEmpty ? '지역 미설정' : currentArea,
                 tone: _PillTone.neutral,
               ),
-              const SizedBox(width: 8),
-              IconButton(
-                tooltip: '닫기',
-                onPressed: onClose,
-                icon: Icon(Icons.close_rounded, color: cs.onSurfaceVariant),
-              ),
+              if (!embedded) ...[
+                const SizedBox(width: 8),
+                IconButton(
+                  tooltip: '닫기',
+                  onPressed: onClose,
+                  icon: Icon(Icons.close_rounded, color: cs.onSurfaceVariant),
+                ),
+              ],
             ],
           ),
         ),
@@ -595,22 +712,38 @@ class _LocationListPicker extends StatelessWidget {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
             children: [
-              const _SectionHeader(
-                title: '주차 구역(부모)',
-                subtitle: '부모 선택 → 자식 선택 → (자식 영역만) 슬롯 선택',
+              _SectionHeader(
+                title: embedded ? '부모 주차 구역' : '주차 구역(부모)',
+                subtitle: embedded
+                    ? '상위 구역 ${topLevels.length}개'
+                    : '부모 선택 → 자식 선택 → (자식 영역만) 슬롯 선택',
               ),
               const SizedBox(height: 8),
               ...topLevels.map((loc) {
                 final grid = loc.parkingGrid;
                 final hasGrid = grid != null && grid.rows > 0 && grid.cols > 0;
-                final subtitle = hasGrid
-                    ? '그리드: ${grid.rows}×${grid.cols}'
-                    : '그리드 없음 · 바로 선택';
+                final parentKey = _InputLocationBottomSheetState._nameKey(
+                  loc.locationName,
+                );
+                final childCount = childDocs.where((child) {
+                  return _InputLocationBottomSheetState._nameKey(
+                        child.parent ?? '',
+                      ) ==
+                      parentKey;
+                }).length;
+                final capacity = loc.capacity > 0 ? loc.capacity : loc.plateCount;
+                final subtitle = embedded
+                    ? hasGrid
+                        ? '자식 $childCount · 공간 $capacity · ${grid.rows}×${grid.cols}'
+                        : '슬롯 그리드 없음 · 선택 불가'
+                    : hasGrid
+                        ? '그리드: ${grid.rows}×${grid.cols}'
+                        : '슬롯 그리드 없음 · 선택 불가';
                 return _CardTile(
                   title: loc.locationName,
                   subtitle: subtitle,
-                  leading: hasGrid ? Icons.layers_rounded : Icons.place_rounded,
-                  onTap: () => onPickLocation(loc),
+                  leading: hasGrid ? Icons.layers_rounded : Icons.block_rounded,
+                  onTap: hasGrid ? () => onPickLocation(loc) : null,
                 );
               }),
             ],
@@ -663,7 +796,7 @@ class _CardTile extends StatelessWidget {
   final String title;
   final String subtitle;
   final IconData leading;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   const _CardTile({
     required this.title,
@@ -675,41 +808,66 @@ class _CardTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final enabled = onTap != null;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-        leading: Container(
-          width: 38,
-          height: 38,
-          decoration: BoxDecoration(
-            color: cs.primary.withOpacity(0.12),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(leading, color: cs.primary),
-        ),
-        title: Text(
-          title,
-          style: TextStyle(
-            fontWeight: FontWeight.w900,
-            color: cs.onSurface,
+    return AnimatedOpacity(
+      duration: reduceMotion ? Duration.zero : const Duration(milliseconds: 180),
+      curve: Curves.easeOutCubic,
+      opacity: enabled ? 1 : .5,
+      child: AnimatedContainer(
+        duration:
+            reduceMotion ? Duration.zero : const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+        margin: const EdgeInsets.only(bottom: 10),
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: enabled
+                ? cs.outlineVariant.withOpacity(0.85)
+                : cs.outlineVariant.withOpacity(0.5),
           ),
         ),
-        subtitle: Text(
-          subtitle,
-          style: TextStyle(
-            fontWeight: FontWeight.w700,
+        child: ListTile(
+          enabled: enabled,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          leading: Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: enabled
+                  ? cs.primary.withOpacity(0.12)
+                  : cs.surfaceContainerHighest.withOpacity(.75),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              leading,
+              color: enabled ? cs.primary : cs.onSurfaceVariant,
+            ),
+          ),
+          title: Text(
+            title,
+            style: TextStyle(
+              fontWeight: FontWeight.w900,
+              color: enabled ? cs.onSurface : cs.onSurfaceVariant,
+            ),
+          ),
+          subtitle: Text(
+            subtitle,
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              color: cs.onSurfaceVariant,
+            ),
+          ),
+          trailing: Icon(
+            enabled ? Icons.chevron_right : Icons.lock_outline_rounded,
             color: cs.onSurfaceVariant,
           ),
+          onTap: onTap,
         ),
-        trailing: Icon(Icons.chevron_right, color: cs.onSurfaceVariant),
-        onTap: onTap,
       ),
     );
   }
@@ -720,15 +878,20 @@ class _ParentChildViewportSlotFlow extends StatefulWidget {
   final ParkingGridModel parentGrid;
   final List<LocationModel> childDocs;
   final List<String> preferredParkingAreas;
+  final bool animateCrop;
+  final ValueChanged<String>? onDebug;
 
   final VoidCallback onBackToParents;
   final ValueChanged<String> onPickFinal;
 
   const _ParentChildViewportSlotFlow({
+    super.key,
     required this.parentName,
     required this.parentGrid,
     required this.childDocs,
     required this.preferredParkingAreas,
+    this.animateCrop = false,
+    this.onDebug,
     required this.onBackToParents,
     required this.onPickFinal,
   });
@@ -796,6 +959,9 @@ class _ParentChildViewportSlotFlowState
   }
 
   void _selectChild(String childName) {
+    widget.onDebug?.call(
+      'parking_child=selected parent=${widget.parentName} child=$childName',
+    );
     setState(() {
       _selectedChildName = childName;
       _isBlockedSlotsLoading = true;
@@ -1138,12 +1304,18 @@ class _ParentChildViewportSlotFlowState
         : (label.isNotEmpty ? label : '슬롯');
 
     final full = '${widget.parentName} - ${child.locationName} - $slotSeg';
+    widget.onDebug?.call(
+      'parking_empty_slot=selected parent=${widget.parentName} child=${child.locationName} slot=$no label=$label',
+    );
     widget.onPickFinal(full);
   }
 
   void _pickTowerSlotAndClose(LocationModel child, int no) {
     final seg = '슬롯 $no';
     final full = '${widget.parentName} - ${child.locationName} - $seg';
+    widget.onDebug?.call(
+      'parking_empty_slot=selected parent=${widget.parentName} child=${child.locationName} slot=$no tower=true',
+    );
     widget.onPickFinal(full);
   }
 
@@ -1540,9 +1712,54 @@ class _ParentChildViewportSlotFlowState
 
   @override
   Widget build(BuildContext context) {
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final animateCrop = widget.animateCrop && !reduceMotion;
+    final stageKey = _selectedChildName == null
+        ? 'child_picker'
+        : 'slot_picker:${_selectedChildName!}';
     return WillPopScope(
       onWillPop: _onWillPop,
-      child: _content(context),
+      child: AnimatedSwitcher(
+        duration: animateCrop ? const Duration(milliseconds: 260) : Duration.zero,
+        reverseDuration:
+            animateCrop ? const Duration(milliseconds: 210) : Duration.zero,
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        transitionBuilder: (child, animation) {
+          final curved = CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+            reverseCurve: Curves.easeInCubic,
+          );
+          return AnimatedBuilder(
+            animation: curved,
+            child: child,
+            builder: (context, animatedChild) {
+              final value = curved.value;
+              return ClipRect(
+                clipper: _ParkingStageCropClipper(
+                  progress: value,
+                  alignment: Alignment.center,
+                  minWidthFactor: .22,
+                  minHeightFactor: .22,
+                ),
+                child: Opacity(
+                  opacity: value,
+                  child: Transform.scale(
+                    scale: .96 + (.04 * value),
+                    child: animatedChild,
+                  ),
+                ),
+              );
+            },
+          );
+        },
+        child: KeyedSubtree(
+          key: ValueKey<String>(stageKey),
+          child: _content(context),
+        ),
+      ),
     );
   }
 }

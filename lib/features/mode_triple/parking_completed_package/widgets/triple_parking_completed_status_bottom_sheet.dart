@@ -32,6 +32,7 @@ Future<void> showTripleParkingCompletedStatusSideDockFromRealtime({
 }) async {
   PlateLogSideDockRequest? logRequest;
   PlateBillingSideDockRequest? billingRequest;
+  PlateModel? modifyRequest;
   await showParkingStatusLoadingSideDock<bool>(
     context: context,
     mode: '트리플',
@@ -71,6 +72,42 @@ Future<void> showTripleParkingCompletedStatusSideDockFromRealtime({
         }
         final reopenPlate = billedPlate ?? requestedBilling.plate;
         await trace.succeed('실시간 상태 처리에서 정산 후 상태 Side Dock을 다시 엽니다.');
+        if (!context.mounted) return;
+        await showTripleParkingCompletedStatusBottomSheet(
+          context: context,
+          plate: reopenPlate,
+          onRequestEntry: (traceLog) async {
+            final activeArea = context.read<AreaState>().currentArea;
+            await handleParkingCompletedEntryRequest(
+              context,
+              reopenPlate.plateNumber,
+              activeArea,
+              traceLog: traceLog,
+            );
+          },
+          onDelete: () => _showDeleteDialog(context, reopenPlate),
+        );
+        return;
+      }
+
+      final requestedModify = modifyRequest;
+      if (requestedModify != null && context.mounted) {
+        trace.log(
+          'realtime_status_modify_handoff sourceDock=parking_status targetDock=modify_plate handoffPolicy=close_then_open overlayStacking=false plate=${requestedModify.plateNumber}',
+          progress: .78,
+        );
+        final modifiedPlate = await showModifyPlateSideDock(
+          context: context,
+          plate: requestedModify,
+          collectionKey: PlateType.parkingCompleted,
+        );
+        if (!context.mounted) return;
+        final reopenPlate = modifiedPlate ?? requestedModify;
+        trace.log(
+          'realtime_status_modify_return targetDock=parking_status saved=${modifiedPlate != null} plate=${reopenPlate.plateNumber}',
+          progress: .9,
+        );
+        await trace.succeed('실시간 상태 처리에서 정보 수정 후 상태 Side Dock을 다시 엽니다.');
         if (!context.mounted) return;
         await showTripleParkingCompletedStatusBottomSheet(
           context: context,
@@ -130,6 +167,9 @@ Future<void> showTripleParkingCompletedStatusSideDockFromRealtime({
         },
         onBillingRequested: (value) {
           billingRequest = value;
+        },
+        onModifyRequested: (value) {
+          modifyRequest = value;
         },
       );
     },
@@ -196,6 +236,7 @@ Future<bool?> showTripleParkingCompletedStatusBottomSheet({
   while (context.mounted) {
     PlateLogSideDockRequest? logRequest;
     PlateBillingSideDockRequest? billingRequest;
+    PlateModel? modifyRequest;
     final currentStatusTitle = currentPlate.typeEnum == PlateType.parkingRequests ? '입차 요청 상태 처리' : currentPlate.typeEnum == PlateType.departureRequests ? '출차 요청 상태 처리' : '입차 완료 상태 처리';
     final result = await showParkingStatusSideDock<bool>(
       trace: trace,
@@ -214,6 +255,9 @@ Future<bool?> showTripleParkingCompletedStatusBottomSheet({
         },
         onBillingRequested: (request) {
           billingRequest = request;
+        },
+        onModifyRequested: (value) {
+          modifyRequest = value;
         },
       ),
     );
@@ -259,6 +303,26 @@ Future<bool?> showTripleParkingCompletedStatusBottomSheet({
       continue;
     }
 
+    final requestedModify = modifyRequest;
+    if (requestedModify != null && context.mounted) {
+      trace.log(
+        'status_modify_handoff sourceDock=parking_status targetDock=modify_plate handoffPolicy=close_then_open overlayStacking=false plate=${requestedModify.plateNumber} status=$currentStatusTitle',
+        progress: .78,
+      );
+      final modifiedPlate = await showModifyPlateSideDock(
+        context: context,
+        plate: requestedModify,
+        collectionKey: PlateType.parkingCompleted,
+      );
+      if (!context.mounted) return result;
+      currentPlate = modifiedPlate ?? requestedModify;
+      trace.log(
+        'status_modify_return targetDock=parking_status saved=${modifiedPlate != null} plate=${currentPlate.plateNumber}',
+        progress: .9,
+      );
+      continue;
+    }
+
     final requestedLog = logRequest;
     if (requestedLog != null && context.mounted) {
       trace.log(
@@ -292,6 +356,7 @@ class _StatusSideDockContent extends StatefulWidget {
     required this.onDelete,
     required this.onLogRequested,
     required this.onBillingRequested,
+    required this.onModifyRequested,
   });
 
   final PlateModel plate;
@@ -302,6 +367,7 @@ class _StatusSideDockContent extends StatefulWidget {
   final Future<bool> Function() onDelete;
   final ValueChanged<PlateLogSideDockRequest> onLogRequested;
   final ValueChanged<PlateBillingSideDockRequest> onBillingRequested;
+  final ValueChanged<PlateModel> onModifyRequested;
 
   @override
   State<_StatusSideDockContent> createState() => _StatusSideDockContentState();
@@ -1058,7 +1124,6 @@ class _StatusSideDockContentState extends State<_StatusSideDockContent> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final rootContext = Navigator.of(context, rootNavigator: true).context;
 
     Future<ParkingStatusDirectionalGearActionResult> Function()
         primaryOnPressed = () async {
@@ -1322,16 +1387,12 @@ class _StatusSideDockContentState extends State<_StatusSideDockContent> {
             enabled: !_primaryBusy && !disableOthers && !_isOtherDriving,
             onPressed: () async {
               if (_isOtherDriving) return;
-              Navigator.pop(context);
-              Navigator.push(
-                rootContext,
-                MaterialPageRoute(
-                  builder: (_) => ModifyPlateScreen(
-                    plate: _plate,
-                    collectionKey: PlateType.parkingCompleted,
-                  ),
-                ),
+              parkingStatusTraceLog(
+                context,
+                '정보 수정 요청 plate=${_plate.plateNumber} handoff=modify_side_dock',
               );
+              widget.onModifyRequested(_plate);
+              Navigator.of(context).pop();
             },
           ),
           ParkingStatusManagementAction(

@@ -95,7 +95,7 @@ class InputBillSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = CommonUiTheme.of(context);
     final billState = context.watch<BillState>();
-    final normalizedType = selectedBillType == '고정' ? '변동' : selectedBillType;
+    final normalizedType = selectedBillType == '정기' ? '정기' : '변동';
     final isGeneral = normalizedType == '변동';
     final isMonthly = normalizedType == '정기';
     final filteredBills = billState.generalBills;

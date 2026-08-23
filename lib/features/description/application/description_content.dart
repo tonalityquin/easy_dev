@@ -276,7 +276,7 @@ final DescriptionBook parkinWorkinDescriptionBook = DescriptionBook(
           eyebrow: '정산 유형, 차량별 요금 기준',
           summary: '정산이 필요한 주차장에서는 차량마다 어떤 정산 유형이 적용되어 있는지 확인할 수 있습니다.',
           paragraphs: const [
-            '각 차량은 현장 설정과 입력값에 따라 기본 요금, 고정 요금, 무료 처리, 월주차 여부 같은 정산 기준을 가질 수 있습니다.',
+            '각 차량은 현장 설정과 입력값에 따라 변동 정산, 정기 정산, 무료 처리, 월주차 여부 같은 정산 기준을 가질 수 있습니다.',
             '근무자는 차량 상세 또는 정산 화면에서 적용된 유형을 확인한 뒤 금액을 계산하고 결제 처리를 진행합니다.',
           ],
           bullets: const [

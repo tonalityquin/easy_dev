@@ -6,6 +6,27 @@ import 'package:flutter/services.dart';
 
 import 'common_ui_theme.dart';
 
+class CommonSideDockPresentationController extends ChangeNotifier {
+  CommonSideDockPresentationController({bool visible = true})
+      : _visible = visible;
+
+  bool _visible;
+
+  bool get visible => _visible;
+
+  void show() {
+    if (_visible) return;
+    _visible = true;
+    notifyListeners();
+  }
+
+  void hide() {
+    if (!_visible) return;
+    _visible = false;
+    notifyListeners();
+  }
+}
+
 Future<T?> showCommonRightSideDock<T>({
   required BuildContext context,
   required WidgetBuilder builder,
@@ -14,6 +35,7 @@ Future<T?> showCommonRightSideDock<T>({
   double maxWidth = 360,
   double widthFactor = 0.92,
   bool barrierDismissible = true,
+  CommonSideDockPresentationController? presentationController,
 }) {
   final reduceMotion =
       MediaQuery.maybeOf(context)?.disableAnimations ?? false;
@@ -28,6 +50,7 @@ Future<T?> showCommonRightSideDock<T>({
       maxWidth: maxWidth,
       widthFactor: widthFactor,
       scrimDismissible: barrierDismissible,
+      presentationController: presentationController,
     ),
   );
 }
@@ -40,6 +63,7 @@ class _CommonRightSideDockRoute<T> extends PopupRoute<T> {
     required this.maxWidth,
     required this.widthFactor,
     required this.scrimDismissible,
+    required this.presentationController,
   });
 
   final WidgetBuilder builder;
@@ -48,6 +72,7 @@ class _CommonRightSideDockRoute<T> extends PopupRoute<T> {
   final double maxWidth;
   final double widthFactor;
   final bool scrimDismissible;
+  final CommonSideDockPresentationController? presentationController;
   bool _layoutLogged = false;
   bool _closeRequested = false;
   String? _closeSource;
@@ -116,10 +141,12 @@ class _CommonRightSideDockRoute<T> extends PopupRoute<T> {
       curve: reduceMotion ? Curves.linear : Curves.easeOutCubic,
       reverseCurve: reduceMotion ? Curves.linear : Curves.easeInOutCubic,
     );
-    final listenable = Listenable.merge(<Listenable>[
+    final listenables = <Listenable>[
       panelAnimation,
       depthAnimation,
-    ]);
+      if (presentationController != null) presentationController!,
+    ];
+    final listenable = Listenable.merge(listenables);
 
     return CommonUiScope(
       child: Material(
@@ -138,6 +165,8 @@ class _CommonRightSideDockRoute<T> extends PopupRoute<T> {
                 ? 0.0
                 : depthAnimation.value.clamp(0.0, 1.0).toDouble();
             final reversing = animation.status == AnimationStatus.reverse;
+            final presentationVisible = presentationController?.visible ?? true;
+            final presentationOpacity = presentationVisible ? 1.0 : 0.0;
             final maxDockWidth =
                 (screen.width * widthFactor).clamp(240.0, double.infinity);
             final dockWidth = math.min(maxWidth, maxDockWidth);
@@ -145,7 +174,8 @@ class _CommonRightSideDockRoute<T> extends PopupRoute<T> {
             final slideX = slideDistance * (1 - progress);
             final depthShiftX = -10.0 * depth;
             final depthScale = 1.0 - (.008 * depth);
-            final panelOpacity = progress * (1.0 - (.06 * depth));
+            final panelOpacity =
+                progress * (1.0 - (.06 * depth)) * presentationOpacity;
 
             if (!_layoutLogged) {
               _layoutLogged = true;
@@ -160,9 +190,9 @@ class _CommonRightSideDockRoute<T> extends PopupRoute<T> {
                 children: [
                   Positioned.fill(
                     child: AbsorbPointer(
-                      absorbing: reversing,
+                      absorbing: reversing || !presentationVisible,
                       child: ExcludeSemantics(
-                        excluding: reversing,
+                        excluding: reversing || !presentationVisible,
                         child: Semantics(
                           button: scrimDismissible,
                           label: scrimDismissible
@@ -172,7 +202,9 @@ class _CommonRightSideDockRoute<T> extends PopupRoute<T> {
                             behavior: HitTestBehavior.opaque,
                             onTap: () => _dismissFromScrim(context),
                             child: ColoredBox(
-                              color: tokens.scrim.withOpacity(0.22 * progress),
+                              color: tokens.scrim.withOpacity(
+                                0.22 * progress * presentationOpacity,
+                              ),
                             ),
                           ),
                         ),
@@ -184,20 +216,25 @@ class _CommonRightSideDockRoute<T> extends PopupRoute<T> {
                     bottom: 0,
                     right: 0,
                     width: dockWidth,
-                    child: Transform.translate(
-                      offset: Offset(slideX + depthShiftX, 0),
-                      child: Transform.scale(
-                        alignment: Alignment.centerRight,
-                        scale: depthScale,
-                        child: Opacity(
-                          opacity: panelOpacity.clamp(0.0, 1.0).toDouble(),
-                          child: _CommonGlassSideDock(
-                            width: dockWidth,
-                            height: screen.height,
-                            child: SafeArea(
-                              child: Padding(
-                                padding: EdgeInsets.only(bottom: keyboardInset),
-                                child: Builder(builder: builder),
+                    child: AbsorbPointer(
+                      absorbing: reversing || !presentationVisible,
+                      child: Transform.translate(
+                        offset: Offset(slideX + depthShiftX, 0),
+                        child: Transform.scale(
+                          alignment: Alignment.centerRight,
+                          scale: depthScale,
+                          child: Opacity(
+                            opacity: panelOpacity.clamp(0.0, 1.0).toDouble(),
+                            child: _CommonGlassSideDock(
+                              width: dockWidth,
+                              height: screen.height,
+                              child: SafeArea(
+                                child: Padding(
+                                  padding: EdgeInsets.only(
+                                    bottom: keyboardInset,
+                                  ),
+                                  child: Builder(builder: builder),
+                                ),
                               ),
                             ),
                           ),
@@ -260,7 +297,6 @@ class _CommonGlassSideDock extends StatelessWidget {
     );
   }
 }
-
 
 Future<T?> showOperationsRightSideDock<T>({
   required BuildContext context,

@@ -12,6 +12,7 @@ enum CommonButtonVariant {
   secondary,
   tertiary,
   destructive,
+  success,
 }
 
 enum CommonHaptic {
@@ -63,6 +64,7 @@ class CommonButton extends StatefulWidget {
     this.semanticsLabel,
     this.haptic = CommonHaptic.none,
     this.minHeight,
+    this.preserveVariantWhenDisabled = false,
   });
 
   final String label;
@@ -76,6 +78,7 @@ class CommonButton extends StatefulWidget {
   final String? semanticsLabel;
   final CommonHaptic haptic;
   final double? minHeight;
+  final bool preserveVariantWhenDisabled;
 
   @override
   State<CommonButton> createState() => _CommonButtonState();
@@ -281,7 +284,10 @@ class _CommonButtonState extends State<CommonButton> {
   }
 
   _CommonButtonColors _buttonColors(CommonUiTokens tokens) {
-    if (!_enabled && !widget.loading && !_invoking) {
+    if (!_enabled &&
+        !widget.loading &&
+        !_invoking &&
+        !widget.preserveVariantWhenDisabled) {
       return _CommonButtonColors(
         background: widget.variant == CommonButtonVariant.tertiary
             ? tokens.transparent
@@ -331,6 +337,12 @@ class _CommonButtonState extends State<CommonButton> {
           background: _pressed ? tokens.danger : tokens.dangerContainer,
           foreground: _pressed ? tokens.onDanger : tokens.onDangerContainer,
           border: tokens.danger,
+        );
+      case CommonButtonVariant.success:
+        return _CommonButtonColors(
+          background: _pressed ? tokens.success : tokens.successContainer,
+          foreground: _pressed ? tokens.onSuccess : tokens.onSuccessContainer,
+          border: tokens.success,
         );
     }
   }

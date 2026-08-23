@@ -13,7 +13,6 @@ import '../../../shared/area_remote_settings/application/area_remote_settings_sy
 import '../../account/applications/user_state.dart';
 import '../../dashboard/applications/common/endtime_reminder_service.dart';
 import '../../dev/debug/debug_api_logger.dart';
-import '../../dev/domain/repositories/area_repo_package/area_repository.dart';
 import '../../selector/sheets/service_bottom_sheet.dart';
 import '../controllers/single_inside_controller.dart';
 import 'widgets/single_inside_document_box_button_section.dart';
@@ -497,15 +496,15 @@ class _SingleInsideDataDownloadDockState
 
       trace = await DeveloperOperationTrace.start(
         context: context,
-        title: '연결 데이터 내려받기',
-        initialMessage: '현재 지역의 경량 연결 데이터 동기화를 준비하고 있습니다.',
+        title: '다운로드 데이터 확인',
+        initialMessage: '현재 지역의 SQLite Snapshot 연결 데이터를 확인하고 있습니다.',
         useCommonUi: true,
         developerModeMessage: '개발자 모드 ON: debugPrint 코드를 복사할 수 있습니다.',
         standardModeMessage: '개발자 모드 OFF',
       );
 
       trace.log(
-        'singleModePolicy=email+invite+communication only areaMasterRefresh=false',
+        'singleModePolicy=sqlite_snapshot_read_only firebaseRead=false sharedPreferencesRead=false',
         progress: 0.04,
       );
       trace.log(
@@ -514,7 +513,6 @@ class _SingleInsideDataDownloadDockState
       );
 
       final result = await AreaRemoteSettingsSync.sync(
-        repository: context.read<AreaRepository>(),
         division: division,
         area: area,
         onLog: trace.log,
@@ -523,10 +521,10 @@ class _SingleInsideDataDownloadDockState
       );
 
       trace.log(
-        '출퇴근 경량 데이터 동기화 결과: syncedCount=${result.syncedCount} emailSynced=${result.emailSynced} inviteSynced=${result.inviteSynced} communicationSynced=${result.communicationSynced}',
+        'SQLite Snapshot 연결 데이터 확인 결과: availableCount=${result.availableCount} emailAvailable=${result.emailAvailable} inviteAvailable=${result.inviteAvailable} communicationAvailable=${result.communicationAvailable}',
         progress: 0.97,
       );
-      await trace.succeed('현재 지역 연결 데이터 내려받기가 완료되었습니다.');
+      await trace.succeed('현재 지역의 SQLite Snapshot 확인이 완료되었습니다.');
 
       if (!mounted) return;
       _setStateSafe(_SingleInsideDataDownloadState.success);
@@ -535,9 +533,9 @@ class _SingleInsideDataDownloadDockState
       if (!trace.developerMode) {
         await StatusDialog.showSuccess(
           context,
-          title: '데이터 내려받기 완료',
+          title: '다운로드 데이터 확인 완료',
           description:
-              '현재 지역(${result.area})의 email · invite · communication만 동기화했습니다.\nArea Master는 갱신하지 않았습니다.\n${result.summary}',
+              '현재 지역(${result.area})의 본사 다운로드 SQLite Snapshot을 확인했습니다.\nFirebase와 SharedPreferences는 조회하거나 갱신하지 않았습니다.\n${result.summary}',
           useCommonUi: true,
         );
       }
@@ -548,7 +546,7 @@ class _SingleInsideDataDownloadDockState
       final activeTrace = trace;
       if (activeTrace != null) {
         await activeTrace.fail(
-          '현재 지역 연결 데이터 내려받기에 실패했습니다.',
+          '현재 지역의 SQLite Snapshot 확인에 실패했습니다.',
           error: error,
           stackTrace: stackTrace,
         );
@@ -561,9 +559,9 @@ class _SingleInsideDataDownloadDockState
       if (activeTrace == null || !activeTrace.developerMode) {
         await StatusDialog.showFailure(
           context,
-          title: '데이터 내려받기 실패',
+          title: '다운로드 데이터 확인 실패',
           description:
-              'email · invite · communication 동기화를 완료하지 못했습니다. 기존 로컬값은 가능한 범위에서 복원됩니다.',
+              '현재 지역의 본사 다운로드 SQLite Snapshot을 확인하지 못했습니다.',
           useCommonUi: true,
         );
       }
@@ -601,26 +599,26 @@ class _SingleInsideDataDownloadDockState
   String get _title {
     switch (_state) {
       case _SingleInsideDataDownloadState.idle:
-        return '데이터 내려받기';
+        return '다운로드 데이터 확인';
       case _SingleInsideDataDownloadState.loading:
-        return '연결 데이터 동기화 중';
+        return 'SQLite Snapshot 확인 중';
       case _SingleInsideDataDownloadState.success:
-        return '최신 데이터 적용 완료';
+        return '다운로드 데이터 확인 완료';
       case _SingleInsideDataDownloadState.failure:
-        return '다시 내려받기';
+        return '다시 확인';
     }
   }
 
   String get _subtitle {
     switch (_state) {
       case _SingleInsideDataDownloadState.idle:
-        return 'email · invite · communication만 갱신';
+        return '본사 내려받기 SQLite Snapshot만 사용';
       case _SingleInsideDataDownloadState.loading:
-        return '현재 지역 설정 3개만 확인하고 있습니다';
+        return '현재 지역의 저장된 연결 정보를 확인합니다';
       case _SingleInsideDataDownloadState.success:
-        return 'Area Master는 변경하지 않았습니다';
+        return 'Firebase · SharedPreferences 접근 없음';
       case _SingleInsideDataDownloadState.failure:
-        return '기존 로컬값을 유지하고 다시 시도할 수 있습니다';
+        return '본사 내려받기 후 다시 확인할 수 있습니다';
     }
   }
 
@@ -810,7 +808,7 @@ class _SingleInsideDataDownloadDockState
       return Semantics(
         button: true,
         enabled: !_busy,
-        label: '데이터 내려받기',
+        label: '다운로드 데이터 확인',
         child: dock,
       );
     }
@@ -818,7 +816,7 @@ class _SingleInsideDataDownloadDockState
     return Semantics(
       button: true,
       enabled: !_busy,
-      label: '데이터 내려받기',
+      label: '다운로드 데이터 확인',
       child: TweenAnimationBuilder<double>(
         tween: Tween<double>(begin: 0, end: 1),
         duration: const Duration(milliseconds: 240),

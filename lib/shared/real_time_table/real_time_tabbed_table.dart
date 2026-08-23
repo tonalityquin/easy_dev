@@ -2191,6 +2191,33 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     };
   }
 
+  Future<void> _runEntryQuickActionFromSurface(
+    TypePageEntryQuickAction action,
+    Rect sourceRect,
+  ) async {
+    _onUserActivity();
+    _debugLog('quick_action_tap', <String, Object?>{
+      'action': 'entry',
+      'table': widget.tabs[_currentTableIndex].id,
+      'mode': _viewMode?.mode.name,
+      'sourceRect': '${sourceRect.left.toStringAsFixed(1)},${sourceRect.top.toStringAsFixed(1)},${sourceRect.width.toStringAsFixed(1)},${sourceRect.height.toStringAsFixed(1)}',
+    });
+    try {
+      await action(sourceRect);
+      _debugLog('quick_action_complete', <String, Object?>{
+        'action': 'entry',
+      });
+    } catch (error, stackTrace) {
+      _debugLog('quick_action_failure', <String, Object?>{
+        'action': 'entry',
+        'error': error,
+      });
+      debugPrint(
+        '[TypePageQuickAction] action_failure action=entry error=$error\nStackTrace:\n$stackTrace',
+      );
+    }
+  }
+
   Future<void> _runQuickActionFromSurface(
     String actionId,
     TypePageQuickAction action,
@@ -2610,10 +2637,9 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
             semanticsLabel: '입차',
             icon: Icons.add_circle_outline_rounded,
             foreground: cs.primary,
-            onPressed: () => _runQuickActionFromSurface(
-              'entry',
-              actions.openEntry,
-            ),
+            showProgressWhileRunning: false,
+            onPressed: (sourceRect) =>
+                _runEntryQuickActionFromSurface(actions.openEntry, sourceRect),
           ),
         ),
         Expanded(
@@ -2621,7 +2647,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
             semanticsLabel: '검색',
             icon: Icons.manage_search_rounded,
             foreground: cs.onSurfaceVariant,
-            onPressed: () => _runQuickActionFromSurface(
+            onPressed: (_) => _runQuickActionFromSurface(
               'search',
               actions.openSearch,
             ),
@@ -2632,7 +2658,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
             semanticsLabel: '대시보드',
             icon: Icons.dashboard_rounded,
             foreground: cs.onSurfaceVariant,
-            onPressed: () => _runQuickActionFromSurface(
+            onPressed: (_) => _runQuickActionFromSurface(
               'dashboard',
               actions.openDashboard,
             ),
@@ -3314,12 +3340,14 @@ class _TypePageQuickActionControl extends StatefulWidget {
     required this.icon,
     required this.foreground,
     required this.onPressed,
+    this.showProgressWhileRunning = true,
   });
 
   final String semanticsLabel;
   final IconData icon;
   final Color foreground;
-  final Future<void> Function() onPressed;
+  final Future<void> Function(Rect sourceRect) onPressed;
+  final bool showProgressWhileRunning;
 
   @override
   State<_TypePageQuickActionControl> createState() =>
@@ -3337,8 +3365,25 @@ class _TypePageQuickActionControlState
       _running = true;
     });
     HapticFeedback.selectionClick();
+    final renderObject = context.findRenderObject();
+    final sourceRect = renderObject is RenderBox && renderObject.hasSize
+        ? (() {
+            final origin = renderObject.localToGlobal(Offset.zero);
+            final extent = math.min(44.0, renderObject.size.shortestSide);
+            final center = origin + renderObject.size.center(Offset.zero);
+            return Rect.fromCenter(
+              center: center,
+              width: extent,
+              height: extent,
+            );
+          })()
+        : Rect.fromCenter(
+            center: MediaQuery.sizeOf(context).center(Offset.zero),
+            width: 44,
+            height: 44,
+          );
     try {
-      await widget.onPressed();
+      await widget.onPressed(sourceRect);
     } finally {
       if (!mounted) return;
       setState(() {
@@ -3396,7 +3441,7 @@ class _TypePageQuickActionControlState
                   duration: reduceMotion
                       ? Duration.zero
                       : const Duration(milliseconds: 160),
-                  child: _running
+                  child: _running && widget.showProgressWhileRunning
                       ? SizedBox(
                           key: const ValueKey<String>('running'),
                           width: 18,

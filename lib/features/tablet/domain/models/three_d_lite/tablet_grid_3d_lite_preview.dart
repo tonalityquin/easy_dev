@@ -1069,9 +1069,9 @@ class _StaticScenePainter extends CustomPainter {
       final showLabel = projector.pixelsPerUnit >= 8.5 &&
           (scene.lod == _SceneLod.detailed || slot.rect.area >= 2);
       if (!showLabel) continue;
-      final label = slot.no != null
-          ? '${slot.no}'
-          : _compactSlotLabel(slot.categoryLabel, slot.label);
+      final label = slot.no == null
+          ? _compactSlotLabel(slot.categoryLabel, slot.label)
+          : '';
       if (label.isEmpty) continue;
       final center = _rectCenter(projector, slot.rect, 0.055);
       textPainter.text = TextSpan(
@@ -1480,7 +1480,7 @@ class _DeparturePulsePainter extends CustomPainter {
         scene.lod == _SceneLod.detailed ? 0.56 : 0.42,
       );
       textPainter.text = TextSpan(
-        text: slot.no == null ? '출차 요청' : '출차 ${slot.no}',
+        text: '출차 요청',
         style: TextStyle(
           fontSize: scene.lod == _SceneLod.detailed ? 10 : 8,
           fontWeight: FontWeight.w900,
