@@ -8,6 +8,7 @@ import '../../../../app/utils/status_dialog.dart';
 import '../../../../features/account/applications/user_state.dart';
 import '../../../../features/dev/application/area_state.dart';
 import '../../../../features/payment/applications/bill_state.dart';
+import '../../../../features/payment/domain/models/bill_model.dart';
 import '../../../../features/sector/applications/sector_state.dart';
 import '../../../../features/sector/domain/models/sector_model.dart';
 import '../../../plate/domain/models/plate_status_draft.dart';
@@ -159,8 +160,8 @@ class InputPlateController {
     expectedOriginalStatus = draft;
     expectedStatusSourcePath = sourcePath.trim().isEmpty ? null : sourcePath.trim();
     statusEditedByUser = false;
-    statusWriteRequested = true;
-    statusDeletionRequested = draft.isEmpty;
+    statusWriteRequested = false;
+    statusDeletionRequested = false;
   }
 
   void applyStatusNotFound() {
@@ -170,8 +171,8 @@ class InputPlateController {
     expectedOriginalStatus = PlateStatusDraft(customStatus: '');
     expectedStatusSourcePath = null;
     statusEditedByUser = false;
-    statusWriteRequested = true;
-    statusDeletionRequested = true;
+    statusWriteRequested = false;
+    statusDeletionRequested = false;
   }
 
   void applyStatusLookupFailed() {
@@ -608,8 +609,16 @@ class InputPlateController {
     BuildContext context,
     VoidCallback refreshUI, {
     ActionTraceController? trace,
+    ValueChanged<String>? onDebug,
   }) async {
+    void emitDebug(String message) {
+      final line = '[InputPlateController][Submit] $message';
+      debugPrint(line);
+      onDebug?.call(message);
+    }
+
     trace?.add('입차 처리 시작');
+    emitDebug('submit=start status=${statusLookupState.name}');
 
     if (!statusLookupReadyForSubmit) {
       final stateName = statusLookupState.name;
@@ -623,7 +632,8 @@ class InputPlateController {
         'state=$stateName plate=${buildPlateNumber()}',
       );
       trace?.add('중단: 상태 조회 미완료 state=$stateName');
-      if (context.mounted && trace == null) {
+      emitDebug('submit=blocked reason=status_lookup state=$stateName');
+      if (context.mounted && trace == null && onDebug == null) {
         final lookupTrace = await DeveloperOperationTrace.start(
           context: context,
           title: '입차 상태 조회 확인',
@@ -666,6 +676,8 @@ class InputPlateController {
     final canUseBill = areaState.capabilitiesOfCurrentArea.contains(
       Capability.bill,
     );
+    int? localRegularAmount;
+    int? localRegularDurationHours;
     final hasAnyBill = canUseBill &&
         (billState.generalBills.isNotEmpty || billState.regularBills.isNotEmpty);
 
@@ -709,10 +721,48 @@ class InputPlateController {
         (selectedBill == null || selectedBill!.isEmpty) &&
         selectedBillType != '정기') {
       trace?.add('중단: selectedBill 누락');
+      emitDebug('billing=blocked reason=missing_selection');
       if (context.mounted) {
         showFailedSnackbar(context, '정산 유형을 선택해주세요.', useCommonUi: true);
       }
       return false;
+    }
+
+    if (canUseBill &&
+        selectedBillType != '정기' &&
+        selectedBill != null &&
+        selectedBill!.isNotEmpty) {
+      BillModel? localBill;
+      for (final bill in billState.generalBills) {
+        if (bill.countType.trim() == selectedBill) {
+          localBill = bill;
+          break;
+        }
+      }
+      if (localBill == null) {
+        trace?.add('중단: 로컬 정산 데이터 불일치');
+        emitDebug(
+          'billing=blocked reason=local_bill_not_found value=${selectedBill ?? ''}',
+        );
+        if (context.mounted) {
+          showFailedSnackbar(
+            context,
+            '선택한 정산 정보를 확인할 수 없습니다.',
+            useCommonUi: true,
+          );
+        }
+        return false;
+      }
+      selectedBasicStandard = localBill.basicStandard ?? 0;
+      selectedBasicAmount = localBill.basicAmount ?? 0;
+      selectedAddStandard = localBill.addStandard ?? 0;
+      selectedAddAmount = localBill.addAmount ?? 0;
+      localRegularAmount = localBill.regularAmount;
+      localRegularDurationHours = localBill.regularDurationHours;
+      trace?.add('정산 로컬 검증 완료');
+      emitDebug(
+        'billing=validated source=local_cache value=${localBill.countType} basicStandard=$selectedBasicStandard basicAmount=$selectedBasicAmount addStandard=$selectedAddStandard addAmount=$selectedAddAmount',
+      );
     }
 
     final sectorResolution = await _resolveSectorForEntry(
@@ -727,7 +777,7 @@ class InputPlateController {
     }
     final selectedSector = sectorResolution.sector;
     DeveloperOperationTrace? statusOperationTrace;
-    if (trace == null && context.mounted) {
+    if (trace == null && onDebug == null && context.mounted) {
       statusOperationTrace = await DeveloperOperationTrace.start(
         context: context,
         title: '입차 상태 정보 저장',
@@ -758,20 +808,49 @@ class InputPlateController {
     isLoading = true;
     refreshUI();
 
+    PhotoUploadResult? uploadResult;
+    var registrationCommitted = false;
+
+    Future<void> cleanupUploadedImages(String reason) async {
+      final result = uploadResult;
+      if (registrationCommitted ||
+          result == null ||
+          result.uploadedObjectPaths.isEmpty) {
+        return;
+      }
+      emitDebug(
+        'image_cleanup=start reason=$reason count=${result.uploadedObjectPaths.length}',
+      );
+      final failedPaths = await InputPlateService.cleanupUploadedImages(
+        result.uploadedObjectPaths,
+      );
+      emitDebug(
+        'image_cleanup=complete reason=$reason requested=${result.uploadedObjectPaths.length} failed=${failedPaths.length}',
+      );
+      trace?.add(
+        '사진 정리 완료 requested=${result.uploadedObjectPaths.length} failed=${failedPaths.length}',
+      );
+    }
+
     try {
       trace?.add('사진 업로드 시작');
-      final uploadResult = await InputPlateService.uploadCapturedImages(
+      emitDebug('image_upload=start count=${capturedImages.length}');
+      final currentUploadResult = await InputPlateService.uploadCapturedImages(
         capturedImages,
         plateNumber,
         area,
         userName,
         division,
       );
+      uploadResult = currentUploadResult;
       trace?.add(
-        '사진 업로드 완료 uploaded=${uploadResult.uploadedUrls.length} failed=${uploadResult.failedCount}',
+        '사진 업로드 완료 uploaded=${currentUploadResult.uploadedUrls.length} failed=${currentUploadResult.failedCount}',
+      );
+      emitDebug(
+        'image_upload=complete uploaded=${currentUploadResult.uploadedUrls.length} failed=${currentUploadResult.failedCount}',
       );
 
-      if (context.mounted && uploadResult.hasFailure && trace == null) {
+      if (context.mounted && currentUploadResult.hasFailure && trace == null) {
         await StatusDialog.showFailure(
           context,
           title: StatusDialog.photoSaveFailed,
@@ -803,7 +882,7 @@ class InputPlateController {
         plateNumber: plateNumber,
         location: isLocationSelected ? location : '',
         isLocationSelected: isLocationSelected,
-        imageUrls: uploadResult.uploadedUrls,
+        imageUrls: currentUploadResult.uploadedUrls,
         selectedBill: canUseBill ? selectedBill : null,
         statusWriteRequested: statusWriteRequested,
         statusLookupState: statusLookupState,
@@ -814,6 +893,9 @@ class InputPlateController {
         basicAmount: canUseBill ? selectedBasicAmount : 0,
         addStandard: canUseBill ? selectedAddStandard : 0,
         addAmount: canUseBill ? selectedAddAmount : 0,
+        regularAmount: canUseBill ? localRegularAmount : null,
+        regularDurationHours:
+            canUseBill ? localRegularDurationHours : null,
         region: dropdownValue,
         customStatus: draft.customStatus,
         selectedBillType: canUseBill ? selectedBillType : '변동',
@@ -826,21 +908,23 @@ class InputPlateController {
         sectorName: selectedSector?.name,
       );
       trace?.add('입차 등록 결과=$wasSuccessful');
-
-      if (!context.mounted) {
-        trace?.add('중단: context unmounted after register');
-        if (statusOperationTrace != null) {
-          await statusOperationTrace.fail('화면 종료로 상태 저장 결과를 완료하지 못했습니다.');
-        }
-        return false;
-      }
+      emitDebug('register=complete success=$wasSuccessful');
 
       if (!wasSuccessful) {
         trace?.add('중단: registerPlateEntry returned false');
+        await cleanupUploadedImages('register_returned_false');
         if (statusOperationTrace != null) {
           await statusOperationTrace.fail('입차 상태 정보 저장이 완료되지 않았습니다.');
         }
         return false;
+      }
+
+      registrationCommitted = true;
+
+      if (!context.mounted) {
+        trace?.add('완료: context unmounted after committed register');
+        emitDebug('register=committed contextMounted=false');
+        return true;
       }
 
       final sid = ocrSessionId;
@@ -876,6 +960,8 @@ class InputPlateController {
       return true;
     } catch (e, st) {
       trace?.add('예외 발생: $e');
+      emitDebug('register=exception error=$e');
+      await cleanupUploadedImages('register_exception');
       final compactStack = st
           .toString()
           .split('\n')

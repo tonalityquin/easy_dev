@@ -19,6 +19,20 @@ import '../../../plate/domain/models/plate_status_draft.dart';
 import '../../../plate/domain/models/plate_status_scope.dart';
 import '../../../plate/domain/repositories/plate_repository.dart';
 
+class ModifyPhotoUploadResult {
+  final List<String> mergedUrls;
+  final List<String> uploadedObjectPaths;
+  final List<String> failedFiles;
+
+  const ModifyPhotoUploadResult({
+    required this.mergedUrls,
+    required this.uploadedObjectPaths,
+    required this.failedFiles,
+  });
+
+  bool get hasFailure => failedFiles.isNotEmpty;
+}
+
 class ModifyPlateService {
   final BuildContext context;
   final List<XFile> capturedImages;
@@ -50,12 +64,13 @@ class ModifyPlateService {
   final String? selectedSectorName;
   final bool canUseBill;
   final bool canUseSector;
-  final PlateStatusScope statusScope;
+  final PlateStatusScope? statusScope;
   final bool statusChanged;
   final PlateStatusDraft expectedOriginalStatus;
   final String? expectedStatusSourcePath;
   final String statusActorId;
   final String statusActorName;
+  final ValueChanged<String>? onDebug;
 
   ModifyPlateService({
     required this.context,
@@ -91,6 +106,7 @@ class ModifyPlateService {
     required this.expectedStatusSourcePath,
     required this.statusActorId,
     required this.statusActorName,
+    this.onDebug,
   });
 
   static const String _tPlate = 'plate';
@@ -104,6 +120,16 @@ class ModifyPlateService {
 
   static const Duration _uploadRetryDelay = Duration(milliseconds: 500);
   static const int _uploadMaxAttempts = 3;
+
+  void _debug(String message) {
+    final normalized = '[ModifyPlateService] $message';
+    final callback = onDebug;
+    if (callback != null) {
+      callback(normalized);
+      return;
+    }
+    debugPrint(normalized);
+  }
 
   static Future<void> _logApiError({
     required String tag,
@@ -186,13 +212,25 @@ class ModifyPlateService {
     return '$division/$area/images/$monthStr/$fileName';
   }
 
+  static bool _sameStringList(List<String>? left, List<String> right) {
+    final a = left ?? const <String>[];
+    if (a.length != right.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != right[i]) return false;
+    }
+    return true;
+  }
+
   String composePlateNumber() {
     return '${controllerFrontdigit.text}-${controllerMidDigit.text}-${controllerBackDigit.text}';
   }
 
-  Future<List<String>> uploadAndMergeImages(String plateNumber) async {
+  Future<ModifyPhotoUploadResult> uploadAndMergeImages(
+    String plateNumber,
+  ) async {
     final uploader = GcsImageUploader();
     final uploadedImageUrls = <String>[];
+    final uploadedObjectPaths = <String>[];
     final failedFiles = <String>[];
 
     final area = context.read<AreaState>().currentArea;
@@ -200,12 +238,18 @@ class ModifyPlateService {
     final session = context.read<UserState>().session;
     final performedBy = session?.displayName ?? 'Unknown';
 
+    _debug(
+      'photo_upload=start plate=$plateNumber captured=${capturedImages.length} existing=${existingImageUrls.length}',
+    );
+
     for (int i = 0; i < capturedImages.length; i++) {
       final image = capturedImages[i];
       final file = File(image.path);
       if (!file.existsSync()) {
         failedFiles.add(file.path);
-
+        _debug(
+          'photo_upload=file_missing index=${i + 1} total=${capturedImages.length} path=${file.path}',
+        );
         await _logApiError(
           tag: 'DoubleModifyPlateService.uploadAndMergeImages',
           message: '업로드 대상 파일이 존재하지 않음',
@@ -223,20 +267,18 @@ class ModifyPlateService {
             _tPlate,
             _tPlateDouble,
             _tPlateModify,
-            _tPlateUpload
+            _tPlateUpload,
           ],
         );
         continue;
       }
 
       final nowUtc = DateTime.now().toUtc();
-
       final fileName = _buildFileNameUtc(
         nowUtc: nowUtc,
         plateNumber: plateNumber,
         performedBy: performedBy,
       );
-
       final gcsPath = _buildGcsPathUtc(
         division: division,
         area: area,
@@ -247,9 +289,11 @@ class ModifyPlateService {
       String? gcsUrl;
       for (int attempt = 0; attempt < _uploadMaxAttempts; attempt++) {
         try {
+          _debug(
+            'photo_upload=attempt index=${i + 1} total=${capturedImages.length} attempt=${attempt + 1} path=$gcsPath',
+          );
           gcsUrl = await uploader.modifyUploadImage(file, gcsPath);
           if (gcsUrl != null) break;
-
           await _logApiError(
             tag: 'DoubleModifyPlateService.uploadAndMergeImages',
             message: 'GCS 업로드 결과가 null',
@@ -270,10 +314,13 @@ class ModifyPlateService {
               _tPlateDouble,
               _tPlateModify,
               _tPlateUpload,
-              _tGcs
+              _tGcs,
             ],
           );
         } catch (e) {
+          _debug(
+            'photo_upload=attempt_failed index=${i + 1} attempt=${attempt + 1} error=$e',
+          );
           await _logApiError(
             tag: 'DoubleModifyPlateService.uploadAndMergeImages',
             message: 'GCS 업로드 예외',
@@ -294,19 +341,24 @@ class ModifyPlateService {
               _tPlateDouble,
               _tPlateModify,
               _tPlateUpload,
-              _tGcs
+              _tGcs,
             ],
           );
-
           await Future.delayed(_uploadRetryDelay);
         }
       }
 
       if (gcsUrl != null) {
         uploadedImageUrls.add(gcsUrl);
+        uploadedObjectPaths.add(gcsPath);
+        _debug(
+          'photo_upload=success index=${i + 1} path=$gcsPath',
+        );
       } else {
         failedFiles.add(file.path);
-
+        _debug(
+          'photo_upload=failed index=${i + 1} path=$gcsPath',
+        );
         await _logApiError(
           tag: 'DoubleModifyPlateService.uploadAndMergeImages',
           message: 'GCS 업로드 최종 실패(재시도 소진)',
@@ -326,7 +378,7 @@ class ModifyPlateService {
             _tPlateDouble,
             _tPlateModify,
             _tPlateUpload,
-            _tGcs
+            _tGcs,
           ],
         );
       }
@@ -351,12 +403,97 @@ class ModifyPlateService {
           _tPlate,
           _tPlateDouble,
           _tPlateModify,
-          _tPlateUpload
+          _tPlateUpload,
         ],
       );
     }
 
-    return <String>[...existingImageUrls, ...uploadedImageUrls];
+    final mergedUrls = <String>[
+      ...existingImageUrls,
+      ...uploadedImageUrls,
+    ];
+    _debug(
+      'photo_upload=complete merged=${mergedUrls.length} uploaded=${uploadedObjectPaths.length} failed=${failedFiles.length}',
+    );
+    return ModifyPhotoUploadResult(
+      mergedUrls: List<String>.unmodifiable(mergedUrls),
+      uploadedObjectPaths: List<String>.unmodifiable(uploadedObjectPaths),
+      failedFiles: List<String>.unmodifiable(failedFiles),
+    );
+  }
+
+  static Future<List<String>> cleanupUploadedImages(
+    List<String> objectPaths, {
+    ValueChanged<String>? onDebug,
+  }) async {
+    if (objectPaths.isEmpty) return const <String>[];
+    const bucketName = AuthConfig.gcsBucketName;
+    final normalizedPaths = objectPaths
+        .map((path) => path.trim())
+        .where((path) => path.isNotEmpty)
+        .toList(growable: false);
+    if (normalizedPaths.isEmpty) return const <String>[];
+
+    late final gcs.StorageApi storage;
+    try {
+      storage = await _storage();
+    } catch (error) {
+      final message =
+          '[ModifyPlateService] photo_cleanup=prepare_failed error=$error';
+      if (onDebug != null) {
+        onDebug(message);
+      } else {
+        debugPrint(message);
+      }
+      return List<String>.unmodifiable(normalizedPaths);
+    }
+
+    final failedPaths = <String>[];
+    for (final path in normalizedPaths) {
+      try {
+        final startMessage =
+            '[ModifyPlateService] photo_cleanup=start path=$path';
+        if (onDebug != null) {
+          onDebug(startMessage);
+        } else {
+          debugPrint(startMessage);
+        }
+        await storage.objects.delete(bucketName, path);
+        final successMessage =
+            '[ModifyPlateService] photo_cleanup=success path=$path';
+        if (onDebug != null) {
+          onDebug(successMessage);
+        } else {
+          debugPrint(successMessage);
+        }
+      } catch (error) {
+        failedPaths.add(path);
+        final failureMessage =
+            '[ModifyPlateService] photo_cleanup=failed path=$path error=$error';
+        if (onDebug != null) {
+          onDebug(failureMessage);
+        } else {
+          debugPrint(failureMessage);
+        }
+        await _logApiError(
+          tag: 'DoubleModifyPlateService.cleanupUploadedImages',
+          message: '차량 수정 실패 후 GCS 업로드 롤백 실패',
+          error: error,
+          extra: <String, dynamic>{
+            'bucket': bucketName,
+            'gcsPath': path,
+          },
+          tags: const <String>[
+            _tPlate,
+            _tPlateDouble,
+            _tPlateModify,
+            _tPlateUpload,
+            _tGcs,
+          ],
+        );
+      }
+    }
+    return List<String>.unmodifiable(failedPaths);
   }
 
   Future<bool> updatePlateInfo({
@@ -404,18 +541,14 @@ class ModifyPlateService {
     final effectiveRegularDurationValue = canUseBill
         ? selectedRegularDurationHours
         : originalPlate.regularDurationValue;
-
-    debugPrint(
-      '[ModifyPlateService][Capabilities] plate=$plateNumber '
-      'area=${originalPlate.area} bill=$canUseBill sector=$canUseSector '
-      'previousSectorId=${originalPlate.sectorId ?? ''} '
-      'previousSectorName=${originalPlate.sectorName ?? ''} '
-      'selectedSectorId=$normalizedSectorId '
-      'selectedSectorName=$normalizedSectorName',
-    );
-
     final effectiveCustomStatus =
         statusChanged ? updatedCustomStatus : originalPlate.customStatus;
+
+    _debug(
+      'update=prepare plate=$plateNumber area=${originalPlate.area} '
+      'bill=$canUseBill sector=$canUseSector statusChanged=$statusChanged',
+    );
+
     final updatedPlate = PlateModel(
       id: originalPlate.id,
       addAmount: effectiveAddAmount,
@@ -457,6 +590,12 @@ class ModifyPlateService {
     );
 
     final changes = originalPlate.diff(updatedPlate);
+    if (!_sameStringList(originalPlate.imageUrls, imageUrls)) {
+      changes[PlateFields.imageUrls] = <String, dynamic>{
+        'before': originalPlate.imageUrls ?? const <String>[],
+        'after': imageUrls,
+      };
+    }
 
     PlateLogModel? log;
     if (changes.isNotEmpty) {
@@ -474,58 +613,124 @@ class ModifyPlateService {
       );
     }
 
+    final updatedFields = <String, dynamic>{};
+    if (originalPlate.location != updatedPlate.location) {
+      updatedFields[PlateFields.location] = updatedPlate.location;
+    }
+    if (originalPlate.billingType != updatedPlate.billingType) {
+      updatedFields[PlateFields.billingType] = updatedPlate.billingType;
+    }
+    if (originalPlate.billingPlanType != updatedPlate.billingPlanType) {
+      updatedFields[PlateFields.billingPlanType] = updatedPlate.billingPlanType;
+    }
+    if (originalPlate.plateNumber != updatedPlate.plateNumber) {
+      updatedFields[PlateFields.plateNumber] = updatedPlate.plateNumber;
+    }
+    if (statusChanged) {
+      updatedFields[PlateFields.customStatus] = updatedCustomStatus;
+    }
+    if (!_sameStringList(originalPlate.imageUrls, imageUrls)) {
+      updatedFields[PlateFields.imageUrls] = imageUrls;
+    }
+    if (originalPlate.region != updatedPlate.region) {
+      updatedFields[PlateFields.region] = updatedPlate.region;
+    }
+    if (originalPlate.basicStandard != updatedPlate.basicStandard) {
+      updatedFields[PlateFields.basicStandard] = updatedPlate.basicStandard;
+    }
+    if (originalPlate.basicAmount != updatedPlate.basicAmount) {
+      updatedFields[PlateFields.basicAmount] = updatedPlate.basicAmount;
+    }
+    if (originalPlate.addStandard != updatedPlate.addStandard) {
+      updatedFields[PlateFields.addStandard] = updatedPlate.addStandard;
+    }
+    if (originalPlate.addAmount != updatedPlate.addAmount) {
+      updatedFields[PlateFields.addAmount] = updatedPlate.addAmount;
+    }
+    if (originalPlate.regularAmount != updatedPlate.regularAmount) {
+      updatedFields[PlateFields.regularAmount] = updatedPlate.regularAmount;
+    }
+    if (originalPlate.regularDurationValue != updatedPlate.regularDurationValue) {
+      updatedFields[PlateFields.regularDurationValue] =
+          updatedPlate.regularDurationValue;
+      updatedFields[PlateFields.regularDurationHours] =
+          updatedPlate.regularDurationValue;
+    }
+    if (originalPlate.manufacturerName != updatedPlate.manufacturerName) {
+      updatedFields[PlateFields.manufacturerName] = updatedPlate.manufacturerName;
+    }
+    if (originalPlate.modelName != updatedPlate.modelName) {
+      updatedFields[PlateFields.modelName] = updatedPlate.modelName;
+    }
+    if (originalPlate.parkingPriority1SlotKey !=
+        updatedPlate.parkingPriority1SlotKey) {
+      updatedFields[PlateFields.parkingPriority1SlotKey] =
+          updatedPlate.parkingPriority1SlotKey;
+    }
+    if (originalPlate.parkingPriority2SlotKey !=
+        updatedPlate.parkingPriority2SlotKey) {
+      updatedFields[PlateFields.parkingPriority2SlotKey] =
+          updatedPlate.parkingPriority2SlotKey;
+    }
+    if (originalPlate.parkingPriority3SlotKey !=
+        updatedPlate.parkingPriority3SlotKey) {
+      updatedFields[PlateFields.parkingPriority3SlotKey] =
+          updatedPlate.parkingPriority3SlotKey;
+    }
+    if (canUseSector && originalPlate.sectorId != updatedPlate.sectorId) {
+      updatedFields[PlateFields.sectorId] = hasSector
+          ? normalizedSectorId
+          : FieldValue.delete();
+    }
+    if (canUseSector && originalPlate.sectorName != updatedPlate.sectorName) {
+      updatedFields[PlateFields.sectorName] = hasSector
+          ? normalizedSectorName
+          : FieldValue.delete();
+    }
+
+    _debug(
+      'update=fields_ready count=${updatedFields.length} '
+      'keys=${updatedFields.keys.join(',')} statusChanged=$statusChanged',
+    );
+
     try {
-      await repo.updatePlateWithStatus(
-        '${originalPlate.plateNumber}_${originalPlate.area}',
-        <String, dynamic>{
-          if (originalPlate.location != newLocation) 'location': newLocation,
-          if (canUseBill && originalPlate.billingType != effectiveBillingType)
-            'billingType': effectiveBillingType,
-          if (originalPlate.plateNumber != plateNumber)
-            'plate_number': plateNumber,
-          if (statusChanged) 'customStatus': updatedCustomStatus,
-          'imageUrls': imageUrls,
-          'region': dropdownValue,
-          if (canUseBill) ...<String, dynamic>{
-            'basicStandard': selectedBasicStandard,
-            'basicAmount': selectedBasicAmount,
-            'addStandard': selectedAddStandard,
-            'addAmount': selectedAddAmount,
-            'regularAmount': selectedRegularAmount,
-            'regularDurationValue': selectedRegularDurationHours,
-            'regularDurationHours': selectedRegularDurationHours,
-          },
-          PlateFields.manufacturerName: manufacturerName,
-          PlateFields.modelName: modelName,
-          PlateFields.parkingPriority1SlotKey: priority1SlotKey,
-          PlateFields.parkingPriority2SlotKey: priority2SlotKey,
-          PlateFields.parkingPriority3SlotKey: priority3SlotKey,
-          if (canUseSector) ...<String, dynamic>{
-            PlateFields.sectorId:
-                hasSector ? normalizedSectorId : FieldValue.delete(),
-            PlateFields.sectorName:
-                hasSector ? normalizedSectorName : FieldValue.delete(),
-          },
-          'isSelected': false,
-          'selectedBy': null,
-          'updatedAt': DateTime.now().toUtc(),
-        },
-        log: log,
-        plateNumber: plateNumber,
-        area: originalPlate.area,
-        statusScope: statusScope,
-        statusChanged: statusChanged,
-        expectedOriginalStatus: expectedOriginalStatus,
-        expectedStatusSourcePath: expectedStatusSourcePath,
-        customStatus: updatedCustomStatus,
-        updatedByName: statusActorName,
-        updatedById: statusActorId,
+      final documentId = '${originalPlate.plateNumber}_${originalPlate.area}';
+      if (statusChanged) {
+        final resolvedScope = statusScope;
+        if (resolvedScope == null) {
+          throw StateError('status scope is required when status changes');
+        }
+        await repo.updatePlateWithStatus(
+          documentId,
+          updatedFields,
+          log: log,
+          plateNumber: plateNumber,
+          area: originalPlate.area,
+          statusScope: resolvedScope,
+          statusChanged: true,
+          expectedOriginalStatus: expectedOriginalStatus,
+          expectedStatusSourcePath: expectedStatusSourcePath,
+          customStatus: updatedCustomStatus,
+          updatedByName: statusActorName,
+          updatedById: statusActorId,
+        );
+      } else {
+        await repo.updatePlate(
+          documentId,
+          updatedFields,
+          log: log,
+        );
+      }
+      _debug(
+        'update=success statusMode=${statusChanged ? 'transaction' : 'plate_only'} fields=${updatedFields.length}',
       );
       return true;
     } catch (e) {
       await _logApiError(
         tag: 'DoubleModifyPlateService.updatePlateInfo',
-        message: 'PlateRepository.updatePlateWithStatus 실패',
+        message: statusChanged
+            ? 'PlateRepository.updatePlateWithStatus 실패'
+            : 'PlateRepository.updatePlate 실패',
         error: e,
         extra: <String, dynamic>{
           'docId': '${originalPlate.plateNumber}_${originalPlate.area}',
@@ -536,9 +741,10 @@ class ModifyPlateService {
           'newPlateNumber': plateNumber,
           'imageUrlsCount': imageUrls.length,
           'statusChanged': statusChanged,
-          'statusScope': statusScope.storageLabel,
+          'statusScope': statusScope?.storageLabel ?? 'skipped',
           'hasLog': log != null,
           'changedFieldsCount': changes.length,
+          'writeFieldsCount': updatedFields.length,
           'capabilityBill': canUseBill,
           'capabilitySector': canUseSector,
           'previousSectorId': originalPlate.sectorId,
@@ -551,9 +757,10 @@ class ModifyPlateService {
           _tPlate,
           _tPlateDouble,
           _tPlateModify,
-          _tPlateRepo
+          _tPlateRepo,
         ],
       );
+      _debug('update=failed error=$e');
       rethrow;
     }
   }

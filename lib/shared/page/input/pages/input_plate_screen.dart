@@ -4,7 +4,6 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../../app/utils/developer_operation_status_dialog.dart';
@@ -20,6 +19,7 @@ import '../../../../features/payment/applications/bill_state.dart';
 import '../../../../features/payment/domain/models/bill_model.dart';
 import '../../../../features/sector/applications/sector_state.dart';
 import '../../../../features/sector/domain/models/sector_model.dart';
+import '../../../operational_cache/domain/repositories/operational_local_repository.dart';
 import '../../../plate/domain/models/plate_status_lookup_result.dart';
 import '../../../plate/domain/models/plate_status_scope.dart';
 import '../../../plate/domain/repositories/plate_repository.dart';
@@ -83,7 +83,6 @@ class InputPlateScreen extends StatefulWidget {
 }
 
 class _InputPlateScreenState extends State<InputPlateScreen> {
-  static const String _prefsHasMonthlyKey = 'has_monthly_parking';
 
   late final InputPlateController controller;
   final TextEditingController _identityFrontDraftController =
@@ -113,6 +112,8 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   bool _monthlyDocExists = false;
   int _statusLookupGeneration = 0;
   int _monthlyLookupGeneration = 0;
+  String? _historyStatusCacheKey;
+  PlateStatusLookupResult? _historyStatusCacheResult;
   bool _openedScannerOnce = false;
   bool _scannerActive = false;
   DeveloperOperationTrace? _editorTrace;
@@ -235,6 +236,15 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   String _safeArea(String area) {
     final value = area.trim();
     return value.isEmpty ? 'unknown' : value;
+  }
+
+  String _historyStatusKey(String plateNumber, String area) {
+    return '${_safeArea(area)}|${plateNumber.trim()}';
+  }
+
+  void _clearHistoryStatusCache() {
+    _historyStatusCacheKey = null;
+    _historyStatusCacheResult = null;
   }
 
   void _showFloatingMessage(String message) {
@@ -402,8 +412,11 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
   Future<void> _loadHasMonthlyParkingFlag() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final value = prefs.getBool(_prefsHasMonthlyKey) ?? false;
+      final area = context.read<AreaState>().currentArea.trim();
+      final meta = area.isEmpty
+          ? null
+          : await context.read<OperationalLocalRepository>().readAreaMeta(area);
+      final value = meta?.hasMonthlyParking ?? false;
       if (!mounted) return;
       if (!_hasMonthlyLoaded || _hasMonthlyParking != value) {
         setState(() {
@@ -543,6 +556,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       _monthlyLookupGeneration++;
       _monthlyDocExists = false;
       controller.resetStatusLookupToIdle();
+      _clearHistoryStatusCache();
     });
     controller.suppressOcrEditCount(false);
     _identityAutoApplying = false;
@@ -831,6 +845,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
   Future<void> _lookupGeneralStatusForCurrentPlate({
     bool preserveBillingType = false,
+    bool forceRefresh = false,
   }) async {
     if (!controller.isInputValid()) {
       final generation = ++_statusLookupGeneration;
@@ -846,6 +861,10 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
     final plateNumber = controller.buildPlateNumber();
     final area = context.read<AreaState>().currentArea;
+    final cacheKey = _historyStatusKey(plateNumber, area);
+    final cachedLookup = !forceRefresh && _historyStatusCacheKey == cacheKey
+        ? _historyStatusCacheResult
+        : null;
     final lookupGeneration = ++_statusLookupGeneration;
     setState(() {
       controller.beginStatusLookup();
@@ -853,13 +872,17 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       _monthlyDocExists = false;
     });
     _log(
-      'status_lookup=start plate=$plateNumber area=$area generation=$lookupGeneration',
+      'status_lookup=start plate=$plateNumber area=$area generation=$lookupGeneration source=${cachedLookup == null ? 'firestore' : 'side_dock_cache'} forceRefresh=$forceRefresh',
     );
 
-    final lookup = await _fetchPlateStatus(plateNumber, area);
+    final lookup = cachedLookup ?? await _fetchPlateStatus(plateNumber, area);
     if (!mounted || lookupGeneration != _statusLookupGeneration) return;
     if (!controller.isInputValid() || controller.buildPlateNumber() != plateNumber) {
       return;
+    }
+    if (cachedLookup == null) {
+      _historyStatusCacheKey = cacheKey;
+      _historyStatusCacheResult = lookup;
     }
 
     if (lookup.isFailed) {
@@ -1052,7 +1075,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     return applied;
   }
 
-  Future<void> _selectGeneralBill(String value) async {
+  void _selectGeneralBill(String value) {
     final billState = context.read<BillState>();
     BillModel? selected;
     for (final bill in billState.generalBills) {
@@ -1071,9 +1094,8 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       }
     });
     _log(
-      'billing=value_selected type=${controller.selectedBillType} value=${value.trim()}',
+      'billing=value_selected type=${controller.selectedBillType} value=${value.trim()} source=local_cache statusLookup=unchanged',
     );
-    await _lookupGeneralStatusForCurrentPlate(preserveBillingType: true);
   }
 
   String _variableBillingSummary() {
@@ -1137,7 +1159,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     if (controller.selectedBillType == '정기') {
       await _handleMonthlySelectedFetchAndApply();
     } else {
-      await _lookupGeneralStatusForCurrentPlate();
+      await _lookupGeneralStatusForCurrentPlate(forceRefresh: true);
     }
   }
 
@@ -1201,6 +1223,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       controller.controllerMidDigit.text = mid;
       controller.controllerBackDigit.text = back;
       controller.resetStatusLookupToIdle();
+      _clearHistoryStatusCache();
       _monthlyLookupGeneration++;
       _monthlyDocExists = false;
     });
@@ -1417,6 +1440,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       () {
         if (mounted) setState(() {});
       },
+      onDebug: _log,
     );
     if (!mounted) return;
     if (!success) {
@@ -1786,10 +1810,9 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       valueOptions: options,
       detailRows: _variableBillingDetailRows(),
       loading: billState.isLoading,
-      onValueChanged: (selectedValue) async {
-        final applyFuture = _selectGeneralBill(selectedValue);
+      onValueChanged: (selectedValue) {
+        _selectGeneralBill(selectedValue);
         if (dialogContext.mounted) setDialogState(() {});
-        await applyFuture;
         if (!mounted) return;
         _log(
           'billing=variable_auto_applied value=${selectedValue.trim()}',
@@ -1993,16 +2016,35 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
           onHeaderTap: _identityEditing
               ? null
               : () => _enterIdentityEditor(source: 'header_identity'),
-          headerAction: _editorTrace?.developerMode == true
-              ? CommonIconButton(
-                  icon: Icons.bug_report_rounded,
-                  tooltip: '디버그 상태',
-                  size: 38,
-                  iconSize: 19,
-                  haptic: CommonHaptic.selection,
-                  onPressed: _showDeveloperStatus,
-                )
-              : null,
+          headerAction: AnimatedSwitcher(
+            duration: MediaQuery.maybeOf(context)?.disableAnimations == true
+                ? Duration.zero
+                : const Duration(milliseconds: 180),
+            switchInCurve: Curves.easeOutBack,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (child, animation) {
+              return FadeTransition(
+                opacity: animation,
+                child: ScaleTransition(
+                  scale: Tween<double>(begin: .88, end: 1).animate(animation),
+                  child: child,
+                ),
+              );
+            },
+            child: _editorTrace?.developerMode == true
+                ? CommonIconButton(
+                    key: const ValueKey<String>('input_plate_debug_action'),
+                    icon: Icons.bug_report_rounded,
+                    tooltip: '디버그 상태',
+                    size: 38,
+                    iconSize: 19,
+                    haptic: CommonHaptic.selection,
+                    onPressed: _showDeveloperStatus,
+                  )
+                : const SizedBox.shrink(
+                    key: ValueKey<String>('input_plate_debug_action_hidden'),
+                  ),
+          ),
           leadingRail: PlateEditorRail(
             enabled: !_busy && !_identityEditing,
             policy: policy,

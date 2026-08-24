@@ -1,23 +1,23 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../../features/dev/application/area_state.dart';
-import '../../../../features/dev/debug/debug_api_logger.dart';
-import '../../../../features/location/applications/location_state.dart';
-import '../../../../features/location/domain/models/location_model.dart';
-import '../../../../shared/plate/application/common/view_doc_rows_store.dart';
-import '../../../../shared/plate/domain/repositories/plate_repository.dart';
-import '../../../../shared/preview_package/parking_grid_3d_preview.dart';
+import '../../../shared/operational_cache/domain/repositories/operational_local_repository.dart';
+
+import '../../dev/application/area_state.dart';
+import '../../dev/debug/debug_api_logger.dart';
+import '../../location/applications/location_state.dart';
+import '../../location/domain/models/location_model.dart';
+import '../../../shared/plate/application/common/view_doc_rows_store.dart';
+import '../../../shared/plate/domain/repositories/plate_repository.dart';
+import '../../../shared/preview_package/parking_grid_3d_preview.dart';
 
 const String _tParking = 'parking';
 const String _tParkingStatus = 'parking/status';
 const String _tFirestore = 'firestore';
-const String _tPrefs = 'prefs';
+const String _tSqlite = 'sqlite';
 const String _tUi = 'ui';
 
 String _trimOrEmpty(Object? v) => (v ?? '').toString().trim();
@@ -162,19 +162,6 @@ Future<void> _logApiError({
   } catch (_) {}
 }
 
-List<Map<String, dynamic>> _decodeCachedLocationsJsonToMaps(String raw) {
-  final trimmed = raw.trim();
-  if (trimmed.isEmpty) return <Map<String, dynamic>>[];
-  final decoded = jsonDecode(trimmed);
-  if (decoded is! List)
-    throw const FormatException('cached_locations is not a List');
-  final out = <Map<String, dynamic>>[];
-  for (final item in decoded) {
-    if (item is Map) out.add(Map<String, dynamic>.from(item));
-  }
-  return out;
-}
-
 class TripleParkingStatusPage extends StatefulWidget {
   const TripleParkingStatusPage({super.key});
 
@@ -184,8 +171,6 @@ class TripleParkingStatusPage extends StatefulWidget {
 }
 
 class _TripleParkingStatusPageState extends State<TripleParkingStatusPage> {
-  static const String _kCachedLocationsPrefix = 'cached_locations_';
-
   StreamSubscription<List<ViewRowData>>? _pcSub;
   StreamSubscription<List<ViewRowData>>? _drSub;
   Timer? _viewDebounce;
@@ -260,12 +245,12 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage> {
     _lastArea = area;
 
     await Future.wait(<Future<void>>[
-      _runLoadLocationsFromPrefs(forceRefresh: refreshLocationsSource),
+      _runLoadLocationsFromLocal(forceRefresh: refreshLocationsSource),
       _runAggregateCount(forceRefresh: false),
     ]);
   }
 
-  Future<void> _runLoadLocationsFromPrefs({required bool forceRefresh}) async {
+  Future<void> _runLoadLocationsFromLocal({required bool forceRefresh}) async {
     if (!mounted) return;
 
     final int seq = ++_locationsReqSeq;
@@ -287,9 +272,9 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage> {
         await locState.manualLocationRefresh();
       } catch (e) {
         await _logApiError(
-          tag: 'TripleParkingStatusPage._runLoadLocationsFromPrefs',
+          tag: 'TripleParkingStatusPage._runLoadLocationsFromLocal',
           message:
-              'forceRefresh: LocationState.manualLocationRefresh 실패 → prefs 로드로 fallback',
+              'forceRefresh: LocationState.manualLocationRefresh 실패 → SQLite 로드로 fallback',
           error: e,
           extra: <String, dynamic>{
             'division': division,
@@ -310,29 +295,11 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage> {
     }
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final key = '$_kCachedLocationsPrefix$requestedArea';
-      final raw = (prefs.getString(key) ?? '').trim();
-
-      if (raw.isEmpty) {
-        if (shouldDropResult()) return;
-        setState(() {
-          _cachedLocations = <LocationModel>[];
-          _isLocationsLoading = false;
-          _hadLocationsError = false;
-        });
-        return;
-      }
-
-      final List<Map<String, dynamic>> maps =
-          await compute(_decodeCachedLocationsJsonToMaps, raw);
+      final next = await context
+          .read<OperationalLocalRepository>()
+          .readLocations(requestedArea);
 
       if (shouldDropResult()) return;
-
-      final next = <LocationModel>[];
-      for (final m in maps) {
-        next.add(LocationModel.fromCacheMap(m));
-      }
 
       setState(() {
         _cachedLocations = next;
@@ -341,16 +308,16 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage> {
       });
     } catch (e) {
       await _logApiError(
-        tag: 'TripleParkingStatusPage._runLoadLocationsFromPrefs',
-        message: 'SharedPreferences에서 cached_locations 로드/파싱 실패',
+        tag: 'TripleParkingStatusPage._runLoadLocationsFromLocal',
+        message: 'SQLite에서 operational_locations 로드 실패',
         error: e,
         extra: <String, dynamic>{
           'division': division,
           'area': requestedArea,
-          'cacheKey': '$_kCachedLocationsPrefix$requestedArea',
+          'sqliteArea': requestedArea,
           'forceRefresh': forceRefresh,
         },
-        tags: const <String>[_tParking, _tParkingStatus, _tPrefs],
+        tags: const <String>[_tParking, _tParkingStatus, _tSqlite],
       );
 
       if (shouldDropResult()) return;
@@ -582,7 +549,7 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage> {
                 const SizedBox(height: 16),
                 ElevatedButton.icon(
                   onPressed: () =>
-                      _runLoadLocationsFromPrefs(forceRefresh: true),
+                      _runLoadLocationsFromLocal(forceRefresh: true),
                   icon: const Icon(Icons.refresh),
                   label: const Text('원본 갱신 후 캐시 다시 로드'),
                 ),

@@ -1,10 +1,8 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../app/utils/location_debug_status.dart';
 import '../../dev/application/area_state.dart';
@@ -12,12 +10,11 @@ import '../domain/models/grid_rect.dart';
 import '../domain/models/location_model.dart';
 import '../domain/models/parking_grid_model.dart';
 import '../domain/repositories/location_repository.dart';
+import '../../../shared/operational_cache/domain/repositories/operational_local_repository.dart';
 
 class LocationState extends ChangeNotifier {
-  static const String _cacheLocationsPrefix = 'cached_locations_';
-  static const String _cacheTotalCapacityPrefix = 'total_capacity_';
-
   final LocationRepository _repository;
+  final OperationalLocalRepository _localRepository;
   final AreaState _areaState;
 
   List<LocationModel> _locations = [];
@@ -49,7 +46,7 @@ class LocationState extends ChangeNotifier {
 
   Map<String, int> get plateCountsByDisplayName => _plateCountsByDisplayName;
 
-  LocationState(this._repository, this._areaState) {
+  LocationState(this._repository, this._localRepository, this._areaState) {
     Future.microtask(loadFromLocationCache);
     _areaState.addListener(_handleAreaChange);
   }
@@ -73,30 +70,6 @@ class LocationState extends ChangeNotifier {
     _isLoading = false;
     _safeNotify();
   }
-
-  static List<Map<String, dynamic>> _decodeCachedLocationsToMaps(String raw) {
-    final trimmed = raw.trim();
-    if (trimmed.isEmpty) return <Map<String, dynamic>>[];
-
-    final decoded = jsonDecode(trimmed);
-    if (decoded is! List) {
-      throw const FormatException('cached_locations is not a List');
-    }
-
-    final out = <Map<String, dynamic>>[];
-    for (final item in decoded) {
-      if (item is Map) {
-        out.add(Map<String, dynamic>.from(item));
-      }
-    }
-    return out;
-  }
-
-  static String _cacheKeyForArea(String area) =>
-      '$_cacheLocationsPrefix${area.trim()}';
-
-  static String _capacityKeyForArea(String area) =>
-      '$_cacheTotalCapacityPrefix${area.trim()}';
 
   bool _shouldDropCacheResult({
     required int seq,
@@ -240,27 +213,22 @@ class LocationState extends ChangeNotifier {
   Future<void> _writeCache({
     required String area,
     required List<LocationModel> data,
-    required SharedPreferences prefs,
   }) async {
     final trimmedArea = area.trim();
-    final jsonData = json.encode(data.map((e) => e.toCacheMap()).toList());
     final totalCapacity = _totalCapacityForCache(data);
-    final locationSaved = await prefs.setString(
-      _cacheKeyForArea(trimmedArea),
-      jsonData,
+    await _localRepository.replaceLocations(
+      area: trimmedArea,
+      locations: data,
+      totalCapacity: totalCapacity,
     );
-    final capacitySaved = await prefs.setInt(
-      _capacityKeyForArea(trimmedArea),
-      totalCapacity,
+    final storedCount = await _localRepository.countLocations(trimmedArea);
+    if (storedCount != data.length ||
+        !await _localRepository.hasLocationsSnapshot(trimmedArea)) {
+      throw StateError('주차 구역 SQLite 저장 검증 실패');
+    }
+    debugPrint(
+      '[LocationState] SQLite 저장 완료: area=$trimmedArea count=$storedCount totalCapacity=$totalCapacity',
     );
-    if (!locationSaved || !capacitySaved) {
-      throw StateError('주차 구역 로컬 저장 실패');
-    }
-    await prefs.reload();
-    if (prefs.getString(_cacheKeyForArea(trimmedArea)) != jsonData ||
-        prefs.getInt(_capacityKeyForArea(trimmedArea)) != totalCapacity) {
-      throw StateError('주차 구역 로컬 저장 검증 실패');
-    }
   }
 
   Future<void> _syncFromRepository({
@@ -323,8 +291,7 @@ class LocationState extends ChangeNotifier {
       _selectedLocationId = null;
       _previousArea = trimmedArea;
 
-      final prefs = await SharedPreferences.getInstance();
-      await _writeCache(area: trimmedArea, data: data, prefs: prefs);
+      await _writeCache(area: trimmedArea, data: data);
     } catch (e, stackTrace) {
       LocationDebugStatus.report(
         title: '구역 동기화 실패',
@@ -379,21 +346,14 @@ class LocationState extends ChangeNotifier {
     final int seq = ++_cacheLoadSeq;
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final cachedJson = prefs.getString(_cacheKeyForArea(requestedArea));
-
-      if (cachedJson != null && cachedJson.trim().isNotEmpty) {
-        final maps = await compute(_decodeCachedLocationsToMaps, cachedJson);
-
-        if (_shouldDropCacheResult(seq: seq, requestedArea: requestedArea))
-          return;
-
-        _locations = maps.map((m) => LocationModel.fromCacheMap(m)).toList();
-      } else {
-        if (_shouldDropCacheResult(seq: seq, requestedArea: requestedArea))
-          return;
-        _locations = [];
+      final stored = await _localRepository.readLocations(requestedArea);
+      if (_shouldDropCacheResult(seq: seq, requestedArea: requestedArea)) {
+        return;
       }
+      _locations = stored;
+      debugPrint(
+        '[LocationState] SQLite 로드 완료: area=$requestedArea count=${stored.length}',
+      );
     } catch (e, stackTrace) {
       LocationDebugStatus.report(
         title: '구역 캐시 오류',
@@ -425,51 +385,95 @@ class LocationState extends ChangeNotifier {
     );
   }
 
-  Future<void> clearCurrentAreaCache() async {
-    final currentArea = _areaState.currentArea.trim();
-    if (currentArea.isEmpty) {
-      throw StateError('현재 지역 정보가 없습니다.');
-    }
-
-    ++_cacheLoadSeq;
-    ++_repoSyncSeq;
-    _cacheLoadInFlightByArea.remove(currentArea);
-    _repoSyncInFlightByArea.remove(currentArea);
-
-    final prefs = await SharedPreferences.getInstance();
-    final locationKey = _cacheKeyForArea(currentArea);
-    final capacityKey = _capacityKeyForArea(currentArea);
-    await prefs.remove(locationKey);
-    await prefs.remove(capacityKey);
-    await prefs.reload();
-    if (prefs.containsKey(locationKey) || prefs.containsKey(capacityKey)) {
-      throw StateError('기존 주차 구역 로컬 데이터 삭제 검증 실패');
-    }
-
-    _locations = [];
-    _selectedLocationId = null;
-    _previousArea = currentArea;
-    _isLoading = false;
-    _safeNotify();
+  Future<void> clearCurrentAreaCache() {
+    return clearAreaCache(_areaState.currentArea.trim());
   }
 
-  Future<void> manualLocationRefreshStrict() async {
-    final currentArea = _areaState.currentArea.trim();
-    if (currentArea.isEmpty) {
+  Future<void> clearAreaCache(String area) async {
+    final normalizedArea = area.trim();
+    if (normalizedArea.isEmpty) {
       throw StateError('현재 지역 정보가 없습니다.');
     }
 
-    await _syncFromRepository(
-      area: currentArea,
-      setLoading: true,
-      reason: 'operationalDataSync',
-      rethrowErrors: true,
-    );
+    final affectsCurrentArea =
+        _areaState.currentArea.trim() == normalizedArea;
+    if (affectsCurrentArea) {
+      ++_cacheLoadSeq;
+      ++_repoSyncSeq;
+    }
+    _cacheLoadInFlightByArea.remove(normalizedArea);
+    _repoSyncInFlightByArea.remove(normalizedArea);
 
-    final prefs = await SharedPreferences.getInstance();
-    if (!prefs.containsKey(_cacheKeyForArea(currentArea)) ||
-        !prefs.containsKey(_capacityKeyForArea(currentArea))) {
-      throw StateError('주차 구역 로컬 데이터 저장 결과가 없습니다.');
+    await _localRepository.clearLocations(normalizedArea);
+    if (await _localRepository.countLocations(normalizedArea) != 0 ||
+        await _localRepository.hasLocationsSnapshot(normalizedArea)) {
+      throw StateError('기존 주차 구역 SQLite 데이터 삭제 검증 실패');
+    }
+
+    if (affectsCurrentArea &&
+        _areaState.currentArea.trim() == normalizedArea) {
+      _locations = [];
+      _selectedLocationId = null;
+      _previousArea = normalizedArea;
+      _isLoading = false;
+      _safeNotify();
+    }
+    debugPrint('[LocationState] 지역 SQLite 삭제 완료: area=$normalizedArea');
+  }
+
+  Future<void> manualLocationRefreshStrict() {
+    return manualLocationRefreshStrictForArea(_areaState.currentArea.trim());
+  }
+
+  Future<void> manualLocationRefreshStrictForArea(String area) async {
+    final normalizedArea = area.trim();
+    if (normalizedArea.isEmpty) {
+      throw StateError('현재 지역 정보가 없습니다.');
+    }
+    if (_areaState.currentArea.trim() != normalizedArea) {
+      throw StateError('주차 구역 동기화 시작 전에 현재 지역이 변경되었습니다.');
+    }
+
+    _isLoading = true;
+    _safeNotify();
+    try {
+      final data = await _repository.getLocationsOnce(normalizedArea);
+      if (_areaState.currentArea.trim() != normalizedArea) {
+        throw StateError('주차 구역 동기화 중 현재 지역이 변경되었습니다.');
+      }
+
+      await _writeCache(area: normalizedArea, data: data);
+      if (_areaState.currentArea.trim() != normalizedArea) {
+        throw StateError('주차 구역 저장 중 현재 지역이 변경되었습니다.');
+      }
+
+      _locations = List<LocationModel>.of(data);
+      _selectedLocationId = null;
+      _previousArea = normalizedArea;
+
+      if (!await _localRepository.hasLocationsSnapshot(normalizedArea)) {
+        throw StateError('주차 구역 SQLite 저장 결과가 없습니다.');
+      }
+      final storedCount = await _localRepository.countLocations(normalizedArea);
+      if (storedCount != data.length) {
+        throw StateError(
+          '주차 구역 SQLite 저장 개수가 일치하지 않습니다: firestore=${data.length}, sqlite=$storedCount',
+        );
+      }
+      debugPrint(
+        '[LocationState] 고정 지역 Firestore 새로고침 완료: area=$normalizedArea count=$storedCount',
+      );
+    } catch (error, stackTrace) {
+      debugPrint(
+        '[LocationState] 고정 지역 Firestore 새로고침 실패: area=$normalizedArea error=$error',
+      );
+      debugPrint('[LocationState] stackTrace=$stackTrace');
+      Error.throwWithStackTrace(error, stackTrace);
+    } finally {
+      if (_areaState.currentArea.trim() == normalizedArea) {
+        _isLoading = false;
+        _safeNotify();
+      }
     }
   }
 

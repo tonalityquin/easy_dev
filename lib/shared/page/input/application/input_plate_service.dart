@@ -16,10 +16,12 @@ import '../../../plate/domain/models/plate_status_lookup_result.dart';
 
 class PhotoUploadResult {
   final List<String> uploadedUrls;
+  final List<String> uploadedObjectPaths;
   final List<String> failedFiles;
 
   const PhotoUploadResult({
     required this.uploadedUrls,
+    required this.uploadedObjectPaths,
     required this.failedFiles,
   });
 
@@ -125,6 +127,7 @@ class InputPlateService {
   ) async {
     final uploader = GcsImageUploader();
     final List<String> uploadedUrls = [];
+    final List<String> uploadedObjectPaths = [];
     final List<String> failedFiles = [];
 
     debugPrint('📸 총 업로드 시도 이미지 수: ${images.length}');
@@ -248,6 +251,7 @@ class InputPlateService {
         );
       } else {
         uploadedUrls.add(gcsUrl);
+        uploadedObjectPaths.add(gcsPath);
       }
 
       await Future.delayed(const Duration(milliseconds: 100));
@@ -261,9 +265,55 @@ class InputPlateService {
     }
 
     return PhotoUploadResult(
-      uploadedUrls: uploadedUrls,
+      uploadedUrls: List<String>.unmodifiable(uploadedUrls),
+      uploadedObjectPaths: List<String>.unmodifiable(uploadedObjectPaths),
       failedFiles: List<String>.unmodifiable(failedFiles),
     );
+  }
+
+  static Future<List<String>> cleanupUploadedImages(
+    List<String> objectPaths,
+  ) async {
+    if (objectPaths.isEmpty) return const <String>[];
+    const bucketName = AuthConfig.gcsBucketName;
+    final normalizedPaths = objectPaths
+        .map((path) => path.trim())
+        .where((path) => path.isNotEmpty)
+        .toList(growable: false);
+    if (normalizedPaths.isEmpty) return const <String>[];
+
+    late final gcs.StorageApi storage;
+    try {
+      storage = await _storage();
+    } catch (error) {
+      debugPrint('❌ GCS 업로드 롤백 준비 실패: $error');
+      return List<String>.unmodifiable(normalizedPaths);
+    }
+
+    final failedPaths = <String>[];
+
+    for (final path in normalizedPaths) {
+      try {
+        debugPrint('🧹 GCS 업로드 롤백 시작: $path');
+        await storage.objects.delete(bucketName, path);
+        debugPrint('✅ GCS 업로드 롤백 완료: $path');
+      } catch (error) {
+        failedPaths.add(path);
+        debugPrint('❌ GCS 업로드 롤백 실패: $path error=$error');
+        await _logApiError(
+          tag: 'InputPlateService.cleanupUploadedImages',
+          message: '입차 등록 실패 후 GCS 업로드 롤백 실패',
+          error: error,
+          extra: <String, dynamic>{
+            'bucket': bucketName,
+            'gcsPath': path,
+          },
+          tags: const <String>[_tPlate, _tPlateUpload, _tGcs],
+        );
+      }
+    }
+
+    return List<String>.unmodifiable(failedPaths);
   }
 
   static Future<bool> registerPlateEntry({
@@ -282,6 +332,8 @@ class InputPlateService {
     required int basicAmount,
     required int addStandard,
     required int addAmount,
+    int? regularAmount,
+    int? regularDurationHours,
     required String region,
     String? customStatus,
     required String selectedBillType,
@@ -327,6 +379,9 @@ class InputPlateService {
         basicAmount: finalBasicAmount,
         addStandard: finalAddStandard,
         addAmount: finalAddAmount,
+        regularAmount: selectedBillType == '정기' ? null : regularAmount,
+        regularDurationHours:
+            selectedBillType == '정기' ? null : regularDurationHours,
         region: region,
         imageUrls: imageUrls,
         customStatus: customStatus ?? '',

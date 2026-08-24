@@ -10,6 +10,7 @@ import '../../../../features/dev/application/area_state.dart';
 import '../../../secondary/widgets/ops_console_widgets.dart';
 import '../../../tts/application/tts_sync_helper.dart';
 import '../../../tts/application/tts_user_filters.dart';
+import '../../../operational_cache/domain/repositories/operational_local_repository.dart';
 
 class DashboardSetting extends StatefulWidget {
   const DashboardSetting({super.key});
@@ -28,6 +29,7 @@ class _DashboardSettingState extends State<DashboardSetting> {
   bool _locked = true;
   bool? _hasMonthlyParking;
   DateTime? _lastRefreshAt;
+  String _operationalArea = '';
 
   @override
   void initState() {
@@ -53,13 +55,13 @@ class _DashboardSettingState extends State<DashboardSetting> {
 
   Future<void> _load() async {
     final loaded = await TtsUserFilters.load();
-    final prefs = await SharedPreferences.getInstance();
-    final hasMonthlyParking = prefs.getBool(
-      OperationalDataSyncWorkflow.monthlyParkingKey,
-    );
-    final lastRefreshAt = DateTime.tryParse(
-      prefs.getString(OperationalDataSyncWorkflow.lastSyncAtKey) ?? '',
-    );
+    final area = context.read<AreaState>().currentArea.trim();
+    final meta = area.isEmpty
+        ? null
+        : await context.read<OperationalLocalRepository>().readAreaMeta(area);
+    final hasMonthlyParking = meta?.hasMonthlyParking;
+    final lastRefreshAt = meta?.syncedAt;
+    _operationalArea = area;
 
     try {
       await TtsSyncHelper.apply(
@@ -78,6 +80,24 @@ class _DashboardSettingState extends State<DashboardSetting> {
       _hasMonthlyParking = hasMonthlyParking;
       _lastRefreshAt = lastRefreshAt;
       _loading = false;
+    });
+  }
+
+
+  Future<void> _reloadOperationalMeta(String area) async {
+    final normalizedArea = area.trim();
+    final meta = normalizedArea.isEmpty
+        ? null
+        : await context
+            .read<OperationalLocalRepository>()
+            .readAreaMeta(normalizedArea);
+    if (!mounted || context.read<AreaState>().currentArea.trim() != normalizedArea) {
+      return;
+    }
+    setState(() {
+      _operationalArea = normalizedArea;
+      _hasMonthlyParking = meta?.hasMonthlyParking;
+      _lastRefreshAt = meta?.syncedAt;
     });
   }
 
@@ -176,6 +196,14 @@ class _DashboardSettingState extends State<DashboardSetting> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final currentArea = context.select<AreaState, String>((s) => s.currentArea.trim());
+    if (_operationalArea != currentArea) {
+      _operationalArea = currentArea;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _reloadOperationalMeta(currentArea);
+        }
+      });
+    }
     final areaLabel = currentArea.isEmpty ? '지역 미설정' : currentArea;
     final monthlyLabel = _hasMonthlyParking == null ? '대기' : (_hasMonthlyParking! ? '있음' : '없음');
 

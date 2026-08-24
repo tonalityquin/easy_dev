@@ -35,61 +35,6 @@ class _ViewRow {
   final String location;
 }
 
-class _ParkingViewMemCache {
-  _ParkingViewMemCache._();
-
-  static final Map<String, List<_ViewRow>> _cacheByKey =
-      <String, List<_ViewRow>>{};
-  static final Map<String, int> _cacheAtMsByKey = <String, int>{};
-
-  static String _key(String collection, String area) =>
-      '$collection|${area.trim()}';
-
-  static bool _shouldUseCache(String collection) {
-    return collection != 'parking_completed_view';
-  }
-
-  static Duration _ttlForCollection(String collection) {
-    return const Duration(seconds: 3);
-  }
-
-  static Future<List<_ViewRow>> fetch({
-    required PlateRepository plateRepository,
-    required String collection,
-    required String area,
-    required bool forceRefresh,
-  }) async {
-    final normalizedArea = area.trim();
-    if (normalizedArea.isEmpty) return const <_ViewRow>[];
-    final key = _key(collection, normalizedArea);
-    final useCache = !forceRefresh && _shouldUseCache(collection);
-    if (useCache) {
-      final cachedAt = _cacheAtMsByKey[key] ?? 0;
-      if (cachedAt > 0) {
-        final age = DateTime.now().millisecondsSinceEpoch - cachedAt;
-        if (age >= 0 && age <= _ttlForCollection(collection).inMilliseconds) {
-          return List<_ViewRow>.of(_cacheByKey[key] ?? const <_ViewRow>[]);
-        }
-      }
-    }
-    final locations = await plateRepository.fetchViewLocations(
-      collectionName: collection,
-      area: normalizedArea,
-    );
-    final rows = locations
-        .map((location) => _ViewRow(location: location))
-        .toList(growable: false);
-    if (useCache) {
-      _cacheByKey[key] = List<_ViewRow>.of(rows);
-      _cacheAtMsByKey[key] = DateTime.now().millisecondsSinceEpoch;
-    } else {
-      _cacheByKey.remove(key);
-      _cacheAtMsByKey.remove(key);
-    }
-    return rows;
-  }
-}
-
 class _ParkingSelectionData {
   const _ParkingSelectionData({
     required this.parent,
@@ -220,7 +165,7 @@ class _PlateParkingWorkspaceState extends State<PlateParkingWorkspace>
     _selectedParentName = null;
     _recentParentName = null;
     if (area.isNotEmpty) {
-      unawaited(_reloadOccupancy(forceRefresh: true));
+      unawaited(_reloadOccupancy());
     }
   }
 
@@ -355,7 +300,7 @@ class _PlateParkingWorkspaceState extends State<PlateParkingWorkspace>
     widget.onDebug?.call(message);
   }
 
-  Future<void> _reloadOccupancy({required bool forceRefresh}) async {
+  Future<void> _reloadOccupancy() async {
     final area = _loadedArea.trim();
     if (area.isEmpty || !mounted) return;
     setState(() {
@@ -364,20 +309,23 @@ class _PlateParkingWorkspaceState extends State<PlateParkingWorkspace>
     });
     try {
       final repository = context.read<PlateRepository>();
-      final rows = await Future.wait(<Future<List<_ViewRow>>>[
-        _ParkingViewMemCache.fetch(
-          plateRepository: repository,
-          collection: 'parking_completed_view',
+      final locations = await Future.wait(<Future<List<String>>>[
+        repository.fetchViewLocations(
+          collectionName: 'parking_completed_view',
           area: area,
-          forceRefresh: forceRefresh,
         ),
-        _ParkingViewMemCache.fetch(
-          plateRepository: repository,
-          collection: 'departure_requests_view',
+        repository.fetchViewLocations(
+          collectionName: 'departure_requests_view',
           area: area,
-          forceRefresh: forceRefresh,
         ),
       ]);
+      final rows = locations
+          .map(
+            (items) => items
+                .map((location) => _ViewRow(location: location))
+                .toList(growable: false),
+          )
+          .toList(growable: false);
       final blocked = <String, _BlockedSlotKind>{};
       void apply(List<_ViewRow> input, _BlockedSlotKind kind) {
         for (final row in input) {
@@ -397,7 +345,7 @@ class _PlateParkingWorkspaceState extends State<PlateParkingWorkspace>
         _occupancyError = null;
       });
       _debug(
-        'parking_spatial=occupancy_ready area=$area blocked=${blocked.length} forceRefresh=$forceRefresh',
+        'parking_spatial=occupancy_ready area=$area blocked=${blocked.length} source=view_firestore',
       );
     } catch (error) {
       if (!mounted) return;
@@ -606,7 +554,7 @@ class _PlateParkingWorkspaceState extends State<PlateParkingWorkspace>
     _debug(
       'parking_child=expanded parent=${parent.locationName} child=${child.locationName}',
     );
-    unawaited(_reloadOccupancy(forceRefresh: true));
+    unawaited(_reloadOccupancy());
   }
 
   Future<void> _closeFocus({required String reason}) async {
@@ -723,13 +671,6 @@ class _PlateParkingWorkspaceState extends State<PlateParkingWorkspace>
               label: const Text('위치 사용 안 함'),
             ),
           ],
-          IconButton(
-            tooltip: '주차 현황 새로고침',
-            onPressed: _occupancyLoading
-                ? null
-                : () => unawaited(_reloadOccupancy(forceRefresh: true)),
-            icon: const Icon(Icons.refresh_rounded),
-          ),
         ],
       ),
     );
@@ -990,56 +931,75 @@ class _PlateParkingWorkspaceState extends State<PlateParkingWorkspace>
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _buildHeader(context),
-                if (_occupancyLoading)
-                  LinearProgressIndicator(
-                    minHeight: 2,
-                    color: Theme.of(context).colorScheme.primary,
-                    backgroundColor: Theme.of(context)
-                        .colorScheme
-                        .surfaceContainerHighest
-                        .withOpacity(.35),
-                  ),
-                if (_occupancyError != null)
-                  Material(
-                    color: Theme.of(context).colorScheme.errorContainer,
-                    child: InkWell(
-                      onTap: () => unawaited(
-                        _reloadOccupancy(forceRefresh: true),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 7,
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.refresh_rounded,
-                              size: 17,
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onErrorContainer,
-                            ),
-                            const SizedBox(width: 7),
-                            Expanded(
-                              child: Text(
-                                '주차 현황을 갱신하지 못했습니다. 눌러서 다시 시도하세요.',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.copyWith(
+                AnimatedSwitcher(
+                  duration: MediaQuery.maybeOf(context)?.disableAnimations == true
+                      ? Duration.zero
+                      : const Duration(milliseconds: 180),
+                  reverseDuration:
+                      MediaQuery.maybeOf(context)?.disableAnimations == true
+                          ? Duration.zero
+                          : const Duration(milliseconds: 140),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  transitionBuilder: (child, animation) {
+                    return SizeTransition(
+                      sizeFactor: animation,
+                      axisAlignment: -1,
+                      child: FadeTransition(opacity: animation, child: child),
+                    );
+                  },
+                  child: _occupancyLoading
+                      ? LinearProgressIndicator(
+                          key: const ValueKey<String>('occupancy_loading'),
+                          minHeight: 2,
+                          color: Theme.of(context).colorScheme.primary,
+                          backgroundColor: Theme.of(context)
+                              .colorScheme
+                              .surfaceContainerHighest
+                              .withOpacity(.35),
+                        )
+                      : _occupancyError != null
+                          ? Material(
+                              key: const ValueKey<String>('occupancy_error'),
+                              color:
+                                  Theme.of(context).colorScheme.errorContainer,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 7,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.error_outline_rounded,
+                                      size: 17,
                                       color: Theme.of(context)
                                           .colorScheme
                                           .onErrorContainer,
-                                      fontWeight: FontWeight.w800,
                                     ),
+                                    const SizedBox(width: 7),
+                                    Expanded(
+                                      child: Text(
+                                        '주차 현황을 불러오지 못했습니다.',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .onErrorContainer,
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
+                            )
+                          : const SizedBox.shrink(
+                              key: ValueKey<String>('occupancy_ready'),
                             ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
+                ),
                 Expanded(
                   child: Consumer<LocationState>(
                     builder: (context, locationState, _) {

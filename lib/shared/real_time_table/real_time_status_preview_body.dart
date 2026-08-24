@@ -1,9 +1,9 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import '../operational_cache/domain/repositories/operational_local_repository.dart';
 
 import '../../app/utils/developer_operation_status_dialog.dart';
 import '../../features/location/applications/location_state.dart';
@@ -77,8 +77,8 @@ class _RealTimeStatusPreviewBodyState extends State<RealTimeStatusPreviewBody>
   static const String _boardPauseReason = '현황 DOT MAP 다이얼로그';
   static const String _dockPauseReason = '현황 상태 처리 사이드 도크';
 
-  Future<List<LocationModel>>? _prefsFuture;
-  String _prefsArea = '';
+  Future<List<LocationModel>>? _localFuture;
+  String _localArea = '';
   final Map<String, PlateModel> _plateDetailCache = <String, PlateModel>{};
   final Map<String, Future<PlateModel?>> _plateDetailInflight =
       <String, Future<PlateModel?>>{};
@@ -106,8 +106,8 @@ class _RealTimeStatusPreviewBodyState extends State<RealTimeStatusPreviewBody>
       widget.controller.bindParentFocus(this, _onParentFocusRequest);
     }
     if (oldWidget.area.trim() != widget.area.trim()) {
-      _prefsFuture = null;
-      _prefsArea = '';
+      _localFuture = null;
+      _localArea = '';
       _plateDetailCache.clear();
       _plateDetailInflight.clear();
     }
@@ -164,23 +164,10 @@ class _RealTimeStatusPreviewBodyState extends State<RealTimeStatusPreviewBody>
     setState(() {});
   }
 
-  Future<List<LocationModel>> _loadLocationsFromPrefs(String area) async {
+  Future<List<LocationModel>> _loadLocationsFromLocal(String area) async {
     final normalizedArea = area.trim();
     if (normalizedArea.isEmpty) return const <LocationModel>[];
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString('cached_locations_$normalizedArea');
-    if (raw == null || raw.trim().isEmpty) return const <LocationModel>[];
-    final decoded = json.decode(raw);
-    if (decoded is! List) return const <LocationModel>[];
-    final locations = <LocationModel>[];
-    for (final item in decoded) {
-      if (item is Map) {
-        locations.add(
-          LocationModel.fromCacheMap(Map<String, dynamic>.from(item)),
-        );
-      }
-    }
-    return locations;
+    return context.read<OperationalLocalRepository>().readLocations(normalizedArea);
   }
 
   RealTimeTabSpec? _specForCollection(String collection) {
@@ -459,7 +446,7 @@ class _RealTimeStatusPreviewBodyState extends State<RealTimeStatusPreviewBody>
     if (_lastRenderSignature != signature) {
       _lastRenderSignature = signature;
       debugPrint(
-        '[RealTimeStatusDotMap] event=render screen=${widget.screen} area=$area mode=status_spatial parents=${groups.length} parentGridReady=$parentGridReady occupied=$occupied canonicalRows=${data.rows.length} source=view_doc_rows_store locationSource=${context.read<LocationState>().locations.isNotEmpty ? 'location_state' : 'cached_locations'} interaction=parent_child_dialog_slot parentTap=child_zone parentSlotTap=disabled childPresentation=center_dialog childTransition=source_rect_expand_reverse_collapse childViewport=crop_fit childSlotTap=collapse_then_status_dock childDialogAutoPause=true systemBack=dialog_reverse_to_parent scrim=blur_dim occupiedLabel=plate_last4 slotHitPolicy=collision_safe_partition statusPriority=departure_in_progress>departure_request>parking_request>parked firebaseAdditionalRead=0',
+        '[RealTimeStatusDotMap] event=render screen=${widget.screen} area=$area mode=status_spatial parents=${groups.length} parentGridReady=$parentGridReady occupied=$occupied canonicalRows=${data.rows.length} source=view_doc_rows_store locationSource=${context.read<LocationState>().locations.isNotEmpty ? 'location_state' : 'sqlite'} interaction=parent_child_dialog_slot parentTap=child_zone parentSlotTap=disabled childPresentation=center_dialog childTransition=source_rect_expand_reverse_collapse childViewport=crop_fit childSlotTap=collapse_then_status_dock childDialogAutoPause=true systemBack=dialog_reverse_to_parent scrim=blur_dim occupiedLabel=plate_last4 slotHitPolicy=collision_safe_partition statusPriority=departure_in_progress>departure_request>parking_request>parked firebaseAdditionalRead=0',
       );
     }
 
@@ -508,14 +495,14 @@ class _RealTimeStatusPreviewBodyState extends State<RealTimeStatusPreviewBody>
       );
     }
 
-    if (_prefsFuture == null || _prefsArea != area) {
-      _prefsArea = area;
-      _prefsFuture = _loadLocationsFromPrefs(area);
+    if (_localFuture == null || _localArea != area) {
+      _localArea = area;
+      _localFuture = _loadLocationsFromLocal(area);
     }
 
     return SizedBox.expand(
       child: FutureBuilder<List<LocationModel>>(
-        future: _prefsFuture,
+        future: _localFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const RealTimeExpandedLoading();

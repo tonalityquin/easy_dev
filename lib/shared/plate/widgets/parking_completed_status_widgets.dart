@@ -6,13 +6,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../features/location/applications/location_state.dart';
 import '../../../features/location/domain/models/grid_rect.dart';
 import '../../../features/location/domain/models/location_model.dart';
 import '../../../features/location/domain/models/parking_grid_model.dart';
+import '../../operational_cache/domain/repositories/operational_local_repository.dart';
 import '../domain/models/plate_model.dart';
 import '../../../design_system/common_ui/common_ui_components.dart';
 import '../../../design_system/common_ui/common_ui_side_dock.dart';
@@ -238,43 +238,21 @@ class _ParkingStatusVehicleLocationCardState
       }
     } catch (_) {}
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString('cached_locations_$key');
-      if (raw == null || raw.trim().isEmpty) {
-        return const _ParkingStatusLocationSnapshot(
-          locations: <LocationModel>[],
-          source: 'local_cache_empty',
-        );
-      }
-      final decoded = jsonDecode(raw);
-      if (decoded is! List) {
-        return const _ParkingStatusLocationSnapshot(
-          locations: <LocationModel>[],
-          source: 'local_cache_invalid',
-        );
-      }
-      final out = <LocationModel>[];
-      for (final item in decoded) {
-        if (item is Map) {
-          out.add(
-            LocationModel.fromCacheMap(
-              Map<String, dynamic>.from(item),
-            ),
-          );
-        }
-      }
+      final stored = await context
+          .read<OperationalLocalRepository>()
+          .readLocations(key);
       return _ParkingStatusLocationSnapshot(
-        locations: List<LocationModel>.unmodifiable(out),
-        source: 'local_cache',
+        locations: List<LocationModel>.unmodifiable(stored),
+        source: stored.isEmpty ? 'sqlite_empty' : 'sqlite',
       );
     } catch (error) {
       parkingStatusTraceLog(
         context,
-        'vehicle_location_cache=error target=${widget.plate.plateNumber} error=$error',
+        'vehicle_location_sqlite=error target=${widget.plate.plateNumber} error=$error',
       );
       return const _ParkingStatusLocationSnapshot(
         locations: <LocationModel>[],
-        source: 'local_cache_error',
+        source: 'sqlite_error',
       );
     }
   }

@@ -13,8 +13,16 @@ import '../../features/sector/data/repositories/firestore_sector_repository.dart
 import '../../features/sector/domain/repositories/sector_repository.dart';
 import '../../shared/plate/data/repositories/firestore_plate_repository.dart';
 import '../../shared/plate/domain/repositories/plate_repository.dart';
+import '../../shared/operational_cache/data/local/operational_cache_database.dart';
+import '../../shared/operational_cache/data/repositories/sqlite_operational_local_repository.dart';
+import '../../shared/operational_cache/domain/repositories/operational_local_repository.dart';
 
 final List<SingleChildWidget> repositoryProviders = [
+  Provider<OperationalLocalRepository>(
+    create: (_) => SqliteOperationalLocalRepository(
+      OperationalCacheDatabase.instance,
+    ),
+  ),
   Provider<PlateRepository>(
     create: (_) {
       return FirestorePlateRepository();

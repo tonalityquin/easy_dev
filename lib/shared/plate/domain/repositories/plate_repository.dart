@@ -286,6 +286,8 @@ abstract class PlateRepository {
     int? basicAmount,
     int? addStandard,
     int? addAmount,
+    int? regularAmount,
+    int? regularDurationHours,
     required String region,
     required String selectedBillType,
     List<String>? imageUrls,

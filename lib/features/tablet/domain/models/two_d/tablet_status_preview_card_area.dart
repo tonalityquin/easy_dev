@@ -1,9 +1,9 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../../../../shared/operational_cache/domain/repositories/operational_local_repository.dart';
 
 import '../../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../pages/widgets/tablet_common_components.dart';
@@ -112,8 +112,8 @@ class _ParkingStatusPreviewCardAreaState
   final Map<String, List<_LiveViewRow>> _rowsByCollection =
       <String, List<_LiveViewRow>>{};
 
-  Future<List<LocationModel>>? _prefsFuture;
-  String _prefsArea = '';
+  Future<List<LocationModel>>? _localFuture;
+  String _localArea = '';
 
   String _boundArea = '';
   String _boundOverlaySignature = '';
@@ -129,8 +129,8 @@ class _ParkingStatusPreviewCardAreaState
     super.didUpdateWidget(oldWidget);
 
     if (oldWidget.area.trim() != widget.area.trim()) {
-      _prefsFuture = null;
-      _prefsArea = '';
+      _localFuture = null;
+      _localArea = '';
     }
 
     _bindSubscriptionsIfNeeded();
@@ -244,24 +244,10 @@ class _ParkingStatusPreviewCardAreaState
     }
   }
 
-  Future<List<LocationModel>> _loadLocationsFromPrefs(String area) async {
+  Future<List<LocationModel>> _loadLocationsFromLocal(String area) async {
     final resolvedArea = area.trim();
     if (resolvedArea.isEmpty) return const <LocationModel>[];
-
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString('cached_locations_$resolvedArea');
-    if (raw == null || raw.trim().isEmpty) return const <LocationModel>[];
-
-    final decoded = json.decode(raw);
-    if (decoded is! List) return const <LocationModel>[];
-
-    final out = <LocationModel>[];
-    for (final item in decoded) {
-      if (item is Map) {
-        out.add(LocationModel.fromCacheMap(Map<String, dynamic>.from(item)));
-      }
-    }
-    return out;
+    return context.read<OperationalLocalRepository>().readLocations(resolvedArea);
   }
 
   List<_LiveViewRow> _rowsForCollection(String collection) {
@@ -389,14 +375,14 @@ class _ParkingStatusPreviewCardAreaState
       );
     }
 
-    if (_prefsFuture == null || _prefsArea != resolvedArea) {
-      _prefsArea = resolvedArea;
-      _prefsFuture = _loadLocationsFromPrefs(resolvedArea);
+    if (_localFuture == null || _localArea != resolvedArea) {
+      _localArea = resolvedArea;
+      _localFuture = _loadLocationsFromLocal(resolvedArea);
     }
 
     return SizedBox.expand(
       child: FutureBuilder<List<LocationModel>>(
-        future: _prefsFuture,
+        future: _localFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const TabletCommonLoadingState(

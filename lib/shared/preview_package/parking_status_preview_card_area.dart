@@ -1,13 +1,13 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../features/location/applications/location_state.dart';
-import '../../../features/location/domain/models/location_model.dart';
-import '../../../shared/plate/application/common/view_doc_rows_store.dart';
+import '../operational_cache/domain/repositories/operational_local_repository.dart';
+
+import '../../features/location/applications/location_state.dart';
+import '../../features/location/domain/models/location_model.dart';
+import '../plate/application/common/view_doc_rows_store.dart';
 import 'parking_grid_3d_preview.dart';
 
 @immutable
@@ -75,33 +75,22 @@ class ParkingStatusPreviewCardArea extends StatefulWidget {
 }
 
 class _ParkingStatusPreviewCardAreaState extends State<ParkingStatusPreviewCardArea> {
-  Future<List<LocationModel>>? _prefsFuture;
-  String _prefsArea = '';
+  Future<List<LocationModel>>? _localFuture;
+  String _localArea = '';
 
   @override
   void didUpdateWidget(covariant ParkingStatusPreviewCardArea oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.area.trim() != widget.area.trim()) {
-      _prefsFuture = null;
-      _prefsArea = '';
+      _localFuture = null;
+      _localArea = '';
     }
   }
 
-  Future<List<LocationModel>> _loadLocationsFromPrefs(String area) async {
+  Future<List<LocationModel>> _loadLocationsFromLocal(String area) async {
     final a = area.trim();
     if (a.isEmpty) return const <LocationModel>[];
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString('cached_locations_$a');
-    if (raw == null || raw.trim().isEmpty) return const <LocationModel>[];
-    final decoded = json.decode(raw);
-    if (decoded is! List) return const <LocationModel>[];
-    final out = <LocationModel>[];
-    for (final item in decoded) {
-      if (item is Map) {
-        out.add(LocationModel.fromCacheMap(Map<String, dynamic>.from(item)));
-      }
-    }
-    return out;
+    return context.read<OperationalLocalRepository>().readLocations(a);
   }
 
   ParkingGridOverlay _buildOverlay(ViewDocRowsStore store, String area) {
@@ -244,14 +233,14 @@ class _ParkingStatusPreviewCardAreaState extends State<ParkingStatusPreviewCardA
       );
     }
 
-    if (_prefsFuture == null || _prefsArea != a) {
-      _prefsArea = a;
-      _prefsFuture = _loadLocationsFromPrefs(a);
+    if (_localFuture == null || _localArea != a) {
+      _localArea = a;
+      _localFuture = _loadLocationsFromLocal(a);
     }
 
     return SizedBox.expand(
       child: FutureBuilder<List<LocationModel>>(
-        future: _prefsFuture,
+        future: _localFuture,
         builder: (context, snap) {
           if (snap.connectionState == ConnectionState.waiting) {
             final cs = Theme.of(context).colorScheme;

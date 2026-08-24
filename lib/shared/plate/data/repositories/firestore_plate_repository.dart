@@ -720,6 +720,8 @@ class FirestorePlateRepository implements PlateRepository {
     int? basicAmount,
     int? addStandard,
     int? addAmount,
+    int? regularAmount,
+    int? regularDurationHours,
     required String region,
     List<String>? imageUrls,
     bool isLockedFee = false,
@@ -754,6 +756,8 @@ class FirestorePlateRepository implements PlateRepository {
       basicAmount: basicAmount,
       addStandard: addStandard,
       addAmount: addAmount,
+      regularAmount: regularAmount,
+      regularDurationHours: regularDurationHours,
       region: region,
       imageUrls: imageUrls,
       isLockedFee: isLockedFee,
@@ -1144,65 +1148,11 @@ class FirestorePlateRepository implements PlateRepository {
         }
       }
 
-      try {
-        final primary = await _firestore
-            .collectionGroup('plates')
-            .where('plateDocId', isEqualTo: docId)
-            .orderBy('monthKey', descending: true)
-            .limit(1)
-            .get();
-        if (primary.docs.isNotEmpty) {
-          final doc = primary.docs.first;
-          return PlateStatusLookupResult.found(
-            record: PlateStatusRecord.fromMap(doc.data(), docId: doc.id),
-            sourcePath: doc.reference.path,
-          );
-        }
-      } on FirebaseException catch (error) {
-        debugPrint(
-          '[FirestorePlateRepository][StatusLookup] primaryIndexFallback '
-          'plate=$plateNumber area=$safeArea code=${error.code}',
-        );
-      }
-
-      final secondary = await _firestore
-          .collectionGroup('plates')
-          .where('plateDocId', isEqualTo: docId)
-          .limit(12)
-          .get();
-      if (secondary.docs.isEmpty) {
-        return const PlateStatusLookupResult.notFound();
-      }
-
-      QueryDocumentSnapshot<Map<String, dynamic>>? best;
-      var bestMonth = -1;
-      for (final doc in secondary.docs) {
-        final data = doc.data();
-        var monthInt = -1;
-        final monthKey = (data['monthKey'] as String?)?.trim();
-        if (monthKey != null && monthKey.isNotEmpty) {
-          monthInt = int.tryParse(monthKey) ?? -1;
-        } else {
-          final parts = doc.reference.path.split('/');
-          final index = parts.indexOf('months');
-          if (index >= 0 && index + 1 < parts.length) {
-            monthInt = int.tryParse(parts[index + 1]) ?? -1;
-          }
-        }
-        if (monthInt > bestMonth) {
-          bestMonth = monthInt;
-          best = doc;
-        }
-      }
-
-      final selected = best ?? secondary.docs.first;
-      return PlateStatusLookupResult.found(
-        record: PlateStatusRecord.fromMap(
-          selected.data(),
-          docId: selected.id,
-        ),
-        sourcePath: selected.reference.path,
+      debugPrint(
+        '[FirestorePlateRepository][StatusLookup] scope=history '
+        'plate=$plateNumber area=$safeArea state=not_found months=${monthsToTry.map(_monthKey).join(',')}',
       );
+      return const PlateStatusLookupResult.notFound();
     } catch (error) {
       debugPrint(
         '[FirestorePlateRepository][StatusLookup] scope=history '

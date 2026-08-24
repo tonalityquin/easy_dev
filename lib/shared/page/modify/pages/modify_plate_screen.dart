@@ -131,7 +131,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
   final List<String> _existingImageUrls = <String>[];
 
   bool isLoading = false;
-  bool _statusContextResolving = true;
+  bool _statusContextResolving = false;
   String? _statusContextError;
   PlateEditorWorkspace? _activeDialog;
   late String _policySignature;
@@ -185,7 +185,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
         progress: .165,
       );
       _log('overview=ready display=list_surface editMode=central', progress: .17);
-      _resolveStatusContext();
+      _log('status_context=lazy_ready trigger=memo_or_status_change', progress: .18);
     });
   }
 
@@ -472,13 +472,18 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
   Future<void> _handleModifyAction() async {
     if (_busy || _hasPendingWorkspaceDraft) return;
 
-    if (_statusContextError != null || !_controller.statusContextResolved) {
+    final statusChanged = _controller.hasStatusChanges;
+    if (statusChanged &&
+        (_statusContextError != null || !_controller.statusContextResolved)) {
+      _log('status_context=save_resolve_required reason=status_changed');
       await _resolveStatusContext();
       if (!mounted ||
           _statusContextError != null ||
           !_controller.statusContextResolved) {
         return;
       }
+    } else if (!statusChanged) {
+      _log('status_context=save_skip reason=status_unchanged');
     }
 
     setState(() => isLoading = true);
@@ -583,6 +588,9 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
     setState(() {
       _controller.clearBillingSelection();
       _controller.selectedBillType = targetType;
+      _controller.invalidateStatusContext();
+      _statusContextError = null;
+      _statusContextResolving = false;
     });
     HapticFeedback.selectionClick();
     _log(
@@ -714,7 +722,12 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
           }
         }
         if (selected == null) return;
-        setState(() => _controller.applyBillDefaults(selected));
+        setState(() {
+          _controller.applyBillDefaults(selected);
+          _controller.invalidateStatusContext();
+          _statusContextError = null;
+          _statusContextResolving = false;
+        });
         if (dialogContext.mounted) setDialogState(() {});
         HapticFeedback.selectionClick();
         _log(
@@ -876,32 +889,60 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
           },
         );
       case PlateEditorWorkspace.memo:
-        return PlateMemoWorkspace(
-          controller: _memoDraftController,
-          originalValue: _controller.originalStatusDraft.customStatus,
-          committedValue: _controller.customStatusController.text,
-          statusResolving: _statusContextResolving,
-          statusError: _statusContextError,
-          onRetry: _resolveStatusContext,
-          onApplied: (value) {
-            _applyMemo(value);
-            if (!dialogContext.mounted) return;
-            _closeEditorDialog(
-              dialogContext,
-              PlateEditorWorkspace.memo,
-              reason: 'memo_applied',
+        var initialResolveScheduled = false;
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final unresolved = !_controller.statusContextResolved &&
+                _statusContextError == null;
+            if (unresolved &&
+                !_statusContextResolving &&
+                !initialResolveScheduled) {
+              initialResolveScheduled = true;
+              WidgetsBinding.instance.addPostFrameCallback((_) async {
+                if (!dialogContext.mounted) return;
+                final future = _resolveStatusContext();
+                setDialogState(() {});
+                await future;
+                if (dialogContext.mounted) setDialogState(() {});
+              });
+            }
+
+            Future<void> retryStatus() async {
+              if (!dialogContext.mounted) return;
+              final future = _resolveStatusContext();
+              setDialogState(() {});
+              await future;
+              if (dialogContext.mounted) setDialogState(() {});
+            }
+
+            return PlateMemoWorkspace(
+              controller: _memoDraftController,
+              originalValue: _controller.originalStatusDraft.customStatus,
+              committedValue: _controller.customStatusController.text,
+              statusResolving: _statusContextResolving || unresolved,
+              statusError: _statusContextError,
+              onRetry: retryStatus,
+              onApplied: (value) {
+                _applyMemo(value);
+                if (!dialogContext.mounted) return;
+                _closeEditorDialog(
+                  dialogContext,
+                  PlateEditorWorkspace.memo,
+                  reason: 'memo_applied',
+                );
+              },
+              onPendingChanged: (pending) {
+                if (_memoPending == pending) return;
+                setState(() => _memoPending = pending);
+              },
+              onExit: () => _closeEditorDialog(
+                dialogContext,
+                PlateEditorWorkspace.memo,
+                reason: 'memo_exit',
+              ),
+              onDebug: _log,
             );
           },
-          onPendingChanged: (pending) {
-            if (_memoPending == pending) return;
-            setState(() => _memoPending = pending);
-          },
-          onExit: () => _closeEditorDialog(
-            dialogContext,
-            PlateEditorWorkspace.memo,
-            reason: 'memo_exit',
-          ),
-          onDebug: _log,
         );
     }
   }
@@ -946,16 +987,33 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
         closeEnabled: !busy,
         onClose: () => _requestClose(source: 'header_close'),
         onHeaderTap: null,
-        headerAction: widget.trace?.developerMode == true
-            ? CommonIconButton(
-                icon: Icons.bug_report_rounded,
-                tooltip: '디버그 상태',
-                size: 38,
-                iconSize: 19,
-                haptic: CommonHaptic.selection,
-                onPressed: _showDeveloperStatus,
-              )
-            : null,
+        headerAction: AnimatedSwitcher(
+          duration: MediaQuery.maybeOf(context)?.disableAnimations == true
+              ? Duration.zero
+              : const Duration(milliseconds: 180),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          transitionBuilder: (child, animation) => FadeTransition(
+            opacity: animation,
+            child: ScaleTransition(
+              scale: Tween<double>(begin: .92, end: 1).animate(animation),
+              child: child,
+            ),
+          ),
+          child: widget.trace?.developerMode == true
+              ? CommonIconButton(
+                  key: const ValueKey<String>('modify_debug_action'),
+                  icon: Icons.bug_report_rounded,
+                  tooltip: '디버그 상태',
+                  size: 38,
+                  iconSize: 19,
+                  haptic: CommonHaptic.selection,
+                  onPressed: _showDeveloperStatus,
+                )
+              : const SizedBox.shrink(
+                  key: ValueKey<String>('modify_debug_action_hidden'),
+                ),
+        ),
         leadingRail: PlateEditorRail(
           enabled: !busy,
           policy: policy,

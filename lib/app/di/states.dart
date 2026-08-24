@@ -9,7 +9,7 @@ import '../../features/dev/application/area_state.dart';
 import '../../features/dev/application/field_calendar_state.dart';
 import '../../features/dev/domain/repositories/area_repo_package/area_repository.dart';
 import '../../features/location/applications/location_state.dart';
-import '../../features/location/data/repositories/firestore_location_repository.dart';
+import '../../features/location/domain/repositories/location_repository.dart';
 import '../../features/payment/applications/bill_state.dart';
 import '../../features/payment/domain/repositories/bill_repository.dart';
 import '../../features/sector/applications/sector_state.dart';
@@ -31,6 +31,7 @@ import '../../shared/plate/application/triple/triple_filter_plate.dart';
 import '../../shared/plate/application/triple/triple_plate_state.dart';
 import '../../shared/plate/domain/repositories/plate_repository.dart';
 import '../../shared/plate/domain/services/plate_write_service.dart';
+import '../../shared/operational_cache/domain/repositories/operational_local_repository.dart';
 import '../../shared/secondary/application/secondary_info.dart';
 import '../../shared/secondary/application/secondary_state.dart';
 
@@ -104,19 +105,22 @@ final List<SingleChildWidget> stateProviders = [
   ),
   ChangeNotifierProvider(
     create: (context) => LocationState(
-      FirestoreLocationRepository(),
+      context.read<LocationRepository>(),
+      context.read<OperationalLocalRepository>(),
       context.read<AreaState>(),
     ),
   ),
   ChangeNotifierProvider(
     create: (context) => BillState(
       context.read<BillRepository>(),
+      context.read<OperationalLocalRepository>(),
       context.read<AreaState>(),
     ),
   ),
   ChangeNotifierProvider(
     create: (context) => SectorState(
       context.read<SectorRepository>(),
+      context.read<OperationalLocalRepository>(),
       context.read<AreaState>(),
     ),
   ),

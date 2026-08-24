@@ -241,9 +241,6 @@ class PlateCreationService {
     );
   }
 
-  static final Map<String, Map<String, dynamic>> _billCache = {};
-  static final Map<String, DateTime> _billCacheExpiry = {};
-  static const Duration _billTtl = Duration(minutes: 10);
 
   Map<String, dynamic> _buildParkingCompletedViewItem({
     required String plateDocId,
@@ -293,33 +290,6 @@ class PlateCreationService {
     };
   }
 
-  Future<Map<String, dynamic>?> _getBillCached({
-    required String? billingType,
-    required String area,
-  }) async {
-    if (billingType == null || billingType.trim().isEmpty) return null;
-    final key = '${billingType}_$area';
-    final now = DateTime.now();
-
-    final exp = _billCacheExpiry[key];
-    final cached = _billCache[key];
-    if (cached != null && exp != null && exp.isAfter(now)) {
-      return cached;
-    }
-
-    final billDoc = await _firestore.collection('bill').doc(key).get();
-
-    if (billDoc.exists) {
-      final data = billDoc.data()!;
-      _billCache[key] = data;
-      _billCacheExpiry[key] = now.add(_billTtl);
-      return data;
-    } else {
-      _billCache.remove(key);
-      _billCacheExpiry.remove(key);
-      return null;
-    }
-  }
 
   Future<void> addPlate({
     required String plateNumber,
@@ -338,6 +308,8 @@ class PlateCreationService {
     int? basicAmount,
     int? addStandard,
     int? addAmount,
+    int? regularAmount,
+    int? regularDurationHours,
     required String region,
     List<String>? imageUrls,
     bool isLockedFee = false,
@@ -379,9 +351,6 @@ class PlateCreationService {
       ),
     );
     final expectedSourcePath = expectedStatusSourcePath?.trim() ?? '';
-    final expectedSourceRef = expectedSourcePath.isEmpty
-        ? null
-        : _firestore.doc(expectedSourcePath);
     final bool hasResolvedStatusSnapshot =
         statusLookupState == PlateStatusLookupState.found ||
         statusLookupState == PlateStatusLookupState.notFound;
@@ -425,36 +394,20 @@ class PlateCreationService {
           '🧩 [PlateCreationService] canWrite parking_requests_view = $canWriteRequestsView');
     }
 
-    int? regularAmount;
-    int? regularDurationHours;
-
-    if (selectedBillType != '정기' &&
-        billingType != null &&
-        billingType.isNotEmpty) {
-      try {
-        final billData =
-            await _getBillCached(billingType: billingType, area: area);
-        if (billData == null) {
-          throw Exception('Firestore에서 정산 데이터를 찾을 수 없음');
-        }
-        basicStandard = billData['basicStandard'] ?? 0;
-        basicAmount = billData['basicAmount'] ?? 0;
-        addStandard = billData['addStandard'] ?? 0;
-        addAmount = billData['addAmount'] ?? 0;
-        regularAmount = billData['regularAmount'];
-        regularDurationHours = billData['regularDurationValue'] ?? billData['regularDurationHours'];
-      } catch (e, st) {
-        debugPrint("🔥 정산 정보 로드 실패: $e");
-        if (kDebugMode) {
-          debugPrint("stack: $st");
-        }
-        throw Exception("Firestore 정산 정보 로드 실패: $e");
-      }
-    } else if (selectedBillType == '정기') {
+    if (selectedBillType == '정기') {
+      regularAmount = null;
+      regularDurationHours = null;
       basicStandard = 0;
       basicAmount = 0;
       addStandard = 0;
       addAmount = 0;
+    } else {
+      debugPrint(
+        '[PlateCreationService][Billing] source=local_cache '
+        'billingType=${billingType ?? ''} basicStandard=${basicStandard ?? 0} '
+        'basicAmount=${basicAmount ?? 0} addStandard=${addStandard ?? 0} '
+        'addAmount=${addAmount ?? 0}',
+      );
     }
 
     final plateFourDigit = plateNumber.length >= 4
@@ -542,6 +495,23 @@ class PlateCreationService {
     try {
       await _firestore.runTransaction((tx) async {
         final snap = await tx.get(docRef);
+        if (snap.exists) {
+          final data = snap.data();
+          final existingTypeStr = (data?[PlateFields.type] as String?) ?? '';
+          final existingType = PlateType.values.firstWhere(
+            (type) => type.firestoreValue == existingTypeStr,
+            orElse: () => PlateType.parkingRequests,
+          );
+          if (!_isAllowedDuplicate(existingType)) {
+            debugPrint(
+              '🚨 중복된 번호판 등록 시도: $plateNumber (${existingType.name})',
+            );
+            throw DuplicatePlateException(
+              '이미 등록된 번호판입니다: $plateNumber',
+            );
+          }
+        }
+
         final monthlyStatusSnapshot =
             (monthlyStatusScope || shouldValidateStatusSnapshot)
                 ? await tx.get(monthlyStatusRef)
@@ -611,14 +581,15 @@ class PlateCreationService {
             final previousStatusSnapshot =
                 await tx.get(previousHistoryStatusRef);
             DocumentSnapshot<Map<String, dynamic>>? sourceStatusSnapshot;
-            if (expectedSourceRef != null) {
-              if (expectedSourceRef.path == currentHistoryStatusRef.path) {
+            if (expectedSourcePath.isNotEmpty) {
+              if (expectedSourcePath == currentHistoryStatusRef.path) {
                 sourceStatusSnapshot = currentStatusSnapshot;
-              } else if (expectedSourceRef.path ==
-                  previousHistoryStatusRef.path) {
+              } else if (expectedSourcePath == previousHistoryStatusRef.path) {
                 sourceStatusSnapshot = previousStatusSnapshot;
               } else {
-                sourceStatusSnapshot = await tx.get(expectedSourceRef);
+                throw const PlateStatusConflictException(
+                  '현재 월과 이전 월 외 상태 경로는 사용할 수 없습니다.',
+                );
               }
             }
 
@@ -675,184 +646,179 @@ class PlateCreationService {
             orElse: () => PlateType.parkingRequests,
           );
 
-          if (!_isAllowedDuplicate(existingType)) {
-            debugPrint("🚨 중복된 번호판 등록 시도: $plateNumber (${existingType.name})");
-            throw DuplicatePlateException("이미 등록된 번호판입니다: $plateNumber");
-          } else {
-            final bool shouldIncrementReentryBillingCount =
-                existingType == PlateType.departureCompleted &&
-                    shouldIncrementBillingCount;
+          final bool shouldIncrementReentryBillingCount =
+              existingType == PlateType.departureCompleted &&
+                  shouldIncrementBillingCount;
 
-            final List<Map<String, dynamic>> existingLogs = (() {
-              final raw = data?['logs'];
-              if (raw is List) {
-                return raw
-                    .whereType<Map>()
-                    .map((e) => Map<String, dynamic>.from(e))
-                    .toList();
-              }
-              return <Map<String, dynamic>>[];
-            })();
-
-            final List<Map<String, dynamic>> newLogs =
-                (plateWithLog.logs ?? []).map((e) => e.toMap()).toList();
-            final List<Map<String, dynamic>> mergedLogs = [
-              ...existingLogs,
-              ...newLogs
-            ];
-
-            final partial = <String, dynamic>{
-              PlateFields.type: plateType.firestoreValue,
-              PlateFields.company: normalizedDivision,
-              PlateFields.division: normalizedDivision,
-              if (shouldApplyPlateStatusFields)
-                PlateFields.customStatus: statusMemo,
-              PlateFields.updatedAt: FieldValue.serverTimestamp(),
-              if (base.location.isNotEmpty)
-                PlateFields.location: _locationToMap(base.location),
-              if (endTime != null) PlateFields.endTime: endTime,
-              if (billingType != null && billingType.trim().isNotEmpty)
-                PlateFields.billingType: billingType,
-              if (imageUrls != null) PlateFields.imageUrls: imageUrls,
-              if (paymentMethod != null)
-                PlateFields.paymentMethod: paymentMethod,
-              if ((manufacturerName ?? '').trim().isNotEmpty)
-                PlateFields.manufacturerName: manufacturerName!.trim(),
-              if ((modelName ?? '').trim().isNotEmpty)
-                PlateFields.modelName: modelName!.trim(),
-              if ((priority1SlotKey ?? '').trim().isNotEmpty)
-                PlateFields.parkingPriority1SlotKey: priority1SlotKey!.trim(),
-              if ((priority2SlotKey ?? '').trim().isNotEmpty)
-                PlateFields.parkingPriority2SlotKey: priority2SlotKey!.trim(),
-              if ((priority3SlotKey ?? '').trim().isNotEmpty)
-                PlateFields.parkingPriority3SlotKey: priority3SlotKey!.trim(),
-              PlateFields.sectorId:
-                  hasSector ? normalizedSectorId : FieldValue.delete(),
-              PlateFields.sectorName:
-                  hasSector ? normalizedSectorName : FieldValue.delete(),
-              if (lockedAtTimeInSeconds != null)
-                PlateFields.lockedAtTimeInSeconds: lockedAtTimeInSeconds,
-              if (lockedFeeAmount != null)
-                PlateFields.lockedFeeAmount: lockedFeeAmount,
-              PlateFields.isLockedFee: effectiveIsLockedFee,
-              PlateFields.logs: mergedLogs,
-            };
-
-            if (shouldIncrementReentryBillingCount) {
-              partial[PlateFields.lastBillingCountedAt] =
-                  FieldValue.serverTimestamp();
+          final List<Map<String, dynamic>> existingLogs = (() {
+            final raw = data?['logs'];
+            if (raw is List) {
+              return raw
+                  .whereType<Map>()
+                  .map((e) => Map<String, dynamic>.from(e))
+                  .toList();
             }
+            return <Map<String, dynamic>>[];
+          })();
 
-            if (plateType == PlateType.parkingRequests) {
-              partial[PlateFields.requestTime] = FieldValue.serverTimestamp();
+          final List<Map<String, dynamic>> newLogs =
+              (plateWithLog.logs ?? []).map((e) => e.toMap()).toList();
+          final List<Map<String, dynamic>> mergedLogs = [
+            ...existingLogs,
+            ...newLogs
+          ];
 
-              if (canWriteRequestsView) {
-                tx.set(
-                  requestsViewRef,
-                  <String, dynamic>{
-                    PlateFields.area: area,
-                    PlateFields.updatedAt: FieldValue.serverTimestamp(),
-                    'items': _buildParkingRequestsViewItem(
-                      plateDocId: plateDocId,
-                      plateNumber: plateNumber,
-                      location: base.location,
-                      createdAtValue: data?[PlateFields.createdAt],
-                      sectorId: base.sectorId,
-                      sectorName: base.sectorName,
-                    ),
-                  },
-                  SetOptions(merge: true),
-                );
-              } else {
-                if (kDebugMode) {
-                  debugPrint(
-                      '🚫 [PlateCreationService] skip parking_requests_view upsert (toggle OFF)');
-                }
-              }
-            } else {
-              if (existingType == PlateType.parkingRequests &&
-                  canWriteRequestsView) {
-                tx.set(
-                  requestsViewRef,
-                  <String, dynamic>{
-                    PlateFields.area: area,
-                    PlateFields.updatedAt: FieldValue.serverTimestamp(),
-                    'items': <String, dynamic>{
-                      plateDocId: FieldValue.delete(),
-                    },
-                  },
-                  SetOptions(merge: true),
-                );
-              }
-            }
+          final partial = <String, dynamic>{
+            PlateFields.type: plateType.firestoreValue,
+            PlateFields.company: normalizedDivision,
+            PlateFields.division: normalizedDivision,
+            if (shouldApplyPlateStatusFields)
+              PlateFields.customStatus: statusMemo,
+            PlateFields.updatedAt: FieldValue.serverTimestamp(),
+            if (base.location.isNotEmpty)
+              PlateFields.location: _locationToMap(base.location),
+            if (endTime != null) PlateFields.endTime: endTime,
+            if (billingType != null && billingType.trim().isNotEmpty)
+              PlateFields.billingType: billingType,
+            if (imageUrls != null) PlateFields.imageUrls: imageUrls,
+            if (paymentMethod != null)
+              PlateFields.paymentMethod: paymentMethod,
+            if ((manufacturerName ?? '').trim().isNotEmpty)
+              PlateFields.manufacturerName: manufacturerName!.trim(),
+            if ((modelName ?? '').trim().isNotEmpty)
+              PlateFields.modelName: modelName!.trim(),
+            if ((priority1SlotKey ?? '').trim().isNotEmpty)
+              PlateFields.parkingPriority1SlotKey: priority1SlotKey!.trim(),
+            if ((priority2SlotKey ?? '').trim().isNotEmpty)
+              PlateFields.parkingPriority2SlotKey: priority2SlotKey!.trim(),
+            if ((priority3SlotKey ?? '').trim().isNotEmpty)
+              PlateFields.parkingPriority3SlotKey: priority3SlotKey!.trim(),
+            PlateFields.sectorId:
+                hasSector ? normalizedSectorId : FieldValue.delete(),
+            PlateFields.sectorName:
+                hasSector ? normalizedSectorName : FieldValue.delete(),
+            if (lockedAtTimeInSeconds != null)
+              PlateFields.lockedAtTimeInSeconds: lockedAtTimeInSeconds,
+            if (lockedFeeAmount != null)
+              PlateFields.lockedFeeAmount: lockedFeeAmount,
+            PlateFields.isLockedFee: effectiveIsLockedFee,
+            PlateFields.logs: mergedLogs,
+          };
 
-            if (plateType == PlateType.parkingCompleted) {
-              partial['parkingCompletedAt'] = FieldValue.serverTimestamp();
+          if (shouldIncrementReentryBillingCount) {
+            partial[PlateFields.lastBillingCountedAt] =
+                FieldValue.serverTimestamp();
+          }
 
-              if (canWriteCompletedView) {
-                tx.set(
-                  completedViewRef,
-                  <String, dynamic>{
-                    PlateFields.area: area,
-                    PlateFields.updatedAt: FieldValue.serverTimestamp(),
-                    'items': _buildParkingCompletedViewItem(
-                      plateDocId: plateDocId,
-                      plateNumber: plateNumber,
-                      location: base.location,
-                      createdAtValue: data?[PlateFields.createdAt],
-                      sectorId: base.sectorId,
-                      sectorName: base.sectorName,
-                    ),
-                  },
-                  SetOptions(merge: true),
-                );
-              } else {
-                if (kDebugMode) {
-                  debugPrint(
-                      '🚫 [PlateCreationService] skip parking_completed_view upsert (toggle OFF)');
-                }
-              }
+          if (plateType == PlateType.parkingRequests) {
+            partial[PlateFields.requestTime] = FieldValue.serverTimestamp();
 
-              if (canWriteRequestsView) {
-                tx.set(
-                  requestsViewRef,
-                  <String, dynamic>{
-                    PlateFields.area: area,
-                    PlateFields.updatedAt: FieldValue.serverTimestamp(),
-                    'items': <String, dynamic>{
-                      plateDocId: FieldValue.delete(),
-                    },
-                  },
-                  SetOptions(merge: true),
-                );
-              }
-            }
-
-            final bool wasLocked = (data?['isLockedFee'] == true);
-            if (wasLocked) {
-              final countersRef =
-                  _firestore.collection('plate_counters').doc('area_$area');
+            if (canWriteRequestsView) {
               tx.set(
-                countersRef,
-                {'departureCompletedEvents': FieldValue.increment(1)},
+                requestsViewRef,
+                <String, dynamic>{
+                  PlateFields.area: area,
+                  PlateFields.updatedAt: FieldValue.serverTimestamp(),
+                  'items': _buildParkingRequestsViewItem(
+                    plateDocId: plateDocId,
+                    plateNumber: plateNumber,
+                    location: base.location,
+                    createdAtValue: data?[PlateFields.createdAt],
+                    sectorId: base.sectorId,
+                    sectorName: base.sectorName,
+                  ),
+                },
+                SetOptions(merge: true),
+              );
+            } else {
+              if (kDebugMode) {
+                debugPrint(
+                    '🚫 [PlateCreationService] skip parking_requests_view upsert (toggle OFF)');
+              }
+            }
+          } else {
+            if (existingType == PlateType.parkingRequests &&
+                canWriteRequestsView) {
+              tx.set(
+                requestsViewRef,
+                <String, dynamic>{
+                  PlateFields.area: area,
+                  PlateFields.updatedAt: FieldValue.serverTimestamp(),
+                  'items': <String, dynamic>{
+                    plateDocId: FieldValue.delete(),
+                  },
+                },
                 SetOptions(merge: true),
               );
             }
+          }
 
-            tx.update(docRef, partial);
+          if (plateType == PlateType.parkingCompleted) {
+            partial['parkingCompletedAt'] = FieldValue.serverTimestamp();
 
-            if (shouldIncrementReentryBillingCount) {
-              PlateBillingCountService.incrementInTransaction(
-                transaction: tx,
-                firestore: _firestore,
-                company: normalizedDivision,
-                area: area,
-                plateDocId: plateDocId,
-                plateNumber: plateNumber,
-                countedAt: countedAt,
-                userName: userName,
+            if (canWriteCompletedView) {
+              tx.set(
+                completedViewRef,
+                <String, dynamic>{
+                  PlateFields.area: area,
+                  PlateFields.updatedAt: FieldValue.serverTimestamp(),
+                  'items': _buildParkingCompletedViewItem(
+                    plateDocId: plateDocId,
+                    plateNumber: plateNumber,
+                    location: base.location,
+                    createdAtValue: data?[PlateFields.createdAt],
+                    sectorId: base.sectorId,
+                    sectorName: base.sectorName,
+                  ),
+                },
+                SetOptions(merge: true),
+              );
+            } else {
+              if (kDebugMode) {
+                debugPrint(
+                    '🚫 [PlateCreationService] skip parking_completed_view upsert (toggle OFF)');
+              }
+            }
+
+            if (canWriteRequestsView) {
+              tx.set(
+                requestsViewRef,
+                <String, dynamic>{
+                  PlateFields.area: area,
+                  PlateFields.updatedAt: FieldValue.serverTimestamp(),
+                  'items': <String, dynamic>{
+                    plateDocId: FieldValue.delete(),
+                  },
+                },
+                SetOptions(merge: true),
               );
             }
+          }
+
+          final bool wasLocked = (data?['isLockedFee'] == true);
+          if (wasLocked) {
+            final countersRef =
+                _firestore.collection('plate_counters').doc('area_$area');
+            tx.set(
+              countersRef,
+              {'departureCompletedEvents': FieldValue.increment(1)},
+              SetOptions(merge: true),
+            );
+          }
+
+          tx.update(docRef, partial);
+
+          if (shouldIncrementReentryBillingCount) {
+            PlateBillingCountService.incrementInTransaction(
+              transaction: tx,
+              firestore: _firestore,
+              company: normalizedDivision,
+              area: area,
+              plateDocId: plateDocId,
+              plateNumber: plateNumber,
+              countedAt: countedAt,
+              userName: userName,
+            );
           }
         } else {
           final createdAtValue = FieldValue.serverTimestamp();

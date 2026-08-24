@@ -175,6 +175,12 @@ class ModifyPlateController {
     statusMarkedForDeletion = statusDraft.isEmpty && hasOriginalStatus;
   }
 
+  void invalidateStatusContext() {
+    statusContextResolved = false;
+    statusScope = null;
+    expectedStatusSourcePath = null;
+  }
+
   void clearStatusDraft() {
     customStatusController.clear();
     statusMarkedForDeletion = hasOriginalStatus;
@@ -348,17 +354,44 @@ class ModifyPlateController {
 
   Future<void> resolveStatusContext() async {
     final repo = context.read<PlateRepository>();
-    final scope = await repo.resolvePlateStatusScope(
+    final monthlyLookup = await repo.lookupPlateStatus(
       plateNumber: plate.plateNumber,
       area: plate.area,
-      billingType: plate.billingType,
-      regularAmount: plate.regularAmount ?? 0,
+      scope: PlateStatusScope.monthly,
     );
-    final lookup = await repo.lookupPlateStatus(
-      plateNumber: plate.plateNumber,
-      area: plate.area,
-      scope: scope,
-    );
+
+    if (monthlyLookup.isFailed) {
+      throw PlateStatusReadException(
+        '상태 메모 최신 정보를 확인하지 못했습니다.',
+        cause: monthlyLookup.error,
+      );
+    }
+
+    late final PlateStatusScope scope;
+    late final PlateStatusLookupResult lookup;
+
+    if (monthlyLookup.isFound) {
+      scope = PlateStatusScope.monthly;
+      lookup = monthlyLookup;
+    } else if (monthlyLookup.isInactive) {
+      scope = PlateStatusScope.history;
+      lookup = await repo.lookupPlateStatus(
+        plateNumber: plate.plateNumber,
+        area: plate.area,
+        scope: PlateStatusScope.history,
+      );
+    } else if ((canUseBill ? selectedBillType : _determineBillType()) == '정기') {
+      scope = PlateStatusScope.monthly;
+      lookup = monthlyLookup;
+    } else {
+      scope = PlateStatusScope.history;
+      lookup = await repo.lookupPlateStatus(
+        plateNumber: plate.plateNumber,
+        area: plate.area,
+        scope: PlateStatusScope.history,
+      );
+    }
+
     if (lookup.isFailed) {
       throw PlateStatusReadException(
         '상태 메모 최신 정보를 확인하지 못했습니다.',
@@ -399,7 +432,8 @@ class ModifyPlateController {
       '[ModifyPlateController][StatusContext] plate=${plate.plateNumber} '
       'scope=${scope.storageLabel} lookup=${lookup.state.name} '
       'sourcePath=${lookup.sourcePath ?? ''} '
-      'memoLength=${authoritativeDraft.customStatus.length}',
+      'memoLength=${authoritativeDraft.customStatus.length} '
+      'monthlyLookup=${monthlyLookup.state.name}',
     );
   }
 
@@ -427,6 +461,82 @@ class ModifyPlateController {
       selectedAddAmount = 0;
       selectedAddStandard = 0;
     }
+  }
+
+  Future<bool> _revalidateBillingFromLocalCache({
+    DeveloperOperationTrace? trace,
+  }) async {
+    if (!canUseBill) return true;
+
+    final normalizedSelectedBill = selectedBill?.trim();
+    selectedBill =
+        normalizedSelectedBill == null || normalizedSelectedBill.isEmpty
+            ? null
+            : normalizedSelectedBill;
+
+    if (selectedBill == null) {
+      trace?.log('billing_local_validation=cleared');
+      debugPrint(
+        '[ModifyPlateController][Billing] source=local state=cleared',
+      );
+      return true;
+    }
+
+    final billState = context.read<BillState>();
+    if (billState.isLoading) {
+      trace?.log('billing_local_validation=cache_reload');
+      await billState.loadFromBillCache();
+    }
+    dynamic matched;
+    if (selectedBillType == '정기') {
+      for (final bill in billState.regularBills) {
+        if (bill.countType.trim() == selectedBill) {
+          matched = bill;
+          break;
+        }
+      }
+    } else {
+      for (final bill in billState.generalBills) {
+        if (bill.countType.trim() == selectedBill) {
+          matched = bill;
+          break;
+        }
+      }
+    }
+
+    if (matched == null) {
+      trace?.log(
+        'billing_local_validation=failed plan=$selectedBillType value=${selectedBill ?? ''}',
+      );
+      debugPrint(
+        '[ModifyPlateController][Billing] source=local state=missing '
+        'plan=$selectedBillType value=${selectedBill ?? ''}',
+      );
+      if (context.mounted) {
+        showFailedSnackbar(
+          context,
+          '선택한 정산 정보를 로컬에서 확인할 수 없습니다.',
+          useCommonUi: true,
+        );
+      }
+      return false;
+    }
+
+    applyBillDefaults(matched);
+    trace?.log(
+      'billing_local_validation=ready plan=$selectedBillType value=${selectedBill ?? ''} '
+      'basic=$selectedBasicStandard/$selectedBasicAmount '
+      'add=$selectedAddStandard/$selectedAddAmount '
+      'regular=$selectedRegularDurationHours/$selectedRegularAmount',
+    );
+    debugPrint(
+      '[ModifyPlateController][Billing] source=local state=ready '
+      'plan=$selectedBillType value=${selectedBill ?? ''} '
+      'basic=$selectedBasicStandard/$selectedBasicAmount '
+      'add=$selectedAddStandard/$selectedAddAmount '
+      'regular=$selectedRegularDurationHours/$selectedRegularAmount',
+    );
+    return true;
   }
 
   Future<PlateModel?> handleAction({
@@ -464,29 +574,18 @@ class ModifyPlateController {
       return null;
     }
 
-    if (canUseBill) {
-      final billState = context.read<BillState>();
-      final allBills = [...billState.generalBills, ...billState.regularBills];
-      trace?.log('allBills=${allBills.length}');
-
-      final normalizedSelectedBill = selectedBill?.trim();
-      selectedBill =
-          (normalizedSelectedBill == null || normalizedSelectedBill.isEmpty)
-              ? null
-              : normalizedSelectedBill;
-
-      trace?.log(
-        'selectedBillType=$selectedBillType selectedBill=${selectedBill ?? ''}',
-      );
-
-      trace?.log('billingSelection=${hasBillingSelection ? 'selected' : 'cleared'}');
+    if (!await _revalidateBillingFromLocalCache(trace: trace)) {
+      return null;
     }
 
     final effectiveSectorId = canUseSector ? selectedSectorId : plate.sectorId;
     final effectiveSectorName =
         canUseSector ? selectedSectorName : plate.sectorName;
-    if (!statusContextResolved) {
+    final statusChangedBeforeResolve = hasStatusChanges;
+
+    if (statusChangedBeforeResolve && !statusContextResolved) {
       try {
+        trace?.log('status_context=resolve_required reason=status_changed');
         await resolveStatusContext();
       } catch (error) {
         trace?.log('중단: 상태 저장 범위 확인 실패 error=$error');
@@ -499,28 +598,31 @@ class ModifyPlateController {
         }
         return null;
       }
-    }
-
-    final resolvedScope = statusScope;
-    if (resolvedScope == null) {
-      trace?.log('중단: 상태 저장 범위 없음');
-      return null;
+    } else if (!statusChangedBeforeResolve) {
+      trace?.log('status_context=skip reason=status_unchanged');
     }
 
     final draft = statusDraft;
     final statusChanged = hasStatusChanges;
+    final resolvedScope = statusScope;
+    if (statusChanged && resolvedScope == null) {
+      trace?.log('중단: 상태 저장 범위 없음');
+      return null;
+    }
+
     final userState = context.read<UserState>();
+    final scopeLabel = resolvedScope?.storageLabel ?? 'skipped';
 
     trace?.log(
       'status memoLength=${draft.customStatus.length} '
       'changed=$statusChanged deletePending=$statusMarkedForDeletion '
-      'scope=${resolvedScope.storageLabel}',
+      'scope=$scopeLabel',
     );
     debugPrint(
       '[ModifyPlateController][Status] plate=${plate.plateNumber} '
       'memoLength=${draft.customStatus.length} '
       'changed=$statusChanged deletePending=$statusMarkedForDeletion '
-      'scope=${resolvedScope.storageLabel}',
+      'scope=$scopeLabel',
     );
 
     final service = ModifyPlateService(
@@ -557,6 +659,7 @@ class ModifyPlateController {
       expectedStatusSourcePath: expectedStatusSourcePath,
       statusActorId: userState.session?.id ?? '',
       statusActorName: userState.name.trim(),
+      onDebug: trace == null ? null : (message) => trace.log(message),
     );
 
     final plateNumber = service.composePlateNumber();
@@ -578,15 +681,41 @@ class ModifyPlateController {
       'sectorName=${effectiveSectorName ?? ''}',
     );
 
+    ModifyPhotoUploadResult? uploadResult;
+    var firestoreCommitted = false;
+
+    Future<void> cleanupUploadedImages(String reason) async {
+      final paths = uploadResult?.uploadedObjectPaths ?? const <String>[];
+      if (paths.isEmpty || firestoreCommitted) return;
+      trace?.log(
+        'photo_cleanup=start reason=$reason count=${paths.length}',
+      );
+      final failedPaths = await ModifyPlateService.cleanupUploadedImages(
+        paths,
+        onDebug: trace == null ? null : (message) => trace.log(message),
+      );
+      trace?.log(
+        'photo_cleanup=done reason=$reason requested=${paths.length} failed=${failedPaths.length}',
+      );
+      debugPrint(
+        '[ModifyPlateController][PhotoCleanup] reason=$reason '
+        'requested=${paths.length} failed=${failedPaths.length}',
+      );
+    }
+
     try {
       trace?.log('사진 병합 업로드 시작');
-      final mergedImageUrls = await service.uploadAndMergeImages(plateNumber);
-      trace?.log('사진 병합 업로드 완료 count=${mergedImageUrls.length}');
+      uploadResult = await service.uploadAndMergeImages(plateNumber);
+      trace?.log(
+        '사진 병합 업로드 완료 merged=${uploadResult.mergedUrls.length} '
+        'uploaded=${uploadResult.uploadedObjectPaths.length} '
+        'failed=${uploadResult.failedFiles.length}',
+      );
 
       trace?.log('차량 정보 업데이트 시작');
       final success = await service.updatePlateInfo(
         plateNumber: plateNumber,
-        imageUrls: mergedImageUrls,
+        imageUrls: uploadResult.mergedUrls,
         newLocation: newLocation,
         newBillingType: newBillingType,
         updatedCustomStatus: updatedCustomStatus,
@@ -595,10 +724,16 @@ class ModifyPlateController {
 
       if (!success) {
         trace?.log('중단: updatePlateInfo returned false');
+        await cleanupUploadedImages('update_returned_false');
         return null;
       }
 
-      trace?.log('차량 문서와 상태 문서 transaction 저장 완료');
+      firestoreCommitted = true;
+      trace?.log(
+        statusChanged
+            ? '차량 문서와 상태 문서 transaction 저장 완료'
+            : '차량 문서 transaction 저장 완료 status=skipped',
+      );
 
       final updatedPlate = PlateModel(
         id: plate.id,
@@ -611,11 +746,15 @@ class ModifyPlateController {
         billingPlanType: canUseBill
             ? (selectedBillType == '정기' ? '정기' : '변동')
             : plate.billingPlanType,
-        customStatus: updatedCustomStatus,
+        customStatus: statusChanged
+            ? updatedCustomStatus
+            : statusContextResolved
+                ? draft.customStatus
+                : plate.customStatus,
         endTime: plate.endTime,
-        imageUrls: mergedImageUrls,
+        imageUrls: uploadResult.mergedUrls,
         isLockedFee: plate.isLockedFee,
-        isSelected: false,
+        isSelected: plate.isSelected,
         location: newLocation,
         lockedAtTimeInSeconds: plate.lockedAtTimeInSeconds,
         lockedFeeAmount: plate.lockedFeeAmount,
@@ -635,7 +774,7 @@ class ModifyPlateController {
             ? selectedRegularDurationHours
             : plate.regularDurationValue,
         requestTime: plate.requestTime,
-        selectedBy: null,
+        selectedBy: plate.selectedBy,
         type: plate.type,
         updatedAt: plate.updatedAt,
         userAdjustment: plate.userAdjustment,
@@ -652,6 +791,9 @@ class ModifyPlateController {
       trace?.log('수정 처리 성공');
       return updatedPlate;
     } catch (e, st) {
+      if (!firestoreCommitted) {
+        await cleanupUploadedImages('update_exception');
+      }
       trace?.log('예외 발생: $e');
       final compactStack = st
           .toString()

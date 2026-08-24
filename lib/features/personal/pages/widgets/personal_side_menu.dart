@@ -14,6 +14,7 @@ import '../../../../design_system/common_ui/common_ui_overlays.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../app/theme/theme_prefs_controller.dart';
 import '../../../../shared/plate/domain/repositories/plate_repository.dart';
+import '../../../../shared/operational_cache/domain/repositories/operational_local_repository.dart';
 import '../../../dev/application/area_state.dart';
 import '../../../location/applications/location_state.dart';
 import '../../../payment/applications/bill_state.dart';
@@ -41,8 +42,6 @@ class PersonalSideMenu extends StatefulWidget {
 }
 
 class _PersonalSideMenuState extends State<PersonalSideMenu> {
-  static const String _prefsHasMonthlyKey = 'has_monthly_parking';
-
   bool _refreshing = false;
   DateTime? _lastRefreshAt;
 
@@ -56,15 +55,16 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
 
   Future<bool?> _syncHasMonthlyParkingFlag() async {
     final area = context.read<AreaState>().currentArea.trim();
-    final prefs = await SharedPreferences.getInstance();
     if (area.isEmpty) {
-      await prefs.setBool(_prefsHasMonthlyKey, false);
       return false;
     }
     try {
       final repo = context.read<PlateRepository>();
       final exists = await repo.hasMonthlyParkingByArea(area: area);
-      await prefs.setBool(_prefsHasMonthlyKey, exists);
+      await context.read<OperationalLocalRepository>().updateMonthlyParking(
+        area: area,
+        hasMonthlyParking: exists,
+      );
       return exists;
     } catch (e, st) {
       await DevFirebaseDebugDialog.show(

@@ -4,7 +4,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../../design_system/common_ui/common_ui_overlays.dart';
@@ -17,13 +16,13 @@ import '../../../../../app/utils/status_dialog.dart';
 import '../../../../../app/theme/brand_theme.dart';
 import '../../../../../app/theme/theme_prefs_controller.dart';
 import '../../../../dev/application/area_state.dart';
-import '../../../../sector/applications/sector_state.dart';
 import '../../../../selector/application/dev_auth.dart';
 import '../../../applications/tablet_grid_render_mode_state.dart';
 import '../../../applications/tablet_pad_mode_state.dart';
 import '../../../applications/tablet_parking_completed_view_toggle_state.dart';
 import '../../../applications/tablet_plate_tail4_size_state.dart';
 import '../../../applications/tablet_work_session_state.dart';
+import '../../../../../shared/operational_cache/domain/repositories/operational_local_repository.dart';
 import '../../widgets/tablet_common_components.dart';
 
 class TabletTopNavigation extends StatefulWidget {
@@ -45,6 +44,7 @@ class _TabletTopNavigationState extends State<TabletTopNavigation> {
   bool _refreshing = false;
   DateTime? _lastRefreshAt;
   int? _localSectorCount;
+  String _snapshotArea = '';
 
 
   @override
@@ -54,15 +54,15 @@ class _TabletTopNavigationState extends State<TabletTopNavigation> {
   }
 
   Future<void> _loadSyncSnapshot() async {
-    final prefs = await SharedPreferences.getInstance();
-    final value = DateTime.tryParse(
-      prefs.getString(OperationalDataSyncWorkflow.lastSyncAtKey) ?? '',
-    );
     final area = context.read<AreaState>().currentArea.trim();
-    final sectorCount = SectorState.cachedCountOf(prefs, area);
+    final meta = area.isEmpty
+        ? null
+        : await context.read<OperationalLocalRepository>().readAreaMeta(area);
+    final value = meta?.syncedAt;
+    _snapshotArea = area;
+    final sectorCount = meta?.sectorsReady == true ? meta?.sectorCount : null;
     debugPrint(
-      '[TabletTopNavigation] 로컬 동기화 상태 로드: '
-      'area=$area, sectorCount=${sectorCount ?? -1}, syncedAt=$value',
+      '[TabletTopNavigation] SQLite 동기화 상태 로드: area=$area sectorCount=${sectorCount ?? -1} syncedAt=$value',
     );
     if (!mounted) return;
     setState(() {
@@ -305,6 +305,15 @@ class _TabletTopNavigationState extends State<TabletTopNavigation> {
   @override
   Widget build(BuildContext context) {
     final selectedArea = context.watch<AreaState>().currentArea;
+    final normalizedSelectedArea = selectedArea.trim();
+    if (_snapshotArea != normalizedSelectedArea) {
+      _snapshotArea = normalizedSelectedArea;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _loadSyncSnapshot();
+        }
+      });
+    }
     final cs = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
 
