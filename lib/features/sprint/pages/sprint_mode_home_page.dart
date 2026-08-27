@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../app/utils/developer_operation_status_dialog.dart';
+import '../../../shared/calendar/calendar_public_text.dart';
 import '../application/sprint_mode_store.dart';
 import '../domain/sprint_models.dart';
 import 'sprint_block_editor_sheet.dart';
@@ -903,8 +904,8 @@ class _ScheduleTimeline extends StatelessWidget {
         }
         final trace = await DeveloperOperationTrace.start(
           context: context,
-          title: 'Google 캘린더 동기화',
-          initialMessage: '연결된 Google Calendar 일정을 내려받고 있습니다.',
+          title: '일정 동기화',
+          initialMessage: '연결된 캘린더 일정을 내려받고 있습니다.',
           useCommonUi: true,
           developerModeMessage:
               '개발자 모드 ON: 캘린더 동기화 로그를 복사할 수 있습니다.',
@@ -939,17 +940,17 @@ class _ScheduleTimeline extends StatelessWidget {
             'connected=$connected externalEvents=${store.externalEvents.length}',
             progress: 0.92,
           );
-          await trace.succeed('Google Calendar 동기화를 완료했습니다.');
+          await trace.succeed('일정 동기화를 완료했습니다.');
         } catch (error, stackTrace) {
           await trace.fail(
-            'Google Calendar 동기화에 실패했습니다.',
+            '일정 동기화에 실패했습니다.',
             error: error,
             stackTrace: stackTrace,
           );
           if (context.mounted && !trace.developerMode) {
             sprintShowMessage(
               context: context,
-              message: 'Google Calendar 동기화에 실패했습니다.',
+              message: '일정 동기화에 실패했습니다.',
               danger: true,
             );
           }
@@ -1168,8 +1169,8 @@ class _TimelineStatusHeader extends StatelessWidget {
         break;
     }
     final calendarLabel = profileCount == 0
-        ? 'Google 캘린더 · $stateLabel'
-        : 'Google 캘린더 $profileCount개 · $stateLabel';
+        ? '캘린더 · $stateLabel'
+        : '캘린더 $profileCount개 · $stateLabel';
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final duration =
@@ -1535,12 +1536,12 @@ class _ExternalCalendarEventAddButton extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '${sprintFormatDate(store.selectedDate)}에 Google 일정 추가',
+                          '${sprintFormatDate(store.selectedDate)}에 일정 추가',
                           style: const TextStyle(fontWeight: FontWeight.w900),
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '${profile.label} · ${profile.accessRoleLabel}',
+                          '${calendarPublicLabel(profile.label)} · ${profile.accessRoleLabel}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -1599,7 +1600,7 @@ class _ExternalEventCard extends StatelessWidget {
                   const Icon(Icons.event_outlined),
                   const SizedBox(width: 8),
                   Text(
-                    'Google 일정',
+                    '일정',
                     style: Theme.of(sheetContext)
                         .textTheme
                         .labelLarge
@@ -1747,8 +1748,8 @@ class _ExternalEventCard extends StatelessWidget {
                       duration: duration,
                       child: Text(
                         event.allDay
-                            ? '종일 · Google 일정 · $stateLabel'
-                            : '${sprintFormatTime(event.start)}–${sprintFormatTime(event.end)} · Google 일정 · $stateLabel',
+                            ? '종일 · 일정 · $stateLabel'
+                            : '${sprintFormatTime(event.start)}–${sprintFormatTime(event.end)} · 일정 · $stateLabel',
                         key: ValueKey<String>(
                           '${event.id}-${event.start.millisecondsSinceEpoch}-$stateLabel',
                         ),
@@ -2413,7 +2414,7 @@ class _UnplacedTasksSheetState extends State<_UnplacedTasksSheet> {
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    '모든 활성 프로젝트의 미배치 업무가 대상입니다. 연결된 Google Calendar 일정도 삭제되며 이 작업은 되돌릴 수 없습니다.',
+                    '모든 활성 프로젝트의 미배치 업무가 대상입니다. 연결된 캘린더 일정도 삭제되며 이 작업은 되돌릴 수 없습니다.',
                     style: TextStyle(
                       color: colors.onErrorContainer,
                       height: 1.45,
@@ -2466,7 +2467,7 @@ class _UnplacedTasksSheetState extends State<_UnplacedTasksSheet> {
     ];
     if (result.pendingRemoteDeleteCount > 0) {
       parts.add(
-        '${result.pendingRemoteDeleteCount}개는 Google Calendar 삭제 대기 또는 진행 중입니다.',
+        '${result.pendingRemoteDeleteCount}개는 연결된 캘린더에서 삭제 대기 또는 진행 중입니다.',
       );
     }
     if (result.skippedCount > 0) {
@@ -3056,7 +3057,7 @@ class _GoogleCalendarSettingTile extends StatelessWidget {
 
     final profileCount = profiles.length;
     final defaultLabel = defaultProfile?.label.trim().isNotEmpty == true
-        ? defaultProfile!.label.trim()
+        ? calendarPublicLabel(defaultProfile!.label)
         : '기본 캘린더 없음';
     final subtitle = profileCount == 0
         ? status
@@ -3081,7 +3082,7 @@ class _GoogleCalendarSettingTile extends StatelessWidget {
             key: ValueKey<int>(profileCount),
           ),
         ),
-        title: const Text('Google 캘린더 계정'),
+        title: const Text('캘린더 연결'),
         subtitle: AnimatedSwitcher(
           duration: duration,
           child: Text(

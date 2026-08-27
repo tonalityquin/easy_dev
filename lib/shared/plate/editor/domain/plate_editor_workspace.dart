@@ -38,7 +38,6 @@ class PlateEditorPolicy {
         PlateEditorWorkspace.camera,
         if (hasSector) PlateEditorWorkspace.sector,
         if (hasBill) PlateEditorWorkspace.variableBilling,
-        if (hasBill) PlateEditorWorkspace.regularBilling,
         PlateEditorWorkspace.memo,
       ];
 

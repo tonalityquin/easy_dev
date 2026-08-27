@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import '../../../../../app/init/db_connection_status_section.dart';
 import '../../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../../design_system/common_ui/common_ui_theme.dart';
-import '../../../../../shared/page/widget/navigation/minor_top_navigation.dart';
+import '../../../../../app/command/presentation/terminal_launcher_button.dart';
 import '../../../sheets/minor/minor_hq_dash_board_page.dart';
 
 class MinorDashBoard extends StatelessWidget {
@@ -31,7 +31,7 @@ class MinorDashBoard extends StatelessWidget {
         child: Scaffold(
           backgroundColor: tokens.canvas,
           appBar: AppBar(
-            title: const MinorTopNavigation(useCommonUi: true),
+            title: const TerminalLauncherButton(source: 'minor_headquarter'),
             centerTitle: true,
             backgroundColor: tokens.surface,
             foregroundColor: tokens.textPrimary,

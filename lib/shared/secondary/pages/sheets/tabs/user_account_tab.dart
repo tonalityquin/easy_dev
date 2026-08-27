@@ -5,33 +5,18 @@ import 'package:flutter/material.dart';
 
 import '../../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../../app/utils/status_dialog.dart';
+import '../../../data/services/dev_user_write_service.dart';
+import '../../../../../features/account/domain/models/user/user_model.dart';
+import '../../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../widgets/ops_console_widgets.dart';
 
-
-class _UserAccountsTabCounts {
-  const _UserAccountsTabCounts({
-    required this.activeCount,
-    required this.inactiveCount,
-  });
-
-  final int activeCount;
-  final int inactiveCount;
-
-  int get totalCount => activeCount + inactiveCount;
-
-  Map<String, int> toMap() {
-    return <String, int>{
-      'activeCount': activeCount,
-      'inactiveCount': inactiveCount,
-      'totalCount': totalCount,
-    };
-  }
-}
 
 class UserAccountsTab extends StatefulWidget {
   final String? selectedDivision;
   final String? selectedArea;
+  final List<String> divisionList;
   final ValueChanged<String?> onDivisionChanged;
   final ValueChanged<String?> onAreaChanged;
 
@@ -39,6 +24,7 @@ class UserAccountsTab extends StatefulWidget {
     super.key,
     required this.selectedDivision,
     required this.selectedArea,
+    required this.divisionList,
     required this.onDivisionChanged,
     required this.onAreaChanged,
   });
@@ -63,9 +49,14 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
   ];
 
   final Map<String, Map<String, dynamic>> _editedUsers = <String, Map<String, dynamic>>{};
+  final DevUserWriteService _devUserWriteService = DevUserWriteService();
+  final Map<String, Future<List<String>>> _primaryAreaFutures = <String, Future<List<String>>>{};
   final Set<String> _savingIds = <String>{};
   bool _creating = false;
+  String? _selectedUserId;
   int _refreshTick = 0;
+  String? _scopeAreasDivision;
+  Future<List<String>>? _scopeAreasFuture;
 
   Map<String, dynamic> _normalizedWeekMapFromData(
     Map<String, dynamic> data,
@@ -90,7 +81,11 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
     };
   }
 
-  Map<String, dynamic> _copyUser(Map<String, dynamic> d) {
+  Map<String, dynamic> _copyUser(
+    Map<String, dynamic> d, {
+    String? primaryDivision,
+    String? primaryArea,
+  }) {
     final startByWeekday = _normalizedWeekMapFromData(
       d,
       'startTimeByWeekday',
@@ -105,22 +100,62 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
       for (final day in _CreateUserAccountDraft.weekdays)
         if (startByWeekday[day] == null && endByWeekday[day] == null) day,
     ];
+    final rawBreakDays = d['breakDays'];
+    final breakDays = rawBreakDays is Iterable
+        ? rawBreakDays
+            .map((value) => value.toString().trim())
+            .where(
+              (day) =>
+                  _CreateUserAccountDraft.weekdays.contains(day) &&
+                  startByWeekday[day] != null &&
+                  endByWeekday[day] != null,
+            )
+            .toSet()
+            .toList(growable: false)
+        : <String>[
+            for (final day in _CreateUserAccountDraft.weekdays)
+              if (startByWeekday[day] != null && endByWeekday[day] != null) day,
+          ];
+    final divisions = List<String>.from(d['divisions'] ?? const <String>[]);
+    final areas = List<String>.from(d['areas'] ?? const <String>[]);
+    final storedPrimaryDivision = (d['_primaryDivision'] ?? '').toString().trim();
+    final resolvedPrimaryDivision = (primaryDivision ?? '').trim().isNotEmpty
+        ? primaryDivision!.trim()
+        : storedPrimaryDivision.isNotEmpty
+            ? storedPrimaryDivision
+            : divisions.isNotEmpty
+                ? divisions.first.trim()
+                : '';
+    final hasCurrentAreaKey = d.containsKey('currentArea');
+    final storedCurrentArea = hasCurrentAreaKey ? (d['currentArea'] ?? '').toString().trim() : '';
+    final storedSelectedArea = (d['selectedArea'] ?? '').toString().trim();
+    final resolvedPrimaryArea = (primaryArea ?? '').trim().isNotEmpty
+        ? primaryArea!.trim()
+        : hasCurrentAreaKey
+            ? storedCurrentArea
+            : storedSelectedArea.isNotEmpty
+                ? storedSelectedArea
+                : areas.isNotEmpty
+                    ? areas.first.trim()
+                    : '';
     return <String, dynamic>{
       'name': d['name'] ?? '',
       'phone': d['phone'] ?? '',
       'email': d['email'] ?? '',
       'password': d['password'] ?? '',
-      'divisions': List<String>.from(d['divisions'] ?? const <String>[]),
-      'areas': List<String>.from(d['areas'] ?? const <String>[]),
+      'divisions': divisions,
+      'areas': areas,
       'role': d['role'] ?? 'fieldCommon',
       'modes': List<String>.from(d['modes'] ?? const <String>[]),
       'position': d['position'] ?? '',
-      'currentArea': d['currentArea'],
-      'selectedArea': d['selectedArea'],
+      'currentArea': resolvedPrimaryArea.isEmpty ? null : resolvedPrimaryArea,
+      'selectedArea': resolvedPrimaryArea.isEmpty ? null : resolvedPrimaryArea,
+      '_primaryDivision': resolvedPrimaryDivision,
       'englishSelectedAreaName': d['englishSelectedAreaName'],
       'startTimeByWeekday': startByWeekday,
       'endTimeByWeekday': endByWeekday,
       'fixedHolidays': fixedHolidays,
+      'breakDays': breakDays,
       'isSaved': d['isSaved'] ?? false,
       'isSelected': d['isSelected'] ?? false,
       'isWorking': d['isWorking'] ?? false,
@@ -128,20 +163,6 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
       'createdAt': d['createdAt'],
       'updatedAt': d['updatedAt'],
     };
-  }
-
-  Future<List<String>> fetchDivisions() async {
-    final snapshot = await FirebaseFirestore.instance
-        .collection('areas')
-        .get(const GetOptions(source: Source.server));
-
-
-    return snapshot.docs
-        .map((doc) => (doc.data()['division'] ?? '').toString().trim())
-        .where((division) => division.isNotEmpty)
-        .toSet()
-        .toList()
-      ..sort();
   }
 
   Future<List<String>> getAreasByDivisions(List<String> divisions) async {
@@ -172,8 +193,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
     final qs = await FirebaseFirestore.instance
         .collection('areas')
         .where('division', isEqualTo: division)
-        .get(const GetOptions(source: Source.server));
-
+        .get(const GetOptions(source: Source.serverAndCache));
 
     return qs;
   }
@@ -186,6 +206,64 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
         .toSet()
         .toList()
       ..sort();
+  }
+
+  Future<List<String>> _scopeAreaNames(String division) {
+    if (_scopeAreasDivision != division || _scopeAreasFuture == null) {
+      _scopeAreasDivision = division;
+      _scopeAreasFuture = _fetchAreaNamesForDivision(division);
+    }
+    return _scopeAreasFuture!;
+  }
+
+  Future<List<String>> _primaryAreaNames(String division) {
+    final cached = _primaryAreaFutures[division];
+    if (cached != null) return cached;
+    final future = _fetchAreaNamesForDivision(division).catchError(
+      (Object error, StackTrace stackTrace) {
+        _primaryAreaFutures.remove(division);
+        Error.throwWithStackTrace(error, stackTrace);
+      },
+    );
+    _primaryAreaFutures[division] = future;
+    return future;
+  }
+
+  List<String> _withPrimaryFirst(List<String> source, String primary) {
+    final normalized = source
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty && value != primary)
+        .toSet()
+        .toList(growable: true);
+    normalized.insert(0, primary);
+    return normalized;
+  }
+
+  String _primaryDivisionOf(Map<String, dynamic> data) {
+    final explicit = (data['_primaryDivision'] ?? '').toString().trim();
+    if (explicit.isNotEmpty) return explicit;
+    final divisions = List<String>.from(data['divisions'] ?? const <String>[]);
+    if (divisions.isNotEmpty) return divisions.first.trim();
+    return '';
+  }
+
+  String _primaryAreaOf(Map<String, dynamic> data) {
+    final current = (data['currentArea'] ?? '').toString().trim();
+    if (current.isNotEmpty) return current;
+    final selected = (data['selectedArea'] ?? '').toString().trim();
+    if (selected.isNotEmpty) return selected;
+    return '';
+  }
+
+  @override
+  void didUpdateWidget(covariant UserAccountsTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedDivision != widget.selectedDivision) {
+      _scopeAreasDivision = null;
+      _scopeAreasFuture = null;
+      _selectedUserId = null;
+      _primaryAreaFutures.clear();
+    }
   }
 
   Future<String?> _fetchEnglishNameByArea(String division, String area) async {
@@ -206,15 +284,15 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
   }
 
   Future<QuerySnapshot<Map<String, dynamic>>> _fetchUsersForArea(
+    String division,
     String area,
   ) async {
-    final qs = await FirebaseFirestore.instance
-        .collection('user_accounts')
-        .where('areas', arrayContains: area)
-        .get(const GetOptions(source: Source.server));
-
-
-    return qs;
+    final showId = _showDocId(division, area);
+    return FirebaseFirestore.instance
+        .collection('user_accounts_show')
+        .doc(showId)
+        .collection('users')
+        .get(const GetOptions(source: Source.serverAndCache));
   }
 
   String _showDocId(String? division, String? area) {
@@ -222,12 +300,6 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
     final a = (area ?? '').trim().isEmpty ? 'unknownArea' : (area ?? '').trim();
     return '$d-$a';
   }
-
-  int _normalizeLimit(dynamic v) {
-    if (v is int && v >= 0) return v;
-    return 1 << 30;
-  }
-
 
   String? _limitValueFromError(Object e, String key) {
     final raw = e.toString();
@@ -253,6 +325,34 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
     required String activeTitle,
     required String totalTitle,
   }) async {
+    final raw = e.toString();
+    if (raw.contains('USER_ALREADY_EXISTS') || raw.contains('SHOW_USER_ALREADY_EXISTS')) {
+      await StatusDialog.showFailure(
+        context,
+        title: '동일 계정이 이미 존재합니다',
+        description: '같은 계정 ID 또는 동일 지역 projection이 이미 존재합니다. 전화번호와 현재 지역을 확인하세요.',
+        useCommonUi: true,
+      );
+      return;
+    }
+    if (raw.contains('USER_NOT_FOUND')) {
+      await StatusDialog.showFailure(
+        context,
+        title: '원본 계정을 찾지 못했습니다',
+        description: '계정 목록을 새로 불러온 뒤 다시 수정하세요.',
+        useCommonUi: true,
+      );
+      return;
+    }
+    if (raw.contains('ACCOUNT_LIMIT_NOT_CONFIGURED')) {
+      await StatusDialog.showFailure(
+        context,
+        title: '계정 리밋 설정 필요',
+        description: '선택한 지역의 activeLimit과 totalLimit이 설정되지 않았습니다. 리밋 관리에서 두 값을 저장한 뒤 다시 시도하세요.',
+        useCommonUi: true,
+      );
+      return;
+    }
     final activeLimit = _activeLimitFromError(e);
     if (activeLimit != null) {
       await StatusDialog.showFailure(
@@ -285,121 +385,13 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
     );
   }
 
-  int? _asInt(dynamic v) => v is int ? v : null;
-
-  Map<String, dynamic> _userAccountsPayload(Map<String, dynamic> data) {
-    final payload = Map<String, dynamic>.from(data);
-    payload.remove('id');
-    payload.remove('isActive');
-    payload.remove('disabledAt');
-    payload.remove('updatedAt');
-    return payload;
-  }
-
-  int _nonNegative(dynamic v) {
-    final i = _asInt(v);
-    if (i == null || i < 0) return 0;
-    return i;
-  }
-
-  _UserAccountsTabCounts _countsFromMeta(Map<String, dynamic> data) {
-    final active = _nonNegative(data['activeCount']);
-    final inactiveRaw = _asInt(data['inactiveCount']);
-    final totalRaw = _asInt(data['totalCount']);
-    var inactive = inactiveRaw == null || inactiveRaw < 0 ? 0 : inactiveRaw;
-    if ((inactiveRaw == null || inactiveRaw < 0) && totalRaw != null && totalRaw >= active) {
-      inactive = totalRaw - active;
-    }
-    return _UserAccountsTabCounts(activeCount: active, inactiveCount: inactive);
-  }
-
-  bool _metaNeedsCountCompute(Map<String, dynamic> data, bool strict) {
-    if (strict) return true;
-    final active = _asInt(data['activeCount']);
-    final inactive = _asInt(data['inactiveCount']);
-    final total = _asInt(data['totalCount']);
-    if (active == null || active < 0) return true;
-    if (inactive == null || inactive < 0) return true;
-    if (total == null || total < 0) return true;
-    return total != active + inactive;
-  }
-
-  Future<_UserAccountsTabCounts> _syncAccountCounts({
-    required DocumentReference<Map<String, dynamic>> showDocRef,
-    required String division,
-    required String area,
-    required bool strict,
-  }) async {
-    try {
-      final metaSnap = await showDocRef.get(const GetOptions(source: Source.server));
-      final meta = metaSnap.data() ?? <String, dynamic>{};
-
-
-      if (!_metaNeedsCountCompute(meta, strict)) {
-        return _countsFromMeta(meta);
-      }
-
-      final qs = await showDocRef.collection('users').get(const GetOptions(source: Source.server));
-      var active = 0;
-      var inactive = 0;
-      for (final doc in qs.docs) {
-        final data = doc.data();
-        final isActive = (data['isActive'] as bool?) ?? true;
-        if (isActive) {
-          active += 1;
-        } else {
-          inactive += 1;
-        }
-      }
-      final counts = _UserAccountsTabCounts(activeCount: active, inactiveCount: inactive);
-
-
-      await showDocRef.set(
-        <String, dynamic>{
-          'division': division,
-          'area': area,
-          ...counts.toMap(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
-
-
-      return counts;
-    } catch (_) {
-      return const _UserAccountsTabCounts(activeCount: 0, inactiveCount: 0);
-    }
-  }
-
   Future<void> _saveChanges(
     String oldId,
     Map<String, dynamic> oldData,
     Map<String, dynamic> newData,
   ) async {
-    String firstListValue(Map<String, dynamic> data, String key, String fallback) {
-      final list = List.from(data[key] ?? const []);
-      if (list.isEmpty) return fallback;
-      final value = list.first.toString().trim();
-      return value.isEmpty ? fallback : value;
-    }
-
-    final phone = (oldData['phone'] ?? '').toString();
-    final String newArea = firstListValue(newData, 'areas', 'default');
-    final String newDivision = firstListValue(newData, 'divisions', 'unknownDivision');
-    final String oldArea = firstListValue(oldData, 'areas', newArea);
-    final String oldDivision = firstListValue(oldData, 'divisions', newDivision);
-    final String newId = '$phone-$newArea';
-    final String oldShowId = _showDocId(oldDivision, oldArea);
-    final String newShowId = _showDocId(newDivision, newArea);
-    final bool idChanged = oldId != newId;
-    final bool showChanged = oldShowId != newShowId;
-    final bool moved = idChanged || showChanged;
-
-    final fs = FirebaseFirestore.instance;
-    final oldShowDocRef = fs.collection('user_accounts_show').doc(oldShowId);
-    final newShowDocRef = fs.collection('user_accounts_show').doc(newShowId);
-    final oldShowUserDocRef = oldShowDocRef.collection('users').doc(oldId);
-    final newShowUserDocRef = newShowDocRef.collection('users').doc(newId);
+    final primaryDivision = _primaryDivisionOf(newData);
+    final primaryArea = _primaryAreaOf(newData);
     final trace = await DeveloperOperationTrace.start(
       context: context,
       title: '운영 계정 수정',
@@ -410,197 +402,67 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
     );
 
     try {
-      trace.log(
-        '요일별 근무시간 스키마 확인 완료: startTimeByWeekday/endTimeByWeekday만 저장합니다.',
-        progress: 0.12,
-      );
-      await _syncAccountCounts(
-        showDocRef: newShowDocRef,
-        division: newDivision,
-        area: newArea,
-        strict: true,
-      );
-      trace.log('계정 한도 및 대상 지역 메타데이터 확인 완료', progress: 0.3);
-      if (moved) {
-        await _syncAccountCounts(
-          showDocRef: oldShowDocRef,
-          division: oldDivision,
-          area: oldArea,
-          strict: true,
-        );
+      if (primaryDivision.isEmpty || primaryArea.isEmpty) {
+        throw StateError('PRIMARY_ASSIGNMENT_REQUIRED');
+      }
+      final validAreas = await _primaryAreaNames(primaryDivision);
+      if (!validAreas.contains(primaryArea)) {
+        throw StateError('PRIMARY_AREA_NOT_IN_DIVISION');
       }
 
-      trace.log('Firestore transaction 저장을 시작합니다.', progress: 0.46);
-      await fs.runTransaction((tx) async {
-        final oldRef = fs.collection('user_accounts').doc(oldId);
-        final newRef = fs.collection('user_accounts').doc(newId);
+      final phone = (oldData['phone'] ?? '').toString().replaceAll(RegExp(r'\D'), '').trim();
+      if (phone.isEmpty) {
+        throw StateError('PHONE_REQUIRED');
+      }
+      final newId = '$phone-$primaryArea';
+      final englishName = await _fetchEnglishNameByArea(primaryDivision, primaryArea) ?? primaryArea;
+      final normalizedNewData = Map<String, dynamic>.from(newData);
+      normalizedNewData['divisions'] = _withPrimaryFirst(
+        List<String>.from(normalizedNewData['divisions'] ?? const <String>[]),
+        primaryDivision,
+      );
+      normalizedNewData['areas'] = _withPrimaryFirst(
+        List<String>.from(normalizedNewData['areas'] ?? const <String>[]),
+        primaryArea,
+      );
+      normalizedNewData['currentArea'] = primaryArea;
+      normalizedNewData['selectedArea'] = primaryArea;
+      normalizedNewData['englishSelectedAreaName'] = englishName;
+      normalizedNewData.remove('_primaryDivision');
 
-        final oldSnap = await tx.get(oldRef);
-        if (!oldSnap.exists) {
-          throw Exception('원본 계정이 존재하지 않습니다.');
-        }
-
-        if (idChanged) {
-          final newSnap = await tx.get(newRef);
-            if (newSnap.exists) {
-            throw Exception('동일 ID가 이미 존재합니다: $newId');
-          }
-        }
-
-        final newShowSnap = await tx.get(newShowDocRef);
-        final newShowData = newShowSnap.data() ?? <String, dynamic>{};
-        final newCounts0 = _countsFromMeta(newShowData);
-        final newActiveLimit = _normalizeLimit(newShowData['activeLimit']);
-        final newTotalLimit = _normalizeLimit(newShowData['totalLimit']);
-
-        final newShowUserSnap = await tx.get(newShowUserDocRef);
-        final newShowUserData = newShowUserSnap.data() ?? <String, dynamic>{};
-        final newShowUserExists = newShowUserSnap.exists;
-        final newShowUserActive = (newShowUserData['isActive'] as bool?) ?? false;
-
-        final payload = _userAccountsPayload(newData)
-          ..['createdAt'] = oldSnap.data()?['createdAt'] ?? FieldValue.serverTimestamp()
-          ..['updatedAt'] = FieldValue.serverTimestamp();
-
-        if (!moved) {
-          final targetActive = newShowUserExists
-              ? newShowUserActive
-              : ((newData['isActive'] as bool?) ?? true);
-          var counts1 = newCounts0;
-          if (!newShowUserExists) {
-            if (newCounts0.totalCount >= newTotalLimit) {
-              throw StateError('TOTAL_LIMIT_REACHED:$newTotalLimit');
-            }
-            if (targetActive && newCounts0.activeCount >= newActiveLimit) {
-              throw StateError('ACTIVE_LIMIT_REACHED:$newActiveLimit');
-            }
-            counts1 = _UserAccountsTabCounts(
-              activeCount: newCounts0.activeCount + (targetActive ? 1 : 0),
-              inactiveCount: newCounts0.inactiveCount + (targetActive ? 0 : 1),
-            );
-          }
-
-          final showPayload = Map<String, dynamic>.from(newData)
-            ..remove('id')
-            ..['startTime'] = FieldValue.delete()
-            ..['endTime'] = FieldValue.delete()
-            ..['createdAt'] = newShowUserData['createdAt'] ?? oldSnap.data()?['createdAt'] ?? FieldValue.serverTimestamp()
-            ..['updatedAt'] = FieldValue.serverTimestamp()
-            ..['isActive'] = targetActive;
-          showPayload['disabledAt'] = targetActive
-              ? FieldValue.delete()
-              : (newShowUserData['disabledAt'] ?? FieldValue.serverTimestamp());
-
-          tx.update(oldRef, <String, dynamic>{
-            ...payload,
-            'startTime': FieldValue.delete(),
-            'endTime': FieldValue.delete(),
-          });
-          tx.set(
-            newShowDocRef,
-            <String, dynamic>{
-              'division': newDivision,
-              'area': newArea,
-              ...counts1.toMap(),
-              'updatedAt': FieldValue.serverTimestamp(),
-            },
-            SetOptions(merge: true),
-          );
-          tx.set(newShowUserDocRef, showPayload, SetOptions(merge: true));
-          return;
-        }
-
-        final oldShowSnap = await tx.get(oldShowDocRef);
-        final oldShowData = oldShowSnap.data() ?? <String, dynamic>{};
-        final oldCounts0 = _countsFromMeta(oldShowData);
-
-        final oldShowUserSnap = await tx.get(oldShowUserDocRef);
-        final oldShowUserData = oldShowUserSnap.data() ?? <String, dynamic>{};
-        final oldShowUserExists = oldShowUserSnap.exists;
-        final oldShowUserActive = (oldShowUserData['isActive'] as bool?) ?? false;
-        final targetActive = oldShowUserExists
-            ? oldShowUserActive
-            : (newShowUserExists ? newShowUserActive : ((newData['isActive'] as bool?) ?? true));
-
-        final oldActiveDelta = oldShowUserExists && oldShowUserActive ? -1 : 0;
-        final oldInactiveDelta = oldShowUserExists && !oldShowUserActive ? -1 : 0;
-        final newActiveDelta = targetActive
-            ? (newShowUserExists && newShowUserActive ? 0 : 1)
-            : (newShowUserExists && newShowUserActive ? -1 : 0);
-        final newInactiveDelta = targetActive
-            ? (newShowUserExists && !newShowUserActive ? -1 : 0)
-            : (newShowUserExists && !newShowUserActive ? 0 : 1);
-        final newTotalDelta = newShowUserExists ? 0 : 1;
-
-        if (newTotalDelta > 0 && newCounts0.totalCount >= newTotalLimit) {
-          throw StateError('TOTAL_LIMIT_REACHED:$newTotalLimit');
-        }
-        if (newActiveDelta > 0 && newCounts0.activeCount >= newActiveLimit) {
-          throw StateError('ACTIVE_LIMIT_REACHED:$newActiveLimit');
-        }
-
-        final oldCounts1 = _UserAccountsTabCounts(
-          activeCount: (oldCounts0.activeCount + oldActiveDelta) < 0 ? 0 : oldCounts0.activeCount + oldActiveDelta,
-          inactiveCount: (oldCounts0.inactiveCount + oldInactiveDelta) < 0 ? 0 : oldCounts0.inactiveCount + oldInactiveDelta,
-        );
-        final newCounts1 = _UserAccountsTabCounts(
-          activeCount: (newCounts0.activeCount + newActiveDelta) < 0 ? 0 : newCounts0.activeCount + newActiveDelta,
-          inactiveCount: (newCounts0.inactiveCount + newInactiveDelta) < 0 ? 0 : newCounts0.inactiveCount + newInactiveDelta,
-        );
-
-        final showPayload = Map<String, dynamic>.from(newData)
-          ..remove('id')
-          ..['startTime'] = FieldValue.delete()
-          ..['endTime'] = FieldValue.delete()
-          ..['createdAt'] = oldShowUserData['createdAt'] ?? newShowUserData['createdAt'] ?? oldSnap.data()?['createdAt'] ?? FieldValue.serverTimestamp()
-          ..['updatedAt'] = FieldValue.serverTimestamp()
-          ..['isActive'] = targetActive;
-        showPayload['disabledAt'] = targetActive
-            ? FieldValue.delete()
-            : (oldShowUserData['disabledAt'] ?? newShowUserData['disabledAt'] ?? FieldValue.serverTimestamp());
-
-        if (idChanged) {
-          tx.set(newRef, payload);
-          tx.delete(oldRef);
-        } else {
-          tx.update(oldRef, <String, dynamic>{
-            ...payload,
-            'startTime': FieldValue.delete(),
-            'endTime': FieldValue.delete(),
-          });
-        }
-
-        if (oldShowUserExists) {
-          tx.delete(oldShowUserDocRef);
-        }
-        tx.set(newShowUserDocRef, showPayload, SetOptions(merge: true));
-        tx.set(
-          newShowDocRef,
-          <String, dynamic>{
-            'division': newDivision,
-            'area': newArea,
-            ...newCounts1.toMap(),
-            'updatedAt': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true),
-        );
-        tx.set(
-          oldShowDocRef,
-          <String, dynamic>{
-            'division': oldDivision,
-            'area': oldArea,
-            ...oldCounts1.toMap(),
-            'updatedAt': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true),
-        );
-      });
-
-
-      trace.log('Firestore 계정 수정 및 legacy 필드 삭제 완료', progress: 0.92);
+      final user = UserModel.fromMap(newId, normalizedNewData);
+      trace.log(
+        '현재 소속 검증 완료: division=$primaryDivision area=$primaryArea oldId=$oldId newId=$newId',
+        progress: 0.18,
+      );
+      trace.log(
+        'DevUserWriteService 전용 경로로 원본/projection/count/limit 업데이트를 요청합니다. breakDays=${user.breakDays.join(',')}',
+        progress: 0.38,
+      );
+      final previousDivision = (widget.selectedDivision ?? '').trim();
+      final previousArea = (widget.selectedArea ?? '').trim();
+      if (previousDivision.isEmpty || previousArea.isEmpty) {
+        throw StateError('PREVIOUS_PRIMARY_ASSIGNMENT_REQUIRED');
+      }
+      await _devUserWriteService.updateUser(
+        user: user,
+        previousUserId: oldId,
+        previousDivision: previousDivision,
+        previousArea: previousArea,
+        targetDivision: primaryDivision,
+        targetArea: primaryArea,
+        log: (message) => trace.log(message),
+      );
+      trace.log('DevUserWriteService 계정 수정 완료', progress: 0.92);
       await trace.succeed('운영 계정 수정이 완료되었습니다.');
       if (!mounted) return;
 
+      if (widget.selectedDivision != primaryDivision) {
+        widget.onDivisionChanged(primaryDivision);
+      }
+      if (widget.selectedArea != primaryArea) {
+        widget.onAreaChanged(primaryArea);
+      }
       if (!trace.developerMode) {
         await StatusDialog.showSuccess(
           context,
@@ -608,11 +470,11 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
           useCommonUi: true,
         );
       }
-
       if (!mounted) return;
-
       setState(() {
         _editedUsers.remove(oldId);
+        _editedUsers.remove(newId);
+        _selectedUserId = null;
         _refreshTick++;
       });
     } catch (e, st) {
@@ -623,7 +485,17 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
         stackTrace: st,
       );
       if (!mounted || trace.developerMode) return;
-
+      if (e.toString().contains('PRIMARY_ASSIGNMENT_REQUIRED') ||
+          e.toString().contains('PREVIOUS_PRIMARY_ASSIGNMENT_REQUIRED') ||
+          e.toString().contains('PRIMARY_AREA_NOT_IN_DIVISION')) {
+        await StatusDialog.showFailure(
+          context,
+          title: '현재 소속을 확인하세요',
+          description: '현재 회사와 해당 회사에 속한 현재 지역을 선택한 뒤 다시 저장하세요.',
+          useCommonUi: true,
+        );
+        return;
+      }
       await _showAccountLimitFailureDialog(
         e,
         fallbackTitle: StatusDialog.userAccountSaveFailed,
@@ -654,15 +526,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
 
   Future<void> _createAccount(_CreateUserAccountDraft draft) async {
     if (_creating) return;
-
     setState(() => _creating = true);
-
-    final fs = FirebaseFirestore.instance;
-    final id = draft.documentId;
-    final showId = _showDocId(draft.division, draft.area);
-    final userRef = fs.collection('user_accounts').doc(id);
-    final showDocRef = fs.collection('user_accounts_show').doc(showId);
-    final showUserDocRef = showDocRef.collection('users').doc(id);
     final trace = await DeveloperOperationTrace.start(
       context: context,
       title: '운영 계정 생성',
@@ -673,68 +537,44 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
     );
 
     try {
-      trace.log(
-        '요일별 근무시간 스키마 확인 완료: startTimeByWeekday/endTimeByWeekday만 생성합니다.',
-        progress: 0.12,
-      );
       final englishName = await _fetchEnglishNameByArea(draft.division, draft.area) ?? draft.area;
-      await _syncAccountCounts(
-        showDocRef: showDocRef,
+      final user = UserModel(
+        id: draft.documentId,
+        areas: <String>[draft.area],
+        currentArea: draft.area,
+        divisions: <String>[draft.division],
+        modes: List<String>.from(draft.modes),
+        email: draft.email,
+        englishSelectedAreaName: englishName,
+        breakDays: draft.breakDays.toList(growable: false),
+        isSaved: false,
+        isSelected: false,
+        isWorking: false,
+        name: draft.name,
+        password: draft.password,
+        phone: draft.phone,
+        position: draft.position,
+        role: draft.role,
+        selectedArea: draft.area,
+        startTimeByWeekday: Map<String, TimeOfDay?>.from(draft.startTimeByWeekday),
+        endTimeByWeekday: Map<String, TimeOfDay?>.from(draft.endTimeByWeekday),
+        isActive: true,
+      );
+      trace.log(
+        '현재 소속 확정: division=${draft.division} area=${draft.area} id=${draft.documentId}',
+        progress: 0.16,
+      );
+      trace.log(
+        'DevUserWriteService 전용 경로로 계정 생성을 요청합니다. breakDays=${user.breakDays.join(',')}',
+        progress: 0.38,
+      );
+      await _devUserWriteService.createUser(
+        user: user,
         division: draft.division,
         area: draft.area,
-        strict: true,
+        log: (message) => trace.log(message),
       );
-      trace.log('계정 한도 및 대상 지역 메타데이터 확인 완료', progress: 0.3);
-
-
-      trace.log('Firestore transaction 생성을 시작합니다.', progress: 0.46);
-      await fs.runTransaction((tx) async {
-        final userSnap = await tx.get(userRef);
-        if (userSnap.exists) {
-          throw Exception('동일 ID가 이미 존재합니다: $id');
-        }
-
-        final showSnap = await tx.get(showDocRef);
-        final showData = showSnap.data() ?? <String, dynamic>{};
-        final activeLimit = _normalizeLimit(showData['activeLimit']);
-        final totalLimit = _normalizeLimit(showData['totalLimit']);
-        final counts = _countsFromMeta(showData);
-
-        if (counts.activeCount >= activeLimit) {
-          throw StateError('ACTIVE_LIMIT_REACHED:$activeLimit');
-        }
-        if (counts.totalCount >= totalLimit) {
-          throw StateError('TOTAL_LIMIT_REACHED:$totalLimit');
-        }
-
-        final accountMap = draft.toUserAccountsMap(englishName)
-          ..['createdAt'] = FieldValue.serverTimestamp()
-          ..['updatedAt'] = FieldValue.serverTimestamp();
-
-        final showMap = draft.toShowUserMap(englishName)
-          ..['startTime'] = FieldValue.delete()
-          ..['endTime'] = FieldValue.delete()
-          ..['createdAt'] = FieldValue.serverTimestamp()
-          ..['updatedAt'] = FieldValue.serverTimestamp();
-
-        tx.set(userRef, accountMap);
-        tx.set(
-          showDocRef,
-          <String, dynamic>{
-            'division': draft.division,
-            'area': draft.area,
-            'activeCount': counts.activeCount + 1,
-            'inactiveCount': counts.inactiveCount,
-            'totalCount': counts.totalCount + 1,
-            'updatedAt': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true),
-        );
-        tx.set(showUserDocRef, showMap, SetOptions(merge: true));
-      });
-
-
-      trace.log('Firestore 계정 생성 완료', progress: 0.92);
+      trace.log('DevUserWriteService 계정 생성 완료', progress: 0.92);
       await trace.succeed('운영 계정 생성이 완료되었습니다.');
       if (!mounted) return;
 
@@ -744,7 +584,6 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
       if (widget.selectedArea != draft.area) {
         widget.onAreaChanged(draft.area);
       }
-
       if (!trace.developerMode) {
         await StatusDialog.showSuccess(
           context,
@@ -752,7 +591,6 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
           useCommonUi: true,
         );
       }
-
       if (!mounted) return;
       setState(() => _refreshTick++);
     } catch (e, st) {
@@ -763,7 +601,6 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
         stackTrace: st,
       );
       if (!mounted || trace.developerMode) return;
-
       await _showAccountLimitFailureDialog(
         e,
         fallbackTitle: StatusDialog.userAccountSaveFailed,
@@ -777,301 +614,764 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
     }
   }
 
-  Widget _buildCreateButton({required List<String> divisionList}) {
-    return SizedBox(
-      width: double.infinity,
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 240),
-        switchInCurve: Curves.easeOutCubic,
-        switchOutCurve: Curves.easeInCubic,
-        child: FilledButton.icon(
-          key: ValueKey<bool>(_creating),
-          onPressed: _creating ? null : () => _openCreateDialog(divisionList),
-          icon: _creating
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.person_add_alt_1),
-          label: Text(_creating ? '계정 생성 중' : '신규 계정 생성'),
+  Widget _buildScopeSurface(
+    BuildContext context, {
+    required List<String> divisionList,
+  }) {
+    final selectedDivision = divisionList.contains(widget.selectedDivision)
+        ? widget.selectedDivision
+        : null;
+    return OpsDockListSurface(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          children: [
+            DropdownButtonFormField<String>(
+              value: selectedDivision,
+              isExpanded: true,
+              items: divisionList
+                  .map(
+                    (division) => DropdownMenuItem<String>(
+                      value: division,
+                      child: Text(
+                        division,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  )
+                  .toList(growable: false),
+              onChanged: _creating
+                  ? null
+                  : (value) {
+                      setState(() {
+                        _selectedUserId = null;
+                        _scopeAreasDivision = null;
+                        _scopeAreasFuture = null;
+                      });
+                      widget.onDivisionChanged(value);
+                      widget.onAreaChanged(null);
+                    },
+              decoration: opsInputDecoration(
+                context,
+                label: '회사 선택',
+                prefixIcon: const Icon(Icons.business_rounded),
+              ),
+            ),
+            const SizedBox(height: 10),
+            AnimatedSwitcher(
+              duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false
+                  ? Duration.zero
+                  : CommonUiMotion.selection,
+              child: selectedDivision == null
+                  ? const SizedBox.shrink(key: ValueKey<String>('user_area_none'))
+                  : FutureBuilder<List<String>>(
+                      key: ValueKey<String>('user_area_$selectedDivision'),
+                      future: _scopeAreaNames(selectedDivision),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 8),
+                            child: SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2.2),
+                            ),
+                          );
+                        }
+                        final areas = snapshot.data ?? const <String>[];
+                        return DropdownButtonFormField<String>(
+                          value: areas.contains(widget.selectedArea) ? widget.selectedArea : null,
+                          isExpanded: true,
+                          items: areas
+                              .map(
+                                (area) => DropdownMenuItem<String>(
+                                  value: area,
+                                  child: Text(
+                                    area,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              )
+                              .toList(growable: false),
+                          onChanged: _creating
+                              ? null
+                              : (value) {
+                                  setState(() => _selectedUserId = null);
+                                  widget.onAreaChanged(value);
+                                },
+                          decoration: opsInputDecoration(
+                            context,
+                            label: '지역 선택',
+                            prefixIcon: const Icon(Icons.location_on_rounded),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildUserList({required List<String> divisionList}) {
-    return Expanded(
-      child: widget.selectedArea == null
-          ? const Center(child: Text('지역을 선택하세요.'))
-          : FutureBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              key: ValueKey<String>('${widget.selectedArea}-$_refreshTick'),
-              future: _fetchUsersForArea(widget.selectedArea!),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return const Center(child: Text('해당 지역에 계정이 없습니다.'));
-                }
-
-                final docs = snapshot.data!.docs;
-                return ListView.builder(
-                  itemCount: docs.length,
-                  itemBuilder: (context, index) {
-                    final doc = docs[index];
-                    final data = doc.data();
-                    final id = doc.id;
-                    final base = _editedUsers[id] ?? _copyUser(data);
-                    final updated = _copyUser(base);
-
-                    return Card(
-                      margin: const EdgeInsets.symmetric(vertical: 6),
+  Widget _buildCreateSurface(
+    BuildContext context, {
+    required List<String> divisionList,
+  }) {
+    final tokens = CommonUiTheme.of(context);
+    final canCreate = !_creating && divisionList.isNotEmpty;
+    return OpsDockListSurface(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(13, 11, 9, 11),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: tokens.accentContainer,
+                borderRadius: BorderRadius.circular(CommonUiShapes.control),
+              ),
+              alignment: Alignment.center,
+              child: Icon(
+                Icons.person_add_alt_1_rounded,
+                size: 19,
+                color: tokens.onAccentContainer,
+              ),
+            ),
+            const SizedBox(width: 11),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '신규 계정',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: tokens.textPrimary,
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '최신 근무 스키마와 지역 리밋을 기준으로 생성합니다.',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: tokens.textSecondary,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            AnimatedSwitcher(
+              duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false
+                  ? Duration.zero
+                  : CommonUiMotion.selection,
+              child: _creating
+                  ? SizedBox(
+                      key: const ValueKey<String>('user_creating'),
+                      width: 34,
+                      height: 34,
                       child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '${updated['name']} ($id)',
-                              style: const TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                            const SizedBox(height: 8),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: [
-                                ...(updated['divisions'] as List<String>).map((division) {
-                                  return InputChip(
-                                    label: Text(division),
-                                    onDeleted: () {
-                                      setState(() {
-                                        final list = List<String>.from(updated['divisions']);
-                                        list.remove(division);
-                                        updated['divisions'] = list;
-                                        _editedUsers[id] = _copyUser(updated);
-                                      });
-                                    },
-                                  );
-                                }),
-                                ActionChip(
-                                  label: const Text('+ 추가'),
-                                  onPressed: () async {
-                                    final toAdd = await showCommonOverlayDialog<String>(
-                                      context: context,
-                                      builder: (_) => SimpleDialog(
-                                        title: const Text('Division 추가'),
-                                        children: divisionList
-                                            .where((d) => !(updated['divisions'] as List).contains(d))
-                                            .map(
-                                              (d) => SimpleDialogOption(
-                                                onPressed: () => Navigator.pop(context, d),
-                                                child: Text(d),
-                                              ),
-                                            )
-                                            .toList(),
-                                      ),
-                                    );
-
-                                    if (toAdd != null) {
-                                      setState(() {
-                                        final list = List<String>.from(updated['divisions']);
-                                        list.add(toAdd);
-                                        updated['divisions'] = list;
-                                        _editedUsers[id] = _copyUser(updated);
-                                      });
-                                    }
-                                  },
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: [
-                                ...(updated['areas'] as List<String>).map((area) {
-                                  return InputChip(
-                                    label: Text(area),
-                                    onDeleted: () {
-                                      setState(() {
-                                        final list = List<String>.from(updated['areas']);
-                                        list.remove(area);
-                                        updated['areas'] = list;
-                                        _editedUsers[id] = _copyUser(updated);
-                                      });
-                                    },
-                                  );
-                                }),
-                                ActionChip(
-                                  label: const Text('+ 추가'),
-                                  onPressed: () async {
-                                    final areas = await getAreasByDivisions(
-                                      List<String>.from(updated['divisions']),
-                                    );
-                                    if (!mounted) return;
-                                    final toAdd = await showCommonOverlayDialog<String>(
-                                      context: context,
-                                      builder: (_) => SimpleDialog(
-                                        title: const Text('Area 추가'),
-                                        children: areas
-                                            .where((a) => !(updated['areas'] as List).contains(a))
-                                            .map(
-                                              (a) => SimpleDialogOption(
-                                                onPressed: () => Navigator.pop(context, a),
-                                                child: Text(a),
-                                              ),
-                                            )
-                                            .toList(),
-                                      ),
-                                    );
-
-                                    if (toAdd != null) {
-                                      setState(() {
-                                        final list = List<String>.from(updated['areas']);
-                                        list.add(toAdd);
-                                        updated['areas'] = list;
-                                        _editedUsers[id] = _copyUser(updated);
-                                      });
-                                    }
-                                  },
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                const Text('Role: '),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: DropdownButton<String>(
-                                    isExpanded: true,
-                                    value: _roles.contains(updated['role']) ? updated['role'] : _roles.last,
-                                    items: _roles
-                                        .map(
-                                          (role) => DropdownMenuItem(
-                                            value: role,
-                                            child: Text(role),
-                                          ),
-                                        )
-                                        .toList(),
-                                    onChanged: (val) {
-                                      if (val != null) {
-                                        setState(() {
-                                          updated['role'] = val;
-                                          _editedUsers[id] = _copyUser(updated);
-                                        });
-                                      }
-                                    },
-                                  ),
-                                ),
-                              ],
-                            ),
-                            if ((updated['modes'] as List<String>).isNotEmpty) ...[
-                              const SizedBox(height: 4),
-                              Text("허용 모드: ${(updated['modes'] as List<String>).join(', ')}"),
-                            ],
-                            if ((updated['position'] ?? '').toString().trim().isNotEmpty) ...[
-                              const SizedBox(height: 4),
-                              Text("직책: ${updated['position']}"),
-                            ],
-                            const SizedBox(height: 12),
-                            ElevatedButton.icon(
-                              onPressed: _savingIds.contains(id)
-                                  ? null
-                                  : () async {
-                                      setState(() => _savingIds.add(id));
-                                      await _saveChanges(id, data, updated);
-                                      if (!mounted) return;
-                                      setState(() => _savingIds.remove(id));
-                                    },
-                              icon: const Icon(Icons.save),
-                              label: const Text('저장'),
-                            ),
-                          ],
+                        padding: const EdgeInsets.all(7),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.3,
+                          color: tokens.accent,
                         ),
                       ),
-                    );
-                  },
+                    )
+                  : CommonIconButton(
+                      key: const ValueKey<String>('user_create'),
+                      icon: Icons.add_rounded,
+                      tooltip: '신규 계정 생성',
+                      onPressed: canCreate ? () => _openCreateDialog(divisionList) : null,
+                      haptic: CommonHaptic.selection,
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPrimaryAssignmentSurface(
+    BuildContext context, {
+    required String id,
+    required Map<String, dynamic> updated,
+    required List<String> divisionList,
+  }) {
+    final tokens = CommonUiTheme.of(context);
+    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final divisions = List<String>.from(updated['divisions'] ?? const <String>[]);
+    final primaryDivision = _primaryDivisionOf(updated);
+    final divisionValue = divisionList.contains(primaryDivision) ? primaryDivision : null;
+    return OpsDockListSurface(
+      child: Padding(
+        padding: const EdgeInsets.all(11),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '현재 소속',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: tokens.textPrimary,
+                    fontWeight: FontWeight.w800,
+                  ),
+            ),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<String>(
+              value: divisionValue,
+              isExpanded: true,
+              items: divisionList
+                  .map(
+                    (division) => DropdownMenuItem<String>(
+                      value: division,
+                      child: Text(division),
+                    ),
+                  )
+                  .toList(growable: false),
+              onChanged: (value) {
+                if (value == null) return;
+                setState(() {
+                  final nextDivisions = divisions.contains(value)
+                      ? divisions
+                      : <String>[...divisions, value];
+                  updated['_primaryDivision'] = value;
+                  updated['divisions'] = nextDivisions;
+                  updated['currentArea'] = null;
+                  updated['selectedArea'] = null;
+                  _editedUsers[id] = _copyUser(updated);
+                });
+              },
+              decoration: opsInputDecoration(
+                context,
+                label: '현재 회사',
+                prefixIcon: const Icon(Icons.corporate_fare_rounded),
+              ),
+            ),
+            const SizedBox(height: 8),
+            AnimatedSwitcher(
+              duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+              child: divisionValue == null
+                  ? const SizedBox.shrink(key: ValueKey<String>('primary_area_none'))
+                  : FutureBuilder<List<String>>(
+                      key: ValueKey<String>('primary_area_$divisionValue'),
+                      future: _primaryAreaNames(divisionValue),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const SizedBox(
+                            key: ValueKey<String>('primary_area_loading'),
+                            height: 52,
+                            child: Center(child: CircularProgressIndicator(strokeWidth: 2.2)),
+                          );
+                        }
+                        if (snapshot.hasError) {
+                          return OpsDockListSurface(
+                            key: const ValueKey<String>('primary_area_error'),
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(11, 9, 7, 9),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      '현재 지역 목록을 불러오지 못했습니다.',
+                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                            color: tokens.textSecondary,
+                                          ),
+                                    ),
+                                  ),
+                                  CommonIconButton(
+                                    icon: Icons.refresh_rounded,
+                                    tooltip: '지역 목록 다시 불러오기',
+                                    onPressed: () {
+                                      setState(() {
+                                        _primaryAreaFutures.remove(divisionValue);
+                                      });
+                                    },
+                                    haptic: CommonHaptic.selection,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }
+                        final areaList = snapshot.data ?? const <String>[];
+                        final primaryArea = _primaryAreaOf(updated);
+                        final areaValue = areaList.contains(primaryArea) ? primaryArea : null;
+                        return DropdownButtonFormField<String>(
+                          key: ValueKey<String>('primary_area_ready_$divisionValue'),
+                          value: areaValue,
+                          isExpanded: true,
+                          items: areaList
+                              .map(
+                                (area) => DropdownMenuItem<String>(
+                                  value: area,
+                                  child: Text(area),
+                                ),
+                              )
+                              .toList(growable: false),
+                          onChanged: (value) {
+                            if (value == null) return;
+                            setState(() {
+                              final currentAreas = List<String>.from(updated['areas'] ?? const <String>[]);
+                              if (!currentAreas.contains(value)) currentAreas.add(value);
+                              updated['areas'] = currentAreas;
+                              updated['currentArea'] = value;
+                              updated['selectedArea'] = value;
+                              _editedUsers[id] = _copyUser(updated);
+                            });
+                          },
+                          decoration: opsInputDecoration(
+                            context,
+                            label: '현재 지역',
+                            prefixIcon: const Icon(Icons.location_on_rounded),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUserEditor(
+    BuildContext context, {
+    required String id,
+    required Map<String, dynamic> data,
+    required Map<String, dynamic> updated,
+    required List<String> divisionList,
+  }) {
+    final tokens = CommonUiTheme.of(context);
+    final breakDays = List<String>.from(updated['breakDays'] ?? const <String>[]);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Divider(height: 18, thickness: 1, color: tokens.borderSubtle),
+        _buildPrimaryAssignmentSurface(
+          context,
+          id: id,
+          updated: updated,
+          divisionList: divisionList,
+        ),
+        const SizedBox(height: 10),
+        Text(
+          '접근 가능 회사',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: tokens.textSecondary,
+                fontWeight: FontWeight.w700,
+              ),
+        ),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 7,
+          runSpacing: 7,
+          children: [
+            for (final division in List<String>.from(updated['divisions'] ?? const <String>[]))
+              InputChip(
+                label: Text(division),
+                onDeleted: division == _primaryDivisionOf(updated)
+                    ? null
+                    : () {
+                  setState(() {
+                    final list = List<String>.from(updated['divisions'] ?? const <String>[]);
+                    list.remove(division);
+                    updated['divisions'] = list;
+                    _editedUsers[id] = _copyUser(updated);
+                  });
+                },
+              ),
+            ActionChip(
+              label: const Text('회사 추가'),
+              onPressed: () async {
+                final current = List<String>.from(updated['divisions'] ?? const <String>[]).toSet();
+                final candidates = divisionList.where((value) => !current.contains(value)).toList();
+                if (candidates.isEmpty) return;
+                final selected = await showCommonOverlayDialog<String>(
+                  context: context,
+                  builder: (dialogContext) => SimpleDialog(
+                    title: const Text('회사 추가'),
+                    children: candidates
+                        .map(
+                          (division) => SimpleDialogOption(
+                            onPressed: () => Navigator.of(dialogContext).pop(division),
+                            child: Text(division),
+                          ),
+                        )
+                        .toList(growable: false),
+                  ),
                 );
+                if (selected == null || !mounted) return;
+                setState(() {
+                  final list = List<String>.from(updated['divisions'] ?? const <String>[]);
+                  list.add(selected);
+                  updated['divisions'] = list;
+                  _editedUsers[id] = _copyUser(updated);
+                });
               },
             ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Text(
+          '접근 가능 지역',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: tokens.textSecondary,
+                fontWeight: FontWeight.w700,
+              ),
+        ),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 7,
+          runSpacing: 7,
+          children: [
+            for (final area in List<String>.from(updated['areas'] ?? const <String>[]))
+              InputChip(
+                label: Text(area),
+                onDeleted: area == _primaryAreaOf(updated)
+                    ? null
+                    : () {
+                  setState(() {
+                    final list = List<String>.from(updated['areas'] ?? const <String>[]);
+                    list.remove(area);
+                    updated['areas'] = list;
+                    _editedUsers[id] = _copyUser(updated);
+                  });
+                },
+              ),
+            ActionChip(
+              label: const Text('지역 추가'),
+              onPressed: () async {
+                final divisions = List<String>.from(updated['divisions'] ?? const <String>[]);
+                final areas = await getAreasByDivisions(divisions);
+                if (!mounted) return;
+                final current = List<String>.from(updated['areas'] ?? const <String>[]).toSet();
+                final candidates = areas.where((value) => !current.contains(value)).toList();
+                if (candidates.isEmpty) return;
+                final selected = await showCommonOverlayDialog<String>(
+                  context: context,
+                  builder: (dialogContext) => SimpleDialog(
+                    title: const Text('지역 추가'),
+                    children: candidates
+                        .map(
+                          (area) => SimpleDialogOption(
+                            onPressed: () => Navigator.of(dialogContext).pop(area),
+                            child: Text(area),
+                          ),
+                        )
+                        .toList(growable: false),
+                  ),
+                );
+                if (selected == null || !mounted) return;
+                setState(() {
+                  final list = List<String>.from(updated['areas'] ?? const <String>[]);
+                  list.add(selected);
+                  updated['areas'] = list;
+                  _editedUsers[id] = _copyUser(updated);
+                });
+              },
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        DropdownButtonFormField<String>(
+          value: _roles.contains(updated['role']) ? updated['role'] as String : _roles.last,
+          items: _roles
+              .map(
+                (role) => DropdownMenuItem<String>(
+                  value: role,
+                  child: Text(role),
+                ),
+              )
+              .toList(growable: false),
+          onChanged: (value) {
+            if (value == null) return;
+            setState(() {
+              updated['role'] = value;
+              _editedUsers[id] = _copyUser(updated);
+            });
+          },
+          decoration: opsInputDecoration(
+            context,
+            label: 'Role',
+            prefixIcon: const Icon(Icons.admin_panel_settings_rounded),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          '허용 모드: ${List<String>.from(updated['modes'] ?? const <String>[]).join(', ')}',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: tokens.textSecondary,
+              ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          '휴게 적용: ${breakDays.isEmpty ? '없음' : breakDays.join(', ')}',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: tokens.textSecondary,
+              ),
+        ),
+        if ((updated['position'] ?? '').toString().trim().isNotEmpty) ...[
+          const SizedBox(height: 3),
+          Text(
+            '직책: ${updated['position']}',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: tokens.textSecondary,
+                ),
+          ),
+        ],
+        const SizedBox(height: 10),
+        CommonButton(
+          label: _savingIds.contains(id) ? '저장 중' : '저장',
+          icon: Icons.save_rounded,
+          loading: _savingIds.contains(id),
+          onPressed: _savingIds.contains(id)
+              ? null
+              : () async {
+                  setState(() => _savingIds.add(id));
+                  await _saveChanges(id, data, updated);
+                  if (!mounted) return;
+                  setState(() => _savingIds.remove(id));
+                },
+          expand: true,
+          haptic: CommonHaptic.medium,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildUserList({required List<String> divisionList}) {
+    final tokens = CommonUiTheme.of(context);
+    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final division = widget.selectedDivision;
+    final area = widget.selectedArea;
+    if (division == null || area == null) {
+      return const OpsDockListSurface(
+        child: SizedBox(
+          height: 280,
+          child: OpsEmptyState(
+            icon: Icons.manage_accounts_rounded,
+            title: '회사와 지역을 선택하세요',
+            message: '선택한 범위의 계정을 List Surface에서 관리할 수 있습니다.',
+          ),
+        ),
+      );
+    }
+    return OpsDockListSurface(
+      child: FutureBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        key: ValueKey<String>('$division-$area-$_refreshTick'),
+        future: _fetchUsersForArea(division, area),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const SizedBox(
+              height: 280,
+              child: Center(child: CircularProgressIndicator()),
+            );
+          }
+          if (snapshot.hasError) {
+            return SizedBox(
+              height: 280,
+              child: OpsEmptyState(
+                icon: Icons.error_outline_rounded,
+                title: '계정 목록을 불러오지 못했습니다',
+                message: snapshot.error.toString(),
+              ),
+            );
+          }
+          final docs = snapshot.data?.docs ?? const <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+          if (docs.isEmpty) {
+            return const SizedBox(
+              height: 280,
+              child: OpsEmptyState(
+                icon: Icons.person_off_outlined,
+                title: '등록된 계정이 없습니다',
+                message: '신규 계정에서 첫 운영 계정을 생성하세요.',
+              ),
+            );
+          }
+          return ListView.separated(
+            padding: EdgeInsets.zero,
+            itemCount: docs.length,
+            separatorBuilder: (_, __) => Divider(
+              height: 1,
+              thickness: 1,
+              color: tokens.borderSubtle,
+            ),
+            itemBuilder: (context, index) {
+              final doc = docs[index];
+              final data = doc.data();
+              final id = doc.id;
+              final base = _editedUsers[id] ?? _copyUser(
+                data,
+                primaryDivision: division,
+                primaryArea: area,
+              );
+              final updated = _copyUser(base);
+              final selected = _selectedUserId == id;
+              final active = (updated['isActive'] as bool?) ?? true;
+              final role = (updated['role'] ?? '').toString();
+              final position = (updated['position'] ?? '').toString().trim();
+              return CommonAnimatedReveal(
+                delay: reduceMotion ? Duration.zero : Duration(milliseconds: index * 22),
+                offset: const Offset(.016, 0),
+                child: OpsDockSelectableRowSurface(
+                  selected: selected,
+                  selectionColor: tokens.accent,
+                  selectedContainer: tokens.accentContainer,
+                  onTap: () {
+                    setState(() {
+                      _selectedUserId = selected ? null : id;
+                      if (!selected) {
+                        _editedUsers.putIfAbsent(
+                          id,
+                          () => _copyUser(
+                            data,
+                            primaryDivision: division,
+                            primaryArea: area,
+                          ),
+                        );
+                      }
+                    });
+                  },
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 38,
+                            height: 38,
+                            decoration: BoxDecoration(
+                              color: active ? tokens.successContainer : tokens.surfaceSelected,
+                              borderRadius: BorderRadius.circular(CommonUiShapes.control),
+                            ),
+                            alignment: Alignment.center,
+                            child: Icon(
+                              active ? Icons.person_rounded : Icons.person_off_rounded,
+                              size: 20,
+                              color: active ? tokens.success : tokens.iconSecondary,
+                            ),
+                          ),
+                          const SizedBox(width: 11),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  (updated['name'] ?? '').toString().trim().isEmpty
+                                      ? id
+                                      : (updated['name'] ?? '').toString(),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                        color: tokens.textPrimary,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '$role${position.isEmpty ? '' : ' · $position'} · ${active ? '활성' : '비활성'}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                        color: tokens.textSecondary,
+                                      ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  id,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                        color: tokens.textSecondary,
+                                      ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          AnimatedRotation(
+                            duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                            turns: selected ? .5 : 0,
+                            child: Icon(Icons.keyboard_arrow_down_rounded, color: tokens.iconSecondary),
+                          ),
+                        ],
+                      ),
+                      AnimatedSize(
+                        duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
+                        curve: Curves.easeOutCubic,
+                        alignment: Alignment.topCenter,
+                        child: selected
+                            ? _buildUserEditor(
+                                context,
+                                id: id,
+                                data: data,
+                                updated: updated,
+                                divisionList: divisionList,
+                              )
+                            : const SizedBox.shrink(),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: FutureBuilder<List<String>>(
-        key: ValueKey<int>(_refreshTick),
-        future: fetchDivisions(),
-        builder: (context, divisionSnapshot) {
-          if (divisionSnapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (!divisionSnapshot.hasData || divisionSnapshot.data!.isEmpty) {
-            return const Text('등록된 회사가 없습니다.');
-          }
-
-          final divisionList = divisionSnapshot.data!;
-          final selectedDivision = divisionList.contains(widget.selectedDivision) ? widget.selectedDivision : null;
-
-          return Column(
-            children: [
-              DropdownButtonFormField<String>(
-                value: selectedDivision,
-                items: divisionList
-                    .map((div) => DropdownMenuItem(value: div, child: Text(div)))
-                    .toList(),
-                onChanged: (value) async {
-                  widget.onDivisionChanged(value);
-                  widget.onAreaChanged(null);
-                },
-                decoration: const InputDecoration(labelText: '회사 선택'),
-              ),
-              const SizedBox(height: 12),
-              selectedDivision == null
-                  ? const Text('회사를 먼저 선택하세요.')
-                  : FutureBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                      future: _fetchAreasForDivision(selectedDivision),
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
-                          return const Center(child: CircularProgressIndicator());
-                        }
-                        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                          return const Text('등록된 지역이 없습니다.');
-                        }
-
-                        final areas = snapshot.data!.docs
-                            .map((e) => (e.data()['name'] ?? '').toString().trim())
-                            .where((area) => area.isNotEmpty)
-                            .toSet()
-                            .toList()
-                          ..sort();
-
-                        return DropdownButtonFormField<String>(
-                          value: areas.contains(widget.selectedArea) ? widget.selectedArea : null,
-                          items: areas
-                              .map(
-                                (area) => DropdownMenuItem(
-                                  value: area,
-                                  child: Text(area),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: widget.onAreaChanged,
-                          decoration: const InputDecoration(labelText: '지역 선택'),
-                        );
-                      },
+    final tokens = CommonUiTheme.of(context);
+    final divisionList = widget.divisionList;
+    return ColoredBox(
+      color: tokens.canvas,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          12,
+          12,
+          12,
+          12 + MediaQuery.viewPaddingOf(context).bottom,
+        ),
+        child: divisionList.isEmpty
+            ? const OpsDockListSurface(
+                child: SizedBox(
+                  height: 280,
+                  child: OpsEmptyState(
+                    icon: Icons.business_outlined,
+                    title: '등록된 회사가 없습니다',
+                    message: '회사 관리에서 먼저 회사를 생성하세요.',
+                  ),
+                ),
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  CommonAnimatedReveal(
+                    child: _buildScopeSurface(
+                      context,
+                      divisionList: divisionList,
                     ),
-              const SizedBox(height: 12),
-              _buildCreateButton(divisionList: divisionList),
-              const SizedBox(height: 12),
-              _buildUserList(divisionList: divisionList),
-            ],
-          );
-        },
+                  ),
+                  const SizedBox(height: 9),
+                  CommonAnimatedReveal(
+                    delay: const Duration(milliseconds: 35),
+                    child: _buildCreateSurface(
+                      context,
+                      divisionList: divisionList,
+                    ),
+                  ),
+                  const SizedBox(height: 9),
+                  Expanded(
+                    child: _buildUserList(divisionList: divisionList),
+                  ),
+                ],
+              ),
       ),
     );
   }
@@ -1090,6 +1390,7 @@ class _CreateUserAccountDraft {
     required this.position,
     required this.startTimeByWeekday,
     required this.endTimeByWeekday,
+    required this.breakDays,
   });
 
   static const List<String> weekdays = <String>['월', '화', '수', '목', '금', '토', '일'];
@@ -1105,54 +1406,11 @@ class _CreateUserAccountDraft {
   final String position;
   final Map<String, TimeOfDay?> startTimeByWeekday;
   final Map<String, TimeOfDay?> endTimeByWeekday;
+  final Set<String> breakDays;
 
   String get documentId => '$phone-$area';
 
-  Map<String, int>? _timeToMap(TimeOfDay? time) {
-    if (time == null) return null;
-    return <String, int>{'hour': time.hour, 'minute': time.minute};
-  }
 
-  Map<String, dynamic> _encodeWeekdayMap(Map<String, TimeOfDay?> map) {
-    final out = <String, dynamic>{};
-    for (final day in weekdays) {
-      out[day] = _timeToMap(map[day]);
-    }
-    return out;
-  }
-
-  Map<String, dynamic> toUserAccountsMap(String englishSelectedAreaName) {
-    return <String, dynamic>{
-      'areas': <String>[area],
-      'currentArea': area,
-      'divisions': <String>[division],
-      'modes': modes,
-      'email': email,
-      'englishSelectedAreaName': englishSelectedAreaName,
-      'fixedHolidays': <String>[
-        for (final day in weekdays)
-          if (startTimeByWeekday[day] == null && endTimeByWeekday[day] == null) day,
-      ],
-      'isSaved': false,
-      'isSelected': false,
-      'isWorking': false,
-      'name': name,
-      'password': password,
-      'phone': phone,
-      'position': position,
-      'role': role,
-      'selectedArea': area,
-      'startTimeByWeekday': _encodeWeekdayMap(startTimeByWeekday),
-      'endTimeByWeekday': _encodeWeekdayMap(endTimeByWeekday),
-    };
-  }
-
-  Map<String, dynamic> toShowUserMap(String englishSelectedAreaName) {
-    return <String, dynamic>{
-      ...toUserAccountsMap(englishSelectedAreaName),
-      'isActive': true,
-    };
-  }
 }
 
 class _CreateUserAccountDialog extends StatefulWidget {
@@ -1190,6 +1448,7 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
   final Set<String> _selectedModes = <String>{'single'};
   Map<String, TimeOfDay?> _startByDay = <String, TimeOfDay?>{};
   Map<String, TimeOfDay?> _endByDay = <String, TimeOfDay?>{};
+  Set<String> _breakDays = <String>{};
   List<String> _areaList = <String>[];
   bool _loadingAreas = false;
   String? _errorText;
@@ -1271,6 +1530,7 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
   }
 
   Future<void> _pickTime(String day, {required bool isStart}) async {
+    final wasWorking = _startByDay[day] != null && _endByDay[day] != null;
     final current = isStart ? _startByDay[day] : _endByDay[day];
     final initial = current ?? (isStart ? const TimeOfDay(hour: 9, minute: 0) : const TimeOfDay(hour: 18, minute: 0));
     final picked = await showCommonTimePicker(
@@ -1293,6 +1553,10 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
       } else {
         _endByDay = Map<String, TimeOfDay?>.of(_endByDay)..[day] = picked;
       }
+      final working = _startByDay[day] != null && _endByDay[day] != null;
+      if (!wasWorking && working) {
+        _breakDays = <String>{..._breakDays, day};
+      }
     });
   }
 
@@ -1301,6 +1565,21 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
       _errorText = null;
       _startByDay = Map<String, TimeOfDay?>.of(_startByDay)..[day] = null;
       _endByDay = Map<String, TimeOfDay?>.of(_endByDay)..[day] = null;
+      _breakDays = <String>{..._breakDays}..remove(day);
+    });
+  }
+
+  void _toggleBreak(String day, bool value) {
+    final working = _startByDay[day] != null && _endByDay[day] != null;
+    if (!working) return;
+    setState(() {
+      _errorText = null;
+      _breakDays = <String>{..._breakDays};
+      if (value) {
+        _breakDays.add(day);
+      } else {
+        _breakDays.remove(day);
+      }
     });
   }
 
@@ -1354,6 +1633,7 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
         position: _positionController.text.trim(),
         startTimeByWeekday: Map<String, TimeOfDay?>.from(_startByDay),
         endTimeByWeekday: Map<String, TimeOfDay?>.from(_endByDay),
+        breakDays: Set<String>.of(_breakDays),
       ),
     );
   }
@@ -1411,23 +1691,31 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
   }
 
   Widget _buildWeekdayEditor() {
+    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final tokens = CommonUiTheme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('요일별 근무 시간', style: TextStyle(fontWeight: FontWeight.w800)),
+        Text(
+          '요일별 근무 시간',
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: tokens.textPrimary,
+                fontWeight: FontWeight.w800,
+              ),
+        ),
         const SizedBox(height: 8),
         for (final day in _days)
           AnimatedContainer(
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOutCubic,
+            duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+            curve: CommonUiMotion.standard,
             margin: const EdgeInsets.only(bottom: 8),
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
               color: _startByDay[day] != null && _endByDay[day] != null
-                  ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.18)
-                  : Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.18),
-              border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-              borderRadius: BorderRadius.circular(12),
+                  ? tokens.accentContainer.withOpacity(.16)
+                  : tokens.surfaceSelected.withOpacity(.55),
+              border: Border.all(color: tokens.borderSubtle),
+              borderRadius: BorderRadius.circular(CommonUiShapes.control),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1436,18 +1724,33 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
                   children: [
                     SizedBox(
                       width: 36,
-                      child: Text(day, style: const TextStyle(fontWeight: FontWeight.w900)),
+                      child: Text(
+                        day,
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                              color: tokens.textPrimary,
+                              fontWeight: FontWeight.w900,
+                            ),
+                      ),
                     ),
                     Expanded(
                       child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 180),
-                        child: Text(
-                          _startByDay[day] != null && _endByDay[day] != null
-                              ? '${_formatTime(_startByDay[day])} ~ ${_formatTime(_endByDay[day])}'
-                              : '휴무',
+                        duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                        child: Builder(
                           key: ValueKey<String>(
-                            '${day}_${_formatTime(_startByDay[day])}_${_formatTime(_endByDay[day])}',
+                            '${day}_${_formatTime(_startByDay[day])}_${_formatTime(_endByDay[day])}_${_breakDays.contains(day)}',
                           ),
+                          builder: (_) {
+                            final working = _startByDay[day] != null && _endByDay[day] != null;
+                            return Text(
+                              working
+                                  ? '${_formatTime(_startByDay[day])} ~ ${_formatTime(_endByDay[day])} · ${_breakDays.contains(day) ? '휴게 있음' : '휴게 없음'}'
+                                  : '휴무',
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: tokens.textSecondary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                            );
+                          },
                         ),
                       ),
                     ),
@@ -1457,12 +1760,13 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 7),
                 Row(
                   children: [
                     Expanded(
                       child: OutlinedButton.icon(
                         onPressed: () => _pickTime(day, isStart: true),
-                        icon: const Icon(Icons.login),
+                        icon: const Icon(Icons.login_rounded),
                         label: Text('출근 ${_formatTime(_startByDay[day])}'),
                       ),
                     ),
@@ -1470,11 +1774,38 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
                     Expanded(
                       child: OutlinedButton.icon(
                         onPressed: () => _pickTime(day, isStart: false),
-                        icon: const Icon(Icons.logout),
+                        icon: const Icon(Icons.logout_rounded),
                         label: Text('퇴근 ${_formatTime(_endByDay[day])}'),
                       ),
                     ),
                   ],
+                ),
+                AnimatedSize(
+                  duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                  child: _startByDay[day] != null && _endByDay[day] != null
+                      ? Padding(
+                          padding: const EdgeInsets.only(top: 7),
+                          child: Row(
+                            children: [
+                              Icon(Icons.free_breakfast_rounded, size: 18, color: tokens.iconSecondary),
+                              const SizedBox(width: 7),
+                              Expanded(
+                                child: Text(
+                                  '휴게 적용',
+                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                        color: tokens.textPrimary,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                ),
+                              ),
+                              Switch.adaptive(
+                                value: _breakDays.contains(day),
+                                onChanged: (value) => _toggleBreak(day, value),
+                              ),
+                            ],
+                          ),
+                        )
+                      : const SizedBox.shrink(),
                 ),
               ],
             ),
@@ -1485,169 +1816,230 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final tokens = CommonUiTheme.of(context);
+    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
     return AlertDialog(
       title: const Text('신규 계정 생성'),
       content: SizedBox(
-        width: 560,
+        width: 590,
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               AnimatedSize(
-                duration: const Duration(milliseconds: 220),
-                curve: Curves.easeOutCubic,
+                duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                curve: CommonUiMotion.enter,
                 child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 180),
+                  duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
                   child: _errorText == null
-                      ? const SizedBox.shrink(key: ValueKey<String>('no_error'))
-                      : Padding(
+                      ? const SizedBox.shrink(key: ValueKey<String>('user_create_error_none'))
+                      : Container(
                           key: ValueKey<String>(_errorText!),
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: cs.errorContainer,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              _errorText!,
-                              style: TextStyle(
-                                color: cs.onErrorContainer,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.all(11),
+                          decoration: BoxDecoration(
+                            color: tokens.dangerContainer,
+                            borderRadius: BorderRadius.circular(CommonUiShapes.control),
+                            border: Border.all(color: tokens.danger),
+                          ),
+                          child: Text(
+                            _errorText!,
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: tokens.onDangerContainer,
+                                  fontWeight: FontWeight.w700,
+                                ),
                           ),
                         ),
                 ),
               ),
-              _buildTextField(
-                controller: _nameController,
-                label: '이름',
-                onChanged: (_) => setState(() => _errorText = null),
-              ),
-              const SizedBox(height: 12),
-              _buildTextField(
-                controller: _phoneController,
-                label: '전화번호',
-                keyboardType: TextInputType.phone,
-                onChanged: (_) => setState(() => _errorText = null),
-              ),
-              const SizedBox(height: 12),
-              _buildTextField(
-                controller: _emailController,
-                label: '이메일 아이디(@gmail.com 제외)',
-                keyboardType: TextInputType.emailAddress,
-                onChanged: (_) => setState(() => _errorText = null),
-              ),
-              const SizedBox(height: 12),
-              _buildTextField(
-                controller: _passwordController,
-                label: '비밀번호',
-                suffixIcon: IconButton(
-                  tooltip: '비밀번호 재생성',
-                  onPressed: () => setState(() => _passwordController.text = _generateRandomPassword()),
-                  icon: const Icon(Icons.refresh),
-                ),
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                value: _selectedDivision,
-                decoration: opsInputDecoration(
-                  context,
-                  label: '회사',
-                  prefixIcon: const Icon(Icons.business_rounded),
-                ),
-                items: widget.divisionList
-                    .map((division) => DropdownMenuItem<String>(
-                          value: division,
-                          child: Text(division),
-                        ))
-                    .toList(),
-                onChanged: (value) {
-                  if (value == null) return;
-                  setState(() {
-                    _errorText = null;
-                    _selectedDivision = value;
-                    _selectedArea = null;
-                  });
-                  _loadAreas();
-                },
-              ),
-              const SizedBox(height: 12),
-              _loadingAreas
-                  ? const Center(child: Padding(
-                      padding: EdgeInsets.all(8),
-                      child: CircularProgressIndicator(),
-                    ))
-                  : DropdownButtonFormField<String>(
-                      value: _areaList.contains(_selectedArea) ? _selectedArea : null,
-                      decoration: const InputDecoration(
-                        labelText: '지역',
-                        border: OutlineInputBorder(),
+              OpsDockListSurface(
+                child: Padding(
+                  padding: const EdgeInsets.all(13),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _buildTextField(
+                        controller: _nameController,
+                        label: '이름',
+                        onChanged: (_) => setState(() => _errorText = null),
                       ),
-                      items: _areaList
-                          .map((area) => DropdownMenuItem<String>(
-                                value: area,
-                                child: Text(area),
-                              ))
-                          .toList(),
-                      onChanged: (value) => setState(() {
-                        _errorText = null;
-                        _selectedArea = value;
-                      }),
-                    ),
-              const SizedBox(height: 8),
-              Text(
-                '생성 문서 ID: ${_documentIdPreview()}',
-                style: const TextStyle(fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                value: widget.roleList.contains(_selectedRole) ? _selectedRole : widget.roleList.last,
-                decoration: const InputDecoration(
-                  labelText: 'Role',
-                  border: OutlineInputBorder(),
+                      const SizedBox(height: 12),
+                      _buildTextField(
+                        controller: _phoneController,
+                        label: '전화번호',
+                        keyboardType: TextInputType.phone,
+                        onChanged: (_) => setState(() => _errorText = null),
+                      ),
+                      const SizedBox(height: 12),
+                      _buildTextField(
+                        controller: _emailController,
+                        label: '이메일 아이디(@gmail.com 제외)',
+                        keyboardType: TextInputType.emailAddress,
+                        onChanged: (_) => setState(() => _errorText = null),
+                      ),
+                      const SizedBox(height: 12),
+                      _buildTextField(
+                        controller: _passwordController,
+                        label: '비밀번호',
+                        suffixIcon: IconButton(
+                          tooltip: '비밀번호 재생성',
+                          onPressed: () => setState(
+                            () => _passwordController.text = _generateRandomPassword(),
+                          ),
+                          icon: const Icon(Icons.refresh_rounded),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        value: _selectedDivision,
+                        isExpanded: true,
+                        decoration: opsInputDecoration(
+                          context,
+                          label: '회사',
+                          prefixIcon: const Icon(Icons.business_rounded),
+                        ),
+                        items: widget.divisionList
+                            .map(
+                              (division) => DropdownMenuItem<String>(
+                                value: division,
+                                child: Text(
+                                  division,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            )
+                            .toList(growable: false),
+                        onChanged: (value) {
+                          if (value == null) return;
+                          setState(() {
+                            _errorText = null;
+                            _selectedDivision = value;
+                            _selectedArea = null;
+                          });
+                          _loadAreas();
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      AnimatedSwitcher(
+                        duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                        child: _loadingAreas
+                            ? const SizedBox(
+                                key: ValueKey<String>('user_create_area_loading'),
+                                height: 52,
+                                child: Center(
+                                  child: SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(strokeWidth: 2.2),
+                                  ),
+                                ),
+                              )
+                            : DropdownButtonFormField<String>(
+                                key: ValueKey<String>(
+                                  'user_create_area_${_selectedDivision ?? ''}_${_areaList.join('|')}',
+                                ),
+                                value: _areaList.contains(_selectedArea) ? _selectedArea : null,
+                                isExpanded: true,
+                                decoration: opsInputDecoration(
+                                  context,
+                                  label: '지역',
+                                  prefixIcon: const Icon(Icons.location_on_rounded),
+                                ),
+                                items: _areaList
+                                    .map(
+                                      (area) => DropdownMenuItem<String>(
+                                        value: area,
+                                        child: Text(
+                                          area,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    )
+                                    .toList(growable: false),
+                                onChanged: (value) => setState(() {
+                                  _errorText = null;
+                                  _selectedArea = value;
+                                }),
+                              ),
+                      ),
+                      const SizedBox(height: 9),
+                      AnimatedSwitcher(
+                        duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                        child: Text(
+                          '생성 문서 ID: ${_documentIdPreview()}',
+                          key: ValueKey<String>(_documentIdPreview()),
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: tokens.textSecondary,
+                                fontWeight: FontWeight.w800,
+                              ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        value: widget.roleList.contains(_selectedRole)
+                            ? _selectedRole
+                            : widget.roleList.last,
+                        isExpanded: true,
+                        decoration: opsInputDecoration(
+                          context,
+                          label: 'Role',
+                          prefixIcon: const Icon(Icons.admin_panel_settings_rounded),
+                        ),
+                        items: widget.roleList
+                            .map(
+                              (role) => DropdownMenuItem<String>(
+                                value: role,
+                                child: Text(
+                                  role,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            )
+                            .toList(growable: false),
+                        onChanged: (value) {
+                          if (value == null) return;
+                          setState(() {
+                            _errorText = null;
+                            _selectedRole = value;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      _buildTextField(
+                        controller: _positionController,
+                        label: '직책(선택)',
+                        onChanged: (_) => setState(() => _errorText = null),
+                      ),
+                      const SizedBox(height: 14),
+                      _buildModeSelector(),
+                      const SizedBox(height: 14),
+                      _buildWeekdayEditor(),
+                    ],
+                  ),
                 ),
-                items: widget.roleList
-                    .map((role) => DropdownMenuItem<String>(
-                          value: role,
-                          child: Text(role),
-                        ))
-                    .toList(),
-                onChanged: (value) {
-                  if (value == null) return;
-                  setState(() {
-                    _errorText = null;
-                    _selectedRole = value;
-                  });
-                },
               ),
-              const SizedBox(height: 12),
-              _buildTextField(
-                controller: _positionController,
-                label: '직책(선택)',
-                onChanged: (_) => setState(() => _errorText = null),
-              ),
-              const SizedBox(height: 12),
-              _buildModeSelector(),
-              const SizedBox(height: 12),
-              _buildWeekdayEditor(),
             ],
           ),
         ),
       ),
       actions: [
-        TextButton(
+        CommonButton(
+          label: '취소',
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('취소'),
+          variant: CommonButtonVariant.tertiary,
+          haptic: CommonHaptic.selection,
         ),
-        FilledButton.icon(
+        CommonButton(
+          label: '생성',
+          icon: Icons.person_add_alt_1_rounded,
           onPressed: _submit,
-          icon: const Icon(Icons.person_add_alt_1),
-          label: const Text('생성'),
+          variant: CommonButtonVariant.primary,
+          haptic: CommonHaptic.medium,
         ),
       ],
     );

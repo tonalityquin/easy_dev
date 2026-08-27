@@ -576,7 +576,12 @@ class _MonthlyPaymentSettingWorkspaceState
             extendedBy: _draft.extended ? userName : null,
           );
       if (!mounted) return;
-      trace.log('결제 Repository 저장 완료', progress: .9);
+      final markerNow = DateTime.now();
+      final markerMonth = '${markerNow.year.toString().padLeft(4, '0')}${markerNow.month.toString().padLeft(2, '0')}';
+      trace.log(
+        '결제 Repository 저장 완료 plateStatusMarkerPolicy=current_month_deduplicated markerMonth=$markerMonth',
+        progress: .9,
+      );
       await trace.succeed('정기권 결제가 완료되었습니다.');
       if (!mounted) return;
       workspace?.setDirty(false, source: 'payment_submit_success');

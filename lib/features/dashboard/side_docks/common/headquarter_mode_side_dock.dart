@@ -11,18 +11,29 @@ import '../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../design_system/common_ui/common_ui_side_dock.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../account/applications/user_state.dart';
+import '../../../headquarter/application/actions/headquarter_common_actions.dart';
+import '../../../headquarter/application/fab/hub_quick_actions.dart';
 import '../../../headquarter/application/snapshot/headquarter_snapshot_repository.dart';
+import '../../../headquarter/widgets/headquarter_dashboard_identity_header.dart';
 import '../../../selector/application/dev_auth.dart';
 
 class HeadquarterModeDockResult {
+  const HeadquarterModeDockResult.navigate({
+    required this.modeKey,
+    required this.areaName,
+  }) : openSecondary = false;
+
   const HeadquarterModeDockResult.switchMode(this.modeKey)
-      : openSecondary = false;
+      : areaName = '',
+        openSecondary = false;
 
   const HeadquarterModeDockResult.openSecondary()
       : modeKey = '',
+        areaName = '',
         openSecondary = true;
 
   final String modeKey;
+  final String areaName;
   final bool openSecondary;
 }
 
@@ -31,9 +42,9 @@ Future<HeadquarterModeDockResult?> showHeadquarterModeSideDock({
   required String currentModeKey,
   required String currentScreen,
 }) {
-  return showCommonRightSideDock<HeadquarterModeDockResult>(
+  return showCommonLeftSideDock<HeadquarterModeDockResult>(
     context: context,
-    barrierLabel: '헤드쿼터 모드 전환',
+    barrierLabel: '헤드쿼터 이동',
     maxWidth: 440,
     widthFactor: 0.96,
     builder: (_) => HeadquarterModeSideDock(
@@ -105,6 +116,7 @@ class _HeadquarterModeSideDockState extends State<HeadquarterModeSideDock> {
   bool _devModeEnabled = false;
   bool _developerStateResolved = false;
   bool _supportLoading = true;
+  bool _downloadingSnapshot = false;
   String _division = '';
   String _downloadedAtIso = '';
   String? _expandedArea;
@@ -116,7 +128,7 @@ class _HeadquarterModeSideDockState extends State<HeadquarterModeSideDock> {
     super.initState();
     _selectedModeKey = widget.currentModeKey;
     _debugLog.log(
-      'mounted screen=${widget.currentScreen} current=${widget.currentModeKey} source=sqlite_download_snapshot rail=single,double,triple,minor|developer:sprint,secondary',
+      'mounted screen=${widget.currentScreen} current=${widget.currentModeKey} source=sqlite_download_snapshot rail=single,double,triple,minor|developer:sprint,secondary dockSide=left dockAnchor=left dockSlideDirection=negative_x_to_zero maxWidth=440 widthFactor=0.96 sizePolicy=preserved dashboardIdentity=mode_dock modeSource=currentModeKey userSource=UserState identityAnimation=fade_scale_y_settle actionCarousel=excluded additionalFirebaseRead=0 additionalFirebaseWrite=0',
     );
     DevAuth.devModeEnabled.addListener(_handleDevModeChanged);
     _resolveDeveloperState();
@@ -175,6 +187,12 @@ class _HeadquarterModeSideDockState extends State<HeadquarterModeSideDock> {
     final userState = context.read<UserState>();
     final division = userState.division.trim();
     _debugLog.log('snapshot_load_start division=$division');
+    if (!_supportLoading) {
+      setState(() {
+        _supportLoading = true;
+        _supportError = null;
+      });
+    }
 
     if (division.isEmpty) {
       setState(() {
@@ -204,21 +222,18 @@ class _HeadquarterModeSideDockState extends State<HeadquarterModeSideDock> {
         return;
       }
 
-      final branchAreas = snapshot.areas.where((area) {
-        final name = area.name.trim();
-        if (name.isEmpty) return false;
-        if (area.isHeadquarter) return false;
-        if (name == division) return false;
-        return true;
+      final snapshotAreas = snapshot.areas.where((area) {
+        return area.name.trim().isNotEmpty;
       }).toList(growable: false);
 
-      final branches = branchAreas.map((area) {
+      final branches = snapshotAreas.map((area) {
         return _BranchSupportViewData(
           areaName: area.name.trim(),
           modes: Set<String>.unmodifiable(area.modes),
           tabletSupported:
               area.capabilities.contains(Capability.tablet),
           capabilities: Set<Capability>.unmodifiable(area.capabilities),
+          isHeadquarter: area.isHeadquarter,
         );
       }).toList(growable: false)
         ..sort(
@@ -240,7 +255,7 @@ class _HeadquarterModeSideDockState extends State<HeadquarterModeSideDock> {
       });
 
       _debugLog.log(
-        'snapshot_load_complete division=$division branches=${branches.length} downloadedAt=${snapshot.downloadedAtIso}',
+        'snapshot_load_complete division=$division areas=${branches.length} downloadedAt=${snapshot.downloadedAtIso}',
       );
       if (diagnostics != null) {
         _debugLog.log(
@@ -249,7 +264,7 @@ class _HeadquarterModeSideDockState extends State<HeadquarterModeSideDock> {
       }
       for (final branch in branches) {
         _debugLog.log(
-          'snapshot_branch area=${branch.areaName} modes=${branch.modes.toList()..sort()} tablet=${branch.tabletSupported} capabilities=${branch.capabilities.map((item) => item.key).toList()..sort()}',
+          'snapshot_area area=${branch.areaName} modes=${branch.modes.toList()..sort()} tablet=${branch.tabletSupported} capabilities=${branch.capabilities.map((item) => item.key).toList()..sort()}',
         );
       }
     } catch (error, stackTrace) {
@@ -285,13 +300,6 @@ class _HeadquarterModeSideDockState extends State<HeadquarterModeSideDock> {
     );
   }
 
-  String get _currentModeTitle {
-    for (final item in _allModeItems) {
-      if (item.modeKey == widget.currentModeKey) return item.title;
-    }
-    return widget.currentModeKey;
-  }
-
   int? _supportCountFor(String modeKey) {
     if (modeKey == 'sprint') return null;
     if (_supportLoading || _supportError != null) return null;
@@ -322,7 +330,32 @@ class _HeadquarterModeSideDockState extends State<HeadquarterModeSideDock> {
     HapticFeedback.selectionClick();
     setState(() => _expandedArea = next);
     _debugLog.log(
-      'branch_expand area=$areaName expanded=${next == areaName} mode=$_selectedModeKey',
+      'area_detail area=$areaName expanded=${next == areaName} mode=$_selectedModeKey',
+    );
+  }
+
+  void _navigateArea(_BranchSupportViewData area) {
+    if (!area.supports(_selectedModeKey)) return;
+    final userState = context.read<UserState>();
+    final currentArea = userState.currentArea.trim();
+    if (_selectedModeKey == widget.currentModeKey &&
+        currentArea == area.areaName) {
+      _debugLog.log(
+        'area_navigation_noop mode=$_selectedModeKey area=${area.areaName} reason=already_current',
+      );
+      HapticFeedback.selectionClick();
+      Navigator.of(context).pop();
+      return;
+    }
+    _debugLog.log(
+      'area_navigation_select fromMode=${widget.currentModeKey} fromArea=$currentArea toMode=$_selectedModeKey toArea=${area.areaName} isHeadquarter=${area.isHeadquarter} dataSource=sqlite firebaseRead=0 firebaseWrite=0',
+    );
+    HapticFeedback.selectionClick();
+    Navigator.of(context).pop(
+      HeadquarterModeDockResult.navigate(
+        modeKey: _selectedModeKey,
+        areaName: area.areaName,
+      ),
     );
   }
 
@@ -350,12 +383,110 @@ class _HeadquarterModeSideDockState extends State<HeadquarterModeSideDock> {
     Navigator.of(context).pop(const HeadquarterModeDockResult.openSecondary());
   }
 
+  Future<void> _runUtilityAction({
+    required String action,
+    required Future<void> Function() operation,
+  }) async {
+    _debugLog.log('utility_action_start action=$action');
+    try {
+      await operation();
+      _debugLog.log('utility_action_complete action=$action');
+    } catch (error, stackTrace) {
+      _debugLog.log(
+        'utility_action_failure action=$action error=$error stack=$stackTrace',
+      );
+      rethrow;
+    }
+  }
+
+  Future<void> _openMyInfo() {
+    return _runUtilityAction(
+      action: 'open_my_info',
+      operation: () => HeadquarterCommonActions.openMyInfo(
+        context,
+        source: 'mode_dock',
+      ),
+    );
+  }
+
+  Future<void> _openWorkActions() {
+    return _runUtilityAction(
+      action: 'open_work_actions',
+      operation: () => HeadquarterCommonActions.openWorkActions(
+        context,
+        source: 'mode_dock',
+        modeKey: widget.currentModeKey,
+      ),
+    );
+  }
+
+  Future<void> _toggleQuickButton() async {
+    await _runUtilityAction(
+      action: 'toggle_quick_button',
+      operation: () async {
+        await HeadHubActions.init();
+        final next = !HeadHubActions.enabled.value;
+        HeadHubActions.setEnabled(next);
+        HeadquarterCommonActions.recordEvent(
+          source: 'mode_dock',
+          action: 'toggle_quick_button',
+          phase: next ? 'enabled' : 'disabled',
+        );
+        HapticFeedback.selectionClick();
+      },
+    );
+  }
+
+  Future<void> _refreshSnapshot() async {
+    if (_downloadingSnapshot) return;
+    setState(() => _downloadingSnapshot = true);
+    try {
+      await _runUtilityAction(
+        action: 'refresh_area_master',
+        operation: () => HeadquarterCommonActions.run<void>(
+          source: 'mode_dock',
+          action: 'refresh_area_master',
+          operation: () => HeadHubActions.refreshAreaMaster(context),
+        ),
+      );
+      if (!mounted) return;
+      await _loadSupportData();
+    } finally {
+      if (mounted) {
+        setState(() => _downloadingSnapshot = false);
+      }
+    }
+  }
+
+  Future<void> _openSettings() {
+    return _runUtilityAction(
+      action: 'open_service_settings',
+      operation: () => HeadquarterCommonActions.openSettings(
+        context,
+        source: 'mode_dock',
+      ),
+    );
+  }
+
+  Future<void> _logout() {
+    return _runUtilityAction(
+      action: 'logout',
+      operation: () => HeadquarterCommonActions.logout(
+        context,
+        source: 'mode_dock',
+      ),
+    );
+  }
+
   Future<void> _showDeveloperStatus() async {
     if (!_devModeEnabled) return;
     _debugLog.log(
-      'status_dialog_open division=$_division selected=$_selectedModeKey branches=${_branches.length} downloadedAt=$_downloadedAtIso supportError=${_supportError ?? ''}',
+      'status_dialog_open division=$_division selected=$_selectedModeKey current=${widget.currentModeKey} areas=${_branches.length} downloadedAt=$_downloadedAtIso supportError=${_supportError ?? ''} dockSide=left dockAnchor=left dockSlideDirection=negative_x_to_zero maxWidth=440 widthFactor=0.96 sizePolicy=preserved dashboardIdentity=mode_dock modeSource=currentModeKey userSource=UserState identityAnimation=fade_scale_y_settle actionCarousel=excluded additionalFirebaseRead=0 additionalFirebaseWrite=0',
     );
-    await _debugLog.showStatus(context);
+    await _debugLog.showStatus(
+      context,
+      additionalLines: HeadquarterCommonActions.debugLines,
+    );
   }
 
   void _close() {
@@ -371,9 +502,17 @@ class _HeadquarterModeSideDockState extends State<HeadquarterModeSideDock> {
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final selected = _selectedItem;
     final isCurrent = selected.modeKey == widget.currentModeKey;
+    final userState = context.watch<UserState>();
 
     return Column(
       children: [
+        HeadquarterDashboardIdentityHeader(
+          name: userState.name,
+          position: userState.position,
+          modeKey: widget.currentModeKey,
+          variant: HeadquarterDashboardIdentityVariant.modeDock,
+        ),
+        const SizedBox(height: 10),
         Row(
           children: [
             Container(
@@ -397,22 +536,12 @@ class _HeadquarterModeSideDockState extends State<HeadquarterModeSideDock> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '헤드쿼터 모드 전환',
+                    '헤드쿼터 이동',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                           color: tokens.textPrimary,
                           fontWeight: FontWeight.w800,
-                        ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '현재 · $_currentModeTitle',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: tokens.textSecondary,
-                          fontWeight: FontWeight.w600,
                         ),
                   ),
                   const SizedBox(height: 2),
@@ -453,6 +582,24 @@ class _HeadquarterModeSideDockState extends State<HeadquarterModeSideDock> {
               haptic: CommonHaptic.light,
             ),
           ],
+        ),
+        const SizedBox(height: 10),
+        ValueListenableBuilder<bool>(
+          valueListenable: HeadHubActions.enabled,
+          builder: (context, quickEnabled, _) {
+            return _HeadquarterUtilityShelf(
+              quickEnabled: quickEnabled,
+              downloading: _downloadingSnapshot,
+              developerMode: _devModeEnabled,
+              onMyInfo: _openMyInfo,
+              onWorkActions: _openWorkActions,
+              onQuickButton: _toggleQuickButton,
+              onDownload: _refreshSnapshot,
+              onSettings: _openSettings,
+              onLogout: _logout,
+              onDeveloperStatus: _showDeveloperStatus,
+            );
+          },
         ),
         const SizedBox(height: 10),
         Expanded(
@@ -609,23 +756,27 @@ class _HeadquarterModeSideDockState extends State<HeadquarterModeSideDock> {
                             supportError: _supportError,
                             downloadedAtIso: _downloadedAtIso,
                             expandedArea: _expandedArea,
+                            currentModeKey: widget.currentModeKey,
+                            currentArea: userState.currentArea.trim(),
                             onToggleArea: _toggleArea,
+                            onNavigateArea: _navigateArea,
                             reduceMotion: reduceMotion,
                           ),
                         ),
                       ),
-                      Padding(
-                        padding: const EdgeInsets.all(10),
-                        child: CommonButton(
-                          label: isCurrent ? '현재 모드' : '이 모드로 전환',
-                          icon: isCurrent
-                              ? Icons.check_circle_rounded
-                              : Icons.swap_horiz_rounded,
-                          onPressed: isCurrent ? null : _confirm,
-                          expand: true,
-                          haptic: CommonHaptic.selection,
+                      if (selected.modeKey == _sprintItem.modeKey)
+                        Padding(
+                          padding: const EdgeInsets.all(10),
+                          child: CommonButton(
+                            label: isCurrent ? '현재 모드' : '스프린트 열기',
+                            icon: isCurrent
+                                ? Icons.check_circle_rounded
+                                : Icons.bolt_rounded,
+                            onPressed: isCurrent ? null : _confirm,
+                            expand: true,
+                            haptic: CommonHaptic.selection,
+                          ),
                         ),
-                      ),
                     ],
                   ),
                 ),
@@ -648,7 +799,10 @@ class _HeadquarterModeContent extends StatelessWidget {
     required this.supportError,
     required this.downloadedAtIso,
     required this.expandedArea,
+    required this.currentModeKey,
+    required this.currentArea,
     required this.onToggleArea,
+    required this.onNavigateArea,
     required this.reduceMotion,
   });
 
@@ -659,7 +813,10 @@ class _HeadquarterModeContent extends StatelessWidget {
   final String? supportError;
   final String downloadedAtIso;
   final String? expandedArea;
+  final String currentModeKey;
+  final String currentArea;
   final ValueChanged<String> onToggleArea;
+  final ValueChanged<_BranchSupportViewData> onNavigateArea;
   final bool reduceMotion;
 
   bool get _isSprint => item.modeKey == 'sprint';
@@ -737,7 +894,10 @@ class _HeadquarterModeContent extends StatelessWidget {
               branch: supported[index],
               selectedModeKey: item.modeKey,
               expanded: expandedArea == supported[index].areaName,
-              onTap: () => onToggleArea(supported[index].areaName),
+              current: currentModeKey == item.modeKey &&
+                  currentArea == supported[index].areaName,
+              onTap: () => onNavigateArea(supported[index]),
+              onToggleDetail: () => onToggleArea(supported[index].areaName),
               reduceMotion: reduceMotion,
               revealDelay: reduceMotion
                   ? Duration.zero
@@ -918,7 +1078,9 @@ class _BranchSupportCard extends StatefulWidget {
     required this.branch,
     required this.selectedModeKey,
     required this.expanded,
+    required this.current,
     required this.onTap,
+    required this.onToggleDetail,
     required this.reduceMotion,
     required this.revealDelay,
   });
@@ -926,7 +1088,9 @@ class _BranchSupportCard extends StatefulWidget {
   final _BranchSupportViewData branch;
   final String selectedModeKey;
   final bool expanded;
+  final bool current;
   final VoidCallback onTap;
+  final VoidCallback onToggleDetail;
   final bool reduceMotion;
   final Duration revealDelay;
 
@@ -1042,21 +1206,75 @@ class _BranchSupportCardState extends State<_BranchSupportCard>
                                     ),
                               ),
                             ),
-                            const SizedBox(width: 4),
-                            AnimatedRotation(
-                              turns: widget.expanded ? .5 : 0,
-                              duration: widget.reduceMotion
-                                  ? Duration.zero
-                                  : CommonUiMotion.selection,
-                              curve: CommonUiMotion.standard,
-                              child: Icon(
-                                Icons.keyboard_arrow_down_rounded,
-                                color: tokens.iconSecondary,
-                                size: 20,
+                            if (widget.current) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 7,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: tokens.successContainer,
+                                  borderRadius: BorderRadius.circular(
+                                    CommonUiShapes.pill,
+                                  ),
+                                  border: Border.all(
+                                    color: tokens.success.withOpacity(.28),
+                                  ),
+                                ),
+                                child: Text(
+                                  '현재',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .labelSmall
+                                      ?.copyWith(
+                                        color: tokens.success,
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 9.5,
+                                      ),
+                                ),
                               ),
+                            ],
+                            const SizedBox(width: 4),
+                            IconButton(
+                              onPressed: widget.onToggleDetail,
+                              visualDensity: VisualDensity.compact,
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(
+                                minWidth: 30,
+                                minHeight: 30,
+                              ),
+                              icon: AnimatedRotation(
+                                turns: widget.expanded ? .5 : 0,
+                                duration: widget.reduceMotion
+                                    ? Duration.zero
+                                    : CommonUiMotion.selection,
+                                curve: CommonUiMotion.standard,
+                                child: Icon(
+                                  Icons.keyboard_arrow_down_rounded,
+                                  color: tokens.iconSecondary,
+                                  size: 20,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 2),
+                            Icon(
+                              Icons.arrow_forward_ios_rounded,
+                              color: tokens.accent,
+                              size: 14,
                             ),
                           ],
                         ),
+                        if (widget.branch.isHeadquarter) ...[
+                          const SizedBox(height: 5),
+                          Text(
+                            '본사',
+                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                  color: tokens.accent,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                          ),
+                        ],
                         const SizedBox(height: 8),
                         Row(
                           children: [
@@ -1461,6 +1679,407 @@ class _EmptySupportSurface extends StatelessWidget {
   }
 }
 
+class _HeadquarterUtilityShelf extends StatelessWidget {
+  const _HeadquarterUtilityShelf({
+    required this.quickEnabled,
+    required this.downloading,
+    required this.developerMode,
+    required this.onMyInfo,
+    required this.onWorkActions,
+    required this.onQuickButton,
+    required this.onDownload,
+    required this.onSettings,
+    required this.onLogout,
+    required this.onDeveloperStatus,
+  });
+
+  final bool quickEnabled;
+  final bool downloading;
+  final bool developerMode;
+  final Future<void> Function() onMyInfo;
+  final Future<void> Function() onWorkActions;
+  final Future<void> Function() onQuickButton;
+  final Future<void> Function() onDownload;
+  final Future<void> Function() onSettings;
+  final Future<void> Function() onLogout;
+  final Future<void> Function() onDeveloperStatus;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final actions = <_HeadquarterUtilityAction>[
+      _HeadquarterUtilityAction(
+        label: '내 정보',
+        icon: Icons.person_rounded,
+        color: tokens.info,
+        onTap: onMyInfo,
+      ),
+      _HeadquarterUtilityAction(
+        label: '근무 액션',
+        icon: Icons.work_history_rounded,
+        color: tokens.warning,
+        onTap: onWorkActions,
+      ),
+      _HeadquarterUtilityAction(
+        label: '퀵버튼',
+        status: quickEnabled ? '켜짐' : '꺼짐',
+        icon: Icons.lightbulb_rounded,
+        color: quickEnabled ? tokens.warning : tokens.iconDisabled,
+        selected: quickEnabled,
+        onTap: onQuickButton,
+      ),
+      _HeadquarterUtilityAction(
+        label: '다운받기',
+        status: downloading ? '진행 중' : null,
+        icon: Icons.download_rounded,
+        color: tokens.info,
+        loading: downloading,
+        onTap: downloading ? null : onDownload,
+      ),
+      _HeadquarterUtilityAction(
+        label: '환경설정',
+        icon: Icons.settings_rounded,
+        color: tokens.accent,
+        onTap: onSettings,
+      ),
+      _HeadquarterUtilityAction(
+        label: '로그아웃',
+        icon: Icons.logout_rounded,
+        color: tokens.danger,
+        danger: true,
+        onTap: onLogout,
+      ),
+    ];
+
+    final content = Container(
+      padding: const EdgeInsets.fromLTRB(10, 9, 10, 10),
+      decoration: BoxDecoration(
+        color: tokens.surfaceOverlay,
+        borderRadius: BorderRadius.circular(CommonUiShapes.card),
+        border: Border.all(color: tokens.borderSubtle),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.dashboard_customize_rounded,
+                size: 16,
+                color: tokens.accent,
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  '본사 도구',
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: tokens.textPrimary,
+                        fontWeight: FontWeight.w900,
+                      ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final itemWidth = (constraints.maxWidth - 12) / 3;
+              return Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (var index = 0; index < actions.length; index++)
+                    SizedBox(
+                      width: itemWidth,
+                      height: 58,
+                      child: _HeadquarterUtilityReveal(
+                        order: index,
+                        child: _HeadquarterUtilityButton(
+                          action: actions[index],
+                          onLongPress:
+                              developerMode ? onDeveloperStatus : null,
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+
+    if (reduceMotion) return content;
+
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: 1),
+      duration: CommonUiMotion.component,
+      curve: CommonUiMotion.enter,
+      builder: (context, value, child) {
+        return Opacity(
+          opacity: value,
+          child: Transform.translate(
+            offset: Offset(0, 6 * (1 - value)),
+            child: child,
+          ),
+        );
+      },
+      child: content,
+    );
+  }
+}
+
+class _HeadquarterUtilityReveal extends StatelessWidget {
+  const _HeadquarterUtilityReveal({
+    required this.order,
+    required this.child,
+  });
+
+  final int order;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (reduceMotion) return child;
+    final delayMs = order * 24;
+    const motionMs = 180;
+    final totalMs = delayMs + motionMs;
+    final start = delayMs / totalMs;
+
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: 1),
+      duration: Duration(milliseconds: totalMs),
+      builder: (context, value, animatedChild) {
+        final normalized = value <= start
+            ? 0.0
+            : ((value - start) / (1 - start)).clamp(0.0, 1.0).toDouble();
+        final motion = Curves.easeOutCubic.transform(normalized);
+        return Opacity(
+          opacity: motion,
+          child: Transform.translate(
+            offset: Offset(0, 5 * (1 - motion)),
+            child: Transform.scale(
+              scale: .97 + (.03 * motion),
+              child: animatedChild,
+            ),
+          ),
+        );
+      },
+      child: child,
+    );
+  }
+}
+
+class _HeadquarterUtilityButton extends StatefulWidget {
+  const _HeadquarterUtilityButton({
+    required this.action,
+    required this.onLongPress,
+  });
+
+  final _HeadquarterUtilityAction action;
+  final Future<void> Function()? onLongPress;
+
+  @override
+  State<_HeadquarterUtilityButton> createState() =>
+      _HeadquarterUtilityButtonState();
+}
+
+class _HeadquarterUtilityButtonState
+    extends State<_HeadquarterUtilityButton> {
+  bool _pressed = false;
+  bool _hovered = false;
+  bool _focused = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final enabled = widget.action.onTap != null;
+    final background = !enabled
+        ? tokens.surfaceDisabled
+        : widget.action.selected
+            ? tokens.surfaceSelected
+            : _pressed || _hovered
+                ? tokens.surfaceSelected
+                : tokens.surfaceRaised;
+    final border = _focused
+        ? tokens.focusRing
+        : widget.action.danger
+            ? tokens.danger.withOpacity(.4)
+            : widget.action.selected
+                ? tokens.accent.withOpacity(.55)
+                : tokens.borderSubtle;
+    final foreground = enabled
+        ? widget.action.danger
+            ? tokens.danger
+            : tokens.textPrimary
+        : tokens.textDisabled;
+
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      label: widget.action.label,
+      value: widget.action.status,
+      child: AnimatedScale(
+        scale: _pressed && enabled ? .97 : 1,
+        duration: reduceMotion ? Duration.zero : CommonUiMotion.press,
+        curve: CommonUiMotion.enter,
+        child: AnimatedContainer(
+          duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+          curve: CommonUiMotion.standard,
+          decoration: BoxDecoration(
+            color: background,
+            borderRadius: BorderRadius.circular(CommonUiShapes.control),
+            border: Border.all(color: border, width: _focused ? 2 : 1),
+            boxShadow: _hovered && enabled
+                ? [
+                    BoxShadow(
+                      color: tokens.shadow,
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
+                : const [],
+          ),
+          child: Material(
+            color: tokens.transparent,
+            borderRadius: BorderRadius.circular(CommonUiShapes.control),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: enabled
+                  ? () {
+                      unawaited(widget.action.onTap!());
+                    }
+                  : null,
+              onLongPress: widget.onLongPress == null
+                  ? null
+                  : () {
+                      unawaited(widget.onLongPress!());
+                    },
+              onHighlightChanged: (value) {
+                if (_pressed == value) return;
+                setState(() => _pressed = value);
+              },
+              onHover: (value) {
+                if (_hovered == value) return;
+                setState(() => _hovered = value);
+              },
+              onFocusChange: (value) {
+                if (_focused == value) return;
+                setState(() => _focused = value);
+              },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 7),
+                child: Row(
+                  children: [
+                    AnimatedSwitcher(
+                      duration: reduceMotion
+                          ? Duration.zero
+                          : CommonUiMotion.selection,
+                      child: widget.action.loading
+                          ? SizedBox(
+                              key: const ValueKey<String>('loading'),
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: widget.action.color,
+                              ),
+                            )
+                          : Icon(
+                              widget.action.icon,
+                              key: ValueKey<String>(
+                                '${widget.action.label}_${widget.action.selected}',
+                              ),
+                              size: 18,
+                              color: enabled
+                                  ? widget.action.color
+                                  : tokens.iconDisabled,
+                            ),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.action.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelMedium
+                                ?.copyWith(
+                                  color: foreground,
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                          ),
+                          AnimatedSize(
+                            duration: reduceMotion
+                                ? Duration.zero
+                                : CommonUiMotion.selection,
+                            curve: CommonUiMotion.standard,
+                            child: widget.action.status == null
+                                ? const SizedBox.shrink()
+                                : Text(
+                                    widget.action.status!,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelSmall
+                                        ?.copyWith(
+                                          color: widget.action.selected
+                                              ? tokens.accent
+                                              : tokens.textSecondary,
+                                          fontSize: 8.8,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                  ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HeadquarterUtilityAction {
+  const _HeadquarterUtilityAction({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+    this.status,
+    this.selected = false,
+    this.loading = false,
+    this.danger = false,
+  });
+
+  final String label;
+  final String? status;
+  final IconData icon;
+  final Color color;
+  final Future<void> Function()? onTap;
+  final bool selected;
+  final bool loading;
+  final bool danger;
+}
+
 class _HeadquarterRailButton extends StatefulWidget {
   const _HeadquarterRailButton({
     required this.item,
@@ -1663,12 +2282,14 @@ class _BranchSupportViewData {
     required this.modes,
     required this.tabletSupported,
     required this.capabilities,
+    required this.isHeadquarter,
   });
 
   final String areaName;
   final Set<String> modes;
   final bool tabletSupported;
   final Set<Capability> capabilities;
+  final bool isHeadquarter;
 
   bool supports(String modeKey) => modes.contains(modeKey.trim().toLowerCase());
 }
@@ -1690,12 +2311,19 @@ class _HeadquarterDockDebugLog {
       .map((line) => 'debugPrint(${jsonEncode(line)});')
       .join('\n');
 
-  Future<void> showStatus(BuildContext context) async {
+  Future<void> showStatus(
+    BuildContext context, {
+    List<String> additionalLines = const <String>[],
+  }) async {
+    final combined = <String>[..._lines, ...additionalLines];
+    final code = combined
+        .map((line) => 'debugPrint(${jsonEncode(line)});')
+        .join('\n');
     await StatusDialog.showSuccess(
       context,
-      title: '헤드쿼터 모드 상태',
-      description: _lines.join('\n'),
-      copyText: debugPrintCode,
+      title: '헤드쿼터 이동 상태',
+      description: combined.join('\n'),
+      copyText: code,
       copyButtonLabel: 'debugPrint 코드 복사',
       visibleDuration: Duration.zero,
       useCommonUi: true,

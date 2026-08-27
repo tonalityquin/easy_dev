@@ -22,6 +22,8 @@ const String _kLocSep = ' - ';
 const String _kLocUnknown = '미지정';
 const String _monthlyPlateStatusCollection = 'monthly_plate_status';
 const String _monthlyPlateStatusViewCollection = 'monthly_plate_status_view';
+const String _monthlyParkingMarkerType = '정기 주차';
+const String _plateStatusMarkerMonthsField = 'plateStatusMarkerMonths';
 
 Map<String, dynamic> _locationToMap(String display) {
   final raw = display.trim();
@@ -238,6 +240,30 @@ class FirestorePlateRepository implements PlateRepository {
         .doc(monthKey)
         .collection('plates')
         .doc(_plateDocId(plateNumber, safeArea));
+  }
+
+  DocumentReference<Map<String, dynamic>> _statusHistoryRefForMonthKey({
+    required String docId,
+    required String area,
+    required String monthKey,
+  }) {
+    return _firestore
+        .collection('plate_status')
+        .doc(_safeArea(area))
+        .collection('months')
+        .doc(monthKey)
+        .collection('plates')
+        .doc(docId);
+  }
+
+  List<String> _markerMonthsFromData(Map<String, dynamic> data) {
+    final raw = data[_plateStatusMarkerMonthsField];
+    if (raw is! List) return const <String>[];
+    return raw
+        .map((value) => value.toString().trim())
+        .where((value) => RegExp(r'^\d{6}$').hasMatch(value))
+        .toSet()
+        .toList(growable: false);
   }
 
   DocumentReference<Map<String, dynamic>> _monthlyStatusRef({
@@ -1753,30 +1779,49 @@ class FirestorePlateRepository implements PlateRepository {
     required String documentId,
   }) async {
     final trimmed = documentId.trim();
-    if (trimmed.isEmpty) {
-      return;
-    }
+    if (trimmed.isEmpty) return;
 
-    final areaIndex = trimmed.lastIndexOf('_');
-    final area = areaIndex >= 0 && areaIndex + 1 < trimmed.length ? trimmed.substring(areaIndex + 1) : '';
+    final fallbackAreaIndex = trimmed.lastIndexOf('_');
+    final fallbackArea = fallbackAreaIndex >= 0 && fallbackAreaIndex + 1 < trimmed.length
+        ? trimmed.substring(fallbackAreaIndex + 1).trim()
+        : '';
+    final monthlyRef = _firestore.collection(_monthlyPlateStatusCollection).doc(trimmed);
 
     try {
-      final batch = _firestore.batch();
-      batch.delete(_firestore.collection(_monthlyPlateStatusCollection).doc(trimmed));
-      if (area.trim().isNotEmpty) {
-        batch.set(
-          _firestore.collection(_monthlyPlateStatusViewCollection).doc(area.trim()),
-          <String, dynamic>{
-            'area': area.trim(),
-            'updatedAt': FieldValue.serverTimestamp(),
-            'items': <String, dynamic>{
-              trimmed: FieldValue.delete(),
+      await _firestore.runTransaction((tx) async {
+        final monthlySnap = await tx.get(monthlyRef).timeout(const Duration(seconds: 10));
+        final data = monthlySnap.data() ?? <String, dynamic>{};
+        final storedArea = _textValue(data['area']);
+        final area = storedArea.isNotEmpty ? storedArea : fallbackArea;
+        final markerMonths = _markerMonthsFromData(data);
+
+        tx.delete(monthlyRef);
+        if (area.isNotEmpty) {
+          tx.set(
+            _firestore.collection(_monthlyPlateStatusViewCollection).doc(area),
+            <String, dynamic>{
+              'area': area,
+              'updatedAt': FieldValue.serverTimestamp(),
+              'items': <String, dynamic>{
+                trimmed: FieldValue.delete(),
+              },
             },
-          },
-          SetOptions(merge: true),
+            SetOptions(merge: true),
+          );
+          for (final monthKey in markerMonths) {
+            tx.delete(
+              _statusHistoryRefForMonthKey(
+                docId: trimmed,
+                area: area,
+                monthKey: monthKey,
+              ),
+            );
+          }
+        }
+        debugPrint(
+          '[FirestorePlateRepository][MonthlyMarker] action=delete docId=$trimmed area=$area months=${markerMonths.join(',')}',
         );
-      }
-      await batch.commit().timeout(const Duration(seconds: 10));
+      }).timeout(const Duration(seconds: 10));
     } catch (e, st) {
       await _showMonthlyFirebaseDebug(
         operation: 'monthly.deleteMonthlyPlateStatus',
@@ -1786,8 +1831,7 @@ class FirestorePlateRepository implements PlateRepository {
           'collection': _monthlyPlateStatusCollection,
           'viewCollection': _monthlyPlateStatusViewCollection,
           'docId': trimmed,
-          'area': area,
-          'writePath': '$_monthlyPlateStatusCollection/$trimmed delete + $_monthlyPlateStatusViewCollection/$area items delete',
+          'area': fallbackArea,
         },
       );
       rethrow;
@@ -1849,7 +1893,26 @@ class FirestorePlateRepository implements PlateRepository {
       await _firestore.runTransaction((tx) async {
         final snap = await tx.get(ref).timeout(const Duration(seconds: 10));
         final existing = snap.data() ?? <String, dynamic>{};
-        tx.update(ref, payload);
+        final currentMonthKey = _monthKey(DateTime.now());
+        final markerMonths = _markerMonthsFromData(existing);
+        final markerExistsForCurrentMonth = markerMonths.contains(currentMonthKey);
+        final transactionPayload = Map<String, dynamic>.from(payload);
+        if (!markerExistsForCurrentMonth) {
+          transactionPayload[_plateStatusMarkerMonthsField] =
+              FieldValue.arrayUnion(<String>[currentMonthKey]);
+          tx.set(
+            _statusHistoryRefForMonthKey(
+              docId: docId,
+              area: safeArea,
+              monthKey: currentMonthKey,
+            ),
+            const <String, dynamic>{'type': _monthlyParkingMarkerType},
+          );
+        }
+        tx.update(ref, transactionPayload);
+        debugPrint(
+          '[FirestorePlateRepository][MonthlyMarker] action=payment month=$currentMonthKey docId=$docId write=${!markerExistsForCurrentMonth}',
+        );
 
         final viewData = Map<String, dynamic>.from(existing);
         viewData['plateNumber'] = canonicalPlate;
@@ -2196,6 +2259,12 @@ class FirestorePlateRepository implements PlateRepository {
     final docId = _plateDocId(canonicalPlate, safeArea);
     final ref = _firestore.collection(_monthlyPlateStatusCollection).doc(docId);
     final viewRef = _firestore.collection(_monthlyPlateStatusViewCollection).doc(safeArea);
+    final currentMonthKey = _monthKey(DateTime.now());
+    final currentMarkerRef = _statusHistoryRefForMonthKey(
+      docId: docId,
+      area: safeArea,
+      monthKey: currentMonthKey,
+    );
 
     try {
       final emptyMonthly = _isEmptyMonthlyPayload(
@@ -2217,6 +2286,15 @@ class FirestorePlateRepository implements PlateRepository {
 
         if (emptyMonthly) {
           tx.delete(ref);
+          for (final monthKey in _markerMonthsFromData(existing)) {
+            tx.delete(
+              _statusHistoryRefForMonthKey(
+                docId: docId,
+                area: safeArea,
+                monthKey: monthKey,
+              ),
+            );
+          }
           if (safeArea.isNotEmpty) {
             tx.set(
               viewRef,
@@ -2252,7 +2330,17 @@ class FirestorePlateRepository implements PlateRepository {
           if (isExtended != null) 'isExtended': isExtended,
         };
 
-        if (!snap.exists) base['createdAt'] = FieldValue.serverTimestamp();
+        if (!snap.exists) {
+          base['createdAt'] = FieldValue.serverTimestamp();
+          base[_plateStatusMarkerMonthsField] = <String>[currentMonthKey];
+          tx.set(
+            currentMarkerRef,
+            const <String, dynamic>{'type': _monthlyParkingMarkerType},
+          );
+          debugPrint(
+            '[FirestorePlateRepository][MonthlyMarker] action=create month=$currentMonthKey docId=$docId',
+          );
+        }
 
         tx.set(ref, base, SetOptions(merge: true));
         tx.set(

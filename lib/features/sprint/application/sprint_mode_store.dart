@@ -6,6 +6,7 @@ import 'package:googleapis/calendar/v3.dart' as gcal;
 
 import '../../../app/auth/google_auth_session.dart';
 
+import '../../../shared/calendar/calendar_public_text.dart';
 import '../../../shared/google_calendar/google_event_colors.dart';
 import '../../headquarter/widgets/calendar/google_calendar_service.dart';
 import 'sprint_calendar_sync_coordinator.dart';
@@ -206,9 +207,7 @@ class SprintModeStore extends ChangeNotifier {
   String get googleCalendarId => defaultCalendarProfile?.calendarId ?? 'primary';
   bool get googleCalendarIdLocked => defaultCalendarProfile?.locked ?? false;
   String get defaultCalendarLabel =>
-      defaultCalendarProfile?.label.trim().isNotEmpty == true
-          ? defaultCalendarProfile!.label.trim()
-          : 'Google 캘린더';
+      calendarPublicLabel(defaultCalendarProfile?.label ?? '캘린더');
   String get defaultGoogleEmail => defaultGoogleAccount?.email.trim() ?? '';
   bool get isTodaySelected =>
       _selectedDate.isAtSameMomentAs(_day(DateTime.now()));
@@ -309,7 +308,7 @@ class SprintModeStore extends ChangeNotifier {
         calendarId: snapshot.googleCalendarId.trim().isEmpty
             ? 'primary'
             : snapshot.googleCalendarId.trim(),
-        label: '기존 Google 캘린더',
+        label: '기존 캘린더',
         role: SprintCalendarProfileRole.primary,
         locked: snapshot.googleCalendarIdLocked,
         sortOrder: 0,
@@ -1456,9 +1455,9 @@ class SprintModeStore extends ChangeNotifier {
   String calendarProfileLabel(String? profileId) {
     final profile = calendarProfileById(profileId);
     if (profile == null || profile.label.trim().isEmpty) {
-      return 'Google 캘린더';
+      return '캘린더';
     }
-    return profile.label.trim();
+    return calendarPublicLabel(profile.label);
   }
 
   bool isProfileAuthenticated(String profileId) {
@@ -1993,7 +1992,7 @@ class SprintModeStore extends ChangeNotifier {
       final previousProfile = calendarProfileById(previousProfileId);
       final previousAccount = accountForProfile(previousProfileId);
       if (previousProfile == null || previousAccount == null) {
-        _taskInputError = '기존 Google 캘린더 연결 정보를 찾지 못했습니다.';
+        _taskInputError = '기존 캘린더 연결 정보를 찾지 못했습니다.';
         return false;
       }
       if (!isProfileAuthenticated(previousProfileId)) {
@@ -3448,12 +3447,12 @@ class SprintModeStore extends ChangeNotifier {
       _calendarStatesByProfile[profile.id] =
           SprintCalendarConnectionState.connected;
       _calendarErrorsByProfile[profile.id] =
-          '이 Google 캘린더는 읽기 전용입니다.';
+          '이 캘린더는 읽기 전용입니다.';
     } else {
       _calendarStatesByProfile[profile.id] =
           SprintCalendarConnectionState.failed;
       _calendarErrorsByProfile[profile.id] =
-          'Google 캘린더 동기화 상태를 확인하세요.';
+          '캘린더 동기화 상태를 확인하세요.';
     }
     debugPrint(
       '[SprintCalendarWrite] blocked profile=${profile.id} '

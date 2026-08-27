@@ -7,7 +7,6 @@ import '../../../../shared/page/application/single/single_page_info.dart';
 import '../../../../shared/secondary/side_docks/secondary_side_dock.dart';
 import '../../../selector/application/dev_auth.dart';
 import '../../applications/single/single_hq_state.dart';
-import '../../widgets/headquarter_mode_switch_button.dart';
 
 class SingleHeadquarterPage extends StatelessWidget {
   const SingleHeadquarterPage({super.key});
@@ -29,46 +28,18 @@ class _SingleHeadquarterShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = CommonUiTheme.of(context);
+    final pages = context.watch<SingleHqState>().pages;
     return PopScope(
       canPop: false,
       child: Scaffold(
         backgroundColor: tokens.canvas,
         body: const RefreshableBody(),
-        bottomNavigationBar: const SafeArea(
-          top: false,
-          child: _BottomArea(),
-        ),
-      ),
-    );
-  }
-}
-
-class _BottomArea extends StatelessWidget {
-  const _BottomArea();
-
-  @override
-  Widget build(BuildContext context) {
-    final state = context.watch<SingleHqState>();
-    final pages = state.pages;
-    final switchButton = HeadquarterModeSwitchButton(
-      currentModeKey: 'single',
-      currentScreen: 'single_headquarter_page',
-      onBeforeSwitch: () {},
-    );
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: CommonUiTheme.of(context).surface,
-        border: Border(
-          top: BorderSide(color: CommonUiTheme.of(context).borderSubtle),
-        ),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (pages.length >= 2) const PageBottomNavigation(),
-          switchButton,
-        ],
+        bottomNavigationBar: pages.length >= 2
+            ? const SafeArea(
+                top: false,
+                child: PageBottomNavigation(),
+              )
+            : null,
       ),
     );
   }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../design_system/common_ui/common_ui_components.dart';
 import '../../../design_system/common_ui/common_ui_overlays.dart';
 import '../../../design_system/common_ui/common_ui_theme.dart';
+import '../../../shared/calendar/calendar_public_text.dart';
 import '../application/sprint_mode_store.dart';
 import '../domain/sprint_models.dart';
 
@@ -245,7 +246,7 @@ Future<String?> sprintSelectTaskCalendar({
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'Google 캘린더 선택',
+                '캘린더 선택',
                 style: Theme.of(sheetContext).textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
@@ -254,7 +255,6 @@ Future<String?> sprintSelectTaskCalendar({
               ...profiles.indexed.map(
                 (entry) {
                   final profile = entry.$2;
-                  final account = store.accountForProfile(profile.id);
                   final selected = profile.id == preferred.id;
                   return CommonAnimatedReveal(
                     delay: reduceMotion
@@ -277,13 +277,13 @@ Future<String?> sprintSelectTaskCalendar({
                             ),
                           ),
                           title: Text(
-                            profile.label,
+                            calendarPublicLabel(profile.label),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(fontWeight: FontWeight.w700),
                           ),
                           subtitle: Text(
-                            '${account?.email ?? ''} · ${profile.calendarId}',
+                            calendarPublicAccessLabel(canEditEvents: profile.canEditEvents, canManageSharing: profile.canManageSharing),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),

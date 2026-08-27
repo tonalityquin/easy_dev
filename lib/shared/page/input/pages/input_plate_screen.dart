@@ -109,7 +109,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   bool _memoPending = false;
   bool _hasMonthlyParking = false;
   bool _hasMonthlyLoaded = false;
-  bool _monthlyDocExists = false;
   int _statusLookupGeneration = 0;
   int _monthlyLookupGeneration = 0;
   String? _historyStatusCacheKey;
@@ -123,6 +122,25 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   int _cameraInitialPreviewIndex = 0;
 
   bool get _busy => controller.isLoading;
+
+  bool _isBillingWorkspace(PlateEditorWorkspace workspace) {
+    return workspace == PlateEditorWorkspace.variableBilling ||
+        workspace == PlateEditorWorkspace.regularBilling;
+  }
+
+  bool _isMonthlyLockedWorkspace(PlateEditorWorkspace workspace) {
+    return _isBillingWorkspace(workspace) ||
+        workspace == PlateEditorWorkspace.memo;
+  }
+
+  Set<PlateEditorWorkspace> get _disabledMonthlyWorkspaces =>
+      controller.monthlyBillingLocked
+          ? const <PlateEditorWorkspace>{
+              PlateEditorWorkspace.variableBilling,
+              PlateEditorWorkspace.regularBilling,
+              PlateEditorWorkspace.memo,
+            }
+          : const <PlateEditorWorkspace>{};
 
   bool get _hasPendingWorkspaceDraft => _memoPending;
 
@@ -178,6 +196,14 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       progress: .08,
     );
     _log('overview=ready display=list_surface editMode=central', progress: .12);
+    _log(
+      'regular_billing_ui=read_only rail=hidden contentLabel=정기 등록 railVariableLabel=정산',
+      progress: .125,
+    );
+    _log(
+      'content_status_labels required=필수 입력 optional=선택 입력 complete=입력 완료 minorParkingOptional=${widget.isMinorMode}',
+      progress: .13,
+    );
     final monthlyFlagFuture = _loadHasMonthlyParkingFlag();
     final billState = context.read<BillState>();
     final sectorState = context.read<SectorState>();
@@ -554,7 +580,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       _identityEditing = false;
       _identityMiddleSuggestions = const <String>[];
       _monthlyLookupGeneration++;
-      _monthlyDocExists = false;
+      controller.unlockMonthlyBilling(clearSelection: true);
       controller.resetStatusLookupToIdle();
       _clearHistoryStatusCache();
     });
@@ -675,12 +701,21 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     if (workspace == PlateEditorWorkspace.overview || !policy.supports(workspace)) {
       return;
     }
+    if (controller.monthlyBillingLocked &&
+        _isMonthlyLockedWorkspace(workspace)) {
+      _log(
+        'workspace=blocked reason=monthly_parking workspace=${workspace.name} source=$source',
+      );
+      return;
+    }
     if (workspace == PlateEditorWorkspace.vehicleIdentity) {
       _enterIdentityEditor(source: source);
       return;
     }
     if (workspace == PlateEditorWorkspace.regularBilling) {
-      await _activateRegularBilling(source: source);
+      _log(
+        'workspace=ignored reason=regular_billing_read_only source=$source',
+      );
       return;
     }
     if (workspace == PlateEditorWorkspace.variableBilling &&
@@ -765,6 +800,10 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   }
 
   Future<void> _clearBillingSelection(String type) async {
+    if (controller.monthlyBillingLocked) {
+      _log('billing=clear_blocked reason=monthly_parking targetType=$type');
+      return;
+    }
     final previousType = controller.selectedBillType;
     final previousValue = controller.selectedBill?.trim().isNotEmpty == true
         ? controller.selectedBill!.trim()
@@ -774,7 +813,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       controller.selectedBillType = type;
       _statusLookupGeneration++;
       _monthlyLookupGeneration++;
-      _monthlyDocExists = false;
       controller.resetStatusLookupToIdle();
     });
     HapticFeedback.selectionClick();
@@ -792,6 +830,10 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   }
 
   void _applyMemo(String value) {
+    if (controller.monthlyBillingLocked) {
+      _log('memo=blocked reason=monthly_parking action=apply');
+      return;
+    }
     setState(() {
       controller.customStatusController.text = value;
       controller.markStatusDraftEdited();
@@ -853,7 +895,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       setState(() {
         controller.resetStatusLookupToIdle();
         _monthlyLookupGeneration++;
-        _monthlyDocExists = false;
       });
       _log('status_lookup=reset generation=$generation reason=incomplete_plate');
       return;
@@ -869,7 +910,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     setState(() {
       controller.beginStatusLookup();
       _monthlyLookupGeneration++;
-      _monthlyDocExists = false;
     });
     _log(
       'status_lookup=start plate=$plateNumber area=$area generation=$lookupGeneration source=${cachedLookup == null ? 'firestore' : 'side_dock_cache'} forceRefresh=$forceRefresh',
@@ -908,6 +948,23 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     }
 
     final data = lookup.record!;
+    final isMonthlyParkingMarker = data.type?.trim() == '정기 주차';
+    if (isMonthlyParkingMarker) {
+      setState(() {
+        controller.selectedBillType = '정기';
+        controller.selectedBill = null;
+        controller.countTypeController.clear();
+      });
+      _log(
+        'status_lookup=monthly_marker plate=$plateNumber area=$area sourcePath=${lookup.sourcePath ?? ''}',
+        progress: .46,
+      );
+      await _handleMonthlySelectedFetchAndApply(
+        recognizedFromPlateStatus: true,
+      );
+      return;
+    }
+
     final fetchedStatus = data.customStatus;
     final fetchedCountType = data.countType;
     final shouldResolveMonthly = !preserveBillingType &&
@@ -925,7 +982,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
         controller.selectedBillType = '정기';
         controller.selectedBill = fetchedCountType;
       }
-      _monthlyDocExists = false;
     });
     _syncMemoDraftFromCommitted();
     _log(
@@ -936,12 +992,13 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     }
   }
 
-  Future<void> _handleMonthlySelectedFetchAndApply() async {
+  Future<void> _handleMonthlySelectedFetchAndApply({
+    bool recognizedFromPlateStatus = false,
+  }) async {
     if (!controller.isInputValid()) {
       if (!mounted) return;
       setState(() {
         _monthlyLookupGeneration++;
-        _monthlyDocExists = false;
       });
       await StatusDialog.showFailure(
         context,
@@ -956,7 +1013,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     final lookupGeneration = ++_monthlyLookupGeneration;
     setState(() {
       controller.beginStatusLookup();
-      _monthlyDocExists = false;
     });
     _log(
       'monthly_lookup=start plate=$plateNumber area=$area generation=$lookupGeneration',
@@ -980,7 +1036,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       }
       if (!result.isSuccess) {
         setState(() {
-          _monthlyDocExists = false;
           if (result.failure == _MonthlyFetchFailureType.readError) {
             controller.applyStatusLookupFailed();
           } else if (result.failure == _MonthlyFetchFailureType.inactive) {
@@ -991,8 +1046,13 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
         });
         _syncMemoDraftFromCommitted();
         _log(
-          'monthly_lookup=failed type=${result.failure?.name ?? 'unknown'} error=${result.error ?? ''}',
+          'monthly_lookup=failed type=${result.failure?.name ?? 'unknown'} error=${result.error ?? ''} recognizedFromPlateStatus=$recognizedFromPlateStatus',
         );
+        if (recognizedFromPlateStatus) {
+          setState(() {
+            controller.unlockMonthlyBilling(clearSelection: true);
+          });
+        }
         if (result.failure == _MonthlyFetchFailureType.inactive) {
           await StatusDialog.showFailure(
             context,
@@ -1015,28 +1075,99 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       final fetchedStatus = data.customStatus;
       final fetchedCountType = data.countType;
       final sourcePath = result.sourcePath!;
+      if (recognizedFromPlateStatus &&
+          (fetchedCountType == null || fetchedCountType.trim().isEmpty)) {
+        setState(() {
+          controller.unlockMonthlyBilling(clearSelection: true);
+          controller.applyStatusNotFound();
+        });
+        _syncMemoDraftFromCommitted();
+        _log(
+          'monthly_lookup=invalid_marker_source reason=count_type_empty sourcePath=$sourcePath',
+        );
+        await StatusDialog.showFailure(
+          context,
+          title: StatusDialog.monthlyApplyFailed,
+          useCommonUi: true,
+        );
+        return;
+      }
       setState(() {
-        _monthlyDocExists = true;
         controller.applyFetchedStatus(
-          customStatus: fetchedStatus,
+          customStatus: recognizedFromPlateStatus ? null : fetchedStatus,
           sourcePath: sourcePath,
         );
         if (fetchedCountType != null && fetchedCountType.isNotEmpty) {
           controller.countTypeController.text = fetchedCountType;
           controller.selectedBill = fetchedCountType;
         }
+        if (recognizedFromPlateStatus &&
+            fetchedCountType != null &&
+            fetchedCountType.isNotEmpty) {
+          controller.lockMonthlyBilling(fetchedCountType);
+        }
       });
       _syncMemoDraftFromCommitted();
       _log(
-        'monthly_lookup=found sourcePath=$sourcePath memoLength=${(fetchedStatus ?? '').trim().length} countType=${fetchedCountType ?? ''}',
+        'monthly_lookup=found sourcePath=$sourcePath memoLength=${(fetchedStatus ?? '').trim().length} countType=${fetchedCountType ?? ''} recognizedFromPlateStatus=$recognizedFromPlateStatus locked=${controller.monthlyBillingLocked}',
+        progress: .58,
       );
+      if (recognizedFromPlateStatus && controller.monthlyBillingLocked) {
+        await HapticFeedback.mediumImpact();
+        await _showMonthlyParkingRecognitionDialog(data);
+      }
     } catch (error, stackTrace) {
       _log('monthly_lookup=exception error=$error stack=$stackTrace');
+      if (mounted && recognizedFromPlateStatus) {
+        setState(() {
+          controller.unlockMonthlyBilling(clearSelection: true);
+        });
+      }
       if (mounted) _showFloatingMessage('정기 주차 정보를 불러오지 못했습니다.');
     }
   }
 
+  Future<void> _showMonthlyParkingRecognitionDialog(
+    PlateStatusRecord record,
+  ) async {
+    if (!mounted) return;
+    final rows = <String>[
+      '차량번호 ${controller.buildPlateNumber()}',
+      if ((record.countType ?? '').trim().isNotEmpty)
+        '정기 정산 ${(record.countType ?? '').trim()}',
+      if ((record.regularType ?? '').trim().isNotEmpty)
+        '상품 ${(record.regularType ?? '').trim()}',
+      if ((record.startDate ?? '').trim().isNotEmpty ||
+          (record.endDate ?? '').trim().isNotEmpty)
+        '기간 ${(record.startDate ?? '').trim()} ~ ${(record.endDate ?? '').trim()}',
+      if ((record.regularAmount ?? 0) > 0)
+        '요금 ${record.regularAmount}원',
+      if ((record.customStatus ?? '').trim().isNotEmpty)
+        '상태 메모 ${(record.customStatus ?? '').trim()}',
+      if ((record.specialNote ?? '').trim().isNotEmpty)
+        '특이사항 ${(record.specialNote ?? '').trim()}',
+    ];
+    final trace = _editorTrace;
+    final debugCode = trace?.developerMode == true
+        ? trace!.debugPrintCode
+        : null;
+    await StatusDialog.showSuccess(
+      context,
+      title: '월 주차 차량',
+      description: rows.join('\n'),
+      copyText: debugCode,
+      copyButtonLabel: 'debugPrint 코드 복사',
+      visibleDuration: Duration.zero,
+      useCommonUi: true,
+      awaitManualClose: true,
+    );
+  }
+
   Future<void> _changeBillType(String type) async {
+    if (controller.monthlyBillingLocked) {
+      _log('billing=type_change_blocked reason=monthly_parking requested=$type');
+      return;
+    }
     if (type == '정기' && _hasMonthlyLoaded && !_hasMonthlyParking) return;
     setState(() {
       controller.selectedBillType = type;
@@ -1048,7 +1179,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       if (type != '정기') controller.countTypeController.clear();
       _statusLookupGeneration++;
       _monthlyLookupGeneration++;
-      _monthlyDocExists = false;
       controller.resetStatusLookupToIdle();
     });
     _log('billing=type_changed type=$type');
@@ -1059,23 +1189,11 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     }
   }
 
-  Future<bool> _activateRegularBilling({required String source}) async {
-    _log('billing=regular_selected source=$source');
-    await _changeBillType('정기');
-    if (!mounted) return false;
-    final applied = controller.selectedBillType == '정기' &&
-        _monthlyDocExists &&
-        _hasRegularBillingSelection;
-    _log(
-      'billing=regular_auto_apply_result source=$source applied=$applied value=${_regularBillingSummary()}',
-    );
-    if (applied) {
-      HapticFeedback.mediumImpact();
-    }
-    return applied;
-  }
-
   void _selectGeneralBill(String value) {
+    if (controller.monthlyBillingLocked) {
+      _log('billing=value_change_blocked reason=monthly_parking value=${value.trim()}');
+      return;
+    }
     final billState = context.read<BillState>();
     BillModel? selected;
     for (final bill in billState.generalBills) {
@@ -1217,16 +1335,20 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     }
 
     controller.suppressOcrEditCount(true);
+    final wasMonthlyLocked = controller.monthlyBillingLocked;
     setState(() {
       controller.isThreeDigit = front.length == 3;
       controller.controllerFrontDigit.text = front;
       controller.controllerMidDigit.text = mid;
       controller.controllerBackDigit.text = back;
+      _monthlyLookupGeneration++;
+      controller.unlockMonthlyBilling(clearSelection: true);
       controller.resetStatusLookupToIdle();
       _clearHistoryStatusCache();
-      _monthlyLookupGeneration++;
-      _monthlyDocExists = false;
     });
+    if (wasMonthlyLocked) {
+      _log('monthly_lock=reset source=ocr_plate_change');
+    }
     controller.suppressOcrEditCount(false);
     if (sessionId != null && sessionId.isNotEmpty) {
       controller.bindOcrSession(sessionId);
@@ -1580,6 +1702,13 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     PlateEditorWorkspace workspace,
     PlateEditorPolicy policy,
   ) async {
+    if (controller.monthlyBillingLocked &&
+        _isMonthlyLockedWorkspace(workspace)) {
+      _log(
+        'overview=row_tap_blocked workspace=${workspace.name} reason=monthly_parking',
+      );
+      return;
+    }
     if (_busy || workspace == PlateEditorWorkspace.overview) return;
     if (!policy.supports(workspace)) return;
 
@@ -1612,12 +1741,10 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
         }
         break;
       case PlateEditorWorkspace.regularBilling:
-        if (_hasRegularBillingSelection) {
-          _log('overview=row_tap workspace=regularBilling action=clear');
-          await _clearBillingSelection('정기');
-          return;
-        }
-        break;
+        _log(
+          'overview=row_tap_ignored workspace=regularBilling reason=read_only',
+        );
+        return;
       case PlateEditorWorkspace.vehicleIdentity:
       case PlateEditorWorkspace.camera:
       case PlateEditorWorkspace.memo:
@@ -1639,6 +1766,8 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     InputPlateRegistrationPolicy registration,
   ) {
     final memo = controller.customStatusController.text.trim();
+    final hasParking = controller.locationController.text.trim().isNotEmpty ||
+        controller.selectedParkingPriorities.isNotEmpty;
     final sections = <Widget>[
       PlateEditorVehicleIdentitySection(
         region: controller.dropdownValue,
@@ -1658,15 +1787,17 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       ),
       PlateEditorOverviewSection(
         icon: Icons.local_parking_rounded,
-        title: '주차',
+        title: '주차 구역',
         value: controller.locationController.text.trim().isEmpty
             ? ''
             : plateParkingOverviewLocation(
                 controller.locationController.text,
               ),
-        status: registration.parkingComplete
+        status: hasParking
             ? PlateEditorSectionStatus.complete
-            : PlateEditorSectionStatus.incomplete,
+            : registration.parkingRequired
+                ? PlateEditorSectionStatus.incomplete
+                : PlateEditorSectionStatus.optional,
         onTap: () => unawaited(
           _handleOverviewWorkspaceTap(
             PlateEditorWorkspace.parking,
@@ -1706,8 +1837,9 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       if (policy.hasBill)
         PlateEditorOverviewSection(
           icon: Icons.receipt_long_rounded,
-          title: '변동 정산',
+          title: '정산 유형',
           value: _variableBillingSummary(),
+          enabled: !controller.monthlyBillingLocked,
           status: _hasVariableBillingSelection
               ? PlateEditorSectionStatus.complete
               : controller.selectedBillType == '변동' &&
@@ -1724,26 +1856,24 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       if (policy.hasBill)
         PlateEditorOverviewSection(
           icon: Icons.calendar_month_rounded,
-          title: '정기 정산',
+          title: '정기 등록',
           value: _regularBillingSummary(),
+          enabled: !controller.monthlyBillingLocked,
+          interactionEnabled: false,
           status: _hasRegularBillingSelection
               ? PlateEditorSectionStatus.complete
               : controller.selectedBillType == '정기' &&
                       registration.billingRequired
                   ? PlateEditorSectionStatus.incomplete
                   : PlateEditorSectionStatus.none,
-          onTap: () => unawaited(
-            _handleOverviewWorkspaceTap(
-              PlateEditorWorkspace.regularBilling,
-              policy,
-            ),
-          ),
+          onTap: null,
         ),
       PlateEditorOverviewSection(
         icon: _statusError == null
             ? Icons.notes_rounded
             : Icons.warning_amber_rounded,
         title: '상태 메모',
+        enabled: !controller.monthlyBillingLocked,
         value: controller.statusLookupInProgress
             ? '상태 정보 확인 중'
             : _statusError != null
@@ -2048,6 +2178,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
           leadingRail: PlateEditorRail(
             enabled: !_busy && !_identityEditing,
             policy: policy,
+            disabledWorkspaces: _disabledMonthlyWorkspaces,
             selectedWorkspace: _activeDialog,
             onSelected: (workspace) => _openEditorDialog(
               workspace,

@@ -12,6 +12,13 @@ import '../domain/models/parking_grid_model.dart';
 import '../domain/repositories/location_repository.dart';
 import '../../../shared/operational_cache/domain/repositories/operational_local_repository.dart';
 
+enum ParkingViewCapability {
+  loading,
+  empty,
+  tableOnly,
+  tableAndStatus,
+}
+
 class LocationState extends ChangeNotifier {
   final LocationRepository _repository;
   final OperationalLocalRepository _localRepository;
@@ -43,6 +50,27 @@ class LocationState extends ChangeNotifier {
   String? get selectedLocationId => _selectedLocationId;
 
   bool get isLoading => _isLoading;
+
+  int get hierarchicalLocationCount => _locations.where((location) {
+        final type = (location.type ?? 'single').trim();
+        return type == 'composite_parent' ||
+            type == 'composite_child' ||
+            type == 'composite';
+      }).length;
+
+  int get singleLocationCount => _locations.where((location) {
+        final type = (location.type ?? 'single').trim();
+        return type.isEmpty || type == 'single';
+      }).length;
+
+  ParkingViewCapability get parkingViewCapability {
+    if (_isLoading) return ParkingViewCapability.loading;
+    if (_locations.isEmpty) return ParkingViewCapability.empty;
+    if (hierarchicalLocationCount > 0) {
+      return ParkingViewCapability.tableAndStatus;
+    }
+    return ParkingViewCapability.tableOnly;
+  }
 
   Map<String, int> get plateCountsByDisplayName => _plateCountsByDisplayName;
 
@@ -98,6 +126,10 @@ class LocationState extends ChangeNotifier {
     if (currentArea == _previousArea) return;
 
     _previousArea = currentArea;
+    _locations = [];
+    _selectedLocationId = null;
+    _isLoading = currentArea.isNotEmpty;
+    _safeNotify();
 
     if (_cacheLoadScheduled) return;
     _cacheLoadScheduled = true;
@@ -344,6 +376,11 @@ class LocationState extends ChangeNotifier {
     required String requestedArea,
   }) async {
     final int seq = ++_cacheLoadSeq;
+
+    if (!_isLoading) {
+      _isLoading = true;
+      _safeNotify();
+    }
 
     try {
       final stored = await _localRepository.readLocations(requestedArea);

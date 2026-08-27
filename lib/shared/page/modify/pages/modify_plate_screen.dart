@@ -37,6 +37,7 @@ Future<PlateModel?> showModifyPlateSideDock({
   required BuildContext context,
   required PlateModel plate,
   required PlateType collectionKey,
+  bool isMinorMode = false,
 }) async {
   final trace = await DeveloperOperationTrace.start(
     context: context,
@@ -67,6 +68,7 @@ Future<PlateModel?> showModifyPlateSideDock({
         return ModifyPlateScreen(
           plate: plate,
           collectionKey: collectionKey,
+          isMinorMode: isMinorMode,
           trace: trace,
         );
       },
@@ -108,11 +110,13 @@ class ModifyPlateScreen extends StatefulWidget {
     super.key,
     required this.plate,
     required this.collectionKey,
+    this.isMinorMode = false,
     this.trace,
   });
 
   final PlateModel plate;
   final PlateType collectionKey;
+  final bool isMinorMode;
   final DeveloperOperationTrace? trace;
 
   @override
@@ -142,6 +146,25 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
   int _cameraInitialPreviewIndex = 0;
 
   bool get _busy => isLoading || _statusContextResolving;
+
+  bool _isBillingWorkspace(PlateEditorWorkspace workspace) {
+    return workspace == PlateEditorWorkspace.variableBilling ||
+        workspace == PlateEditorWorkspace.regularBilling;
+  }
+
+  bool _isMonthlyLockedWorkspace(PlateEditorWorkspace workspace) {
+    return _isBillingWorkspace(workspace) ||
+        workspace == PlateEditorWorkspace.memo;
+  }
+
+  Set<PlateEditorWorkspace> get _disabledMonthlyWorkspaces =>
+      _controller.billingLocked
+          ? const <PlateEditorWorkspace>{
+              PlateEditorWorkspace.variableBilling,
+              PlateEditorWorkspace.regularBilling,
+              PlateEditorWorkspace.memo,
+            }
+          : const <PlateEditorWorkspace>{};
   bool get _hasPendingWorkspaceDraft => _memoPending;
 
   @override
@@ -177,7 +200,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
         progress: .14,
       );
       _log(
-        'modify_capabilities area=${policy.area} bill=${policy.hasBill} sector=${policy.hasSector}',
+        'modify_capabilities area=${policy.area} bill=${policy.hasBill} sector=${policy.hasSector} billingLocked=${_controller.billingLocked}',
         progress: .16,
       );
       _log(
@@ -185,6 +208,14 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
         progress: .165,
       );
       _log('overview=ready display=list_surface editMode=central', progress: .17);
+      _log(
+        'regular_billing_ui=read_only rail=hidden contentLabel=정기 등록 railVariableLabel=정산',
+        progress: .172,
+      );
+      _log(
+        'content_status_labels required=필수 입력 optional=선택 입력 complete=입력 완료 minorParkingOptional=${widget.isMinorMode}',
+        progress: .174,
+      );
       _log('status_context=lazy_ready trigger=memo_or_status_change', progress: .18);
     });
   }
@@ -359,6 +390,19 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
     if (workspace == PlateEditorWorkspace.overview || !policy.supports(workspace)) {
       return;
     }
+    if (workspace == PlateEditorWorkspace.regularBilling) {
+      _log(
+        'workspace=ignored reason=regular_billing_read_only source=$source',
+      );
+      return;
+    }
+    if (_controller.billingLocked &&
+        _isMonthlyLockedWorkspace(workspace)) {
+      _log(
+        'workspace=blocked reason=monthly_parking workspace=${workspace.name} source=$source',
+      );
+      return;
+    }
     if (workspace == PlateEditorWorkspace.vehicleIdentity) {
       _log('identity_plate=edit_blocked source=$source plate=${_controller.currentPlateNumberDisplay}');
       return;
@@ -417,6 +461,10 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
   }
 
   void _applyMemo(String value) {
+    if (_controller.billingLocked) {
+      _log('memo=blocked reason=monthly_parking action=apply');
+      return;
+    }
     setState(() {
       _controller.customStatusController.text = value;
       _controller.handleStatusTextChanged();
@@ -577,6 +625,10 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
   }
 
   void _clearOverviewBilling(PlateEditorWorkspace workspace) {
+    if (_controller.billingLocked) {
+      _log('billing=clear_blocked reason=monthly_parking workspace=${workspace.name}');
+      return;
+    }
     final targetType = workspace == PlateEditorWorkspace.regularBilling
         ? '정기'
         : '변동';
@@ -604,6 +656,13 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
   ) async {
     if (_busy || workspace == PlateEditorWorkspace.overview) return;
     if (!policy.supports(workspace)) return;
+    if (_controller.billingLocked &&
+        _isMonthlyLockedWorkspace(workspace)) {
+      _log(
+        'overview=row_tap_blocked workspace=${workspace.name} reason=monthly_parking',
+      );
+      return;
+    }
 
     switch (workspace) {
       case PlateEditorWorkspace.parking:
@@ -632,12 +691,10 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
         }
         break;
       case PlateEditorWorkspace.regularBilling:
-        if (_controller.selectedBillType == '정기' &&
-            _controller.hasBillingSelection) {
-          _clearOverviewBilling(workspace);
-          return;
-        }
-        break;
+        _log(
+          'overview=row_tap_ignored workspace=regularBilling reason=read_only',
+        );
+        return;
       case PlateEditorWorkspace.vehicleIdentity:
         _log('identity_plate=edit_blocked source=overview_row_tap plate=${_controller.currentPlateNumberDisplay}');
         return;
@@ -663,6 +720,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
       policy: policy,
       statusContextResolving: _statusContextResolving,
       statusContextError: _statusContextError,
+      isMinorMode: widget.isMinorMode,
       onRegionTap: () => unawaited(_openRegionPicker()),
       onWorkspaceTap: (workspace) => unawaited(
         _handleOverviewWorkspaceTap(workspace, policy),
@@ -714,6 +772,10 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
       valueOptions: options,
       loading: billState.isLoading,
       onValueChanged: (value) {
+        if (_controller.billingLocked) {
+          _log('billing=value_change_blocked reason=monthly_parking workspace=${workspace.name} value=${value.trim()}');
+          return;
+        }
         dynamic selected;
         for (final bill in source) {
           if (bill.countType.trim() == value.trim()) {
@@ -1017,6 +1079,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
         leadingRail: PlateEditorRail(
           enabled: !busy,
           policy: policy,
+          disabledWorkspaces: _disabledMonthlyWorkspaces,
           selectedWorkspace: _activeDialog,
           onSelected: (workspace) => _openEditorDialog(
             workspace,

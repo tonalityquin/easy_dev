@@ -332,6 +332,8 @@ class PlateCreationService {
         userName.trim().isEmpty ? 'unknown' : userName.trim();
     final String statusMemo = (customStatus ?? '').trim();
     final bool monthlyStatusScope = selectedBillType.trim() == '정기';
+    final bool hasMonthlyBillingSelection = monthlyStatusScope &&
+        (billingType?.trim().isNotEmpty ?? false);
     final monthlyStatusRef = _firestore
         .collection(_monthlyPlateStatusCollection)
         .doc(plateDocId);
@@ -355,9 +357,11 @@ class PlateCreationService {
         statusLookupState == PlateStatusLookupState.found ||
         statusLookupState == PlateStatusLookupState.notFound;
     final bool shouldApplyPlateStatusFields =
-        statusEditedByUser || hasResolvedStatusSnapshot;
+        !hasMonthlyBillingSelection &&
+        (statusEditedByUser || hasResolvedStatusSnapshot);
     final bool shouldValidateStatusSnapshot =
-        shouldApplyPlateStatusFields || statusWriteRequested;
+        !hasMonthlyBillingSelection &&
+        (shouldApplyPlateStatusFields || statusWriteRequested);
 
     if (statusLookupState == PlateStatusLookupState.idle ||
         statusLookupState == PlateStatusLookupState.loading) {
@@ -370,6 +374,11 @@ class PlateCreationService {
         '상태 정보의 유효기간이 확인되지 않아 입차 정보를 저장하지 않았습니다.',
       );
     }
+    if (statusLookupState == PlateStatusLookupState.failed) {
+      throw const PlateStatusConflictException(
+        '기존 상태 정보를 확인하지 못해 최신 상태를 보호했습니다. 다시 조회한 뒤 저장해 주세요.',
+      );
+    }
 
     debugPrint(
       '[PlateCreationService][Status] plate=$plateNumber area=$area '
@@ -378,6 +387,7 @@ class PlateCreationService {
       'writeRequested=$statusWriteRequested '
       'lookupState=${statusLookupState.name} edited=$statusEditedByUser '
       'sourcePath=$expectedSourcePath '
+      'monthlyMemoSuppressed=$hasMonthlyBillingSelection '
       'applyPlateFields=$shouldApplyPlateStatusFields '
       'validateSnapshot=$shouldValidateStatusSnapshot saveMode=transaction',
     );
@@ -462,7 +472,7 @@ class PlateCreationService {
       lockedAtTimeInSeconds: lockedAtTimeInSeconds,
       lockedFeeAmount: lockedFeeAmount,
       paymentMethod: paymentMethod,
-      customStatus: statusMemo,
+      customStatus: hasMonthlyBillingSelection ? null : statusMemo,
       regularAmount: regularAmount,
       regularDurationHours: regularDurationHours,
       manufacturerName: manufacturerName?.trim(),
@@ -532,15 +542,21 @@ class PlateCreationService {
               '정기 주차 기간이 만료되어 입차 정보를 저장하지 않았습니다.',
             );
           }
+          final authoritativeCountType = monthlyRecord.countType?.trim() ?? '';
+          final submittedCountType = billingType?.trim() ?? '';
+          final billingMatches = authoritativeCountType.isNotEmpty &&
+              submittedCountType == authoritativeCountType;
+          debugPrint(
+            '[PlateCreationService][MonthlyBillingLock] plate=$plateNumber area=$area authoritative=$authoritativeCountType submitted=$submittedCountType match=$billingMatches',
+          );
+          if (!billingMatches) {
+            throw const PlateStatusConflictException(
+              '정기 주차 정산 정보가 변경되어 입차 정보를 저장하지 않았습니다.',
+            );
+          }
         }
 
         if (shouldValidateStatusSnapshot) {
-          if (statusLookupState == PlateStatusLookupState.failed) {
-            throw const PlateStatusConflictException(
-              '기존 상태 정보를 확인하지 못해 최신 상태를 보호했습니다. 다시 조회한 뒤 저장해 주세요.',
-            );
-          }
-
           if (monthlyStatusScope) {
             if (expectedSourcePath.isNotEmpty &&
                 expectedSourcePath != monthlyStatusRef.path) {
@@ -918,7 +934,7 @@ class PlateCreationService {
           }
         }
 
-        if (statusWriteRequested) {
+        if (statusWriteRequested && !hasMonthlyBillingSelection) {
           _writeStatusInTransaction(
             transaction: tx,
             plateNumber: plateNumber,

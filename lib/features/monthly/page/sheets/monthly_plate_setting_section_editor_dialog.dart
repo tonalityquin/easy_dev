@@ -100,6 +100,12 @@ class _MonthlyPlateSettingSectionEditorDialogState
     _statusController = TextEditingController(text: draft.customStatus);
     _noteController = TextEditingController(text: draft.specialNote);
     widget.trace.log('편집 화면이 열렸습니다: section=${widget.section.name}');
+    if (widget.section == MonthlyWorkspaceSection.vehicle &&
+        !widget.isEditMode) {
+      widget.trace.log(
+        '차량 정보 확대 레이아웃 적용: dialog=720x660 keypad=300 segment=88 horizontalPadding=14 verticalPadding=12',
+      );
+    }
   }
 
   @override
@@ -423,26 +429,46 @@ class _MonthlyPlateSettingSectionEditorDialogState
           },
         ),
         const SizedBox(height: 10),
-        PlateIdentityInputPanel(
-          frontController: _frontController,
-          middleController: _middleController,
-          backController: _backController,
-          initialThreeDigit: _frontController.text.trim().isEmpty
-              ? true
-              : _frontController.text.trim().length == 3,
-          showValidationErrors: _submitted,
-          onDebug: _logPlateIdentity,
-          onFrontDigitModeChanged: (threeDigits) {
-            _logPlateIdentity(
-              'identity_editor=monthly_front_mode digits=${threeDigits ? 3 : 2}',
+        TweenAnimationBuilder<double>(
+          duration: widget.isEditMode || _reduceMotion
+              ? Duration.zero
+              : CommonUiMotion.component,
+          curve: CommonUiMotion.standard,
+          tween: Tween<double>(begin: 0, end: 1),
+          builder: (context, value, child) {
+            return Opacity(
+              opacity: value,
+              child: Transform.scale(
+                scale: .98 + (.02 * value),
+                alignment: Alignment.topCenter,
+                child: child,
+              ),
             );
           },
-          onFocusTargetChanged: (target) {
-            _logPlateIdentity(
-              'identity_editor=monthly_focus target=${target.name}',
-            );
-          },
-          keypadHeight: 224,
+          child: PlateIdentityInputPanel(
+            frontController: _frontController,
+            middleController: _middleController,
+            backController: _backController,
+            initialThreeDigit: _frontController.text.trim().isEmpty
+                ? true
+                : _frontController.text.trim().length == 3,
+            showValidationErrors: _submitted,
+            onDebug: _logPlateIdentity,
+            onFrontDigitModeChanged: (threeDigits) {
+              _logPlateIdentity(
+                'identity_editor=monthly_front_mode digits=${threeDigits ? 3 : 2}',
+              );
+            },
+            onFocusTargetChanged: (target) {
+              _logPlateIdentity(
+                'identity_editor=monthly_focus target=${target.name}',
+              );
+            },
+            keypadHeight: widget.isEditMode ? 224 : 300,
+            segmentMinHeight: widget.isEditMode ? 68 : 88,
+            segmentHorizontalPadding: widget.isEditMode ? 10 : 14,
+            segmentVerticalPadding: widget.isEditMode ? 8 : 12,
+          ),
         ),
       ],
     );

@@ -13,6 +13,7 @@ class PlateEditorRail extends StatelessWidget {
     required this.onSelected,
     this.title = '차량 관리',
     this.onLiveOcr,
+    this.disabledWorkspaces = const <PlateEditorWorkspace>{},
   });
 
   final bool enabled;
@@ -21,6 +22,7 @@ class PlateEditorRail extends StatelessWidget {
   final ValueChanged<PlateEditorWorkspace> onSelected;
   final String title;
   final ValueChanged<Rect>? onLiveOcr;
+  final Set<PlateEditorWorkspace> disabledWorkspaces;
 
   String _label(PlateEditorWorkspace workspace) {
     switch (workspace) {
@@ -31,7 +33,7 @@ class PlateEditorRail extends StatelessWidget {
       case PlateEditorWorkspace.sector:
         return '방문';
       case PlateEditorWorkspace.variableBilling:
-        return '변동';
+        return '정산';
       case PlateEditorWorkspace.regularBilling:
         return '정기';
       case PlateEditorWorkspace.memo:
@@ -52,7 +54,7 @@ class PlateEditorRail extends StatelessWidget {
       case PlateEditorWorkspace.sector:
         return '방문 구역';
       case PlateEditorWorkspace.variableBilling:
-        return '변동 정산';
+        return '정산 유형';
       case PlateEditorWorkspace.regularBilling:
         return '정기 정산';
       case PlateEditorWorkspace.memo:
@@ -105,7 +107,12 @@ class PlateEditorRail extends StatelessWidget {
 
         Widget action(PlateEditorWorkspace workspace) {
           final selected = selectedWorkspace == workspace;
-          return Stack(
+          final workspaceEnabled = enabled && !disabledWorkspaces.contains(workspace);
+          return AnimatedOpacity(
+            duration: reduceMotion ? Duration.zero : const Duration(milliseconds: 180),
+            curve: Curves.easeOutCubic,
+            opacity: workspaceEnabled ? 1 : .42,
+            child: Stack(
             alignment: Alignment.centerLeft,
             children: [
               CommonSideRailActionButton(
@@ -113,7 +120,7 @@ class PlateEditorRail extends StatelessWidget {
                 visualLabel: _label(workspace),
                 icon: _icon(workspace),
                 selected: selected,
-                enabled: enabled,
+                enabled: workspaceEnabled,
                 compact: metrics.compact,
                 extent: metrics.minimumButtonExtent,
                 tooltip: _semantic(workspace),
@@ -134,6 +141,7 @@ class PlateEditorRail extends StatelessWidget {
                 ),
               ),
             ],
+            ),
           );
         }
 

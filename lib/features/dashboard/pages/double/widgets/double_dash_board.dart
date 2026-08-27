@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import '../../../../../app/init/db_connection_status_section.dart';
 import '../../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../../design_system/common_ui/common_ui_theme.dart';
-import '../../../../../shared/page/widget/navigation/double_top_navigation.dart';
+import '../../../../../app/command/presentation/terminal_launcher_button.dart';
 import '../../../sheets/double/double_hq_dash_board_page.dart';
 
 class DoubleDashBoard extends StatelessWidget {
@@ -31,7 +31,7 @@ class DoubleDashBoard extends StatelessWidget {
         child: Scaffold(
           backgroundColor: tokens.canvas,
           appBar: AppBar(
-            title: const DoubleTopNavigation(useCommonUi: true),
+            title: const TerminalLauncherButton(source: 'double_headquarter'),
             centerTitle: true,
             backgroundColor: tokens.surface,
             foregroundColor: tokens.textPrimary,

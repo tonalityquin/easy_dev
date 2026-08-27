@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../shared/calendar/calendar_public_text.dart';
 import '../../../shared/google_calendar/google_event_colors.dart';
 import '../application/sprint_mode_store.dart';
 import '../domain/sprint_models.dart';
@@ -238,7 +239,7 @@ class _SprintTaskDetailSheetState extends State<_SprintTaskDetailSheet> {
       setState(() => _saving = false);
       sprintShowMessage(
         context: context,
-        message: 'Google Calendar 일정 삭제 후 다시 시도하세요.',
+        message: '연결된 일정을 삭제한 후 다시 시도하세요.',
         danger: true,
       );
     }
@@ -254,8 +255,8 @@ class _SprintTaskDetailSheetState extends State<_SprintTaskDetailSheet> {
     sprintShowMessage(
       context: context,
       message: success
-          ? 'Google Calendar 동기화를 완료했습니다.'
-          : 'Google Calendar 동기화에 실패했습니다.',
+          ? '일정 동기화를 완료했습니다.'
+          : '일정 동기화에 실패했습니다.',
       danger: !success,
     );
   }
@@ -290,8 +291,7 @@ class _SprintTaskDetailSheetState extends State<_SprintTaskDetailSheet> {
     final projects = widget.store.projects;
     final calendarProfiles = widget.store.calendarProfiles;
     final taskProfile = widget.store.calendarProfileById(_calendarProfileId);
-    final taskAccount = widget.store.accountForProfile(taskProfile?.id);
-    final project = widget.store.projectById(_projectId);
+        final project = widget.store.projectById(_projectId);
     final projectColor = googleEventColor(
       project?.googleColorId,
       colors.primary,
@@ -321,14 +321,12 @@ class _SprintTaskDetailSheetState extends State<_SprintTaskDetailSheet> {
                 value: _calendarProfileId,
                 isExpanded: true,
                 decoration: const InputDecoration(
-                  labelText: 'Google 캘린더',
+                  labelText: '캘린더',
                   border: OutlineInputBorder(),
                 ),
                 items: calendarProfiles
                     .map(
                       (profile) {
-                        final account =
-                            widget.store.accountForProfile(profile.id);
                         return DropdownMenuItem<String>(
                           value: profile.id,
                           child: Row(
@@ -343,7 +341,7 @@ class _SprintTaskDetailSheetState extends State<_SprintTaskDetailSheet> {
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
-                                  '${profile.label} · ${account?.email ?? ''}',
+                                  '${calendarPublicLabel(profile.label)} · ${profile.accessRoleLabel}',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -394,14 +392,14 @@ class _SprintTaskDetailSheetState extends State<_SprintTaskDetailSheet> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            taskProfile?.label ?? '로컬 업무',
+                            taskProfile == null ? '로컬 업무' : calendarPublicLabel(taskProfile.label),
                             style: const TextStyle(fontWeight: FontWeight.w900),
                           ),
                           const SizedBox(height: 3),
                           Text(
                             taskProfile == null
                                 ? '연결된 캘린더가 없어 로컬 변경만 저장합니다.'
-                                : '${taskAccount?.email ?? ''} · ${taskProfile.calendarId}',
+                                : calendarPublicAccessLabel(canEditEvents: taskProfile.canEditEvents, canManageSharing: taskProfile.canManageSharing),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(color: colors.onSurfaceVariant),
@@ -603,7 +601,7 @@ class _SprintTaskDetailSheetState extends State<_SprintTaskDetailSheet> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          'Google Calendar',
+                          '일정 연동',
                           style: TextStyle(fontWeight: FontWeight.w900),
                         ),
                         const SizedBox(height: 2),

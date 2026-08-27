@@ -4,11 +4,9 @@ import 'package:provider/provider.dart';
 
 import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../shared/page/application/double/double_page_info.dart';
-import '../../../../shared/plate/application/double/double_plate_state.dart';
 import '../../../../shared/secondary/side_docks/secondary_side_dock.dart';
 import '../../../selector/application/dev_auth.dart';
 import '../../applications/double/double_hq_state.dart';
-import '../../widgets/headquarter_mode_switch_button.dart';
 
 class DoubleHeadquarterPage extends StatelessWidget {
   const DoubleHeadquarterPage({super.key});
@@ -32,46 +30,18 @@ class _DoubleHeadquarterShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = CommonUiTheme.of(context);
+    final pages = context.watch<DoubleHqState>().pages;
     return PopScope(
       canPop: false,
       child: Scaffold(
         backgroundColor: tokens.canvas,
         body: const RefreshableBody(),
-        bottomNavigationBar: const SafeArea(
-          top: false,
-          child: _BottomArea(),
-        ),
-      ),
-    );
-  }
-}
-
-class _BottomArea extends StatelessWidget {
-  const _BottomArea();
-
-  @override
-  Widget build(BuildContext context) {
-    final state = context.watch<DoubleHqState>();
-    final pages = state.pages;
-    final switchButton = HeadquarterModeSwitchButton(
-      currentModeKey: 'double',
-      currentScreen: 'double_headquarter_page',
-      onBeforeSwitch: () => context.read<DoublePlateState>().doubleDisableAll(),
-    );
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: CommonUiTheme.of(context).surface,
-        border: Border(
-          top: BorderSide(color: CommonUiTheme.of(context).borderSubtle),
-        ),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (pages.length >= 2) const PageBottomNavigation(),
-          switchButton,
-        ],
+        bottomNavigationBar: pages.length >= 2
+            ? const SafeArea(
+                top: false,
+                child: PageBottomNavigation(),
+              )
+            : null,
       ),
     );
   }

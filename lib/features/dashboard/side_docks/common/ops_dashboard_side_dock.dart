@@ -379,10 +379,8 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
   Future<void> _runOperationalSync(BuildContext context) async {
     await _closeCurrentDockAndRun(context, (rootContext) async {
       debugPrint('[OpsDashboardSideDock] operational_sync_start');
-      final result = await OperationalDataSyncWorkflow.run(
+      final result = await OperationalDataSyncWorkflow.runCurrentArea(
         context: rootContext,
-        title: '운영 데이터 동기화',
-        message: '현재 지역의 주차 구역, 섹터, 정산 데이터를 로컬에 내려받기 전 요청을 준비하고 있습니다.',
         useCommonUi: true,
       );
       debugPrint(

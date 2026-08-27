@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../app/command/presentation/terminal_launcher_button.dart';
 import '../../../app/init/app_exit_service.dart';
 import '../../../app/init/db_connection_status_section.dart';
 import '../../../app/init/logout_helper.dart';
@@ -294,6 +295,36 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
     return SingleInsideMode.leader;
   }
 
+  Widget _buildTerminalLauncher(BuildContext context) {
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+
+    return Positioned(
+      top: 16,
+      left: 0,
+      right: 0,
+      child: TweenAnimationBuilder<double>(
+        duration:
+            reduceMotion ? Duration.zero : const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+        tween: Tween<double>(begin: 0, end: 1),
+        builder: (context, value, child) {
+          return Opacity(
+            opacity: value,
+            child: Transform.translate(
+              offset: Offset(0, (1 - value) * -6),
+              child: child,
+            ),
+          );
+        },
+        child: const Align(
+          alignment: Alignment.topCenter,
+          child: TerminalLauncherButton(source: 'single_branch'),
+        ),
+      ),
+    );
+  }
+
   Widget _buildMenu(BuildContext context, ColorScheme cs) {
     return Positioned(
       top: 16,
@@ -351,7 +382,7 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
     return SingleChildScrollView(
       child: Center(
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.fromLTRB(24, 64, 24, 24),
           child: Column(
             children: [
               const SingleInsideHeaderWidgetSection(),
@@ -420,7 +451,6 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
             return SafeArea(
               child: Stack(
                 children: [
-                  _buildScreenTag(context),
                   _buildContent(
                     context: context,
                     mode: mode,
@@ -430,6 +460,8 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
                     division: division,
                     footerHeight: footerHeight,
                   ),
+                  _buildScreenTag(context),
+                  _buildTerminalLauncher(context),
                   _buildMenu(context, cs),
                 ],
               ),

@@ -23,6 +23,18 @@ enum OperationalDataSyncResult {
 class OperationalDataSyncWorkflow {
   static bool _running = false;
 
+  static Future<OperationalDataSyncResult> runCurrentArea({
+    required BuildContext context,
+    bool useCommonUi = true,
+  }) {
+    return run(
+      context: context,
+      title: '운영 데이터 동기화',
+      message: '현재 지역의 주차 구역, 섹터, 정산 데이터를 로컬에 내려받기 전 요청을 준비하고 있습니다.',
+      useCommonUi: useCommonUi,
+    );
+  }
+
   static Future<OperationalDataSyncResult> run({
     required BuildContext context,
     String title = '운영 데이터 동기화',

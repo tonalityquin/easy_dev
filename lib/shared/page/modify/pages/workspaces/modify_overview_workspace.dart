@@ -14,6 +14,7 @@ class ModifyOverviewWorkspace extends StatelessWidget {
     required this.policy,
     required this.statusContextResolving,
     required this.statusContextError,
+    required this.isMinorMode,
     required this.onRegionTap,
     required this.onWorkspaceTap,
   });
@@ -23,6 +24,7 @@ class ModifyOverviewWorkspace extends StatelessWidget {
   final PlateEditorPolicy policy;
   final bool statusContextResolving;
   final String? statusContextError;
+  final bool isMinorMode;
   final VoidCallback onRegionTap;
   final ValueChanged<PlateEditorWorkspace> onWorkspaceTap;
 
@@ -61,35 +63,44 @@ class ModifyOverviewWorkspace extends StatelessWidget {
     return '$locationValue · 우선 $priorityCount';
   }
 
-  PlateEditorSectionStatus _changed(bool value) {
-    return value
-        ? PlateEditorSectionStatus.changed
-        : PlateEditorSectionStatus.none;
-  }
-
   @override
   Widget build(BuildContext context) {
     final memo = controller.customStatusController.text.trim();
+    final parkingValue = _parkingSummary();
+    final hasParking = parkingValue.trim().isNotEmpty;
+    final hasPhotos = (plate.imageUrls?.isNotEmpty ?? false) ||
+        controller.capturedImages.isNotEmpty;
+    final hasSector = controller.selectedSectorName?.trim().isNotEmpty == true;
     final sections = <Widget>[
       PlateEditorVehicleIdentitySection(
         region: controller.dropdownValue,
         plate: controller.currentPlateNumberDisplay,
-        regionStatus: _changed(controller.hasRegionChanges),
-        plateStatus: PlateEditorSectionStatus.none,
+        regionStatus: controller.dropdownValue.trim().isNotEmpty
+            ? PlateEditorSectionStatus.complete
+            : PlateEditorSectionStatus.incomplete,
+        plateStatus: controller.currentPlateNumberDisplay.trim().isNotEmpty
+            ? PlateEditorSectionStatus.complete
+            : PlateEditorSectionStatus.incomplete,
         onRegionTap: onRegionTap,
         onPlateTap: null,
       ),
       PlateEditorOverviewSection(
         icon: Icons.local_parking_rounded,
-        title: '주차',
-        value: _parkingSummary(),
-        status: _changed(controller.hasLocationChanges),
+        title: '주차 구역',
+        value: parkingValue,
+        status: hasParking
+            ? PlateEditorSectionStatus.complete
+            : isMinorMode
+                ? PlateEditorSectionStatus.optional
+                : PlateEditorSectionStatus.incomplete,
         onTap: () => onWorkspaceTap(PlateEditorWorkspace.parking),
       ),
       PlateEditorOverviewPhotoSection(
         summary:
             '등록 ${plate.imageUrls?.length ?? 0} · 신규 ${controller.capturedImages.length}',
-        status: _changed(controller.hasPhotoChanges),
+        status: hasPhotos
+            ? PlateEditorSectionStatus.complete
+            : PlateEditorSectionStatus.none,
         onTap: () => onWorkspaceTap(PlateEditorWorkspace.camera),
       ),
       if (policy.hasSector)
@@ -99,34 +110,40 @@ class ModifyOverviewWorkspace extends StatelessWidget {
           value: controller.selectedSectorName?.trim().isNotEmpty == true
               ? controller.selectedSectorName!.trim()
               : '',
-          status: _changed(controller.hasSectorChanges),
+          status: hasSector
+              ? PlateEditorSectionStatus.complete
+              : PlateEditorSectionStatus.incomplete,
           onTap: () => onWorkspaceTap(PlateEditorWorkspace.sector),
         ),
       if (policy.hasBill)
         PlateEditorOverviewSection(
           icon: Icons.receipt_long_rounded,
-          title: '변동 정산',
+          title: '정산 유형',
           value: _variableBillingSummary(),
+          enabled: !controller.billingLocked,
           status: _hasVariableBillingSelection
-              ? _changed(controller.hasBillingChanges)
+              ? PlateEditorSectionStatus.complete
               : PlateEditorSectionStatus.none,
           onTap: () => onWorkspaceTap(PlateEditorWorkspace.variableBilling),
         ),
       if (policy.hasBill)
         PlateEditorOverviewSection(
           icon: Icons.calendar_month_rounded,
-          title: '정기 정산',
+          title: '정기 등록',
           value: _regularBillingSummary(),
+          enabled: !controller.billingLocked,
+          interactionEnabled: false,
           status: _hasRegularBillingSelection
-              ? _changed(controller.hasBillingChanges)
+              ? PlateEditorSectionStatus.complete
               : PlateEditorSectionStatus.none,
-          onTap: () => onWorkspaceTap(PlateEditorWorkspace.regularBilling),
+          onTap: null,
         ),
       PlateEditorOverviewSection(
         icon: statusContextError != null
             ? Icons.warning_amber_rounded
             : Icons.notes_rounded,
         title: '상태 메모',
+        enabled: !controller.billingLocked,
         value: statusContextResolving
             ? '상태 정보 확인 중'
             : statusContextError != null
@@ -136,7 +153,9 @@ class ModifyOverviewWorkspace extends StatelessWidget {
             ? PlateEditorSectionStatus.loading
             : statusContextError != null
                 ? PlateEditorSectionStatus.error
-                : _changed(controller.hasStatusChanges),
+                : memo.isNotEmpty
+                    ? PlateEditorSectionStatus.complete
+                    : PlateEditorSectionStatus.none,
         onTap: () => onWorkspaceTap(PlateEditorWorkspace.memo),
       ),
     ];

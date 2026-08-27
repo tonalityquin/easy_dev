@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../app/di/routes.dart';
 import '../../../app/utils/snackbar_helper.dart';
@@ -6,6 +7,7 @@ import '../../../design_system/common_ui/common_ui_components.dart';
 import '../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../shared/secondary/side_docks/secondary_side_dock.dart';
 import '../../dev/debug/debug_action_recorder.dart';
+import '../../headquarter/application/headquarter_dashboard_context.dart';
 import '../../selector/application/dev_auth.dart';
 import '../side_docks/common/headquarter_mode_side_dock.dart';
 
@@ -22,6 +24,216 @@ class HeadquarterModeSwitchButton extends StatelessWidget {
   final String currentScreen;
   final VoidCallback onBeforeSwitch;
 
+  @override
+  Widget build(BuildContext context) {
+    return _HeadquarterModeContextPublisher(
+      modeKey: currentModeKey,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+        child: CommonButton(
+          label: '헤드쿼터 모드 전환',
+          icon: Icons.swap_horiz_rounded,
+          onPressed: () => _HeadquarterModeSwitchCoordinator.switchMode(
+            context: context,
+            currentModeKey: currentModeKey,
+            currentScreen: currentScreen,
+            onBeforeSwitch: onBeforeSwitch,
+          ),
+          expand: true,
+          variant: CommonButtonVariant.secondary,
+          haptic: CommonHaptic.selection,
+        ),
+      ),
+    );
+  }
+}
+
+@immutable
+class HeadquarterModeSwitchChip extends StatelessWidget {
+  const HeadquarterModeSwitchChip({
+    super.key,
+    required this.currentModeKey,
+    required this.currentScreen,
+    required this.onBeforeSwitch,
+  });
+
+  final String currentModeKey;
+  final String currentScreen;
+  final VoidCallback onBeforeSwitch;
+
+  @override
+  Widget build(BuildContext context) {
+    return _HeadquarterModeContextPublisher(
+      modeKey: currentModeKey,
+      child: _HeadquarterModeSwitchChipSurface(
+        modeKey: currentModeKey,
+        onPressed: () => _HeadquarterModeSwitchCoordinator.switchMode(
+          context: context,
+          currentModeKey: currentModeKey,
+          currentScreen: currentScreen,
+          onBeforeSwitch: onBeforeSwitch,
+        ),
+      ),
+    );
+  }
+}
+
+class _HeadquarterModeSwitchChipSurface extends StatefulWidget {
+  const _HeadquarterModeSwitchChipSurface({
+    required this.modeKey,
+    required this.onPressed,
+  });
+
+  final String modeKey;
+  final Future<void> Function() onPressed;
+
+  @override
+  State<_HeadquarterModeSwitchChipSurface> createState() =>
+      _HeadquarterModeSwitchChipSurfaceState();
+}
+
+class _HeadquarterModeSwitchChipSurfaceState
+    extends State<_HeadquarterModeSwitchChipSurface> {
+  bool _pressed = false;
+  bool _hovered = false;
+  bool _focused = false;
+  bool _busy = false;
+
+  Future<void> _invoke() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    HapticFeedback.selectionClick();
+    try {
+      await widget.onPressed();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final duration = reduceMotion ? Duration.zero : CommonUiMotion.selection;
+    final label = HeadquarterDashboardContext.exactModeLabel(widget.modeKey);
+    final scale = _pressed ? .97 : 1.0;
+    final background = _hovered || _focused
+        ? Color.alphaBlend(tokens.accent.withOpacity(.08), tokens.accentContainer)
+        : tokens.accentContainer;
+    final borderColor = _focused
+        ? tokens.focusRing
+        : tokens.accent.withOpacity(_hovered ? .52 : .34);
+
+    return Semantics(
+      button: true,
+      enabled: !_busy,
+      label: '현재 $label 모드, 헤드쿼터 모드 전환',
+      child: FocusableActionDetector(
+        enabled: !_busy,
+        onShowHoverHighlight: (value) {
+          if (mounted) setState(() => _hovered = value);
+        },
+        onShowFocusHighlight: (value) {
+          if (mounted) setState(() => _focused = value);
+        },
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: _busy ? null : (_) => setState(() => _pressed = true),
+          onTapCancel: _busy ? null : () => setState(() => _pressed = false),
+          onTapUp: _busy
+              ? null
+              : (_) {
+                  setState(() => _pressed = false);
+                  _invoke();
+                },
+          child: AnimatedScale(
+            duration: reduceMotion ? Duration.zero : CommonUiMotion.press,
+            curve: CommonUiMotion.standard,
+            scale: scale,
+            child: AnimatedContainer(
+              duration: duration,
+              curve: CommonUiMotion.enter,
+              constraints: const BoxConstraints(minHeight: 36),
+              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+              decoration: BoxDecoration(
+                color: background,
+                borderRadius: BorderRadius.circular(CommonUiShapes.pill),
+                border: Border.all(
+                  color: borderColor,
+                  width: _focused ? 2 : 1,
+                ),
+                boxShadow: _hovered
+                    ? [
+                        BoxShadow(
+                          color: tokens.shadow.withOpacity(tokens.isDark ? .24 : .10),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ]
+                    : const [],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AnimatedSwitcher(
+                    duration: duration,
+                    child: _busy
+                        ? SizedBox(
+                            key: const ValueKey<String>('mode-switch-busy'),
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: tokens.onAccentContainer,
+                            ),
+                          )
+                        : Icon(
+                            Icons.swap_horiz_rounded,
+                            key: const ValueKey<String>('mode-switch-icon'),
+                            size: 17,
+                            color: tokens.onAccentContainer,
+                          ),
+                  ),
+                  const SizedBox(width: 6),
+                  AnimatedSwitcher(
+                    duration: duration,
+                    switchInCurve: CommonUiMotion.enter,
+                    switchOutCurve: CommonUiMotion.exit,
+                    transitionBuilder: (child, animation) {
+                      if (reduceMotion) return child;
+                      return FadeTransition(
+                        opacity: animation,
+                        child: SlideTransition(
+                          position: Tween<Offset>(
+                            begin: const Offset(.08, 0),
+                            end: Offset.zero,
+                          ).animate(animation),
+                          child: child,
+                        ),
+                      );
+                    },
+                    child: Text(
+                      label,
+                      key: ValueKey<String>(label),
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                            color: tokens.onAccentContainer,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -.1,
+                          ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HeadquarterModeSwitchCoordinator {
   static const List<_HeadquarterModeTarget> _allTargets =
       <_HeadquarterModeTarget>[
     _HeadquarterModeTarget(
@@ -56,14 +268,19 @@ class HeadquarterModeSwitchButton extends StatelessWidget {
     ),
   ];
 
-  _HeadquarterModeTarget? _targetFor(String modeKey) {
+  static _HeadquarterModeTarget? _targetFor(String modeKey) {
     for (final target in _allTargets) {
       if (target.modeKey == modeKey) return target;
     }
     return null;
   }
 
-  void _trace(BuildContext context, _HeadquarterModeTarget target) {
+  static void _trace(
+    BuildContext context, {
+    required String currentModeKey,
+    required String currentScreen,
+    required _HeadquarterModeTarget target,
+  }) {
     DebugActionRecorder.instance.recordAction(
       '헤드쿼터 모드 전환',
       route: ModalRoute.of(context)?.settings.name,
@@ -77,7 +294,12 @@ class HeadquarterModeSwitchButton extends StatelessWidget {
     );
   }
 
-  Future<void> _switchMode(BuildContext context) async {
+  static Future<void> switchMode({
+    required BuildContext context,
+    required String currentModeKey,
+    required String currentScreen,
+    required VoidCallback onBeforeSwitch,
+  }) async {
     debugPrint(
       '[HQ-MODE-SWITCH] dock_open screen=$currentScreen mode=$currentModeKey',
     );
@@ -136,11 +358,17 @@ class HeadquarterModeSwitchButton extends StatelessWidget {
       return;
     }
 
-    _trace(context, target);
+    _trace(
+      context,
+      currentModeKey: currentModeKey,
+      currentScreen: currentScreen,
+      target: target,
+    );
     onBeforeSwitch();
     if (!context.mounted) return;
 
-    final returnRouteName = target.isSprint ? _currentHeadquarterRoute() : null;
+    final returnRouteName =
+        target.isSprint ? _currentHeadquarterRoute(currentModeKey) : null;
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     debugPrint(
@@ -160,7 +388,7 @@ class HeadquarterModeSwitchButton extends StatelessWidget {
     );
   }
 
-  String? _currentHeadquarterRoute() {
+  static String? _currentHeadquarterRoute(String currentModeKey) {
     switch (currentModeKey) {
       case 'single':
         return AppRoutes.singleHeadquarterPage;
@@ -175,7 +403,7 @@ class HeadquarterModeSwitchButton extends StatelessWidget {
     }
   }
 
-  PageRouteBuilder<void> _buildRoute({
+  static PageRouteBuilder<void> _buildRoute({
     required String routeName,
     required WidgetBuilder builder,
     required bool isSprint,
@@ -219,21 +447,45 @@ class HeadquarterModeSwitchButton extends StatelessWidget {
       },
     );
   }
+}
+
+class _HeadquarterModeContextPublisher extends StatefulWidget {
+  const _HeadquarterModeContextPublisher({
+    required this.modeKey,
+    required this.child,
+  });
+
+  final String modeKey;
+  final Widget child;
 
   @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
-      child: CommonButton(
-        label: '헤드쿼터 모드 전환',
-        icon: Icons.swap_horiz_rounded,
-        onPressed: () => _switchMode(context),
-        expand: true,
-        variant: CommonButtonVariant.secondary,
-        haptic: CommonHaptic.selection,
-      ),
+  State<_HeadquarterModeContextPublisher> createState() =>
+      _HeadquarterModeContextPublisherState();
+}
+
+class _HeadquarterModeContextPublisherState
+    extends State<_HeadquarterModeContextPublisher> {
+  @override
+  void initState() {
+    super.initState();
+    HeadquarterDashboardContext.publishMode(
+      widget.modeKey,
+      source: 'headquarter_mode_switch:init',
     );
   }
+
+  @override
+  void didUpdateWidget(covariant _HeadquarterModeContextPublisher oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.modeKey == widget.modeKey) return;
+    HeadquarterDashboardContext.publishMode(
+      widget.modeKey,
+      source: 'headquarter_mode_switch:update',
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 @immutable

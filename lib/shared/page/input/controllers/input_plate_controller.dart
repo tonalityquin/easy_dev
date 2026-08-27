@@ -57,6 +57,8 @@ class InputPlateController {
 
   String selectedBillType = '변동';
   String? selectedBill;
+  bool monthlyBillingLocked = false;
+  String? lockedMonthlyCountType;
 
   int selectedBasicStandard = 0;
   int selectedBasicAmount = 0;
@@ -187,6 +189,15 @@ class InputPlateController {
   }
 
   void markStatusDraftEdited() {
+    if (monthlyBillingLocked) {
+      statusEditedByUser = false;
+      statusWriteRequested = false;
+      statusDeletionRequested = false;
+      debugPrint(
+        '[InputPlateController][MonthlyBillingLock] status_edit=blocked plate=${buildPlateNumber()}',
+      );
+      return;
+    }
     statusEditedByUser = true;
     statusWriteRequested = true;
     statusDeletionRequested = statusDraft.isEmpty;
@@ -380,6 +391,8 @@ class InputPlateController {
     expectedStatusSourcePath = null;
     isThreeDigit = true;
     selectedBillType = '변동';
+    monthlyBillingLocked = false;
+    lockedMonthlyCountType = null;
     clearVehicleInfo();
   }
 
@@ -420,6 +433,26 @@ class InputPlateController {
     selectedAddAmount = 0;
   }
 
+  void lockMonthlyBilling(String countType) {
+    final value = countType.trim();
+    monthlyBillingLocked = true;
+    lockedMonthlyCountType = value.isEmpty ? null : value;
+    selectedBillType = '정기';
+    if (value.isNotEmpty) {
+      selectedBill = value;
+      countTypeController.text = value;
+    }
+  }
+
+  void unlockMonthlyBilling({bool clearSelection = false}) {
+    monthlyBillingLocked = false;
+    lockedMonthlyCountType = null;
+    if (clearSelection) {
+      selectedBillType = '변동';
+      clearBillingSelection(resetType: false);
+    }
+  }
+
   void dispose() {
     _removeInputListeners();
     controllerFrontDigit.dispose();
@@ -450,6 +483,14 @@ class InputPlateController {
       'memoLength=${customStatusController.text.trim().length} ',
       progress: .28,
     );
+    if (monthlyBillingLocked) {
+      final message =
+          '[InputPlateController][MonthlyBillingLock] status_delete=blocked plate=$plateNumber';
+      debugPrint(message);
+      trace.log(message, progress: .72);
+      await trace.succeed('정기 주차 차량 상태 메모 삭제를 건너뛰었습니다.');
+      return;
+    }
 
     try {
       if (isMonthly) {
@@ -717,6 +758,28 @@ class InputPlateController {
       'selectedBillType=$selectedBillType selectedBill=${selectedBill ?? ''}',
     );
 
+    if (monthlyBillingLocked) {
+      final lockedValue = lockedMonthlyCountType?.trim() ?? '';
+      final currentValue = selectedBill?.trim() ?? '';
+      final validLockedBilling = selectedBillType == '정기' &&
+          lockedValue.isNotEmpty &&
+          currentValue == lockedValue;
+      emitDebug(
+        'monthly_billing_lock validate=$validLockedBilling locked=$lockedValue current=$currentValue plan=$selectedBillType',
+      );
+      if (!validLockedBilling) {
+        trace?.add('중단: 월 주차 정산 잠금 값 불일치');
+        if (context.mounted) {
+          showFailedSnackbar(
+            context,
+            '월 주차 정산 정보를 다시 확인해주세요.',
+            useCommonUi: true,
+          );
+        }
+        return false;
+      }
+    }
+
     if (hasAnyBill &&
         (selectedBill == null || selectedBill!.isEmpty) &&
         selectedBillType != '정기') {
@@ -776,6 +839,19 @@ class InputPlateController {
       return false;
     }
     final selectedSector = sectorResolution.sector;
+    final suppressStatusMemo = monthlyBillingLocked &&
+        selectedBillType == '정기' &&
+        (lockedMonthlyCountType?.trim().isNotEmpty ?? false);
+    if (suppressStatusMemo) {
+      statusEditedByUser = false;
+      statusWriteRequested = false;
+      statusDeletionRequested = false;
+      emitDebug(
+        'status_memo=suppressed reason=confirmed_monthly_parking plate=$plateNumber billing=${lockedMonthlyCountType ?? ''}',
+      );
+      trace?.add('정기 주차 차량 상태 메모 저장 생략');
+    }
+
     DeveloperOperationTrace? statusOperationTrace;
     if (trace == null && onDebug == null && context.mounted) {
       statusOperationTrace = await DeveloperOperationTrace.start(
@@ -884,9 +960,11 @@ class InputPlateController {
         isLocationSelected: isLocationSelected,
         imageUrls: currentUploadResult.uploadedUrls,
         selectedBill: canUseBill ? selectedBill : null,
-        statusWriteRequested: statusWriteRequested,
+        statusWriteRequested:
+            suppressStatusMemo ? false : statusWriteRequested,
         statusLookupState: statusLookupState,
-        statusEditedByUser: statusEditedByUser,
+        statusEditedByUser:
+            suppressStatusMemo ? false : statusEditedByUser,
         expectedOriginalStatus: expectedOriginalStatus,
         expectedStatusSourcePath: expectedStatusSourcePath,
         basicStandard: canUseBill ? selectedBasicStandard : 0,
@@ -897,7 +975,7 @@ class InputPlateController {
         regularDurationHours:
             canUseBill ? localRegularDurationHours : null,
         region: dropdownValue,
-        customStatus: draft.customStatus,
+        customStatus: suppressStatusMemo ? null : draft.customStatus,
         selectedBillType: canUseBill ? selectedBillType : '변동',
         manufacturerName: selectedManufacturerName,
         modelName: selectedModelName,

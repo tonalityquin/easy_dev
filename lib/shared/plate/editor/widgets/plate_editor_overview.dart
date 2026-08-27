@@ -9,6 +9,7 @@ enum PlateEditorSectionStatus {
   changed,
   complete,
   incomplete,
+  optional,
   pending,
   loading,
   error,
@@ -98,13 +99,17 @@ class PlateEditorOverviewSection extends StatelessWidget {
     required this.value,
     required this.onTap,
     this.status = PlateEditorSectionStatus.none,
+    this.enabled = true,
+    this.interactionEnabled = true,
   });
 
   final IconData icon;
   final String title;
   final String value;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final PlateEditorSectionStatus status;
+  final bool enabled;
+  final bool interactionEnabled;
 
   @override
   Widget build(BuildContext context) {
@@ -115,17 +120,23 @@ class PlateEditorOverviewSection extends StatelessWidget {
     final statusLabel = _statusLabel(status);
     final statusColor = _statusColor(tokens, status);
 
+    final interactive = enabled && interactionEnabled && onTap != null;
     return Semantics(
-      button: true,
+      button: interactive,
+      enabled: enabled,
       label: [
         title,
         value,
         if (statusLabel != null) statusLabel,
       ].join(', '),
-      child: SizedBox(
-        height: _plateEditorOverviewRowHeight,
-        child: _PlateEditorActionRowSurface(
-          onTap: onTap,
+      child: AnimatedOpacity(
+        duration: duration,
+        curve: CommonUiMotion.standard,
+        opacity: enabled ? 1 : .5,
+        child: SizedBox(
+          height: _plateEditorOverviewRowHeight,
+          child: _PlateEditorActionRowSurface(
+            onTap: interactive ? onTap : null,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -157,6 +168,13 @@ class PlateEditorOverviewSection extends StatelessWidget {
                       duration: duration,
                       switchInCurve: CommonUiMotion.enter,
                       switchOutCurve: CommonUiMotion.exit,
+                      transitionBuilder: (child, animation) => FadeTransition(
+                        opacity: animation,
+                        child: ScaleTransition(
+                          scale: Tween<double>(begin: .94, end: 1).animate(animation),
+                          child: child,
+                        ),
+                      ),
                       child: Text(
                         statusLabel,
                         key: ValueKey<String>(statusLabel),
@@ -198,6 +216,7 @@ class PlateEditorOverviewSection extends StatelessWidget {
               ),
             ],
           ),
+        ),
         ),
       ),
     );
@@ -405,7 +424,7 @@ class PlateEditorOverviewPhotoSection extends StatelessWidget {
   Widget build(BuildContext context) {
     return PlateEditorOverviewSection(
       icon: Icons.photo_library_rounded,
-      title: '사진',
+      title: '사진 촬영',
       value: summary,
       status: status,
       onTap: onTap,
@@ -441,7 +460,7 @@ class _PlateEditorActionRowSurface extends StatefulWidget {
     required this.child,
   });
 
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final Widget child;
 
   @override
@@ -467,7 +486,7 @@ class _PlateEditorActionRowSurfaceState
         color: Colors.transparent,
         child: InkWell(
           onTap: widget.onTap,
-          onHighlightChanged: (value) {
+          onHighlightChanged: widget.onTap == null ? null : (value) {
             if (!mounted) return;
             setState(() => _pressed = value);
           },
@@ -499,6 +518,7 @@ class _PlateEditorStatusDot extends StatelessWidget {
       PlateEditorSectionStatus.error => Icons.error_rounded,
       PlateEditorSectionStatus.loading => Icons.pending_rounded,
       PlateEditorSectionStatus.incomplete => Icons.radio_button_unchecked_rounded,
+      PlateEditorSectionStatus.optional => Icons.circle_outlined,
       PlateEditorSectionStatus.pending => Icons.pending_actions_rounded,
       PlateEditorSectionStatus.none => Icons.radio_button_unchecked_rounded,
       PlateEditorSectionStatus.changed => Icons.circle_rounded,
@@ -515,9 +535,11 @@ String? _statusLabel(PlateEditorSectionStatus status) {
     case PlateEditorSectionStatus.changed:
       return '변경됨';
     case PlateEditorSectionStatus.complete:
-      return '완료';
+      return '입력 완료';
     case PlateEditorSectionStatus.incomplete:
-      return '미완료';
+      return '필수 입력';
+    case PlateEditorSectionStatus.optional:
+      return '선택 입력';
     case PlateEditorSectionStatus.pending:
       return '적용 대기';
     case PlateEditorSectionStatus.loading:
@@ -535,6 +557,8 @@ Color _statusColor(CommonUiTokens tokens, PlateEditorSectionStatus status) {
     case PlateEditorSectionStatus.incomplete:
     case PlateEditorSectionStatus.pending:
       return tokens.warning;
+    case PlateEditorSectionStatus.optional:
+      return tokens.textSecondary;
     case PlateEditorSectionStatus.error:
       return tokens.danger;
     case PlateEditorSectionStatus.loading:

@@ -19,6 +19,9 @@ class PlateIdentityInputPanel extends StatefulWidget {
     this.onDebug,
     this.showValidationErrors = false,
     this.keypadHeight = 238,
+    this.segmentMinHeight = 68,
+    this.segmentHorizontalPadding = 10,
+    this.segmentVerticalPadding = 8,
   });
 
   final TextEditingController frontController;
@@ -31,6 +34,9 @@ class PlateIdentityInputPanel extends StatefulWidget {
   final ValueChanged<String>? onDebug;
   final bool showValidationErrors;
   final double keypadHeight;
+  final double segmentMinHeight;
+  final double segmentHorizontalPadding;
+  final double segmentVerticalPadding;
 
   @override
   State<PlateIdentityInputPanel> createState() =>
@@ -181,8 +187,11 @@ class _PlateIdentityInputPanelState extends State<PlateIdentityInputPanel> {
           child: AnimatedContainer(
             duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
             curve: CommonUiMotion.standard,
-            constraints: const BoxConstraints(minHeight: 68),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            constraints: BoxConstraints(minHeight: widget.segmentMinHeight),
+            padding: EdgeInsets.symmetric(
+              horizontal: widget.segmentHorizontalPadding,
+              vertical: widget.segmentVerticalPadding,
+            ),
             decoration: BoxDecoration(
               color: selected ? tokens.accentContainer : tokens.surface,
               borderRadius: BorderRadius.circular(CommonUiShapes.control),

@@ -5,23 +5,31 @@ import 'package:flutter/services.dart';
 
 import '../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../design_system/common_ui/common_ui_side_dock.dart';
 import '../../../design_system/common_ui/common_ui_theme.dart';
+import '../../../shared/calendar/calendar_public_text.dart';
 import '../../../shared/google_calendar/google_event_colors.dart';
+import '../../selector/application/dev_auth.dart';
 import '../../sprint/application/sprint_mode_store.dart';
 import '../../sprint/domain/sprint_models.dart';
 import '../../sprint/pages/sprint_external_event_editor_sheet.dart';
 import '../../sprint/pages/sprint_project_workspace_sheet.dart';
 import '../../sprint/pages/sprint_task_detail_sheet.dart';
+import 'headquarter_calendar_side_dock.dart';
 
 class HeadquarterCalendarCard extends StatefulWidget {
   const HeadquarterCalendarCard({
     super.key,
     this.useCommonUi = false,
     this.showAccountEntry = false,
+    this.headerTrailing,
+    this.fillViewport = false,
   });
 
   final bool useCommonUi;
   final bool showAccountEntry;
+  final Widget? headerTrailing;
+  final bool fillViewport;
 
   @override
   State<HeadquarterCalendarCard> createState() =>
@@ -48,6 +56,7 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard>
   StackTrace? _initializationStack;
   bool _refreshing = false;
   bool _disposed = false;
+  String _lastLayoutLog = '';
 
   @override
   void initState() {
@@ -60,6 +69,7 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard>
       vsync: this,
       duration: const Duration(milliseconds: 850),
     );
+    unawaited(DevAuth.isDevModeEnabled());
     unawaited(_initialize());
   }
 
@@ -116,7 +126,7 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard>
       items.add(
         _HeadquarterCalendarItem.task(
           task: task,
-          profileLabel: _store.calendarProfileLabel(profileId),
+          profileLabel: calendarPublicLabel(_store.calendarProfileLabel(profileId)),
           projectName: project?.name ?? '스프린트 업무',
           projectIcon: project?.icon ?? Icons.task_alt_rounded,
           projectColorId: project?.googleColorId,
@@ -127,7 +137,7 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard>
       items.add(
         _HeadquarterCalendarItem.external(
           event: event,
-          profileLabel: _store.calendarProfileLabel(event.calendarProfileId),
+          profileLabel: calendarPublicLabel(_store.calendarProfileLabel(event.calendarProfileId)),
           editable: _store.canEditExternalEvent(event),
         ),
       );
@@ -184,6 +194,9 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard>
       _selectedDay = DateTime(next.year, next.month, selectedDay);
     });
     HapticFeedback.selectionClick();
+    HeadquarterCalendarSideDockDiagnostics.log(
+      'month_move delta=$delta month=${next.toIso8601String()} selected=${_selectedDay.toIso8601String()}',
+    );
     _store.ensureCalendarRangeFor(_monthAnchor, immediate: true);
   }
 
@@ -195,6 +208,9 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard>
       }
     });
     HapticFeedback.selectionClick();
+    HeadquarterCalendarSideDockDiagnostics.log(
+      'day_select date=${_selectedDay.toIso8601String()} count=${_selectedItems.length}',
+    );
     _store.ensureCalendarRangeFor(day, immediate: true);
   }
 
@@ -203,13 +219,16 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard>
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     setState(() => _refreshing = true);
+    HeadquarterCalendarSideDockDiagnostics.log(
+      'refresh_start date=${_selectedDay.toIso8601String()}',
+    );
     if (!reduceMotion) {
       _refreshController.repeat();
     }
     final trace = await DeveloperOperationTrace.start(
       context: context,
-      title: '본사 Google 캘린더 갱신',
-      initialMessage: '스프린트 모드에 연결된 Google Calendar 일정을 갱신하고 있습니다.',
+      title: '본사 일정 갱신',
+      initialMessage: '연결된 일정을 갱신하고 있습니다.',
       useCommonUi: widget.useCommonUi,
       developerModeMessage:
           '개발자 모드 ON: 본사 캘린더 동기화 로그를 복사할 수 있습니다.',
@@ -258,7 +277,7 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard>
           );
         }
         if (failedProfiles.length == _store.calendarProfiles.length) {
-          await trace.fail('연결된 Google 캘린더의 갱신에 실패했습니다.');
+          await trace.fail('연결된 일정의 갱신에 실패했습니다.');
         } else {
           await trace.succeed('일부 캘린더를 제외하고 일정을 갱신했습니다.');
         }
@@ -275,15 +294,21 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard>
       _refreshController.stop();
       _refreshController.value = 0;
       if (mounted) setState(() => _refreshing = false);
+      HeadquarterCalendarSideDockDiagnostics.log(
+        'refresh_end date=${_selectedDay.toIso8601String()} count=${_selectedItems.length}',
+      );
     }
   }
 
   Future<void> _openCreate() async {
     if (!_store.initialized) return;
+    HeadquarterCalendarSideDockDiagnostics.log(
+      'create_request date=${_selectedDay.toIso8601String()}',
+    );
     if (_store.editableCalendarProfiles.isEmpty) {
       await _showInfoDialog(
         title: '일정 추가',
-        message: '스프린트 모드에서 일정 변경 권한이 있는 Google 캘린더를 먼저 연결하세요.',
+        message: '일정 변경 권한이 있는 캘린더를 먼저 연결하세요.',
       );
       return;
     }
@@ -296,6 +321,9 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard>
   }
 
   Future<void> _openItem(_HeadquarterCalendarItem item) async {
+    HeadquarterCalendarSideDockDiagnostics.log(
+      'item_request id=${item.id} task=${item.isTask} editable=${item.editable}',
+    );
     if (item.isTask) {
       await _showTaskDetail(item);
       return;
@@ -522,7 +550,7 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard>
     final defaultProfile = _store.defaultCalendarProfile;
     if (profiles.isEmpty) return state;
     final defaultLabel = defaultProfile?.label.trim().isNotEmpty == true
-        ? defaultProfile!.label.trim()
+        ? calendarPublicLabel(defaultProfile!.label)
         : '기본 캘린더 없음';
     return '$defaultLabel · 총 ${profiles.length}개 · $state';
   }
@@ -543,8 +571,8 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard>
   Future<void> _showAccountDeveloperStatus() async {
     final trace = await DeveloperOperationTrace.start(
       context: context,
-      title: 'Google 캘린더 계정 상태',
-      initialMessage: '본사 Dashboard Google Calendar 계정 상태를 확인합니다.',
+      title: '캘린더 연결 상태',
+      initialMessage: '본사 Dashboard 캘린더 연결 상태를 확인합니다.',
       useCommonUi: widget.useCommonUi,
       showDialogImmediately: false,
       developerModeMessage:
@@ -554,11 +582,11 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard>
     );
     if (!mounted) return;
     trace.log(_calendarAccountDiagnostics(), progress: 1);
-    await trace.succeed('Google Calendar 계정 상태 확인을 완료했습니다.');
+    await trace.succeed('캘린더 연결 상태 확인을 완료했습니다.');
     if (!mounted || !trace.developerMode) return;
     await trace.showSnapshotStatusDialog(
       context,
-      title: 'Google 캘린더 계정 상태',
+      title: '캘린더 연결 상태',
       description: '현재 계정 상태의 debugPrint 코드를 복사할 수 있습니다.',
     );
   }
@@ -571,8 +599,8 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard>
 
     final trace = await DeveloperOperationTrace.start(
       context: context,
-      title: 'Google 캘린더 계정',
-      initialMessage: 'Sprint Google Calendar 계정 BottomSheet를 엽니다.',
+      title: '캘린더 연결',
+      initialMessage: '캘린더 연결 BottomSheet를 엽니다.',
       useCommonUi: widget.useCommonUi,
       showDialogImmediately: false,
       developerModeMessage:
@@ -592,23 +620,23 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard>
       if (!mounted) return;
       _store.ensureCalendarRangeFor(_monthAnchor, immediate: true);
       trace.log('after ${_calendarAccountDiagnostics()}', progress: 0.86);
-      await trace.succeed('Google Calendar 계정 BottomSheet를 닫았습니다.');
+      await trace.succeed('캘린더 연결 BottomSheet를 닫았습니다.');
       if (!mounted || !trace.developerMode) return;
       await trace.showSnapshotStatusDialog(
         context,
-        title: 'Google 캘린더 계정',
+        title: '캘린더 연결',
         description: '계정 BottomSheet 동작의 debugPrint 코드를 복사할 수 있습니다.',
       );
     } catch (error, stackTrace) {
       await trace.fail(
-        'Google Calendar 계정 BottomSheet 처리에 실패했습니다.',
+        '캘린더 연결 BottomSheet 처리에 실패했습니다.',
         error: error,
         stackTrace: stackTrace,
       );
       if (!mounted || !trace.developerMode) return;
       await trace.showSnapshotStatusDialog(
         context,
-        title: 'Google 캘린더 계정 오류',
+        title: '캘린더 연결 오류',
         description: '실패 로그의 debugPrint 코드를 복사할 수 있습니다.',
         failure: true,
       );
@@ -618,6 +646,8 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard>
   Widget _buildAccountEntry(
     BuildContext context, {
     required Duration duration,
+    bool compact = false,
+    bool extreme = false,
   }) {
     final state = _store.calendarState;
     final profileCount = _store.calendarProfiles.length;
@@ -626,6 +656,76 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard>
     final errorState = state == SprintCalendarConnectionState.failed ||
         state == SprintCalendarConnectionState.reauthenticationRequired;
     final cs = Theme.of(context).colorScheme;
+
+    if (extreme) {
+      return AnimatedContainer(
+        duration: duration,
+        curve: Curves.easeOutCubic,
+        decoration: BoxDecoration(
+          color: errorState
+              ? cs.errorContainer.withOpacity(.32)
+              : cs.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(13),
+          border: Border.all(
+            color: errorState
+                ? cs.error.withOpacity(.26)
+                : cs.outlineVariant.withOpacity(.58),
+          ),
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(13),
+            onTap: enabled ? _openAccountSheet : null,
+            onLongPress: _showAccountDeveloperStatus,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 9),
+              child: Row(
+                children: [
+                  Icon(
+                    errorState
+                        ? Icons.event_busy_outlined
+                        : Icons.event_available_outlined,
+                    color: errorState ? cs.error : cs.primary,
+                    size: 17,
+                  ),
+                  const SizedBox(width: 7),
+                  Expanded(
+                    child: Text(
+                      '캘린더 연결',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  AnimatedSwitcher(
+                    duration: duration,
+                    child: Text(
+                      _calendarStateLabel(state),
+                      key: ValueKey<SprintCalendarConnectionState>(state),
+                      style: TextStyle(
+                        color: errorState ? cs.error : cs.onSurfaceVariant,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: cs.onSurfaceVariant,
+                    size: 17,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     return AnimatedContainer(
       duration: duration,
@@ -648,14 +748,17 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard>
           onTap: enabled ? _openAccountSheet : null,
           onLongPress: _showAccountDeveloperStatus,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            padding: EdgeInsets.symmetric(
+              horizontal: compact ? 10 : 14,
+              vertical: compact ? 8 : 12,
+            ),
             child: Row(
               children: [
                 AnimatedContainer(
                   duration: duration,
                   curve: Curves.easeOutCubic,
-                  width: 42,
-                  height: 42,
+                  width: compact ? 34 : 42,
+                  height: compact ? 34 : 42,
                   decoration: BoxDecoration(
                     color: errorState
                         ? cs.errorContainer
@@ -682,12 +785,12 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Google 캘린더 계정',
+                        '캘린더 연결',
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(
                               fontWeight: FontWeight.w900,
                             ),
                       ),
-                      const SizedBox(height: 3),
+                      SizedBox(height: compact ? 2 : 3),
                       AnimatedSwitcher(
                         duration: duration,
                         switchInCurve: Curves.easeOutCubic,
@@ -695,7 +798,7 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard>
                         child: Text(
                           _calendarAccountSubtitle,
                           key: ValueKey<String>(_calendarAccountSubtitle),
-                          maxLines: 2,
+                          maxLines: compact ? 1 : 2,
                           overflow: TextOverflow.ellipsis,
                           style:
                               Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -752,6 +855,55 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard>
     return googleEventColor(item.colorId, cs.secondary);
   }
 
+  Future<void> _showCalendarDeveloperStatus() async {
+    HeadquarterCalendarSideDockDiagnostics.log(
+      'dashboard_status date=${_selectedDay.toIso8601String()} events=${_selectedItems.length} profiles=${_store.calendarProfiles.length} state=${_store.calendarState.name}',
+    );
+    await HeadquarterCalendarSideDockDiagnostics.showStatus(
+      context,
+      title: '본사 일정 상태',
+      description:
+          '선택 날짜 ${_selectedDay.month}월 ${_selectedDay.day}일 · 일정 ${_selectedItems.length}개 · 연결 ${_store.calendarProfiles.length}개의 debugPrint 코드를 복사할 수 있습니다.',
+    );
+  }
+
+  List<HeadquarterCalendarDockEntry> _buildDockEntries() {
+    return _selectedItems
+        .map(
+          (item) => HeadquarterCalendarDockEntry(
+            id: item.id,
+            title: item.title,
+            subtitle: '${_rangeLabel(item)} · ${item.profileLabel}',
+            icon: item.icon,
+            color: _itemColor(context, item),
+            task: item.isTask,
+            readOnly: !item.isTask && !item.editable,
+            onTap: () => _openItem(item),
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  Future<void> _openFullScheduleDock() async {
+    if (_selectedItems.isEmpty) return;
+    final controller = CommonSideDockPresentationController();
+    HeadquarterCalendarSideDockDiagnostics.log(
+      'preview_more_open date=${_selectedDay.toIso8601String()} count=${_selectedItems.length}',
+    );
+    try {
+      await showHeadquarterCalendarSideDock(
+        context: context,
+        selectedDay: _selectedDay,
+        listenable: _store,
+        entriesBuilder: _buildDockEntries,
+        onAdd: _openCreate,
+        presentationController: controller,
+      );
+    } finally {
+      controller.dispose();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -762,213 +914,423 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard>
         reduceMotion ? Duration.zero : const Duration(milliseconds: 220);
     final events = _selectedItems;
     final summary = _monthSummary;
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: cs.outlineVariant.withOpacity(.65)),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: tokens.shadow,
-            blurRadius: 18,
-            offset: const Offset(0, 7),
-          ),
-        ],
-      ),
-      child: AnimatedSize(
-        duration: duration,
-        curve: Curves.easeOutCubic,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (widget.showAccountEntry) ...[
-              _buildAccountEntry(context, duration: duration),
-              const SizedBox(height: 12),
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final viewportHeight = constraints.maxHeight.isFinite
+            ? constraints.maxHeight
+            : 720.0;
+        final compact = viewportHeight < 650;
+        final ultra = viewportHeight < 540;
+        final extreme = viewportHeight < 470;
+        final outerPadding = extreme
+            ? 5.0
+            : ultra
+                ? 8.0
+                : compact
+                    ? 10.0
+                    : 14.0;
+        final gap = extreme
+            ? 3.0
+            : ultra
+                ? 5.0
+                : compact
+                    ? 7.0
+                    : 10.0;
+        final previewLimit = extreme
+            ? 0
+            : ultra
+                ? 1
+                : compact
+                    ? 1
+                    : viewportHeight >= 760
+                        ? 3
+                        : 2;
+        final previewEvents = events.take(previewLimit).toList(growable: false);
+        final hiddenCount = events.length - previewEvents.length;
+        final accountHeight = widget.showAccountEntry
+            ? extreme
+                ? 40.0
+                : ultra
+                    ? 52.0
+                    : compact
+                        ? 58.0
+                        : 66.0
+            : 0.0;
+        final headerHeight = 40.0;
+        final monthHeight = extreme ? 40.0 : 44.0;
+        final weekdaysHeight = extreme ? 15.0 : 18.0;
+        final selectedHeaderHeight = extreme ? 20.0 : 24.0;
+        final previewHeight = events.isEmpty
+            ? extreme
+                ? 40.0
+                : ultra
+                    ? 44.0
+                    : 50.0
+            : (previewEvents.length * (ultra ? 44.0 : 50.0)) +
+                (hiddenCount > 0
+                    ? extreme
+                        ? 36.0
+                        : ultra
+                            ? 38.0
+                            : 42.0
+                    : 0.0);
+        final gapCount = widget.showAccountEntry ? 6 : 5;
+        final reserved = outerPadding * 2 +
+            headerHeight +
+            accountHeight +
+            monthHeight +
+            weekdaysHeight +
+            selectedHeaderHeight +
+            previewHeight +
+            (gap * gapCount);
+        final gridHeight = (viewportHeight - reserved)
+            .clamp(extreme ? 0.0 : 72.0, 330.0)
+            .toDouble();
+        final layoutLog =
+            'layout height=${viewportHeight.toStringAsFixed(1)} compact=$compact ultra=$ultra extreme=$extreme preview=${previewEvents.length} hidden=$hiddenCount grid=${gridHeight.toStringAsFixed(1)}';
+        if (_lastLayoutLog != layoutLog) {
+          _lastLayoutLog = layoutLog;
+          HeadquarterCalendarSideDockDiagnostics.log(layoutLog);
+        }
+
+        final content = Container(
+          padding: EdgeInsets.all(outerPadding),
+          decoration: BoxDecoration(
+            color: cs.surface,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: cs.outlineVariant.withOpacity(.65)),
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                color: tokens.shadow,
+                blurRadius: 18,
+                offset: const Offset(0, 7),
+              ),
             ],
-            Row(
-              children: [
-                IconButton(
-                  onPressed: () => _moveMonth(-1),
-                  icon: const Icon(Icons.chevron_left_rounded),
-                ),
-                Expanded(
-                  child: Text(
-                    '${_visibleMonth.year}년 ${_visibleMonth.month.toString().padLeft(2, '0')}월',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w900),
-                  ),
-                ),
-                IconButton(
-                  onPressed: () => _moveMonth(1),
-                  icon: const Icon(Icons.chevron_right_rounded),
-                ),
-                IconButton(
-                  onPressed: _refreshing ? null : _refresh,
-                  tooltip: '일정 갱신',
-                  icon: reduceMotion
-                      ? Icon(
-                          _refreshing
-                              ? Icons.sync_rounded
-                              : Icons.refresh_rounded,
-                        )
-                      : RotationTransition(
-                          turns: _refreshController,
-                          child: Icon(
-                            _refreshing
-                                ? Icons.sync_rounded
-                                : Icons.refresh_rounded,
-                          ),
-                        ),
-                ),
-                IconButton(
-                  onPressed: _store.initialized ? _openCreate : null,
-                  icon: const Icon(Icons.add_circle_rounded),
-                  tooltip: '일정 추가',
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: _weekdays
-                  .map(
-                    (day) => Expanded(
-                      child: Center(
-                        child: Text(
-                          day,
-                          style: TextStyle(
-                            color: cs.onSurfaceVariant,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    ),
-                  )
-                  .toList(growable: false),
-            ),
-            const SizedBox(height: 5),
-            if ((_store.initializing || !_store.initialized) &&
-                _initializationError == null)
-              const SizedBox(
-                height: 250,
-                child: Center(child: CircularProgressIndicator()),
-              )
-            else if (_initializationError != null)
-              _ErrorBox(
-                text: '캘린더 연결 정보를 불러오지 못했습니다.',
-                onRetry: () {
-                  debugPrint(
-                    '[HeadquarterCalendar] retry initialization error=$_initializationError',
-                  );
-                  if (_initializationStack != null) {
-                    debugPrint('$_initializationStack');
-                  }
-                  setState(() {
-                    _initializationError = null;
-                    _initializationStack = null;
-                  });
-                  unawaited(_initialize());
-                },
-              )
-            else
-              _buildCalendarGrid(summary),
-            const SizedBox(height: 13),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '${_selectedDay.month}월 ${_selectedDay.day}일 ${_weekdays[_selectedDay.weekday % 7]}요일',
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleSmall
-                        ?.copyWith(fontWeight: FontWeight.w900),
-                  ),
-                ),
-                AnimatedSwitcher(
-                  duration: duration,
-                  child: Text(
-                    '${events.length}개',
-                    key: ValueKey<int>(events.length),
-                    style: TextStyle(
-                      color: cs.onSurfaceVariant,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            if (_store.calendarProfiles.isEmpty && _store.initialized)
-              _ConnectionBox(onRefresh: _refresh)
-            else if (events.isEmpty)
-              _EmptyBox(onAdd: _openCreate)
-            else
-              AnimatedSwitcher(
-                duration: duration,
-                switchInCurve: Curves.easeOutCubic,
-                switchOutCurve: Curves.easeInCubic,
-                child: Column(
-                  key: ValueKey<String>(
-                    '${_dateKey(_selectedDay)}-${events.map((event) => event.id).join('|')}',
-                  ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(
+                height: headerHeight,
+                child: Row(
                   children: [
-                    for (final event in events)
-                      _EventTile(
-                        event: event,
-                        color: _itemColor(context, event),
-                        onTap: () => _openItem(event),
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: tokens.accentContainer,
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                    const SizedBox(height: 2),
-                    TextButton.icon(
-                      onPressed: _openCreate,
-                      icon: const Icon(Icons.add_rounded),
-                      label: const Text('일정 추가'),
+                      alignment: Alignment.center,
+                      child: Icon(
+                        Icons.calendar_month_rounded,
+                        color: tokens.onAccentContainer,
+                        size: 18,
+                      ),
+                    ),
+                    const SizedBox(width: 9),
+                    Expanded(
+                      child: Text(
+                        '일정',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              color: tokens.textPrimary,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -.15,
+                            ),
+                      ),
+                    ),
+                    ValueListenableBuilder<bool>(
+                      valueListenable: DevAuth.devModeEnabled,
+                      builder: (context, enabled, child) {
+                        if (!enabled) return const SizedBox.shrink();
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 4),
+                          child: IconButton(
+                            onPressed: _showCalendarDeveloperStatus,
+                            tooltip: '상태',
+                            visualDensity: VisualDensity.compact,
+                            icon: Icon(
+                              Icons.bug_report_outlined,
+                              color: tokens.textSecondary,
+                              size: 18,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    if (widget.headerTrailing != null) widget.headerTrailing!,
+                  ],
+                ),
+              ),
+              SizedBox(height: gap),
+              if (widget.showAccountEntry) ...[
+                SizedBox(
+                  height: accountHeight,
+                  child: _buildAccountEntry(
+                    context,
+                    duration: duration,
+                    compact: compact,
+                    extreme: extreme,
+                  ),
+                ),
+                SizedBox(height: gap),
+              ],
+              SizedBox(
+                height: monthHeight,
+                child: Row(
+                  children: [
+                    IconButton(
+                      onPressed: () => _moveMonth(-1),
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(Icons.chevron_left_rounded),
+                    ),
+                    Expanded(
+                      child: Text(
+                        '${_visibleMonth.year}년 ${_visibleMonth.month.toString().padLeft(2, '0')}월',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w900,
+                            ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => _moveMonth(1),
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(Icons.chevron_right_rounded),
+                    ),
+                    IconButton(
+                      onPressed: _refreshing ? null : _refresh,
+                      tooltip: '일정 갱신',
+                      visualDensity: VisualDensity.compact,
+                      icon: reduceMotion
+                          ? Icon(
+                              _refreshing
+                                  ? Icons.sync_rounded
+                                  : Icons.refresh_rounded,
+                            )
+                          : RotationTransition(
+                              turns: _refreshController,
+                              child: Icon(
+                                _refreshing
+                                    ? Icons.sync_rounded
+                                    : Icons.refresh_rounded,
+                              ),
+                            ),
+                    ),
+                    IconButton(
+                      onPressed: _store.initialized ? _openCreate : null,
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(Icons.add_circle_rounded),
+                      tooltip: '일정 추가',
                     ),
                   ],
                 ),
               ),
-          ],
-        ),
-      ),
+              SizedBox(height: gap),
+              SizedBox(
+                height: weekdaysHeight,
+                child: Row(
+                  children: _weekdays
+                      .map(
+                        (day) => Expanded(
+                          child: Center(
+                            child: Text(
+                              day,
+                              style: TextStyle(
+                                color: cs.onSurfaceVariant,
+                                fontWeight: FontWeight.w900,
+                                fontSize: compact ? 11 : 12,
+                              ),
+                            ),
+                          ),
+                        ),
+                      )
+                      .toList(growable: false),
+                ),
+              ),
+              SizedBox(height: gap * .6),
+              SizedBox(
+                height: gridHeight,
+                child: (_store.initializing || !_store.initialized) &&
+                        _initializationError == null
+                    ? const Center(child: CircularProgressIndicator())
+                    : _initializationError != null
+                        ? _ErrorBox(
+                            text: '캘린더 연결 정보를 불러오지 못했습니다.',
+                            compact: compact,
+                            onRetry: () {
+                              debugPrint(
+                                '[HeadquarterCalendar] retry initialization error=$_initializationError',
+                              );
+                              if (_initializationStack != null) {
+                                debugPrint('$_initializationStack');
+                              }
+                              setState(() {
+                                _initializationError = null;
+                                _initializationStack = null;
+                              });
+                              unawaited(_initialize());
+                            },
+                          )
+                        : _buildCalendarGrid(
+                            summary,
+                            height: gridHeight,
+                            compact: compact,
+                          ),
+              ),
+              SizedBox(height: gap),
+              SizedBox(
+                height: selectedHeaderHeight,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '${_selectedDay.month}월 ${_selectedDay.day}일 ${_weekdays[_selectedDay.weekday % 7]}요일',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w900,
+                            ),
+                      ),
+                    ),
+                    AnimatedSwitcher(
+                      duration: duration,
+                      child: Text(
+                        '${events.length}개',
+                        key: ValueKey<int>(events.length),
+                        style: TextStyle(
+                          color: cs.onSurfaceVariant,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(height: gap * .6),
+              SizedBox(
+                height: previewHeight,
+                child: AnimatedSwitcher(
+                  duration: duration,
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  transitionBuilder: (child, animation) {
+                    if (reduceMotion) return child;
+                    return FadeTransition(
+                      opacity: animation,
+                      child: SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(0, .035),
+                          end: Offset.zero,
+                        ).animate(animation),
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: Align(
+                    key: ValueKey<String>(
+                      '${_dateKey(_selectedDay)}-${events.map((event) => event.id).join('|')}',
+                    ),
+                    alignment: Alignment.topCenter,
+                    child: _buildPreviewArea(
+                      events: events,
+                      previewEvents: previewEvents,
+                      hiddenCount: hiddenCount,
+                      compact: compact,
+                      ultra: ultra,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+
+        if (!widget.fillViewport || !constraints.maxHeight.isFinite) {
+          return content;
+        }
+        return SizedBox.expand(child: content);
+      },
     );
   }
 
-  Widget _buildCalendarGrid(Map<String, _DaySummary> summary) {
+  Widget _buildPreviewArea({
+    required List<_HeadquarterCalendarItem> events,
+    required List<_HeadquarterCalendarItem> previewEvents,
+    required int hiddenCount,
+    required bool compact,
+    required bool ultra,
+  }) {
+    if (_store.calendarProfiles.isEmpty && _store.initialized) {
+      return _ConnectionBox(onRefresh: _refresh, compact: compact);
+    }
+    if (events.isEmpty) {
+      return _EmptyBox(onAdd: _openCreate, compact: compact);
+    }
+    return Column(
+      key: ValueKey<String>(
+        '${_dateKey(_selectedDay)}-${events.map((event) => event.id).join('|')}',
+      ),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final event in previewEvents)
+          _EventTile(
+            event: event,
+            color: _itemColor(context, event),
+            onTap: () => _openItem(event),
+            compact: true,
+            ultra: ultra,
+          ),
+        if (hiddenCount > 0)
+          _MoreEventsButton(
+            hiddenCount: hiddenCount,
+            onTap: _openFullScheduleDock,
+            compact: compact,
+          ),
+      ],
+    );
+  }
+
+  Widget _buildCalendarGrid(
+    Map<String, _DaySummary> summary, {
+    required double height,
+    required bool compact,
+  }) {
     final first = DateTime(_visibleMonth.year, _visibleMonth.month, 1);
     final start = first.subtract(Duration(days: first.weekday % 7));
     final days = List<DateTime>.generate(
       42,
       (index) => start.add(Duration(days: index)),
     );
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 7,
-        childAspectRatio: .88,
-      ),
-      itemCount: days.length,
-      itemBuilder: (context, index) {
-        final day = days[index];
-        final daySummary = summary[_dateKey(day)];
-        final selected = _sameDay(day, _selectedDay);
-        final today = _sameDay(day, DateTime.now());
-        final inMonth = day.month == _visibleMonth.month &&
-            day.year == _visibleMonth.year;
-        return _DayCell(
-          day: day.day,
-          count: daySummary?.count ?? 0,
-          important: daySummary?.important ?? false,
-          selected: selected,
-          today: today,
-          inMonth: inMonth,
-          onTap: () => _selectDay(day),
+    final dense = (height / 6) < 28;
+    return Column(
+      children: List<Widget>.generate(6, (weekIndex) {
+        return Expanded(
+          child: Row(
+            children: List<Widget>.generate(7, (weekdayIndex) {
+              final index = weekIndex * 7 + weekdayIndex;
+              final day = days[index];
+              final daySummary = summary[_dateKey(day)];
+              final selected = _sameDay(day, _selectedDay);
+              final today = _sameDay(day, DateTime.now());
+              final inMonth = day.month == _visibleMonth.month &&
+                  day.year == _visibleMonth.year;
+              return Expanded(
+                child: _DayCell(
+                  day: day.day,
+                  count: daySummary?.count ?? 0,
+                  important: daySummary?.important ?? false,
+                  selected: selected,
+                  today: today,
+                  inMonth: inMonth,
+                  compact: compact,
+                  dense: dense,
+                  onTap: () => _selectDay(day),
+                ),
+              );
+            }, growable: false),
+          ),
         );
-      },
+      }, growable: false),
     );
   }
 
@@ -1152,6 +1514,8 @@ class _DayCell extends StatelessWidget {
     required this.selected,
     required this.today,
     required this.inMonth,
+    required this.compact,
+    required this.dense,
     required this.onTap,
   });
 
@@ -1161,6 +1525,8 @@ class _DayCell extends StatelessWidget {
   final bool selected;
   final bool today;
   final bool inMonth;
+  final bool compact;
+  final bool dense;
   final VoidCallback onTap;
 
   @override
@@ -1186,8 +1552,10 @@ class _DayCell extends StatelessWidget {
         duration:
             reduceMotion ? Duration.zero : const Duration(milliseconds: 160),
         curve: Curves.easeOutCubic,
-        margin: const EdgeInsets.all(2),
-        padding: const EdgeInsets.fromLTRB(4, 5, 4, 4),
+        margin: EdgeInsets.all(dense ? .5 : compact ? 1 : 2),
+        padding: dense
+            ? EdgeInsets.zero
+            : EdgeInsets.fromLTRB(3, compact ? 3 : 5, 3, compact ? 2 : 4),
         decoration: BoxDecoration(
           color: background,
           borderRadius: BorderRadius.circular(12),
@@ -1195,53 +1563,87 @@ class _DayCell extends StatelessWidget {
               ? Border.all(color: cs.primary.withOpacity(.45))
               : null,
         ),
-        child: Column(
-          children: [
-            Text(
-              '$day',
-              style: TextStyle(
-                color: foreground,
-                fontWeight:
-                    selected || today ? FontWeight.w900 : FontWeight.w700,
-                fontSize: 12,
-              ),
-            ),
-            const Spacer(),
-            if (count > 0)
-              AnimatedContainer(
-                duration: reduceMotion
-                    ? Duration.zero
-                    : const Duration(milliseconds: 160),
-                constraints: const BoxConstraints(minWidth: 20),
-                height: 18,
-                padding: const EdgeInsets.symmetric(horizontal: 5),
-                decoration: BoxDecoration(
-                  color: selected
-                      ? cs.onPrimary.withOpacity(.2)
-                      : important
-                          ? cs.errorContainer
-                          : cs.secondaryContainer,
-                  borderRadius: BorderRadius.circular(999),
-                ),
+        child: dense
+            ? Stack(
                 alignment: Alignment.center,
-                child: Text(
-                  count > 99 ? '99+' : '$count',
-                  style: TextStyle(
-                    color: selected
-                        ? cs.onPrimary
-                        : important
-                            ? cs.onErrorContainer
-                            : cs.onSecondaryContainer,
-                    fontSize: 9,
-                    fontWeight: FontWeight.w900,
-                    height: 1,
+                children: [
+                  Text(
+                    '$day',
+                    style: TextStyle(
+                      color: foreground,
+                      fontWeight: selected || today
+                          ? FontWeight.w900
+                          : FontWeight.w700,
+                      fontSize: 9,
+                      height: 1,
+                    ),
                   ),
-                ),
+                  if (count > 0)
+                    Positioned(
+                      bottom: 1,
+                      child: Container(
+                        width: 5,
+                        height: 5,
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? cs.onPrimary
+                              : important
+                                  ? cs.error
+                                  : cs.secondary,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                ],
               )
-            else
-              const SizedBox(height: 18),
-          ],
-        ),
+            : Column(
+                children: [
+                  Text(
+                    '$day',
+                    style: TextStyle(
+                      color: foreground,
+                      fontWeight: selected || today
+                          ? FontWeight.w900
+                          : FontWeight.w700,
+                      fontSize: compact ? 11 : 12,
+                    ),
+                  ),
+                  const Spacer(),
+                  if (count > 0)
+                    AnimatedContainer(
+                      duration: reduceMotion
+                          ? Duration.zero
+                          : const Duration(milliseconds: 160),
+                      constraints: BoxConstraints(minWidth: compact ? 18 : 20),
+                      height: compact ? 15 : 18,
+                      padding: const EdgeInsets.symmetric(horizontal: 5),
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? cs.onPrimary.withOpacity(.2)
+                            : important
+                                ? cs.errorContainer
+                                : cs.secondaryContainer,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        count > 99 ? '99+' : '$count',
+                        style: TextStyle(
+                          color: selected
+                              ? cs.onPrimary
+                              : important
+                                  ? cs.onErrorContainer
+                                  : cs.onSecondaryContainer,
+                          fontSize: compact ? 8 : 9,
+                          fontWeight: FontWeight.w900,
+                          height: 1,
+                        ),
+                      ),
+                    )
+                  else
+                    SizedBox(height: compact ? 15 : 18),
+                ],
+              ),
       ),
     );
   }
@@ -1252,11 +1654,15 @@ class _EventTile extends StatelessWidget {
     required this.event,
     required this.color,
     required this.onTap,
+    this.compact = false,
+    this.ultra = false,
   });
 
   final _HeadquarterCalendarItem event;
   final Color color;
   final VoidCallback onTap;
+  final bool compact;
+  final bool ultra;
 
   @override
   Widget build(BuildContext context) {
@@ -1267,7 +1673,7 @@ class _EventTile extends StatelessWidget {
     final duration =
         reduceMotion ? Duration.zero : const Duration(milliseconds: 180);
     return Padding(
-      padding: const EdgeInsets.only(bottom: 7),
+      padding: EdgeInsets.only(bottom: ultra ? 3 : compact ? 4 : 7),
       child: Material(
         color: tokens.transparent,
         child: InkWell(
@@ -1276,7 +1682,10 @@ class _EventTile extends StatelessWidget {
           child: AnimatedContainer(
             duration: duration,
             curve: Curves.easeOutCubic,
-            padding: const EdgeInsets.all(11),
+            padding: EdgeInsets.symmetric(
+              horizontal: compact ? 9 : 11,
+              vertical: ultra ? 5 : compact ? 7 : 11,
+            ),
             decoration: BoxDecoration(
               color: Color.alphaBlend(color.withOpacity(.07), cs.surface),
               borderRadius: BorderRadius.circular(14),
@@ -1286,15 +1695,15 @@ class _EventTile extends StatelessWidget {
               children: [
                 AnimatedContainer(
                   duration: duration,
-                  width: 34,
-                  height: 34,
+                  width: ultra ? 28 : compact ? 30 : 34,
+                  height: ultra ? 28 : compact ? 30 : 34,
                   decoration: BoxDecoration(
                     color: color.withOpacity(.12),
-                    borderRadius: BorderRadius.circular(11),
+                    borderRadius: BorderRadius.circular(compact ? 9 : 11),
                   ),
-                  child: Icon(event.icon, color: color, size: 19),
+                  child: Icon(event.icon, color: color, size: compact ? 17 : 19),
                 ),
-                const SizedBox(width: 10),
+                SizedBox(width: compact ? 8 : 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1312,7 +1721,7 @@ class _EventTile extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: cs.onSurfaceVariant,
-                          fontSize: 12,
+                          fontSize: compact ? 11 : 12,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -1347,28 +1756,142 @@ class _EventTile extends StatelessWidget {
   }
 }
 
-class _EmptyBox extends StatelessWidget {
-  const _EmptyBox({required this.onAdd});
+class _MoreEventsButton extends StatefulWidget {
+  const _MoreEventsButton({
+    required this.hiddenCount,
+    required this.onTap,
+    required this.compact,
+  });
 
-  final VoidCallback onAdd;
+  final int hiddenCount;
+  final Future<void> Function() onTap;
+  final bool compact;
+
+  @override
+  State<_MoreEventsButton> createState() => _MoreEventsButtonState();
+}
+
+class _MoreEventsButtonState extends State<_MoreEventsButton> {
+  bool _pressed = false;
+  bool _hovered = false;
+  bool _focused = false;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 18),
-      decoration: BoxDecoration(
-        border: Border.all(
-          color: Theme.of(context).colorScheme.outlineVariant,
+    final tokens = CommonUiTheme.of(context);
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final duration = reduceMotion ? Duration.zero : CommonUiMotion.selection;
+    return FocusableActionDetector(
+      onShowHoverHighlight: (value) {
+        if (mounted) setState(() => _hovered = value);
+      },
+      onShowFocusHighlight: (value) {
+        if (mounted) setState(() => _focused = value);
+      },
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: (_) => setState(() => _pressed = true),
+        onTapCancel: () => setState(() => _pressed = false),
+        onTapUp: (_) {
+          setState(() => _pressed = false);
+          HapticFeedback.selectionClick();
+          widget.onTap();
+        },
+        child: AnimatedScale(
+          duration: reduceMotion ? Duration.zero : CommonUiMotion.press,
+          curve: CommonUiMotion.standard,
+          scale: _pressed ? .98 : 1,
+          child: AnimatedContainer(
+            duration: duration,
+            curve: CommonUiMotion.enter,
+            padding: EdgeInsets.symmetric(
+              horizontal: widget.compact ? 10 : 12,
+              vertical: widget.compact ? 7 : 9,
+            ),
+            decoration: BoxDecoration(
+              color: _hovered ? tokens.surfaceSelected : tokens.surfaceRaised,
+              borderRadius: BorderRadius.circular(13),
+              border: Border.all(
+                color: _focused
+                    ? tokens.focusRing
+                    : _hovered
+                        ? tokens.accent.withOpacity(.36)
+                        : tokens.borderSubtle,
+                width: _focused ? 2 : 1,
+              ),
+              boxShadow: _hovered
+                  ? [
+                      BoxShadow(
+                        color: tokens.shadow.withOpacity(tokens.isDark ? .22 : .08),
+                        blurRadius: 9,
+                        offset: const Offset(0, 4),
+                      ),
+                    ]
+                  : const [],
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.view_agenda_outlined, color: tokens.accent, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '+ ${widget.hiddenCount}개 일정 더 보기',
+                    style: TextStyle(
+                      color: tokens.textPrimary,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                AnimatedSlide(
+                  duration: duration,
+                  offset: _hovered ? const Offset(.12, 0) : Offset.zero,
+                  child: Icon(
+                    Icons.chevron_right_rounded,
+                    color: tokens.textSecondary,
+                    size: 18,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
+      ),
+    );
+  }
+}
+
+class _EmptyBox extends StatelessWidget {
+  const _EmptyBox({required this.onAdd, this.compact = false});
+
+  final VoidCallback onAdd;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: compact ? 10 : 12),
+      decoration: BoxDecoration(
+        border: Border.all(color: cs.outlineVariant),
         borderRadius: BorderRadius.circular(14),
       ),
-      child: Column(
+      child: Row(
         children: [
-          const Text('선택한 날짜에 일정이 없습니다.'),
-          const SizedBox(height: 6),
+          const Expanded(
+            child: Text(
+              '선택한 날짜에 일정이 없습니다.',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
           TextButton.icon(
             onPressed: onAdd,
-            icon: const Icon(Icons.add_rounded),
+            style: TextButton.styleFrom(
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            ),
+            icon: const Icon(Icons.add_rounded, size: 18),
             label: const Text('일정 추가'),
           ),
         ],
@@ -1378,15 +1901,16 @@ class _EmptyBox extends StatelessWidget {
 }
 
 class _ConnectionBox extends StatelessWidget {
-  const _ConnectionBox({required this.onRefresh});
+  const _ConnectionBox({required this.onRefresh, this.compact = false});
 
   final VoidCallback onRefresh;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: EdgeInsets.symmetric(horizontal: compact ? 10 : 12),
       decoration: BoxDecoration(
         color: cs.surfaceContainerHighest.withOpacity(.45),
         borderRadius: BorderRadius.circular(14),
@@ -1394,16 +1918,19 @@ class _ConnectionBox extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(Icons.calendar_month_rounded, color: cs.primary),
-          const SizedBox(width: 10),
+          Icon(Icons.calendar_month_rounded, color: cs.primary, size: 19),
+          const SizedBox(width: 8),
           const Expanded(
             child: Text(
-              '스프린트 모드에 연결된 Google 캘린더가 없습니다.',
+              '연결된 캘린더가 없습니다.',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(fontWeight: FontWeight.w800),
             ),
           ),
           IconButton(
             onPressed: onRefresh,
+            visualDensity: VisualDensity.compact,
             icon: const Icon(Icons.refresh_rounded),
           ),
         ],
@@ -1413,16 +1940,17 @@ class _ConnectionBox extends StatelessWidget {
 }
 
 class _ErrorBox extends StatelessWidget {
-  const _ErrorBox({required this.text, required this.onRetry});
+  const _ErrorBox({required this.text, required this.onRetry, this.compact = false});
 
   final String text;
   final VoidCallback onRetry;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: EdgeInsets.all(compact ? 10 : 14),
       decoration: BoxDecoration(
         color: cs.errorContainer.withOpacity(.4),
         borderRadius: BorderRadius.circular(14),

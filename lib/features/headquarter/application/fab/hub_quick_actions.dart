@@ -17,6 +17,10 @@ import '../../../../app/utils/snackbar_helper.dart';
 import '../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../account/applications/user_state.dart';
+import '../actions/headquarter_common_actions.dart';
+import '../headquarter_dashboard_context.dart';
+import '../navigation/headquarter_context_navigation_coordinator.dart';
+import '../../widgets/headquarter_dashboard_identity_header.dart';
 import '../../application/area/area_master_cache.dart';
 import '../../page/sheets/head_memo.dart';
 import '../../../selector/application/dev_auth.dart';
@@ -488,8 +492,19 @@ class _HubBubbleState extends State<_HubBubble> {
   void initState() {
     super.initState();
     _pos = widget.initialPos;
-    _recordDebug('initialized navigation=popup_route');
+    HeadquarterDashboardContext.currentModeKey.addListener(
+      _handleHeadquarterModeChanged,
+    );
+    _recordDebug(
+      'initialized navigation=popup_route dashboardIdentity=quick_dock modeSource=HeadquarterDashboardContext userSource=UserState identityAnimation=fast_fade_scale_y_settle actionCarousel=excluded additionalFirebaseRead=0 additionalFirebaseWrite=0',
+    );
     _refreshDeveloperMode();
+  }
+
+  void _handleHeadquarterModeChanged() {
+    _recordDebug(
+      'dashboard_identity_mode_changed current=${HeadquarterDashboardContext.currentModeKey.value} source=HeadquarterDashboardContext',
+    );
   }
 
   void _recordDebug(String message) {
@@ -550,19 +565,28 @@ class _HubBubbleState extends State<_HubBubble> {
       'position=${_pos.dx.toStringAsFixed(1)},${_pos.dy.toStringAsFixed(1)}, developerMode=$_developerMode',
       progress: 0.45,
     );
+    final currentMode =
+        HeadquarterDashboardContext.currentModeKey.value.trim();
+    trace.log(
+      'dashboardIdentity=quick_dock, currentMode=${currentMode.isEmpty ? 'unknown' : currentMode}, modeSource=HeadquarterDashboardContext, userSource=UserState, identityAnimation=fast_fade_scale_y_settle, actionCarousel=excluded, additionalFirebaseRead=0, additionalFirebaseWrite=0',
+      progress: 0.5,
+    );
     trace.log(
       'layout=vertical_headers, indent=10, sections=$sectionSummary',
       progress: 0.52,
     );
     trace.log(
-      'work=memo operations=field,attendance,break,statistics support=faq,terms,privacy,contact thirdParty=moved_to_dashboard',
+      'personal=my_info,work_actions work=memo operations=headquarter_navigation,field,attendance,break,statistics,refresh_area_master system=quick_button,settings,logout support=faq,terms,privacy,contact',
       progress: 0.58,
     );
     trace.log(
       'backPolicy=popup_route_first, panelRouteActive=${panelRoute != null}, panelRouteCurrent=${panelRoute?.isCurrent ?? false}, closeSources=handle,scrim,action,system_back',
       progress: 0.68,
     );
-    final snapshot = List<String>.of(_debugLines);
+    final snapshot = <String>[
+      ..._debugLines,
+      ...HeadquarterCommonActions.debugLines,
+    ];
     if (snapshot.isEmpty) {
       trace.log('기록된 빠른 실행 로그가 없습니다.', progress: 0.75);
     } else {
@@ -577,7 +601,7 @@ class _HubBubbleState extends State<_HubBubble> {
   }
 
   Future<void> _refreshDeveloperMode() async {
-    final enabled = await DevAuth.isDeveloperLoggedIn();
+    final enabled = await DevAuth.isDevModeEnabled();
     if (!mounted) return;
     _recordDebug('developer_mode=$enabled');
     if (_developerMode == enabled) return;
@@ -586,6 +610,9 @@ class _HubBubbleState extends State<_HubBubble> {
 
   @override
   void dispose() {
+    HeadquarterDashboardContext.currentModeKey.removeListener(
+      _handleHeadquarterModeChanged,
+    );
     _disposing = true;
     final route = _panelRoute;
     if (route != null) {
@@ -758,6 +785,39 @@ class _HubBubbleState extends State<_HubBubble> {
 
     return <_DockAction>[
       _DockAction(
+        id: 'my_info',
+        category: _QuickActionCategory.personal,
+        icon: Icons.person_rounded,
+        label: '내 정보',
+        description: '계정과 사용자 정보를 확인합니다.',
+        color: tokens.infoContainer,
+        foreground: tokens.onInfoContainer,
+        onTap: () async {
+          await closeMenu();
+          await HeadquarterCommonActions.openMyInfo(
+            actionContext,
+            source: 'quick_dock',
+          );
+        },
+      ),
+      _DockAction(
+        id: 'work_actions',
+        category: _QuickActionCategory.personal,
+        icon: Icons.work_history_rounded,
+        label: '근무 액션',
+        description: '휴게 사용과 퇴근을 처리합니다.',
+        color: tokens.warningContainer,
+        foreground: tokens.onWarningContainer,
+        onTap: () async {
+          await closeMenu();
+          await HeadquarterCommonActions.openWorkActions(
+            actionContext,
+            source: 'quick_dock',
+            modeKey: HeadquarterDashboardContext.currentModeKey.value,
+          );
+        },
+      ),
+      _DockAction(
         id: 'memo',
         category: _QuickActionCategory.work,
         icon: Icons.sticky_note_2_rounded,
@@ -772,6 +832,27 @@ class _HubBubbleState extends State<_HubBubble> {
               context: sheetContext,
               useCommonUi: true,
             ),
+          );
+        },
+      ),
+      _DockAction(
+        id: 'headquarter_navigation',
+        category: _QuickActionCategory.operations,
+        icon: Icons.location_city_rounded,
+        label: '업무 지역',
+        description: '본사 SQLite 기준 업무 지역으로 이동합니다.',
+        color: tokens.accentContainer,
+        foreground: tokens.onAccentContainer,
+        onTap: () async {
+          await closeMenu();
+          final navigationContext = HeadHubActions._bestContext() ?? actionContext;
+          if (!navigationContext.mounted) return;
+          await HeadquarterContextNavigationCoordinator.openNavigationDock(
+            context: navigationContext,
+            currentModeKey: HeadquarterDashboardContext.currentModeKey.value,
+            currentScreen:
+                ModalRoute.of(navigationContext)?.settings.name ?? 'quick_dock',
+            source: 'quick_dock',
           );
         },
       ),
@@ -848,6 +929,74 @@ class _HubBubbleState extends State<_HubBubble> {
         },
       ),
       _DockAction(
+        id: 'refresh_area_master',
+        category: _QuickActionCategory.operations,
+        icon: Icons.download_rounded,
+        label: '다운받기',
+        description: '본사 운영 데이터를 최신 Snapshot으로 갱신합니다.',
+        color: tokens.infoContainer,
+        foreground: tokens.onInfoContainer,
+        onTap: () async {
+          await closeMenu();
+          await HeadquarterCommonActions.run<void>(
+            source: 'quick_dock',
+            action: 'refresh_area_master',
+            operation: () => HeadHubActions.refreshAreaMaster(actionContext),
+          );
+        },
+      ),
+      _DockAction(
+        id: 'quick_button',
+        category: _QuickActionCategory.system,
+        icon: Icons.lightbulb_rounded,
+        label: '퀵버튼',
+        description: '빠른 실행 핸들을 끕니다.',
+        color: tokens.warningContainer,
+        foreground: tokens.onWarningContainer,
+        onTap: () async {
+          await closeMenu();
+          await HeadquarterCommonActions.run<void>(
+            source: 'quick_dock',
+            action: 'disable_quick_button',
+            operation: () async {
+              HeadHubActions.setEnabled(false);
+            },
+          );
+        },
+      ),
+      _DockAction(
+        id: 'settings',
+        category: _QuickActionCategory.system,
+        icon: Icons.settings_rounded,
+        label: '환경설정',
+        description: '서비스 환경과 동작 설정을 관리합니다.',
+        color: tokens.accentContainer,
+        foreground: tokens.onAccentContainer,
+        onTap: () async {
+          await closeMenu();
+          await HeadquarterCommonActions.openSettings(
+            actionContext,
+            source: 'quick_dock',
+          );
+        },
+      ),
+      _DockAction(
+        id: 'logout',
+        category: _QuickActionCategory.system,
+        icon: Icons.logout_rounded,
+        label: '로그아웃',
+        description: '현재 계정의 세션을 종료합니다.',
+        color: tokens.dangerContainer,
+        foreground: tokens.onDangerContainer,
+        onTap: () async {
+          await closeMenu();
+          await HeadquarterCommonActions.logout(
+            actionContext,
+            source: 'quick_dock',
+          );
+        },
+      ),
+      _DockAction(
         id: 'faq',
         category: _QuickActionCategory.support,
         icon: Icons.help_center_rounded,
@@ -858,8 +1007,9 @@ class _HubBubbleState extends State<_HubBubble> {
         onTap: () async {
           await closeMenu();
           await HeadHubActions.closeAnySheet();
-          await HeadHubActions.navigatorKey.currentState
-              ?.pushNamed(AppRoutes.faq);
+          await HeadHubActions.navigatorKey.currentState?.pushNamed(
+            AppRoutes.faq,
+          );
         },
       ),
       _DockAction(
@@ -873,8 +1023,7 @@ class _HubBubbleState extends State<_HubBubble> {
         onTap: () async {
           await closeMenu();
           await HeadHubActions.closeAnySheet();
-          final opened =
-              await HeadHubActions.openTermsOfService(actionContext);
+          final opened = await HeadHubActions.openTermsOfService(actionContext);
           _recordDebug('external_result id=terms opened=$opened');
         },
       ),
@@ -920,8 +1069,9 @@ class _HubBubbleState extends State<_HubBubble> {
           hiddenUntilExactQuery: true,
           onTap: () async {
             await closeMenu();
-            await HeadHubActions.navigatorKey.currentState
-                ?.pushNamed(AppRoutes.noteSystem);
+            await HeadHubActions.navigatorKey.currentState?.pushNamed(
+              AppRoutes.noteSystem,
+            );
           },
         ),
     ];
@@ -1285,6 +1435,8 @@ class _HeadQuickActionsRoutePanelState
                           actions: widget.actions,
                           controller: widget.controller,
                           focusNode: widget.focusNode,
+                          developerMode: widget.developerMode,
+                          onDeveloperStatus: widget.onDeveloperStatus,
                           onSelect: widget.onSelect,
                         ),
                       ),
@@ -1354,25 +1506,33 @@ class _HeadQuickActionsRoutePanelState
 }
 
 enum _QuickActionCategory {
+  personal,
   work,
   operations,
+  system,
   support,
   developer,
 }
 
 extension _QuickActionCategoryUi on _QuickActionCategory {
   static const List<_QuickActionCategory> mainCategories = <_QuickActionCategory>[
+    _QuickActionCategory.personal,
     _QuickActionCategory.work,
     _QuickActionCategory.operations,
+    _QuickActionCategory.system,
     _QuickActionCategory.support,
   ];
 
   String get label {
     switch (this) {
+      case _QuickActionCategory.personal:
+        return '개인';
       case _QuickActionCategory.work:
         return '업무';
       case _QuickActionCategory.operations:
         return '운영';
+      case _QuickActionCategory.system:
+        return '시스템';
       case _QuickActionCategory.support:
         return '지원';
       case _QuickActionCategory.developer:
@@ -1385,12 +1545,16 @@ class _CommandPaletteDock extends StatelessWidget {
   final List<_DockAction> actions;
   final TextEditingController controller;
   final FocusNode focusNode;
+  final bool developerMode;
+  final Future<void> Function() onDeveloperStatus;
   final Future<void> Function(_DockAction action) onSelect;
 
   const _CommandPaletteDock({
     required this.actions,
     required this.controller,
     required this.focusNode,
+    required this.developerMode,
+    required this.onDeveloperStatus,
     required this.onSelect,
   });
 
@@ -1398,6 +1562,7 @@ class _CommandPaletteDock extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
+    final userState = context.watch<UserState>();
 
     final queryRaw = controller.text.trim();
     final query = _normalize(queryRaw);
@@ -1419,13 +1584,47 @@ class _CommandPaletteDock extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          titleText,
-          style: text.titleSmall?.copyWith(
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0.2,
-            color: cs.onSurface,
-          ),
+        ValueListenableBuilder<String>(
+          valueListenable: HeadquarterDashboardContext.currentModeKey,
+          builder: (context, modeKey, _) {
+            return HeadquarterDashboardIdentityHeader(
+              name: userState.name,
+              position: userState.position,
+              modeKey: modeKey,
+              variant: HeadquarterDashboardIdentityVariant.quickDock,
+            );
+          },
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                titleText,
+                style: text.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.2,
+                  color: cs.onSurface,
+                ),
+              ),
+            ),
+            AnimatedSwitcher(
+              duration: MediaQuery.maybeOf(context)?.disableAnimations == true
+                  ? Duration.zero
+                  : CommonUiMotion.selection,
+              child: developerMode
+                  ? CommonIconButton(
+                      key: const ValueKey<String>('quick_dock_debug'),
+                      icon: Icons.bug_report_rounded,
+                      tooltip: '상태',
+                      onPressed: onDeveloperStatus,
+                      haptic: CommonHaptic.selection,
+                    )
+                  : const SizedBox.shrink(
+                      key: ValueKey<String>('quick_dock_debug_hidden'),
+                    ),
+            ),
+          ],
         ),
         const SizedBox(height: 10),
         _SearchField(
@@ -1693,87 +1892,162 @@ class _StaggeredReveal extends StatelessWidget {
   }
 }
 
-class _PaletteTile extends StatelessWidget {
+class _PaletteTile extends StatefulWidget {
+  const _PaletteTile({
+    required this.action,
+    required this.onSelect,
+  });
+
   final _DockAction action;
   final Future<void> Function(_DockAction action) onSelect;
 
-  const _PaletteTile({required this.action, required this.onSelect});
+  @override
+  State<_PaletteTile> createState() => _PaletteTileState();
+}
+
+class _PaletteTileState extends State<_PaletteTile> {
+  bool _pressed = false;
+  bool _hovered = false;
+  bool _focused = false;
 
   @override
   Widget build(BuildContext context) {
     final tokens = CommonUiTheme.of(context);
     final text = Theme.of(context).textTheme;
-
-    final border = tokens.borderSubtle;
-    final bg = tokens.surface;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final background = _pressed || _hovered
+        ? tokens.surfaceSelected
+        : tokens.surface;
+    final border = _focused ? tokens.focusRing : tokens.borderSubtle;
 
     return Semantics(
       button: true,
-      label: action.label,
-      child: Material(
-        color: tokens.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: () => onSelect(action),
-          child: Ink(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            decoration: BoxDecoration(
-              color: bg,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: border, width: 1),
+      label: widget.action.label,
+      child: AnimatedScale(
+        scale: _pressed ? .985 : 1,
+        duration: reduceMotion ? Duration.zero : CommonUiMotion.press,
+        curve: CommonUiMotion.enter,
+        child: AnimatedContainer(
+          duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+          curve: CommonUiMotion.standard,
+          decoration: BoxDecoration(
+            color: background,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: border,
+              width: _focused ? 2 : 1,
             ),
-            child: Row(
-              children: [
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    color: action.color,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: tokens.shadow,
-                        blurRadius: 8,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  alignment: Alignment.center,
-                  child: Icon(action.icon, color: action.foreground, size: 22),
+            boxShadow: _hovered
+                ? [
+                    BoxShadow(
+                      color: tokens.shadow,
+                      blurRadius: 12,
+                      offset: const Offset(0, 5),
+                    ),
+                  ]
+                : const [],
+          ),
+          child: Material(
+            color: tokens.transparent,
+            borderRadius: BorderRadius.circular(14),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(14),
+              onTap: () {
+                unawaited(widget.onSelect(widget.action));
+              },
+              onHighlightChanged: (value) {
+                if (_pressed == value) return;
+                setState(() => _pressed = value);
+              },
+              onHover: (value) {
+                if (_hovered == value) return;
+                setState(() => _hovered = value);
+              },
+              onFocusChange: (value) {
+                if (_focused == value) return;
+                setState(() => _focused = value);
+              },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 12,
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        action.label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: text.titleSmall?.copyWith(
-                          color: tokens.textPrimary,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.2,
-                        ),
-                      ),
-                      if ((action.description ?? '').trim().isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          action.description!,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: text.bodySmall?.copyWith(
-                            color: tokens.textSecondary,
-                            height: 1.15,
+                child: Row(
+                  children: [
+                    AnimatedContainer(
+                      duration: reduceMotion
+                          ? Duration.zero
+                          : CommonUiMotion.selection,
+                      curve: CommonUiMotion.standard,
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: widget.action.color,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: tokens.shadow,
+                            blurRadius: _hovered ? 11 : 8,
+                            offset: const Offset(0, 3),
                           ),
-                        ),
-                      ],
-                    ],
-                  ),
+                        ],
+                      ),
+                      alignment: Alignment.center,
+                      child: Icon(
+                        widget.action.icon,
+                        color: widget.action.foreground,
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.action.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: text.titleSmall?.copyWith(
+                              color: tokens.textPrimary,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                          if ((widget.action.description ?? '')
+                              .trim()
+                              .isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              widget.action.description!,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: text.bodySmall?.copyWith(
+                                color: tokens.textSecondary,
+                                height: 1.15,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    AnimatedSlide(
+                      offset: _hovered ? const Offset(.08, 0) : Offset.zero,
+                      duration: reduceMotion
+                          ? Duration.zero
+                          : CommonUiMotion.selection,
+                      curve: CommonUiMotion.enter,
+                      child: Icon(
+                        Icons.chevron_right_rounded,
+                        color: tokens.iconSecondary,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                Icon(Icons.chevron_right_rounded, color: tokens.iconSecondary),
-              ],
+              ),
             ),
           ),
         ),

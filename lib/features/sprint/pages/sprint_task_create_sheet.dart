@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../shared/calendar/calendar_public_text.dart';
 import '../../../shared/google_calendar/google_event_colors.dart';
 import '../application/sprint_mode_store.dart';
 import '../domain/sprint_models.dart';
@@ -223,8 +224,6 @@ class _SprintTaskCreateSheetState extends State<_SprintTaskCreateSheet> {
     final calendarProfiles = widget.store.calendarProfiles;
     final calendarProfile =
         widget.store.calendarProfileById(_calendarProfileId);
-    final calendarAccount =
-        widget.store.accountForProfile(calendarProfile?.id);
     final project = widget.store.projectById(_projectId);
     final targetDate = project?.targetDate;
     final afterTarget = targetDate != null &&
@@ -258,7 +257,7 @@ class _SprintTaskCreateSheetState extends State<_SprintTaskCreateSheet> {
                 const SizedBox(height: 14),
                 if (calendarProfiles.isNotEmpty) ...[
                   const Text(
-                    'Google 캘린더',
+                    '캘린더',
                     style: TextStyle(fontWeight: FontWeight.w800),
                   ),
                   const SizedBox(height: 8),
@@ -271,8 +270,6 @@ class _SprintTaskCreateSheetState extends State<_SprintTaskCreateSheet> {
                     items: calendarProfiles
                         .map(
                           (profile) {
-                            final account =
-                                widget.store.accountForProfile(profile.id);
                             return DropdownMenuItem<String>(
                               value: profile.id,
                               child: Row(
@@ -287,7 +284,7 @@ class _SprintTaskCreateSheetState extends State<_SprintTaskCreateSheet> {
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
-                                      '${profile.label} · ${account?.email ?? ''}',
+                                      '${calendarPublicLabel(profile.label)} · ${profile.accessRoleLabel}',
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                     ),
@@ -340,7 +337,7 @@ class _SprintTaskCreateSheetState extends State<_SprintTaskCreateSheet> {
                               Text(
                                 calendarProfile == null
                                     ? '로컬 업무'
-                                    : calendarProfile.label,
+                                    : calendarPublicLabel(calendarProfile.label),
                                 style: const TextStyle(
                                   fontWeight: FontWeight.w900,
                                 ),
@@ -349,7 +346,7 @@ class _SprintTaskCreateSheetState extends State<_SprintTaskCreateSheet> {
                               Text(
                                 calendarProfile == null
                                     ? '연결된 캘린더가 없어 로컬에 저장합니다.'
-                                    : '${calendarAccount?.email ?? ''} · ${calendarProfile.calendarId}',
+                                    : calendarPublicAccessLabel(canEditEvents: calendarProfile.canEditEvents, canManageSharing: calendarProfile.canManageSharing),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(

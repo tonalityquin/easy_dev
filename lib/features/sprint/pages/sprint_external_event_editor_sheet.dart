@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../design_system/common_ui/common_ui_theme.dart';
+import '../../../shared/calendar/calendar_public_text.dart';
 import '../application/sprint_mode_store.dart';
 import '../domain/sprint_models.dart';
 import 'sprint_ui.dart';
@@ -140,19 +141,19 @@ class _SprintExternalEventEditorSheetState
       return '종료 시각은 시작 시각보다 늦어야 합니다.';
     }
     if (value.contains('calendar_profile_not_found')) {
-      return '연결된 Google 캘린더를 찾지 못했습니다.';
+      return '연결된 캘린더를 찾지 못했습니다.';
     }
     if (value.contains('calendar_profile_account_mismatch') ||
         value.contains('calendar_profile_account_missing')) {
       return '현재 앱 사용자 계정의 공유 캘린더 목록에서 이 캘린더를 다시 연결하세요.';
     }
     if (value.contains('google_authentication_required')) {
-      return '현재 앱 사용자 계정의 Google Calendar 권한을 갱신하세요.';
+      return '현재 앱 사용자 계정의 캘린더 연결 권한을 갱신하세요.';
     }
     if (value.contains('404') || value.contains('not found')) {
-      return 'Google Calendar에서 일정을 찾지 못했습니다.';
+      return '연결된 캘린더에서 일정을 찾지 못했습니다.';
     }
-    return 'Google Calendar 일정 작업을 완료하지 못했습니다.';
+    return '일정 작업을 완료하지 못했습니다.';
   }
 
   Future<void> _pickStartDate() async {
@@ -246,15 +247,15 @@ class _SprintExternalEventEditorSheetState
     });
     final trace = await DeveloperOperationTrace.start(
       context: context,
-      title: _editing ? 'Google 일정 수정' : 'Google 일정 추가',
+      title: _editing ? '일정 수정' : '일정 추가',
       initialMessage: _editing
-          ? '공유 Google Calendar 일정을 수정하고 있습니다.'
-          : '공유 Google Calendar에 일정을 추가하고 있습니다.',
+          ? '연결된 캘린더 일정을 수정하고 있습니다.'
+          : '연결된 캘린더에 일정을 추가하고 있습니다.',
       useCommonUi: true,
       developerModeMessage:
-          '개발자 모드 ON: Google Calendar 작업 로그를 복사할 수 있습니다.',
+          '개발자 모드 ON: 일정 작업 로그를 복사할 수 있습니다.',
       standardModeMessage:
-          '개발자 모드 OFF: Google Calendar 작업 로그를 콘솔에 기록합니다.',
+          '개발자 모드 OFF: 일정 작업 로그를 콘솔에 기록합니다.',
     );
     trace.log(
       'profile=${profile.id} calendar=${profile.calendarId} '
@@ -297,8 +298,8 @@ class _SprintExternalEventEditorSheetState
       );
       await trace.succeed(
         _editing
-            ? 'Google Calendar 일정을 수정했습니다.'
-            : 'Google Calendar에 일정을 추가했습니다.',
+            ? '일정을 수정했습니다.'
+            : '일정을 추가했습니다.',
       );
       if (!mounted) return;
       Navigator.of(context).pop();
@@ -332,8 +333,8 @@ class _SprintExternalEventEditorSheetState
           barrierDismissible: false,
           builder: (dialogContext) {
             return AlertDialog(
-              title: const Text('Google 일정 삭제'),
-              content: Text('${event.title} 일정을 Google Calendar에서 삭제할까요?'),
+              title: const Text('일정 삭제'),
+              content: Text('${event.title} 일정을 연결된 캘린더에서 삭제할까요?'),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -356,13 +357,13 @@ class _SprintExternalEventEditorSheetState
     });
     final trace = await DeveloperOperationTrace.start(
       context: context,
-      title: 'Google 일정 삭제',
-      initialMessage: '공유 Google Calendar 일정을 삭제하고 있습니다.',
+      title: '일정 삭제',
+      initialMessage: '연결된 캘린더 일정을 삭제하고 있습니다.',
       useCommonUi: true,
       developerModeMessage:
-          '개발자 모드 ON: Google Calendar 삭제 로그를 복사할 수 있습니다.',
+          '개발자 모드 ON: 일정 삭제 로그를 복사할 수 있습니다.',
       standardModeMessage:
-          '개발자 모드 OFF: Google Calendar 삭제 로그를 콘솔에 기록합니다.',
+          '개발자 모드 OFF: 일정 삭제 로그를 콘솔에 기록합니다.',
     );
     trace.log(
       'profile=${profile.id} calendar=${profile.calendarId} '
@@ -377,7 +378,7 @@ class _SprintExternalEventEditorSheetState
       }
       trace.log('Google Calendar API에 삭제를 요청하고 있습니다.', progress: 0.72);
       await widget.store.deleteExternalCalendarEvent(event.id);
-      await trace.succeed('Google Calendar 일정을 삭제했습니다.');
+      await trace.succeed('일정을 삭제했습니다.');
       if (!mounted) return;
       Navigator.of(context).pop();
     } catch (error, stackTrace) {
@@ -439,7 +440,7 @@ class _SprintExternalEventEditorSheetState
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      _editing ? 'Google 일정 수정' : 'Google 일정 추가',
+                      _editing ? '일정 수정' : '일정 추가',
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.w900,
                           ),
@@ -454,7 +455,7 @@ class _SprintExternalEventEditorSheetState
                     ? _calendarProfileId
                     : null,
                 decoration: const InputDecoration(
-                  labelText: 'Google 캘린더',
+                  labelText: '캘린더',
                   prefixIcon: Icon(Icons.calendar_month_outlined),
                 ),
                 items: profiles
@@ -462,7 +463,7 @@ class _SprintExternalEventEditorSheetState
                       (candidate) => DropdownMenuItem<String>(
                         value: candidate.id,
                         child: Text(
-                          '${candidate.label} · ${candidate.accessRoleLabel}',
+                          '${calendarPublicLabel(candidate.label)} · ${candidate.accessRoleLabel}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -630,7 +631,7 @@ class _SprintExternalEventEditorSheetState
                               ? Icons.save_outlined
                               : Icons.add_circle_outline_rounded,
                         ),
-                        label: Text(_editing ? '변경 저장' : 'Google 일정 추가'),
+                        label: Text(_editing ? '변경 저장' : '일정 추가'),
                       ),
               ),
               if (_editing) ...[
@@ -638,7 +639,7 @@ class _SprintExternalEventEditorSheetState
                 OutlinedButton.icon(
                   onPressed: _busy ? null : _delete,
                   icon: const Icon(Icons.delete_outline_rounded),
-                  label: const Text('Google Calendar에서 삭제'),
+                  label: const Text('일정 삭제'),
                 ),
               ],
             ],

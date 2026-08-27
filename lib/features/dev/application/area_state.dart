@@ -453,6 +453,24 @@ class AreaState with ChangeNotifier {
     }
   }
 
+  void applyLocalAreaRecord(
+    AreaRecord record, {
+    String source = 'local',
+  }) {
+    final normalizedArea = record.name.trim();
+    if (normalizedArea.isEmpty) {
+      debugPrint('[AreaState] local area 적용 중단: area_empty source=$source');
+      return;
+    }
+    _sessionGeneration++;
+    _applyRecordToState(record);
+    notifyListeners();
+    debugPrint(
+      '[AreaState] local area 적용 완료: $_currentArea / division=$_currentDivision / source=$source / remoteRead=0 remoteWrite=0 / caps=${Cap.human(capabilitiesOfCurrentArea)}',
+    );
+    _notifyForegroundWithArea();
+  }
+
   Future<void> updateAreaPicker(
     String newArea, {
     bool isSyncing = false,

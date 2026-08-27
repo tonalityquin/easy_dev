@@ -63,6 +63,7 @@ class ModifyPlateService {
   final String? selectedSectorId;
   final String? selectedSectorName;
   final bool canUseBill;
+  final bool billingLocked;
   final bool canUseSector;
   final PlateStatusScope? statusScope;
   final bool statusChanged;
@@ -99,6 +100,7 @@ class ModifyPlateService {
     required this.selectedSectorId,
     required this.selectedSectorName,
     required this.canUseBill,
+    required this.billingLocked,
     required this.canUseSector,
     required this.statusScope,
     required this.statusChanged,
@@ -523,30 +525,35 @@ class ModifyPlateService {
     final effectiveSectorName = canUseSector
         ? (hasSector ? normalizedSectorName : null)
         : originalPlate.sectorName;
+    final canEditBilling = canUseBill && !billingLocked;
     final effectiveBillingType =
-        canUseBill ? newBillingType : originalPlate.billingType;
-    final effectiveBillingPlanType = canUseBill
+        canEditBilling ? newBillingType : originalPlate.billingType;
+    final effectiveBillingPlanType = canEditBilling
         ? (selectedBillType == '정기' ? '정기' : '변동')
         : originalPlate.billingPlanType;
-    final effectiveBasicStandard =
-        canUseBill ? selectedBasicStandard : originalPlate.basicStandard;
+    final effectiveBasicStandard = canEditBilling
+        ? selectedBasicStandard
+        : originalPlate.basicStandard;
     final effectiveBasicAmount =
-        canUseBill ? selectedBasicAmount : originalPlate.basicAmount;
+        canEditBilling ? selectedBasicAmount : originalPlate.basicAmount;
     final effectiveAddStandard =
-        canUseBill ? selectedAddStandard : originalPlate.addStandard;
+        canEditBilling ? selectedAddStandard : originalPlate.addStandard;
     final effectiveAddAmount =
-        canUseBill ? selectedAddAmount : originalPlate.addAmount;
-    final effectiveRegularAmount =
-        canUseBill ? selectedRegularAmount : originalPlate.regularAmount;
-    final effectiveRegularDurationValue = canUseBill
+        canEditBilling ? selectedAddAmount : originalPlate.addAmount;
+    final effectiveRegularAmount = canEditBilling
+        ? selectedRegularAmount
+        : originalPlate.regularAmount;
+    final effectiveRegularDurationValue = canEditBilling
         ? selectedRegularDurationHours
         : originalPlate.regularDurationValue;
-    final effectiveCustomStatus =
-        statusChanged ? updatedCustomStatus : originalPlate.customStatus;
+    final statusMutationAllowed = statusChanged && !billingLocked;
+    final effectiveCustomStatus = statusMutationAllowed
+        ? updatedCustomStatus
+        : originalPlate.customStatus;
 
     _debug(
       'update=prepare plate=$plateNumber area=${originalPlate.area} '
-      'bill=$canUseBill sector=$canUseSector statusChanged=$statusChanged',
+      'bill=$canUseBill billingLocked=$billingLocked canEditBilling=$canEditBilling sector=$canUseSector statusChanged=$statusChanged statusMutationAllowed=$statusMutationAllowed',
     );
 
     final updatedPlate = PlateModel(
@@ -626,7 +633,7 @@ class ModifyPlateService {
     if (originalPlate.plateNumber != updatedPlate.plateNumber) {
       updatedFields[PlateFields.plateNumber] = updatedPlate.plateNumber;
     }
-    if (statusChanged) {
+    if (statusMutationAllowed) {
       updatedFields[PlateFields.customStatus] = updatedCustomStatus;
     }
     if (!_sameStringList(originalPlate.imageUrls, imageUrls)) {
@@ -695,7 +702,7 @@ class ModifyPlateService {
 
     try {
       final documentId = '${originalPlate.plateNumber}_${originalPlate.area}';
-      if (statusChanged) {
+      if (statusMutationAllowed) {
         final resolvedScope = statusScope;
         if (resolvedScope == null) {
           throw StateError('status scope is required when status changes');

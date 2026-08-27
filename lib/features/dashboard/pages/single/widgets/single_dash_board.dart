@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../../../../app/init/db_connection_status_section.dart';
 import '../../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../../design_system/common_ui/common_ui_theme.dart';
+import '../../../../../app/command/presentation/terminal_launcher_button.dart';
 import '../../../sheets/single/single_hq_dash_board_page.dart';
 
 class SingleDashBoard extends StatelessWidget {
@@ -30,13 +31,7 @@ class SingleDashBoard extends StatelessWidget {
         child: Scaffold(
           backgroundColor: tokens.canvas,
           appBar: AppBar(
-            title: Text(
-              '싱글 헤드쿼터',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: tokens.textPrimary,
-                    fontWeight: FontWeight.w800,
-                  ),
-            ),
+            title: const TerminalLauncherButton(source: 'single_headquarter'),
             centerTitle: true,
             backgroundColor: tokens.surface,
             foregroundColor: tokens.textPrimary,

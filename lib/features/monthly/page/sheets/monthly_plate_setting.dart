@@ -341,7 +341,9 @@ class _MonthlyPlateSettingWorkspaceState
   Size _editorTargetSize(MonthlyWorkspaceSection section) {
     switch (section) {
       case MonthlyWorkspaceSection.vehicle:
-        return Size(520, widget.isEditMode ? 390 : 470);
+        return widget.isEditMode
+            ? const Size(520, 390)
+            : const Size(720, 660);
       case MonthlyWorkspaceSection.product:
         return const Size(520, 500);
       case MonthlyWorkspaceSection.period:
@@ -475,13 +477,17 @@ class _MonthlyPlateSettingWorkspaceState
       showDialogImmediately: false,
     );
     try {
+      final targetSize = _editorTargetSize(section);
       trace.log(
         '원본 row bounds 확보: width=${sourceRect.width.toStringAsFixed(1)}, height=${sourceRect.height.toStringAsFixed(1)}',
+      );
+      trace.log(
+        '편집 Dialog 목표 크기: section=${section.name} width=${targetSize.width.toStringAsFixed(0)} height=${targetSize.height.toStringAsFixed(0)}',
       );
       final applied = await showCommonOriginMorphDialog<bool>(
         context: context,
         sourceRect: sourceRect,
-        targetSize: _editorTargetSize(section),
+        targetSize: targetSize,
         barrierDismissible: false,
         barrierLabel: '${_sectionTitle(section)} 편집',
         builder: (_) => MonthlyPlateSettingSectionEditorDialog(
@@ -564,7 +570,12 @@ class _MonthlyPlateSettingWorkspaceState
             isExtended: false,
           );
       if (!mounted) return;
-      trace.log('Repository 저장 완료', progress: .9);
+      final markerNow = DateTime.now();
+      final markerMonth = '${markerNow.year.toString().padLeft(4, '0')}${markerNow.month.toString().padLeft(2, '0')}';
+      trace.log(
+        'Repository 저장 완료 plateStatusMarkerPolicy=${widget.isEditMode ? "existing_only" : "create_current_month"} markerMonth=$markerMonth',
+        progress: .9,
+      );
       await trace.succeed(
         widget.isEditMode ? '정기권 수정이 완료되었습니다.' : '정기권 등록이 완료되었습니다.',
       );

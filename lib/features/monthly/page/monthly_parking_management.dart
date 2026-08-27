@@ -490,7 +490,7 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
           _selectedHydratedItem = null;
         }
       });
-      _log('delete_completed doc=${item.docId}');
+      _log('delete_completed doc=${item.docId} plateStatusMarkers=deleted_by_registered_months');
       showMonthlyCommonMessage(
         context,
         '정기 주차 정보가 삭제되었습니다.',

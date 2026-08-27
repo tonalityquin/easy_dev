@@ -1230,6 +1230,39 @@ class UserState extends ChangeNotifier {
     }
   }
 
+  void setCurrentAreaLocalOnly(
+    String newArea, {
+    String source = 'local',
+  }) {
+    final normalizedArea = newArea.trim();
+    if (normalizedArea.isEmpty) {
+      debugPrint('[UserState] local currentArea 적용 중단: area_empty source=$source');
+      return;
+    }
+
+    if (_isTablet) {
+      if (_tablet == null) return;
+      _tablet = _tablet!.copyWith(
+        currentArea: normalizedArea,
+        selectedArea: normalizedArea,
+      );
+      _session = TabletSessionAccount(_tablet!);
+      notifyListeners();
+      debugPrint(
+        '[UserState] local currentArea 적용 완료: $normalizedArea / tablet=true / source=$source / firebaseRead=0 firebaseWrite=0',
+      );
+      return;
+    }
+
+    if (_user == null) return;
+    _user = _user!.copyWith(currentArea: normalizedArea);
+    _session = UserSessionAccount(_user!);
+    notifyListeners();
+    debugPrint(
+      '[UserState] local currentArea 적용 완료: $normalizedArea / tablet=false / source=$source / firebaseRead=0 firebaseWrite=0',
+    );
+  }
+
   Future<void> areaPickerCurrentArea(String newArea) async {
     if (_isTablet) {
       if (_tablet == null) return;

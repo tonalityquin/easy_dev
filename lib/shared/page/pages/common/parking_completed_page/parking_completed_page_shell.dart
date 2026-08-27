@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import '../../../../../app/command/presentation/terminal_launcher_button.dart';
 import '../../../../../app/init/db_connection_status_section.dart';
 import '../../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../../design_system/common_ui/common_ui_theme.dart';
@@ -74,7 +75,6 @@ class ParkingCompletedBrandTintedLogo extends StatelessWidget {
 class ParkingCompletedPageShell extends StatelessWidget {
   const ParkingCompletedPageShell({
     super.key,
-    required this.topNavigation,
     required this.semanticsLabel,
     required this.syncSourceTag,
     required this.syncSpecs,
@@ -87,7 +87,6 @@ class ParkingCompletedPageShell extends StatelessWidget {
     this.showDbStatusOnAppBar = true,
   });
 
-  final Widget topNavigation;
   final String semanticsLabel;
   final String syncSourceTag;
   final List<ViewDocSyncSpec> syncSpecs;
@@ -127,7 +126,7 @@ class ParkingCompletedPageShell extends StatelessWidget {
                 backgroundColor: scaffoldBackgroundColor ?? tokens.canvas,
                 appBar: AppBar(
                   titleSpacing: NavigationToolbar.kMiddleSpacing,
-                  title: topNavigation,
+                  title: TerminalLauncherButton(source: syncSourceTag),
                   centerTitle: true,
                   backgroundColor: tokens.surface,
                   foregroundColor: tokens.textPrimary,

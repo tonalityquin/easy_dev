@@ -122,6 +122,11 @@ class ModifyPlateController {
         currentPriority3 != originalPriority3;
   }
 
+  bool get billingLocked =>
+      (plate.billingPlanType ?? '').trim() == '정기';
+
+  bool get canEditBilling => canUseBill && !billingLocked;
+
   bool get hasBillingSelection {
     if (!canUseBill) return false;
     return (selectedBill?.trim().isNotEmpty ?? false) ||
@@ -129,7 +134,7 @@ class ModifyPlateController {
   }
 
   bool get hasBillingChanges {
-    if (!canUseBill) return false;
+    if (!canEditBilling) return false;
     final currentBill = selectedBill?.trim() ?? '';
     final originalBill = plate.billingType?.trim() ?? '';
     return currentBill != originalBill ||
@@ -154,7 +159,8 @@ class ModifyPlateController {
 
   bool get hasPhotoChanges => capturedImages.isNotEmpty;
 
-  bool get hasStatusChanges => !originalStatusDraft.sameAs(statusDraft);
+  bool get hasStatusChanges =>
+      !billingLocked && !originalStatusDraft.sameAs(statusDraft);
 
   bool get hasOriginalStatus => !originalStatusDraft.isEmpty;
 
@@ -172,6 +178,13 @@ class ModifyPlateController {
   bool get hasUnsavedChanges => changeCount > 0;
 
   void handleStatusTextChanged() {
+    if (billingLocked) {
+      statusMarkedForDeletion = false;
+      debugPrint(
+        '[ModifyPlateController][MonthlyBillingLock] status_edit=blocked plate=${plate.plateNumber}',
+      );
+      return;
+    }
     statusMarkedForDeletion = statusDraft.isEmpty && hasOriginalStatus;
   }
 
@@ -182,6 +195,13 @@ class ModifyPlateController {
   }
 
   void clearStatusDraft() {
+    if (billingLocked) {
+      statusMarkedForDeletion = false;
+      debugPrint(
+        '[ModifyPlateController][MonthlyBillingLock] status_clear=blocked plate=${plate.plateNumber}',
+      );
+      return;
+    }
     customStatusController.clear();
     statusMarkedForDeletion = hasOriginalStatus;
     debugPrint(
@@ -245,6 +265,12 @@ class ModifyPlateController {
   }
 
   void clearBillingSelection() {
+    if (billingLocked) {
+      debugPrint(
+        '[ModifyPlateController][BillingLock] action=clear blocked=true plate=${plate.plateNumber}',
+      );
+      return;
+    }
     selectedBill = null;
     selectedBillCountType = null;
     selectedBillModel = null;
@@ -353,6 +379,17 @@ class ModifyPlateController {
   }
 
   Future<void> resolveStatusContext() async {
+    if (billingLocked) {
+      statusContextResolved = true;
+      statusScope = null;
+      expectedStatusSourcePath = null;
+      expectedPersistedStatusDraft = originalStatusDraft;
+      statusMarkedForDeletion = false;
+      debugPrint(
+        '[ModifyPlateController][MonthlyBillingLock] status_context=skipped plate=${plate.plateNumber}',
+      );
+      return;
+    }
     final repo = context.read<PlateRepository>();
     final monthlyLookup = await repo.lookupPlateStatus(
       plateNumber: plate.plateNumber,
@@ -439,6 +476,12 @@ class ModifyPlateController {
 
   void applyBillDefaults(dynamic bill) {
     if (bill == null) return;
+    if (billingLocked) {
+      debugPrint(
+        '[ModifyPlateController][BillingLock] action=apply blocked=true plate=${plate.plateNumber}',
+      );
+      return;
+    }
 
     selectedBillModel = bill;
     selectedBillCountType = bill.countType;
@@ -466,7 +509,10 @@ class ModifyPlateController {
   Future<bool> _revalidateBillingFromLocalCache({
     DeveloperOperationTrace? trace,
   }) async {
-    if (!canUseBill) return true;
+    if (!canEditBilling) {
+      trace?.log('billing_local_validation=skip locked=$billingLocked');
+      return true;
+    }
 
     final normalizedSelectedBill = selectedBill?.trim();
     selectedBill =
@@ -652,6 +698,7 @@ class ModifyPlateController {
       selectedSectorId: effectiveSectorId,
       selectedSectorName: effectiveSectorName,
       canUseBill: canUseBill,
+      billingLocked: billingLocked,
       canUseSector: canUseSector,
       statusScope: resolvedScope,
       statusChanged: statusChanged,
@@ -664,7 +711,7 @@ class ModifyPlateController {
 
     final plateNumber = service.composePlateNumber();
     final newLocation = locationController.text.trim();
-    final newBillingType = canUseBill ? selectedBill : plate.billingType;
+    final newBillingType = canEditBilling ? selectedBill : plate.billingType;
     final updatedCustomStatus = draft.customStatus;
 
     trace?.log('plateNumber=$plateNumber');

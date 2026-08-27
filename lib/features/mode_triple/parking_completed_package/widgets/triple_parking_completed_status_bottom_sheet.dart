@@ -395,7 +395,7 @@ class _StatusSideDockContentState extends State<_StatusSideDockContent> {
         context,
         'billing_state=${parkingCompletedBillingStateDebugName(_billingState)} '
         'billingType=${_billingApplicable ? (_plate.billingType ?? '').trim() : "none"} '
-        'bypass=${_billingState == ParkingCompletedBillingState.notApplicable}',
+        'bypass=${_billingState == ParkingCompletedBillingState.notApplicable} monthlyBillingLocked=$_monthlyBillingLocked',
       );
     });
 
@@ -422,7 +422,11 @@ class _StatusSideDockContentState extends State<_StatusSideDockContent> {
   bool get _billingApplicable =>
       _billingState != ParkingCompletedBillingState.notApplicable;
 
+  bool get _monthlyBillingLocked =>
+      (_plate.billingPlanType ?? '').trim() == '정기';
+
   bool get _needsBilling =>
+      !_monthlyBillingLocked &&
       (_type == PlateType.parkingCompleted) &&
       _billingState == ParkingCompletedBillingState.unsettled;
 
@@ -486,6 +490,13 @@ class _StatusSideDockContentState extends State<_StatusSideDockContent> {
 
 
   Future<bool> _autoPrebillFreeIfNeeded() async {
+    if (_monthlyBillingLocked) {
+      parkingStatusTraceLog(
+        context,
+        'billing_action=blocked reason=monthly_parking action=free_auto plate=${_plate.plateNumber}',
+      );
+      return true;
+    }
     if (_plate.isLockedFee == true) return true;
     if (!_isFreeBilling) return false;
     parkingStatusTraceLog(
@@ -853,6 +864,13 @@ class _StatusSideDockContentState extends State<_StatusSideDockContent> {
   Future<ParkingStatusDirectionalGearActionResult> _performPrebill({
     bool continueDepartureAfterSuccess = false,
   }) async {
+    if (_monthlyBillingLocked) {
+      parkingStatusTraceLog(
+        context,
+        'billing_action=blocked reason=monthly_parking action=settle plate=${_plate.plateNumber}',
+      );
+      return ParkingStatusDirectionalGearActionResult.blocked;
+    }
     if (!_billingApplicable) {
       parkingStatusTraceLog(
         context,
@@ -962,6 +980,13 @@ class _StatusSideDockContentState extends State<_StatusSideDockContent> {
   }
 
   Future<void> _handleCancelPrebill() async {
+    if (_monthlyBillingLocked) {
+      parkingStatusTraceLog(
+        context,
+        'billing_action=blocked reason=monthly_parking action=cancel plate=${_plate.plateNumber}',
+      );
+      return;
+    }
     if (!_billingApplicable) {
       parkingStatusTraceLog(
         context,
@@ -1370,7 +1395,7 @@ class _StatusSideDockContentState extends State<_StatusSideDockContent> {
               linkedReverse:
                   _billingState == ParkingCompletedBillingState.settled,
               emphasized: _needsBilling,
-              enabled: !_primaryBusy && !disableOthers && !_isOtherDriving,
+              enabled: !_primaryBusy && !disableOthers && !_isOtherDriving && !_monthlyBillingLocked,
               onPressed: () async {
                 if (_billingState == ParkingCompletedBillingState.settled) {
                   await _handleCancelPrebill();

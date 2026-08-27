@@ -6,7 +6,6 @@ import '../account/applications/user_state.dart';
 import '../dev/application/area_state.dart';
 import '../../shared/page/application/common/type_view_mode_state.dart';
 import '../../shared/page/pages/common/parking_completed_page/parking_completed_page_shell.dart';
-import '../../shared/page/widget/navigation/double_top_navigation.dart';
 import '../../shared/plate/application/double/double_plate_state.dart';
 import '../../shared/plate/domain/enums/plate_type.dart';
 import '../../shared/plate/widgets/parking_completed_plate_search_sheet.dart';
@@ -78,7 +77,6 @@ class _DoubleParkingCompletedPageState
     final area = resolveParkingCompletedArea(context);
 
     return ParkingCompletedPageShell(
-      topNavigation: const DoubleTopNavigation(),
       semanticsLabel: 'screen_tag: DoubleParkingCompletedPage',
       syncSourceTag: 'DoubleParkingCompletedPage(sync)',
       syncSpecs: const [

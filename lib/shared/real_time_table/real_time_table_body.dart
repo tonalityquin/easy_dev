@@ -630,67 +630,6 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
     _scheduleApplyPlateCountsAfterFrame(countsByDisplayName);
   }
 
-  Widget _buildSortSummaryPill(ColorScheme cs, TextTheme text) {
-    final summary = _sortState?.summaryLabel ?? '정렬 · 최신순';
-    final reduceMotion =
-        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    return Semantics(
-      label: '현재 보기 · $summary',
-      child: AnimatedContainer(
-        duration:
-            reduceMotion ? Duration.zero : const Duration(milliseconds: 190),
-        curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-        decoration: BoxDecoration(
-          color: cs.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: cs.outlineVariant.withOpacity(.65),
-          ),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              Icons.table_rows_rounded,
-              size: 18,
-              color: cs.onSurfaceVariant,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: AnimatedSwitcher(
-                duration: reduceMotion
-                    ? Duration.zero
-                    : const Duration(milliseconds: 180),
-                transitionBuilder: (child, animation) {
-                  return FadeTransition(
-                    opacity: animation,
-                    child: SlideTransition(
-                      position: Tween<Offset>(
-                        begin: const Offset(0, .14),
-                        end: Offset.zero,
-                      ).animate(animation),
-                      child: child,
-                    ),
-                  );
-                },
-                child: Text(
-                  summary,
-                  key: ValueKey<String>(summary),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: text.labelMedium?.copyWith(
-                    color: cs.onSurfaceVariant,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   TextStyle _headStyle(ColorScheme cs) =>
       Theme.of(context).textTheme.labelMedium!.copyWith(
         fontWeight: FontWeight.w900,
@@ -718,7 +657,7 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
     final after = state.timeOrderLabel;
     final oldestAfter = state.isOldest;
     debugPrint(
-      '[RealTimeSortOrder] source=real_time_table_header action=toggle_sort_order before=$before after=$after sortField=createdAt nullCreatedAt=last animation=header_rotation_190ms_rows_fade_slide_200ms',
+      '[RealTimeSortOrder] source=real_time_table_header action=toggle_sort_order before=$before after=$after sortField=createdAt columns=vehicle_number,parking_location,elapsed_time labels=차량_번호,주차_위치,경과_시간 nullCreatedAt=last animation=header_rotation_190ms_table_switcher_fade_slide_scale_220ms rowMountReveal=disabled',
     );
     if (_sortOrderTraceBusy || !mounted) return;
     _sortOrderTraceBusy = true;
@@ -732,10 +671,10 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
         showDialogImmediately: false,
         developerModeMessage:
             '개발자 모드 ON: 정렬 변경 상태를 Status Dialog에서 확인할 수 있습니다.',
-        standardModeMessage: '일반 모드: 경과 헤더를 눌러 정렬을 즉시 변경합니다.',
+        standardModeMessage: '일반 모드: 경과 시간 헤더를 눌러 정렬을 즉시 변경합니다.',
       );
       trace.log(
-        'priority=${state.priorityMode.name} order=$after oldest=$oldestAfter field=createdAt nullCreatedAt=last headerTouchTarget=44dp headerAnimation=rotation_190ms rowsAnimation=fade_slide_200ms reducedMotion=${MediaQuery.maybeOf(context)?.disableAnimations ?? false}',
+        'priority=${state.priorityMode.name} order=$after oldest=$oldestAfter field=createdAt nullCreatedAt=last headerTouchTarget=44dp headerAnimation=rotation_190ms tableAnimation=switcher_fade_slide_scale_220ms rowMountReveal=disabled columns=vehicle_number,parking_location,elapsed_time labels=차량_번호,주차_위치,경과_시간 contextBar=responsive_sort_status reducedMotion=${MediaQuery.maybeOf(context)?.disableAnimations ?? false}',
         progress: .82,
       );
       await trace.succeed('$after 정렬로 변경했습니다.');
@@ -789,12 +728,49 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
           child: Row(
             children: [
               Expanded(
-                flex: 3,
+                flex: 7,
+                child: Semantics(
+                  label: '차량 번호',
+                  header: true,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      '차량 번호',
+                      style: headStyle,
+                      maxLines: 1,
+                      softWrap: false,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 5,
+                child: Semantics(
+                  label: '주차 위치',
+                  header: true,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      '주차 위치',
+                      style: headStyle,
+                      maxLines: 1,
+                      softWrap: false,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 4,
                 child: Semantics(
                   button: true,
+                  header: true,
                   label: _sortOldFirst
-                      ? '경과 · 오래된순 · 누르면 최신순으로 변경'
-                      : '경과 · 최신순 · 누르면 오래된순으로 변경',
+                      ? '경과 시간 · 오래된순 · 누르면 최신순으로 변경'
+                      : '경과 시간 · 최신순 · 누르면 오래된순으로 변경',
                   child: Tooltip(
                     message: _sortOldFirst
                         ? '오래된순 · 누르면 최신순'
@@ -809,32 +785,33 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
                           constraints: const BoxConstraints(minHeight: 44),
                           child: Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 4),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.end,
-                              children: [
-                                Flexible(
-                                  child: Text(
-                                    '경과',
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerRight,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    '경과 시간',
                                     style: headStyle,
                                     maxLines: 1,
                                     softWrap: false,
-                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                ),
-                                const SizedBox(width: 3),
-                                AnimatedRotation(
-                                  turns: _sortOldFirst ? .5 : 0,
-                                  duration: reduceMotion
-                                      ? Duration.zero
-                                      : const Duration(milliseconds: 190),
-                                  curve: Curves.easeOutCubic,
-                                  child: Icon(
-                                    Icons.arrow_upward_rounded,
-                                    size: 16,
-                                    color: cs.onSurfaceVariant,
+                                  const SizedBox(width: 3),
+                                  AnimatedRotation(
+                                    turns: _sortOldFirst ? .5 : 0,
+                                    duration: reduceMotion
+                                        ? Duration.zero
+                                        : const Duration(milliseconds: 190),
+                                    curve: Curves.easeOutCubic,
+                                    child: Icon(
+                                      Icons.arrow_upward_rounded,
+                                      size: 16,
+                                      color: cs.onSurfaceVariant,
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
                         ),
@@ -843,51 +820,11 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                flex: 7,
-                child: Text(
-                  'Plate',
-                  style: headStyle,
-                  maxLines: 1,
-                  softWrap: false,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                flex: 5,
-                child: Text(
-                  'Location',
-                  style: headStyle,
-                  maxLines: 1,
-                  softWrap: false,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
             ],
           ),
         ),
         Expanded(
-          child: TweenAnimationBuilder<double>(
-            key: ValueKey<String>(
-              'table_rows:${_sortOldFirst ? 'oldest' : 'newest'}',
-            ),
-            tween: Tween<double>(begin: 0, end: 1),
-            duration: reduceMotion
-                ? Duration.zero
-                : const Duration(milliseconds: 200),
-            curve: Curves.easeOutCubic,
-            builder: (context, value, child) {
-              return Opacity(
-                opacity: value,
-                child: Transform.translate(
-                  offset: Offset(0, (1 - value) * 6),
-                  child: child,
-                ),
-              );
-            },
-            child: Scrollbar(
+          child: Scrollbar(
               controller: _scrollCtrl,
               child: ListView.builder(
               controller: _scrollCtrl,
@@ -917,11 +854,101 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
                       child: Row(
                         children: [
                           Expanded(
-                            flex: 3,
+                            flex: 7,
+                            child: Semantics(
+                              label: '차량 번호 ${r.plateNumber}${r.isSelected ? ', 주행 중' : ''}',
+                              child: Row(
+                                children: [
+                                  Flexible(
+                                    child: FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      alignment: Alignment.centerLeft,
+                                      child: AnimatedSwitcher(
+                                        duration: motionDuration,
+                                        switchInCurve: Curves.easeOutCubic,
+                                        switchOutCurve: Curves.easeInCubic,
+                                        transitionBuilder: (child, animation) {
+                                          if (reduceMotion) return child;
+                                          final curved = CurvedAnimation(
+                                            parent: animation,
+                                            curve: Curves.easeOutCubic,
+                                            reverseCurve: Curves.easeInCubic,
+                                          );
+                                          return FadeTransition(
+                                            opacity: curved,
+                                            child: SlideTransition(
+                                              position: Tween<Offset>(
+                                                begin: const Offset(-.04, 0),
+                                                end: Offset.zero,
+                                              ).animate(curved),
+                                              child: child,
+                                            ),
+                                          );
+                                        },
+                                        child: Text(
+                                          r.plateNumber,
+                                          key: ValueKey<String>(r.plateNumber),
+                                          style: cellStyle.copyWith(
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                          maxLines: 1,
+                                          softWrap: false,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  if (r.isSelected) ...[
+                                    const SizedBox(width: 6),
+                                    ExcludeSemantics(
+                                      child: _DrivingBadge(
+                                        colorScheme: cs,
+                                        textTheme: text,
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            flex: 5,
+                            child: Semantics(
+                              label: '주차 위치 $locationText',
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerLeft,
+                                child: AnimatedSwitcher(
+                                  duration: motionDuration,
+                                  switchInCurve: Curves.easeOutCubic,
+                                  switchOutCurve: Curves.easeInCubic,
+                                  transitionBuilder: (child, animation) {
+                                    if (reduceMotion) return child;
+                                    return FadeTransition(
+                                      opacity: animation,
+                                      child: child,
+                                    );
+                                  },
+                                  child: Text(
+                                    locationText,
+                                    key: ValueKey<String>(locationText),
+                                    style: cellStyle.copyWith(
+                                      color: cs.onSurfaceVariant,
+                                    ),
+                                    maxLines: 1,
+                                    softWrap: false,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            flex: 4,
                             child: Semantics(
                               label: r.createdAt == null
-                                  ? '경과시간 정보 없음'
-                                  : '경과 $elapsedText',
+                                  ? '경과 시간 정보 없음'
+                                  : '경과 시간 $elapsedText',
                               child: Align(
                                 alignment: Alignment.centerRight,
                                 child: FittedBox(
@@ -963,67 +990,6 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
                               ),
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            flex: 7,
-                            child: Row(
-                              children: [
-                                Flexible(
-                                  child: FittedBox(
-                                    fit: BoxFit.scaleDown,
-                                    alignment: Alignment.centerLeft,
-                                    child: Text(
-                                      r.plateNumber,
-                                      style: cellStyle.copyWith(
-                                        fontWeight: FontWeight.w900,
-                                      ),
-                                      maxLines: 1,
-                                      softWrap: false,
-                                    ),
-                                  ),
-                                ),
-                                if (r.isSelected) ...[
-                                  const SizedBox(width: 6),
-                                  _DrivingBadge(
-                                    colorScheme: cs,
-                                    textTheme: text,
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            flex: 5,
-                            child: Semantics(
-                              label: 'Location $locationText',
-                              child: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                alignment: Alignment.centerLeft,
-                                child: AnimatedSwitcher(
-                                  duration: motionDuration,
-                                  switchInCurve: Curves.easeOutCubic,
-                                  switchOutCurve: Curves.easeInCubic,
-                                  transitionBuilder: (child, animation) {
-                                    if (reduceMotion) return child;
-                                    return FadeTransition(
-                                      opacity: animation,
-                                      child: child,
-                                    );
-                                  },
-                                  child: Text(
-                                    locationText,
-                                    key: ValueKey<String>(locationText),
-                                    style: cellStyle.copyWith(
-                                      color: cs.onSurfaceVariant,
-                                    ),
-                                    maxLines: 1,
-                                    softWrap: false,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
                         ],
                       ),
                     ),
@@ -1033,7 +999,6 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
               ),
             ),
           ),
-        ),
       ],
     );
   }
@@ -1043,17 +1008,11 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
     super.build(context);
 
     final cs = Theme.of(context).colorScheme;
-    final text = Theme.of(context).textTheme;
 
     return Container(
       color: cs.surface,
       child: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
-            child: _buildSortSummaryPill(cs, text),
-          ),
-          Divider(height: 1, color: cs.outlineVariant.withOpacity(.7)),
           Expanded(
             child: AnimatedSwitcher(
               duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false

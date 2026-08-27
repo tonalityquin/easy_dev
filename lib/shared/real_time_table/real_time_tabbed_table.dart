@@ -10,6 +10,8 @@ import 'package:provider/provider.dart';
 
 import '../../app/utils/status_dialog.dart';
 import '../../app/utils/developer_operation_status_dialog.dart';
+import '../../app/utils/operational_data_sync_workflow.dart';
+import '../../design_system/common_ui/common_ui_components.dart';
 import '../../design_system/common_ui/common_ui_theme.dart';
 import '../../features/account/applications/user_state.dart';
 import '../../features/location/applications/location_state.dart';
@@ -72,6 +74,9 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
   static const double _modeReelTravel = 44;
   static const double _modeReelDistanceThreshold = 22;
   static const double _modeReelVelocityThreshold = 320;
+  static const double _tableSwipeVisualActivationDistance = 14;
+  static const double _tableSwipeCommitDistanceThreshold = 42;
+  static const double _tableSwipeVelocityThreshold = 320;
   static const Duration _parentSelectorReopenCooldown =
       Duration(milliseconds: 180);
 
@@ -80,6 +85,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
   late final AnimationController _tableSwipeController;
   late final AnimationController _statusVisualPulseController;
   late final AnimationController _modeReelController;
+  late final AnimationController _modeReelHintController;
   final GlobalKey _modeReelSourceKey = GlobalKey(debugLabel: 'mode-reel-source');
 
   late final List<RealTimeTabController> _controllers;
@@ -87,11 +93,13 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
   double _horizontalDragDistance = 0;
   double _horizontalSwipeViewportWidth = 1;
   bool _horizontalDragActive = false;
+  bool _tableSwipeVisualActivated = false;
   bool _tableTransitioning = false;
   bool _tableSwipeGuardBlocked = false;
   int _swipePhysicalDirection = 0;
   int _swipeTableStep = 0;
   int _swipeDestinationIndex = -1;
+  String? _lastTableContextBarLayoutSignature;
 
   double _modeReelDragDistance = 0;
   bool _modeReelDragActive = false;
@@ -114,12 +122,18 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
 
   TypeViewModeState? _viewMode;
   TypeAutoTransitionGuard? _autoGuard;
+  LocationState? _locationState;
   Timer? _idleTimer;
   bool _idleSyncScheduled = false;
 
   bool _transitionMaskOn = false;
   String _transitionMaskMessage = '데이터 불러오는 중...';
   bool _debugDialogShowing = false;
+  bool _operationalSyncRunning = false;
+  bool _parkingCapabilityInitialized = false;
+  bool _parkingCapabilitySyncScheduled = false;
+  ParkingViewCapability _parkingViewCapability =
+      ParkingViewCapability.loading;
 
   @override
   void initState() {
@@ -158,6 +172,12 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
       value: 0,
     );
 
+    _modeReelHintController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+      value: 0,
+    );
+
     _loadGates();
   }
 
@@ -165,6 +185,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
   void didChangeDependencies() {
     super.didChangeDependencies();
     _attachAutoGuardListener();
+    _attachLocationStateListener();
     _syncSortContextAfterBuild();
     if (widget.viewModeAuto == null) {
       _detachViewModeListener();
@@ -183,6 +204,131 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     }
     _scheduleIdleSyncAfterBuild();
   }
+
+  void _attachLocationStateListener() {
+    LocationState? next;
+    try {
+      next = context.read<LocationState>();
+    } catch (_) {
+      next = null;
+    }
+    if (_locationState != next) {
+      _locationState?.removeListener(_onLocationStateChanged);
+      _locationState = next;
+      _locationState?.addListener(_onLocationStateChanged);
+    }
+    _syncParkingCapabilityFromLocationState(rebuild: false);
+  }
+
+  void _detachLocationStateListener() {
+    _locationState?.removeListener(_onLocationStateChanged);
+    _locationState = null;
+  }
+
+  void _onLocationStateChanged() {
+    if (!mounted) return;
+    _syncParkingCapabilityFromLocationState(rebuild: true);
+  }
+
+  void _syncParkingCapabilityFromLocationState({required bool rebuild}) {
+    final nextCapability =
+        _locationState?.parkingViewCapability ??
+            ParkingViewCapability.tableAndStatus;
+    if (_parkingCapabilityInitialized &&
+        _parkingViewCapability == nextCapability) {
+      return;
+    }
+    final previous = _parkingViewCapability;
+    if (rebuild && mounted) {
+      setState(() {
+        _parkingViewCapability = nextCapability;
+        _parkingCapabilityInitialized = true;
+      });
+    } else {
+      _parkingViewCapability = nextCapability;
+      _parkingCapabilityInitialized = true;
+    }
+    _scheduleParkingCapabilitySync(
+      previous: previous,
+      next: nextCapability,
+    );
+  }
+
+  Future<void> _runModeReelHintAnimation() async {
+    if (!mounted || !_statusViewSupported) return;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (reduceMotion) {
+      _modeReelHintController.value = 0;
+      return;
+    }
+    _modeReelHintController.stop();
+    for (var index = 0; index < 2; index++) {
+      if (!mounted || !_statusViewSupported) break;
+      await _modeReelHintController.forward(from: 0);
+      if (index == 0 && mounted && _statusViewSupported) {
+        await Future<void>.delayed(const Duration(milliseconds: 120));
+      }
+    }
+    if (mounted) {
+      _modeReelHintController.value = 0;
+    }
+  }
+
+  void _scheduleParkingCapabilitySync({
+    required ParkingViewCapability previous,
+    required ParkingViewCapability next,
+  }) {
+    if (_parkingCapabilitySyncScheduled) return;
+    _parkingCapabilitySyncScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _parkingCapabilitySyncScheduled = false;
+      if (!mounted) return;
+      final statusEnabled =
+          _parkingViewCapability == ParkingViewCapability.tableAndStatus;
+      _viewMode?.setStatusEnabled(statusEnabled);
+      final reduceMotion =
+          MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+      if (statusEnabled && !reduceMotion) {
+        unawaited(_runModeReelHintAnimation());
+      } else {
+        _modeReelHintController.stop();
+        _modeReelHintController.value = 0;
+      }
+      var locationCount = 0;
+      var hierarchicalCount = 0;
+      var singleCount = 0;
+      try {
+        final state = context.read<LocationState>();
+        locationCount = state.locations.length;
+        hierarchicalCount = state.hierarchicalLocationCount;
+        singleCount = state.singleLocationCount;
+      } catch (_) {}
+      _debugLog('parking_view_capability', <String, Object?>{
+        'previous': previous.name,
+        'next': _parkingViewCapability.name,
+        'locationCount': locationCount,
+        'hierarchicalCount': hierarchicalCount,
+        'singleCount': singleCount,
+        'statusEnabled': statusEnabled,
+        'autoTransition': statusEnabled,
+        'modeControl': statusEnabled
+            ? 'vertical_swipe_reel'
+            : _parkingViewCapability == ParkingViewCapability.tableOnly
+                ? 'static_table_indicator'
+                : _parkingViewCapability == ParkingViewCapability.empty
+                    ? 'download_surface'
+                    : 'loading_surface',
+        'firebaseAdditionalRead': 0,
+      });
+      _syncIdleWithMode();
+      if (mounted) setState(() {});
+    });
+  }
+
+  bool get _statusViewSupported =>
+      _parkingViewCapability == ParkingViewCapability.tableAndStatus &&
+      (_viewMode?.statusEnabled ?? true);
 
   void _scheduleIdleSyncAfterBuild() {
     if (_idleSyncScheduled) return;
@@ -312,6 +458,13 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
 
     guard.setCountdownDuration(auto.idleToStatusAfter);
 
+    if (!_statusViewSupported) {
+      guard.setCountdownEnabled(false, reason: '현황 보기 미지원');
+      _idleTimer?.cancel();
+      _idleTimer = null;
+      return;
+    }
+
     if (vm.mode != TypeViewMode.table) {
       guard.setCountdownEnabled(false, reason: '현황 모드');
       _idleTimer?.cancel();
@@ -378,6 +531,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     final guard = _autoGuard;
     final vm = _viewMode;
     if (auto == null || guard == null || vm == null) return;
+    if (!_statusViewSupported) return;
     if (vm.mode != TypeViewMode.table) return;
     if (!guard.countdownRunning) return;
 
@@ -387,6 +541,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
       final currentGuard = _autoGuard;
       final currentVm = _viewMode;
       if (currentGuard == null || currentVm == null) return;
+      if (!_statusViewSupported || !currentVm.statusEnabled) return;
       if (currentVm.mode != TypeViewMode.table) return;
       if (!currentGuard.countdownElapsed) {
         _scheduleIdleFromGuard();
@@ -408,12 +563,14 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     final guard = _autoGuard;
     final vm = _viewMode;
     if (guard == null || vm == null) return;
+    if (!_statusViewSupported || !vm.statusEnabled) return;
     if (vm.mode != TypeViewMode.table) return;
     if (!guard.countdownElapsed) return;
 
     await WidgetsBinding.instance.endOfFrame;
     if (!mounted) return;
     if (_transitionMaskOn) return;
+    if (!_statusViewSupported || _viewMode?.statusEnabled != true) return;
     if (_viewMode?.mode != TypeViewMode.table) return;
     if (!guard.countdownElapsed) {
       _debugLog('auto_switch_cancelled', <String, Object?>{
@@ -439,9 +596,10 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
 
     try {
       vm.setMode(TypeViewMode.status);
-      switched = true;
+      switched = vm.mode == TypeViewMode.status;
       _debugLog('auto_switch_completed', <String, Object?>{
-        'mode': TypeViewMode.status.name,
+        'mode': vm.mode.name,
+        'switched': switched,
       });
       await WidgetsBinding.instance.endOfFrame;
     } finally {
@@ -583,7 +741,9 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     _endTableSwipeGuard();
     _detachViewModeListener();
     _detachAutoGuardListener();
+    _detachLocationStateListener();
     _modeReelController.dispose();
+    _modeReelHintController.dispose();
     _statusVisualPulseController.dispose();
     _tableSwipeController.dispose();
     _hudPulseController.dispose();
@@ -708,11 +868,36 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     });
   }
 
-  double _swipeProgressForDistance(double distance) {
+  double _tableSwipeVisualDistance(double rawDistance) {
+    final magnitude = rawDistance.abs();
+    if (magnitude <= _tableSwipeVisualActivationDistance) return 0;
+    final visualMagnitude =
+        magnitude - _tableSwipeVisualActivationDistance;
+    return rawDistance < 0 ? -visualMagnitude : visualMagnitude;
+  }
+
+  double _swipeProgressForVisualDistance(double visualDistance) {
     final width = _horizontalSwipeViewportWidth <= 0
         ? 1.0
         : _horizontalSwipeViewportWidth;
-    return (distance.abs() / width).clamp(0.0, 1.0).toDouble();
+    final usableWidth = math.max(
+      1.0,
+      width - _tableSwipeVisualActivationDistance,
+    );
+    return (visualDistance.abs() / usableWidth)
+        .clamp(0.0, 1.0)
+        .toDouble();
+  }
+
+  void _clearTableSwipeVisualState({bool rebuild = true}) {
+    _tableSwipeController.value = 0;
+    _tableSwipeVisualActivated = false;
+    _swipePhysicalDirection = 0;
+    _swipeTableStep = 0;
+    _swipeDestinationIndex = -1;
+    if (rebuild && mounted) {
+      setState(() {});
+    }
   }
 
   Duration _swipeSettleDuration({
@@ -743,6 +928,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     _horizontalSwipeViewportWidth = viewportWidth <= 0 ? 1 : viewportWidth;
     _horizontalDragActive = true;
     _horizontalDragDistance = 0;
+    _tableSwipeVisualActivated = false;
     _swipePhysicalDirection = 0;
     _swipeTableStep = 0;
     _swipeDestinationIndex = -1;
@@ -753,22 +939,59 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
       'table': widget.tabs[_currentTableIndex].id,
       'tableCount': _enabledTableIndices().length,
       'viewportWidth': _horizontalSwipeViewportWidth.toStringAsFixed(1),
+      'visualActivationDistance': _tableSwipeVisualActivationDistance,
+      'commitDistanceThreshold': _tableSwipeCommitDistanceThreshold,
+      'velocityThreshold': _tableSwipeVelocityThreshold,
+      'pageStructure': 'stable_stack',
+      'currentPageState': 'preserved',
+      'rowMountReveal': 'disabled',
+      'horizontalOnly': true,
     });
   }
 
   void _onTableHorizontalDragUpdate(DragUpdateDetails details) {
     if (!_horizontalDragActive) return;
     _horizontalDragDistance += details.delta.dx;
-    final physicalDirection = _horizontalDragDistance < 0
-        ? -1
-        : _horizontalDragDistance > 0
-            ? 1
-            : 0;
-    if (physicalDirection != 0) {
-      _setSwipeDirection(physicalDirection);
+    final visualDistance =
+        _tableSwipeVisualDistance(_horizontalDragDistance);
+    if (visualDistance == 0) {
+      if (_tableSwipeVisualActivated ||
+          _swipePhysicalDirection != 0 ||
+          _swipeDestinationIndex != -1 ||
+          _tableSwipeController.value != 0) {
+        _debugLog('table_swipe_visual_deactivated', <String, Object?>{
+          'screen': widget.screen,
+          'table': widget.tabs[_currentTableIndex].id,
+          'rawDistance': _horizontalDragDistance.toStringAsFixed(1),
+          'visualDistance': '0.0',
+          'visualActivationDistance': _tableSwipeVisualActivationDistance,
+        });
+        _clearTableSwipeVisualState();
+      } else {
+        _tableSwipeController.value = 0;
+      }
+      return;
     }
+
+    final physicalDirection = visualDistance < 0 ? -1 : 1;
+    if (!_tableSwipeVisualActivated) {
+      _tableSwipeVisualActivated = true;
+      _debugLog('table_swipe_visual_activated', <String, Object?>{
+        'screen': widget.screen,
+        'table': widget.tabs[_currentTableIndex].id,
+        'rawDistance': _horizontalDragDistance.toStringAsFixed(1),
+        'visualDistance': visualDistance.toStringAsFixed(1),
+        'physicalDirection': _physicalDirectionLabel(physicalDirection),
+        'visualActivationDistance': _tableSwipeVisualActivationDistance,
+        'pageStructure': 'stable_stack',
+        'currentPageState': 'preserved',
+        'rowMountReveal': 'disabled',
+        'horizontalOnly': true,
+      });
+    }
+    _setSwipeDirection(physicalDirection);
     _tableSwipeController.value =
-        _swipeProgressForDistance(_horizontalDragDistance);
+        _swipeProgressForVisualDistance(visualDistance);
   }
 
   void _onTableHorizontalDragCancel() {
@@ -792,10 +1015,10 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     final velocity = details.primaryVelocity ?? 0;
     _horizontalDragActive = false;
 
-    const distanceThreshold = 42.0;
-    const velocityThreshold = 320.0;
-    final distanceAccepted = distance.abs() >= distanceThreshold;
-    final velocityAccepted = velocity.abs() >= velocityThreshold;
+    final distanceAccepted =
+        distance.abs() >= _tableSwipeCommitDistanceThreshold;
+    final velocityAccepted =
+        velocity.abs() >= _tableSwipeVelocityThreshold;
     if (!distanceAccepted && !velocityAccepted) {
       unawaited(
         _cancelInteractiveTableSwipe(
@@ -828,11 +1051,16 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     required int physicalDirection,
   }) async {
     final progress = _tableSwipeController.value.clamp(0.0, 1.0).toDouble();
-    final duration = _swipeSettleDuration(
-      progress: progress,
-      commit: false,
-      velocity: velocity,
-    );
+    final visualDistance = _tableSwipeVisualDistance(distance);
+    final visualActivated = _tableSwipeVisualActivated && progress > 0;
+    final snapBack = visualActivated;
+    final duration = snapBack
+        ? _swipeSettleDuration(
+            progress: progress,
+            commit: false,
+            velocity: velocity,
+          )
+        : Duration.zero;
     final tableStep = physicalDirection == 0
         ? 0
         : _tableStepForPhysicalDirection(physicalDirection);
@@ -842,16 +1070,26 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
           ? 'none'
           : _physicalDirectionLabel(physicalDirection),
       'tableStep': tableStep,
-      'distance': distance.toStringAsFixed(1),
+      'rawDistance': distance.toStringAsFixed(1),
+      'visualDistance': visualDistance.toStringAsFixed(1),
+      'visualActivated': visualActivated,
       'progress': progress.toStringAsFixed(3),
       'velocity': velocity.toStringAsFixed(1),
+      'visualActivationDistance': _tableSwipeVisualActivationDistance,
+      'commitDistanceThreshold': _tableSwipeCommitDistanceThreshold,
+      'velocityThreshold': _tableSwipeVelocityThreshold,
+      'snapBack': snapBack,
       'snapBackDurationMs': duration.inMilliseconds,
       'table': widget.tabs[_currentTableIndex].id,
+      'pageStructure': 'stable_stack',
+      'currentPageState': 'preserved',
+      'rowMountReveal': 'disabled',
+      'verticalRowReplay': false,
     });
 
-    _tableTransitioning = true;
+    _tableTransitioning = snapBack;
     try {
-      if (duration == Duration.zero) {
+      if (!snapBack || duration == Duration.zero) {
         _tableSwipeController.value = 0;
       } else {
         await _tableSwipeController.animateTo(
@@ -862,14 +1100,31 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
       }
     } finally {
       _horizontalDragDistance = 0;
-      _swipePhysicalDirection = 0;
-      _swipeTableStep = 0;
-      _swipeDestinationIndex = -1;
       _tableTransitioning = false;
+      _clearTableSwipeVisualState(rebuild: false);
       _endTableSwipeGuard();
       if (mounted) {
         setState(() {});
       }
+      unawaited(
+        _showControlStatus(
+          title: 'TypePage 테이블 스와이프 취소',
+          lines: <String>[
+            'tableSwipeCancelled reason=$reason',
+            'screen=${widget.screen}',
+            'table=${widget.tabs[_currentTableIndex].id}',
+            'rawDistance=${distance.toStringAsFixed(1)} visualDistance=${visualDistance.toStringAsFixed(1)}',
+            'visualActivationDistance=$_tableSwipeVisualActivationDistance visualActivated=$visualActivated',
+            'commitDistanceThreshold=$_tableSwipeCommitDistanceThreshold velocityThreshold=$_tableSwipeVelocityThreshold',
+            'velocity=${velocity.toStringAsFixed(1)} progress=${progress.toStringAsFixed(3)}',
+            'snapBack=$snapBack snapBackDurationMs=${duration.inMilliseconds}',
+            'tapJitterProtected=${!visualActivated}',
+            'pageStructure=stable_stack currentPageState=preserved',
+            'rowMountReveal=disabled verticalRowReplay=false horizontalOnly=true',
+            'firebaseAdditionalRead=0 firebaseAdditionalWrite=0',
+          ],
+        ),
+      );
     }
   }
 
@@ -909,6 +1164,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
       velocity: velocity,
     );
     final direction = _physicalDirectionLabel(physicalDirection);
+    final visualActivatedAtCommit = _tableSwipeVisualActivated;
 
     _debugLog('table_transition_start', <String, Object?>{
       'screen': widget.screen,
@@ -925,7 +1181,17 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
       'velocity': velocity.toStringAsFixed(1),
       'wrapped': wrapped,
       'animationDurationMs': duration.inMilliseconds,
-      'statusVisual': 'rail+ambient_wash',
+      'visualActivationDistance': _tableSwipeVisualActivationDistance,
+      'commitDistanceThreshold': _tableSwipeCommitDistanceThreshold,
+      'velocityThreshold': _tableSwipeVelocityThreshold,
+      'visualActivated': visualActivatedAtCommit,
+      'pageStructure': 'stable_stack',
+      'currentPageState': 'preserved',
+      'destinationState': 'promoted_by_spec_key',
+      'rowMountReveal': 'disabled',
+      'verticalRowReplay': false,
+      'horizontalOnly': true,
+      'statusVisual': 'rail+ambient_wash+responsive_context_bar',
       'fromStatusColor': _statusVisualRole(fromSpec),
       'toStatusColor': _statusVisualRole(toSpec),
     });
@@ -952,6 +1218,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
         _swipePhysicalDirection = 0;
         _swipeTableStep = 0;
         _swipeDestinationIndex = -1;
+        _tableSwipeVisualActivated = false;
       });
       _tableSwipeController.value = 0;
       _syncSortContextAfterBuild();
@@ -967,8 +1234,14 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
         'toTable': toSpec.id,
         'wrapped': wrapped,
         'hudActive': toSpec.id,
-        'statusVisual': 'rail+ambient_wash',
+        'statusVisual': 'rail+ambient_wash+responsive_context_bar',
         'statusColor': _statusVisualRole(toSpec),
+        'contextBarLabel': toSpec.label,
+        'contextBarLayout': _tableContextLayoutMode(MediaQuery.sizeOf(context).width),
+        'pageStructure': 'stable_stack',
+        'destinationState': 'promoted_by_spec_key',
+        'rowMountReveal': 'disabled',
+        'verticalRowReplay': false,
       });
       _triggerStatusVisualPulse(toSpec);
       unawaited(
@@ -983,10 +1256,17 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
             'fromIndex=$fromIndex toIndex=$toIndex wrapped=$wrapped',
             'distance=${distance.toStringAsFixed(1)} velocity=${velocity.toStringAsFixed(1)}',
             'dragProgress=${progress.toStringAsFixed(3)} animationDurationMs=${duration.inMilliseconds}',
+            'visualActivationDistance=$_tableSwipeVisualActivationDistance commitDistanceThreshold=$_tableSwipeCommitDistanceThreshold velocityThreshold=$_tableSwipeVelocityThreshold',
+            'visualActivated=$visualActivatedAtCommit tapJitterProtection=dead_zone',
+            'pageStructure=stable_stack currentPageState=preserved destinationState=promoted_by_spec_key',
+            'rowMountReveal=disabled verticalRowReplay=false horizontalOnly=true',
             'hudActive=${toSpec.id}',
             'hudOpacity=active:1.00 inactive:0.76',
             'hudCounts=${_hudCountSummary(area)}',
-            'statusVisual=rail+ambient_wash',
+            'statusVisual=rail+ambient_wash+responsive_context_bar',
+            'contextBar=responsive_sort_status smallPhoneResponsive=true',
+            'contextBarTableLabel=${toSpec.label}',
+            'contextBarLayout=${_tableContextLayoutMode(MediaQuery.sizeOf(context).width)} contextBarWidth=${MediaQuery.sizeOf(context).width.toStringAsFixed(1)}',
             'statusColor=${_statusVisualRole(toSpec)}',
             'statusVisualPointer=ignored statusVisualSemantics=excluded',
             'hudPointer=ignored hudSemantics=excluded',
@@ -1009,6 +1289,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     if (!_canSwipeTables()) return;
     _horizontalDragActive = false;
     _horizontalDragDistance = 0;
+    _tableSwipeVisualActivated = false;
     final screenWidth = MediaQuery.sizeOf(context).width;
     _horizontalSwipeViewportWidth = screenWidth > 0 ? screenWidth : 1;
     _tableSwipeController.stop();
@@ -1081,6 +1362,9 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     for (final line in lines.skip(1)) {
       trace.log(line);
     }
+    trace.log('parkingViewCapability=${_parkingViewCapability.name}');
+    trace.log('statusEnabled=${_viewMode?.statusEnabled ?? false}');
+    trace.log('modeControl=${_parkingViewCapability == ParkingViewCapability.tableAndStatus ? 'vertical_swipe_reel' : _parkingViewCapability == ParkingViewCapability.tableOnly ? 'static_table_indicator' : _parkingViewCapability == ParkingViewCapability.empty ? 'download_surface' : 'loading_surface'}');
     await trace.succeed('TypePage 상태 확인을 완료했습니다.');
     if (trace.developerMode && mounted) {
       await trace.showStatusDialog(context);
@@ -1162,6 +1446,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
   }
 
   bool _canUseModeReel() {
+    if (!_statusViewSupported) return false;
     if (_viewMode == null || _transitionMaskOn) return false;
     if (_modeReelDragActive ||
         _modeReelTransitioning ||
@@ -1470,6 +1755,14 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
         );
         progress = .5;
       }
+      if (!_statusViewSupported || !vm.statusEnabled) {
+        _debugLog('mode_reel_commit_cancelled', <String, Object?>{
+          'reason': 'status_view_disabled_during_transition',
+          'capability': _parkingViewCapability.name,
+        });
+        _modeReelController.value = 0;
+        return;
+      }
       _triggerModeReelDetent(source: source);
       vm.setMode(to);
       _triggerHudPulse();
@@ -1512,8 +1805,8 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
             'distanceThreshold=$_modeReelDistanceThreshold velocityThreshold=$_modeReelVelocityThreshold',
             'detent=true haptic=selectionClick',
             'motion=translateY+rotationX+opacity+scale',
-            'visualText=none tableIcon=table_rows_rounded statusIcon=custom_dot_map',
-            'reelFrame=none reelBorder=none reelTouchHeight=44',
+            'visualGuide=vertical_chevrons+next_mode_ghost tableIcon=table_rows_rounded statusIcon=custom_dot_map',
+            'reelFrame=none reelBorder=none reelTouchHeight=64',
             'hudCounts=${_hudCountSummary(area)}',
             'hudOpacity=active:1.00 inactive:0.76->1.00->0.76',
             'statusVisual=rail+ambient_wash tableOnly=true',
@@ -2080,6 +2373,14 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
       final selectedItem = parents.firstWhere(
         (item) => item.parent == selectedParent,
       );
+      if (!_statusViewSupported || !vm.statusEnabled) {
+        _debugLog('parent_selector_result_ignored', <String, Object?>{
+          'reason': 'status_view_disabled',
+          'capability': _parkingViewCapability.name,
+          'selectedParent': selectedItem.parent,
+        });
+        return;
+      }
       final from = vm.mode;
       final controller = _controllers[_currentTableIndex];
       final request = controller.requestParentFocus(
@@ -2168,6 +2469,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
   }
 
   Map<CustomSemanticsAction, VoidCallback>? _modeReelSemanticsActions() {
+    if (!_canUseModeReel()) return null;
     final vm = _viewMode;
     if (vm == null) return null;
     final to = _oppositeViewMode(vm.mode);
@@ -2302,6 +2604,361 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     return Color.lerp(currentColor, destinationColor, progress) ?? currentColor;
   }
 
+  String _tableContextLayoutMode(double width) {
+    if (width >= 390) return 'regular';
+    if (width >= 330) return 'compact';
+    return 'narrow';
+  }
+
+  void _scheduleTableContextBarLayoutTrace({
+    required double width,
+    required String layout,
+    required String sortLabel,
+    required RealTimeTabSpec spec,
+  }) {
+    final signature = '$layout:${width.round() ~/ 8}:${spec.id}:$sortLabel';
+    if (_lastTableContextBarLayoutSignature == signature) return;
+    _lastTableContextBarLayoutSignature = signature;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _debugLog('table_context_bar_layout', <String, Object?>{
+        'screen': widget.screen,
+        'width': width.toStringAsFixed(1),
+        'layout': layout,
+        'sortLabel': sortLabel,
+        'table': spec.id,
+        'tableLabel': spec.label,
+        'statusColor': _statusVisualRole(spec),
+        'smallPhoneResponsive': true,
+        'firebaseAdditionalRead': 0,
+      });
+    });
+  }
+
+  Widget _buildTableContextSortSurface({
+    required ColorScheme cs,
+    required TextTheme text,
+    required RealTimeSortState sortState,
+    required String layout,
+    required bool reduceMotion,
+  }) {
+    final regular = layout == 'regular';
+    final narrow = layout == 'narrow';
+    final label = regular ? sortState.summaryLabel : sortState.timeOrderLabel;
+    final horizontalPadding = regular ? 11.0 : narrow ? 8.0 : 9.0;
+    final iconSize = regular ? 17.0 : 16.0;
+    return Semantics(
+      label: '현재 정렬, ${sortState.timeOrderLabel}',
+      child: AnimatedContainer(
+        duration: reduceMotion
+            ? Duration.zero
+            : const Duration(milliseconds: 190),
+        curve: Curves.easeOutCubic,
+        constraints: const BoxConstraints(minHeight: 44),
+        padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(13),
+          border: Border.all(
+            color: cs.outlineVariant.withOpacity(.62),
+          ),
+        ),
+        child: Row(
+          children: <Widget>[
+            if (!narrow) ...<Widget>[
+              Icon(
+                Icons.table_rows_rounded,
+                size: iconSize,
+                color: cs.onSurfaceVariant,
+              ),
+              SizedBox(width: regular ? 7 : 5),
+            ],
+            Expanded(
+              child: AnimatedSwitcher(
+                duration: reduceMotion
+                    ? Duration.zero
+                    : const Duration(milliseconds: 180),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                transitionBuilder: (child, animation) {
+                  return FadeTransition(
+                    opacity: animation,
+                    child: SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(0, .12),
+                        end: Offset.zero,
+                      ).animate(animation),
+                      child: child,
+                    ),
+                  );
+                },
+                child: Align(
+                  key: ValueKey<String>('sort:$layout:$label'),
+                  alignment: Alignment.centerLeft,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      softWrap: false,
+                      style: text.labelMedium?.copyWith(
+                        color: cs.onSurfaceVariant,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTableContextStatusSurface({
+    required TextTheme text,
+    required CommonUiTokens tokens,
+    required bool reduceMotion,
+  }) {
+    return AnimatedBuilder(
+      animation: Listenable.merge(<Listenable>[
+        _tableSwipeController,
+        _statusVisualPulseController,
+      ]),
+      builder: (context, _) {
+        final currentIndex =
+            _currentTableIndex.clamp(0, widget.tabs.length - 1);
+        final currentSpec = widget.tabs[currentIndex];
+        final destinationIndex = _swipeDestinationIndex;
+        final destinationValid = destinationIndex >= 0 &&
+            destinationIndex < widget.tabs.length &&
+            destinationIndex != currentIndex &&
+            _swipePhysicalDirection != 0;
+        final destinationSpec =
+            destinationValid ? widget.tabs[destinationIndex] : null;
+        final rawProgress = destinationValid
+            ? _tableSwipeController.value.clamp(0.0, 1.0).toDouble()
+            : 0.0;
+        final progress = reduceMotion
+            ? (rawProgress >= .5 ? 1.0 : 0.0)
+            : rawProgress;
+        final currentColor = _statusHudColor(currentSpec, tokens);
+        final destinationColor = destinationSpec == null
+            ? currentColor
+            : _statusHudColor(destinationSpec, tokens);
+        final color = destinationSpec == null
+            ? currentColor
+            : Color.lerp(currentColor, destinationColor, progress) ??
+                currentColor;
+        final pulse = reduceMotion
+            ? 0.0
+            : _statusVisualPulseStrength(_statusVisualPulseController.value);
+        final fillOpacity = (tokens.isDark ? .14 : .10) + (.025 * pulse);
+        final borderOpacity = .34 + (.12 * pulse);
+        final scale = 1 + (.012 * pulse);
+        final direction = _swipePhysicalDirection == 0
+            ? -1.0
+            : _swipePhysicalDirection.toDouble();
+        final currentOpacity = destinationSpec == null ? 1.0 : 1 - progress;
+        final destinationOpacity = destinationSpec == null ? 0.0 : progress;
+
+        Widget labelFor(
+          RealTimeTabSpec spec, {
+          required double opacity,
+          required double translateX,
+        }) {
+          return Opacity(
+            opacity: opacity.clamp(0.0, 1.0).toDouble(),
+            child: Transform.translate(
+              offset: Offset(translateX, 0),
+              child: Center(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    spec.label,
+                    maxLines: 1,
+                    softWrap: false,
+                    style: text.labelMedium?.copyWith(
+                      color: color,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: .1,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
+
+        return Semantics(
+          label: '현재 테이블, ${currentSpec.label}',
+          child: Transform.scale(
+            scale: scale,
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 44),
+              padding: const EdgeInsets.symmetric(horizontal: 9),
+              decoration: BoxDecoration(
+                color: color.withOpacity(fillOpacity),
+                borderRadius: BorderRadius.circular(13),
+                border: Border.all(
+                  color: color.withOpacity(borderOpacity),
+                ),
+              ),
+              child: Stack(
+                fit: StackFit.expand,
+                children: <Widget>[
+                  labelFor(
+                    currentSpec,
+                    opacity: currentOpacity,
+                    translateX: direction * 5 * progress,
+                  ),
+                  if (destinationSpec != null)
+                    labelFor(
+                      destinationSpec,
+                      opacity: destinationOpacity,
+                      translateX: -direction * 5 * (1 - progress),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildTableContextBar(ColorScheme cs) {
+    final tableMode = (_viewMode?.mode ?? TypeViewMode.table) ==
+        TypeViewMode.table;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    return AnimatedSize(
+      duration: reduceMotion
+          ? Duration.zero
+          : const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+      child: AnimatedSwitcher(
+        duration: reduceMotion
+            ? Duration.zero
+            : const Duration(milliseconds: 190),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        transitionBuilder: (child, animation) {
+          final curved = CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+            reverseCurve: Curves.easeInCubic,
+          );
+          return FadeTransition(
+            opacity: curved,
+            child: SizeTransition(
+              sizeFactor: curved,
+              axisAlignment: -1,
+              child: child,
+            ),
+          );
+        },
+        child: tableMode
+            ? Consumer<RealTimeSortState>(
+                key: const ValueKey<String>('table-context-bar'),
+                builder: (context, sortState, _) {
+                  final text = Theme.of(context).textTheme;
+                  final tokens = CommonUiTheme.of(context);
+                  return LayoutBuilder(
+                    builder: (context, constraints) {
+                      final mediaWidth = MediaQuery.sizeOf(context).width;
+                      final width = constraints.maxWidth.isFinite &&
+                              constraints.maxWidth > 0
+                          ? constraints.maxWidth
+                          : mediaWidth;
+                      final layout = _tableContextLayoutMode(width);
+                      final regular = layout == 'regular';
+                      final narrow = layout == 'narrow';
+                      final horizontalPadding =
+                          regular ? 12.0 : narrow ? 8.0 : 10.0;
+                      final gap = regular ? 8.0 : narrow ? 4.0 : 6.0;
+                      final leftFlex = regular ? 58 : narrow ? 46 : 52;
+                      final rightFlex = 100 - leftFlex;
+                      final spec = widget.tabs[
+                          _currentTableIndex.clamp(0, widget.tabs.length - 1)];
+                      _scheduleTableContextBarLayoutTrace(
+                        width: width,
+                        layout: layout,
+                        sortLabel: sortState.timeOrderLabel,
+                        spec: spec,
+                      );
+                      final canSwipe = _canSwipeTables();
+                      return GestureDetector(
+                        behavior: HitTestBehavior.translucent,
+                        excludeFromSemantics: true,
+                        onHorizontalDragStart: canSwipe
+                            ? (details) => _onTableHorizontalDragStart(
+                                  details,
+                                  width <= 0 ? 1 : width,
+                                )
+                            : null,
+                        onHorizontalDragUpdate:
+                            canSwipe ? _onTableHorizontalDragUpdate : null,
+                        onHorizontalDragEnd:
+                            canSwipe ? _onTableHorizontalDragEnd : null,
+                        onHorizontalDragCancel:
+                            canSwipe ? _onTableHorizontalDragCancel : null,
+                        child: Container(
+                          padding: EdgeInsets.fromLTRB(
+                            horizontalPadding,
+                            4,
+                            horizontalPadding,
+                            6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: cs.surface,
+                            border: Border(
+                              bottom: BorderSide(
+                                color: cs.outlineVariant.withOpacity(.70),
+                              ),
+                            ),
+                          ),
+                          child: SizedBox(
+                            height: 44,
+                            child: Row(
+                              children: <Widget>[
+                                Expanded(
+                                  flex: leftFlex,
+                                  child: _buildTableContextSortSurface(
+                                    cs: cs,
+                                    text: text,
+                                    sortState: sortState,
+                                    layout: layout,
+                                    reduceMotion: reduceMotion,
+                                  ),
+                                ),
+                                SizedBox(width: gap),
+                                Expanded(
+                                  flex: rightFlex,
+                                  child: _buildTableContextStatusSurface(
+                                    text: text,
+                                    tokens: tokens,
+                                    reduceMotion: reduceMotion,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
+              )
+            : const SizedBox.shrink(
+                key: ValueKey<String>('table-context-bar-hidden'),
+              ),
+      ),
+    );
+  }
+
   double _statusVisualPulseStrength(double progress) {
     final p = progress.clamp(0.0, 1.0).toDouble();
     if (p <= .35) {
@@ -2316,7 +2973,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     _debugLog('status_visual_pulse_complete', <String, Object?>{
       'table': spec.id,
       'statusColor': _statusVisualRole(spec),
-      'statusVisual': 'rail+ambient_wash',
+      'statusVisual': 'rail+ambient_wash+responsive_context_bar',
     });
   }
 
@@ -2545,13 +3202,17 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
   }
 
   Widget _buildInteractiveSwipePages(double viewportWidth) {
-    final currentPage = _buildStatePageAt(_currentTableIndex);
+    final currentIndex = _currentTableIndex;
+    final currentSpec = widget.tabs[currentIndex];
+    final currentPage = _buildStatePageAt(currentIndex);
     final destinationIndex = _swipeDestinationIndex;
-    final destinationPage = destinationIndex >= 0 &&
-            destinationIndex < widget.tabs.length &&
-            destinationIndex != _currentTableIndex
-        ? _buildStatePageAt(destinationIndex)
-        : null;
+    final hasDestination = destinationIndex >= 0 &&
+        destinationIndex < widget.tabs.length &&
+        destinationIndex != currentIndex;
+    final destinationSpec =
+        hasDestination ? widget.tabs[destinationIndex] : null;
+    final destinationPage =
+        hasDestination ? _buildStatePageAt(destinationIndex) : null;
 
     return ClipRect(
       child: AnimatedBuilder(
@@ -2560,29 +3221,47 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
           final progress =
               _tableSwipeController.value.clamp(0.0, 1.0).toDouble();
           final direction = _swipePhysicalDirection;
-          if (destinationPage == null || direction == 0) {
-            return currentPage;
-          }
-          final currentDx = direction * progress * viewportWidth;
-          final destinationDx =
-              direction * (progress - 1) * viewportWidth;
-          final currentOpacity = 1 - (.08 * progress);
-          final destinationOpacity = .92 + (.08 * progress);
+          final swipeActive =
+              destinationPage != null && destinationSpec != null && direction != 0;
+          final currentDx =
+              swipeActive ? direction * progress * viewportWidth : 0.0;
+          final destinationDx = swipeActive
+              ? direction * (progress - 1) * viewportWidth
+              : 0.0;
+          final currentOpacity =
+              swipeActive ? 1 - (.08 * progress) : 1.0;
+          final destinationOpacity =
+              swipeActive ? .92 + (.08 * progress) : 0.0;
+
           return Stack(
             fit: StackFit.expand,
             children: <Widget>[
-              Transform.translate(
-                offset: Offset(destinationDx, 0),
-                child: Opacity(
-                  opacity: destinationOpacity.clamp(0.0, 1.0).toDouble(),
-                  child: destinationPage,
+              if (swipeActive)
+                KeyedSubtree(
+                  key: ValueKey<String>(
+                    'swipe-page:${destinationSpec.id}',
+                  ),
+                  child: Transform.translate(
+                    offset: Offset(destinationDx, 0),
+                    child: Opacity(
+                      opacity:
+                          destinationOpacity.clamp(0.0, 1.0).toDouble(),
+                      child: destinationPage,
+                    ),
+                  ),
+                )
+              else
+                const SizedBox.shrink(
+                  key: ValueKey<String>('swipe-page:empty-destination'),
                 ),
-              ),
-              Transform.translate(
-                offset: Offset(currentDx, 0),
-                child: Opacity(
-                  opacity: currentOpacity.clamp(0.0, 1.0).toDouble(),
-                  child: currentPage,
+              KeyedSubtree(
+                key: ValueKey<String>('swipe-page:${currentSpec.id}'),
+                child: Transform.translate(
+                  offset: Offset(currentDx, 0),
+                  child: Opacity(
+                    opacity: currentOpacity.clamp(0.0, 1.0).toDouble(),
+                    child: currentPage,
+                  ),
                 ),
               ),
             ],
@@ -2684,10 +3363,13 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     );
   }
 
-  double _modeReelRowExtent(BuildContext context) {
+  double _modeControlRowExtent(BuildContext context) {
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     final bottomPadding = bottomInset > 8 ? bottomInset : 8.0;
-    return 7 + 44 + bottomPadding;
+    final contentHeight = _parkingViewCapability == ParkingViewCapability.empty
+        ? 72.0
+        : 64.0;
+    return 7 + contentHeight + bottomPadding;
   }
 
   Widget _buildStatusCountOverlay({
@@ -2770,16 +3452,72 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     );
   }
 
+  Widget _buildModeReelGuide({
+    required ColorScheme cs,
+    required TypeViewMode nextMode,
+    required double opacity,
+    required double offsetY,
+  }) {
+    final guideColor = cs.primary.withOpacity(.64 * opacity);
+    final ghostColor = cs.primary.withOpacity(.30 * opacity);
+    return Transform.translate(
+      offset: Offset(0, offsetY),
+      child: Opacity(
+        opacity: opacity.clamp(0.0, 1.0).toDouble(),
+        child: Stack(
+          fit: StackFit.expand,
+          children: <Widget>[
+            Align(
+              alignment: const Alignment(0, -1),
+              child: Icon(
+                Icons.keyboard_arrow_up_rounded,
+                size: 15,
+                color: guideColor,
+              ),
+            ),
+            Align(
+              alignment: const Alignment(0, -.58),
+              child: _buildModeReelGlyph(
+                nextMode,
+                ghostColor,
+                size: 11,
+              ),
+            ),
+            Align(
+              alignment: const Alignment(0, .58),
+              child: _buildModeReelGlyph(
+                nextMode,
+                ghostColor,
+                size: 11,
+              ),
+            ),
+            Align(
+              alignment: const Alignment(0, 1),
+              child: Icon(
+                Icons.keyboard_arrow_down_rounded,
+                size: 15,
+                color: guideColor,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildModeReelVisual(ColorScheme cs) {
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     return ExcludeSemantics(
       child: SizedBox(
-        width: 88,
-        height: 44,
+        width: 112,
+        height: 64,
         child: ClipRect(
           child: AnimatedBuilder(
-            animation: _modeReelController,
+            animation: Listenable.merge(<Listenable>[
+              _modeReelController,
+              _modeReelHintController,
+            ]),
             builder: (context, _) {
               final liveMode = _viewMode?.mode ?? TypeViewMode.table;
               final from = (_modeReelDragActive || _modeReelTransitioning)
@@ -2792,29 +3530,34 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
               final direction = _modeReelPhysicalDirection == 0
                   ? -1
                   : _modeReelPhysicalDirection;
+              final guideOpacity =
+                  (1 - progress * 2.2).clamp(0.0, 1.0).toDouble();
+              final hintWave = reduceMotion || progress > .01
+                  ? 0.0
+                  : math.sin(_modeReelHintController.value * math.pi * 2);
+              final hintOffset = hintWave * 2.4;
               if (reduceMotion) {
                 final visibleMode = progress >= .5 ? to : from;
                 return Stack(
                   fit: StackFit.expand,
                   children: <Widget>[
+                    _buildModeReelGuide(
+                      cs: cs,
+                      nextMode: _oppositeViewMode(visibleMode),
+                      opacity: 1,
+                      offsetY: 0,
+                    ),
                     Center(
                       child: _buildModeReelGlyph(
                         visibleMode,
                         cs.primary,
-                      ),
-                    ),
-                    Align(
-                      alignment: const Alignment(0, .88),
-                      child: Icon(
-                        Icons.drag_handle_rounded,
-                        size: 18,
-                        color: cs.outlineVariant.withOpacity(.74),
+                        size: 27,
                       ),
                     ),
                   ],
                 );
               }
-              final travel = 30.0;
+              final travel = 36.0;
               final maxAngle = math.pi * 55 / 180;
               final currentY = direction * travel * progress;
               final nextY = -direction * travel * (1 - progress);
@@ -2829,6 +3572,12 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
               return Stack(
                 fit: StackFit.expand,
                 children: <Widget>[
+                  _buildModeReelGuide(
+                    cs: cs,
+                    nextMode: to,
+                    opacity: guideOpacity,
+                    offsetY: hintOffset,
+                  ),
                   Center(
                     child: _buildModeReelItem(
                       mode: to,
@@ -2849,19 +3598,6 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
                       scale: currentScale,
                     ),
                   ),
-                  Align(
-                    alignment: const Alignment(0, .88),
-                    child: Opacity(
-                      opacity: (1 - (.38 * progress))
-                          .clamp(0.0, 1.0)
-                          .toDouble(),
-                      child: Icon(
-                        Icons.drag_handle_rounded,
-                        size: 18,
-                        color: cs.outlineVariant.withOpacity(.74),
-                      ),
-                    ),
-                  ),
                 ],
               );
             },
@@ -2873,7 +3609,9 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
 
   Widget _buildModeReelSurface(ColorScheme cs) {
     final mode = _viewMode?.mode ?? TypeViewMode.table;
+    final nextMode = _oppositeViewMode(mode);
     return Container(
+      key: const ValueKey<String>('parking-mode:table-and-status'),
       color: widget.tabBarStyle.containerColor(cs),
       child: SafeArea(
         top: false,
@@ -2881,8 +3619,9 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
         child: Semantics(
           button: true,
           enabled: _canUseModeReel(),
-          label: '부모 주차 구역 선택',
-          value: mode == TypeViewMode.table ? '현재 테이블 보기' : '현재 현황 보기',
+          label: '보기 모드 전환 및 부모 주차 구역 선택',
+          value:
+              '현재 ${mode == TypeViewMode.table ? '테이블' : '현황'} 보기. 위 또는 아래로 밀어 ${nextMode == TypeViewMode.table ? '테이블' : '현황'} 보기로 전환할 수 있습니다. 탭하면 부모 주차 구역을 선택합니다.',
           onTap: _onModeReelTap,
           onLongPress: () => unawaited(_onModeReelLongPress()),
           customSemanticsActions: _modeReelSemanticsActions(),
@@ -2896,7 +3635,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
             onVerticalDragEnd: _onModeReelDragEnd,
             onVerticalDragCancel: _onModeReelDragCancel,
             child: SizedBox(
-              height: 44,
+              height: 64,
               width: double.infinity,
               child: Center(
                 child: KeyedSubtree(
@@ -2924,11 +3663,238 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     );
   }
 
+  Widget _buildTableOnlyModeSurface(ColorScheme cs) {
+    return Container(
+      key: const ValueKey<String>('parking-mode:table-only'),
+      color: widget.tabBarStyle.containerColor(cs),
+      child: SafeArea(
+        top: false,
+        minimum: const EdgeInsets.fromLTRB(12, 7, 12, 8),
+        child: Semantics(
+          label: '현재 지역은 테이블 보기만 지원합니다.',
+          child: SizedBox(
+            height: 64,
+            width: double.infinity,
+            child: Center(
+              child: ExcludeSemantics(
+                child: SizedBox(
+                  width: 112,
+                  height: 64,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: <Widget>[
+                      Center(
+                        child: Icon(
+                          Icons.table_rows_rounded,
+                          size: 29,
+                          color: cs.primary,
+                        ),
+                      ),
+                      Align(
+                        alignment: const Alignment(0, .76),
+                        child: Icon(
+                          Icons.horizontal_rule_rounded,
+                          size: 26,
+                          color: cs.outlineVariant.withOpacity(.72),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLocationLoadingSurface(ColorScheme cs) {
+    final text = Theme.of(context).textTheme;
+    return Container(
+      key: const ValueKey<String>('parking-mode:loading'),
+      color: widget.tabBarStyle.containerColor(cs),
+      child: SafeArea(
+        top: false,
+        minimum: const EdgeInsets.fromLTRB(12, 7, 12, 8),
+        child: SizedBox(
+          height: 64,
+          child: Center(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.2,
+                    color: cs.primary,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  '주차 구역 확인 중',
+                  style: text.labelLarge?.copyWith(
+                    color: cs.onSurfaceVariant,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _runOperationalSyncFromEmptySurface() async {
+    if (_operationalSyncRunning) return;
+    setState(() {
+      _operationalSyncRunning = true;
+    });
+    _debugLog('operational_sync_requested', <String, Object?>{
+      'source': 'realtime_location_empty_surface',
+      'capability': _parkingViewCapability.name,
+    });
+    try {
+      final result = await OperationalDataSyncWorkflow.runCurrentArea(
+        context: context,
+        useCommonUi: true,
+      );
+      _debugLog('operational_sync_result', <String, Object?>{
+        'source': 'realtime_location_empty_surface',
+        'result': result.name,
+      });
+    } catch (error, stackTrace) {
+      _debugLog('operational_sync_failure', <String, Object?>{
+        'source': 'realtime_location_empty_surface',
+        'error': error,
+      });
+      debugPrint(
+        '[RealTimeViewMode] operational_sync_failure error=$error\nStackTrace:\n$stackTrace',
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _operationalSyncRunning = false;
+        });
+      }
+    }
+  }
+
+  Widget _buildLocationEmptySurface(ColorScheme cs) {
+    final text = Theme.of(context).textTheme;
+    return Container(
+      key: const ValueKey<String>('parking-mode:empty'),
+      color: widget.tabBarStyle.containerColor(cs),
+      child: SafeArea(
+        top: false,
+        minimum: const EdgeInsets.fromLTRB(12, 7, 12, 8),
+        child: SizedBox(
+          height: 72,
+          child: Row(
+            children: <Widget>[
+              Icon(
+                Icons.location_off_rounded,
+                size: 22,
+                color: cs.onSurfaceVariant,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      '주차 구역 데이터가 없습니다.',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: text.labelLarge?.copyWith(
+                        color: cs.onSurfaceVariant,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '현재 지역의 운영 데이터를 내려받아 주세요.',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: text.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              SizedBox(
+                width: 150,
+                child: CommonButton(
+                  label: _operationalSyncRunning ? '내려받는 중' : '지금 내려받기',
+                  icon: Icons.download_rounded,
+                  loading: _operationalSyncRunning,
+                  onPressed: _operationalSyncRunning
+                      ? null
+                      : _runOperationalSyncFromEmptySurface,
+                  minHeight: 44,
+                  preserveVariantWhenDisabled: true,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildParkingModeControlSurface(ColorScheme cs) {
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final child = switch (_parkingViewCapability) {
+      ParkingViewCapability.loading => _buildLocationLoadingSurface(cs),
+      ParkingViewCapability.empty => _buildLocationEmptySurface(cs),
+      ParkingViewCapability.tableOnly => _buildTableOnlyModeSurface(cs),
+      ParkingViewCapability.tableAndStatus => _buildModeReelSurface(cs),
+    };
+    return AnimatedSize(
+      duration: reduceMotion
+          ? Duration.zero
+          : const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+      child: AnimatedSwitcher(
+        duration: reduceMotion
+            ? Duration.zero
+            : const Duration(milliseconds: 220),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        transitionBuilder: (child, animation) {
+          final curved = CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+            reverseCurve: Curves.easeInCubic,
+          );
+          return FadeTransition(
+            opacity: curved,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, .08),
+                end: Offset.zero,
+              ).animate(curved),
+              child: child,
+            ),
+          );
+        },
+        child: child,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final area = _resolveArea();
-    final modeReelExtent = _modeReelRowExtent(context);
+    final modeReelExtent = _modeControlRowExtent(context);
     return Container(
       color: cs.surface,
       child: Stack(
@@ -2936,6 +3902,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
         children: [
           Column(
             children: [
+              _buildTableContextBar(cs),
               Expanded(
                 child: Stack(
                   fit: StackFit.expand,
@@ -2947,7 +3914,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
                 ),
               ),
               _buildLayerSurface(cs),
-              _buildModeReelSurface(cs),
+              _buildParkingModeControlSurface(cs),
             ],
           ),
           _buildStatusCountOverlay(
