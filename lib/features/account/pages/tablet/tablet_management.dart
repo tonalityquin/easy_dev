@@ -8,6 +8,7 @@ import '../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../app/utils/status_dialog.dart';
 import '../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
+import '../../../../shared/auth/tablet_phone.dart';
 import '../../../../shared/secondary/application/secondary_account_workspace_state.dart';
 import '../../../../shared/secondary/application/secondary_tablet_workspace_state.dart';
 import '../../../../shared/secondary/widgets/ops_console_dialogs.dart';
@@ -218,26 +219,15 @@ class _TabletManagementState extends State<TabletManagement> {
     });
   }
 
-  String _maskEmail(String value) {
-    final trimmed = value.trim();
-    if (trimmed.isEmpty) return '';
-    final parts = trimmed.split('@');
-    if (parts.length != 2) return trimmed;
-    final local = parts.first;
-    final domain = parts.last;
-    if (local.isEmpty) return trimmed;
-    final visible = local.substring(0, 1);
-    final maskLength = local.length <= 2 ? 2 : local.length - 1;
-    return '$visible${List.filled(maskLength, '*').join()}@$domain';
-  }
+  String _maskedPhone(TabletModel tablet) => TabletPhone.mask(tablet.phone);
 
   bool _matchesSearch(TabletModel tablet) {
     final q = _query.trim().toLowerCase();
     if (q.isEmpty) return true;
     final haystack = <String>[
       tablet.name,
-      tablet.handle,
-      tablet.email,
+      tablet.phone,
+      TabletPhone.format(tablet.phone),
       tablet.role,
       tablet.position ?? '',
       tablet.areas.join(' '),
@@ -266,7 +256,7 @@ class _TabletManagementState extends State<TabletManagement> {
     final wasSelected = userState.selectedUserId == tablet.id;
     await userState.toggleUserCard(tablet.id);
     _log(
-      '${wasSelected ? 'tablet_deselected' : 'tablet_selected'} handle=${tablet.handle} mode=${mode.name}',
+      '${wasSelected ? 'tablet_deselected' : 'tablet_selected'} phone=${TabletPhone.mask(tablet.phone)} mode=${mode.name}',
     );
   }
 
@@ -306,10 +296,10 @@ class _TabletManagementState extends State<TabletManagement> {
     TabletModel selectedTablet,
   ) async {
     final userState = context.read<UserState>();
-    _log('delete_confirm_opened handle=${selectedTablet.handle}');
+    _log('delete_confirm_opened phone=${TabletPhone.mask(selectedTablet.phone)}');
     final ok = await _confirmDelete(context);
     if (!ok) {
-      _log('delete_cancelled handle=${selectedTablet.handle}');
+      _log('delete_cancelled phone=${TabletPhone.mask(selectedTablet.phone)}');
       return;
     }
 
@@ -318,7 +308,7 @@ class _TabletManagementState extends State<TabletManagement> {
       initialMessage: '태블릿 계정 삭제 요청을 시작합니다.',
     );
     try {
-      trace.log('삭제 대상 확인: handle=${selectedTablet.handle}, id=${selectedTablet.id}', progress: .2);
+      trace.log('삭제 대상 확인: phone=${TabletPhone.mask(selectedTablet.phone)}, id=${selectedTablet.id}', progress: .2);
       trace.log('태블릿 계정 삭제와 캐시 갱신을 요청합니다.', progress: .5);
       String? deleteError;
       await userState.deleteTabletCard(
@@ -341,7 +331,7 @@ class _TabletManagementState extends State<TabletManagement> {
       }
       trace.log('태블릿 삭제 및 캐시 반영 완료', progress: .92);
       await trace.succeed('태블릿 삭제가 완료되었습니다.');
-      _log('delete_completed handle=${selectedTablet.handle}');
+      _log('delete_completed phone=${TabletPhone.mask(selectedTablet.phone)}');
     } catch (error, stackTrace) {
       _log('delete_failed error=$error');
       await trace.fail(
@@ -552,9 +542,8 @@ class _TabletManagementState extends State<TabletManagement> {
           final tablet = tablets[index];
           return _TabletDockRow(
             key: ValueKey<String>(tablet.id),
-            name: tablet.name.trim().isEmpty ? tablet.handle : tablet.name,
-            handle: tablet.handle,
-            email: _maskEmail(tablet.email),
+            name: tablet.name.trim().isEmpty ? TabletPhone.mask(tablet.phone) : tablet.name,
+            phone: _maskedPhone(tablet),
             role: tablet.role,
             division: tablet.divisions.join(', '),
             working: tablet.isWorking,
@@ -770,8 +759,7 @@ class _TabletDockRow extends StatelessWidget {
   const _TabletDockRow({
     super.key,
     required this.name,
-    required this.handle,
-    required this.email,
+    required this.phone,
     required this.role,
     required this.division,
     required this.working,
@@ -781,8 +769,7 @@ class _TabletDockRow extends StatelessWidget {
   });
 
   final String name;
-  final String handle;
-  final String email;
+  final String phone;
   final String role;
   final String division;
   final bool working;
@@ -802,7 +789,7 @@ class _TabletDockRow extends StatelessWidget {
     final statusColor =
         working ? tokens.statusSynchronized : tokens.statusOffline;
     final statusLabel = working ? '운영 중' : '오프라인';
-    final displayHandle = handle.trim().isEmpty ? '핸들 없음' : handle.trim();
+    final displayPhone = phone.trim().isEmpty ? '전화번호 없음' : phone.trim();
     final displayRole = role.trim().isEmpty ? '역할 없음' : role.trim();
 
     return OpsDockSelectableRowSurface(
@@ -869,7 +856,7 @@ class _TabletDockRow extends StatelessWidget {
           ),
           const SizedBox(height: 5),
           Text(
-            '$displayHandle · $displayRole',
+            '$displayPhone · $displayRole',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: textTheme.bodySmall?.copyWith(
@@ -885,9 +872,9 @@ class _TabletDockRow extends StatelessWidget {
               color: tokens.borderSubtle,
             ),
             const SizedBox(height: 8),
-            if (email.trim().isNotEmpty)
+            if (phone.trim().isNotEmpty)
               Text(
-                email,
+                phone,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: textTheme.labelSmall?.copyWith(
@@ -895,7 +882,7 @@ class _TabletDockRow extends StatelessWidget {
                   fontWeight: FontWeight.w700,
                 ),
               ),
-            if (email.trim().isNotEmpty && division.trim().isNotEmpty)
+            if (phone.trim().isNotEmpty && division.trim().isNotEmpty)
               const SizedBox(height: 4),
             if (division.trim().isNotEmpty)
               Text(

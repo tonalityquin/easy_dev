@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../account/applications/user_state.dart';
 import '../../../mode_single/application/att_brk_repository.dart';
 import '../../applications/common/endtime_reminder_service.dart';
+import '../../applications/common/break_record_result.dart';
 
 class SingleHomeDashBoardController {
   Future<void> handleWorkStatus(
@@ -25,30 +26,45 @@ class SingleHomeDashBoardController {
     );
   }
 
-  Future<void> recordBreakTime(BuildContext context) async {
+  Future<BreakRecordResult> recordBreakTime(BuildContext context) async {
     final userState = Provider.of<UserState>(context, listen: false);
     final session = userState.session;
     if (session == null) {
-      debugPrint('[SingleHomeDashBoardController] break_skipped session=null');
-      return;
+      const message = '사용자 세션을 확인할 수 없습니다.';
+      debugPrint(
+        '[SingleHomeDashBoardController] break_record_failed message=$message',
+      );
+      return BreakRecordResult.failure(message: message);
     }
 
     final now = DateTime.now();
-    await AttBrkRepository.instance.insertEventAndUpload(
-      dateTime: now,
-      type: AttBrkModeType.breakTime,
-      userId: session.id,
-      userName: session.displayName,
-      area: userState.currentArea,
-      division: userState.division,
-    );
+    try {
+      await AttBrkRepository.instance.insertEventAndUpload(
+        dateTime: now,
+        type: AttBrkModeType.breakTime,
+        userId: session.id,
+        userName: session.displayName,
+        area: userState.currentArea,
+        division: userState.division,
+      );
 
-    final prefs = await SharedPreferences.getInstance();
-    final date =
-        '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-    await prefs.setString('last_break_date', date);
-    debugPrint(
-      '[SingleHomeDashBoardController] break_recorded at=${now.toIso8601String()} area=${userState.currentArea} division=${userState.division}',
-    );
+      final prefs = await SharedPreferences.getInstance();
+      final date =
+          '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+      await prefs.setString('last_break_date', date);
+      debugPrint(
+        '[SingleHomeDashBoardController] break_record_complete at=${now.toIso8601String()} area=${userState.currentArea} division=${userState.division}',
+      );
+      return BreakRecordResult.success(recordedAt: now);
+    } catch (error, stackTrace) {
+      debugPrint(
+        '[SingleHomeDashBoardController] break_record_error error=$error',
+      );
+      debugPrint(stackTrace.toString());
+      return BreakRecordResult.failure(
+        message: '휴게 기록 중 오류가 발생했습니다: $error',
+      );
+    }
   }
+
 }

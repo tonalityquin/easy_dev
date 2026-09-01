@@ -12,13 +12,13 @@ void _traceAttBrkPunch(
   final String name;
   switch (type) {
     case AttBrkModeType.workIn:
-      name = 'Simple 출근 펀칭';
+      name = 'Single 출근 펀칭';
       break;
     case AttBrkModeType.breakTime:
-      name = 'Simple 휴게 펀칭';
+      name = 'Single 휴게 펀칭';
       break;
     case AttBrkModeType.workOut:
-      name = 'Simple 퇴근 펀칭';
+      name = 'Single 퇴근 펀칭';
       break;
   }
 
@@ -26,7 +26,7 @@ void _traceAttBrkPunch(
     name,
     route: ModalRoute.of(context)?.settings.name,
     meta: <String, dynamic>{
-      'screen': 'simple_punch_card_feedback',
+      'screen': 'single_punch_card_feedback',
       'action': 'punch_feedback_show',
       'type': type.toString(),
       'at': dateTime.toIso8601String(),
@@ -85,18 +85,22 @@ Future<void> showSinglePunchCardFeedback(
   SystemSound.play(SystemSoundType.click);
 
   final cs = Theme.of(context).colorScheme;
+  final reduceMotion =
+      MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
   await showGeneralDialog<void>(
     context: context,
     barrierDismissible: true,
-    barrierLabel: 'simple_punch_card_feedback',
+    barrierLabel: 'single_punch_card_feedback',
     barrierColor: cs.scrim.withOpacity(0.35),
-    transitionDuration: const Duration(milliseconds: 320),
+    transitionDuration:
+        reduceMotion ? Duration.zero : const Duration(milliseconds: 320),
     pageBuilder: (ctx, anim, secondaryAnim) {
       return _PunchCardSheet(
         type: type,
         dateTime: dateTime,
         requiresBreak: requiresBreak,
+        reduceMotion: reduceMotion,
       );
     },
     transitionBuilder: (ctx, anim, secondaryAnim, child) {
@@ -121,11 +125,13 @@ class _PunchCardSheet extends StatefulWidget {
   final AttBrkModeType type;
   final DateTime dateTime;
   final bool requiresBreak;
+  final bool reduceMotion;
 
   const _PunchCardSheet({
     required this.type,
     required this.dateTime,
     required this.requiresBreak,
+    required this.reduceMotion,
   });
 
   @override
@@ -145,7 +151,8 @@ class _PunchCardSheetState extends State<_PunchCardSheet>
 
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 450),
+      duration:
+          widget.reduceMotion ? Duration.zero : const Duration(milliseconds: 450),
     );
 
     _sheetScale = CurvedAnimation(

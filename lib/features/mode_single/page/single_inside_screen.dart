@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -10,11 +11,12 @@ import '../../../app/init/db_connection_status_section.dart';
 import '../../../app/init/logout_helper.dart';
 import '../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../app/utils/status_dialog.dart';
+import '../../../design_system/common_ui/common_adaptive_two_line_content.dart';
 import '../../../shared/area_remote_settings/application/area_remote_settings_sync.dart';
 import '../../account/applications/user_state.dart';
 import '../../dashboard/applications/common/endtime_reminder_service.dart';
 import '../../dev/debug/debug_api_logger.dart';
-import '../../selector/sheets/service_bottom_sheet.dart';
+import '../../selector/application/dev_auth.dart';
 import '../controllers/single_inside_controller.dart';
 import 'widgets/single_inside_document_box_button_section.dart';
 import 'widgets/single_inside_header_widget_section.dart';
@@ -33,8 +35,49 @@ const String _tUi = 'ui';
 
 enum _SingleInsideMenuAction {
   logout,
-  settings,
   exitApp,
+}
+
+class _SingleInsideLayoutDiagnostics {
+  static const int _limit = 120;
+  static final List<String> _lines = <String>[];
+
+  static void log(String message) {
+    final normalized = message.trim();
+    if (normalized.isEmpty) return;
+    final line =
+        '[SINGLE_BRANCH_LAYOUT][${DateTime.now().toIso8601String()}] $normalized';
+    _lines.add(line);
+    if (_lines.length > _limit) {
+      _lines.removeRange(0, _lines.length - _limit);
+    }
+    debugPrint(line);
+  }
+
+  static String get debugPrintCode {
+    if (_lines.isEmpty) {
+      return 'debugPrint(${jsonEncode('[SINGLE_BRANCH_LAYOUT] 기록된 로그가 없습니다.')});';
+    }
+    return _lines.map((line) => 'debugPrint(${jsonEncode(line)});').join('\n');
+  }
+
+  static Future<void> showStatus(
+    BuildContext context, {
+    required String description,
+  }) async {
+    final enabled = await DevAuth.isDevModeEnabled();
+    if (!enabled || !context.mounted) return;
+    await StatusDialog.showSuccess(
+      context,
+      title: '지사 레이아웃 상태',
+      description: description,
+      copyText: debugPrintCode,
+      copyButtonLabel: 'debugPrint 코드 복사',
+      visibleDuration: Duration.zero,
+      useCommonUi: true,
+      awaitManualClose: true,
+    );
+  }
 }
 
 double _contrastRatio(Color a, Color b) {
@@ -197,20 +240,6 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
     }
   }
 
-  Future<void> _openSettings(BuildContext context) async {
-    try {
-      await ServiceBottomSheet.show(
-        context: context,
-      );
-    } catch (e) {
-      await _logApiError(
-        tag: 'SingleInsideScreen._openSettings',
-        message: '설정 바텀시트 열기 실패',
-        error: e,
-        tags: const <String>[_tSingle, _tSingleInside, _tUi],
-      );
-    }
-  }
 
   Future<void> _handleAppExit(BuildContext context) async {
     try {
@@ -233,9 +262,6 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
     switch (action) {
       case _SingleInsideMenuAction.logout:
         await _handleLogout(context);
-        break;
-      case _SingleInsideMenuAction.settings:
-        await _openSettings(context);
         break;
       case _SingleInsideMenuAction.exitApp:
         await _handleAppExit(context);
@@ -341,16 +367,6 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
                 Icon(Icons.logout, color: cs.error),
                 const SizedBox(width: 8),
                 const Text('로그아웃'),
-              ],
-            ),
-          ),
-          PopupMenuItem<_SingleInsideMenuAction>(
-            value: _SingleInsideMenuAction.settings,
-            child: Row(
-              children: [
-                Icon(Icons.settings_outlined, color: cs.primary),
-                const SizedBox(width: 8),
-                const Text('설정'),
               ],
             ),
           ),
@@ -492,6 +508,7 @@ class _SingleInsideDataDownloadDockState
     extends State<_SingleInsideDataDownloadDock> {
   _SingleInsideDataDownloadState _state = _SingleInsideDataDownloadState.idle;
   Timer? _feedbackTimer;
+  String _lastLayoutSignature = '';
 
   bool get _busy => _state == _SingleInsideDataDownloadState.loading;
 
@@ -503,6 +520,11 @@ class _SingleInsideDataDownloadDockState
 
   void _setStateSafe(_SingleInsideDataDownloadState value) {
     if (!mounted) return;
+    if (_state != value) {
+      _SingleInsideLayoutDiagnostics.log(
+        'download_dock_state previous=${_state.name} next=${value.name}',
+      );
+    }
     setState(() => _state = value);
   }
 
@@ -685,6 +707,19 @@ class _SingleInsideDataDownloadDockState
     );
   }
 
+  Future<void> _showLayoutDeveloperStatus() async {
+    final media = MediaQuery.maybeOf(context);
+    final textScale = MediaQuery.textScalerOf(context).scale(14) / 14;
+    _SingleInsideLayoutDiagnostics.log(
+      'status_dialog state=${_state.name} viewport=${media?.size.width.toStringAsFixed(1)}x${media?.size.height.toStringAsFixed(1)} textScale=${textScale.toStringAsFixed(2)} minHeight=64.0',
+    );
+    await _SingleInsideLayoutDiagnostics.showStatus(
+      context,
+      description:
+          'Single 지사 다운로드 Dock의 반응형 높이, TextScaler, 현재 상태 debugPrint 코드를 복사할 수 있습니다.',
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -695,6 +730,14 @@ class _SingleInsideDataDownloadDockState
         reduceMotion ? Duration.zero : const Duration(milliseconds: 200);
     final background = _background(cs);
     final foreground = _foreground(cs);
+    final media = MediaQuery.maybeOf(context);
+    final textScale = MediaQuery.textScalerOf(context).scale(14) / 14;
+    final layoutSignature =
+        'state=${_state.name} viewport=${media?.size.width.toStringAsFixed(1)}x${media?.size.height.toStringAsFixed(1)} textScale=${textScale.toStringAsFixed(2)} minHeight=64.0 paddingY=8.0';
+    if (_lastLayoutSignature != layoutSignature) {
+      _lastLayoutSignature = layoutSignature;
+      _SingleInsideLayoutDiagnostics.log(layoutSignature);
+    }
 
     final dock = SafeArea(
       top: false,
@@ -703,94 +746,102 @@ class _SingleInsideDataDownloadDockState
       bottom: true,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-        child: AnimatedContainer(
+        child: AnimatedSize(
           duration: motion,
           curve: Curves.easeOutCubic,
-          height: 64,
-          decoration: BoxDecoration(
-            color: background,
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(
-              color: foreground.withOpacity(0.14),
-            ),
-          ),
-          child: Material(
-            type: MaterialType.transparency,
-            child: InkWell(
-              onTap: _busy ? null : _download,
+          alignment: Alignment.bottomCenter,
+          child: AnimatedContainer(
+            duration: motion,
+            curve: Curves.easeOutCubic,
+            constraints: const BoxConstraints(minHeight: 64),
+            decoration: BoxDecoration(
+              color: background,
               borderRadius: BorderRadius.circular(22),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                child: Row(
-                  children: [
-                    AnimatedContainer(
-                      duration: motion,
-                      curve: Curves.easeOutCubic,
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: foreground.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      alignment: Alignment.center,
-                      child: AnimatedSwitcher(
+              border: Border.all(
+                color: foreground.withOpacity(0.14),
+              ),
+            ),
+            child: Material(
+              type: MaterialType.transparency,
+              child: InkWell(
+                onTap: _busy ? null : _download,
+                onLongPress: _showLayoutDeveloperStatus,
+                borderRadius: BorderRadius.circular(22),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
+                  child: Row(
+                    children: [
+                      AnimatedContainer(
                         duration: motion,
-                        switchInCurve: Curves.linear,
-                        switchOutCurve: Curves.linear,
-                        transitionBuilder: (child, animation) {
-                          final fadeAnimation = CurvedAnimation(
-                            parent: animation,
-                            curve: Curves.easeOutCubic,
-                            reverseCurve: Curves.easeInCubic,
-                          );
-                          final scaleAnimation = Tween<double>(
-                            begin: 0.86,
-                            end: 1,
-                          ).animate(
-                            CurvedAnimation(
+                        curve: Curves.easeOutCubic,
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: foreground.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        alignment: Alignment.center,
+                        child: AnimatedSwitcher(
+                          duration: motion,
+                          switchInCurve: Curves.linear,
+                          switchOutCurve: Curves.linear,
+                          transitionBuilder: (child, animation) {
+                            final fadeAnimation = CurvedAnimation(
                               parent: animation,
-                              curve: Curves.easeOutBack,
+                              curve: Curves.easeOutCubic,
                               reverseCurve: Curves.easeInCubic,
-                            ),
-                          );
-                          return FadeTransition(
-                            opacity: fadeAnimation,
-                            child: ScaleTransition(
-                              scale: scaleAnimation,
-                              child: child,
-                            ),
-                          );
-                        },
-                        child: _leadingIcon(
-                          foreground: foreground,
-                          reduceMotion: reduceMotion,
+                            );
+                            final scaleAnimation = Tween<double>(
+                              begin: 0.86,
+                              end: 1,
+                            ).animate(
+                              CurvedAnimation(
+                                parent: animation,
+                                curve: Curves.easeOutBack,
+                                reverseCurve: Curves.easeInCubic,
+                              ),
+                            );
+                            return FadeTransition(
+                              opacity: fadeAnimation,
+                              child: ScaleTransition(
+                                scale: scaleAnimation,
+                                child: child,
+                              ),
+                            );
+                          },
+                          child: _leadingIcon(
+                            foreground: foreground,
+                            reduceMotion: reduceMotion,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: AnimatedSwitcher(
-                        duration: motion,
-                        switchInCurve: Curves.easeOutCubic,
-                        switchOutCurve: Curves.easeInCubic,
-                        transitionBuilder: (child, animation) {
-                          return FadeTransition(
-                            opacity: animation,
-                            child: SlideTransition(
-                              position: Tween<Offset>(
-                                begin: const Offset(0, 0.08),
-                                end: Offset.zero,
-                              ).animate(animation),
-                              child: child,
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: AnimatedSwitcher(
+                          duration: motion,
+                          switchInCurve: Curves.easeOutCubic,
+                          switchOutCurve: Curves.easeInCubic,
+                          transitionBuilder: (child, animation) {
+                            return FadeTransition(
+                              opacity: animation,
+                              child: SlideTransition(
+                                position: Tween<Offset>(
+                                  begin: const Offset(0, 0.08),
+                                  end: Offset.zero,
+                                ).animate(animation),
+                                child: child,
+                              ),
+                            );
+                          },
+                          child: CommonAdaptiveTwoLineContent(
+                            key: ValueKey<_SingleInsideDataDownloadState>(
+                              _state,
                             ),
-                          );
-                        },
-                        child: Column(
-                          key: ValueKey<_SingleInsideDataDownloadState>(_state),
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
+                            gap: 2,
+                            title: Text(
                               _title,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -799,8 +850,7 @@ class _SingleInsideDataDownloadDockState
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
-                            const SizedBox(height: 2),
-                            Text(
+                            subtitle: Text(
                               _subtitle,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -809,25 +859,25 @@ class _SingleInsideDataDownloadDockState
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
-                          ],
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    AnimatedRotation(
-                      turns: _state == _SingleInsideDataDownloadState.failure
-                          ? -0.08
-                          : 0,
-                      duration: motion,
-                      curve: Curves.easeOutCubic,
-                      child: Icon(
-                        _state == _SingleInsideDataDownloadState.success
-                            ? Icons.check_rounded
-                            : Icons.chevron_right_rounded,
-                        color: foreground.withOpacity(_busy ? 0.45 : 0.82),
+                      const SizedBox(width: 8),
+                      AnimatedRotation(
+                        turns: _state == _SingleInsideDataDownloadState.failure
+                            ? -0.08
+                            : 0,
+                        duration: motion,
+                        curve: Curves.easeOutCubic,
+                        child: Icon(
+                          _state == _SingleInsideDataDownloadState.success
+                              ? Icons.check_rounded
+                              : Icons.chevron_right_rounded,
+                          color: foreground.withOpacity(_busy ? 0.45 : 0.82),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),

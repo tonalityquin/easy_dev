@@ -47,7 +47,6 @@ void tripleAreaPickerBottomSheet({
       onConfirm: (selected, data) async {
         Navigator.of(context).pop();
         final beforeArea = areaState.currentArea;
-        areaState.updateAreaPicker(selected);
         await userState.areaPickerCurrentArea(selected);
         final isHeadquarter = data.isHeadquarterByName[selected] == true;
         if (!rootContext.mounted) return;
@@ -221,7 +220,6 @@ void tripleAreaPickerBottomSheet({
                               Navigator.of(sheetCtx).pop();
 
                               final beforeArea = areaState.currentArea;
-                              areaState.updateAreaPicker(selected);
                               await userState.areaPickerCurrentArea(selected);
 
                               final isHeadquarter = data.isHeadquarterByName[selected] == true;

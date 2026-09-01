@@ -15,6 +15,7 @@ import '../../../dashboard/domain/repositories/end_work_report_repository.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
 import 'statistics_deep_log_service.dart';
 import 'statistics_deep_model.dart';
+import 'statistics_expandable_chart.dart';
 import 'statistics_report_design.dart';
 
 class StatisticsSectorAreaComparisonPage extends StatefulWidget {
@@ -22,6 +23,7 @@ class StatisticsSectorAreaComparisonPage extends StatefulWidget {
   final List<String> areas;
   final List<DateTime> dates;
   final bool useCommonUi;
+  final bool embedded;
 
   const StatisticsSectorAreaComparisonPage({
     super.key,
@@ -29,6 +31,7 @@ class StatisticsSectorAreaComparisonPage extends StatefulWidget {
     required this.areas,
     required this.dates,
     required this.useCommonUi,
+    this.embedded = false,
   });
 
   @override
@@ -66,6 +69,94 @@ class _StatisticsSectorAreaComparisonPageState
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final duration = reduceMotion ? Duration.zero : CommonUiMotion.layout;
+    final content = SafeArea(
+      top: !widget.embedded,
+      child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        padding: EdgeInsets.fromLTRB(16, widget.embedded ? 4 : 12, 16, 32),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (widget.embedded) ...[
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Area 방문 구역 비교',
+                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                fontWeight: FontWeight.w900,
+                              ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          '선택한 Area의 원본 로그를 명시적으로 불러와 방문 구역을 비교합니다.',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: cs.onSurfaceVariant,
+                                fontWeight: FontWeight.w700,
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: _sending || _report == null || _report!.results.isEmpty
+                        ? null
+                        : _openMailDialog,
+                    icon: AnimatedSwitcher(
+                      duration: duration,
+                      switchInCurve: CommonUiMotion.enter,
+                      switchOutCurve: CommonUiMotion.exit,
+                      child: _sending
+                          ? const SizedBox(
+                              key: ValueKey<String>('comparison_pdf_sending_embedded'),
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(
+                              Icons.send_rounded,
+                              key: ValueKey<String>('comparison_pdf_ready_embedded'),
+                            ),
+                    ),
+                    tooltip: '비교 PDF 발신',
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+            ],
+            _AreaSelectionPanel(
+              areas: widget.areas,
+              selectedAreas: _selectedAreas,
+              loading: _loading,
+              onChanged: _toggleArea,
+              onLoad: _load,
+            ),
+            const SizedBox(height: 12),
+            AnimatedSwitcher(
+              duration: duration,
+              switchInCurve: CommonUiMotion.enter,
+              switchOutCurve: CommonUiMotion.exit,
+              child: _loading
+                  ? const _LoadingPanel(key: ValueKey<String>('loading'))
+                  : _report == null
+                      ? const _EmptyPanel(key: ValueKey<String>('empty'))
+                      : _AreaComparisonView(
+                          key: ValueKey<String>(
+                            _report!.results.map((e) => e.area).join('|'),
+                          ),
+                          report: _report!,
+                        ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (widget.embedded) {
+      return ColoredBox(color: cs.surface, child: content);
+    }
     return Scaffold(
       backgroundColor: cs.surface,
       appBar: AppBar(
@@ -98,40 +189,7 @@ class _StatisticsSectorAreaComparisonPageState
           ),
         ],
       ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _AreaSelectionPanel(
-                areas: widget.areas,
-                selectedAreas: _selectedAreas,
-                loading: _loading,
-                onChanged: _toggleArea,
-                onLoad: _load,
-              ),
-              const SizedBox(height: 12),
-              AnimatedSwitcher(
-                duration: duration,
-                switchInCurve: CommonUiMotion.enter,
-                switchOutCurve: CommonUiMotion.exit,
-                child: _loading
-                    ? const _LoadingPanel(key: ValueKey<String>('loading'))
-                    : _report == null
-                        ? const _EmptyPanel(key: ValueKey<String>('empty'))
-                        : _AreaComparisonView(
-                            key: ValueKey<String>(
-                              _report!.results.map((e) => e.area).join('|'),
-                            ),
-                            report: _report!,
-                          ),
-              ),
-            ],
-          ),
-        ),
-      ),
+      body: content,
     );
   }
 
@@ -916,18 +974,29 @@ class _StatisticsSectorAreaComparisonPageState
         'division=${widget.division} areas=${areas.join(',')} dates=${widget.dates.length} source=verifiedDetailedGcsHistory',
         progress: .06,
       );
-      final cache = await _reportRepository.buildAreaDateCache(
-        division: widget.division.trim(),
-      );
+      final monthKeys = widget.dates
+          .map((date) => '${date.year}${date.month.toString().padLeft(2, '0')}')
+          .toSet()
+          .toList()
+        ..sort();
       trace.log(
-        'firestore source ready areas=${cache.length}',
+        'firestore direct source months=${monthKeys.join(',')}',
         progress: .12,
       );
       final selections = <String, _AreaHistorySourceSelection>{};
       for (final area in areas) {
+        final areaDays = await _reportRepository.loadAreaMonths(
+          division: widget.division.trim(),
+          area: area,
+          monthKeys: monthKeys,
+        );
+        trace.log(
+          'area=$area firestoreMonthReads=${monthKeys.length} loadedDays=${areaDays.length}',
+          progress: .14,
+        );
         final selection = _resolveHistorySource(
           area: area,
-          areaDays: cache[area] ?? const <String, Map<String, dynamic>>{},
+          areaDays: areaDays,
         );
         selections[area] = selection;
         trace.log(
@@ -1415,12 +1484,31 @@ class _AreaInputBarChart extends StatelessWidget {
     return _AreaChartPanel(
       title: 'Area별 Sector 입차 합계',
       subtitle: '각 Area의 당일 완료 업무 기준 입차 대수를 비교합니다.',
-      child: _AreaBarChart(
-        results: results,
-        value: (result) => result.sectorReport.totalInputCount.toDouble(),
-        tooltip: (result) => '${result.area}\n${result.sectorReport.totalInputCount}대',
-        color: Theme.of(context).colorScheme.primary,
-        currency: false,
+      child: StatisticsExpandableChart(
+        title: 'Area별 Sector 입차 합계',
+        subtitle: '각 Area의 당일 완료 업무 기준 입차 대수를 비교합니다.',
+        debugLabel: 'area_input',
+        preview: _AreaBarChart(
+          results: results,
+          value: (result) => result.sectorReport.totalInputCount.toDouble(),
+          tooltip: (result) =>
+              '${result.area}\n${result.sectorReport.totalInputCount}대',
+          color: Theme.of(context).colorScheme.primary,
+          currency: false,
+          interactive: false,
+          landscape: false,
+        ),
+        expandedBuilder: (context, landscape) => _ExpandedAreaBarChart(
+          results: results,
+          value: (result) => result.sectorReport.totalInputCount.toDouble(),
+          valueText: (result) => '${result.sectorReport.totalInputCount}대',
+          tooltip: (result) =>
+              '${result.area}\n${result.sectorReport.totalInputCount}대',
+          color: Theme.of(context).colorScheme.primary,
+          currency: false,
+          landscape: landscape,
+          debugLabel: 'area_input',
+        ),
       ),
     );
   }
@@ -1436,13 +1524,32 @@ class _AreaFeeBarChart extends StatelessWidget {
     return _AreaChartPanel(
       title: 'Area별 Sector 잠금 금액',
       subtitle: 'Area별 완료 업무의 잠금 금액 합계를 비교합니다.',
-      child: _AreaBarChart(
-        results: results,
-        value: (result) => result.sectorReport.totalLockedFee.toDouble(),
-        tooltip: (result) =>
-            '${result.area}\n₩${_fmt(result.sectorReport.totalLockedFee)}',
-        color: Theme.of(context).colorScheme.tertiary,
-        currency: true,
+      child: StatisticsExpandableChart(
+        title: 'Area별 Sector 잠금 금액',
+        subtitle: 'Area별 완료 업무의 잠금 금액 합계를 비교합니다.',
+        debugLabel: 'area_fee',
+        preview: _AreaBarChart(
+          results: results,
+          value: (result) => result.sectorReport.totalLockedFee.toDouble(),
+          tooltip: (result) =>
+              '${result.area}\n₩${_fmt(result.sectorReport.totalLockedFee)}',
+          color: Theme.of(context).colorScheme.tertiary,
+          currency: true,
+          interactive: false,
+          landscape: false,
+        ),
+        expandedBuilder: (context, landscape) => _ExpandedAreaBarChart(
+          results: results,
+          value: (result) => result.sectorReport.totalLockedFee.toDouble(),
+          valueText: (result) =>
+              '₩${_fmt(result.sectorReport.totalLockedFee)}',
+          tooltip: (result) =>
+              '${result.area}\n₩${_fmt(result.sectorReport.totalLockedFee)}',
+          color: Theme.of(context).colorScheme.tertiary,
+          currency: true,
+          landscape: landscape,
+          debugLabel: 'area_fee',
+        ),
       ),
     );
   }
@@ -1454,6 +1561,10 @@ class _AreaBarChart extends StatelessWidget {
   final String Function(StatisticsSectorAreaResult result) tooltip;
   final Color color;
   final bool currency;
+  final bool interactive;
+  final bool landscape;
+  final int? selectedIndex;
+  final ValueChanged<int>? onSelected;
 
   const _AreaBarChart({
     required this.results,
@@ -1461,93 +1572,215 @@ class _AreaBarChart extends StatelessWidget {
     required this.tooltip,
     required this.color,
     required this.currency,
+    required this.interactive,
+    required this.landscape,
+    this.selectedIndex,
+    this.onSelected,
   });
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final maxValue = results.fold<double>(
       0,
       (p, e) => math.max(p, value(e)).toDouble(),
     );
-    return SizedBox(
-      height: 300,
-      child: BarChart(
-        BarChartData(
-          maxY: maxValue <= 0 ? 5 : (maxValue * 1.25).ceilToDouble(),
-          alignment: BarChartAlignment.spaceAround,
-          barTouchData: BarTouchData(
-            touchTooltipData: BarTouchTooltipData(
-              tooltipBgColor: Theme.of(context).colorScheme.inverseSurface,
-              getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                final result = results[group.x.toInt()];
-                return BarTooltipItem(
-                  tooltip(result),
-                  TextStyle(
-                    color: Theme.of(context).colorScheme.onInverseSurface,
-                    fontWeight: FontWeight.w800,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = math.max(
+          constraints.maxWidth,
+          results.length * (landscape ? 150.0 : 108.0) + 72,
+        ).toDouble();
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          child: SizedBox(
+            width: width,
+            height: landscape ? 430 : 300,
+            child: BarChart(
+              BarChartData(
+                maxY: maxValue <= 0 ? 5 : (maxValue * 1.25).ceilToDouble(),
+                alignment: BarChartAlignment.spaceAround,
+                barTouchData: BarTouchData(
+                  enabled: interactive,
+                  touchCallback: interactive
+                      ? (event, response) {
+                          final spot = response?.spot;
+                          if (spot == null) return;
+                          onSelected?.call(spot.touchedBarGroupIndex);
+                        }
+                      : null,
+                  touchTooltipData: BarTouchTooltipData(
+                    tooltipBgColor: cs.inverseSurface,
+                    fitInsideHorizontally: true,
+                    fitInsideVertically: true,
+                    getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                      final index = group.x.toInt();
+                      if (index < 0 || index >= results.length) return null;
+                      return BarTooltipItem(
+                        tooltip(results[index]),
+                        TextStyle(
+                          color: cs.onInverseSurface,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      );
+                    },
                   ),
-                );
-              },
-            ),
-          ),
-          titlesData: FlTitlesData(
-            leftTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                reservedSize: 54,
-                getTitlesWidget: (value, meta) => Text(
-                  currency ? _compact(value) : value.toInt().toString(),
-                  style: const TextStyle(fontSize: 9),
                 ),
-              ),
-            ),
-            bottomTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                reservedSize: 54,
-                getTitlesWidget: (value, meta) {
-                  final index = value.toInt();
-                  if (index < 0 || index >= results.length) {
-                    return const SizedBox.shrink();
-                  }
-                  return SideTitleWidget(
-                    axisSide: meta.axisSide,
-                    space: 8,
-                    child: SizedBox(
-                      width: 80,
-                      child: Text(
-                        results[index].area,
-                        textAlign: TextAlign.center,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 10),
+                titlesData: FlTitlesData(
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: landscape ? 68 : 54,
+                      getTitlesWidget: (value, meta) => Text(
+                        currency ? _compact(value) : value.toInt().toString(),
+                        style: TextStyle(
+                          fontSize: landscape ? 10 : 9,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
-                  );
-                },
-              ),
-            ),
-            topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          ),
-          gridData: FlGridData(show: true, drawVerticalLine: false),
-          borderData: FlBorderData(show: false),
-          barGroups: [
-            for (int i = 0; i < results.length; i++)
-              BarChartGroupData(
-                x: i,
-                barRods: [
-                  BarChartRodData(
-                    toY: value(results[i]),
-                    color: color,
-                    width: 22,
-                    borderRadius: BorderRadius.circular(6),
                   ),
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: landscape ? 62 : 54,
+                      getTitlesWidget: (value, meta) {
+                        final index = value.toInt();
+                        if (index < 0 || index >= results.length) {
+                          return const SizedBox.shrink();
+                        }
+                        return SideTitleWidget(
+                          axisSide: meta.axisSide,
+                          space: 8,
+                          child: SizedBox(
+                            width: landscape ? 132 : 80,
+                            child: Text(
+                              results[index].area,
+                              textAlign: TextAlign.center,
+                              maxLines: landscape ? 3 : 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: landscape ? 11 : 10,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  topTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                  rightTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                ),
+                gridData: FlGridData(show: true, drawVerticalLine: false),
+                borderData: FlBorderData(show: false),
+                barGroups: [
+                  for (int i = 0; i < results.length; i++)
+                    BarChartGroupData(
+                      x: i,
+                      barRods: [
+                        BarChartRodData(
+                          toY: value(results[i]),
+                          color: selectedIndex == null || selectedIndex == i
+                              ? color
+                              : color.withOpacity(.38),
+                          width: landscape ? 30 : 22,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                      ],
+                    ),
                 ],
               ),
-          ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ExpandedAreaBarChart extends StatefulWidget {
+  final List<StatisticsSectorAreaResult> results;
+  final double Function(StatisticsSectorAreaResult result) value;
+  final String Function(StatisticsSectorAreaResult result) valueText;
+  final String Function(StatisticsSectorAreaResult result) tooltip;
+  final Color color;
+  final bool currency;
+  final bool landscape;
+  final String debugLabel;
+
+  const _ExpandedAreaBarChart({
+    required this.results,
+    required this.value,
+    required this.valueText,
+    required this.tooltip,
+    required this.color,
+    required this.currency,
+    required this.landscape,
+    required this.debugLabel,
+  });
+
+  @override
+  State<_ExpandedAreaBarChart> createState() => _ExpandedAreaBarChartState();
+}
+
+class _ExpandedAreaBarChartState extends State<_ExpandedAreaBarChart> {
+  int? _selectedIndex;
+
+  @override
+  Widget build(BuildContext context) {
+    final index = _selectedIndex;
+    final selected = index == null || index < 0 || index >= widget.results.length
+        ? null
+        : widget.results[index];
+    final total = widget.results.fold<double>(
+      0,
+      (sum, result) => sum + widget.value(result),
+    );
+    final ratio = selected == null || total <= 0
+        ? 0.0
+        : widget.value(selected) / total;
+    return Column(
+      children: [
+        Expanded(
+          child: _AreaBarChart(
+            results: widget.results,
+            value: widget.value,
+            tooltip: widget.tooltip,
+            color: widget.color,
+            currency: widget.currency,
+            interactive: true,
+            landscape: widget.landscape,
+            selectedIndex: index,
+            onSelected: (next) {
+              if (next < 0 || next >= widget.results.length) return;
+              HapticFeedback.selectionClick();
+              setState(() => _selectedIndex = next);
+              StatisticsChartInteractionLog.log(
+                'select chart=${widget.debugLabel} index=$next area=${widget.results[next].area} value=${widget.valueText(widget.results[next])}',
+              );
+            },
+          ),
         ),
-      ),
+        const SizedBox(height: 10),
+        StatisticsChartSelectionPanel(
+          title: selected == null
+              ? '막대를 눌러 Area별 상세값을 확인하세요.'
+              : selected.area,
+          values: selected == null
+              ? const <String>[]
+              : <String>[
+                  widget.valueText(selected),
+                  '비교 합계 대비 ${(ratio * 100).toStringAsFixed(1)}%',
+                ],
+          icon: Icons.compare_arrows_rounded,
+        ),
+      ],
     );
   }
 }

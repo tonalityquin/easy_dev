@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../app/di/routes.dart';
 import '../../../app/init/app_start_debug_trace.dart';
 import '../../../app/init/app_start_flow_prefs.dart';
 import '../../../app/init/app_start_user_purpose.dart';
 import '../../../app/init/startup_tasks.dart';
+import '../../../features/launcher/application/launcher_debug_account_override_store.dart';
+import '../../../features/launcher/application/launcher_diagnostics.dart';
+import '../../../features/launcher/application/terminal_restore_hint.dart';
 
 class StartGateScreen extends StatefulWidget {
   const StartGateScreen({super.key});
@@ -24,58 +26,6 @@ class _StartGateScreenState extends State<StartGateScreen> {
     _decide();
   }
 
-  String? _normalizeMode(String? raw) {
-    if (raw == null) return null;
-    final v = raw.trim().toLowerCase();
-    if (v.isEmpty) return null;
-
-    switch (v) {
-      case 'service':
-        return null;
-      case 'personal':
-      case 'mobile':
-      case 'direct':
-        return 'personal';
-      case 'tablet':
-        return 'tablet';
-      case 'single':
-      case 'simple':
-        return 'single';
-      case 'double':
-      case 'lite':
-      case 'light':
-        return 'double';
-      case 'triple':
-      case 'normal':
-        return 'triple';
-      case 'minor':
-        return 'minor';
-      default:
-        return null;
-    }
-  }
-
-  Future<String?> _resolveReturnUserRoute() async {
-    final prefs = await SharedPreferences.getInstance();
-    final mode = _normalizeMode(prefs.getString('mode'));
-    switch (mode) {
-      case 'personal':
-        return AppRoutes.personalLogin;
-      case 'tablet':
-        return AppRoutes.tabletLogin;
-      case 'single':
-        return AppRoutes.singleLogin;
-      case 'double':
-        return AppRoutes.doubleLogin;
-      case 'triple':
-        return AppRoutes.tripleLogin;
-      case 'minor':
-        return AppRoutes.minorLogin;
-      default:
-        return null;
-    }
-  }
-
   Future<String?> _resolvePendingPolicyRoute() async {
     final terms = await AppStartFlowPrefs.getTermsOfServiceAgreed();
     if (!terms) return AppRoutes.termsConsent;
@@ -91,6 +41,16 @@ class _StartGateScreenState extends State<StartGateScreen> {
   }
 
   Future<void> _decide() async {
+    final debugSnapshotRestored =
+        await LauncherDebugAccountOverrideStore.restoreIfNeeded(
+      source: 'start_gate',
+    );
+    if (debugSnapshotRestored) {
+      AppStartDebugTrace.log(
+        'start_gate',
+        'debug_account_override_snapshot_restored',
+      );
+    }
     await AppStartFlowPrefs.migrateFromLegacyIfNeeded();
 
     final permDone = await AppStartFlowPrefs.getPermissionTutorialDone();
@@ -109,10 +69,7 @@ class _StartGateScreenState extends State<StartGateScreen> {
 
     if (!permDone && purpose == null) {
       _navigated = true;
-      AppStartDebugTrace.log(
-        'start_gate',
-        'navigate_user_purpose',
-      );
+      AppStartDebugTrace.log('start_gate', 'navigate_user_purpose');
       Navigator.of(context).pushReplacementNamed(
         AppRoutes.appStartUserPurpose,
       );
@@ -149,8 +106,7 @@ class _StartGateScreenState extends State<StartGateScreen> {
       return;
     }
 
-    final skipPolicyAndPostSetup =
-        purpose?.skipsPolicyAndPostSetup ?? false;
+    final skipPolicyAndPostSetup = purpose?.skipsPolicyAndPostSetup ?? false;
     if (skipPolicyAndPostSetup) {
       AppStartDebugTrace.log(
         'start_gate',
@@ -213,20 +169,57 @@ class _StartGateScreenState extends State<StartGateScreen> {
       }
     }
 
-    await StartupTasks.runAfterPermissions();
+    final report = await StartupTasks.runAfterPermissions();
     if (!mounted || _navigated) return;
 
-    final route = await _resolveReturnUserRoute();
+    final restoreKind = await TerminalRestoreHint.readAccountKindId();
     if (!mounted || _navigated) return;
 
     _navigated = true;
-    final target = route ?? AppRoutes.selector;
+    if (restoreKind != null) {
+      AppStartDebugTrace.log(
+        'start_gate',
+        'skip_power_boot_for_restore',
+        meta: <String, Object?>{
+          'route': AppRoutes.modeLauncher,
+          'accountKind': restoreKind,
+          'startupReady': report.readyCount,
+          'startupAllReady': report.allReady,
+        },
+      );
+      LauncherDiagnostics.record(
+        'startup_power_boot_skipped',
+        scope: 'startup',
+        meta: <String, Object?>{
+          'accountKind': restoreKind,
+          'firebaseReads': 0,
+        },
+      );
+      Navigator.of(context).pushReplacementNamed(
+        AppRoutes.modeLauncher,
+        arguments: report,
+      );
+      return;
+    }
+
     AppStartDebugTrace.log(
       'start_gate',
-      'navigate_main_flow',
-      meta: <String, Object?>{'route': target},
+      'navigate_power_boot',
+      meta: <String, Object?>{
+        'route': AppRoutes.powerBoot,
+        'startupReady': report.readyCount,
+        'startupAllReady': report.allReady,
+      },
     );
-    Navigator.of(context).pushReplacementNamed(target);
+    LauncherDiagnostics.record(
+      'startup_power_boot_required',
+      scope: 'startup',
+      meta: const <String, Object?>{'firebaseReads': 0},
+    );
+    Navigator.of(context).pushReplacementNamed(
+      AppRoutes.powerBoot,
+      arguments: report,
+    );
   }
 
   @override

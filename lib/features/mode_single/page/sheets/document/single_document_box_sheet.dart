@@ -6,7 +6,6 @@ import 'package:intl/intl.dart';
 import '../../../../../app/utils/block_dialog/break_duration_blocking_dialog.dart';
 import '../../../../../design_system/common_ui/common_ui_overlays.dart';
 import '../../../../../shared/document/backup/backup_form_page.dart';
-import '../../../../../shared/document/common_document_overlays.dart';
 import '../../../../../shared/document/user_statement/user_statement_form_page.dart';
 import '../../../../account/applications/user_state.dart';
 import '../../../../commute/domain/repositories/commute_log_repository.dart';
@@ -24,6 +23,19 @@ Future<void> openSingleDocumentBox(BuildContext context) async {
     transparentBackground: true,
     builder: (_) => const _SingleDocumentBoxSheet(),
   );
+}
+
+Future<void> _closeSingleDocumentBoxAndOpen(
+  BuildContext context,
+  Future<void> Function(BuildContext rootContext) action,
+) async {
+  final rootNavigator = Navigator.of(context, rootNavigator: true);
+  final rootContext = rootNavigator.context;
+  if (Navigator.of(context).canPop()) {
+    Navigator.of(context).pop();
+    await Future<void>.delayed(Duration.zero);
+  }
+  await action(rootContext);
 }
 
 class _SingleDocumentBoxSheet extends StatelessWidget {
@@ -140,10 +152,11 @@ class _SingleDocumentBoxSheet extends StatelessWidget {
                                                 await _submitRestTimeRecordsFromSqlite(
                                                     context);
                                               } else {
-                                                await showCommonFullscreenDocument<void>(
-                                                  context: context,
-                                                  barrierLabel: '경위서 작성',
-                                                  child: const UserStatementFormPage(),
+                                                await _closeSingleDocumentBoxAndOpen(
+                                                  context,
+                                                  (rootContext) => showUserStatementSideDock(
+                                                    context: rootContext,
+                                                  ),
                                                 );
                                               }
                                               break;
@@ -172,10 +185,11 @@ class _SingleDocumentBoxSheet extends StatelessWidget {
                                             case SingleDocumentType.generic:
                                               if (item.id ==
                                                   'template-annual-leave-application') {
-                                                await showCommonFullscreenDocument<void>(
-                                                  context: context,
-                                                  barrierLabel: '연차 지원 신청서 작성',
-                                                  child: const BackupFormPage(),
+                                                await _closeSingleDocumentBoxAndOpen(
+                                                  context,
+                                                  (rootContext) => showBackupApplicationSideDock(
+                                                    context: rootContext,
+                                                  ),
                                                 );
                                               }
                                               break;
@@ -577,7 +591,7 @@ Future<List<LocalCommuteRecord>> _loadLocalCommuteRecordsFromSqlite({
 
   if (needWorkIn || needWorkOut) {
     final workRows = await db.query(
-      'simple_work_attendance',
+      AttBrkModeDb.workAttendanceTable,
       columns: ['date', 'type', 'time'],
       orderBy: 'date ASC, created_at ASC',
     );
@@ -602,7 +616,7 @@ Future<List<LocalCommuteRecord>> _loadLocalCommuteRecordsFromSqlite({
           LocalCommuteRecord(
             status: statusLabel,
             dateTime: dt,
-            localTable: 'simple_work_attendance',
+            localTable: AttBrkModeDb.workAttendanceTable,
             localDate: dateStr,
             localType: typeCode,
           ),
@@ -616,7 +630,7 @@ Future<List<LocalCommuteRecord>> _loadLocalCommuteRecordsFromSqlite({
   final needBreak = statuses.contains('휴게');
   if (needBreak) {
     final breakRows = await db.query(
-      'simple_break_attendance',
+      AttBrkModeDb.breakAttendanceTable,
       columns: ['date', 'type', 'time'],
       orderBy: 'date ASC, created_at ASC',
     );
@@ -632,7 +646,7 @@ Future<List<LocalCommuteRecord>> _loadLocalCommuteRecordsFromSqlite({
           LocalCommuteRecord(
             status: '휴게',
             dateTime: dt,
-            localTable: 'simple_break_attendance',
+            localTable: AttBrkModeDb.breakAttendanceTable,
             localDate: dateStr,
             localType: typeCode,
           ),

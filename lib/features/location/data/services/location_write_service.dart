@@ -185,6 +185,46 @@ class LocationWriteService {
     return data;
   }
 
+
+  Future<void> createPlainTextLocation(LocationModel location) async {
+    final locationName = location.locationName.trim();
+    if (locationName.isEmpty) {
+      throw ArgumentError('plain text locationName cannot be empty');
+    }
+    if ((location.type ?? 'single') != 'single') {
+      throw ArgumentError('createPlainTextLocation requires type=single');
+    }
+    if (location.capacity < 0 || location.capacity > 9999) {
+      throw ArgumentError('plain text capacity must be between 0 and 9999');
+    }
+
+    final ref = _firestore.collection('locations').doc(location.id);
+    final data = location.toFirestoreMap();
+    data['type'] = 'single';
+    data['isSelected'] = false;
+    data['plateCount'] = location.plateCount;
+    data['updatedAt'] = FieldValue.serverTimestamp();
+    data.remove('parentId');
+    data.remove('parent');
+    data.remove('parkingGrid');
+    data.remove('childRect');
+    data.remove('childKind');
+    data.remove('childSlotAreaIds');
+    data.remove('childSlots');
+
+    await _firestore.runTransaction((transaction) async {
+      final snapshot = await transaction.get(ref);
+      if (snapshot.exists) {
+        throw StateError('이미 존재하는 텍스트형 구역입니다.');
+      }
+      transaction.set(ref, data);
+    });
+
+    debugPrint(
+      'createPlainTextLocation id=${location.id} area=${location.area} name=$locationName capacity=${location.capacity}',
+    );
+  }
+
   Future<void> createCompositeParent(LocationModel parent) async {
     if (!_isCompositeParent(parent)) {
       throw ArgumentError(
@@ -468,6 +508,9 @@ class LocationWriteService {
     }
     if ((location.type ?? 'single') != 'single') {
       throw ArgumentError('updatePlainTextLocation requires type=single');
+    }
+    if (location.capacity < 0 || location.capacity > 9999) {
+      throw ArgumentError('plain text capacity must be between 0 and 9999');
     }
 
     final ref = _firestore.collection('locations').doc(location.id);

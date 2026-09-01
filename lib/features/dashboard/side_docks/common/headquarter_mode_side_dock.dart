@@ -12,7 +12,6 @@ import '../../../../design_system/common_ui/common_ui_side_dock.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../account/applications/user_state.dart';
 import '../../../headquarter/application/actions/headquarter_common_actions.dart';
-import '../../../headquarter/application/fab/hub_quick_actions.dart';
 import '../../../headquarter/application/snapshot/headquarter_snapshot_repository.dart';
 import '../../../headquarter/widgets/headquarter_dashboard_identity_header.dart';
 import '../../../selector/application/dev_auth.dart';
@@ -116,7 +115,6 @@ class _HeadquarterModeSideDockState extends State<HeadquarterModeSideDock> {
   bool _devModeEnabled = false;
   bool _developerStateResolved = false;
   bool _supportLoading = true;
-  bool _downloadingSnapshot = false;
   String _division = '';
   String _downloadedAtIso = '';
   String? _expandedArea;
@@ -383,101 +381,6 @@ class _HeadquarterModeSideDockState extends State<HeadquarterModeSideDock> {
     Navigator.of(context).pop(const HeadquarterModeDockResult.openSecondary());
   }
 
-  Future<void> _runUtilityAction({
-    required String action,
-    required Future<void> Function() operation,
-  }) async {
-    _debugLog.log('utility_action_start action=$action');
-    try {
-      await operation();
-      _debugLog.log('utility_action_complete action=$action');
-    } catch (error, stackTrace) {
-      _debugLog.log(
-        'utility_action_failure action=$action error=$error stack=$stackTrace',
-      );
-      rethrow;
-    }
-  }
-
-  Future<void> _openMyInfo() {
-    return _runUtilityAction(
-      action: 'open_my_info',
-      operation: () => HeadquarterCommonActions.openMyInfo(
-        context,
-        source: 'mode_dock',
-      ),
-    );
-  }
-
-  Future<void> _openWorkActions() {
-    return _runUtilityAction(
-      action: 'open_work_actions',
-      operation: () => HeadquarterCommonActions.openWorkActions(
-        context,
-        source: 'mode_dock',
-        modeKey: widget.currentModeKey,
-      ),
-    );
-  }
-
-  Future<void> _toggleQuickButton() async {
-    await _runUtilityAction(
-      action: 'toggle_quick_button',
-      operation: () async {
-        await HeadHubActions.init();
-        final next = !HeadHubActions.enabled.value;
-        HeadHubActions.setEnabled(next);
-        HeadquarterCommonActions.recordEvent(
-          source: 'mode_dock',
-          action: 'toggle_quick_button',
-          phase: next ? 'enabled' : 'disabled',
-        );
-        HapticFeedback.selectionClick();
-      },
-    );
-  }
-
-  Future<void> _refreshSnapshot() async {
-    if (_downloadingSnapshot) return;
-    setState(() => _downloadingSnapshot = true);
-    try {
-      await _runUtilityAction(
-        action: 'refresh_area_master',
-        operation: () => HeadquarterCommonActions.run<void>(
-          source: 'mode_dock',
-          action: 'refresh_area_master',
-          operation: () => HeadHubActions.refreshAreaMaster(context),
-        ),
-      );
-      if (!mounted) return;
-      await _loadSupportData();
-    } finally {
-      if (mounted) {
-        setState(() => _downloadingSnapshot = false);
-      }
-    }
-  }
-
-  Future<void> _openSettings() {
-    return _runUtilityAction(
-      action: 'open_service_settings',
-      operation: () => HeadquarterCommonActions.openSettings(
-        context,
-        source: 'mode_dock',
-      ),
-    );
-  }
-
-  Future<void> _logout() {
-    return _runUtilityAction(
-      action: 'logout',
-      operation: () => HeadquarterCommonActions.logout(
-        context,
-        source: 'mode_dock',
-      ),
-    );
-  }
-
   Future<void> _showDeveloperStatus() async {
     if (!_devModeEnabled) return;
     _debugLog.log(
@@ -551,8 +454,8 @@ class _HeadquarterModeSideDockState extends State<HeadquarterModeSideDock> {
                         : CommonUiMotion.selection,
                     child: Text(
                       _downloadedAtIso.trim().isEmpty
-                          ? '다운로드 Snapshot 없음'
-                          : '${_formatTimestamp(_downloadedAtIso)} 다운로드 기준',
+                          ? '업무 데이터 없음'
+                          : '${_formatTimestamp(_downloadedAtIso)} 업데이트 기준',
                       key: ValueKey<String>(_downloadedAtIso),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -582,24 +485,6 @@ class _HeadquarterModeSideDockState extends State<HeadquarterModeSideDock> {
               haptic: CommonHaptic.light,
             ),
           ],
-        ),
-        const SizedBox(height: 10),
-        ValueListenableBuilder<bool>(
-          valueListenable: HeadHubActions.enabled,
-          builder: (context, quickEnabled, _) {
-            return _HeadquarterUtilityShelf(
-              quickEnabled: quickEnabled,
-              downloading: _downloadingSnapshot,
-              developerMode: _devModeEnabled,
-              onMyInfo: _openMyInfo,
-              onWorkActions: _openWorkActions,
-              onQuickButton: _toggleQuickButton,
-              onDownload: _refreshSnapshot,
-              onSettings: _openSettings,
-              onLogout: _logout,
-              onDeveloperStatus: _showDeveloperStatus,
-            );
-          },
         ),
         const SizedBox(height: 10),
         Expanded(
@@ -1644,7 +1529,7 @@ class _DataUnavailableSurface extends StatelessWidget {
         border: Border.all(color: tokens.borderSubtle),
       ),
       child: Text(
-        '다운로드 Snapshot 없음',
+        '업무 데이터 없음',
         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: tokens.textSecondary,
               fontWeight: FontWeight.w800,
@@ -1669,7 +1554,7 @@ class _EmptySupportSurface extends StatelessWidget {
         border: Border.all(color: tokens.borderSubtle),
       ),
       child: Text(
-        '다운로드 기준 지원 지역 0',
+        '지원 지역 없음',
         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: tokens.textSecondary,
               fontWeight: FontWeight.w800,
@@ -1677,407 +1562,6 @@ class _EmptySupportSurface extends StatelessWidget {
       ),
     );
   }
-}
-
-class _HeadquarterUtilityShelf extends StatelessWidget {
-  const _HeadquarterUtilityShelf({
-    required this.quickEnabled,
-    required this.downloading,
-    required this.developerMode,
-    required this.onMyInfo,
-    required this.onWorkActions,
-    required this.onQuickButton,
-    required this.onDownload,
-    required this.onSettings,
-    required this.onLogout,
-    required this.onDeveloperStatus,
-  });
-
-  final bool quickEnabled;
-  final bool downloading;
-  final bool developerMode;
-  final Future<void> Function() onMyInfo;
-  final Future<void> Function() onWorkActions;
-  final Future<void> Function() onQuickButton;
-  final Future<void> Function() onDownload;
-  final Future<void> Function() onSettings;
-  final Future<void> Function() onLogout;
-  final Future<void> Function() onDeveloperStatus;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = CommonUiTheme.of(context);
-    final reduceMotion =
-        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    final actions = <_HeadquarterUtilityAction>[
-      _HeadquarterUtilityAction(
-        label: '내 정보',
-        icon: Icons.person_rounded,
-        color: tokens.info,
-        onTap: onMyInfo,
-      ),
-      _HeadquarterUtilityAction(
-        label: '근무 액션',
-        icon: Icons.work_history_rounded,
-        color: tokens.warning,
-        onTap: onWorkActions,
-      ),
-      _HeadquarterUtilityAction(
-        label: '퀵버튼',
-        status: quickEnabled ? '켜짐' : '꺼짐',
-        icon: Icons.lightbulb_rounded,
-        color: quickEnabled ? tokens.warning : tokens.iconDisabled,
-        selected: quickEnabled,
-        onTap: onQuickButton,
-      ),
-      _HeadquarterUtilityAction(
-        label: '다운받기',
-        status: downloading ? '진행 중' : null,
-        icon: Icons.download_rounded,
-        color: tokens.info,
-        loading: downloading,
-        onTap: downloading ? null : onDownload,
-      ),
-      _HeadquarterUtilityAction(
-        label: '환경설정',
-        icon: Icons.settings_rounded,
-        color: tokens.accent,
-        onTap: onSettings,
-      ),
-      _HeadquarterUtilityAction(
-        label: '로그아웃',
-        icon: Icons.logout_rounded,
-        color: tokens.danger,
-        danger: true,
-        onTap: onLogout,
-      ),
-    ];
-
-    final content = Container(
-      padding: const EdgeInsets.fromLTRB(10, 9, 10, 10),
-      decoration: BoxDecoration(
-        color: tokens.surfaceOverlay,
-        borderRadius: BorderRadius.circular(CommonUiShapes.card),
-        border: Border.all(color: tokens.borderSubtle),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Icon(
-                Icons.dashboard_customize_rounded,
-                size: 16,
-                color: tokens.accent,
-              ),
-              const SizedBox(width: 7),
-              Expanded(
-                child: Text(
-                  '본사 도구',
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: tokens.textPrimary,
-                        fontWeight: FontWeight.w900,
-                      ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final itemWidth = (constraints.maxWidth - 12) / 3;
-              return Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: [
-                  for (var index = 0; index < actions.length; index++)
-                    SizedBox(
-                      width: itemWidth,
-                      height: 58,
-                      child: _HeadquarterUtilityReveal(
-                        order: index,
-                        child: _HeadquarterUtilityButton(
-                          action: actions[index],
-                          onLongPress:
-                              developerMode ? onDeveloperStatus : null,
-                        ),
-                      ),
-                    ),
-                ],
-              );
-            },
-          ),
-        ],
-      ),
-    );
-
-    if (reduceMotion) return content;
-
-    return TweenAnimationBuilder<double>(
-      tween: Tween<double>(begin: 0, end: 1),
-      duration: CommonUiMotion.component,
-      curve: CommonUiMotion.enter,
-      builder: (context, value, child) {
-        return Opacity(
-          opacity: value,
-          child: Transform.translate(
-            offset: Offset(0, 6 * (1 - value)),
-            child: child,
-          ),
-        );
-      },
-      child: content,
-    );
-  }
-}
-
-class _HeadquarterUtilityReveal extends StatelessWidget {
-  const _HeadquarterUtilityReveal({
-    required this.order,
-    required this.child,
-  });
-
-  final int order;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final reduceMotion =
-        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    if (reduceMotion) return child;
-    final delayMs = order * 24;
-    const motionMs = 180;
-    final totalMs = delayMs + motionMs;
-    final start = delayMs / totalMs;
-
-    return TweenAnimationBuilder<double>(
-      tween: Tween<double>(begin: 0, end: 1),
-      duration: Duration(milliseconds: totalMs),
-      builder: (context, value, animatedChild) {
-        final normalized = value <= start
-            ? 0.0
-            : ((value - start) / (1 - start)).clamp(0.0, 1.0).toDouble();
-        final motion = Curves.easeOutCubic.transform(normalized);
-        return Opacity(
-          opacity: motion,
-          child: Transform.translate(
-            offset: Offset(0, 5 * (1 - motion)),
-            child: Transform.scale(
-              scale: .97 + (.03 * motion),
-              child: animatedChild,
-            ),
-          ),
-        );
-      },
-      child: child,
-    );
-  }
-}
-
-class _HeadquarterUtilityButton extends StatefulWidget {
-  const _HeadquarterUtilityButton({
-    required this.action,
-    required this.onLongPress,
-  });
-
-  final _HeadquarterUtilityAction action;
-  final Future<void> Function()? onLongPress;
-
-  @override
-  State<_HeadquarterUtilityButton> createState() =>
-      _HeadquarterUtilityButtonState();
-}
-
-class _HeadquarterUtilityButtonState
-    extends State<_HeadquarterUtilityButton> {
-  bool _pressed = false;
-  bool _hovered = false;
-  bool _focused = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = CommonUiTheme.of(context);
-    final reduceMotion =
-        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    final enabled = widget.action.onTap != null;
-    final background = !enabled
-        ? tokens.surfaceDisabled
-        : widget.action.selected
-            ? tokens.surfaceSelected
-            : _pressed || _hovered
-                ? tokens.surfaceSelected
-                : tokens.surfaceRaised;
-    final border = _focused
-        ? tokens.focusRing
-        : widget.action.danger
-            ? tokens.danger.withOpacity(.4)
-            : widget.action.selected
-                ? tokens.accent.withOpacity(.55)
-                : tokens.borderSubtle;
-    final foreground = enabled
-        ? widget.action.danger
-            ? tokens.danger
-            : tokens.textPrimary
-        : tokens.textDisabled;
-
-    return Semantics(
-      button: true,
-      enabled: enabled,
-      label: widget.action.label,
-      value: widget.action.status,
-      child: AnimatedScale(
-        scale: _pressed && enabled ? .97 : 1,
-        duration: reduceMotion ? Duration.zero : CommonUiMotion.press,
-        curve: CommonUiMotion.enter,
-        child: AnimatedContainer(
-          duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
-          curve: CommonUiMotion.standard,
-          decoration: BoxDecoration(
-            color: background,
-            borderRadius: BorderRadius.circular(CommonUiShapes.control),
-            border: Border.all(color: border, width: _focused ? 2 : 1),
-            boxShadow: _hovered && enabled
-                ? [
-                    BoxShadow(
-                      color: tokens.shadow,
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ]
-                : const [],
-          ),
-          child: Material(
-            color: tokens.transparent,
-            borderRadius: BorderRadius.circular(CommonUiShapes.control),
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              onTap: enabled
-                  ? () {
-                      unawaited(widget.action.onTap!());
-                    }
-                  : null,
-              onLongPress: widget.onLongPress == null
-                  ? null
-                  : () {
-                      unawaited(widget.onLongPress!());
-                    },
-              onHighlightChanged: (value) {
-                if (_pressed == value) return;
-                setState(() => _pressed = value);
-              },
-              onHover: (value) {
-                if (_hovered == value) return;
-                setState(() => _hovered = value);
-              },
-              onFocusChange: (value) {
-                if (_focused == value) return;
-                setState(() => _focused = value);
-              },
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 7),
-                child: Row(
-                  children: [
-                    AnimatedSwitcher(
-                      duration: reduceMotion
-                          ? Duration.zero
-                          : CommonUiMotion.selection,
-                      child: widget.action.loading
-                          ? SizedBox(
-                              key: const ValueKey<String>('loading'),
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: widget.action.color,
-                              ),
-                            )
-                          : Icon(
-                              widget.action.icon,
-                              key: ValueKey<String>(
-                                '${widget.action.label}_${widget.action.selected}',
-                              ),
-                              size: 18,
-                              color: enabled
-                                  ? widget.action.color
-                                  : tokens.iconDisabled,
-                            ),
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            widget.action.label,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context)
-                                .textTheme
-                                .labelMedium
-                                ?.copyWith(
-                                  color: foreground,
-                                  fontSize: 10.5,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                          ),
-                          AnimatedSize(
-                            duration: reduceMotion
-                                ? Duration.zero
-                                : CommonUiMotion.selection,
-                            curve: CommonUiMotion.standard,
-                            child: widget.action.status == null
-                                ? const SizedBox.shrink()
-                                : Text(
-                                    widget.action.status!,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .labelSmall
-                                        ?.copyWith(
-                                          color: widget.action.selected
-                                              ? tokens.accent
-                                              : tokens.textSecondary,
-                                          fontSize: 8.8,
-                                          fontWeight: FontWeight.w800,
-                                        ),
-                                  ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _HeadquarterUtilityAction {
-  const _HeadquarterUtilityAction({
-    required this.label,
-    required this.icon,
-    required this.color,
-    required this.onTap,
-    this.status,
-    this.selected = false,
-    this.loading = false,
-    this.danger = false,
-  });
-
-  final String label;
-  final String? status;
-  final IconData icon;
-  final Color color;
-  final Future<void> Function()? onTap;
-  final bool selected;
-  final bool loading;
-  final bool danger;
 }
 
 class _HeadquarterRailButton extends StatefulWidget {

@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../app/utils/status_dialog.dart';
+import '../../design_system/common_ui/common_ui_theme.dart';
 import '../../features/location/domain/models/grid_rect.dart';
 import '../../features/location/domain/models/location_model.dart';
 import '../../features/location/domain/models/parking_grid_model.dart';
@@ -14,6 +15,7 @@ import '../../features/selector/application/dev_auth.dart';
 import '../parking_dot_map/effective_child_region_geometry.dart';
 import '../parking_dot_map/parking_status_dot_map_surface.dart';
 import '../parking_spatial/parking_spatial_geometry.dart';
+import '../preview_package/parking_grid_3d_preview.dart';
 import 'real_time_sort_state.dart';
 import 'real_time_source_rect_modal.dart';
 import 'real_time_tab_controller.dart';
@@ -31,6 +33,7 @@ class RealTimeLocationBoard extends StatefulWidget {
   const RealTimeLocationBoard({
     super.key,
     required this.groups,
+    required this.statusForRow,
     required this.onPlateTap,
     required this.onParentPageChanged,
     required this.onUserActivity,
@@ -42,6 +45,7 @@ class RealTimeLocationBoard extends StatefulWidget {
   });
 
   final List<ZoneGroupVM> groups;
+  final ParkingSlotStatus Function(RealTimeRowVM row) statusForRow;
   final ValueChanged<RealTimeRowVM> onPlateTap;
   final void Function(String parent, int index, int count) onParentPageChanged;
   final VoidCallback onUserActivity;
@@ -56,11 +60,13 @@ class RealTimeLocationBoard extends StatefulWidget {
   State<RealTimeLocationBoard> createState() => _RealTimeLocationBoardState();
 }
 
-class _RealTimeLocationBoardState extends State<RealTimeLocationBoard> {
+class _RealTimeLocationBoardState extends State<RealTimeLocationBoard>
+    with SingleTickerProviderStateMixin {
   final PageController _pageController = PageController(initialPage: 1);
   final Map<String, bool> _parentInteractionLocked = <String, bool>{};
   final Set<int> _activePointers = <int>{};
   final List<String> _debugLines = <String>[];
+  late final AnimationController _departurePulseController;
   int _pageIndex = 0;
   String _activeParent = '';
   int? _pagingPointer;
@@ -78,6 +84,8 @@ class _RealTimeLocationBoardState extends State<RealTimeLocationBoard> {
   bool _suppressPageChanged = false;
   bool _debugDialogShowing = false;
   int _lastParentFocusSerial = 0;
+  String _lastStatusVisualSignature = '';
+  bool _reduceMotion = false;
 
   bool get _currentParentInteractionLocked => _activeParent.isNotEmpty &&
       (_parentInteractionLocked[_activeParent] ?? false);
@@ -115,6 +123,10 @@ class _RealTimeLocationBoardState extends State<RealTimeLocationBoard> {
   @override
   void initState() {
     super.initState();
+    _departurePulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 940),
+    );
     if (widget.groups.isNotEmpty) {
       _activeParent = widget.groups.first.group;
     }
@@ -152,6 +164,14 @@ class _RealTimeLocationBoardState extends State<RealTimeLocationBoard> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final next = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    _reduceMotion = next;
+    _syncDeparturePulse();
+  }
+
+  @override
   void didUpdateWidget(covariant RealTimeLocationBoard oldWidget) {
     super.didUpdateWidget(oldWidget);
     final validParents = widget.groups.map((group) => group.group).toSet();
@@ -163,6 +183,7 @@ class _RealTimeLocationBoardState extends State<RealTimeLocationBoard> {
       _pageIndex = 0;
       _virtualPageIndex = 0;
       _activeParent = '';
+      _syncDeparturePulse();
       _debugLog('board_updated_empty');
       return;
     }
@@ -192,6 +213,7 @@ class _RealTimeLocationBoardState extends State<RealTimeLocationBoard> {
     _virtualPageIndex = canonicalVirtual;
     final oldRequest = oldWidget.parentFocusRequest;
     final newRequest = widget.parentFocusRequest;
+    _syncDeparturePulse();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       if (widget.groups.length > 1 &&
@@ -212,6 +234,7 @@ class _RealTimeLocationBoardState extends State<RealTimeLocationBoard> {
 
   @override
   void dispose() {
+    _departurePulseController.dispose();
     _pageController.dispose();
     super.dispose();
   }
@@ -254,6 +277,95 @@ class _RealTimeLocationBoardState extends State<RealTimeLocationBoard> {
       .map((line) => 'debugPrint(${jsonEncode(line)});')
       .join('\n');
 
+  Map<ParkingSlotStatus, int> _statusCounts() {
+    final counts = <ParkingSlotStatus, int>{};
+    for (final group in widget.groups) {
+      for (final zone in group.zones) {
+        for (final row in zone.rows) {
+          final status = widget.statusForRow(row);
+          counts[status] = (counts[status] ?? 0) + 1;
+        }
+      }
+    }
+    return counts;
+  }
+
+  bool get _hasDepartureRequest {
+    final counts = _statusCounts();
+    return (counts[ParkingSlotStatus.departureRequest] ?? 0) > 0;
+  }
+
+  void _syncDeparturePulse() {
+    final shouldAnimate = !_reduceMotion && _hasDepartureRequest;
+    if (shouldAnimate) {
+      if (!_departurePulseController.isAnimating) {
+        _departurePulseController.repeat(reverse: true);
+        _debugLog(
+          'departure_pulse_started',
+          <String, Object?>{
+            'durationMs': 940,
+            'reverse': true,
+            'scope': 'departure_request_only',
+            'layer': 'outer_halo',
+            'sharedController': true,
+            'plateLast4Motion': 'static',
+          },
+        );
+      }
+      return;
+    }
+    if (_departurePulseController.isAnimating) {
+      _departurePulseController.stop();
+      _debugLog(
+        'departure_pulse_stopped',
+        <String, Object?>{
+          'reduceMotion': _reduceMotion,
+          'hasDepartureRequest': _hasDepartureRequest,
+          'sharedController': true,
+        },
+      );
+    }
+    _departurePulseController.value = 0;
+  }
+
+  void _recordStatusVisualDebug({required bool reduceMotion}) {
+    final counts = _statusCounts();
+    final parked = counts[ParkingSlotStatus.parked] ?? 0;
+    final departureRequested =
+        counts[ParkingSlotStatus.departureRequest] ?? 0;
+    final departureInProgress =
+        counts[ParkingSlotStatus.departureInProgress] ?? 0;
+    final parkingRequested = counts[ParkingSlotStatus.parkingRequest] ?? 0;
+    final signature =
+        '$parked|$departureRequested|$departureInProgress|$parkingRequested|$reduceMotion';
+    if (_lastStatusVisualSignature == signature) return;
+    _lastStatusVisualSignature = signature;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _lastStatusVisualSignature != signature) return;
+      _debugLog(
+        'status_visual_resolved',
+        <String, Object?>{
+          'parked': parked,
+          'departureRequest': departureRequested,
+          'departureInProgress': departureInProgress,
+          'parkingRequest': parkingRequested,
+          'departureTone': 'statusDepartureRequested',
+          'departureContainer': 'statusDepartureRequestedContainer',
+          'departureText': 'onStatusDepartureRequestedContainer',
+          'departurePulse': reduceMotion ? 'disabled' : '940ms_reverse',
+          'departurePulseLayer': 'outer_halo',
+          'departurePulseScope': 'departure_request_only',
+          'departurePulseController': 'shared_board_controller',
+          'departurePulseActive': _departurePulseController.isAnimating,
+          'departureInProgressPulse': false,
+          'plateLast4Motion': 'static_during_pulse',
+          'plateLast4Opacity': 1.0,
+          'reduceMotion': reduceMotion,
+        },
+      );
+    });
+  }
+
   Future<void> _showDeveloperDebugDialog() async {
     if (!mounted || _debugDialogShowing || _combinedDebugLines.isEmpty) return;
     final enabled = await DevAuth.isDevModeEnabled();
@@ -279,6 +391,10 @@ class _RealTimeLocationBoardState extends State<RealTimeLocationBoard> {
         'childRegionHitTest': 'effective_path_contains',
         'childRegionMotion': 'fade_scale_220ms_highlight_170ms',
         'childDialogParkingDots': 'owned_child_slot_area_ids_only',
+        'towerDetail': 'logical_status_grid_1_to_capacity',
+        'towerParentDepartureIndicator': 'semantic_badge_count_outer_halo',
+        'towerVehicleTap': 'collapse_then_status_side_dock',
+        'towerPlateLast4Motion': 'static_during_pulse',
         'childDialogEffectiveRegionMotion': 'modal_progress_fade_scale',
         'childDialogBorder': 'hidden',
         'childDialogSurface': 'opacity_0.96',
@@ -288,6 +404,18 @@ class _RealTimeLocationBoardState extends State<RealTimeLocationBoard> {
         'childMapSurface': 'transparent',
         'childMapClip': 'rect',
         'childDialogMotion': 'source_rect_crop_expand_reverse_collapse',
+        'departureTone': 'statusDepartureRequested',
+        'departureContainer': 'statusDepartureRequestedContainer',
+        'departureText': 'onStatusDepartureRequestedContainer',
+        'departurePulse': _reduceMotion ? 'disabled' : '940ms_reverse',
+        'departurePulseActive': _departurePulseController.isAnimating,
+        'reduceMotion': _reduceMotion,
+        'departurePulseLayer': 'outer_halo',
+        'departurePulseScope': 'departure_request_only',
+        'departurePulseController': 'shared_board_controller',
+        'departureInProgressPulse': false,
+        'plateLast4Motion': 'static_during_pulse',
+        'developerCopy': 'debugPrint_code',
       },
     );
     final code = _debugPrintCode.trim();
@@ -735,6 +863,7 @@ class _RealTimeLocationBoardState extends State<RealTimeLocationBoard> {
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final currentIndex = _pageIndex.clamp(0, widget.groups.length - 1).toInt();
     final multiple = widget.groups.length > 1;
+    _recordStatusVisualDebug(reduceMotion: reduceMotion);
 
     Widget slide(int index, {String pageRole = 'single'}) {
       final group = widget.groups[index];
@@ -745,6 +874,8 @@ class _RealTimeLocationBoardState extends State<RealTimeLocationBoard> {
           group: group,
           index: index,
           count: widget.groups.length,
+          statusForRow: widget.statusForRow,
+          departurePulse: _departurePulseController,
           onPlateTap: widget.onPlateTap,
           onUserActivity: widget.onUserActivity,
           onAutoPauseStart: widget.onAutoPauseStart,
@@ -805,6 +936,8 @@ class _ParentMapSlide extends StatefulWidget {
     required this.group,
     required this.index,
     required this.count,
+    required this.statusForRow,
+    required this.departurePulse,
     required this.onPlateTap,
     required this.onUserActivity,
     required this.onInteractionLockChanged,
@@ -817,6 +950,8 @@ class _ParentMapSlide extends StatefulWidget {
   final ZoneGroupVM group;
   final int index;
   final int count;
+  final ParkingSlotStatus Function(RealTimeRowVM row) statusForRow;
+  final Animation<double> departurePulse;
   final ValueChanged<RealTimeRowVM> onPlateTap;
   final VoidCallback onUserActivity;
   final ValueChanged<bool> onInteractionLockChanged;
@@ -837,7 +972,7 @@ class _ParentMapSlideState extends State<_ParentMapSlide> {
   bool _dialogCloseRequested = false;
   String _dialogCloseSource = 'route';
   BuildContext? _dialogRouteContext;
-  _OccupiedSlot? _pendingSlotAction;
+  _StatusSlotAction? _pendingSlotAction;
   Completer<void>? _dialogCollapsedCompleter;
 
   ZoneVM? get _focusedZone {
@@ -1064,6 +1199,13 @@ class _ParentMapSlideState extends State<_ParentMapSlide> {
         'childMapSurface': 'transparent',
         'childMapClip': 'rect',
         'motion': 'source_rect_crop_expand_reverse_collapse',
+        'detailContent': zone.source.isTowerChild
+            ? 'tower_logical_status_grid'
+            : 'child_spatial_dot_map',
+        'towerCapacity': zone.source.isTowerChild ? zone.capacity : null,
+        'towerSlotSource': zone.source.isTowerChild
+            ? 'row_location_logical_slot_number'
+            : null,
       },
     );
 
@@ -1110,6 +1252,9 @@ class _ParentMapSlideState extends State<_ParentMapSlide> {
                   'dialogShadow': 'subtle',
                   'childMapFrame': 'hidden',
                   'childMapSurface': 'transparent',
+                  'detailContent': zone.source.isTowerChild
+                      ? 'tower_logical_status_grid'
+                      : 'child_spatial_dot_map',
                 },
               );
             },
@@ -1152,7 +1297,11 @@ class _ParentMapSlideState extends State<_ParentMapSlide> {
                 progress: progress,
                 reduceMotion: reduceMotion,
                 interactionEnabled: interactionEnabled,
-                onPlateTap: _handlePlateTap,
+                statusForRow: widget.statusForRow,
+                departurePulse: widget.departurePulse,
+                onPlateTap: _handleOccupiedPlateTap,
+                onStatusSlotTap: _handleStatusSlotTap,
+                onDebugLog: widget.onDebugLog,
                 onDeveloperDebugTap: widget.onDeveloperDebugTap,
                 onClose: () => _requestDialogClose(
                   dialogContext,
@@ -1184,6 +1333,8 @@ class _ParentMapSlideState extends State<_ParentMapSlide> {
               'child': zone.child,
               'source': closeSource,
               'pendingPlateId': pendingSlotAction.row.plateId,
+              'pendingSlot': pendingSlotAction.slotNo,
+              'pendingStatus': pendingSlotAction.status.name,
             },
           );
         }
@@ -1206,7 +1357,7 @@ class _ParentMapSlideState extends State<_ParentMapSlide> {
             <String, Object?>{
               'parent': pendingSlotAction.zone.group,
               'child': pendingSlotAction.zone.child,
-              'slot': pendingSlotAction.slot.no,
+              'slot': pendingSlotAction.slotNo,
               'plateId': pendingSlotAction.row.plateId,
               'plateNumber': pendingSlotAction.row.plateNumber,
               'dialogClosed': true,
@@ -1308,16 +1459,29 @@ class _ParentMapSlideState extends State<_ParentMapSlide> {
     );
   }
 
-  void _handlePlateTap(_OccupiedSlot occupied) {
+  void _handleOccupiedPlateTap(_OccupiedSlot occupied) {
+    _handleStatusSlotTap(
+      _StatusSlotAction(
+        zone: occupied.zone,
+        slotNo: occupied.slot.no,
+        row: occupied.row,
+        status: occupied.status,
+      ),
+    );
+  }
+
+  void _handleStatusSlotTap(_StatusSlotAction action) {
     if (_dialogCloseRequested || !_dialogRouteOpen) {
       widget.onDebugLog(
         'child_dialog_slot_tap_blocked',
         <String, Object?>{
-          'parent': occupied.zone.group,
-          'child': occupied.zone.child,
-          'slot': occupied.slot.no,
-          'plateId': occupied.row.plateId,
-          'plateNumber': occupied.row.plateNumber,
+          'parent': action.zone.group,
+          'child': action.zone.child,
+          'slot': action.slotNo,
+          'plateId': action.row.plateId,
+          'plateNumber': action.row.plateNumber,
+          'status': action.status.name,
+          'tower': action.zone.source.isTowerChild,
           'reason': _dialogCloseRequested
               ? 'dialog_closing'
               : 'dialog_route_inactive',
@@ -1333,28 +1497,39 @@ class _ParentMapSlideState extends State<_ParentMapSlide> {
       widget.onDebugLog(
         'child_dialog_slot_tap_blocked',
         <String, Object?>{
-          'parent': occupied.zone.group,
-          'child': occupied.zone.child,
-          'slot': occupied.slot.no,
-          'plateId': occupied.row.plateId,
-          'plateNumber': occupied.row.plateNumber,
+          'parent': action.zone.group,
+          'child': action.zone.child,
+          'slot': action.slotNo,
+          'plateId': action.row.plateId,
+          'plateNumber': action.row.plateNumber,
+          'status': action.status.name,
+          'tower': action.zone.source.isTowerChild,
           'reason': 'dialog_context_inactive',
           'action': 'status_side_dock_blocked',
         },
       );
       return;
     }
-    _pendingSlotAction = occupied;
+    _pendingSlotAction = action;
     widget.onUserActivity();
     widget.onDebugLog(
-      'child_dialog_slot_tapped',
+      action.zone.source.isTowerChild
+          ? 'tower_status_slot_tapped'
+          : 'child_dialog_slot_tapped',
       <String, Object?>{
-        'parent': occupied.zone.group,
-        'child': occupied.zone.child,
-        'slot': occupied.slot.no,
-        'plateId': occupied.row.plateId,
-        'plateNumber': occupied.row.plateNumber,
-        'plateLast4': _plateLast4(occupied.row.plateNumber),
+        'parent': action.zone.group,
+        'child': action.zone.child,
+        'slot': action.slotNo,
+        'plateId': action.row.plateId,
+        'plateNumber': action.row.plateNumber,
+        'plateLast4': _plateLast4(action.row.plateNumber),
+        'status': action.status.name,
+        'tower': action.zone.source.isTowerChild,
+        'departureVisual': action.status == ParkingSlotStatus.departureRequest
+            ? 'semantic_color_outer_halo'
+            : action.status == ParkingSlotStatus.departureInProgress
+                ? 'semantic_color_static'
+                : 'default_primary',
         'action': 'collapse_dialog_then_open_status_side_dock',
         'childDialogRemainsOpen': false,
         'sideDockAfterCollapse': true,
@@ -1437,6 +1612,8 @@ class _ParentMapSlideState extends State<_ParentMapSlide> {
           child: _ParentMapPage(
             group: widget.group,
             selectedZoneKey: focused?.fullName,
+            statusForRow: widget.statusForRow,
+            departurePulse: widget.departurePulse,
             onZoneTap: (zone, sourceRect) {
               unawaited(_focusZone(zone, sourceRect));
             },
@@ -1457,7 +1634,11 @@ class _ChildDotMapDialogSurface extends StatelessWidget {
     required this.progress,
     required this.reduceMotion,
     required this.interactionEnabled,
+    required this.statusForRow,
+    required this.departurePulse,
     required this.onPlateTap,
+    required this.onStatusSlotTap,
+    required this.onDebugLog,
     required this.onDeveloperDebugTap,
     required this.onClose,
   });
@@ -1467,7 +1648,11 @@ class _ChildDotMapDialogSurface extends StatelessWidget {
   final double progress;
   final bool reduceMotion;
   final bool interactionEnabled;
+  final ParkingSlotStatus Function(RealTimeRowVM row) statusForRow;
+  final Animation<double> departurePulse;
   final ValueChanged<_OccupiedSlot> onPlateTap;
+  final ValueChanged<_StatusSlotAction> onStatusSlotTap;
+  final void Function(String, [Map<String, Object?>]) onDebugLog;
   final VoidCallback onDeveloperDebugTap;
   final VoidCallback onClose;
 
@@ -1481,8 +1666,16 @@ class _ChildDotMapDialogSurface extends StatelessWidget {
     final headerHeight = 34.0 * headerProgress;
     final mapTop = headerHeight + 7.0 * progress;
     final surfaceOpacity = (.92 + .04 * progress).clamp(0.0, 1.0).toDouble();
-    final remaining =
-        zone.remaining ?? math.max(0, zone.capacity - zone.current);
+    final remaining = zone.source.isTowerChild
+        ? math.max(
+            0,
+            zone.capacity -
+                _towerOccupiedVehicleCount(
+                  zone,
+                  statusForRow,
+                ),
+          )
+        : zone.remaining ?? math.max(0, zone.capacity - zone.current);
 
     return Material(
       color: cs.surface.withOpacity(surfaceOpacity),
@@ -1496,14 +1689,27 @@ class _ChildDotMapDialogSurface extends StatelessWidget {
                 outerPadding,
                 outerPadding,
               ),
-              child: _ChildFocusDotMap(
-                zone: zone,
-                grid: grid,
-                revealProgress: progress,
-                onPlateTap: onPlateTap,
-                reduceMotion: reduceMotion,
-                interactionEnabled: interactionEnabled,
-              ),
+              child: zone.source.isTowerChild
+                  ? _TowerStatusGrid(
+                      zone: zone,
+                      revealProgress: progress,
+                      statusForRow: statusForRow,
+                      departurePulse: departurePulse,
+                      onStatusSlotTap: onStatusSlotTap,
+                      onDebugLog: onDebugLog,
+                      reduceMotion: reduceMotion,
+                      interactionEnabled: interactionEnabled,
+                    )
+                  : _ChildFocusDotMap(
+                      zone: zone,
+                      grid: grid,
+                      revealProgress: progress,
+                      statusForRow: statusForRow,
+                      departurePulse: departurePulse,
+                      onPlateTap: onPlateTap,
+                      reduceMotion: reduceMotion,
+                      interactionEnabled: interactionEnabled,
+                    ),
             ),
           ),
           if (headerProgress > .01)
@@ -1609,10 +1815,424 @@ class _ChildDotMapDialogSurface extends StatelessWidget {
   }
 }
 
+
+class _TowerStatusSlot {
+  const _TowerStatusSlot({
+    required this.no,
+    required this.status,
+    this.row,
+  });
+
+  final int no;
+  final ParkingSlotStatus status;
+  final RealTimeRowVM? row;
+}
+
+class _TowerStatusGrid extends StatefulWidget {
+  const _TowerStatusGrid({
+    required this.zone,
+    required this.revealProgress,
+    required this.statusForRow,
+    required this.departurePulse,
+    required this.onStatusSlotTap,
+    required this.onDebugLog,
+    required this.reduceMotion,
+    required this.interactionEnabled,
+  });
+
+  final ZoneVM zone;
+  final double revealProgress;
+  final ParkingSlotStatus Function(RealTimeRowVM row) statusForRow;
+  final Animation<double> departurePulse;
+  final ValueChanged<_StatusSlotAction> onStatusSlotTap;
+  final void Function(String, [Map<String, Object?>]) onDebugLog;
+  final bool reduceMotion;
+  final bool interactionEnabled;
+
+  @override
+  State<_TowerStatusGrid> createState() => _TowerStatusGridState();
+}
+
+class _TowerStatusGridState extends State<_TowerStatusGrid> {
+  String _lastDebugSignature = '';
+
+  List<_TowerStatusSlot> _resolveSlots() {
+    final capacity = math.max(0, widget.zone.capacity);
+    final rowsBySlot = _rowsBySlot(widget.zone.rows);
+    final slots = <_TowerStatusSlot>[];
+    for (var no = 1; no <= capacity; no++) {
+      final row = rowsBySlot[no];
+      slots.add(
+        _TowerStatusSlot(
+          no: no,
+          row: row,
+          status: row == null
+              ? ParkingSlotStatus.empty
+              : widget.statusForRow(row),
+        ),
+      );
+    }
+    return slots;
+  }
+
+  void _recordDebug(List<_TowerStatusSlot> slots) {
+    final parked = slots
+        .where((slot) => slot.status == ParkingSlotStatus.parked)
+        .length;
+    final departureRequest = slots
+        .where((slot) => slot.status == ParkingSlotStatus.departureRequest)
+        .length;
+    final departureInProgress = slots
+        .where((slot) => slot.status == ParkingSlotStatus.departureInProgress)
+        .length;
+    final parkingRequest = slots
+        .where((slot) => slot.status == ParkingSlotStatus.parkingRequest)
+        .length;
+    final empty = slots
+        .where((slot) => slot.status == ParkingSlotStatus.empty)
+        .length;
+    final resolvedRows = slots.where((slot) => slot.row != null).length;
+    final unresolvedRows = math.max(0, widget.zone.rows.length - resolvedRows);
+    final signature = [
+      widget.zone.fullName,
+      slots.length,
+      parked,
+      departureRequest,
+      departureInProgress,
+      parkingRequest,
+      empty,
+      unresolvedRows,
+      widget.reduceMotion,
+    ].join('|');
+    if (_lastDebugSignature == signature) return;
+    _lastDebugSignature = signature;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _lastDebugSignature != signature) return;
+      widget.onDebugLog(
+        'tower_status_grid_resolved',
+        <String, Object?>{
+          'parent': widget.zone.group,
+          'child': widget.zone.child,
+          'capacity': slots.length,
+          'sourceRows': widget.zone.rows.length,
+          'resolvedRows': resolvedRows,
+          'unresolvedRows': unresolvedRows,
+          'parked': parked,
+          'departureRequest': departureRequest,
+          'departureInProgress': departureInProgress,
+          'parkingRequest': parkingRequest,
+          'empty': empty,
+          'slotSource': 'row_location_logical_slot_number',
+          'render': 'tower_status_grid',
+          'departureTone': 'statusDepartureRequested',
+          'departurePulse': widget.reduceMotion ? 'disabled' : '940ms_reverse',
+          'departurePulseController': 'shared_board_controller',
+          'plateLast4Motion': 'static_during_pulse',
+          'firebaseAdditionalRead': 0,
+        },
+      );
+    });
+  }
+
+  int _columnsForWidth(double width) {
+    if (width >= 620) return 8;
+    if (width >= 420) return 6;
+    return 4;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final slots = _resolveSlots();
+    _recordDebug(slots);
+    if (slots.isEmpty) {
+      return const SizedBox.expand();
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = _columnsForWidth(constraints.maxWidth);
+        final spacing = constraints.maxWidth < 360 ? 6.0 : 8.0;
+        return GridView.builder(
+          padding: const EdgeInsets.all(4),
+          physics: widget.interactionEnabled
+              ? const ClampingScrollPhysics()
+              : const NeverScrollableScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: columns,
+            crossAxisSpacing: spacing,
+            mainAxisSpacing: spacing,
+            childAspectRatio: 1.05,
+          ),
+          itemCount: slots.length,
+          itemBuilder: (context, index) {
+            final slot = slots[index];
+            final phase = index % 4;
+            final progress = widget.reduceMotion
+                ? 1.0
+                : ((widget.revealProgress - (.42 + phase * .025)) / .34)
+                    .clamp(0.0, 1.0)
+                    .toDouble();
+            final eased = Curves.easeOutCubic.transform(progress);
+            return Opacity(
+              opacity: eased,
+              child: Transform.scale(
+                scale: .97 + .03 * eased,
+                child: _TowerStatusSlotCard(
+                  zone: widget.zone,
+                  slot: slot,
+                  departurePulse: widget.departurePulse,
+                  reduceMotion: widget.reduceMotion,
+                  interactionEnabled: widget.interactionEnabled,
+                  onTap: slot.row == null
+                      ? null
+                      : () {
+                          widget.onStatusSlotTap(
+                            _StatusSlotAction(
+                              zone: widget.zone,
+                              slotNo: slot.no,
+                              row: slot.row!,
+                              status: slot.status,
+                            ),
+                          );
+                        },
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _TowerStatusSlotCard extends StatefulWidget {
+  const _TowerStatusSlotCard({
+    required this.zone,
+    required this.slot,
+    required this.departurePulse,
+    required this.reduceMotion,
+    required this.interactionEnabled,
+    required this.onTap,
+  });
+
+  final ZoneVM zone;
+  final _TowerStatusSlot slot;
+  final Animation<double> departurePulse;
+  final bool reduceMotion;
+  final bool interactionEnabled;
+  final VoidCallback? onTap;
+
+  @override
+  State<_TowerStatusSlotCard> createState() => _TowerStatusSlotCardState();
+}
+
+class _TowerStatusSlotCardState extends State<_TowerStatusSlotCard> {
+  bool _pressed = false;
+
+  void _setPressed(bool value) {
+    if (_pressed == value) return;
+    setState(() => _pressed = value);
+  }
+
+  String get _statusLabel => switch (widget.slot.status) {
+        ParkingSlotStatus.departureRequest => '출차 요청',
+        ParkingSlotStatus.departureInProgress => '출차 처리 중',
+        ParkingSlotStatus.parkingRequest => '입차 요청',
+        ParkingSlotStatus.parked => '입차 완료',
+        ParkingSlotStatus.empty => '빈 슬롯',
+      };
+
+  bool get _isDepartureRequest =>
+      widget.slot.status == ParkingSlotStatus.departureRequest;
+
+  bool get _usesDepartureTone =>
+      widget.slot.status == ParkingSlotStatus.departureRequest ||
+      widget.slot.status == ParkingSlotStatus.departureInProgress;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tokens = CommonUiTheme.of(context);
+    final text = Theme.of(context).textTheme;
+    final row = widget.slot.row;
+    final occupied = row != null;
+    final enabled = occupied && widget.interactionEnabled && widget.onTap != null;
+    final duration = widget.reduceMotion
+        ? Duration.zero
+        : const Duration(milliseconds: 150);
+    final background = _usesDepartureTone
+        ? tokens.statusDepartureRequestedContainer
+        : occupied
+            ? cs.primaryContainer
+            : cs.surface;
+    final border = _usesDepartureTone
+        ? tokens.statusDepartureRequested
+        : occupied
+            ? cs.primary
+            : cs.outlineVariant;
+    final foreground = _usesDepartureTone
+        ? tokens.onStatusDepartureRequestedContainer
+        : occupied
+            ? cs.primary
+            : cs.onSurfaceVariant;
+    final semantics = occupied
+        ? '${widget.zone.group} ${widget.zone.child} 슬롯 ${widget.slot.no}, 번호판 ${row.plateNumber}, $_statusLabel, 상태 처리 빠른 실행'
+        : '${widget.zone.group} ${widget.zone.child} 슬롯 ${widget.slot.no}, 빈 슬롯';
+
+    return Semantics(
+      button: enabled,
+      label: semantics,
+      child: AnimatedScale(
+        scale: _pressed ? .965 : 1,
+        duration: widget.reduceMotion
+            ? Duration.zero
+            : const Duration(milliseconds: 90),
+        curve: Curves.easeOutCubic,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            if (_isDepartureRequest && !widget.reduceMotion)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: AnimatedBuilder(
+                    animation: widget.departurePulse,
+                    builder: (context, child) {
+                      final eased = Curves.easeOutCubic.transform(
+                        widget.departurePulse.value
+                            .clamp(0.0, 1.0)
+                            .toDouble(),
+                      );
+                      return Transform.scale(
+                        scale: 1.02 + .08 * eased,
+                        child: Opacity(
+                          opacity: (.34 * (1 - eased))
+                              .clamp(0.0, 1.0)
+                              .toDouble(),
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(11),
+                              border: Border.all(
+                                color: tokens.statusDepartureRequested,
+                                width: 1.4 + .6 * (1 - eased),
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: tokens.statusDepartureRequested
+                                      .withOpacity(.12 * (1 - eased)),
+                                  blurRadius: 5 + 5 * eased,
+                                  spreadRadius: .2 + .8 * eased,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            Positioned.fill(
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: enabled ? widget.onTap : null,
+                  onHighlightChanged: enabled ? _setPressed : null,
+                  borderRadius: BorderRadius.circular(9),
+                  child: AnimatedContainer(
+                    duration: duration,
+                    curve: Curves.easeOutCubic,
+                    padding: const EdgeInsets.fromLTRB(5, 5, 5, 6),
+                    decoration: BoxDecoration(
+                      color: background.withOpacity(occupied ? .96 : .42),
+                      borderRadius: BorderRadius.circular(9),
+                      border: Border.all(
+                        color: border.withOpacity(
+                          _usesDepartureTone
+                              ? .9
+                              : occupied
+                                  ? .72
+                                  : .46,
+                        ),
+                        width: _usesDepartureTone ? 1.35 : 1,
+                      ),
+                      boxShadow: occupied
+                          ? [
+                              BoxShadow(
+                                color: cs.shadow.withOpacity(
+                                  _usesDepartureTone ? .1 : .06,
+                                ),
+                                blurRadius: _usesDepartureTone ? 5 : 3,
+                                offset: const Offset(0, 1),
+                              ),
+                            ]
+                          : const <BoxShadow>[],
+                    ),
+                    child: Stack(
+                      children: [
+                        Align(
+                          alignment: Alignment.topLeft,
+                          child: Text(
+                            '${widget.slot.no}',
+                            maxLines: 1,
+                            style: text.labelSmall?.copyWith(
+                              color: foreground.withOpacity(occupied ? .72 : .64),
+                              fontWeight: FontWeight.w800,
+                              fontFeatures: const <FontFeature>[
+                                FontFeature.tabularFigures(),
+                              ],
+                            ),
+                          ),
+                        ),
+                        if (_usesDepartureTone)
+                          Align(
+                            alignment: Alignment.topRight,
+                            child: Container(
+                              width: 7,
+                              height: 7,
+                              decoration: BoxDecoration(
+                                color: tokens.statusDepartureRequested,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          ),
+                        if (row != null)
+                          Align(
+                            alignment: Alignment.center,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                _plateLast4(row.plateNumber),
+                                maxLines: 1,
+                                softWrap: false,
+                                style: text.titleSmall?.copyWith(
+                                  color: foreground,
+                                  fontWeight: FontWeight.w900,
+                                  height: 1,
+                                  fontFeatures: const <FontFeature>[
+                                    FontFeature.tabularFigures(),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _ParentMapPage extends StatefulWidget {
   const _ParentMapPage({
     required this.group,
     required this.selectedZoneKey,
+    required this.statusForRow,
+    required this.departurePulse,
     required this.onZoneTap,
     required this.onUserActivity,
     required this.onDebugLog,
@@ -1621,6 +2241,8 @@ class _ParentMapPage extends StatefulWidget {
 
   final ZoneGroupVM group;
   final String? selectedZoneKey;
+  final ParkingSlotStatus Function(RealTimeRowVM row) statusForRow;
+  final Animation<double> departurePulse;
   final void Function(ZoneVM, Rect) onZoneTap;
   final VoidCallback onUserActivity;
   final void Function(String, [Map<String, Object?>]) onDebugLog;
@@ -1715,6 +2337,8 @@ class _ParentMapPageState extends State<_ParentMapPage>
       group: widget.group,
       grid: grid,
       selectedZoneKey: widget.selectedZoneKey,
+      statusForRow: widget.statusForRow,
+      departurePulse: widget.departurePulse,
       onZoneTap: widget.onZoneTap,
       onUserActivity: widget.onUserActivity,
       onDebugLog: widget.onDebugLog,
@@ -1746,6 +2370,8 @@ class _ParentOverviewDotMap extends StatefulWidget {
     required this.group,
     required this.grid,
     required this.selectedZoneKey,
+    required this.statusForRow,
+    required this.departurePulse,
     required this.onZoneTap,
     required this.onUserActivity,
     required this.onDebugLog,
@@ -1755,6 +2381,8 @@ class _ParentOverviewDotMap extends StatefulWidget {
   final ZoneGroupVM group;
   final ParkingGridModel grid;
   final String? selectedZoneKey;
+  final ParkingSlotStatus Function(RealTimeRowVM row) statusForRow;
+  final Animation<double> departurePulse;
   final void Function(ZoneVM, Rect) onZoneTap;
   final VoidCallback onUserActivity;
   final void Function(String, [Map<String, Object?>]) onDebugLog;
@@ -1771,6 +2399,7 @@ class _ParentOverviewDotMapState extends State<_ParentOverviewDotMap> {
   bool _peekVisible = false;
   int _peekEpoch = 0;
   String? _lastGeometryDebugSignature;
+  String? _lastTowerStatusDebugSignature;
 
   void _recordResolvedGeometry(List<_ResolvedChildZone> zones) {
     final signature = zones
@@ -1866,9 +2495,23 @@ class _ParentOverviewDotMapState extends State<_ParentOverviewDotMap> {
       <String, Object?>{
         'parent': entry.zone.group,
         'child': entry.zone.child,
-        'remaining': entry.zone.remaining,
+        'remaining': entry.zone.source.isTowerChild
+            ? math.max(
+                0,
+                entry.zone.capacity -
+                    _towerOccupiedVehicleCount(
+                      entry.zone,
+                      widget.statusForRow,
+                    ),
+              )
+            : entry.zone.remaining,
         'capacity': entry.zone.capacity,
-        'current': entry.zone.current,
+        'current': entry.zone.source.isTowerChild
+            ? _towerOccupiedVehicleCount(
+                entry.zone,
+                widget.statusForRow,
+              )
+            : entry.zone.current,
         'anchor': '${anchor.dx.toStringAsFixed(1)},${anchor.dy.toStringAsFixed(1)}',
         'effectiveShape': entry.useEffectiveShape
             ? 'child_slot_area_ids_difference_path'
@@ -1898,7 +2541,16 @@ class _ParentOverviewDotMapState extends State<_ParentOverviewDotMap> {
       <String, Object?>{
         'parent': entry.zone.group,
         'child': entry.zone.child,
-        'remaining': entry.zone.remaining,
+        'remaining': entry.zone.source.isTowerChild
+            ? math.max(
+                0,
+                entry.zone.capacity -
+                    _towerOccupiedVehicleCount(
+                      entry.zone,
+                      widget.statusForRow,
+                    ),
+              )
+            : entry.zone.remaining,
         'capacity': entry.zone.capacity,
         'source': source,
         'childDialogOpened': false,
@@ -1925,6 +2577,59 @@ class _ParentOverviewDotMapState extends State<_ParentOverviewDotMap> {
     );
   }
 
+  void _recordTowerStatusSummary() {
+    final towers = widget.group.zones
+        .where((zone) => zone.source.isTowerChild)
+        .toList(growable: false);
+    if (towers.isEmpty) return;
+    final parts = <String>[];
+    var totalRequests = 0;
+    var totalParkingRequestsExcluded = 0;
+    var totalOccupied = 0;
+    var totalCapacity = 0;
+    for (final zone in towers) {
+      final requests = _towerDepartureRequestCount(zone, widget.statusForRow);
+      final parkingRequestsExcluded =
+          _towerParkingRequestCount(zone, widget.statusForRow);
+      final occupied = _towerOccupiedVehicleCount(zone, widget.statusForRow);
+      totalRequests += requests;
+      totalParkingRequestsExcluded += parkingRequestsExcluded;
+      totalOccupied += occupied;
+      totalCapacity += zone.capacity;
+      parts.add(
+        '${zone.fullName}:$requests:$parkingRequestsExcluded:$occupied:${zone.capacity}',
+      );
+    }
+    final signature = '${parts.join('|')}|${widget.reduceMotion}';
+    if (_lastTowerStatusDebugSignature == signature) return;
+    _lastTowerStatusDebugSignature = signature;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _lastTowerStatusDebugSignature != signature) return;
+      widget.onDebugLog(
+        'tower_parent_status_resolved',
+        <String, Object?>{
+          'parent': widget.group.group,
+          'towerCount': towers.length,
+          'occupied': totalOccupied,
+          'empty': math.max(0, totalCapacity - totalOccupied),
+          'capacity': totalCapacity,
+          'departureRequest': totalRequests,
+          'parkingRequestExcluded': totalParkingRequestsExcluded,
+          'towerStates': parts.join(','),
+          'occupancyRule':
+              'parked+departureRequest+departureInProgress;parkingRequest_excluded',
+          'occupancyIndicator': 'always_visible_car_count',
+          'occupancyMotion': widget.reduceMotion ? 'disabled' : '170ms_fade_scale',
+          'departureIndicator': 'semantic_badge_count_outer_halo',
+          'indicatorPulse': widget.reduceMotion ? 'disabled' : '940ms_reverse',
+          'indicatorPulseController': 'shared_board_controller',
+          'towerTap': 'source_rect_expand_to_logical_status_grid',
+          'firebaseAdditionalRead': 0,
+        },
+      );
+    });
+  }
+
   @override
   void didUpdateWidget(covariant _ParentOverviewDotMap oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -1940,7 +2645,11 @@ class _ParentOverviewDotMapState extends State<_ParentOverviewDotMap> {
 
   @override
   Widget build(BuildContext context) {
-    final occupied = _occupiedSlots(widget.group);
+    final occupied = _occupiedSlots(
+      widget.group,
+      widget.statusForRow,
+    );
+    _recordTowerStatusSummary();
     return LayoutBuilder(
       builder: (context, constraints) {
         final size = Size(constraints.maxWidth, constraints.maxHeight);
@@ -1985,12 +2694,41 @@ class _ParentOverviewDotMapState extends State<_ParentOverviewDotMap> {
                   peeked: _peekZoneKey == entry.zone.fullName && _peekVisible,
                   reduceMotion: widget.reduceMotion,
                 ),
+              for (final entry in zones)
+                if (entry.zone.source.isTowerChild)
+                  _TowerOccupancyIndicator(
+                    key: ValueKey<String>(
+                      'tower-occupancy:${entry.zone.fullName}',
+                    ),
+                    entry: entry,
+                    current: _towerOccupiedVehicleCount(
+                      entry.zone,
+                      widget.statusForRow,
+                    ),
+                    capacity: entry.zone.capacity,
+                    reduceMotion: widget.reduceMotion,
+                  ),
+              for (final entry in zones)
+                if (entry.zone.source.isTowerChild)
+                  _TowerDepartureIndicator(
+                    key: ValueKey<String>(
+                      'tower-departure:${entry.zone.fullName}',
+                    ),
+                    entry: entry,
+                    requestCount: _towerDepartureRequestCount(
+                      entry.zone,
+                      widget.statusForRow,
+                    ),
+                    departurePulse: widget.departurePulse,
+                    reduceMotion: widget.reduceMotion,
+                  ),
               for (final entry in labels)
                 _OccupiedSlotLabel(
                   key: ValueKey<String>(
                     'overview-label:${entry.slot.zone.fullName}:${entry.slot.slot.no}:${entry.slot.row.plateId}',
                   ),
                   entry: entry,
+                  departurePulse: widget.departurePulse,
                   reduceMotion: widget.reduceMotion,
                 ),
               for (final entry in zones)
@@ -2015,6 +2753,7 @@ class _ParentOverviewDotMapState extends State<_ParentOverviewDotMap> {
                   mapSize: size,
                   visible: _peekVisible,
                   reduceMotion: widget.reduceMotion,
+                  statusForRow: widget.statusForRow,
                 ),
             ],
           ),
@@ -2029,6 +2768,8 @@ class _ChildFocusDotMap extends StatelessWidget {
     required this.zone,
     required this.grid,
     required this.revealProgress,
+    required this.statusForRow,
+    required this.departurePulse,
     required this.onPlateTap,
     required this.reduceMotion,
     this.interactionEnabled = true,
@@ -2037,6 +2778,8 @@ class _ChildFocusDotMap extends StatelessWidget {
   final ZoneVM zone;
   final ParkingGridModel grid;
   final double revealProgress;
+  final ParkingSlotStatus Function(RealTimeRowVM row) statusForRow;
+  final Animation<double> departurePulse;
   final ValueChanged<_OccupiedSlot> onPlateTap;
   final bool reduceMotion;
   final bool interactionEnabled;
@@ -2049,7 +2792,10 @@ class _ChildFocusDotMap extends StatelessWidget {
     }
     final effectiveAreaIds = resolvedChildParkingAreaIds(zone.source);
     final useEffectiveShape = !zone.source.isTowerChild;
-    final occupied = _occupiedSlotsForZone(zone);
+    final occupied = _occupiedSlotsForZone(
+      zone,
+      statusForRow,
+    );
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -2126,6 +2872,7 @@ class _ChildFocusDotMap extends StatelessWidget {
                       'child-slot:${entry.slot.zone.fullName}:${entry.slot.slot.no}:${entry.slot.row.plateId}',
                     ),
                     entry: entry,
+                    departurePulse: departurePulse,
                     onTap: () => onPlateTap(entry.slot),
                     reduceMotion: reduceMotion,
                   )
@@ -2135,6 +2882,7 @@ class _ChildFocusDotMap extends StatelessWidget {
                       'child-slot-label:${entry.slot.zone.fullName}:${entry.slot.slot.no}:${entry.slot.row.plateId}',
                     ),
                     entry: entry,
+                    departurePulse: departurePulse,
                     reduceMotion: reduceMotion,
                   ),
             ],
@@ -2290,16 +3038,33 @@ class _PageIndicator extends StatelessWidget {
   }
 }
 
+
+class _StatusSlotAction {
+  const _StatusSlotAction({
+    required this.zone,
+    required this.slotNo,
+    required this.row,
+    required this.status,
+  });
+
+  final ZoneVM zone;
+  final int slotNo;
+  final RealTimeRowVM row;
+  final ParkingSlotStatus status;
+}
+
 class _OccupiedSlot {
   const _OccupiedSlot({
     required this.zone,
     required this.slot,
     required this.row,
+    required this.status,
   });
 
   final ZoneVM zone;
   final ChildSlot slot;
   final RealTimeRowVM row;
+  final ParkingSlotStatus status;
 }
 
 class _ResolvedOccupiedSlot {
@@ -2530,6 +3295,244 @@ class _ChildZoneRegionPainter extends CustomPainter {
   }
 }
 
+
+class _TowerOccupancyIndicator extends StatelessWidget {
+  const _TowerOccupancyIndicator({
+    super.key,
+    required this.entry,
+    required this.current,
+    required this.capacity,
+    required this.reduceMotion,
+  });
+
+  final _ResolvedChildZone entry;
+  final int current;
+  final int capacity;
+  final bool reduceMotion;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    final text = Theme.of(context).textTheme;
+    final normalizedCurrent = math.max(0, current);
+    final occupied = normalizedCurrent > 0;
+    final width = normalizedCurrent >= 100
+        ? 44.0
+        : normalizedCurrent >= 10
+            ? 38.0
+            : 34.0;
+    final height = 22.0;
+    final left = math.max(0.0, entry.nominalRect.left + 2);
+    final top = math.max(0.0, entry.nominalRect.top + 2);
+    final duration = reduceMotion
+        ? Duration.zero
+        : const Duration(milliseconds: 170);
+    final background = occupied
+        ? tokens.statusParkingCompletedContainer
+        : tokens.surfaceRaised;
+    final border = occupied
+        ? tokens.statusParkingCompleted
+        : tokens.borderStrong;
+    final foreground = occupied
+        ? tokens.onStatusParkingCompletedContainer
+        : tokens.textSecondary;
+    final label = capacity > 0
+        ? occupied
+            ? '${entry.zone.displayName}, 차량 $normalizedCurrent대, 총 $capacity대'
+            : '${entry.zone.displayName}, 차량 없음, 0대, 총 $capacity대'
+        : occupied
+            ? '${entry.zone.displayName}, 차량 $normalizedCurrent대'
+            : '${entry.zone.displayName}, 차량 없음, 0대';
+    return Positioned(
+      left: left,
+      top: top,
+      width: width,
+      height: height,
+      child: IgnorePointer(
+        child: Semantics(
+          label: label,
+          child: AnimatedContainer(
+            duration: duration,
+            curve: Curves.easeOutCubic,
+            width: width,
+            height: height,
+            padding: const EdgeInsets.symmetric(horizontal: 5),
+            decoration: BoxDecoration(
+              color: background,
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(
+                color: border.withOpacity(occupied ? .88 : .58),
+                width: occupied ? 1.2 : 1,
+              ),
+            ),
+            child: AnimatedSwitcher(
+              duration: duration,
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (child, animation) {
+                return FadeTransition(
+                  opacity: animation,
+                  child: ScaleTransition(
+                    scale: Tween<double>(begin: .94, end: 1).animate(animation),
+                    child: child,
+                  ),
+                );
+              },
+              child: Row(
+                key: ValueKey<String>(
+                  'tower-occupancy-value:$normalizedCurrent:$capacity',
+                ),
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    occupied
+                        ? Icons.directions_car_filled_rounded
+                        : Icons.directions_car_rounded,
+                    size: 11,
+                    color: foreground,
+                  ),
+                  const SizedBox(width: 2),
+                  Flexible(
+                    child: Text(
+                      '$normalizedCurrent',
+                      maxLines: 1,
+                      overflow: TextOverflow.clip,
+                      style: text.labelSmall?.copyWith(
+                        color: foreground,
+                        fontWeight: FontWeight.w900,
+                        height: 1,
+                        fontFeatures: const <FontFeature>[
+                          FontFeature.tabularFigures(),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TowerDepartureIndicator extends StatelessWidget {
+  const _TowerDepartureIndicator({
+    super.key,
+    required this.entry,
+    required this.requestCount,
+    required this.departurePulse,
+    required this.reduceMotion,
+  });
+
+  final _ResolvedChildZone entry;
+  final int requestCount;
+  final Animation<double> departurePulse;
+  final bool reduceMotion;
+
+  @override
+  Widget build(BuildContext context) {
+    if (requestCount <= 0) return const SizedBox.shrink();
+    final tokens = CommonUiTheme.of(context);
+    final text = Theme.of(context).textTheme;
+    final width = requestCount >= 100
+        ? 42.0
+        : requestCount >= 10
+            ? 36.0
+            : 32.0;
+    final height = 22.0;
+    final left = math.max(0.0, entry.nominalRect.right - width - 2);
+    final top = math.max(0.0, entry.nominalRect.top + 2);
+    final badge = Container(
+      width: width,
+      height: height,
+      padding: const EdgeInsets.symmetric(horizontal: 5),
+      decoration: BoxDecoration(
+        color: tokens.statusDepartureRequestedContainer,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: tokens.statusDepartureRequested.withOpacity(.92),
+          width: 1.2,
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.exit_to_app_rounded,
+            size: 11,
+            color: tokens.onStatusDepartureRequestedContainer,
+          ),
+          const SizedBox(width: 2),
+          Flexible(
+            child: Text(
+              '$requestCount',
+              maxLines: 1,
+              overflow: TextOverflow.clip,
+              style: text.labelSmall?.copyWith(
+                color: tokens.onStatusDepartureRequestedContainer,
+                fontWeight: FontWeight.w900,
+                height: 1,
+                fontFeatures: const <FontFeature>[
+                  FontFeature.tabularFigures(),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    return Positioned(
+      left: left,
+      top: top,
+      width: width,
+      height: height,
+      child: IgnorePointer(
+        child: Semantics(
+          label: '${entry.zone.displayName} 출차 요청 $requestCount대',
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              if (!reduceMotion)
+                Positioned.fill(
+                  child: AnimatedBuilder(
+                    animation: departurePulse,
+                    builder: (context, child) {
+                      final eased = Curves.easeOutCubic.transform(
+                        departurePulse.value.clamp(0.0, 1.0).toDouble(),
+                      );
+                      return Transform.scale(
+                        scale: 1.02 + .08 * eased,
+                        child: Opacity(
+                          opacity: (.3 * (1 - eased))
+                              .clamp(0.0, 1.0)
+                              .toDouble(),
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(
+                                color: tokens.statusDepartureRequested,
+                                width: 1.2,
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              Positioned.fill(child: badge),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ChildZoneHitOverlay extends StatelessWidget {
   const _ChildZoneHitOverlay({
     super.key,
@@ -2596,6 +3599,7 @@ class _ChildZonePeekBubble extends StatelessWidget {
     required this.mapSize,
     required this.visible,
     required this.reduceMotion,
+    required this.statusForRow,
   });
 
   final ZoneVM zone;
@@ -2603,12 +3607,22 @@ class _ChildZonePeekBubble extends StatelessWidget {
   final Size mapSize;
   final bool visible;
   final bool reduceMotion;
+  final ParkingSlotStatus Function(RealTimeRowVM row) statusForRow;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
-    final remaining = zone.remaining ?? math.max(0, zone.capacity - zone.current);
+    final remaining = zone.source.isTowerChild
+        ? math.max(
+            0,
+            zone.capacity -
+                _towerOccupiedVehicleCount(
+                  zone,
+                  statusForRow,
+                ),
+          )
+        : zone.remaining ?? math.max(0, zone.capacity - zone.current);
     final availableWidth = math.max(56.0, mapSize.width - 12).toDouble();
     final preferredWidth =
         math.min(156.0, math.max(88.0, mapSize.width * .4)).toDouble();
@@ -2706,17 +3720,27 @@ class _OccupiedSlotLabel extends StatelessWidget {
   const _OccupiedSlotLabel({
     super.key,
     required this.entry,
+    required this.departurePulse,
     required this.reduceMotion,
     this.pressed = false,
   });
 
   final _ResolvedOccupiedSlot entry;
+  final Animation<double> departurePulse;
   final bool reduceMotion;
   final bool pressed;
+
+  bool get _isDepartureRequest =>
+      entry.slot.status == ParkingSlotStatus.departureRequest;
+
+  bool get _usesDepartureTone =>
+      entry.slot.status == ParkingSlotStatus.departureRequest ||
+      entry.slot.status == ParkingSlotStatus.departureInProgress;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final tokens = CommonUiTheme.of(context);
     final text = Theme.of(context).textTheme;
     final row = entry.slot.row;
     final last4 = _plateLast4(row.plateNumber);
@@ -2724,6 +3748,17 @@ class _OccupiedSlotLabel extends StatelessWidget {
         reduceMotion ? Duration.zero : const Duration(milliseconds: 180);
     final pressDuration =
         reduceMotion ? Duration.zero : const Duration(milliseconds: 90);
+    final background = _usesDepartureTone
+        ? tokens.statusDepartureRequestedContainer
+        : cs.primaryContainer;
+    final border =
+        _usesDepartureTone ? tokens.statusDepartureRequested : cs.primary;
+    final foreground = _usesDepartureTone
+        ? tokens.onStatusDepartureRequestedContainer
+        : cs.primary;
+    final marker = _usesDepartureTone
+        ? tokens.statusDepartureRequested
+        : Colors.transparent;
 
     return Positioned.fromRect(
       rect: entry.visualRect,
@@ -2742,67 +3777,145 @@ class _OccupiedSlotLabel extends StatelessWidget {
             scale: pressed ? .965 : 1,
             duration: pressDuration,
             curve: Curves.easeOutCubic,
-            child: AnimatedContainer(
-              duration: duration,
-              curve: Curves.easeOutCubic,
-              decoration: BoxDecoration(
-                color: cs.primaryContainer.withOpacity(pressed ? 1 : .9),
-                borderRadius: BorderRadius.circular(5),
-                border: Border.all(
-                  color: cs.primary.withOpacity(pressed ? .96 : .72),
-                  width: pressed ? 1.4 : 1,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: cs.shadow.withOpacity(pressed ? .14 : .08),
-                    blurRadius: pressed ? 7 : 4,
-                    offset: const Offset(0, 1),
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                if (_isDepartureRequest && !reduceMotion)
+                  Positioned.fill(
+                    child: AnimatedBuilder(
+                      animation: departurePulse,
+                      builder: (context, child) {
+                        final eased = Curves.easeOutCubic.transform(
+                          departurePulse.value.clamp(0.0, 1.0).toDouble(),
+                        );
+                        return Transform.scale(
+                          scale: 1.02 + .08 * eased,
+                          child: Opacity(
+                            opacity: (.34 * (1 - eased))
+                                .clamp(0.0, 1.0)
+                                .toDouble(),
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(7),
+                                border: Border.all(
+                                  color: tokens.statusDepartureRequested,
+                                  width: 1.4 + .6 * (1 - eased),
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: tokens.statusDepartureRequested
+                                        .withOpacity(.12 * (1 - eased)),
+                                    blurRadius: 5 + 5 * eased,
+                                    spreadRadius: .2 + .8 * eased,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
                   ),
-                ],
-              ),
-              alignment: Alignment.center,
-              child: AnimatedSwitcher(
-                duration: duration,
-                switchInCurve: Curves.easeOutBack,
-                switchOutCurve: Curves.easeInCubic,
-                transitionBuilder: (child, animation) {
-                  if (reduceMotion) return child;
-                  return FadeTransition(
-                    opacity: animation,
-                    child: ScaleTransition(
-                      scale: Tween<double>(begin: .88, end: 1).animate(
-                        CurvedAnimation(
-                          parent: animation,
-                          curve: Curves.easeOutBack,
+                Positioned.fill(
+                  child: AnimatedContainer(
+                    duration: duration,
+                    curve: Curves.easeOutCubic,
+                    decoration: BoxDecoration(
+                      color: background.withOpacity(pressed ? 1 : .94),
+                      borderRadius: BorderRadius.circular(5),
+                      border: Border.all(
+                        color: border.withOpacity(
+                          pressed
+                              ? 1
+                              : _usesDepartureTone
+                                  ? .9
+                                  : .72,
+                        ),
+                        width: _usesDepartureTone
+                            ? (pressed ? 1.55 : 1.25)
+                            : (pressed ? 1.4 : 1),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: cs.shadow.withOpacity(
+                            pressed
+                                ? .14
+                                : _usesDepartureTone
+                                    ? .11
+                                    : .08,
+                          ),
+                          blurRadius: pressed
+                              ? 7
+                              : _usesDepartureTone
+                                  ? 5
+                                  : 4,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                    alignment: Alignment.center,
+                    child: AnimatedSwitcher(
+                      duration: duration,
+                      switchInCurve: Curves.easeOutBack,
+                      switchOutCurve: Curves.easeInCubic,
+                      transitionBuilder: (child, animation) {
+                        if (reduceMotion) return child;
+                        return FadeTransition(
+                          opacity: animation,
+                          child: ScaleTransition(
+                            scale: Tween<double>(begin: .88, end: 1).animate(
+                              CurvedAnimation(
+                                parent: animation,
+                                curve: Curves.easeOutBack,
+                              ),
+                            ),
+                            child: child,
+                          ),
+                        );
+                      },
+                      child: FittedBox(
+                        key: ValueKey<String>(
+                          '${row.plateId}:${row.plateNumber}:${entry.slot.slot.no}',
+                        ),
+                        fit: BoxFit.scaleDown,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 1),
+                          child: Text(
+                            last4,
+                            maxLines: 1,
+                            softWrap: false,
+                            style: text.labelMedium?.copyWith(
+                              color: foreground,
+                              fontWeight: FontWeight.w900,
+                              height: 1,
+                              fontFeatures: const <FontFeature>[
+                                FontFeature.tabularFigures(),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
-                      child: child,
-                    ),
-                  );
-                },
-                child: FittedBox(
-                  key: ValueKey<String>(
-                    '${row.plateId}:${row.plateNumber}:${entry.slot.slot.no}',
-                  ),
-                  fit: BoxFit.scaleDown,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 1),
-                    child: Text(
-                      last4,
-                      maxLines: 1,
-                      softWrap: false,
-                      style: text.labelMedium?.copyWith(
-                        color: cs.primary,
-                        fontWeight: FontWeight.w900,
-                        height: 1,
-                        fontFeatures: const <FontFeature>[
-                          FontFeature.tabularFigures(),
-                        ],
-                      ),
                     ),
                   ),
                 ),
-              ),
+                if (_usesDepartureTone)
+                  Positioned(
+                    top: -2.5,
+                    right: -2.5,
+                    width: 6,
+                    height: 6,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: marker,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: background,
+                          width: 1,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
         ),
@@ -2815,11 +3928,13 @@ class _OccupiedSlotOverlay extends StatefulWidget {
   const _OccupiedSlotOverlay({
     super.key,
     required this.entry,
+    required this.departurePulse,
     required this.onTap,
     required this.reduceMotion,
   });
 
   final _ResolvedOccupiedSlot entry;
+  final Animation<double> departurePulse;
   final VoidCallback onTap;
   final bool reduceMotion;
 
@@ -2838,10 +3953,18 @@ class _OccupiedSlotOverlayState extends State<_OccupiedSlotOverlay> {
   @override
   Widget build(BuildContext context) {
     final row = widget.entry.slot.row;
+    final statusLabel = switch (widget.entry.slot.status) {
+      ParkingSlotStatus.departureRequest => '출차 요청',
+      ParkingSlotStatus.departureInProgress => '출차 처리 중',
+      ParkingSlotStatus.parkingRequest => '입차 요청',
+      ParkingSlotStatus.parked => '입차 완료',
+      ParkingSlotStatus.empty => '빈 슬롯',
+    };
     return Stack(
       children: [
         _OccupiedSlotLabel(
           entry: widget.entry,
+          departurePulse: widget.departurePulse,
           reduceMotion: widget.reduceMotion,
           pressed: _pressed,
         ),
@@ -2850,7 +3973,7 @@ class _OccupiedSlotOverlayState extends State<_OccupiedSlotOverlay> {
           child: Semantics(
             button: true,
             label:
-                '${widget.entry.slot.zone.group} ${widget.entry.slot.zone.child} 슬롯 ${widget.entry.slot.slot.no}, 번호판 ${row.plateNumber}, 상태 처리 빠른 실행',
+                '${widget.entry.slot.zone.group} ${widget.entry.slot.zone.child} 슬롯 ${widget.entry.slot.slot.no}, 번호판 ${row.plateNumber}, $statusLabel, 상태 처리 빠른 실행',
             child: Material(
               color: Colors.transparent,
               child: InkWell(
@@ -2867,15 +3990,67 @@ class _OccupiedSlotOverlayState extends State<_OccupiedSlotOverlay> {
   }
 }
 
-List<_OccupiedSlot> _occupiedSlots(ZoneGroupVM group) {
+
+int _towerDepartureRequestCount(
+  ZoneVM zone,
+  ParkingSlotStatus Function(RealTimeRowVM row) statusForRow,
+) {
+  if (!zone.source.isTowerChild) return 0;
+  var count = 0;
+  for (final row in zone.rows) {
+    if (statusForRow(row) == ParkingSlotStatus.departureRequest) {
+      count++;
+    }
+  }
+  return count;
+}
+
+int _towerParkingRequestCount(
+  ZoneVM zone,
+  ParkingSlotStatus Function(RealTimeRowVM row) statusForRow,
+) {
+  if (!zone.source.isTowerChild) return 0;
+  var count = 0;
+  for (final row in zone.rows) {
+    if (statusForRow(row) == ParkingSlotStatus.parkingRequest) {
+      count++;
+    }
+  }
+  return count;
+}
+
+int _towerOccupiedVehicleCount(
+  ZoneVM zone,
+  ParkingSlotStatus Function(RealTimeRowVM row) statusForRow,
+) {
+  if (!zone.source.isTowerChild) return 0;
+  var count = 0;
+  for (final row in zone.rows) {
+    final status = statusForRow(row);
+    if (status == ParkingSlotStatus.parked ||
+        status == ParkingSlotStatus.departureRequest ||
+        status == ParkingSlotStatus.departureInProgress) {
+      count++;
+    }
+  }
+  return count;
+}
+
+List<_OccupiedSlot> _occupiedSlots(
+  ZoneGroupVM group,
+  ParkingSlotStatus Function(RealTimeRowVM row) statusForRow,
+) {
   final out = <_OccupiedSlot>[];
   for (final zone in group.zones) {
-    out.addAll(_occupiedSlotsForZone(zone));
+    out.addAll(_occupiedSlotsForZone(zone, statusForRow));
   }
   return out;
 }
 
-List<_OccupiedSlot> _occupiedSlotsForZone(ZoneVM zone) {
+List<_OccupiedSlot> _occupiedSlotsForZone(
+  ZoneVM zone,
+  ParkingSlotStatus Function(RealTimeRowVM row) statusForRow,
+) {
   if (zone.rows.isEmpty || zone.source.childSlots.isEmpty) {
     return const <_OccupiedSlot>[];
   }
@@ -2886,7 +4061,14 @@ List<_OccupiedSlot> _occupiedSlotsForZone(ZoneVM zone) {
   for (final slot in slots) {
     final row = rowsBySlot[slot.no];
     if (row == null) continue;
-    out.add(_OccupiedSlot(zone: zone, slot: slot, row: row));
+    out.add(
+      _OccupiedSlot(
+        zone: zone,
+        slot: slot,
+        row: row,
+        status: statusForRow(row),
+      ),
+    );
   }
   return out;
 }

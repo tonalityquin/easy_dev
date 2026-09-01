@@ -2,11 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../app/utils/snackbar_helper.dart';
-import '../../../../features/dev/page/sheets/dev_quick_actions.dart';
 import '../../../../features/selector/application/dev_auth.dart';
-import '../../../../features/selector/sheets/service_bottom_sheet.dart';
 import '../../../plate/domain/repositories/plate_repository.dart';
-import '../../application/secondary_state.dart';
 import '../../widgets/ops_console_dialogs.dart';
 import '../../widgets/ops_console_widgets.dart';
 
@@ -37,39 +34,7 @@ class _BackEndControllerState extends State<BackEndController> {
     });
   }
 
-  Future<void> _openServiceSettings() async {
-    final before = _devAuthorized;
-    await ServiceBottomSheet.show(context: context);
-    if (!mounted) return;
-    await _loadDevAuth();
-    if (!mounted) return;
-    final state = context.read<SecondaryState>();
-    await state.refreshDeveloperLogin();
-    if (!mounted) return;
-    if (!before && _devAuthorized) {
-      showSuccessSnackbar(
-        context,
-        '개발자 모드가 활성화되었습니다.',
-        useCommonUi: true,
-      );
-    }
-  }
 
-  Future<void> _resetDevAuthInline() async {
-    await DevQuickActions.disableDeveloperMode();
-    if (!mounted) return;
-    setState(() {
-      _devAuthorized = false;
-      _checkingDevAuth = false;
-    });
-    showSelectedSnackbar(
-      context,
-      '개발자 모드가 비활성화되었습니다.',
-      useCommonUi: true,
-    );
-    final state = context.read<SecondaryState>();
-    await state.refreshDeveloperLogin();
-  }
 
   Future<void> _rebuildMonthlyPlateStatusViews() async {
     if (_rebuildingMonthlyView) return;
@@ -114,7 +79,7 @@ class _BackEndControllerState extends State<BackEndController> {
     final statusColor = _devAuthorized ? tokens.primary : tokens.error;
     return OpsConsoleScaffold(
       title: '실시간 컨트롤러',
-      subtitle: '개발자 인증과 운영 데이터 유지보수 기능을 관리합니다.',
+      subtitle: 'DEBUG 세션 상태와 운영 데이터 유지보수 기능을 확인합니다.',
       icon: Icons.settings_ethernet_rounded,
       loading: _checkingDevAuth || _rebuildingMonthlyView,
       metrics: [
@@ -145,12 +110,12 @@ class _BackEndControllerState extends State<BackEndController> {
             subtitle: 'PlateState 스냅샷 구독 기능은 제거된 상태입니다.',
             icon: Icons.cloud_off_rounded,
             child: const Text(
-              'Firestore QuerySnapshot 기반 실시간 구독 로직을 사용하지 않습니다. 이 화면은 개발자 인증과 관리 작업만 제공합니다.',
+              'Firestore QuerySnapshot 기반 실시간 구독 로직을 사용하지 않습니다. 이 화면은 DEBUG 상태와 관리 작업만 제공합니다.',
             ),
           ),
           OpsWorkSection(
             title: '개발자 모드',
-            subtitle: '서비스 설정 접근 권한과 개발 도구 표시 상태를 제어합니다.',
+            subtitle: '파킨워킨 터미널에서 활성화한 DEBUG 세션 상태를 확인합니다.',
             icon: _devAuthorized
                 ? Icons.verified_user_rounded
                 : Icons.lock_outline_rounded,
@@ -167,26 +132,6 @@ class _BackEndControllerState extends State<BackEndController> {
                   icon: _devAuthorized
                       ? Icons.check_circle_outline_rounded
                       : Icons.info_outline_rounded,
-                ),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OpsActionButton(
-                        label: '서비스 설정',
-                        icon: Icons.settings_outlined,
-                        onPressed: _checkingDevAuth ? null : _openServiceSettings,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: OpsActionButton(
-                        label: '개발자 모드 초기화',
-                        icon: Icons.restart_alt_rounded,
-                        onPressed: _checkingDevAuth ? null : _resetDevAuthInline,
-                        tonal: true,
-                      ),
-                    ),
-                  ],
                 ),
               ],
             ),

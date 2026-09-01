@@ -5,19 +5,38 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
 import '../../../design_system/common_ui/common_ui_components.dart';
+import '../../../design_system/common_ui/common_ui_overlays.dart';
 import '../../../design_system/common_ui/common_ui_theme.dart';
-
 import 'user_statement_signature_painter.dart';
 
 class UserStatementSignatureResult {
-  UserStatementSignatureResult({required this.pngBytes, required this.signDateTime});
+  UserStatementSignatureResult({
+    required this.pngBytes,
+    required this.signDateTime,
+  });
 
   final Uint8List pngBytes;
   final DateTime signDateTime;
 }
 
-class UserStatementSignatureFullScreenDialog extends StatefulWidget {
-  const UserStatementSignatureFullScreenDialog({
+Future<UserStatementSignatureResult?> showUserStatementSignatureOverlay({
+  required BuildContext context,
+  required String name,
+  required DateTime? initialDateTime,
+}) {
+  return showCommonOverlayDialog<UserStatementSignatureResult>(
+    context: context,
+    barrierDismissible: false,
+    barrierLabel: '전자서명',
+    builder: (_) => UserStatementSignatureDialog(
+      name: name,
+      initialDateTime: initialDateTime,
+    ),
+  );
+}
+
+class UserStatementSignatureDialog extends StatefulWidget {
+  const UserStatementSignatureDialog({
     super.key,
     required this.name,
     required this.initialDateTime,
@@ -27,15 +46,21 @@ class UserStatementSignatureFullScreenDialog extends StatefulWidget {
   final DateTime? initialDateTime;
 
   @override
-  State<UserStatementSignatureFullScreenDialog> createState() => _UserStatementSignatureFullScreenDialogState();
+  State<UserStatementSignatureDialog> createState() =>
+      _UserStatementSignatureDialogState();
 }
 
-class _UserStatementSignatureFullScreenDialogState extends State<UserStatementSignatureFullScreenDialog> {
+class _UserStatementSignatureDialogState
+    extends State<UserStatementSignatureDialog> {
   final GlobalKey _boundaryKey = GlobalKey();
   final List<Offset?> _points = <Offset?>[];
   DateTime? _signDateTime;
+  bool _saving = false;
 
   static const double _strokeWidth = 2.2;
+
+  bool get _reduceMotion =>
+      MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
   @override
   void initState() {
@@ -46,12 +71,13 @@ class _UserStatementSignatureFullScreenDialogState extends State<UserStatementSi
   bool get _hasAny => _points.any((point) => point != null);
 
   void _clear() {
-    if (!_hasAny) return;
+    if (_saving || !_hasAny) return;
     setState(_points.clear);
+    debugPrint('[UserStatementSignature] clear');
   }
 
   void _undo() {
-    if (_points.isEmpty) return;
+    if (_saving || _points.isEmpty) return;
     int index = _points.length - 1;
     if (_points[index] == null) {
       _points.removeAt(index);
@@ -65,206 +91,51 @@ class _UserStatementSignatureFullScreenDialogState extends State<UserStatementSi
       _points.removeAt(index);
     }
     setState(() {});
+    debugPrint('[UserStatementSignature] undo');
   }
 
   Future<void> _save() async {
-    if (!_hasAny) return;
+    if (_saving || !_hasAny) return;
+    setState(() {
+      _saving = true;
+      _signDateTime = DateTime.now();
+    });
+    debugPrint('[UserStatementSignature] save_start');
     try {
-      setState(() => _signDateTime = DateTime.now());
-      await Future<void>.delayed(const Duration(milliseconds: 16));
+      await Future<void>.delayed(
+        _reduceMotion ? Duration.zero : const Duration(milliseconds: 16),
+      );
       if (!mounted) return;
       final boundary =
-          _boundaryKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
-      if (boundary == null) return;
+          _boundaryKey.currentContext?.findRenderObject()
+              as RenderRepaintBoundary?;
+      if (boundary == null) {
+        throw StateError('signature_boundary_not_found');
+      }
       final image = await boundary.toImage(pixelRatio: 3);
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      if (byteData == null || !mounted) return;
+      if (byteData == null) {
+        throw StateError('signature_png_encode_failed');
+      }
+      final bytes = byteData.buffer.asUint8List();
+      debugPrint(
+        '[UserStatementSignature] save_complete bytes=${bytes.length}',
+      );
+      if (!mounted) return;
       Navigator.of(context).pop(
         UserStatementSignatureResult(
-          pngBytes: byteData.buffer.asUint8List(),
+          pngBytes: bytes,
           signDateTime: _signDateTime!,
         ),
       );
-    } catch (_) {}
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = CommonUiTheme.of(context);
-    final name = widget.name.trim().isEmpty ? '이름 미입력' : widget.name.trim();
-    final timeText =
-        _signDateTime == null ? '서명 전' : _fmtCompact(_signDateTime!);
-
-    return Material(
-      color: tokens.canvas,
-      child: SafeArea(
-        child: Scaffold(
-          backgroundColor: tokens.canvas,
-          appBar: AppBar(
-            title: const Text('전자서명'),
-            centerTitle: true,
-            leadingWidth: 58,
-            leading: Padding(
-              padding: const EdgeInsets.only(left: 8),
-              child: CommonIconButton(
-                icon: Icons.close_rounded,
-                tooltip: '닫기',
-                onPressed: () => Navigator.of(context).pop(),
-                haptic: CommonHaptic.selection,
-                size: 40,
-              ),
-            ),
-            actions: [
-              CommonIconButton(
-                icon: Icons.layers_clear_rounded,
-                tooltip: '지우기',
-                onPressed: _hasAny ? _clear : null,
-                haptic: CommonHaptic.selection,
-                size: 40,
-              ),
-              const SizedBox(width: 6),
-              CommonIconButton(
-                icon: Icons.undo_rounded,
-                tooltip: '되돌리기',
-                onPressed: _hasAny ? _undo : null,
-                haptic: CommonHaptic.selection,
-                size: 40,
-              ),
-              const SizedBox(width: 8),
-            ],
-            shape: Border(
-              bottom: BorderSide(color: tokens.borderSubtle),
-            ),
-          ),
-          body: Column(
-            children: [
-              CommonAnimatedReveal(
-                offset: const Offset(0, .02),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                  decoration: BoxDecoration(
-                    color: tokens.surface,
-                    border: Border(
-                      bottom: BorderSide(color: tokens.borderSubtle),
-                    ),
-                  ),
-                  child: Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      _MetadataChip(
-                        icon: Icons.person_outline_rounded,
-                        label: '서명자',
-                        value: name,
-                      ),
-                      _MetadataChip(
-                        icon: Icons.access_time_rounded,
-                        label: '서명 일시',
-                        value: timeText,
-                      ),
-                      CommonButton(
-                        label: '현재 시각',
-                        icon: Icons.schedule_rounded,
-                        onPressed: () =>
-                            setState(() => _signDateTime = DateTime.now()),
-                        variant: CommonButtonVariant.tertiary,
-                        haptic: CommonHaptic.selection,
-                        minHeight: 42,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: CommonAnimatedReveal(
-                    delay: const Duration(milliseconds: 60),
-                    offset: const Offset(0, .025),
-                    child: RepaintBoundary(
-                      key: _boundaryKey,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: tokens.surfaceRaised,
-                          borderRadius:
-                              BorderRadius.circular(CommonUiShapes.card),
-                          border: Border.all(color: tokens.borderSubtle),
-                          boxShadow: [
-                            BoxShadow(
-                              color: tokens.shadow,
-                              blurRadius: 18,
-                              offset: const Offset(0, 8),
-                            ),
-                          ],
-                        ),
-                        child: ClipRRect(
-                          borderRadius:
-                              BorderRadius.circular(CommonUiShapes.card),
-                          child: GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onPanStart: (details) => setState(
-                              () => _points.add(details.localPosition),
-                            ),
-                            onPanUpdate: (details) => setState(
-                              () => _points.add(details.localPosition),
-                            ),
-                            onPanEnd: (_) => setState(() => _points.add(null)),
-                            child: CustomPaint(
-                              painter: UserStatementSignaturePainter(
-                                points: _points,
-                                strokeWidth: _strokeWidth,
-                                color: tokens.textPrimary,
-                                background: tokens.surfaceRaised,
-                                overlayName: name,
-                                overlayDateText: timeText,
-                                guideColor: tokens.borderSubtle,
-                                hintColor: tokens.textSecondary,
-                                overlayTextColor: tokens.textSecondary,
-                              ),
-                              child: const SizedBox.expand(),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              SafeArea(
-                top: false,
-                minimum: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: CommonButton(
-                        label: '취소',
-                        icon: Icons.cancel_outlined,
-                        onPressed: () => Navigator.of(context).pop(),
-                        variant: CommonButtonVariant.tertiary,
-                        expand: true,
-                        haptic: CommonHaptic.selection,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: CommonButton(
-                        label: '저장',
-                        icon: Icons.save_alt_rounded,
-                        onPressed: _hasAny ? _save : null,
-                        expand: true,
-                        haptic: CommonHaptic.medium,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+    } catch (error, stackTrace) {
+      debugPrint(
+        '[UserStatementSignature] save_failure error=$error\n$stackTrace',
+      );
+      if (mounted) {
+        setState(() => _saving = false);
+      }
+    }
   }
 
   String _fmtCompact(DateTime dateTime) {
@@ -275,48 +146,205 @@ class _UserStatementSignatureFullScreenDialogState extends State<UserStatementSi
     final minute = dateTime.minute.toString().padLeft(2, '0');
     return '$year-$month-$day $hour:$minute';
   }
-}
-
-class _MetadataChip extends StatelessWidget {
-  const _MetadataChip({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
 
   @override
   Widget build(BuildContext context) {
     final tokens = CommonUiTheme.of(context);
-    final textTheme = Theme.of(context).textTheme;
-    return Container(
-      constraints: const BoxConstraints(maxWidth: 280),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: tokens.surfaceOverlay,
-        borderRadius: BorderRadius.circular(CommonUiShapes.control),
-        border: Border.all(color: tokens.borderSubtle),
+    final media = MediaQuery.of(context);
+    final name = widget.name.trim().isEmpty ? '이름 미입력' : widget.name.trim();
+    final timeText =
+        _signDateTime == null ? '미서명' : _fmtCompact(_signDateTime!);
+
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        maxWidth: 660,
+        maxHeight: media.size.height * .84,
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 18, color: tokens.iconSecondary),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Text(
-              '$label: $value',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: textTheme.bodyMedium?.copyWith(
-                color: tokens.textPrimary,
-                fontWeight: FontWeight.w600,
+      child: Material(
+        color: tokens.surfaceRaised,
+        borderRadius: BorderRadius.circular(CommonUiShapes.sheet),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
+              decoration: BoxDecoration(
+                color: tokens.surface,
+                border: Border(
+                  bottom: BorderSide(color: tokens.borderSubtle),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.draw_rounded, color: tokens.iconSecondary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '전자서명',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: tokens.textPrimary,
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                  ),
+                  CommonIconButton(
+                    icon: Icons.undo_rounded,
+                    tooltip: '되돌리기',
+                    onPressed: _saving || !_hasAny ? null : _undo,
+                    haptic: CommonHaptic.selection,
+                    size: 38,
+                  ),
+                  CommonIconButton(
+                    icon: Icons.layers_clear_rounded,
+                    tooltip: '지우기',
+                    onPressed: _saving || !_hasAny ? null : _clear,
+                    haptic: CommonHaptic.selection,
+                    size: 38,
+                  ),
+                  CommonIconButton(
+                    icon: Icons.close_rounded,
+                    tooltip: '닫기',
+                    onPressed:
+                        _saving ? null : () => Navigator.of(context).pop(),
+                    haptic: CommonHaptic.selection,
+                    size: 38,
+                  ),
+                ],
               ),
             ),
-          ),
-        ],
+            AnimatedContainer(
+              duration:
+                  _reduceMotion ? Duration.zero : CommonUiMotion.selection,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+              color: tokens.surfaceOverlay,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: tokens.textPrimary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  AnimatedSwitcher(
+                    duration:
+                        _reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                    child: Text(
+                      timeText,
+                      key: ValueKey<String>(timeText),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: tokens.textSecondary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: AnimatedScale(
+                  duration:
+                      _reduceMotion ? Duration.zero : CommonUiMotion.component,
+                  curve: CommonUiMotion.enter,
+                  scale: _saving ? .992 : 1,
+                  child: RepaintBoundary(
+                    key: _boundaryKey,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: tokens.surfaceRaised,
+                        borderRadius:
+                            BorderRadius.circular(CommonUiShapes.card),
+                        border: Border.all(color: tokens.borderSubtle),
+                        boxShadow: [
+                          BoxShadow(
+                            color: tokens.shadow,
+                            blurRadius: 14,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius:
+                            BorderRadius.circular(CommonUiShapes.card),
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onPanStart: _saving
+                              ? null
+                              : (details) => setState(
+                                    () => _points.add(details.localPosition),
+                                  ),
+                          onPanUpdate: _saving
+                              ? null
+                              : (details) => setState(
+                                    () => _points.add(details.localPosition),
+                                  ),
+                          onPanEnd: _saving
+                              ? null
+                              : (_) => setState(() => _points.add(null)),
+                          child: CustomPaint(
+                            painter: UserStatementSignaturePainter(
+                              points: _points,
+                              strokeWidth: _strokeWidth,
+                              color: tokens.textPrimary,
+                              background: tokens.surfaceRaised,
+                              overlayName: name,
+                              overlayDateText: timeText,
+                              guideColor: tokens.borderSubtle,
+                              overlayTextColor: tokens.textSecondary,
+                            ),
+                            child: const SizedBox.expand(),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+              decoration: BoxDecoration(
+                color: tokens.surface.withOpacity(.94),
+                border: Border(
+                  top: BorderSide(color: tokens.borderSubtle),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: CommonButton(
+                      label: '취소',
+                      icon: Icons.close_rounded,
+                      onPressed:
+                          _saving ? null : () => Navigator.of(context).pop(),
+                      variant: CommonButtonVariant.tertiary,
+                      expand: true,
+                      haptic: CommonHaptic.selection,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: CommonButton(
+                      label: _saving ? '저장 중' : '저장',
+                      icon: _saving ? null : Icons.save_alt_rounded,
+                      loading: _saving,
+                      onPressed: _saving || !_hasAny ? null : _save,
+                      expand: true,
+                      haptic: CommonHaptic.medium,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

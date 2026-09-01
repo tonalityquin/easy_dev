@@ -1,7 +1,12 @@
+import 'dart:async';
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../application/debug_session_controller.dart';
+import '../../presentation/debug_tool_shell.dart';
 
 class LocalPrefsBottomSheet extends StatefulWidget {
   const LocalPrefsBottomSheet({super.key});
@@ -10,24 +15,32 @@ class LocalPrefsBottomSheet extends StatefulWidget {
   State<LocalPrefsBottomSheet> createState() => _LocalPrefsBottomSheetState();
 }
 
+enum _PrefFilter { all, boolean, string, number, list }
+
 class _LocalPrefsBottomSheetState extends State<LocalPrefsBottomSheet> {
   bool _loading = true;
-  Map<String, Object?> _data = {};
+  Map<String, Object?> _data = <String, Object?>{};
+  List<String> _allKeys = <String>[];
+  List<String> _filteredKeys = <String>[];
+  _PrefFilter _filter = _PrefFilter.all;
+  String? _recentlyChangedKey;
+  Timer? _highlightTimer;
 
   final TextEditingController _searchCtrl = TextEditingController();
   final FocusNode _searchFocus = FocusNode();
-  List<String> _allKeys = [];
-  List<String> _filteredKeys = [];
+
+  bool get _reduceMotion => MediaQuery.of(context).disableAnimations;
 
   @override
   void initState() {
     super.initState();
-    _loadPrefs();
     _searchCtrl.addListener(_applyFilter);
+    _loadPrefs();
   }
 
   @override
   void dispose() {
+    _highlightTimer?.cancel();
     _searchCtrl.removeListener(_applyFilter);
     _searchCtrl.dispose();
     _searchFocus.dispose();
@@ -35,573 +48,898 @@ class _LocalPrefsBottomSheetState extends State<LocalPrefsBottomSheet> {
   }
 
   Future<void> _loadPrefs() async {
-    setState(() => _loading = true);
-    final prefs = await SharedPreferences.getInstance();
-    final keys = prefs.getKeys().toList()..sort();
-    final map = <String, Object?>{};
-    for (final k in keys) {
-      map[k] = prefs.get(k);
+    if (mounted) setState(() => _loading = true);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final keys = prefs.getKeys().toList()..sort();
+      final map = <String, Object?>{};
+      for (final key in keys) {
+        map[key] = prefs.get(key);
+      }
+      if (!mounted) return;
+      setState(() {
+        _data = map;
+        _allKeys = keys;
+        _loading = false;
+      });
+      _applyFilter();
+      DebugSessionController.record(
+        'shared_preferences_loaded',
+        source: 'shared_preferences',
+        meta: <String, Object?>{'keys': keys.length},
+      );
+    } catch (error) {
+      if (mounted) setState(() => _loading = false);
+      DebugSessionController.record(
+        'shared_preferences_load_failed',
+        source: 'shared_preferences',
+        meta: <String, Object?>{'error': error.toString()},
+      );
     }
-    setState(() {
-      _data = map;
-      _allKeys = keys;
-      _filteredKeys = List.from(_allKeys);
-      _loading = false;
-    });
   }
 
   void _applyFilter() {
-    final q = _searchCtrl.text.trim().toLowerCase();
-    if (q.isEmpty) {
-      setState(() => _filteredKeys = List.from(_allKeys));
-      return;
-    }
-    final filtered = _allKeys.where((k) {
-      final v = _data[k];
-      final keyHit = k.toLowerCase().contains(q);
-      final valueHit = _valuePreview(v).toLowerCase().contains(q);
-      return keyHit || valueHit;
-    }).toList();
+    if (!mounted) return;
+    final query = _searchCtrl.text.trim().toLowerCase();
+    final filtered = _allKeys.where((key) {
+      final value = _data[key];
+      final matchesType = _matchesFilter(value);
+      if (!matchesType) return false;
+      if (query.isEmpty) return true;
+      return key.toLowerCase().contains(query) ||
+          _valuePreview(value).toLowerCase().contains(query);
+    }).toList(growable: false);
     setState(() => _filteredKeys = filtered);
   }
 
-  String _typeLabel(Object? v) {
-    if (v is String) return 'String';
-    if (v is bool) return 'bool';
-    if (v is int) return 'int';
-    if (v is double) return 'double';
-    if (v is List<String>) return 'List<String>';
-    if (v == null) return 'null';
-    return v.runtimeType.toString();
+  bool _matchesFilter(Object? value) {
+    switch (_filter) {
+      case _PrefFilter.all:
+        return true;
+      case _PrefFilter.boolean:
+        return value is bool;
+      case _PrefFilter.string:
+        return value is String;
+      case _PrefFilter.number:
+        return value is int || value is double;
+      case _PrefFilter.list:
+        return value is List<String>;
+    }
   }
 
-  String _valuePreview(Object? v) {
-    if (v is List) return jsonEncode(v);
-    return '$v';
+  String _filterLabel(_PrefFilter value) {
+    switch (value) {
+      case _PrefFilter.all:
+        return 'All';
+      case _PrefFilter.boolean:
+        return 'Bool';
+      case _PrefFilter.string:
+        return 'String';
+      case _PrefFilter.number:
+        return 'Number';
+      case _PrefFilter.list:
+        return 'List';
+    }
+  }
+
+  String _typeLabel(Object? value) {
+    if (value is bool) return 'BOOL';
+    if (value is String) return 'STRING';
+    if (value is int) return 'INT';
+    if (value is double) return 'DOUBLE';
+    if (value is List<String>) return 'LIST';
+    if (value == null) return 'NULL';
+    return value.runtimeType.toString().toUpperCase();
+  }
+
+  String _valuePreview(Object? value) {
+    if (value is List) return jsonEncode(value);
+    if (value == null) return 'null';
+    return value.toString();
   }
 
   Future<void> _setPref(String key, Object? value) async {
-    final prefs = await SharedPreferences.getInstance();
-    bool ok = false;
-
-    if (value == null) {
-      ok = await prefs.remove(key);
-      if (ok) {
-        _data.remove(key);
-        _allKeys.remove(key);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      bool ok = false;
+      if (value == null) {
+        ok = await prefs.remove(key);
+      } else if (value is String) {
+        ok = await prefs.setString(key, value);
+      } else if (value is bool) {
+        ok = await prefs.setBool(key, value);
+      } else if (value is int) {
+        ok = await prefs.setInt(key, value);
+      } else if (value is double) {
+        ok = await prefs.setDouble(key, value);
+      } else if (value is List<String>) {
+        ok = await prefs.setStringList(key, value);
       }
-    } else if (value is String) {
-      ok = await prefs.setString(key, value);
-      if (ok) _data[key] = value;
-    } else if (value is bool) {
-      ok = await prefs.setBool(key, value);
-      if (ok) _data[key] = value;
-    } else if (value is int) {
-      ok = await prefs.setInt(key, value);
-      if (ok) _data[key] = value;
-    } else if (value is double) {
-      ok = await prefs.setDouble(key, value);
-      if (ok) _data[key] = value;
-    } else if (value is List<String>) {
-      ok = await prefs.setStringList(key, value);
-      if (ok) _data[key] = value;
+      if (!ok || !mounted) return;
+      setState(() {
+        if (value == null) {
+          _data.remove(key);
+          _allKeys.remove(key);
+        } else {
+          _data[key] = value;
+          if (!_allKeys.contains(key)) {
+            _allKeys.add(key);
+            _allKeys.sort();
+          }
+          _recentlyChangedKey = key;
+        }
+      });
+      _applyFilter();
+      _highlightTimer?.cancel();
+      if (value != null) {
+        _highlightTimer = Timer(const Duration(milliseconds: 620), () {
+          if (mounted && _recentlyChangedKey == key) {
+            setState(() => _recentlyChangedKey = null);
+          }
+        });
+      }
+      DebugSessionController.record(
+        value == null ? 'shared_preferences_delete' : 'shared_preferences_write',
+        source: 'shared_preferences',
+        meta: <String, Object?>{
+          'key': key,
+          'type': value == null ? 'removed' : _typeLabel(value),
+        },
+      );
+    } catch (error) {
+      DebugSessionController.record(
+        'shared_preferences_write_failed',
+        source: 'shared_preferences',
+        meta: <String, Object?>{'key': key, 'error': error.toString()},
+      );
+      if (mounted) _showMessage('저장하지 못했습니다.');
     }
-
-    if (!mounted || !ok) return;
-
-    setState(() {
-      if (!_allKeys.contains(key) && value != null) {
-        _allKeys.add(key);
-        _allKeys.sort();
-      }
-    });
-    _applyFilter();
   }
 
   Future<void> _copyAll() async {
-    final encoded = jsonEncode(_data.map((k, v) => MapEntry(k, v)));
-    await Clipboard.setData(ClipboardData(text: encoded));
+    await Clipboard.setData(ClipboardData(text: jsonEncode(_data)));
+    DebugSessionController.record(
+      'shared_preferences_copy_all',
+      source: 'shared_preferences',
+      meta: <String, Object?>{'keys': _data.length},
+    );
+    if (mounted) _showMessage('전체 값을 복사했습니다.');
   }
 
   Future<void> _copyEntry(String key, Object? value) async {
-    final encoded = jsonEncode({key: value});
-    await Clipboard.setData(ClipboardData(text: encoded));
+    await Clipboard.setData(ClipboardData(text: jsonEncode(<String, Object?>{key: value})));
+    DebugSessionController.record(
+      'shared_preferences_copy_entry',
+      source: 'shared_preferences',
+      meta: <String, Object?>{'key': key},
+    );
+    if (mounted) _showMessage('항목을 복사했습니다.');
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(milliseconds: 900),
+      ),
+    );
   }
 
   Future<void> _deleteKey(String key) async {
     final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('삭제 확인'),
-        content: Text('“$key” 항목을 삭제할까요?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('취소'),
+          context: context,
+          builder: (_) => _DebugConfirmDialog(
+            title: 'SharedPreferences 삭제',
+            description: key,
+            confirmLabel: '삭제',
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('삭제'),
-          ),
-        ],
-      ),
-    ) ??
+        ) ??
         false;
-    if (ok != true) return;
+    if (!ok) return;
     await _setPref(key, null);
   }
 
-  Future<void> _editString(String key, String current) async {
-    final ctrl = TextEditingController(text: current);
-    final saved = await showDialog<String>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text('문자열 편집\n$key'),
-        content: TextField(
-          controller: ctrl,
-          decoration: const InputDecoration(labelText: '값 (String)'),
-          autofocus: true,
+  Future<void> _editValue(String key, Object? value) async {
+    if (value is bool) {
+      await _setPref(key, !value);
+      return;
+    }
+    if (value is String) {
+      final saved = await _showTextEditor(
+        title: 'String 편집',
+        keyName: key,
+        current: value,
+      );
+      if (saved != null) await _setPref(key, saved);
+      return;
+    }
+    if (value is int) {
+      final saved = await _showTextEditor(
+        title: 'int 편집',
+        keyName: key,
+        current: value.toString(),
+        keyboardType: const TextInputType.numberWithOptions(
+          decimal: false,
+          signed: true,
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('취소'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, ctrl.text),
-            child: const Text('저장'),
-          ),
-        ],
-      ),
-    );
-    if (saved == null) return;
-    await _setPref(key, saved);
-  }
-
-  Future<void> _editNumber<T extends num>(String key, T current) async {
-    final ctrl = TextEditingController(text: '$current');
-    final saved = await showDialog<String>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text('${T == int ? '정수' : '실수'} 편집\n$key'),
-        content: TextField(
-          controller: ctrl,
-          decoration: InputDecoration(
-            labelText: '값 (${T == int ? 'int' : 'double'})',
-            helperText: T == int ? '예: 42' : '예: 3.14',
-          ),
-          keyboardType: const TextInputType.numberWithOptions(
-            decimal: true,
-            signed: true,
-          ),
-          autofocus: true,
+      );
+      if (saved == null) return;
+      final parsed = int.tryParse(saved.trim());
+      if (parsed == null) {
+        _showMessage('정수 값을 확인해 주세요.');
+        return;
+      }
+      await _setPref(key, parsed);
+      return;
+    }
+    if (value is double) {
+      final saved = await _showTextEditor(
+        title: 'double 편집',
+        keyName: key,
+        current: value.toString(),
+        keyboardType: const TextInputType.numberWithOptions(
+          decimal: true,
+          signed: true,
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('취소'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, ctrl.text.trim()),
-            child: const Text('저장'),
-          ),
-        ],
-      ),
-    );
-    if (saved == null) return;
-
-    if (T == int) {
-      final v = int.tryParse(saved);
-      if (v == null) return;
-      await _setPref(key, v);
-    } else {
-      final v = double.tryParse(saved);
-      if (v == null) return;
-      await _setPref(key, v);
+      );
+      if (saved == null) return;
+      final parsed = double.tryParse(saved.trim());
+      if (parsed == null) {
+        _showMessage('실수 값을 확인해 주세요.');
+        return;
+      }
+      await _setPref(key, parsed);
+      return;
+    }
+    if (value is List<String>) {
+      final saved = await _showTextEditor(
+        title: 'List<String> 편집',
+        keyName: key,
+        current: value.join('\n'),
+        minLines: 6,
+        maxLines: 12,
+      );
+      if (saved == null) return;
+      final list = saved
+          .split('\n')
+          .map((entry) => entry.trim())
+          .where((entry) => entry.isNotEmpty)
+          .toList(growable: false);
+      await _setPref(key, list);
     }
   }
 
-  Future<void> _editStringList(String key, List<String> current) async {
-    final ctrl = TextEditingController(text: current.join('\n'));
-    final saved = await showDialog<String>(
+  Future<String?> _showTextEditor({
+    required String title,
+    required String keyName,
+    required String current,
+    TextInputType? keyboardType,
+    int minLines = 1,
+    int maxLines = 6,
+  }) async {
+    final controller = TextEditingController(text: current);
+    final value = await showDialog<String>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: Text('문자열 리스트 편집\n$key'),
-        content: SizedBox(
-          width: 480,
-          child: TextField(
-            controller: ctrl,
-            decoration: const InputDecoration(
-              labelText: '값 (줄마다 1개 항목)',
-              alignLabelWithHint: true,
-            ),
-            minLines: 6,
-            maxLines: 12,
-            autofocus: true,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('취소'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, ctrl.text),
-            child: const Text('저장'),
-          ),
-        ],
+      builder: (_) => _DebugValueEditorDialog(
+        title: title,
+        keyName: keyName,
+        controller: controller,
+        keyboardType: keyboardType,
+        minLines: minLines,
+        maxLines: maxLines,
       ),
     );
-    if (saved == null) return;
-    final list = saved
-        .split('\n')
-        .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
-        .toList(growable: false);
-    await _setPref(key, list);
+    controller.dispose();
+    return value;
   }
 
   Future<void> _addKeyDialog() async {
-    final keyCtrl = TextEditingController();
-    String type = 'String';
-    final valCtrl = TextEditingController();
-
-    final ok = await showDialog<bool>(
+    final keyController = TextEditingController();
+    final valueController = TextEditingController();
+    var type = 'String';
+    final result = await showDialog<_NewPreferenceValue>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('새 항목 추가'),
-        content: SizedBox(
-          width: 480,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: keyCtrl,
-                decoration: const InputDecoration(labelText: '키'),
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                value: type,
-                items: const [
-                  DropdownMenuItem(value: 'String', child: Text('String')),
-                  DropdownMenuItem(value: 'bool', child: Text('bool')),
-                  DropdownMenuItem(value: 'int', child: Text('int')),
-                  DropdownMenuItem(value: 'double', child: Text('double')),
-                  DropdownMenuItem(
-                    value: 'List<String>',
-                    child: Text('List<String>'),
+      builder: (_) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            title: const _DebugDialogTitle(
+              title: '새 SharedPreferences 항목',
+              route: 'Developer / SharedPreferences / Add',
+            ),
+            content: SizedBox(
+              width: 500,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: keyController,
+                    decoration: const InputDecoration(labelText: '키'),
+                    autofocus: true,
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: type,
+                    decoration: const InputDecoration(labelText: '타입'),
+                    items: const [
+                      DropdownMenuItem(value: 'String', child: Text('String')),
+                      DropdownMenuItem(value: 'bool', child: Text('bool')),
+                      DropdownMenuItem(value: 'int', child: Text('int')),
+                      DropdownMenuItem(value: 'double', child: Text('double')),
+                      DropdownMenuItem(
+                        value: 'List<String>',
+                        child: Text('List<String>'),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) setDialogState(() => type = value);
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: valueController,
+                    decoration: const InputDecoration(labelText: '값'),
+                    minLines: type == 'List<String>' ? 4 : 1,
+                    maxLines: type == 'List<String>' ? 8 : 3,
                   ),
                 ],
-                onChanged: (v) => type = v ?? 'String',
-                decoration: const InputDecoration(labelText: '타입'),
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: valCtrl,
-                decoration: const InputDecoration(
-                  labelText: '값 (List<String>는 줄마다 1개, bool은 true/false)',
-                  alignLabelWithHint: true,
-                ),
-                minLines: 1,
-                maxLines: 8,
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('취소'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  Navigator.pop(
+                    context,
+                    _NewPreferenceValue(
+                      key: keyController.text.trim(),
+                      type: type,
+                      rawValue: valueController.text,
+                    ),
+                  );
+                },
+                child: const Text('추가'),
               ),
             ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('취소'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('추가'),
-          ),
-        ],
+          );
+        },
       ),
     );
-
-    if (ok != true) return;
-
-    final key = keyCtrl.text.trim();
-    if (key.isEmpty) return;
-
-    switch (type) {
+    keyController.dispose();
+    valueController.dispose();
+    if (result == null || result.key.isEmpty) return;
+    final raw = result.rawValue;
+    switch (result.type) {
       case 'String':
-        await _setPref(key, valCtrl.text);
-        break;
+        await _setPref(result.key, raw);
+        return;
       case 'bool':
-        final v = valCtrl.text.trim().toLowerCase() == 'true';
-        await _setPref(key, v);
-        break;
+        final normalized = raw.trim().toLowerCase();
+        if (normalized != 'true' && normalized != 'false') {
+          _showMessage('bool 값은 true 또는 false를 입력해 주세요.');
+          return;
+        }
+        await _setPref(result.key, normalized == 'true');
+        return;
       case 'int':
-        final v = int.tryParse(valCtrl.text.trim());
-        if (v == null) return;
-        await _setPref(key, v);
-        break;
+        final parsed = int.tryParse(raw.trim());
+        if (parsed == null) {
+          _showMessage('정수 값을 확인해 주세요.');
+          return;
+        }
+        await _setPref(result.key, parsed);
+        return;
       case 'double':
-        final v = double.tryParse(valCtrl.text.trim());
-        if (v == null) return;
-        await _setPref(key, v);
-        break;
+        final parsed = double.tryParse(raw.trim());
+        if (parsed == null) {
+          _showMessage('실수 값을 확인해 주세요.');
+          return;
+        }
+        await _setPref(result.key, parsed);
+        return;
       case 'List<String>':
-        final list = valCtrl.text
-            .split('\n')
-            .map((e) => e.trim())
-            .where((e) => e.isNotEmpty)
-            .toList(growable: false);
-        await _setPref(key, list);
-        break;
+        await _setPref(
+          result.key,
+          raw
+              .split('\n')
+              .map((entry) => entry.trim())
+              .where((entry) => entry.isNotEmpty)
+              .toList(growable: false),
+        );
+        return;
     }
+  }
+
+  Future<void> _showStatus() async {
+    await DebugSessionController.showStatus(
+      context,
+      source: 'shared_preferences',
+      description: <String>[
+        'DEBUG session: ACTIVE',
+        'Tool: SharedPreferences',
+        'Total keys: ${_allKeys.length}',
+        'Visible keys: ${_filteredKeys.length}',
+        'Filter: ${_filterLabel(_filter)}',
+        'Search: ${_searchCtrl.text.trim().isEmpty ? '-' : _searchCtrl.text.trim()}',
+      ].join('\n'),
+    );
+  }
+
+  Future<void> _exitDebug() async {
+    final reduceMotion = _reduceMotion;
+    DebugSessionController.record(
+      'debug_exit_from_tool',
+      source: 'shared_preferences',
+    );
+    if (mounted) Navigator.of(context).pop();
+    if (!reduceMotion) {
+      await Future<void>.delayed(const Duration(milliseconds: 160));
+    }
+    await DebugSessionController.disable(source: 'shared_preferences');
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final text = Theme.of(context).textTheme;
-
+    final duration =
+        _reduceMotion ? Duration.zero : const Duration(milliseconds: 190);
     return Container(
-      color: Colors.black.withOpacity(0.2),
+      color: Colors.black.withOpacity(0.18),
       child: DraggableScrollableSheet(
-        initialChildSize: 0.8,
-        minChildSize: 0.4,
-        maxChildSize: 0.95,
-        builder: (context, scrollCtrl) {
+        initialChildSize: 0.86,
+        minChildSize: 0.48,
+        maxChildSize: 0.96,
+        builder: (context, scrollController) {
           return Material(
-            color: Colors.white,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-            child: SafeArea(
-              top: false,
-              child: Column(
-                children: [
-                  const SizedBox(height: 8),
-                  Container(
-                    width: 42,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.black12,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
+            color: cs.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              children: [
+                const SizedBox(height: 8),
+                Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: cs.outlineVariant,
+                    borderRadius: BorderRadius.circular(999),
                   ),
-                  const SizedBox(height: 8),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 6,
+                ),
+                const SizedBox(height: 4),
+                DebugToolHeader(
+                  title: 'SharedPreferences',
+                  breadcrumb: 'Developer / SharedPreferences',
+                  meta: '${_allKeys.length} keys · ${_filteredKeys.length} visible',
+                  onClose: () => Navigator.of(context).pop(),
+                  onStatus: _showStatus,
+                  onDebugExit: _exitDebug,
+                  actions: [
+                    IconButton(
+                      tooltip: '새 항목',
+                      onPressed: _addKeyDialog,
+                      icon: const Icon(Icons.add_rounded),
                     ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.computer_rounded, color: cs.primary),
-                        const SizedBox(width: 8),
-                        Text(
-                          'SharedPreferences',
-                          style: text.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
+                    PopupMenuButton<String>(
+                      tooltip: '도구',
+                      onSelected: (value) {
+                        if (value == 'refresh') _loadPrefs();
+                        if (value == 'copy') _copyAll();
+                      },
+                      itemBuilder: (_) => [
+                        const PopupMenuItem(
+                          value: 'refresh',
+                          child: Text('새로고침'),
                         ),
-                        const Spacer(),
-                        IconButton(
-                          tooltip: '추가',
-                          onPressed: _addKeyDialog,
-                          icon: const Icon(Icons.add_rounded),
-                        ),
-                        IconButton(
-                          tooltip: '새로고침',
-                          onPressed: _loadPrefs,
-                          icon: const Icon(Icons.refresh_rounded),
-                        ),
-                        IconButton(
-                          tooltip: '전체 복사',
-                          onPressed: _data.isEmpty ? null : _copyAll,
-                          icon: const Icon(Icons.copy_all_rounded),
-                        ),
-                        IconButton(
-                          tooltip: '닫기',
-                          onPressed: () => Navigator.of(context).pop(),
-                          icon: const Icon(Icons.close_rounded),
+                        PopupMenuItem(
+                          value: 'copy',
+                          enabled: _data.isNotEmpty,
+                          child: const Text('전체 복사'),
                         ),
                       ],
+                      icon: const Icon(Icons.build_outlined),
                     ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                    child: TextField(
-                      controller: _searchCtrl,
-                      focusNode: _searchFocus,
-                      decoration: InputDecoration(
-
-                        prefixIcon: const Icon(Icons.search_rounded),
-                        suffixIcon: _searchCtrl.text.isEmpty
-                            ? null
-                            : IconButton(
-                          icon: const Icon(Icons.clear_rounded),
-                          onPressed: () {
-                            _searchCtrl.clear();
-                            _applyFilter();
-                            _searchFocus.requestFocus();
-                          },
-                        ),
-                        filled: true,
-                        fillColor: cs.surfaceVariant.withOpacity(0.5),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
+                  ],
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                  child: TextField(
+                    controller: _searchCtrl,
+                    focusNode: _searchFocus,
+                    decoration: InputDecoration(
+                      labelText: '검색',
+                      prefixIcon: const Icon(Icons.search_rounded),
+                      suffixIcon: _searchCtrl.text.isEmpty
+                          ? null
+                          : IconButton(
+                              tooltip: '검색 지우기',
+                              onPressed: () {
+                                _searchCtrl.clear();
+                                _searchFocus.requestFocus();
+                              },
+                              icon: const Icon(Icons.clear_rounded),
+                            ),
+                      filled: true,
+                      fillColor: cs.surfaceContainerLow,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(13),
+                        borderSide: BorderSide(color: cs.outlineVariant),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(13),
+                        borderSide: BorderSide(color: cs.outlineVariant),
                       ),
                     ),
                   ),
-                  const Divider(height: 1),
-                  Expanded(
-                    child: _loading
-                        ? const Center(child: CircularProgressIndicator())
-                        : _filteredKeys.isEmpty
-                        ? const Center(child: Text('일치하는 항목이 없습니다.'))
-                        : ListView.builder(
-                      controller: scrollCtrl,
-                      itemCount: _filteredKeys.length,
-                      itemBuilder: (context, idx) {
-                        final key = _filteredKeys[idx];
-                        final value = _data[key];
-
-                        final leading = Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: cs.surfaceVariant,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            _typeLabel(value),
-                            style: TextStyle(
-                              color: cs.onSurfaceVariant,
-                              fontSize: 11,
-                            ),
-                          ),
-                        );
-
-                        Widget trailing;
-                        VoidCallback? onTap;
-
-                        if (value is bool) {
-                          trailing = Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Switch(
-                                value: value,
-                                onChanged: (v) => _setPref(key, v),
-                              ),
-                              _moreMenu(key, value),
-                            ],
-                          );
-                        } else if (value is String) {
-                          trailing = Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                tooltip: '편집',
-                                icon: const Icon(Icons.edit_rounded),
-                                onPressed: () => _editString(key, value),
-                              ),
-                              _moreMenu(key, value),
-                            ],
-                          );
-                        } else if (value is int) {
-                          trailing = Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                tooltip: '편집',
-                                icon: const Icon(Icons.exposure_rounded),
-                                onPressed: () => _editNumber<int>(key, value),
-                              ),
-                              _moreMenu(key, value),
-                            ],
-                          );
-                        } else if (value is double) {
-                          trailing = Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                tooltip: '편집',
-                                icon: const Icon(Icons.exposure_plus_1_rounded),
-                                onPressed: () => _editNumber<double>(key, value),
-                              ),
-                              _moreMenu(key, value),
-                            ],
-                          );
-                        } else if (value is List<String>) {
-                          trailing = Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                tooltip: '편집',
-                                icon: const Icon(Icons.edit),
-                                onPressed: () => _editStringList(key, value),
-                              ),
-                              _moreMenu(key, value),
-                            ],
-                          );
-                        } else {
-                          trailing = _moreMenu(key, value);
-                        }
-
-                        onTap ??= () {
-                          if (value is String) {
-                            _editString(key, value);
-                          } else if (value is int) {
-                            _editNumber<int>(key, value);
-                          } else if (value is double) {
-                            _editNumber<double>(key, value);
-                          } else if (value is List<String>) {
-                            _editStringList(key, value);
-                          }
-                        };
-
-                        return ListTile(
-                          dense: true,
-                          title: Text(
-                            key,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          subtitle: Text(_valuePreview(value)),
-                          leading: leading,
-                          trailing: trailing,
-                          onTap: onTap,
-                        );
-                      },
-                    ),
+                ),
+                SizedBox(
+                  height: 42,
+                  child: ListView.separated(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _PrefFilter.values.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 7),
+                    itemBuilder: (context, index) {
+                      final value = _PrefFilter.values[index];
+                      return ChoiceChip(
+                        label: Text(_filterLabel(value)),
+                        selected: _filter == value,
+                        onSelected: (_) {
+                          HapticFeedback.selectionClick();
+                          setState(() => _filter = value);
+                          _applyFilter();
+                        },
+                      );
+                    },
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(height: 6),
+                Expanded(
+                  child: AnimatedSwitcher(
+                    duration: duration,
+                    child: _loading
+                        ? const Center(
+                            key: ValueKey<String>('prefs_loading'),
+                            child: CircularProgressIndicator(),
+                          )
+                        : _filteredKeys.isEmpty
+                            ? const Center(
+                                key: ValueKey<String>('prefs_empty'),
+                                child: Text('표시할 항목이 없습니다.'),
+                              )
+                            : ListView.builder(
+                                key: ValueKey<String>(
+                                  'prefs_${_filter.name}_${_searchCtrl.text}_${_filteredKeys.length}',
+                                ),
+                                controller: scrollController,
+                                padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),
+                                itemCount: _filteredKeys.length,
+                                itemBuilder: (context, index) {
+                                  final key = _filteredKeys[index];
+                                  final value = _data[key];
+                                  return _PreferenceReveal(
+                                    index: index,
+                                    reduceMotion: _reduceMotion,
+                                    child: _PreferenceTile(
+                                      keyName: key,
+                                      type: _typeLabel(value),
+                                      value: _valuePreview(value),
+                                      rawValue: value,
+                                      highlighted: _recentlyChangedKey == key,
+                                      onTap: () => _editValue(key, value),
+                                      onToggle: value is bool
+                                          ? (next) => _setPref(key, next)
+                                          : null,
+                                      onCopy: () => _copyEntry(key, value),
+                                      onDelete: () => _deleteKey(key),
+                                    ),
+                                  );
+                                },
+                              ),
+                  ),
+                ),
+              ],
             ),
           );
         },
       ),
     );
   }
+}
 
-  Widget _moreMenu(String key, Object? value) {
-    return PopupMenuButton<String>(
-      tooltip: '더보기',
-      itemBuilder: (_) => const [
-        PopupMenuItem(value: 'copy', child: Text('복사')),
-        PopupMenuItem(value: 'delete', child: Text('삭제')),
-      ],
-      onSelected: (v) {
-        switch (v) {
-          case 'copy':
-            _copyEntry(key, value);
-            break;
-          case 'delete':
-            _deleteKey(key);
-            break;
-        }
+class _PreferenceReveal extends StatelessWidget {
+  const _PreferenceReveal({
+    required this.index,
+    required this.reduceMotion,
+    required this.child,
+  });
+
+  final int index;
+  final bool reduceMotion;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (reduceMotion) return child;
+    return TweenAnimationBuilder<double>(
+      duration: Duration(milliseconds: 150 + index.clamp(0, 8).toInt() * 18),
+      curve: Curves.easeOutCubic,
+      tween: Tween<double>(begin: 0, end: 1),
+      builder: (context, value, child) {
+        return Opacity(
+          opacity: value,
+          child: Transform.translate(
+            offset: Offset(0, 5 * (1 - value)),
+            child: child,
+          ),
+        );
       },
-      icon: const Icon(Icons.more_vert_rounded),
+      child: child,
     );
   }
+}
+
+class _PreferenceTile extends StatelessWidget {
+  const _PreferenceTile({
+    required this.keyName,
+    required this.type,
+    required this.value,
+    required this.rawValue,
+    required this.highlighted,
+    required this.onTap,
+    required this.onToggle,
+    required this.onCopy,
+    required this.onDelete,
+  });
+
+  static const Color _debugAccent = Color(0xFF6D5DFB);
+
+  final String keyName;
+  final String type;
+  final String value;
+  final Object? rawValue;
+  final bool highlighted;
+  final VoidCallback onTap;
+  final ValueChanged<bool>? onToggle;
+  final VoidCallback onCopy;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final reduceMotion = MediaQuery.of(context).disableAnimations;
+    return AnimatedContainer(
+      duration: reduceMotion ? Duration.zero : const Duration(milliseconds: 420),
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: highlighted
+            ? Color.alphaBlend(
+                _debugAccent.withOpacity(0.10),
+                cs.surfaceContainerLow,
+              )
+            : cs.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: highlighted
+              ? _debugAccent.withOpacity(0.45)
+              : cs.outlineVariant.withOpacity(0.78),
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: _debugAccent.withOpacity(0.09),
+                          borderRadius: BorderRadius.circular(7),
+                        ),
+                        child: Text(
+                          type,
+                          style: const TextStyle(
+                            color: _debugAccent,
+                            fontFamily: 'monospace',
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.4,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        keyName,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              fontFamily: 'monospace',
+                              fontWeight: FontWeight.w800,
+                            ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        value,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: cs.onSurfaceVariant,
+                              fontFamily: 'monospace',
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (onToggle != null)
+                  Switch.adaptive(
+                    value: rawValue as bool,
+                    onChanged: onToggle,
+                  )
+                else
+                  IconButton(
+                    tooltip: '편집',
+                    onPressed: onTap,
+                    icon: const Icon(Icons.edit_outlined),
+                  ),
+                PopupMenuButton<String>(
+                  tooltip: '항목 메뉴',
+                  onSelected: (selected) {
+                    if (selected == 'copy') onCopy();
+                    if (selected == 'delete') onDelete();
+                  },
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: 'copy', child: Text('복사')),
+                    PopupMenuItem(value: 'delete', child: Text('삭제')),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DebugDialogTitle extends StatelessWidget {
+  const _DebugDialogTitle({required this.title, required this.route});
+
+  static const Color _debugAccent = Color(0xFF6D5DFB);
+
+  final String title;
+  final String route;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'DEBUG',
+          style: TextStyle(
+            color: _debugAccent,
+            fontFamily: 'monospace',
+            fontSize: 10,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 0.6,
+          ),
+        ),
+        const SizedBox(height: 5),
+        Text(title),
+        const SizedBox(height: 3),
+        Text(
+          route,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontFamily: 'monospace',
+              ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DebugValueEditorDialog extends StatelessWidget {
+  const _DebugValueEditorDialog({
+    required this.title,
+    required this.keyName,
+    required this.controller,
+    required this.minLines,
+    required this.maxLines,
+    this.keyboardType,
+  });
+
+  final String title;
+  final String keyName;
+  final TextEditingController controller;
+  final TextInputType? keyboardType;
+  final int minLines;
+  final int maxLines;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: _DebugDialogTitle(
+        title: title,
+        route: 'Developer / SharedPreferences / $keyName',
+      ),
+      content: SizedBox(
+        width: 500,
+        child: TextField(
+          controller: controller,
+          keyboardType: keyboardType,
+          minLines: minLines,
+          maxLines: maxLines,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: '값'),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('취소'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, controller.text),
+          child: const Text('저장'),
+        ),
+      ],
+    );
+  }
+}
+
+class _DebugConfirmDialog extends StatelessWidget {
+  const _DebugConfirmDialog({
+    required this.title,
+    required this.description,
+    required this.confirmLabel,
+  });
+
+  final String title;
+  final String description;
+  final String confirmLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: _DebugDialogTitle(
+        title: title,
+        route: 'Developer / SharedPreferences',
+      ),
+      content: Text(description),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('취소'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: Text(confirmLabel),
+        ),
+      ],
+    );
+  }
+}
+
+class _NewPreferenceValue {
+  const _NewPreferenceValue({
+    required this.key,
+    required this.type,
+    required this.rawValue,
+  });
+
+  final String key;
+  final String type;
+  final String rawValue;
 }

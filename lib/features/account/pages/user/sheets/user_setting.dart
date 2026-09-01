@@ -14,6 +14,7 @@ import '../../../../../shared/auth/five_digit_password_generator.dart';
 import '../../../../../shared/secondary/application/secondary_account_workspace_state.dart';
 import '../../../../../shared/secondary/widgets/ops_console_widgets.dart';
 import '../../../../dev/application/area_state.dart';
+import '../../../../launcher/application/app_mode_registry.dart';
 import '../../../applications/user_state.dart';
 import '../../../domain/models/user/user_model.dart';
 import '../../../domain/repositories/user_repository.dart';
@@ -162,24 +163,12 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
 
   String? _normalizeModeToken(String raw) {
     final value = raw.trim().toLowerCase();
-    if (value.isEmpty) return null;
-    switch (value) {
-      case 'single':
-      case 'double':
-      case 'triple':
-      case 'minor':
-        return value;
-      case 'service':
-      case 'simple':
-        return 'single';
-      case 'lite':
-      case 'light':
-        return 'double';
-      case 'normal':
-        return 'triple';
-      default:
-        return null;
+    if (value == 'service') return 'single';
+    final normalized = AppModeRegistry.normalizeLegacyMode(value);
+    if (normalized == null || !_availableModes.contains(normalized)) {
+      return null;
     }
+    return normalized;
   }
 
   List<String> _normalizeAndFilterModes(Iterable<String> modes) {

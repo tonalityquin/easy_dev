@@ -18,7 +18,7 @@ const String kLastBreakDatePrefsKey = 'last_break_date';
 const String kLastTopHalfResetByBreakDateKey = 'last_tophalf_reset_by_break';
 
 const String kAppModePrefsKey = 'mode';
-const String kAppModeSimpleValue = 'simple';
+const String kAppModeSingleValue = 'single';
 const String kBubbleTopPrefsKey = 'quick_overlay_bubble_top_v2';
 
 const double kBubbleHandleHeight = 72.0;
@@ -116,15 +116,15 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
   bool _isDraggingBubble = false;
 
   OverlayUIMode _uiMode = OverlayUIMode.bubble;
-  bool _isSimpleMode = false;
+  bool _isSingleMode = false;
 
-  bool get _topHalfAllowed => !_isSimpleMode;
+  bool get _topHalfAllowed => !_isSingleMode;
 
   bool get _bubbleModeActive =>
-      _isSimpleMode || _uiMode == OverlayUIMode.bubble;
+      _isSingleMode || _uiMode == OverlayUIMode.bubble;
 
   String get _motionModeName =>
-      _isSimpleMode ? 'simple_bubble' : _uiMode.name;
+      _isSingleMode ? 'single_bubble' : _uiMode.name;
 
   Timer? _shortBreakTimer;
   int _shortBreakSeq = 0;
@@ -368,7 +368,7 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
   }
 
   void _handleCheckoutBoundaryTick(DateTime now) {
-    if (_isSimpleMode || _checkoutBoundaryInFlight) return;
+    if (_isSingleMode || _checkoutBoundaryInFlight) return;
     final scheduledEnd = _scheduledCheckoutEnd;
     if (scheduledEnd == null || now.isBefore(scheduledEnd)) return;
     _scheduledCheckoutEnd = null;
@@ -386,9 +386,9 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
     _checkoutBoundaryInFlight = true;
 
     try {
-      if (_isSimpleMode) {
+      if (_isSingleMode) {
         _scheduledCheckoutEnd = null;
-        _setCheckoutOverdue(false, source: '${source}_simple_mode');
+        _setCheckoutOverdue(false, source: '${source}_single_mode');
         return;
       }
 
@@ -482,7 +482,7 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
   }
 
   void _scheduleBoundaryRetry() {
-    if (_isSimpleMode) return;
+    if (_isSingleMode) return;
     _scheduledCheckoutEnd = DateTime.now().add(
       const Duration(seconds: 15),
     );
@@ -526,7 +526,7 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
     if (await OverlayAccessGuard.closeIfBlocked()) return;
     if (!mounted) return;
 
-    final simpleMode = await _syncAppMode();
+    final singleMode = await _syncAppMode();
     if (!mounted) return;
 
     if (event == '__work_finished__') {
@@ -536,7 +536,7 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
       _setCheckoutOverdue(false, source: 'work_finished');
       _setStateAndSyncBreath(
         () {
-          _uiMode = simpleMode || _nativeWindowIsBubble()
+          _uiMode = singleMode || _nativeWindowIsBubble()
               ? OverlayUIMode.bubble
               : OverlayUIMode.workFinished;
           _overlayStartedAt = DateTime.now();
@@ -551,7 +551,7 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
       _scheduledCheckoutEnd = null;
       _cancelShortBreak();
       if (!mounted) return;
-      if (!simpleMode && _nativeWindowIsBubble()) {
+      if (!singleMode && _nativeWindowIsBubble()) {
         _setStateAndSyncBreath(
           () {
             _uiMode = OverlayUIMode.bubble;
@@ -563,7 +563,7 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
         _setCheckoutOverdue(false, source: 'checkout_nudge_panel_geometry');
         _setStateAndSyncBreath(
           () {
-            _uiMode = simpleMode
+            _uiMode = singleMode
                 ? OverlayUIMode.bubble
                 : OverlayUIMode.checkoutNudge;
             _overlayStartedAt = DateTime.now();
@@ -616,32 +616,32 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
 
     if (OverlayAccessGuard.isBlockedMode(mode)) {
       await OverlayAccessGuard.closeIfBlocked();
-      return _isSimpleMode;
+      return _isSingleMode;
     }
 
-    final isSimple = OverlayAccessGuard.normalizeMode(mode) == kAppModeSimpleValue;
+    final isSingle = OverlayAccessGuard.normalizeMode(mode) == kAppModeSingleValue;
 
-    if (!mounted) return isSimple;
+    if (!mounted) return isSingle;
     _setStateAndSyncBreath(
       () {
-        _isSimpleMode = isSimple;
-        if (_isSimpleMode) {
+        _isSingleMode = isSingle;
+        if (_isSingleMode) {
           _checkoutOverdue = false;
         }
-        if (_isSimpleMode && _uiMode != OverlayUIMode.bubble) {
+        if (_isSingleMode && _uiMode != OverlayUIMode.bubble) {
           _cancelShortBreak();
           _uiMode = OverlayUIMode.bubble;
         }
       },
       source: 'app_mode_sync',
     );
-    return isSimple;
+    return isSingle;
   }
 
   Future<void> _loadAppMode() async {
-    final isSimple = await _syncAppMode();
+    final isSingle = await _syncAppMode();
     if (!mounted) return;
-    if (isSimple) {
+    if (isSingle) {
       _scheduledCheckoutEnd = null;
       return;
     }
@@ -1620,8 +1620,8 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
     Widget body;
     String modeKey;
 
-    if (_isSimpleMode) {
-      modeKey = 'simple_bubble';
+    if (_isSingleMode) {
+      modeKey = 'single_bubble';
       body = _buildBubbleOverlay(context);
     } else if (_uiMode == OverlayUIMode.workFinished) {
       modeKey = 'work_finished';

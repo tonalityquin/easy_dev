@@ -161,7 +161,7 @@ class _SprintWorkspaceHomePageState extends State<SprintWorkspaceHomePage>
         navigator.pop();
         return;
       }
-      navigator.pushReplacementNamed(AppRoutes.selector);
+      navigator.pushReplacementNamed(AppRoutes.modeLauncher);
     } finally {
       if (mounted) _closing = false;
     }

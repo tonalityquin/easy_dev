@@ -6,6 +6,7 @@ import '../../../../../app/utils/snackbar_helper.dart';
 import '../../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../../shared/auth/five_digit_password_generator.dart';
+import '../../../../../shared/auth/tablet_phone.dart';
 import '../../../../../shared/secondary/application/secondary_tablet_workspace_state.dart';
 import '../../../../../shared/secondary/widgets/ops_console_widgets.dart';
 import 'models/tablet_settings_draft.dart';
@@ -33,8 +34,7 @@ class TabletSettingSectionEditorDialog extends StatefulWidget {
 class _TabletSettingSectionEditorDialogState
     extends State<TabletSettingSectionEditorDialog> {
   late final TextEditingController _nameController;
-  late final TextEditingController _handleController;
-  late final TextEditingController _emailController;
+  late final TextEditingController _phoneController;
   late final TextEditingController _passwordController;
   late TabletRoleType _role;
   bool _submitted = false;
@@ -45,8 +45,7 @@ class _TabletSettingSectionEditorDialogState
     super.initState();
     final draft = widget.initialDraft;
     _nameController = TextEditingController(text: draft.name);
-    _handleController = TextEditingController(text: draft.handle);
-    _emailController = TextEditingController(text: draft.emailLocal);
+    _phoneController = TextEditingController(text: TabletPhone.format(draft.phone));
     _passwordController = TextEditingController(text: draft.password);
     _role = draft.role;
     widget.trace.log('편집 화면이 열렸습니다: section=${widget.section.name}');
@@ -61,8 +60,7 @@ class _TabletSettingSectionEditorDialogState
   @override
   void dispose() {
     _nameController.dispose();
-    _handleController.dispose();
-    _emailController.dispose();
+    _phoneController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
@@ -89,16 +87,9 @@ class _TabletSettingSectionEditorDialogState
     }
   }
 
-  bool _isValidEmailLocalPart(String value) {
-    return RegExp(r'^[a-zA-Z0-9._-]+$').hasMatch(value.trim());
-  }
-
   bool get _nameOk => _nameController.text.trim().isNotEmpty;
-  bool get _handleOk =>
-      RegExp(r'^[a-z]{3,20}$').hasMatch(_handleController.text.trim());
-  bool get _emailOk => _emailController.text.trim().isNotEmpty &&
-      _isValidEmailLocalPart(_emailController.text);
-  bool get _identityOk => _nameOk && _handleOk && _emailOk;
+  bool get _phoneOk => TabletPhone.isValid(_phoneController.text);
+  bool get _identityOk => _nameOk && _phoneOk;
   bool get _passwordOk =>
       RegExp(r'^\d{5}$').hasMatch(_passwordController.text.trim());
 
@@ -119,8 +110,7 @@ class _TabletSettingSectionEditorDialogState
       case TabletSettingsSection.identity:
         return base.copyWith(
           name: _nameController.text.trim(),
-          handle: _handleController.text.trim(),
-          emailLocal: _emailController.text.trim(),
+          phone: TabletPhone.normalize(_phoneController.text),
         );
       case TabletSettingsSection.permission:
         return base.copyWith(role: _role);
@@ -138,7 +128,7 @@ class _TabletSettingSectionEditorDialogState
     }
     final result = _resultDraft();
     widget.trace.log(
-      '편집 적용: section=${widget.section.name} nameLength=${result.name.length} handleLength=${result.handle.length} emailLength=${result.emailLocal.length} role=${result.role.name} passwordLength=${result.password.length}',
+      '편집 적용: section=${widget.section.name} nameLength=${result.name.length} phone=${TabletPhone.mask(result.phone)} role=${result.role.name} passwordLength=${result.password.length}',
     );
     widget.onApply(result);
     if (!mounted) return;
@@ -198,44 +188,29 @@ class _TabletSettingSectionEditorDialogState
         ),
         const SizedBox(height: 12),
         TextField(
-          controller: _handleController,
-          textInputAction: TextInputAction.next,
-          onChanged: (_) {
-            if (_submitted) setState(() {});
-          },
-          inputFormatters: <TextInputFormatter>[
-            FilteringTextInputFormatter.allow(RegExp(r'[a-z]')),
-            LengthLimitingTextInputFormatter(20),
-          ],
-          decoration: opsInputDecoration(
-            context,
-            label: '태블릿 아이디',
-            prefixIcon: const Icon(Icons.alternate_email_rounded),
-            errorText: _submitted && !_handleOk
-                ? '아이디는 소문자 영어 3~20자로 입력하세요.'
-                : null,
-          ),
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _emailController,
+          controller: _phoneController,
           textInputAction: TextInputAction.done,
-          keyboardType: TextInputType.emailAddress,
-          onChanged: (_) {
+          keyboardType: TextInputType.phone,
+          onChanged: (value) {
+            final formatted = TabletPhone.format(value);
+            if (formatted != value) {
+              _phoneController.value = TextEditingValue(
+                text: formatted,
+                selection: TextSelection.collapsed(offset: formatted.length),
+              );
+            }
             if (_submitted) setState(() {});
           },
           inputFormatters: <TextInputFormatter>[
-            FilteringTextInputFormatter.deny(RegExp(r'\s')),
+            FilteringTextInputFormatter.allow(RegExp(r'[0-9-]')),
+            LengthLimitingTextInputFormatter(13),
           ],
           decoration: opsInputDecoration(
             context,
-            label: '이메일',
-            suffixText: '@gmail.com',
-            prefixIcon: const Icon(Icons.mail_rounded),
-            errorText: _submitted && !_emailOk
-                ? _emailController.text.trim().isEmpty
-                    ? '이메일을 입력하세요.'
-                    : '이메일을 다시 확인하세요.'
+            label: '전화번호',
+            prefixIcon: const Icon(Icons.phone_rounded),
+            errorText: _submitted && !_phoneOk
+                ? '전화번호를 10~11자리 숫자로 입력하세요.'
                 : null,
           ),
         ),

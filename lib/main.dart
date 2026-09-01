@@ -12,6 +12,7 @@ import 'app/config/overlay_mode_config.dart';
 import 'app/di/providers.dart';
 import 'app/di/routes.dart';
 import 'app/init/app_exit_flag.dart';
+import 'app/init/app_mode_migration.dart';
 import 'app/init/checkout_nudge_guard.dart';
 import 'app/init/app_navigator.dart';
 import 'app/init/quick_overlay_main.dart';
@@ -22,60 +23,12 @@ import 'features/chat/presentation/work_chat_alert_host.dart';
 import 'features/dashboard/applications/common/firebase_google_auth_bridge.dart';
 import 'features/dashboard/widgets/productivity_sheet.dart';
 import 'features/dev/page/sheets/dev_quick_actions.dart';
+import 'features/dev/presentation/debug_session_visual_overlay.dart';
 import 'features/headquarter/application/fab/hub_quick_actions.dart';
 import 'features/headquarter/page/sheets/head_memo.dart';
 import 'shared/tts/application/plate_tts_event_hub.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:intl/intl.dart';
-
-const String kDevUnlockPassword = 'DEV-MODE-2025!';
-
-
-final _devUnlockRouteTracker = _DevUnlockRouteTracker();
-
-class _DevUnlockRouteTracker extends NavigatorObserver {
-  final ValueNotifier<int> stackDepth = ValueNotifier<int>(0);
-  final List<Route<dynamic>> _routes = <Route<dynamic>>[];
-
-  void _publish() {
-    stackDepth.value = _routes.length;
-  }
-
-  @override
-  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
-    _routes.remove(route);
-    _routes.add(route);
-    _publish();
-    super.didPush(route, previousRoute);
-  }
-
-  @override
-  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
-    _routes.remove(route);
-    _publish();
-    super.didPop(route, previousRoute);
-  }
-
-  @override
-  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
-    _routes.remove(route);
-    _publish();
-    super.didRemove(route, previousRoute);
-  }
-
-  @override
-  void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
-    if (oldRoute != null) {
-      _routes.remove(oldRoute);
-    }
-    if (newRoute != null) {
-      _routes.remove(newRoute);
-      _routes.add(newRoute);
-    }
-    _publish();
-    super.didReplace(newRoute: newRoute, oldRoute: oldRoute);
-  }
-}
 
 String _overlayModeToWire(OverlayMode mode) {
   switch (mode) {
@@ -86,8 +39,8 @@ String _overlayModeToWire(OverlayMode mode) {
   }
 }
 
-Future<bool> _isSimpleAppMode() async {
-  return (await OverlayAccessGuard.currentMode()) == 'simple';
+Future<bool> _isSingleAppMode() async {
+  return (await OverlayAccessGuard.currentMode()) == 'single';
 }
 
 String _ts() => DateTime.now().toIso8601String();
@@ -169,12 +122,12 @@ Future<void> openQuickOverlay(BuildContext context) async {
   if (!await ensureOverlayPermission(context)) return;
 
   final requestedMode = await OverlayModeConfig.getMode();
-  final isSimpleMode = await _isSimpleAppMode();
-  final mode = isSimpleMode ? OverlayMode.bubble : requestedMode;
+  final isSingleMode = await _isSingleAppMode();
+  final mode = isSingleMode ? OverlayMode.bubble : requestedMode;
   final wire = _overlayModeToWire(mode);
 
   if (await FlutterOverlayWindow.isActive()) {
-    if (!isSimpleMode) {
+    if (!isSingleMode) {
       await FlutterOverlayWindow.shareData('__mode:${wire}__');
       await FlutterOverlayWindow.shareData('__collapse__');
       return;
@@ -234,7 +187,7 @@ class _LifecycleOverlayRequest {
   String get content {
     if (workFinished) return '오늘의 업무는 종료되었습니다. 앱 종료 방법을 확인해 주세요.';
     if (checkoutNudge) return '퇴근 시간이 지났습니다. 퇴근 버튼을 눌러주세요.';
-    return 'Simple 모드 플로팅';
+    return '출퇴근 기록형 플로팅';
   }
 }
 
@@ -310,6 +263,7 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
 
   Future<void> _initializeApp() async {
     AuthConfig.validate();
+    await AppModeMigration.migrateLegacyMode();
 
     debugPrint('[MAIN][${_ts()}] Firebase.initializeApp');
     await Firebase.initializeApp();
@@ -424,10 +378,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   }
 
   Future<_LifecycleOverlayRequest> _resolveLifecycleOverlayRequest() async {
-    final isSimpleMode = await _isSimpleAppMode();
+    final isSingleMode = await _isSingleAppMode();
     final nudge = await CheckoutNudgeGuard.evaluate();
 
-    if (isSimpleMode) {
+    if (isSingleMode) {
       return const _LifecycleOverlayRequest(
         mode: OverlayMode.bubble,
         checkoutNudge: false,
@@ -565,7 +519,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             onUnknownRoute: (_) =>
                 MaterialPageRoute(builder: (_) => const NotFoundPage()),
             navigatorKey: AppNavigator.key,
-            navigatorObservers: [_devUnlockRouteTracker],
             builder: (context, child) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 debugPrint(
@@ -576,91 +529,18 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                 DevQuickActions.mountIfNeeded();
               });
 
-              return WorkChatAlertHost(
-                child: Stack(
-                  children: [
-                    child!,
-                    const _DevUnlockHotspot(),
-                  ],
-                ),
+              return Stack(
+                children: [
+                  WorkChatAlertHost(child: child!),
+                  const Positioned.fill(
+                    child: DebugSessionVisualOverlay(),
+                  ),
+                ],
               );
             },
           );
         },
       ),
-    );
-  }
-}
-
-class _DevUnlockHotspot extends StatefulWidget {
-  const _DevUnlockHotspot();
-
-  @override
-  State<_DevUnlockHotspot> createState() => _DevUnlockHotspotState();
-}
-
-class _DevUnlockHotspotState extends State<_DevUnlockHotspot> {
-  int _tapCount = 0;
-  Timer? _resetTimer;
-
-  @override
-  void dispose() {
-    _resetTimer?.cancel();
-    super.dispose();
-  }
-
-  void _onTap() {
-    _tapCount++;
-    _resetTimer?.cancel();
-    _resetTimer = Timer(const Duration(milliseconds: 550), () {
-      _tapCount = 0;
-    });
-
-    if (_tapCount >= 3) {
-      _tapCount = 0;
-      _resetTimer?.cancel();
-      _askPassword();
-    }
-  }
-
-  Future<void> _askPassword() async {
-    final dialogContext = AppNavigator.context;
-    if (dialogContext == null) return;
-
-    final input = await showDialog<String>(
-      context: dialogContext,
-      barrierDismissible: true,
-      builder: (_) => const _DevUnlockPasswordDialog(),
-    );
-
-    if (input == kDevUnlockPassword) {
-      DevQuickActions.setEnabled(true);
-      DevQuickActions.mountIfNeeded();
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return ValueListenableBuilder<int>(
-      valueListenable: _devUnlockRouteTracker.stackDepth,
-      builder: (context, stackDepth, _) {
-        if (stackDepth > 1) {
-          return const SizedBox.shrink();
-        }
-
-        return Positioned(
-          top: 12,
-          right: 8,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: _onTap,
-            child: const SizedBox(
-              width: 48,
-              height: 48,
-            ),
-          ),
-        );
-      },
     );
   }
 }
@@ -702,54 +582,6 @@ class NotFoundPage extends StatelessWidget {
           textAlign: TextAlign.center,
         ),
       ),
-    );
-  }
-}
-
-class _DevUnlockPasswordDialog extends StatefulWidget {
-  const _DevUnlockPasswordDialog();
-
-  @override
-  State<_DevUnlockPasswordDialog> createState() => _DevUnlockPasswordDialogState();
-}
-
-class _DevUnlockPasswordDialogState extends State<_DevUnlockPasswordDialog> {
-  final TextEditingController _controller = TextEditingController();
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _submit() {
-    Navigator.of(context).pop(_controller.text);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('개발자 모드 잠금 해제'),
-      content: TextField(
-        controller: _controller,
-        autofocus: true,
-        obscureText: true,
-        decoration: const InputDecoration(
-          labelText: '비밀번호',
-          hintText: '비밀번호를 입력하세요',
-        ),
-        onSubmitted: (_) => _submit(),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('취소'),
-        ),
-        FilledButton(
-          onPressed: _submit,
-          child: const Text('확인'),
-        ),
-      ],
     );
   }
 }

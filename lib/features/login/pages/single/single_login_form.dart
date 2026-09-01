@@ -52,7 +52,7 @@ class _SingleLoginFormState extends State<SingleLoginForm> {
     _trace(
       '로그인 버튼',
       meta: <String, dynamic>{
-        'screen': 'simple_login',
+        'screen': 'single_login',
         'action': 'login',
       },
     );
@@ -63,7 +63,7 @@ class _SingleLoginFormState extends State<SingleLoginForm> {
     _trace(
       '회사 로고(상단)',
       meta: <String, dynamic>{
-        'screen': 'simple_login',
+        'screen': 'single_login',
         'asset': 'assets/images/ParkinWorkin_logo.png',
         'action': 'tap',
       },
@@ -74,14 +74,14 @@ class _SingleLoginFormState extends State<SingleLoginForm> {
     _trace(
       '회사 로고(펠리컨)',
       meta: <String, dynamic>{
-        'screen': 'simple_login',
+        'screen': 'single_login',
         'asset': 'assets/images/ParkinWorkin_text.png',
-        'action': 'back_to_selector',
-        'to': AppRoutes.selector,
+        'action': 'back_to_mode_launcher',
+        'to': AppRoutes.modeLauncher,
       },
     );
     Navigator.of(context).pushNamedAndRemoveUntil(
-      AppRoutes.selector,
+      AppRoutes.modeLauncher,
       (route) => false,
     );
   }
@@ -136,11 +136,23 @@ class _SingleLoginFormState extends State<SingleLoginForm> {
                 curve: Curves.easeOutCubic,
               ),
             );
+            final slide = Tween<Offset>(
+              begin: const Offset(0, 0.04),
+              end: Offset.zero,
+            ).animate(
+              CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+              ),
+            );
             return FadeTransition(
               opacity: animation,
-              child: ScaleTransition(
-                scale: scale,
-                child: child,
+              child: SlideTransition(
+                position: slide,
+                child: ScaleTransition(
+                  scale: scale,
+                  child: child,
+                ),
               ),
             );
           },

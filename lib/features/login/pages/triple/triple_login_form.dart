@@ -70,12 +70,12 @@ class _TripleLoginFormState extends State<TripleLoginForm> {
       meta: <String, dynamic>{
         'screen': 'normal_login',
         'asset': 'assets/images/ParkinWorkin_text.png',
-        'action': 'back_to_selector',
-        'to': AppRoutes.selector,
+        'action': 'back_to_mode_launcher',
+        'to': AppRoutes.modeLauncher,
       },
     );
     Navigator.of(context).pushNamedAndRemoveUntil(
-      AppRoutes.selector,
+      AppRoutes.modeLauncher,
       (route) => false,
     );
   }

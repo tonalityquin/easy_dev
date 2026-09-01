@@ -26,6 +26,7 @@ import '../../../features/sector/pages/sheets/sector_setting.dart';
 import '../../../features/location/applications/location_state.dart';
 import '../../../features/location/domain/models/location_model.dart';
 import '../../../features/location/pages/location_management.dart';
+import '../../../features/location/pages/sheets/location_plain_setting.dart';
 import '../../../features/location/pages/sheets/location_child_setting.dart';
 import '../../../features/location/pages/sheets/location_parent_setting.dart';
 import '../../../features/selector/application/dev_auth.dart';
@@ -422,6 +423,24 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
     );
   }
 
+  Future<void> _selectLocationPlainSettingsSection(
+    LocationPlainSettingsSection section,
+  ) async {
+    if (!_locationWorkspace.isPlainSettingsView ||
+        _locationWorkspace.settingsSaving) {
+      _debugLog.log(
+        'location_plain_settings_section_rail_blocked section=${section.name} saving=${_locationWorkspace.settingsSaving}',
+      );
+      return;
+    }
+    await HapticFeedback.selectionClick();
+    if (!mounted) return;
+    _locationWorkspace.requestPlainSettingsSection(
+      section,
+      source: 'secondary_location_plain_settings_rail',
+    );
+  }
+
   Future<void> _selectLocationParentSettingsSection(
     LocationParentSettingsSection section,
   ) async {
@@ -503,6 +522,17 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
     _sectorWorkspace.returnToManagement(source: source);
   }
 
+  void _backLocationPlainSettingsWorkspace({String source = 'header_back'}) {
+    if (!_locationWorkspace.isPlainSettingsView ||
+        _locationWorkspace.settingsSaving) {
+      return;
+    }
+    _debugLog.log('location_plain_settings_back source=$source');
+    HapticFeedback.selectionClick();
+    context.read<LocationState>().clearSelection();
+    _locationWorkspace.returnToManagement(source: source);
+  }
+
   void _backLocationParentSettingsWorkspace({String source = 'header_back'}) {
     if (!_locationWorkspace.isParentSettingsView ||
         _locationWorkspace.settingsSaving) {
@@ -548,6 +578,19 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
     if (id == null || id.isEmpty) return null;
     for (final sector in state.sectors) {
       if (sector.id == id) return sector;
+    }
+    return null;
+  }
+
+  LocationModel? _editingLocationPlain(LocationState state) {
+    final id = _locationWorkspace.editingPlainLocationId;
+    if (id == null || id.isEmpty) return null;
+    for (final location in state.locations) {
+      if (location.id == id &&
+          !location.isCompositeParent &&
+          !location.isCompositeChild) {
+        return location;
+      }
     }
     return null;
   }
@@ -642,6 +685,17 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
       );
     }
 
+    if (_locationWorkspace.isPlainSettingsView) {
+      final sectionStates = LocationPlainSettingsSection.values
+          .map(
+            (section) =>
+                '${section.name}:${_locationWorkspace.plainStateFor(section).name}',
+          )
+          .join('|');
+      _debugLog.log(
+        'location_plain_settings_snapshot mode=${_locationWorkspace.plainSettingsMode.name} active=${_locationWorkspace.activePlainSettingsSection.name} dirty=${_locationWorkspace.settingsDirty} saving=${_locationWorkspace.settingsSaving} locationId=${_locationWorkspace.editingPlainLocationId ?? '-'} states=$sectionStates',
+      );
+    }
     if (_locationWorkspace.isParentSettingsView) {
       final sectionStates = LocationParentSettingsSection.values
           .map(
@@ -717,6 +771,17 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
       return;
     }
 
+    if (_selectedSection == Section.location &&
+        _locationWorkspace.isPlainSettingsView) {
+      if (_locationWorkspace.settingsSaving) {
+        _debugLog.log('location_plain_settings_minimize_blocked saving=true');
+        return;
+      }
+      HapticFeedback.lightImpact();
+      context.read<LocationState>().clearSelection();
+      _locationWorkspace.returnToManagement(source: 'header_minimize');
+      return;
+    }
     if (_selectedSection == Section.location &&
         _locationWorkspace.isParentSettingsView) {
       if (_locationWorkspace.settingsSaving) {
@@ -1077,6 +1142,44 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
     }
 
     if (section == Section.location) {
+      if (_locationWorkspace.isPlainSettingsView) {
+        final locationState = context.watch<LocationState>();
+        final initialLocation = _locationWorkspace.isEditingPlainSettings
+            ? _editingLocationPlain(locationState)
+            : null;
+        if (_locationWorkspace.isEditingPlainSettings &&
+            initialLocation == null &&
+            !_locationWorkspace.settingsSaving) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted ||
+                !_locationWorkspace.isPlainSettingsView ||
+                _locationWorkspace.settingsSaving) {
+              return;
+            }
+            _debugLog.log('location_plain_settings_edit_target_missing');
+            _locationWorkspace.returnToManagement(
+              source: 'plain_edit_target_missing',
+            );
+          });
+        }
+        return OpsConsolePresentationScope(
+          key: const ValueKey<String>('secondary-location-plain-settings'),
+          embedded: true,
+          child: _SecondaryOperationsWorkspaceMotion(
+            child: initialLocation == null &&
+                    _locationWorkspace.isEditingPlainSettings &&
+                    !_locationWorkspace.settingsSaving
+                ? const OpsEmptyState(
+                    icon: Icons.location_off_rounded,
+                    title: '수정할 텍스트형 구역을 찾을 수 없습니다',
+                    message: '구역 관리로 돌아가 다시 선택해 주세요.',
+                  )
+                : LocationPlainSettingWorkspace(
+                    initialLocation: initialLocation,
+                  ),
+          ),
+        );
+      }
       if (_locationWorkspace.isParentSettingsView) {
         final locationState = context.watch<LocationState>();
         final initialParent = _locationWorkspace.isEditingParentSettings
@@ -1188,6 +1291,7 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
     } else if (previousArea != area) {
       _lastArea = area;
       if (_locationWorkspace.isParentFocus ||
+          _locationWorkspace.isPlainSettingsView ||
           _locationWorkspace.isParentSettingsView ||
           _locationWorkspace.isChildSettingsView) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1251,12 +1355,15 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
           final selectedTitle = _sectionDisplayTitle(selected);
           final locationFocus =
               selected == Section.location && _locationWorkspace.isParentFocus;
+          final locationPlainSettingsFocus = selected == Section.location &&
+              _locationWorkspace.isPlainSettingsView;
           final locationParentSettingsFocus = selected == Section.location &&
               _locationWorkspace.isParentSettingsView;
           final locationChildSettingsFocus = selected == Section.location &&
               _locationWorkspace.isChildSettingsView;
-          final locationAnySettingsFocus =
-              locationParentSettingsFocus || locationChildSettingsFocus;
+          final locationAnySettingsFocus = locationPlainSettingsFocus ||
+              locationParentSettingsFocus ||
+              locationChildSettingsFocus;
           final accountSettingsFocus =
               selected == Section.user && accountWorkspace.isSettingsView;
           final tabletSettingsFocus =
@@ -1272,6 +1379,7 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
               billSettingsFocus ||
               monthlySettingsFocus ||
               sectorSettingsFocus ||
+              locationPlainSettingsFocus ||
               locationParentSettingsFocus ||
               locationChildSettingsFocus;
           final settingsSaving =
@@ -1280,7 +1388,9 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
               (billSettingsFocus && billWorkspace.settingsSaving) ||
               (monthlySettingsFocus && monthlyWorkspace.saving) ||
               (sectorSettingsFocus && sectorWorkspace.settingsSaving) ||
-              ((locationParentSettingsFocus || locationChildSettingsFocus) &&
+              ((locationPlainSettingsFocus ||
+                      locationParentSettingsFocus ||
+                      locationChildSettingsFocus) &&
                   _locationWorkspace.settingsSaving);
           final locationState = context.watch<LocationState>();
           final locationChildren = locationFocus
@@ -1302,6 +1412,10 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
           final sectorSettingsTitle = sectorWorkspace.isEditingSettings
               ? '섹터 수정'
               : '신규 섹터';
+          final locationPlainSettingsTitle =
+              _locationWorkspace.isEditingPlainSettings
+                  ? '텍스트형 구역 수정'
+                  : '신규 텍스트형 구역';
           final locationParentSettingsTitle =
               _locationWorkspace.isEditingParentSettings
                   ? '부모구역 수정'
@@ -1322,9 +1436,11 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
                               ? monthlySettingsTitle
                               : sectorSettingsFocus
                               ? sectorSettingsTitle
-                              : locationParentSettingsFocus
-                                  ? locationParentSettingsTitle
-                                  : locationChildSettingsFocus
+                              : locationPlainSettingsFocus
+                                  ? locationPlainSettingsTitle
+                                  : locationParentSettingsFocus
+                                      ? locationParentSettingsTitle
+                                      : locationChildSettingsFocus
                                       ? locationChildSettingsTitle
                                       : selectedTitle;
           final subtitle = area.isEmpty ? contextTitle : '$area · $contextTitle';
@@ -1361,6 +1477,12 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
               }
               if (sectorSettingsFocus) {
                 _backSectorSettingsWorkspace(source: 'settings_system_back');
+                return;
+              }
+              if (locationPlainSettingsFocus) {
+                _backLocationPlainSettingsWorkspace(
+                  source: 'settings_system_back',
+                );
                 return;
               }
               if (locationParentSettingsFocus) {
@@ -1432,9 +1554,11 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
                                                         ? () => _backMonthlySettingsWorkspace(source: 'header_back')
                                                         : sectorSettingsFocus
                                                         ? () => _backSectorSettingsWorkspace(source: 'header_back')
-                                                        : locationParentSettingsFocus
-                                                            ? () => _backLocationParentSettingsWorkspace(source: 'header_back')
-                                                            : locationChildSettingsFocus
+                                                        : locationPlainSettingsFocus
+                                                            ? () => _backLocationPlainSettingsWorkspace(source: 'header_back')
+                                                            : locationParentSettingsFocus
+                                                                ? () => _backLocationParentSettingsWorkspace(source: 'header_back')
+                                                                : locationChildSettingsFocus
                                                                 ? () => _backLocationChildSettingsWorkspace(source: 'header_back')
                                                                 : _backLocationWorkspace,
                     backTooltip: accountSettingsFocus
@@ -1519,6 +1643,8 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
                                     child.key ==
                                         const ValueKey<String>('secondary-sector-settings-rail') ||
                                     child.key ==
+                                        const ValueKey<String>('secondary-location-plain-settings-rail') ||
+                                    child.key ==
                                         const ValueKey<String>('secondary-location-parent-settings-rail') ||
                                     child.key ==
                                         const ValueKey<String>('secondary-location-child-settings-rail');
@@ -1547,9 +1673,11 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
                                                   ? 'secondary-monthly-settings-rail'
                                                   : sectorSettingsFocus
                                                   ? 'secondary-sector-settings-rail'
-                                                  : locationParentSettingsFocus
-                                                      ? 'secondary-location-parent-settings-rail'
-                                                      : locationChildSettingsFocus
+                                                  : locationPlainSettingsFocus
+                                                      ? 'secondary-location-plain-settings-rail'
+                                                      : locationParentSettingsFocus
+                                                          ? 'secondary-location-parent-settings-rail'
+                                                          : locationChildSettingsFocus
                                                           ? 'secondary-location-child-settings-rail'
                                                           : 'secondary-global-rail',
                                 ),
@@ -1571,6 +1699,8 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
                                   billSettingsMode: billSettingsFocus,
                                   monthlySettingsMode: monthlySettingsFocus,
                                   sectorSettingsMode: sectorSettingsFocus,
+                                  locationPlainSettingsMode:
+                                      locationPlainSettingsFocus,
                                   locationParentSettingsMode:
                                       locationParentSettingsFocus,
                                   locationChildSettingsMode:
@@ -1604,6 +1734,12 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
                                       sectorWorkspace.sectionStates,
                                   sectorSettingsSaving:
                                       sectorWorkspace.settingsSaving,
+                                  locationPlainSettingsSection:
+                                      _locationWorkspace.activePlainSettingsSection,
+                                  locationPlainSettingsSectionStates:
+                                      _locationWorkspace.plainSectionStates,
+                                  locationPlainSettingsSaving:
+                                      _locationWorkspace.settingsSaving,
                                   locationParentSettingsSection:
                                       _locationWorkspace.activeSettingsSection,
                                   locationParentSettingsSectionStates:
@@ -1650,6 +1786,11 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
                                   },
                                   onSelectSectorSettingsSection: (section) {
                                     unawaited(_selectSectorSettingsSection(section));
+                                  },
+                                  onSelectLocationPlainSettingsSection: (section) {
+                                    unawaited(
+                                      _selectLocationPlainSettingsSection(section),
+                                    );
                                   },
                                   onSelectLocationParentSettingsSection: (section) {
                                     unawaited(
@@ -1924,6 +2065,7 @@ class _SecondaryQuickActionRail extends StatefulWidget {
     required this.billSettingsMode,
     required this.monthlySettingsMode,
     required this.sectorSettingsMode,
+    required this.locationPlainSettingsMode,
     required this.locationParentSettingsMode,
     required this.locationChildSettingsMode,
     required this.settingsSection,
@@ -1942,6 +2084,9 @@ class _SecondaryQuickActionRail extends StatefulWidget {
     required this.sectorSettingsSection,
     required this.sectorSettingsSectionStates,
     required this.sectorSettingsSaving,
+    required this.locationPlainSettingsSection,
+    required this.locationPlainSettingsSectionStates,
+    required this.locationPlainSettingsSaving,
     required this.locationParentSettingsSection,
     required this.locationParentSettingsSectionStates,
     required this.locationParentSettingsSaving,
@@ -1966,6 +2111,7 @@ class _SecondaryQuickActionRail extends StatefulWidget {
     required this.onSelectBillSettingsSection,
     required this.onSelectMonthlySettingsSection,
     required this.onSelectSectorSettingsSection,
+    required this.onSelectLocationPlainSettingsSection,
     required this.onSelectLocationParentSettingsSection,
     required this.onSelectLocationChildSettingsSection,
   });
@@ -1981,6 +2127,7 @@ class _SecondaryQuickActionRail extends StatefulWidget {
   final bool billSettingsMode;
   final bool monthlySettingsMode;
   final bool sectorSettingsMode;
+  final bool locationPlainSettingsMode;
   final bool locationParentSettingsMode;
   final bool locationChildSettingsMode;
   final UserSettingsSection settingsSection;
@@ -2003,6 +2150,10 @@ class _SecondaryQuickActionRail extends StatefulWidget {
   final Map<SectorSettingsSection, SectorSettingsSectionState>
       sectorSettingsSectionStates;
   final bool sectorSettingsSaving;
+  final LocationPlainSettingsSection locationPlainSettingsSection;
+  final Map<LocationPlainSettingsSection, LocationPlainSettingsSectionState>
+      locationPlainSettingsSectionStates;
+  final bool locationPlainSettingsSaving;
   final LocationParentSettingsSection locationParentSettingsSection;
   final Map<LocationParentSettingsSection, LocationParentSettingsSectionState>
       locationParentSettingsSectionStates;
@@ -2029,6 +2180,8 @@ class _SecondaryQuickActionRail extends StatefulWidget {
   final ValueChanged<BillSettingsSection> onSelectBillSettingsSection;
   final ValueChanged<MonthlyWorkspaceSection> onSelectMonthlySettingsSection;
   final ValueChanged<SectorSettingsSection> onSelectSectorSettingsSection;
+  final ValueChanged<LocationPlainSettingsSection>
+      onSelectLocationPlainSettingsSection;
   final ValueChanged<LocationParentSettingsSection>
       onSelectLocationParentSettingsSection;
   final ValueChanged<LocationChildSettingsSection>
@@ -2103,6 +2256,15 @@ class _SecondaryQuickActionRailState extends State<_SecondaryQuickActionRail> {
         sectionStates: widget.sectorSettingsSectionStates,
         saving: widget.sectorSettingsSaving,
         onSelect: widget.onSelectSectorSettingsSection,
+      );
+    }
+    if (widget.locationPlainSettingsMode) {
+      return _LocationPlainSettingsTableOfContentsRail(
+        metrics: metrics,
+        selectedSection: widget.locationPlainSettingsSection,
+        sectionStates: widget.locationPlainSettingsSectionStates,
+        saving: widget.locationPlainSettingsSaving,
+        onSelect: widget.onSelectLocationPlainSettingsSection,
       );
     }
     if (widget.locationParentSettingsMode) {
@@ -3541,6 +3703,181 @@ class _SectorSettingsTocButton extends StatelessWidget {
                   child: Icon(
                     statusIcon,
                     key: ValueKey<SectorSettingsSectionState>(state),
+                    size: 8.5,
+                    color: statusColor,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LocationPlainSettingsTableOfContentsRail extends StatelessWidget {
+  const _LocationPlainSettingsTableOfContentsRail({
+    required this.metrics,
+    required this.selectedSection,
+    required this.sectionStates,
+    required this.saving,
+    required this.onSelect,
+  });
+
+  final CommonSideRailMetrics metrics;
+  final LocationPlainSettingsSection selectedSection;
+  final Map<LocationPlainSettingsSection, LocationPlainSettingsSectionState>
+      sectionStates;
+  final bool saving;
+  final ValueChanged<LocationPlainSettingsSection> onSelect;
+
+  static const List<_LocationPlainSettingsTocItem> _items =
+      <_LocationPlainSettingsTocItem>[
+    _LocationPlainSettingsTocItem(
+      section: LocationPlainSettingsSection.identity,
+      label: '기본',
+      icon: Icons.text_fields_rounded,
+    ),
+    _LocationPlainSettingsTocItem(
+      section: LocationPlainSettingsSection.capacity,
+      label: '수용',
+      icon: Icons.local_parking_rounded,
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return CommonSideRailSurface(
+      title: '텍스트형 설정',
+      semanticsLabel: '텍스트형 주차구역 설정 입력 목차',
+      metrics: metrics,
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: metrics.actionInsetHorizontal,
+          vertical: metrics.actionInsetVertical,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (var i = 0; i < _items.length; i++) ...[
+              _LocationPlainSettingsTocButton(
+                item: _items[i],
+                state: sectionStates[_items[i].section] ??
+                    LocationPlainSettingsSectionState.incomplete,
+                selected: selectedSection == _items[i].section,
+                enabled: !saving,
+                compact: metrics.compact,
+                extent: metrics.minimumButtonExtent,
+                onTap: () => onSelect(_items[i].section),
+              ),
+              if (i != _items.length - 1) const SizedBox(height: 6),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LocationPlainSettingsTocItem {
+  const _LocationPlainSettingsTocItem({
+    required this.section,
+    required this.label,
+    required this.icon,
+  });
+
+  final LocationPlainSettingsSection section;
+  final String label;
+  final IconData icon;
+}
+
+class _LocationPlainSettingsTocButton extends StatelessWidget {
+  const _LocationPlainSettingsTocButton({
+    required this.item,
+    required this.state,
+    required this.selected,
+    required this.enabled,
+    required this.compact,
+    required this.extent,
+    required this.onTap,
+  });
+
+  final _LocationPlainSettingsTocItem item;
+  final LocationPlainSettingsSectionState state;
+  final bool selected;
+  final bool enabled;
+  final bool compact;
+  final double extent;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final statusColor = switch (state) {
+      LocationPlainSettingsSectionState.complete => tokens.success,
+      LocationPlainSettingsSectionState.incomplete => tokens.warning,
+      LocationPlainSettingsSectionState.error => tokens.danger,
+    };
+    final statusIcon = switch (state) {
+      LocationPlainSettingsSectionState.complete => Icons.check_rounded,
+      LocationPlainSettingsSectionState.incomplete =>
+        Icons.priority_high_rounded,
+      LocationPlainSettingsSectionState.error => Icons.error_outline_rounded,
+    };
+    final stateLabel = switch (state) {
+      LocationPlainSettingsSectionState.complete => '입력 완료',
+      LocationPlainSettingsSectionState.incomplete => '입력 필요',
+      LocationPlainSettingsSectionState.error => '입력 오류',
+    };
+    return CommonSideRailActionButton(
+      semanticLabel: '${item.label}, $stateLabel',
+      visualLabel: item.label,
+      selected: selected,
+      enabled: enabled,
+      disabledReason: enabled ? '' : '저장 중에는 목차를 이동할 수 없습니다.',
+      compact: compact,
+      extent: extent,
+      tooltip: '${item.label} · $stateLabel',
+      onTap: onTap,
+      iconChild: SizedBox(
+        width: compact ? 21 : 23,
+        height: compact ? 21 : 23,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Align(
+              alignment: Alignment.center,
+              child: Icon(
+                item.icon,
+                size: compact ? 18 : 19,
+                color: selected ? tokens.accent : tokens.iconPrimary,
+              ),
+            ),
+            Positioned(
+              right: -4,
+              bottom: -4,
+              child: AnimatedContainer(
+                duration:
+                    reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                width: 14,
+                height: 14,
+                decoration: BoxDecoration(
+                  color: tokens.surfaceRaised,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: statusColor, width: 1.4),
+                ),
+                alignment: Alignment.center,
+                child: AnimatedSwitcher(
+                  duration:
+                      reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                  switchInCurve: CommonUiMotion.enter,
+                  switchOutCurve: CommonUiMotion.exit,
+                  child: Icon(
+                    statusIcon,
+                    key: ValueKey<LocationPlainSettingsSectionState>(state),
                     size: 8.5,
                     color: statusColor,
                   ),

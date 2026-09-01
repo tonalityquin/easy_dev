@@ -42,7 +42,7 @@ class _CommandReferenceDock extends StatelessWidget {
   Widget build(BuildContext context) {
     return CommonSideDockFrame(
       title: 'Command Reference',
-      subtitle: '${AppCommandRegistry.commands.length} commands · 탭하면 명령어를 복사합니다.',
+      subtitle: '${AppCommandRegistry.visibleCommands.length} commands · 탭하면 명령어를 복사합니다.',
       icon: Icons.terminal_rounded,
       onClose: () => Navigator.of(context).pop(),
       onLongPress: () => AppCommandDiagnostics.showStatus(

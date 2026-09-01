@@ -441,12 +441,18 @@ class _RealTimeStatusPreviewBodyState extends State<RealTimeStatusPreviewBody>
       0,
       (sum, group) => sum + group.totalCurrent,
     );
+    final departureRequested = data.statusByRowKey.values
+        .where((status) => status == ParkingSlotStatus.departureRequest)
+        .length;
+    final departureInProgress = data.statusByRowKey.values
+        .where((status) => status == ParkingSlotStatus.departureInProgress)
+        .length;
     final signature =
-        '$area|${groups.length}|$parentGridReady|$occupied|${data.rows.length}';
+        '$area|${groups.length}|$parentGridReady|$occupied|${data.rows.length}|$departureRequested|$departureInProgress';
     if (_lastRenderSignature != signature) {
       _lastRenderSignature = signature;
       debugPrint(
-        '[RealTimeStatusDotMap] event=render screen=${widget.screen} area=$area mode=status_spatial parents=${groups.length} parentGridReady=$parentGridReady occupied=$occupied canonicalRows=${data.rows.length} source=view_doc_rows_store locationSource=${context.read<LocationState>().locations.isNotEmpty ? 'location_state' : 'sqlite'} interaction=parent_child_dialog_slot parentTap=child_zone parentSlotTap=disabled childPresentation=center_dialog childTransition=source_rect_expand_reverse_collapse childViewport=crop_fit childSlotTap=collapse_then_status_dock childDialogAutoPause=true systemBack=dialog_reverse_to_parent scrim=blur_dim occupiedLabel=plate_last4 slotHitPolicy=collision_safe_partition statusPriority=departure_in_progress>departure_request>parking_request>parked firebaseAdditionalRead=0',
+        '[RealTimeStatusDotMap] event=render screen=${widget.screen} area=$area mode=status_spatial parents=${groups.length} parentGridReady=$parentGridReady occupied=$occupied canonicalRows=${data.rows.length} departureRequested=$departureRequested departureInProgress=$departureInProgress source=view_doc_rows_store locationSource=${context.read<LocationState>().locations.isNotEmpty ? 'location_state' : 'sqlite'} interaction=parent_child_dialog_slot parentTap=child_zone parentSlotTap=disabled childPresentation=center_dialog childTransition=source_rect_expand_reverse_collapse childViewport=crop_fit childSlotTap=collapse_then_status_dock childDialogAutoPause=true systemBack=dialog_reverse_to_parent scrim=blur_dim occupiedLabel=plate_last4 departureVisual=statusDepartureRequested departurePulse=outer_halo_940ms_reverse plateTextMotion=static slotHitPolicy=collision_safe_partition statusPriority=departure_in_progress>departure_request>parking_request>parked firebaseAdditionalRead=0',
       );
     }
 
@@ -454,6 +460,8 @@ class _RealTimeStatusPreviewBodyState extends State<RealTimeStatusPreviewBody>
       key: ValueKey<String>('status_dot_map:$area'),
       child: RealTimeLocationBoard(
         groups: groups,
+        statusForRow: (row) =>
+            data.statusByRowKey[_rowKey(row)] ?? ParkingSlotStatus.parked,
         onPlateTap: (row) {
           unawaited(_openStatusDock(row, data));
         },

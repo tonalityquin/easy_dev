@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+
+import '../../../../app/di/routes.dart';
 
 import '../../../../app/init/work_schedule_prefs.dart';
 import '../../../../features/account/applications/user_state.dart';
 import '../../../../features/account/domain/repositories/user_repository.dart';
-import '../../../../shared/tts/application/tts_ownership.dart';
-import '../../../../shared/tts/application/tts_user_filters.dart';
+import '../../../../shared/work_session/application/work_area_session_coordinator.dart';
 import '../../../dev/application/area_state.dart';
 import '../area_login_session_refresher.dart';
 import '../../applications/triple/triple_login_network_service.dart';
@@ -72,7 +72,7 @@ class TripleLoginController {
         if (onLoginSucceeded != null) {
           onLoginSucceeded!();
         } else {
-          Navigator.pushReplacementNamed(context, '/triple_commute');
+          Navigator.pushReplacementNamed(context, AppRoutes.tripleCommute);
         }
       });
     });
@@ -158,23 +158,25 @@ class TripleLoginController {
         await WorkSchedulePrefs.refreshReminderFromPrefs(prefs);
 
         await prefs.setString('mode', 'triple');
-
-        await TtsOwnership.setOwner(TtsOwner.foreground);
-        debugPrint('[LOGIN-NORMAL][${_ts()}] SharedPreferences 저장 완료: phone=${prefs.getString('phone')}');
-
-
-        final a = context.read<AreaState>().currentArea;
-        debugPrint('[LOGIN-NORMAL][${_ts()}] send area to FG (currentArea="$a")');
-        if (a.isNotEmpty) {
-          final filters = await TtsUserFilters.load();
-          FlutterForegroundTask.sendDataToTask({
-            'area': a,
-            'ttsFilters': filters.toMap(),
-          });
-          debugPrint('[LOGIN-NORMAL][${_ts()}] sendDataToTask ok (with filters ${filters.toMap()})');
-        } else {
-          debugPrint('[LOGIN-NORMAL][${_ts()}] currentArea is empty → skip send');
-        }
+        final currentRecord = areaState.currentRecord;
+        final workSession = await WorkAreaSessionCoordinator.activate(
+          currentArea: areaState.currentArea.trim(),
+          division: divisionToSet,
+          homeArea: areaToSet,
+          mode: 'triple',
+          currentIsHeadquarter: currentRecord?.isHeadquarter,
+          homeIsHeadquarter:
+              areaState.currentArea.trim() == areaToSet.trim()
+                  ? currentRecord?.isHeadquarter
+                  : null,
+          source: 'legacy_triple_login',
+        );
+        debugPrint(
+          '[LOGIN-NORMAL][${_ts()}] work session sync area=${workSession.currentArea} mode=${workSession.mode} foreground=${workSession.foregroundServiceRunning} appFallback=${workSession.appFallbackListening}',
+        );
+        debugPrint(
+          '[LOGIN-NORMAL][${_ts()}] SharedPreferences 저장 완료: phone=${prefs.getString('phone')}',
+        );
 
         if (context.mounted) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -182,7 +184,7 @@ class TripleLoginController {
             if (onLoginSucceeded != null) {
               onLoginSucceeded!();
             } else {
-              Navigator.pushReplacementNamed(context, '/triple_commute');
+              Navigator.pushReplacementNamed(context, AppRoutes.tripleCommute);
             }
           });
         }

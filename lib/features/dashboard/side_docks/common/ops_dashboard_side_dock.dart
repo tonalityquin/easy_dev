@@ -21,7 +21,6 @@ import '../../../community/page/sheets/discord/discord_bottom_sheet.dart';
 import '../../../dev/application/area_state.dart';
 import '../../../headquarter/application/fab/hub_quick_actions.dart';
 import '../../../selector/application/dev_auth.dart';
-import '../../../selector/sheets/service_bottom_sheet.dart';
 import 'dashboard_dock_request.dart';
 import '../../widgets/widgets/schedule/dashboard_work_schedule_surface.dart';
 
@@ -124,7 +123,7 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
       });
     }
     debugPrint(
-      '[OpsDashboardSideDock] developer_mode_resolved enabled=$enabled settingsVisible=true communityVisible=$enabled changed=$changed',
+      '[OpsDashboardSideDock] developer_mode_resolved enabled=$enabled terminalSettingsOnly=true communityVisible=$enabled changed=$changed',
     );
     return enabled;
   }
@@ -370,11 +369,6 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
     });
   }
 
-  Future<void> _openServiceSettings(BuildContext context) async {
-    await _closeCurrentDockAndRun(context, (rootContext) async {
-      await ServiceBottomSheet.show(context: rootContext);
-    });
-  }
 
   Future<void> _runOperationalSync(BuildContext context) async {
     await _closeCurrentDockAndRun(context, (rootContext) async {
@@ -581,16 +575,6 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
           foreground: tokens.textPrimary,
           onPressed: () => _openCommunity(context),
         ),
-        _DashboardAction(
-          id: 'settings',
-          category: _DashboardActionCategory.settings,
-          label: '설정',
-          description: '개발자 모드에서 서비스 설정을 조정합니다.',
-          icon: Icons.settings_rounded,
-          color: tokens.infoContainer,
-          foreground: tokens.onInfoContainer,
-          onPressed: () => _openServiceSettings(context),
-        ),
       ]);
     }
 
@@ -733,7 +717,7 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
     trace.log('businessTileCount=${monthlyVisible ? 2 : 1}', progress: 0.769);
     trace.log('developerMode=$developerMode', progress: 0.77);
     trace.log('developerModeResolved=$_developerModeResolved', progress: 0.79);
-    trace.log('settingsVisible=true', progress: 0.81);
+    trace.log('terminalSettingsOnly=true', progress: 0.81);
     trace.log('communityVisible=$developerMode', progress: 0.82);
     trace.log('myInfoAction=false', progress: 0.83);
     trace.log('documentBox=false', progress: 0.85);

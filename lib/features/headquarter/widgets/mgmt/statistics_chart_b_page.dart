@@ -65,7 +65,7 @@ class _StatisticsChartBPageState extends State<StatisticsChartBPage> {
           leading: BackButton(
             onPressed: () => Navigator.of(context).pop(widget.report),
           ),
-          title: const Text('통계 그래프 B'),
+          title: const Text('심화 통계'),
           centerTitle: true,
           backgroundColor: cs.surface,
           foregroundColor: cs.onSurface,
@@ -341,7 +341,7 @@ class _ReportCover extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '통계 그래프 B',
+                      '심화 통계',
                       style: theme.textTheme.headlineMedium?.copyWith(
                         fontWeight: FontWeight.w900,
                         height: 1.05,

@@ -1,5 +1,3 @@
-import 'dart:ui' as ui;
-
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
@@ -8,6 +6,7 @@ import '../../../app/di/routes.dart';
 import '../../../app/init/app_start_debug_trace.dart';
 import '../../../app/init/app_start_flow_prefs.dart';
 import '../../../app/init/app_start_user_purpose.dart';
+import '../../../app/tutorial/widgets/app_start_cinematic_reveal.dart';
 import '../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../features/selector/application/dev_auth.dart';
 
@@ -198,37 +197,10 @@ class _AppStartPermissionNoticeScreenState
       reverseCurve: Curves.easeInOutCubic,
     );
 
-    return AnimatedBuilder(
+    return AppStartCinematicReveal(
       animation: animation,
-      builder: (context, child) {
-        final value = animation.value.clamp(0.0, 1.0).toDouble();
-        final blur = _reduceMotion ? 0.0 : 8.0 * (1 - value);
-        final scale = _reduceMotion
-            ? 1.0
-            : _exiting
-                ? 1.0 + (0.015 * (1 - value))
-                : 0.985 + (0.015 * value);
-        final dy = _reduceMotion
-            ? 0.0
-            : _exiting
-                ? -4.0 * (1 - value)
-                : 6.0 * (1 - value);
-
-        return Opacity(
-          opacity: value,
-          child: ImageFiltered(
-            imageFilter: ui.ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-            child: Transform.translate(
-              offset: Offset(0, dy),
-              child: Transform.scale(
-                scale: scale,
-                alignment: Alignment.center,
-                child: child,
-              ),
-            ),
-          ),
-        );
-      },
+      reduceMotion: _reduceMotion,
+      exiting: _exiting,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 640),
         child: Padding(

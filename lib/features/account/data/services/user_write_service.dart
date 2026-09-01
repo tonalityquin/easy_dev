@@ -310,8 +310,13 @@ class UserWriteService {
   Future<void> addTabletCard(TabletModel tablet) async {
     final docRef = _getTabletCollectionRef().doc(tablet.id);
     try {
-      await docRef.set(tablet.toMap());
-
+      await _firestore.runTransaction((tx) async {
+        final existing = await tx.get(docRef);
+        if (existing.exists) {
+          throw StateError('이미 등록된 태블릿 전화번호입니다.');
+        }
+        tx.set(docRef, tablet.toMap());
+      });
     } on FirebaseException {
       rethrow;
     } catch (_) {
@@ -470,11 +475,25 @@ class UserWriteService {
     }
   }
 
-  Future<void> updateTablet(TabletModel tablet) async {
-    final docRef = _getTabletCollectionRef().doc(tablet.id);
+  Future<void> updateTablet(
+    TabletModel tablet, {
+    String? previousId,
+  }) async {
+    final nextRef = _getTabletCollectionRef().doc(tablet.id);
+    final previous = (previousId ?? '').trim();
     try {
-      await docRef.set(tablet.toMap());
-
+      await _firestore.runTransaction((tx) async {
+        if (previous.isNotEmpty && previous != tablet.id) {
+          final existing = await tx.get(nextRef);
+          if (existing.exists) {
+            throw StateError('이미 등록된 태블릿 전화번호입니다.');
+          }
+          tx.set(nextRef, tablet.toMap());
+          tx.delete(_getTabletCollectionRef().doc(previous));
+          return;
+        }
+        tx.set(nextRef, tablet.toMap());
+      });
     } on FirebaseException {
       rethrow;
     } catch (_) {

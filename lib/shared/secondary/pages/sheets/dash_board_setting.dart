@@ -6,8 +6,12 @@ import '../../../../app/init/logout_helper.dart';
 import '../../../../app/utils/operational_data_sync_workflow.dart';
 import '../../../../app/utils/snackbar_helper.dart';
 import '../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_theme.dart';
+import '../../../../features/account/applications/user_state.dart';
 import '../../../../features/dev/application/area_state.dart';
+import '../../../../features/selector/application/dev_auth.dart';
 import '../../../secondary/widgets/ops_console_widgets.dart';
+import '../../../tts/application/plate_tts_session_diagnostics.dart';
 import '../../../tts/application/tts_sync_helper.dart';
 import '../../../tts/application/tts_user_filters.dart';
 import '../../../operational_cache/domain/repositories/operational_local_repository.dart';
@@ -30,11 +34,28 @@ class _DashboardSettingState extends State<DashboardSetting> {
   bool? _hasMonthlyParking;
   DateTime? _lastRefreshAt;
   String _operationalArea = '';
+  bool _developerMode = false;
 
   @override
   void initState() {
     super.initState();
+    _developerMode = DevAuth.devModeEnabled.value;
+    DevAuth.devModeEnabled.addListener(_onDeveloperModeChanged);
+    PlateTtsSessionDiagnostics.ensureStarted();
     _bootstrap();
+  }
+
+  @override
+  void dispose() {
+    DevAuth.devModeEnabled.removeListener(_onDeveloperModeChanged);
+    super.dispose();
+  }
+
+  void _onDeveloperModeChanged() {
+    if (!mounted) return;
+    final next = DevAuth.devModeEnabled.value;
+    if (_developerMode == next) return;
+    setState(() => _developerMode = next);
   }
 
   Future<void> _bootstrap() async {
@@ -149,6 +170,14 @@ class _DashboardSettingState extends State<DashboardSetting> {
     }
   }
 
+  Future<void> _showTtsStatus() async {
+    await PlateTtsSessionDiagnostics.showStatus(
+      context,
+      area: context.read<AreaState>().currentArea.trim(),
+      filters: _filters,
+    );
+  }
+
   Future<void> _manualRefreshAll() async {
     if (_refreshing) return;
 
@@ -195,7 +224,12 @@ class _DashboardSettingState extends State<DashboardSetting> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final currentArea = context.select<AreaState, String>((s) => s.currentArea.trim());
+    final currentArea =
+        context.select<AreaState, String>((s) => s.currentArea.trim());
+    final currentIsHeadquarter = context.select<AreaState, bool?>(
+      (s) => s.currentRecord?.isHeadquarter,
+    );
+    final homeArea = context.select<UserState, String>((s) => s.area.trim());
     if (_operationalArea != currentArea) {
       _operationalArea = currentArea;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -212,12 +246,46 @@ class _DashboardSettingState extends State<DashboardSetting> {
       icon: Icons.dashboard_customize_rounded,
       areaLabel: areaLabel,
       loading: _loading,
-      trailing: CommonIconButton(
-        icon: _locked ? Icons.lock_rounded : Icons.lock_open_rounded,
-        tooltip: _locked ? '잠금 해제' : '잠금',
-        onPressed: _loading ? null : _toggleLock,
-        selected: !_locked,
-        haptic: CommonHaptic.selection,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AnimatedSwitcher(
+            duration: MediaQuery.of(context).disableAnimations
+                ? Duration.zero
+                : CommonUiMotion.selection,
+            transitionBuilder: (child, animation) {
+              final scale = Tween<double>(begin: .88, end: 1).animate(
+                CurvedAnimation(
+                  parent: animation,
+                  curve: CommonUiMotion.enter,
+                ),
+              );
+              return FadeTransition(
+                opacity: animation,
+                child: ScaleTransition(scale: scale, child: child),
+              );
+            },
+            child: !_developerMode
+                ? const SizedBox(key: ValueKey('tts-status-hidden'))
+                : Padding(
+                    key: const ValueKey('tts-status-visible'),
+                    padding: const EdgeInsets.only(right: 6),
+                    child: CommonIconButton(
+                      icon: Icons.bug_report_rounded,
+                      tooltip: 'TTS 상태',
+                      onPressed: _showTtsStatus,
+                      haptic: CommonHaptic.selection,
+                    ),
+                  ),
+          ),
+          CommonIconButton(
+            icon: _locked ? Icons.lock_rounded : Icons.lock_open_rounded,
+            tooltip: _locked ? '잠금 해제' : '잠금',
+            onPressed: _loading ? null : _toggleLock,
+            selected: !_locked,
+            haptic: CommonHaptic.selection,
+          ),
+        ],
       ),
       metrics: [
         OpsMetric(label: 'TTS ON', value: '$_enabledTtsCount/3', icon: Icons.record_voice_over_rounded, color: cs.primary),
@@ -256,13 +324,38 @@ class _DashboardSettingState extends State<DashboardSetting> {
                                 title: 'TTS 알림 채널',
                                 subtitle: '변경 즉시 저장되고 포그라운드 서비스로 동기화됩니다.',
                                 icon: Icons.campaign_rounded,
-                                trailing: _applying
-                                    ? SizedBox(
-                                        width: 18,
-                                        height: 18,
-                                        child: CircularProgressIndicator(strokeWidth: 2, color: cs.primary),
-                                      )
-                                    : OpsStatusBadge(label: '$_enabledTtsCount개 활성', color: cs.primary),
+                                trailing: AnimatedSwitcher(
+                                  duration: MediaQuery.of(context).disableAnimations
+                                      ? Duration.zero
+                                      : CommonUiMotion.selection,
+                                  transitionBuilder: (child, animation) {
+                                    final scale = Tween<double>(begin: .94, end: 1).animate(
+                                      CurvedAnimation(
+                                        parent: animation,
+                                        curve: CommonUiMotion.enter,
+                                      ),
+                                    );
+                                    return FadeTransition(
+                                      opacity: animation,
+                                      child: ScaleTransition(scale: scale, child: child),
+                                    );
+                                  },
+                                  child: _applying
+                                      ? SizedBox(
+                                          key: const ValueKey('tts-applying'),
+                                          width: 18,
+                                          height: 18,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: cs.primary,
+                                          ),
+                                        )
+                                      : OpsStatusBadge(
+                                          key: ValueKey('tts-count-$_enabledTtsCount'),
+                                          label: '$_enabledTtsCount개 활성',
+                                          color: cs.primary,
+                                        ),
+                                ),
                               ),
                               const SizedBox(height: 12),
                               _SwitchTile(
@@ -297,21 +390,105 @@ class _DashboardSettingState extends State<DashboardSetting> {
                             children: [
                               OpsSectionTitle(
                                 title: '현재 운영 지점',
-                                subtitle: currentArea.isEmpty ? '지역 값이 비어 있습니다.' : '$currentArea 기준으로 구독과 캐시를 맞춥니다.',
+                                subtitle: currentArea.isEmpty
+                                    ? '지역 값이 비어 있습니다.'
+                                    : '$currentArea 기준으로 구독과 캐시를 맞춥니다.',
                                 icon: Icons.place_outlined,
+                                trailing: AnimatedSwitcher(
+                                  duration: MediaQuery.of(context).disableAnimations
+                                      ? Duration.zero
+                                      : CommonUiMotion.selection,
+                                  transitionBuilder: (child, animation) {
+                                    final offset = Tween<Offset>(
+                                      begin: const Offset(0, .16),
+                                      end: Offset.zero,
+                                    ).animate(
+                                      CurvedAnimation(
+                                        parent: animation,
+                                        curve: CommonUiMotion.enter,
+                                      ),
+                                    );
+                                    return FadeTransition(
+                                      opacity: animation,
+                                      child: SlideTransition(
+                                        position: offset,
+                                        child: child,
+                                      ),
+                                    );
+                                  },
+                                  child: OpsStatusBadge(
+                                    key: ValueKey(
+                                      'work-area-type-$currentArea-$currentIsHeadquarter',
+                                    ),
+                                    label: currentIsHeadquarter == null
+                                        ? '확인 중'
+                                        : currentIsHeadquarter
+                                            ? '본사'
+                                            : '지사',
+                                    color: currentIsHeadquarter == true
+                                        ? cs.primary
+                                        : cs.tertiary,
+                                  ),
+                                ),
                               ),
                               const SizedBox(height: 14),
-                              Row(
-                                children: [
-                                  Expanded(child: OpsInfoPill(text: currentArea.isEmpty ? '미설정' : currentArea, icon: Icons.business_rounded)),
-                                  const SizedBox(width: 10),
-                                  OpsActionButton(
-                                    label: '재적용',
-                                    icon: Icons.send_rounded,
-                                    onPressed: _loading ? null : _resendToForeground,
-                                    tonal: true,
+                              AnimatedSwitcher(
+                                duration: MediaQuery.of(context).disableAnimations
+                                    ? Duration.zero
+                                    : CommonUiMotion.selection,
+                                transitionBuilder: (child, animation) {
+                                  final scale = Tween<double>(
+                                    begin: .97,
+                                    end: 1,
+                                  ).animate(
+                                    CurvedAnimation(
+                                      parent: animation,
+                                      curve: CommonUiMotion.enter,
+                                    ),
+                                  );
+                                  return FadeTransition(
+                                    opacity: animation,
+                                    child: ScaleTransition(
+                                      scale: scale,
+                                      child: child,
+                                    ),
+                                  );
+                                },
+                                child: Row(
+                                  key: ValueKey(
+                                    'work-area-$homeArea-$currentArea-$currentIsHeadquarter',
                                   ),
-                                ],
+                                  children: [
+                                    Expanded(
+                                      child: OpsInfoPill(
+                                        text: homeArea.isEmpty
+                                            ? '소속 미설정'
+                                            : '소속 $homeArea',
+                                        icon: Icons.apartment_rounded,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: OpsInfoPill(
+                                        text: currentArea.isEmpty
+                                            ? '근무 미설정'
+                                            : '근무 $currentArea',
+                                        icon: Icons.business_rounded,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              SizedBox(
+                                width: double.infinity,
+                                child: OpsActionButton(
+                                  label: '재적용',
+                                  icon: Icons.send_rounded,
+                                  onPressed:
+                                      _loading ? null : _resendToForeground,
+                                  tonal: true,
+                                ),
                               ),
                             ],
                           ),

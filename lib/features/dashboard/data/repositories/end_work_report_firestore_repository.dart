@@ -44,6 +44,7 @@ class EndWorkReportFirestoreRepository {
     required String area,
     required List<LockedPlateRecord> plates,
     required bool sectorEnabled,
+    required String submissionId,
     void Function(String message)? onLog,
   }) async {
     final safeArea = _safeArea(area);
@@ -54,6 +55,7 @@ class EndWorkReportFirestoreRepository {
         safeArea: safeArea,
         record: plate,
         sectorEnabled: sectorEnabled,
+        submissionId: submissionId,
         onLog: onLog,
       );
     }
@@ -63,6 +65,7 @@ class EndWorkReportFirestoreRepository {
     required String safeArea,
     required LockedPlateRecord record,
     required bool sectorEnabled,
+    required String submissionId,
     void Function(String message)? onLog,
   }) async {
     final data = record.data;
@@ -101,6 +104,7 @@ class EndWorkReportFirestoreRepository {
     final createdAt = Timestamp.fromDate(now);
     final logEntry = <String, dynamic>{
       'logKey': logKey,
+      'submissionId': submissionId,
       'sourcePlateDocId': record.docId,
       'sourceType': data['type'],
       'departureCompletedAt': Timestamp.fromDate(completedAt),
@@ -151,6 +155,7 @@ class EndWorkReportFirestoreRepository {
         'plateKey': plateKey,
         'plate_four_digit': fourDigit,
         'logScope': _plateOutLogRoot,
+        'lastSubmissionId': submissionId,
         'lastDepartureCompletedAt': Timestamp.fromDate(completedAt),
         'lastLockedFeeAmount': lockedFeeAmount,
         'lastPaymentMethod': paymentMethod,
@@ -198,7 +203,7 @@ class EndWorkReportFirestoreRepository {
     }
   }
 
-  Future<void> saveMonthlyEndWorkReport({
+  Future<bool> saveMonthlyEndWorkReport({
     required String division,
     required String area,
     required String monthKey,
@@ -208,12 +213,19 @@ class EndWorkReportFirestoreRepository {
     required String createdAtIso,
     required String uploadedBy,
     required bool gcsLogVerified,
+    required String submissionId,
     String? logsUrl,
+    String? gcsObjectName,
+    String? gcsGeneration,
+    String? gcsMd5Hash,
+    int? gcsByteSize,
   }) async {
     final areaRef = _firestore.collection('end_work_reports').doc('area_$area');
     final monthRef = areaRef.collection('months').doc(monthKey);
+    final submissionRef = monthRef.collection('submissions').doc(submissionId);
 
     final historyEntry = <String, dynamic>{
+      'submissionId': submissionId,
       'reportType': EndWorkReportHistoryTypes.detailedGcsEndReport,
       'gcsLogVerified': gcsLogVerified,
       'date': dateStr,
@@ -223,9 +235,17 @@ class EndWorkReportFirestoreRepository {
       'vehicleCount': vehicleCount,
       'metrics': metrics,
       if (logsUrl != null) 'logsUrl': logsUrl,
+      if (gcsObjectName?.trim().isNotEmpty == true)
+        'gcsObjectName': gcsObjectName!.trim(),
+      if (gcsGeneration?.trim().isNotEmpty == true)
+        'gcsGeneration': gcsGeneration!.trim(),
+      if (gcsMd5Hash?.trim().isNotEmpty == true)
+        'gcsMd5Hash': gcsMd5Hash!.trim(),
+      if (gcsByteSize != null) 'gcsByteSize': gcsByteSize,
     };
 
     final dayPayload = <String, dynamic>{
+      'submissionId': submissionId,
       'reportType': EndWorkReportHistoryTypes.detailedGcsEndReport,
       'gcsLogVerified': gcsLogVerified,
       'division': division,
@@ -241,58 +261,141 @@ class EndWorkReportFirestoreRepository {
       'history': FieldValue.arrayUnion(<Map<String, dynamic>>[historyEntry]),
     };
 
-    final batch = _firestore.batch();
+    final inserted = await _firestore.runTransaction<bool>((tx) async {
+      final submissionSnapshot = await tx.get(submissionRef);
+      if (submissionSnapshot.exists) {
+        final existing = submissionSnapshot.data() ?? const <String, dynamic>{};
+        final existingVerified = existing['gcsLogVerified'] == true;
+        if (existingVerified || !gcsLogVerified) {
+          tx.set(
+            submissionRef,
+            <String, dynamic>{
+              'lastRetryAt': FieldValue.serverTimestamp(),
+              'lastRetryUploadedBy': uploadedBy,
+            },
+            SetOptions(merge: true),
+          );
+          return false;
+        }
 
-    batch.set(
-      areaRef,
-      <String, dynamic>{
-        'division': division,
-        'area': area,
-        'updatedAt': FieldValue.serverTimestamp(),
-        'lastMonthKey': monthKey,
-        'lastReportDate': dateStr,
-      },
-      SetOptions(merge: true),
-    );
+        tx.set(
+          monthRef,
+          <String, dynamic>{
+            'division': division,
+            'area': area,
+            'monthKey': monthKey,
+            'updatedAt': FieldValue.serverTimestamp(),
+            'lastReportDate': dateStr,
+            'reports': <String, dynamic>{
+              dateStr: dayPayload,
+            },
+          },
+          SetOptions(merge: true),
+        );
+        tx.set(
+          submissionRef,
+          <String, dynamic>{
+            'gcsLogVerified': true,
+            'vehicleCount': vehicleCount,
+            'metrics': metrics,
+            'createdAt': createdAtIso,
+            'uploadedBy': uploadedBy,
+            if (logsUrl != null) 'logsUrl': logsUrl,
+            if (gcsObjectName?.trim().isNotEmpty == true)
+              'gcsObjectName': gcsObjectName!.trim(),
+            if (gcsGeneration?.trim().isNotEmpty == true)
+              'gcsGeneration': gcsGeneration!.trim(),
+            if (gcsMd5Hash?.trim().isNotEmpty == true)
+              'gcsMd5Hash': gcsMd5Hash!.trim(),
+            if (gcsByteSize != null) 'gcsByteSize': gcsByteSize,
+            'recoveredAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
+        );
+        return true;
+      }
 
-    batch.set(
-      monthRef,
-      <String, dynamic>{
-        'division': division,
-        'area': area,
-        'monthKey': monthKey,
-        'updatedAt': FieldValue.serverTimestamp(),
-        'lastReportDate': dateStr,
-        'reports': <String, dynamic>{
-          dateStr: dayPayload,
+      tx.set(
+        areaRef,
+        <String, dynamic>{
+          'division': division,
+          'area': area,
+          'updatedAt': FieldValue.serverTimestamp(),
+          'lastMonthKey': monthKey,
+          'lastReportDate': dateStr,
         },
-      },
-      SetOptions(merge: true),
-    );
+        SetOptions(merge: true),
+      );
 
-    await batch.commit();
+      tx.set(
+        monthRef,
+        <String, dynamic>{
+          'division': division,
+          'area': area,
+          'monthKey': monthKey,
+          'updatedAt': FieldValue.serverTimestamp(),
+          'lastReportDate': dateStr,
+          'reports': <String, dynamic>{
+            dateStr: dayPayload,
+          },
+        },
+        SetOptions(merge: true),
+      );
+
+      tx.set(
+        submissionRef,
+        <String, dynamic>{
+          'submissionId': submissionId,
+          'division': division,
+          'area': area,
+          'monthKey': monthKey,
+          'date': dateStr,
+          'reportType': EndWorkReportHistoryTypes.detailedGcsEndReport,
+          'gcsLogVerified': gcsLogVerified,
+          'createdAt': createdAtIso,
+          'uploadedBy': uploadedBy,
+          'vehicleCount': vehicleCount,
+          'metrics': metrics,
+          if (logsUrl != null) 'logsUrl': logsUrl,
+          if (gcsObjectName?.trim().isNotEmpty == true)
+            'gcsObjectName': gcsObjectName!.trim(),
+          if (gcsGeneration?.trim().isNotEmpty == true)
+            'gcsGeneration': gcsGeneration!.trim(),
+          if (gcsMd5Hash?.trim().isNotEmpty == true)
+            'gcsMd5Hash': gcsMd5Hash!.trim(),
+          if (gcsByteSize != null) 'gcsByteSize': gcsByteSize,
+          'createdAtServer': FieldValue.serverTimestamp(),
+        },
+      );
+      return true;
+    });
+    debugPrint(
+      '[EndWorkReport][submission] id=$submissionId area=$area month=$monthKey date=$dateStr inserted=$inserted gcsVerified=$gcsLogVerified',
+    );
+    return inserted;
   }
 
   Future<void> cleanupLockedDepartureCompletedPlates({
     required String area,
     required List<String> plateDocIds,
   }) async {
-    final batch = _firestore.batch();
-
-    for (final id in plateDocIds) {
-      batch.delete(_firestore.collection('plates').doc(id));
+    const chunkSize = 450;
+    for (var offset = 0; offset < plateDocIds.length; offset += chunkSize) {
+      final end = (offset + chunkSize).clamp(0, plateDocIds.length).toInt();
+      final batch = _firestore.batch();
+      for (final id in plateDocIds.sublist(offset, end)) {
+        batch.delete(_firestore.collection('plates').doc(id));
+      }
+      await batch.commit();
     }
 
     final countersRef = _firestore.collection('plate_counters').doc('area_$area');
-    batch.set(
-      countersRef,
+    await countersRef.set(
       <String, dynamic>{
         'departureCompletedEvents': 0,
       },
       SetOptions(merge: true),
     );
-
-    await batch.commit();
   }
 
   DocumentReference<Map<String, dynamic>> _plateOutLogRef({

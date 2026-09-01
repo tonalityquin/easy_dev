@@ -38,7 +38,7 @@ Future<List<LocalCommuteRecord>> _loadLocalCommuteRecordsFromSqlite({
 
   if (needWorkIn || needWorkOut) {
     final workRows = await db.query(
-      'simple_work_attendance',
+      AttBrkModeDb.workAttendanceTable,
       columns: ['date', 'type', 'time'],
       orderBy: 'date ASC, created_at ASC',
     );
@@ -63,7 +63,7 @@ Future<List<LocalCommuteRecord>> _loadLocalCommuteRecordsFromSqlite({
           LocalCommuteRecord(
             status: statusLabel,
             dateTime: dt,
-            localTable: 'simple_work_attendance',
+            localTable: AttBrkModeDb.workAttendanceTable,
             localDate: dateStr,
             localType: typeCode,
           ),
@@ -77,7 +77,7 @@ Future<List<LocalCommuteRecord>> _loadLocalCommuteRecordsFromSqlite({
   final needBreak = statuses.contains('휴게');
   if (needBreak) {
     final breakRows = await db.query(
-      'simple_break_attendance',
+      AttBrkModeDb.breakAttendanceTable,
       columns: ['date', 'type', 'time'],
       orderBy: 'date ASC, created_at ASC',
     );
@@ -93,7 +93,7 @@ Future<List<LocalCommuteRecord>> _loadLocalCommuteRecordsFromSqlite({
           LocalCommuteRecord(
             status: '휴게',
             dateTime: dt,
-            localTable: 'simple_break_attendance',
+            localTable: AttBrkModeDb.breakAttendanceTable,
             localDate: dateStr,
             localType: typeCode,
           ),

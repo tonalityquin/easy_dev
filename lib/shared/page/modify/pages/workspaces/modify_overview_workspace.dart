@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../../../../features/location/applications/location_state.dart';
 import '../../../../plate/domain/models/plate_model.dart';
 import '../../../../plate/editor/domain/plate_editor_workspace.dart';
 import '../../../../plate/editor/domain/plate_parking_display.dart';
@@ -52,12 +54,16 @@ class ModifyOverviewWorkspace extends StatelessWidget {
     return '$countType · ${controller.selectedRegularDurationHours}시간 · ${controller.selectedRegularAmount}원';
   }
 
-  String _parkingSummary() {
+  String _parkingSummary(BuildContext context) {
+    final locations = context.watch<LocationState>().locations;
     final location = controller.locationController.text.trim();
     final priorityCount = controller.selectedParkingPriorities.length;
     final locationValue = location.isEmpty
         ? ''
-        : plateParkingOverviewLocation(location);
+        : plateParkingOverviewLocation(
+            location,
+            locations: locations,
+          );
     if (priorityCount == 0) return locationValue;
     if (locationValue.isEmpty) return '우선 $priorityCount';
     return '$locationValue · 우선 $priorityCount';
@@ -66,7 +72,7 @@ class ModifyOverviewWorkspace extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final memo = controller.customStatusController.text.trim();
-    final parkingValue = _parkingSummary();
+    final parkingValue = _parkingSummary(context);
     final hasParking = parkingValue.trim().isNotEmpty;
     final hasPhotos = (plate.imageUrls?.isNotEmpty ?? false) ||
         controller.capturedImages.isNotEmpty;
@@ -91,13 +97,13 @@ class ModifyOverviewWorkspace extends StatelessWidget {
         status: hasParking
             ? PlateEditorSectionStatus.complete
             : isMinorMode
-                ? PlateEditorSectionStatus.optional
-                : PlateEditorSectionStatus.incomplete,
+            ? PlateEditorSectionStatus.optional
+            : PlateEditorSectionStatus.incomplete,
         onTap: () => onWorkspaceTap(PlateEditorWorkspace.parking),
       ),
       PlateEditorOverviewPhotoSection(
         summary:
-            '등록 ${plate.imageUrls?.length ?? 0} · 신규 ${controller.capturedImages.length}',
+        '등록 ${plate.imageUrls?.length ?? 0} · 신규 ${controller.capturedImages.length}',
         status: hasPhotos
             ? PlateEditorSectionStatus.complete
             : PlateEditorSectionStatus.none,
@@ -147,15 +153,15 @@ class ModifyOverviewWorkspace extends StatelessWidget {
         value: statusContextResolving
             ? '상태 정보 확인 중'
             : statusContextError != null
-                ? '상태 정보를 확인하지 못했습니다.'
-                : memo,
+            ? '상태 정보를 확인하지 못했습니다.'
+            : memo,
         status: statusContextResolving
             ? PlateEditorSectionStatus.loading
             : statusContextError != null
-                ? PlateEditorSectionStatus.error
-                : memo.isNotEmpty
-                    ? PlateEditorSectionStatus.complete
-                    : PlateEditorSectionStatus.none,
+            ? PlateEditorSectionStatus.error
+            : memo.isNotEmpty
+            ? PlateEditorSectionStatus.complete
+            : PlateEditorSectionStatus.none,
         onTap: () => onWorkspaceTap(PlateEditorWorkspace.memo),
       ),
     ];

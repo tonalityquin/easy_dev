@@ -8,6 +8,7 @@ abstract class UserRepository {
   Future<UserModel?> getUserById(String userId);
   Future<UserModel?> getUserByHandle(String handle);
   Future<TabletModel?> getTabletByHandle(String handle);
+  Future<TabletModel?> getTabletByPhone(String phone);
   Future<TabletModel?> getTabletByHandleAndAreaName(String handle, String areaName);
 
   Future<void> updateLoadCurrentArea(String phone, String area, String currentArea);
@@ -17,15 +18,15 @@ abstract class UserRepository {
 
   Future<void> setUserActiveStatus(String userId, {required bool isActive});
 
-  Future<void> updateLoadCurrentAreaTablet(String handle, String areaName, String currentArea);
-  Future<void> areaPickerCurrentAreaTablet(String handle, String areaName, String currentArea);
-  Future<void> updateLogOutTabletStatus(String handle, String areaName, {bool? isWorking, bool? isSaved});
-  Future<void> updateWorkingTabletStatus(String handle, String areaName, {bool? isWorking, bool? isSaved});
+  Future<void> updateLoadCurrentAreaTablet(String tabletId, String currentArea);
+  Future<void> areaPickerCurrentAreaTablet(String tabletId, String currentArea);
+  Future<void> updateLogOutTabletStatus(String tabletId, {bool? isWorking, bool? isSaved});
+  Future<void> updateWorkingTabletStatus(String tabletId, {bool? isWorking, bool? isSaved});
 
   Future<void> addUserCard(UserModel user);
   Future<void> addTabletCard(TabletModel tablet);
   Future<void> updateUser(UserModel user);
-  Future<void> updateTablet(TabletModel tablet);
+  Future<void> updateTablet(TabletModel tablet, {String? previousId});
   Future<void> deleteUsers(List<String> ids);
   Future<void> deleteTablets(List<String> ids);
 

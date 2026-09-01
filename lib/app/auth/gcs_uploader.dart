@@ -19,6 +19,7 @@ class GcsCsvUploadReceipt {
   final int csvDataRowCount;
   final int uniqueDocumentCount;
   final String? md5Hash;
+  final String generation;
   final bool sectorColumnsRequired;
   final bool sectorColumnsVerified;
   final bool verified;
@@ -32,6 +33,7 @@ class GcsCsvUploadReceipt {
     required this.csvDataRowCount,
     required this.uniqueDocumentCount,
     required this.md5Hash,
+    required this.generation,
     required this.sectorColumnsRequired,
     required this.sectorColumnsVerified,
     required this.verified,
@@ -259,7 +261,7 @@ Future<gcs.Object> _uploadCsvToGcs({
   required String csv,
   required String destinationPath,
   required String purpose,
-  bool makePublicRead = true,
+  bool makePublicRead = false,
 }) async {
   if (destinationPath.trim().isEmpty) {
     const msg = 'destinationPath가 비어 있어 CSV를 업로드할 수 없습니다.';
@@ -395,14 +397,15 @@ Future<GcsCsvUploadReceipt> uploadEndLogCsvWithReceipt({
   required String division,
   required String area,
   required String userName,
+  required String submissionId,
 }) async {
   final now = DateTime.now();
   final dateStr = now.toIso8601String().split('T').first;
-  final ts = now.millisecondsSinceEpoch;
   final safeUser = _sanitizeFileComponent(userName);
+  final safeSubmissionId = _sanitizeFileComponent(submissionId);
   final monthKey = _yyyyMM(now);
-  final fileName = '${safeUser}_${ts}_ToDoLogs_${dateStr}.csv';
-  final path = '$division/$area/logs/$monthKey/$ts/$fileName';
+  final fileName = '${safeUser}_${safeSubmissionId}_ToDoLogs_${dateStr}.csv';
+  final path = '$division/$area/logs/$monthKey/$safeSubmissionId/$fileName';
   final rows = _buildEndLogCsvRows(
     report: report,
     division: division,
@@ -461,10 +464,12 @@ Future<GcsCsvUploadReceipt> uploadEndLogCsvWithReceipt({
       remoteByteSize > 0 &&
       md5Matched &&
       uniqueDocuments.length == items.length;
-  final url = 'https://storage.googleapis.com/$kBucketName/$objectName';
+  final generation = (verifiedObject.generation ?? inserted.generation ?? '').trim();
+  final baseUrl = 'https://storage.googleapis.com/$kBucketName/$objectName';
+  final url = generation.isEmpty ? baseUrl : '$baseUrl?generation=$generation';
 
   debugPrint(
-    '[GCS_END_LOG] object=$objectName bytes=$remoteByteSize/$byteSize '
+    '[GCS_END_LOG] submission=$submissionId object=$objectName generation=$generation private=true bytes=$remoteByteSize/$byteSize '
     'vehicles=${items.length} uniqueDocs=${uniqueDocuments.length} '
     'csvRows=${rows.length} sectorEnabled=$sectorEnabled '
     'sectorHeaders=$sectorHeaderPresent md5Matched=$md5Matched verified=$verified',
@@ -479,6 +484,7 @@ Future<GcsCsvUploadReceipt> uploadEndLogCsvWithReceipt({
     csvDataRowCount: rows.length,
     uniqueDocumentCount: uniqueDocuments.length,
     md5Hash: verifiedMd5.isNotEmpty ? verifiedMd5 : insertedMd5,
+    generation: generation,
     sectorColumnsRequired: sectorEnabled,
     sectorColumnsVerified: sectorHeaderPresent,
     verified: verified,
@@ -490,12 +496,17 @@ Future<String?> uploadEndLogCsv({
   required String division,
   required String area,
   required String userName,
+  String? submissionId,
 }) async {
+  final effectiveSubmissionId = (submissionId ?? '').trim().isNotEmpty
+      ? submissionId!.trim()
+      : DateTime.now().microsecondsSinceEpoch.toString();
   final receipt = await uploadEndLogCsvWithReceipt(
     report: report,
     division: division,
     area: area,
     userName: userName,
+    submissionId: effectiveSubmissionId,
   );
   return receipt.verified ? receipt.url : null;
 }

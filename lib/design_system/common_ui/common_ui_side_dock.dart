@@ -378,32 +378,87 @@ Future<T?> showOperationsRightSideDock<T>({
   double maxWidth = 360,
   double widthFactor = 0.92,
   bool barrierDismissible = true,
+  double scrimOpacity = 0.22,
+}) {
+  return _showOperationsSideDock<T>(
+    context: context,
+    builder: builder,
+    barrierLabel: barrierLabel,
+    useRootNavigator: useRootNavigator,
+    maxWidth: maxWidth,
+    widthFactor: widthFactor,
+    barrierDismissible: barrierDismissible,
+    scrimOpacity: scrimOpacity,
+    side: CommonSideDockSide.right,
+  );
+}
+
+Future<T?> showOperationsLeftSideDock<T>({
+  required BuildContext context,
+  required WidgetBuilder builder,
+  String barrierLabel = '운영 패널',
+  bool useRootNavigator = false,
+  double maxWidth = 360,
+  double widthFactor = 0.92,
+  bool barrierDismissible = true,
+  double scrimOpacity = 0.22,
+}) {
+  return _showOperationsSideDock<T>(
+    context: context,
+    builder: builder,
+    barrierLabel: barrierLabel,
+    useRootNavigator: useRootNavigator,
+    maxWidth: maxWidth,
+    widthFactor: widthFactor,
+    barrierDismissible: barrierDismissible,
+    scrimOpacity: scrimOpacity,
+    side: CommonSideDockSide.left,
+  );
+}
+
+Future<T?> _showOperationsSideDock<T>({
+  required BuildContext context,
+  required WidgetBuilder builder,
+  required String barrierLabel,
+  required bool useRootNavigator,
+  required double maxWidth,
+  required double widthFactor,
+  required bool barrierDismissible,
+  required double scrimOpacity,
+  required CommonSideDockSide side,
 }) {
   final reduceMotion =
       MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+  final logTag = side == CommonSideDockSide.left
+      ? 'OperationsLeftSideDock'
+      : 'OperationsRightSideDock';
   debugPrint(
-    '[OperationsRightSideDock] push label=$barrierLabel reduceMotion=$reduceMotion motion=operations_210_190 translate=22 opacity=0.90_to_1',
+    '[$logTag] push label=$barrierLabel reduceMotion=$reduceMotion side=${side.name} motion=operations_210_190 translate=${side == CommonSideDockSide.left ? '-22_to_0' : '22_to_0'} opacity=0.90_to_1',
   );
   return Navigator.of(context, rootNavigator: useRootNavigator).push<T>(
-    _OperationsRightSideDockRoute<T>(
+    _OperationsSideDockRoute<T>(
       builder: builder,
       barrierLabelText: barrierLabel,
       reduceMotion: reduceMotion,
       maxWidth: maxWidth,
       widthFactor: widthFactor,
       scrimDismissible: barrierDismissible,
+      scrimOpacity: scrimOpacity.clamp(0.0, 1.0).toDouble(),
+      side: side,
     ),
   );
 }
 
-class _OperationsRightSideDockRoute<T> extends PopupRoute<T> {
-  _OperationsRightSideDockRoute({
+class _OperationsSideDockRoute<T> extends PopupRoute<T> {
+  _OperationsSideDockRoute({
     required this.builder,
     required this.barrierLabelText,
     required this.reduceMotion,
     required this.maxWidth,
     required this.widthFactor,
     required this.scrimDismissible,
+    required this.scrimOpacity,
+    required this.side,
   });
 
   final WidgetBuilder builder;
@@ -412,8 +467,15 @@ class _OperationsRightSideDockRoute<T> extends PopupRoute<T> {
   final double maxWidth;
   final double widthFactor;
   final bool scrimDismissible;
+  final double scrimOpacity;
+  final CommonSideDockSide side;
   bool _closeRequested = false;
   String? _closeSource;
+  bool _layoutLogged = false;
+
+  String get _logTag => side == CommonSideDockSide.left
+      ? 'OperationsLeftSideDock'
+      : 'OperationsRightSideDock';
 
   @override
   bool get barrierDismissible => false;
@@ -438,7 +500,7 @@ class _OperationsRightSideDockRoute<T> extends PopupRoute<T> {
   void _dismissFromScrim(BuildContext context) {
     if (!scrimDismissible || _closeRequested) {
       debugPrint(
-        '[OperationsRightSideDock] close_ignored source=scrim label=$barrierLabelText requested=$_closeRequested dismissible=$scrimDismissible',
+        '[$_logTag] close_ignored source=scrim label=$barrierLabelText requested=$_closeRequested dismissible=$scrimDismissible side=${side.name}',
       );
       return;
     }
@@ -446,7 +508,7 @@ class _OperationsRightSideDockRoute<T> extends PopupRoute<T> {
     _closeSource = 'scrim';
     HapticFeedback.lightImpact();
     debugPrint(
-      '[OperationsRightSideDock] close source=scrim label=$barrierLabelText policy=exactly_once',
+      '[$_logTag] close source=scrim label=$barrierLabelText policy=exactly_once side=${side.name}',
     );
     Navigator.of(context).pop();
   }
@@ -457,7 +519,7 @@ class _OperationsRightSideDockRoute<T> extends PopupRoute<T> {
     if (popped) {
       _closeRequested = true;
       debugPrint(
-        '[OperationsRightSideDock] pop label=$barrierLabelText source=${_closeSource ?? 'route'} policy=exactly_once',
+        '[$_logTag] pop label=$barrierLabelText source=${_closeSource ?? 'route'} policy=exactly_once side=${side.name}',
       );
     }
     return popped;
@@ -490,8 +552,16 @@ class _OperationsRightSideDockRoute<T> extends PopupRoute<T> {
             final maxDockWidth =
                 (media.size.width * widthFactor).clamp(240.0, double.infinity);
             final dockWidth = math.min(maxWidth, maxDockWidth);
-            final translateX = 22.0 * (1 - progress);
+            final isLeft = side == CommonSideDockSide.left;
+            final translateX = (isLeft ? -22.0 : 22.0) * (1 - progress);
             final opacity = .90 + (.10 * progress);
+
+            if (!_layoutLogged) {
+              _layoutLogged = true;
+              debugPrint(
+                '[$_logTag] layout label=$barrierLabelText side=${side.name} anchor=${isLeft ? 'left' : 'right'} translate=${isLeft ? '-22_to_0' : '22_to_0'} dockWidth=${dockWidth.toStringAsFixed(1)} screenWidth=${media.size.width.toStringAsFixed(1)} opacity=0.90_to_1 scrim=${scrimOpacity.toStringAsFixed(2)}',
+              );
+            }
 
             return PopScope(
               canPop: !reversing,
@@ -511,7 +581,7 @@ class _OperationsRightSideDockRoute<T> extends PopupRoute<T> {
                             behavior: HitTestBehavior.opaque,
                             onTap: () => _dismissFromScrim(context),
                             child: ColoredBox(
-                              color: tokens.scrim.withOpacity(.22 * progress),
+                              color: tokens.scrim.withOpacity(scrimOpacity * progress),
                             ),
                           ),
                         ),
@@ -521,7 +591,8 @@ class _OperationsRightSideDockRoute<T> extends PopupRoute<T> {
                   Positioned(
                     top: 0,
                     bottom: 0,
-                    right: 0,
+                    left: isLeft ? 0 : null,
+                    right: isLeft ? null : 0,
                     width: dockWidth,
                     child: Transform.translate(
                       offset: Offset(translateX, 0),
@@ -530,6 +601,7 @@ class _OperationsRightSideDockRoute<T> extends PopupRoute<T> {
                         child: _CommonGlassSideDock(
                           width: dockWidth,
                           height: media.size.height,
+                          side: side,
                           child: SafeArea(
                             child: Padding(
                               padding: EdgeInsets.only(

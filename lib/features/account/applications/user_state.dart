@@ -2,13 +2,11 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import '../../../app/init/work_schedule_prefs.dart';
 import '../../../app/utils/dev_firebase_debug_dialog.dart';
-import '../../../shared/tts/application/tts_ownership.dart';
-import '../../../shared/tts/application/tts_user_filters.dart';
+import '../../../shared/auth/tablet_phone.dart';
 import '../../../shared/tts/services/plate/plate_tts_listener_service.dart';
 import '../../commute/domain/repositories/commute_log_repository.dart';
 import '../../mode_single/application/att_brk_repository.dart';
@@ -19,6 +17,34 @@ import '../domain/models/tablet/tablet_model.dart';
 import '../domain/models/user/user_model.dart';
 import '../domain/repositories/user_repository.dart';
 
+
+enum ClockInIssueClearFailure {
+  noUser,
+  localDatabase,
+  preferenceKeys,
+  preferenceDateWrite,
+  preferenceFlagWrite,
+  preferences,
+}
+
+class ClockInIssueClearResult {
+  const ClockInIssueClearResult.success()
+      : isSuccess = true,
+        failure = null,
+        detail = null,
+        stackTrace = null;
+
+  const ClockInIssueClearResult.failure(
+    this.failure, {
+    this.detail,
+    this.stackTrace,
+  }) : isSuccess = false;
+
+  final bool isSuccess;
+  final ClockInIssueClearFailure? failure;
+  final String? detail;
+  final String? stackTrace;
+}
 
 class UserState extends ChangeNotifier {
   final UserRepository _repository;
@@ -49,6 +75,7 @@ class UserState extends ChangeNotifier {
   static const Set<String> _userSensitiveKeys = <String>{
     'phone',
     'handle',
+    'tabletPhone',
     'role',
     'division',
     'position',
@@ -88,7 +115,7 @@ class UserState extends ChangeNotifier {
 
   String get name => _session?.displayName ?? '';
 
-  String get phone => _user?.phone ?? _tablet?.handle ?? '';
+  String get phone => _user?.phone ?? _tablet?.phone ?? '';
 
   String get password => _user?.password ?? _tablet?.password ?? '';
 
@@ -106,45 +133,6 @@ class UserState extends ChangeNotifier {
 
   UserState(this._repository, this._areaState) {
     _areaState.addListener(_fetchUsersByAreaWithCache);
-  }
-
-  Future<void> _startTtsForArea(String area) async {
-    final trimmed = area.trim();
-    if (trimmed.isEmpty) return;
-
-    Future<bool> sendToForeground(String a) async {
-      try {
-        final running = await FlutterForegroundTask.isRunningService;
-        if (!running) return false;
-        final filters = await TtsUserFilters.load();
-        FlutterForegroundTask.sendDataToTask({
-          'area': a,
-          'ttsFilters': filters.toMap(),
-        });
-        return true;
-      } catch (_) {
-        return false;
-      }
-    }
-
-    try {
-      final owner = await TtsOwnership.getOwner();
-      if (owner == TtsOwner.app) {
-        PlateTtsListenerService.start(trimmed);
-        return;
-      }
-
-      final ok = await sendToForeground(trimmed);
-      await PlateTtsListenerService.stop();
-      if (!ok) {
-        try {
-          await TtsOwnership.setOwner(TtsOwner.app);
-        } catch (_) {}
-        PlateTtsListenerService.start(trimmed);
-      }
-    } catch (_) {
-      PlateTtsListenerService.start(trimmed);
-    }
   }
 
   void _clearSelectionSilently() {
@@ -222,31 +210,32 @@ class UserState extends ChangeNotifier {
     }
   }
 
-  Future<void> isHeWorking() async {
+  Future<void> setWorkingStatus(bool isWorking) async {
     if (_isTablet) {
-      if (_tablet == null) return;
-      final newStatus = !_tablet!.isWorking;
+      if (_tablet == null || _tablet!.isWorking == isWorking) return;
       await _repository.updateWorkingTabletStatus(
-        _tablet!.handle,
-        _tablet!.areas.firstOrNull ?? '',
-        isWorking: newStatus,
+        _tablet!.id,
+        isWorking: isWorking,
       );
-      _tablet = _tablet!.copyWith(isWorking: newStatus);
+      _tablet = _tablet!.copyWith(isWorking: isWorking);
       _session = TabletSessionAccount(_tablet!);
       notifyListeners();
       return;
     }
 
-    if (_user == null) return;
-    final newStatus = !_user!.isWorking;
+    if (_user == null || _user!.isWorking == isWorking) return;
     await _repository.updateWorkingUserStatus(
       _user!.phone,
       _user!.areas.firstOrNull ?? '',
-      isWorking: newStatus,
+      isWorking: isWorking,
     );
-    _user = _user!.copyWith(isWorking: newStatus);
+    _user = _user!.copyWith(isWorking: isWorking);
     _session = UserSessionAccount(_user!);
     notifyListeners();
+  }
+
+  Future<void> isHeWorking() async {
+    await setWorkingStatus(!isWorking);
   }
 
   String? _tryParseLimitError(Object e, String key) {
@@ -381,32 +370,97 @@ class UserState extends ChangeNotifier {
     }
   }
 
-  Future<void> clearClockInIssueFlag() async {
-    if (_user == null) return;
+  Future<ClockInIssueClearResult> clearClockInIssueFlag() async {
+    if (_user == null) {
+      debugPrint(
+        '[CLOCK-IN-ISSUE] clear failed reason=noUser',
+      );
+      return const ClockInIssueClearResult.failure(
+        ClockInIssueClearFailure.noUser,
+      );
+    }
 
     final now = DateTime.now();
     final today = DateFormat('yyyy-MM-dd').format(now);
-    _hasClockInToday = false;
-    _hasClockInTodayForDate = today;
-    notifyListeners();
+
+    debugPrint(
+      '[CLOCK-IN-ISSUE] clear start '
+      'date=$today '
+      'clockInToday=$_hasClockInToday '
+      'cachedDate=$_hasClockInTodayForDate',
+    );
 
     try {
       await AttBrkRepository.instance.clearEventsForDate(now);
-    } catch (e, st) {
-      debugPrint('clearClockInIssueFlag 로컬 펀칭 초기화 실패: $e\n$st');
+    } catch (error, stackTrace) {
+      debugPrint(
+        '[CLOCK-IN-ISSUE] clear failed '
+        'reason=localDatabase '
+        'error=$error\n$stackTrace',
+      );
+      return ClockInIssueClearResult.failure(
+        ClockInIssueClearFailure.localDatabase,
+        detail: error.toString(),
+        stackTrace: stackTrace.toString(),
+      );
     }
 
     final dateKey = _clockInCacheDateKey;
     final flagKey = _clockInCacheFlagKey;
-    if (dateKey == null || flagKey == null) return;
+    if (dateKey == null || flagKey == null) {
+      debugPrint(
+        '[CLOCK-IN-ISSUE] clear failed reason=preferenceKeys',
+      );
+      return const ClockInIssueClearResult.failure(
+        ClockInIssueClearFailure.preferenceKeys,
+      );
+    }
 
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(dateKey, today);
-      await prefs.setBool(flagKey, false);
-    } catch (e, st) {
-      debugPrint('clearClockInIssueFlag prefs 캐시 쓰기 실패: $e\n$st');
+      final dateSaved = await prefs.setString(dateKey, today);
+      if (!dateSaved) {
+        debugPrint(
+          '[CLOCK-IN-ISSUE] clear failed reason=preferenceDateWrite',
+        );
+        return const ClockInIssueClearResult.failure(
+          ClockInIssueClearFailure.preferenceDateWrite,
+        );
+      }
+
+      final flagSaved = await prefs.setBool(flagKey, false);
+      if (!flagSaved) {
+        debugPrint(
+          '[CLOCK-IN-ISSUE] clear failed reason=preferenceFlagWrite',
+        );
+        return const ClockInIssueClearResult.failure(
+          ClockInIssueClearFailure.preferenceFlagWrite,
+        );
+      }
+    } catch (error, stackTrace) {
+      debugPrint(
+        '[CLOCK-IN-ISSUE] clear failed '
+        'reason=preferences '
+        'error=$error\n$stackTrace',
+      );
+      return ClockInIssueClearResult.failure(
+        ClockInIssueClearFailure.preferences,
+        detail: error.toString(),
+        stackTrace: stackTrace.toString(),
+      );
     }
+
+    _hasClockInToday = false;
+    _hasClockInTodayForDate = today;
+    notifyListeners();
+
+    debugPrint(
+      '[CLOCK-IN-ISSUE] clear success '
+      'date=$today '
+      'clockInToday=$_hasClockInToday',
+    );
+
+    return const ClockInIssueClearResult.success();
   }
 
   Future<void> updateLoginUser(UserModel updatedUser) async {
@@ -449,6 +503,21 @@ class UserState extends ChangeNotifier {
         '[USER-STATE][${DateTime.now().toIso8601String()}] updateLoginUserLocalOnly firebaseOk=$firebaseOk currentUser=${FirebaseGoogleAuthBridge.instance.currentUser?.email} anonymous=${FirebaseGoogleAuthBridge.instance.currentUser?.isAnonymous}');
 
     await saveCardToUserPhone(updatedUser);
+  }
+
+  void applyEphemeralLoginUser(UserModel updatedUser) {
+    final previousSessionId = _session?.id ?? '';
+    _isTablet = false;
+    _user = updatedUser;
+    _tablet = null;
+    _session = UserSessionAccount(updatedUser);
+    _hasClockInToday = false;
+    _hasClockInTodayForDate = null;
+    _userList = _replaceItem(_userList, updatedUser);
+    notifyListeners();
+    debugPrint(
+      '[USER-STATE][${DateTime.now().toIso8601String()}] applyEphemeralLoginUser previousSessionId=$previousSessionId currentSessionId=${updatedUser.id}',
+    );
   }
 
   Future<void> _applyCurrentUserScheduleLocalOnly(UserModel updatedUser) async {
@@ -661,6 +730,21 @@ class UserState extends ChangeNotifier {
     await _saveTabletPrefs(updatedTablet);
   }
 
+  void applyEphemeralLoginTablet(TabletModel updatedTablet) {
+    final previousSessionId = _session?.id ?? '';
+    _isTablet = true;
+    _user = null;
+    _tablet = updatedTablet;
+    _session = TabletSessionAccount(updatedTablet);
+    _hasClockInToday = false;
+    _hasClockInTodayForDate = null;
+    _tabletList = _replaceTabletItem(_tabletList, updatedTablet);
+    notifyListeners();
+    debugPrint(
+      '[USER-STATE][${DateTime.now().toIso8601String()}] applyEphemeralLoginTablet previousSessionId=$previousSessionId currentSessionId=${updatedTablet.id}',
+    );
+  }
+
   Future<bool> updateUserCardAsAdmin(
     UserModel updatedUser, {
     void Function(String)? onError,
@@ -697,12 +781,10 @@ class UserState extends ChangeNotifier {
     void Function(String)? onError,
   }) async {
     try {
-      await _repository.updateTablet(updatedTablet);
-      if (previousId != null &&
-          previousId.isNotEmpty &&
-          previousId != updatedTablet.id) {
-        await _repository.deleteTablets(<String>[previousId]);
-      }
+      await _repository.updateTablet(
+        updatedTablet,
+        previousId: previousId,
+      );
 
       final area = _areaState.currentArea.trim();
       if (previousId != null &&
@@ -726,7 +808,7 @@ class UserState extends ChangeNotifier {
 
   Future<void> discardLocalLoginSession({required String source}) async {
     try {
-      PlateTtsListenerService.stop();
+      await PlateTtsListenerService.stop();
     } catch (error, stackTrace) {
       debugPrint(
         '[USER-STATE][${DateTime.now().toIso8601String()}] local login TTS 정리 실패: source=$source, error=$error\n$stackTrace',
@@ -750,106 +832,142 @@ class UserState extends ChangeNotifier {
     );
   }
 
-  Future<void> clearUserToPhone() async {
-    if ((_isTablet && _tablet == null) || (!_isTablet && _user == null)) {
-      await _areaState.clearSession(
-        source: _isTablet
-            ? 'UserState.clearUserToPhone.noTablet'
-            : 'UserState.clearUserToPhone.noUser',
-      );
-      _hasClockInToday = false;
-      _hasClockInTodayForDate = null;
-      _user = null;
-      _tablet = null;
-      _session = null;
-      _isTablet = false;
-      notifyListeners();
-      return;
-    }
+  Future<void> clearUserToPhone({
+    void Function(String)? onDiagnostic,
+    bool skipRemoteStatusUpdate = false,
+    bool keepArea = true,
+  }) async {
+    final missingActiveModel =
+        (_isTablet && _tablet == null) || (!_isTablet && _user == null);
 
-    try {
-      if (_isTablet) {
-        await _repository.updateLogOutTabletStatus(
-          _tablet!.handle,
-          _tablet!.areas.firstOrNull ?? '',
-          isWorking: false,
-          isSaved: false,
-        );
-      } else {
-        await _repository.updateLogOutUserStatus(
-          _user!.phone,
-          _user!.areas.firstOrNull ?? '',
-          isWorking: false,
-          isSaved: false,
-        );
-      }
-
+    if (skipRemoteStatusUpdate) {
+      final line =
+          '[USER-STATE][${DateTime.now().toIso8601String()}] clearUserToPhone remote status update skipped for ephemeral debug session';
+      debugPrint(line);
+      onDiagnostic?.call(line);
+    } else if (missingActiveModel) {
+      final label = _isTablet ? 'tablet' : 'user';
+      final line =
+          '[USER-STATE][${DateTime.now().toIso8601String()}] clearUserToPhone active $label model 없음: remote status update 생략';
+      debugPrint(line);
+      onDiagnostic?.call(line);
+    } else {
       try {
-        final prefs = await SharedPreferences.getInstance();
-        final dateKey = _clockInCacheDateKey;
-        final flagKey = _clockInCacheFlagKey;
-        if (dateKey != null) {
-          await prefs.remove(dateKey);
+        if (_isTablet) {
+          await _repository.updateLogOutTabletStatus(
+            _tablet!.id,
+            isWorking: false,
+            isSaved: false,
+          );
+        } else {
+          await _repository.updateLogOutUserStatus(
+            _user!.phone,
+            _user!.areas.firstOrNull ?? '',
+            isWorking: false,
+            isSaved: false,
+          );
         }
-        if (flagKey != null) {
-          await prefs.remove(flagKey);
-        }
+        final line =
+            '[USER-STATE][${DateTime.now().toIso8601String()}] clearUserToPhone remote logout status update complete';
+        debugPrint(line);
+        onDiagnostic?.call(line);
       } catch (e, st) {
-        debugPrint('clearUserToPhone clock-in 캐시 제거 실패: $e\n$st');
-      }
-
-      await _clearUserPrefsSelective(keepArea: true);
-    } catch (e, st) {
-      debugPrint('clearUserToPhone error: $e');
-      await DevFirebaseDebugDialog.show(
-        operation: _isTablet ? 'tablet.logout.updateStatus' : 'user.logout.updateStatus',
-        error: e,
-        stackTrace: st,
-        details: <String, Object?>{
-          'isTablet': _isTablet,
-          'tabletId': _tablet?.id,
-          'userId': _user?.id,
-          'source': 'UserState.clearUserToPhone',
-        },
-      );
-    } finally {
-      try {
-        PlateTtsListenerService.stop();
-      } catch (_) {}
-
-      try {
-        await FirebaseGoogleAuthBridge.instance.signOutFirebaseOnly();
-        debugPrint(
-            '[USER-STATE][${DateTime.now().toIso8601String()}] clearUserToPhone Firebase signOut complete');
-      } catch (e, st) {
-        debugPrint(
-            '[USER-STATE][${DateTime.now().toIso8601String()}] clearUserToPhone Firebase signOut failed: $e\n$st');
+        final line =
+            '[USER-STATE][${DateTime.now().toIso8601String()}] clearUserToPhone remote logout status update failed: $e';
+        debugPrint('$line\n$st');
+        onDiagnostic?.call(line);
         await DevFirebaseDebugDialog.show(
-          operation: 'firebaseAuth.signOutFirebaseOnly',
+          operation:
+              _isTablet ? 'tablet.logout.updateStatus' : 'user.logout.updateStatus',
           error: e,
           stackTrace: st,
           details: <String, Object?>{
             'isTablet': _isTablet,
-            'source': 'UserState.clearUserToPhone.finally',
+            'tabletId': _tablet?.id,
+            'userId': _user?.id,
+            'source': 'UserState.clearUserToPhone',
+            'localCleanupContinues': true,
           },
         );
       }
+    }
 
-      await _areaState.clearSession(
-        source: 'UserState.clearUserToPhone',
+    Object? localCleanupError;
+    StackTrace? localCleanupStackTrace;
+    try {
+      onDiagnostic?.call(
+        '[USER-STATE][${DateTime.now().toIso8601String()}] local restore credential cleanup start',
       );
-      debugPrint(
-        '[USER-STATE][${DateTime.now().toIso8601String()}] AreaState 세션 캐시 초기화 완료',
+      await _clearLogoutLocalPrefsGuaranteed(keepArea: keepArea);
+      final line =
+          '[USER-STATE][${DateTime.now().toIso8601String()}] local restore credential cleanup complete';
+      debugPrint(line);
+      onDiagnostic?.call(line);
+    } catch (e, st) {
+      localCleanupError = e;
+      localCleanupStackTrace = st;
+      final line =
+          '[USER-STATE][${DateTime.now().toIso8601String()}] local restore credential cleanup failed: $e';
+      debugPrint('$line\n$st');
+      onDiagnostic?.call(line);
+      await DevFirebaseDebugDialog.show(
+        operation: 'user.logout.localCredentialCleanup',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'isTablet': _isTablet,
+          'source': 'UserState.clearUserToPhone',
+        },
       );
+    }
 
-      _hasClockInToday = false;
-      _hasClockInTodayForDate = null;
+    try {
+      await PlateTtsListenerService.stop();
+    } catch (_) {}
 
-      _user = null;
-      _tablet = null;
-      _session = null;
-      _isTablet = false;
-      notifyListeners();
+    try {
+      await FirebaseGoogleAuthBridge.instance.signOutFirebaseOnly();
+      final line =
+          '[USER-STATE][${DateTime.now().toIso8601String()}] clearUserToPhone Firebase signOut complete';
+      debugPrint(line);
+      onDiagnostic?.call(line);
+    } catch (e, st) {
+      final line =
+          '[USER-STATE][${DateTime.now().toIso8601String()}] clearUserToPhone Firebase signOut failed: $e';
+      debugPrint('$line\n$st');
+      onDiagnostic?.call(line);
+      await DevFirebaseDebugDialog.show(
+        operation: 'firebaseAuth.signOutFirebaseOnly',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'isTablet': _isTablet,
+          'source': 'UserState.clearUserToPhone.finally',
+        },
+      );
+    }
+
+    await _areaState.clearSession(
+      source: 'UserState.clearUserToPhone',
+    );
+    final areaLine =
+        '[USER-STATE][${DateTime.now().toIso8601String()}] AreaState 세션 캐시 초기화 완료';
+    debugPrint(areaLine);
+    onDiagnostic?.call(areaLine);
+
+    _hasClockInToday = false;
+    _hasClockInTodayForDate = null;
+    _user = null;
+    _tablet = null;
+    _session = null;
+    _isTablet = false;
+    notifyListeners();
+
+    if (localCleanupError != null) {
+      Error.throwWithStackTrace(
+        localCleanupError,
+        localCleanupStackTrace ?? StackTrace.current,
+      );
     }
   }
 
@@ -981,14 +1099,15 @@ class UserState extends ChangeNotifier {
 
   Future<void> _saveTabletPrefs(TabletModel tablet) async {
     final prefs = await SharedPreferences.getInstance();
-    final handle = tablet.handle.trim().toLowerCase();
+    final phone = TabletPhone.normalize(tablet.phone);
     final areaName = (tablet.selectedArea ??
             tablet.currentArea ??
             tablet.areas.firstOrNull ??
             '')
         .trim();
 
-    await prefs.setString('handle', handle);
+    await prefs.setString('tabletPhone', phone);
+    await prefs.remove('handle');
     await prefs.setString('selectedArea', areaName);
     await prefs.setString(
         'englishSelectedAreaName', tablet.englishSelectedAreaName ?? areaName);
@@ -1074,7 +1193,6 @@ class UserState extends ChangeNotifier {
         division: effectiveDivision.isEmpty ? null : effectiveDivision,
       );
 
-      await _startTtsForArea(trimmedArea);
     } catch (e, st) {
       debugPrint("loadUserToLogInLocalOnly, 오류: $e\n$st");
     }
@@ -1152,7 +1270,6 @@ class UserState extends ChangeNotifier {
       _session = UserSessionAccount(userData);
       notifyListeners();
 
-      await _startTtsForArea(trimmedArea);
     } catch (e) {
       debugPrint("loadUserToLogIn, 오류: $e");
     }
@@ -1161,7 +1278,10 @@ class UserState extends ChangeNotifier {
   Future<void> loadTabletToLogIn() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final handle = prefs.getString('handle')?.trim().toLowerCase();
+      final tabletPhone = TabletPhone.normalize(
+        prefs.getString('tabletPhone') ?? '',
+      );
+      final legacyHandle = prefs.getString('handle')?.trim().toLowerCase();
       final selectedArea = prefs.getString('selectedArea')?.trim();
       final division = prefs.getString('division')?.trim();
       final role = prefs.getString('role')?.trim();
@@ -1169,15 +1289,24 @@ class UserState extends ChangeNotifier {
       final englishSelectedAreaName =
           prefs.getString('englishSelectedAreaName')?.trim();
 
-      if (handle == null || selectedArea == null) return;
+      if (selectedArea == null) return;
 
       final firebaseOk = await FirebaseGoogleAuthBridge.instance
           .ensureSignedInFromGoogleSession(interactive: false);
       debugPrint(
-          '[USER-STATE][${DateTime.now().toIso8601String()}] loadTabletToLogIn firebaseOk=$firebaseOk currentUser=${FirebaseGoogleAuthBridge.instance.currentUser?.email} anonymous=${FirebaseGoogleAuthBridge.instance.currentUser?.isAnonymous}');
+        '[USER-STATE][${DateTime.now().toIso8601String()}] loadTabletToLogIn firebaseOk=$firebaseOk currentUser=${FirebaseGoogleAuthBridge.instance.currentUser?.email} anonymous=${FirebaseGoogleAuthBridge.instance.currentUser?.isAnonymous}',
+      );
 
-      final tablet =
-          await _repository.getTabletByHandleAndAreaName(handle, selectedArea);
+      TabletModel? tablet;
+      if (tabletPhone.isNotEmpty) {
+        tablet = await _repository.getTabletByPhone(tabletPhone);
+      }
+      if (tablet == null && legacyHandle != null && legacyHandle.isNotEmpty) {
+        tablet = await _repository.getTabletByHandleAndAreaName(
+          legacyHandle,
+          selectedArea,
+        );
+      }
       if (tablet == null) return;
 
       final tabletData = tablet.copyWith(
@@ -1198,25 +1327,22 @@ class UserState extends ChangeNotifier {
         division: loginDivision,
       );
       debugPrint(
-        '[USER-STATE][${DateTime.now().toIso8601String()}] loadTabletToLogIn AreaRecord 서버 강제 동기화 완료: $loginDivision/$selectedArea',
+        '[USER-STATE][${DateTime.now().toIso8601String()}] loadTabletToLogIn AreaRecord 서버 강제 동기화 완료: $loginDivision/$selectedArea phone=${TabletPhone.mask(tabletData.phone)}',
       );
 
       _isTablet = true;
       _hasClockInToday = false;
       _hasClockInTodayForDate = null;
-
       _user = null;
       _tablet = tabletData;
       _session = TabletSessionAccount(tabletData);
       notifyListeners();
 
+      await _saveTabletPrefs(tabletData);
       await _repository.updateLoadCurrentAreaTablet(
-        handle,
-        tabletData.areas.firstOrNull ?? '',
+        tabletData.id,
         selectedArea,
       );
-
-      await _startTtsForArea(selectedArea);
     } catch (e, st) {
       debugPrint('loadTabletToLogIn, 오류: $e');
       await DevFirebaseDebugDialog.show(
@@ -1272,8 +1398,7 @@ class UserState extends ChangeNotifier {
 
       try {
         await _repository.areaPickerCurrentAreaTablet(
-          _tablet!.handle.trim(),
-          _tablet!.areas.firstOrNull ?? '',
+          _tablet!.id,
           newArea.trim(),
         );
       } catch (e) {
@@ -1281,7 +1406,6 @@ class UserState extends ChangeNotifier {
       }
 
       await _areaState.updateArea(newArea, isSyncing: true);
-      await _startTtsForArea(newArea);
       return;
     }
 
@@ -1303,7 +1427,6 @@ class UserState extends ChangeNotifier {
 
     await _areaState.updateArea(newArea, isSyncing: true);
 
-    await _startTtsForArea(newArea);
   }
 
   Future<void> _fetchUsersByAreaWithCache({bool force = false}) async {
@@ -1416,16 +1539,38 @@ class UserState extends ChangeNotifier {
     super.dispose();
   }
 
-  Future<void> _clearUserPrefsSelective({bool keepArea = true}) async {
+  Future<void> _clearLogoutLocalPrefsGuaranteed({bool keepArea = true}) async {
     final prefs = await SharedPreferences.getInstance();
-
-    for (final k in _userSensitiveKeys) {
-      await prefs.remove(k);
+    final keys = <String>{..._userSensitiveKeys};
+    final dateKey = _clockInCacheDateKey;
+    final flagKey = _clockInCacheFlagKey;
+    if (dateKey != null) {
+      keys.add(dateKey);
+    }
+    if (flagKey != null) {
+      keys.add(flagKey);
+    }
+    if (!keepArea) {
+      keys.add('selectedArea');
+      keys.add('englishSelectedAreaName');
     }
 
-    if (!keepArea) {
-      await prefs.remove('selectedArea');
-      await prefs.remove('englishSelectedAreaName');
+    final failures = <String>[];
+    for (final key in keys) {
+      try {
+        await prefs.remove(key);
+      } catch (e, st) {
+        failures.add(key);
+        debugPrint(
+          '[USER-STATE][${DateTime.now().toIso8601String()}] logout local key remove failed: key=$key, error=$e\n$st',
+        );
+      }
+    }
+
+    if (failures.isNotEmpty) {
+      throw StateError(
+        '로그아웃 로컬 자동복원 키 정리에 실패했습니다: ${failures.join(', ')}',
+      );
     }
   }
 }

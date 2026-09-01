@@ -7,7 +7,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../dev/application/area_state.dart';
-import '../schedule/weekly_work_schedule_editor.dart';
 
 enum MyInfoEntrySource {
   hqDashboard,
@@ -95,9 +94,6 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
     return <String, dynamic>{};
   }
 
-  bool get _weeklyScheduleVisible =>
-      widget.source == MyInfoEntrySource.hqDashboard;
-
   String get _sourceKey {
     switch (widget.source) {
       case MyInfoEntrySource.hqDashboard:
@@ -113,7 +109,6 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
       'profileVisible': true,
       'operationalDataVisible': false,
       'sessionLogoutVisible': false,
-      'weeklyScheduleVisible': _weeklyScheduleVisible,
       'areaConfigured': _area.trim().isNotEmpty,
       'divisionConfigured': _division.trim().isNotEmpty,
       'loading': _loading,
@@ -138,7 +133,6 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
     trace.log('component=my_info_dialog', progress: 0.18);
     trace.log('source=$_sourceKey', progress: 0.32);
     trace.log('profileVisible=true', progress: 0.46);
-    trace.log('weeklyScheduleVisible=$_weeklyScheduleVisible', progress: 0.6);
     trace.log('areaConfigured=${_area.trim().isNotEmpty}', progress: 0.72);
     trace.log(
       'divisionConfigured=${_division.trim().isNotEmpty}',
@@ -247,19 +241,9 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
             division: _division,
           ),
         ),
-        if (_weeklyScheduleVisible) ...[
-          const SizedBox(height: 14),
-          reveal(
-            1,
-            const WeeklyWorkScheduleEditor(
-              source: 'hq_my_info',
-              initiallyExpanded: true,
-            ),
-          ),
-        ],
         const SizedBox(height: 14),
         reveal(
-          _weeklyScheduleVisible ? 2 : 1,
+          1,
           SizedBox(
             width: double.infinity,
             height: 46,

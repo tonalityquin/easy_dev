@@ -116,16 +116,13 @@ class UserStatusService {
 
   
   Future<void> updateLogOutTabletStatus(
-      String handle,
-      String area, {
-        bool? isWorking,
-        bool? isSaved,
-      }) async {
-    final tabletId = '$handle-$area';
+    String tabletId, {
+    bool? isWorking,
+    bool? isSaved,
+  }) async {
     final updates = <String, dynamic>{};
     if (isWorking != null) updates['isWorking'] = isWorking;
     if (isSaved != null) updates['isSaved'] = isSaved;
-
     await _safeUpdate(
       _getTabletCollectionRef(),
       tabletId,
@@ -135,16 +132,13 @@ class UserStatusService {
   }
 
   Future<void> updateWorkingTabletStatus(
-      String handle,
-      String area, {
-        bool? isWorking,
-        bool? isSaved,
-      }) async {
-    final tabletId = '$handle-$area';
+    String tabletId, {
+    bool? isWorking,
+    bool? isSaved,
+  }) async {
     final updates = <String, dynamic>{};
     if (isWorking != null) updates['isWorking'] = isWorking;
     if (isSaved != null) updates['isSaved'] = isSaved;
-
     await _safeUpdate(
       _getTabletCollectionRef(),
       tabletId,
@@ -154,29 +148,25 @@ class UserStatusService {
   }
 
   Future<void> updateLoadCurrentAreaTablet(
-      String handle,
-      String area,
-      String currentArea,
-      ) async {
-    final tabletId = '$handle-$area';
+    String tabletId,
+    String currentArea,
+  ) async {
     await _safeUpdate(
       _getTabletCollectionRef(),
       tabletId,
-      {'currentArea': currentArea},
+      <String, dynamic>{'currentArea': currentArea},
       opName: 'updateLoadCurrentAreaTablet',
     );
   }
 
   Future<void> areaPickerCurrentAreaTablet(
-      String handle,
-      String area,
-      String currentArea,
-      ) async {
-    final tabletId = '$handle-$area';
+    String tabletId,
+    String currentArea,
+  ) async {
     await _safeUpdate(
       _getTabletCollectionRef(),
       tabletId,
-      {'currentArea': currentArea},
+      <String, dynamic>{'currentArea': currentArea},
       opName: 'areaPickerCurrentAreaTablet',
     );
   }

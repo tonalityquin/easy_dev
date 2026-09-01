@@ -7,9 +7,8 @@ import 'package:provider/provider.dart';
 import '../../../../app/init/app_exit_service.dart';
 import '../../../../app/init/logout_helper.dart';
 import '../../../../app/utils/status_dialog.dart';
-import '../../../../design_system/common_ui/common_ui_components.dart';
-import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../account/applications/user_state.dart';
+import '../../../dashboard/applications/common/break_record_result.dart';
 import '../../../dashboard/sheets/double/double_home_dash_board_controller.dart';
 import '../../../dashboard/sheets/minor/minor_home_dash_board_controller.dart';
 import '../../../dashboard/sheets/single/single_home_dash_board_controller.dart';
@@ -18,7 +17,6 @@ import '../../../dashboard/widgets/widgets/info/my_info_dialog.dart';
 import '../../../dev/debug/debug_action_recorder.dart';
 import '../../../mode_single/application/att_brk_repository.dart';
 import '../../../selector/application/dev_auth.dart';
-import '../../../selector/sheets/service_bottom_sheet.dart';
 import '../headquarter_dashboard_context.dart';
 
 class HeadquarterCommonActions {
@@ -119,22 +117,6 @@ class HeadquarterCommonActions {
     );
   }
 
-  static Future<void> openSettings(
-    BuildContext context, {
-    required String source,
-  }) {
-    return run<void>(
-      source: source,
-      action: 'open_service_settings',
-      operation: () async {
-        final rootContext = Navigator.of(
-          context,
-          rootNavigator: true,
-        ).context;
-        await ServiceBottomSheet.show(context: rootContext);
-      },
-    );
-  }
 
   static Future<void> logout(
     BuildContext context, {
@@ -150,32 +132,11 @@ class HeadquarterCommonActions {
     );
   }
 
-  static Future<void> openWorkActions(
-    BuildContext context, {
-    required String source,
-    String? modeKey,
-  }) {
-    final resolvedMode = currentModeKey(fallback: modeKey);
-    return run<void>(
-      source: source,
-      action: 'open_work_actions',
-      meta: <String, Object?>{'mode': resolvedMode},
-      operation: () => showCommonDialog<void>(
-        context: context,
-        barrierDismissible: true,
-        builder: (dialogContext) => _HeadquarterWorkActionsDialog(
-          parentContext: context,
-          source: source,
-          modeKey: resolvedMode,
-        ),
-      ),
-    );
-  }
-
   static Future<void> recordBreak(
     BuildContext context, {
     required String source,
     required String modeKey,
+    Future<void> Function(DateTime recordedAt)? onRecorded,
   }) {
     final resolvedMode = currentModeKey(fallback: modeKey);
     return run<void>(
@@ -183,21 +144,46 @@ class HeadquarterCommonActions {
       action: 'record_break',
       meta: <String, Object?>{'mode': resolvedMode},
       operation: () async {
+        late final BreakRecordResult result;
         switch (resolvedMode) {
           case 'double':
-            await _doubleController.recordBreakTime(context);
-            return;
+            result = await _doubleController.recordBreakTime(context);
+            break;
           case 'triple':
-            await _tripleController.recordBreakTime(context);
-            return;
+            result = await _tripleController.recordBreakTime(context);
+            break;
           case 'minor':
-            await _minorController.recordBreakTime(context);
-            return;
+            result = await _minorController.recordBreakTime(context);
+            break;
           case 'single':
           default:
-            await _singleController.recordBreakTime(context);
-            return;
+            result = await _singleController.recordBreakTime(context);
+            break;
         }
+        final recordedAt = result.recordedAt;
+        if (!result.success || recordedAt == null) {
+          recordEvent(
+            source: source,
+            action: 'record_break',
+            phase: 'record_failed',
+            meta: <String, Object?>{
+              'mode': resolvedMode,
+              'message': result.message,
+            },
+          );
+          throw StateError(result.message);
+        }
+        recordEvent(
+          source: source,
+          action: 'record_break',
+          phase: 'recorded',
+          meta: <String, Object?>{
+            'mode': resolvedMode,
+            'at': recordedAt.toIso8601String(),
+            'message': result.message,
+          },
+        );
+        await onRecorded?.call(recordedAt);
       },
     );
   }
@@ -206,6 +192,7 @@ class HeadquarterCommonActions {
     BuildContext context, {
     required String source,
     required String modeKey,
+    Future<void> Function(DateTime recordedAt)? onRecorded,
   }) {
     final resolvedMode = currentModeKey(fallback: modeKey);
     return run<void>(
@@ -257,6 +244,7 @@ class HeadquarterCommonActions {
               'at': now.toIso8601String(),
             },
           );
+          await onRecorded?.call(now);
         }
         try {
           if (DebugActionRecorder.instance.isRecording) {
@@ -326,133 +314,5 @@ class HeadquarterCommonActions {
         await _singleController.handleWorkStatus(userState, context);
         return;
     }
-  }
-}
-
-class _HeadquarterWorkActionsDialog extends StatefulWidget {
-  const _HeadquarterWorkActionsDialog({
-    required this.parentContext,
-    required this.source,
-    required this.modeKey,
-  });
-
-  final BuildContext parentContext;
-  final String source;
-  final String modeKey;
-
-  @override
-  State<_HeadquarterWorkActionsDialog> createState() =>
-      _HeadquarterWorkActionsDialogState();
-}
-
-class _HeadquarterWorkActionsDialogState
-    extends State<_HeadquarterWorkActionsDialog> {
-  bool _breakSubmitting = false;
-  bool _clockOutSubmitting = false;
-
-  Future<void> _recordBreak() async {
-    if (_breakSubmitting || _clockOutSubmitting) return;
-    setState(() => _breakSubmitting = true);
-    try {
-      await HeadquarterCommonActions.recordBreak(
-        widget.parentContext,
-        source: widget.source,
-        modeKey: widget.modeKey,
-      );
-    } finally {
-      if (mounted) setState(() => _breakSubmitting = false);
-    }
-  }
-
-  Future<void> _clockOut() async {
-    if (_breakSubmitting || _clockOutSubmitting) return;
-    setState(() => _clockOutSubmitting = true);
-    final parentContext = widget.parentContext;
-    final source = widget.source;
-    final modeKey = widget.modeKey;
-    Navigator.of(context).pop();
-    await Future<void>.delayed(const Duration(milliseconds: 16));
-    if (!parentContext.mounted) return;
-    await HeadquarterCommonActions.clockOut(
-      parentContext,
-      source: source,
-      modeKey: modeKey,
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = CommonUiTheme.of(context);
-    final reduceMotion =
-        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    final busy = _breakSubmitting || _clockOutSubmitting;
-
-    return AnimatedSize(
-      duration: reduceMotion ? Duration.zero : CommonUiMotion.layout,
-      curve: CommonUiMotion.standard,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: tokens.infoContainer,
-                  borderRadius: BorderRadius.circular(CommonUiShapes.control),
-                  border: Border.all(color: tokens.borderSubtle),
-                ),
-                alignment: Alignment.center,
-                child: Icon(
-                  Icons.work_history_rounded,
-                  color: tokens.onInfoContainer,
-                  size: 21,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  '근무 액션',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: tokens.textPrimary,
-                        fontWeight: FontWeight.w900,
-                      ),
-                ),
-              ),
-              CommonIconButton(
-                icon: Icons.close_rounded,
-                tooltip: '닫기',
-                onPressed: busy ? null : () => Navigator.of(context).pop(),
-                haptic: CommonHaptic.selection,
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          CommonButton(
-            label: '휴게 사용 확인',
-            icon: Icons.coffee_rounded,
-            onPressed: busy ? null : _recordBreak,
-            loading: _breakSubmitting,
-            expand: true,
-            variant: CommonButtonVariant.secondary,
-            haptic: CommonHaptic.light,
-            semanticsLabel: '휴게 사용 확인',
-          ),
-          const SizedBox(height: 8),
-          CommonButton(
-            label: '퇴근하기',
-            icon: Icons.exit_to_app_rounded,
-            onPressed: busy ? null : _clockOut,
-            loading: _clockOutSubmitting,
-            expand: true,
-            variant: CommonButtonVariant.destructive,
-            haptic: CommonHaptic.medium,
-            semanticsLabel: '퇴근하기',
-          ),
-        ],
-      ),
-    );
   }
 }

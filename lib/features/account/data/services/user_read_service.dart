@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../app/utils/dev_firebase_debug_dialog.dart';
+import '../../../../shared/auth/tablet_phone.dart';
 import '../../domain/models/tablet/tablet_model.dart';
 import '../../domain/models/user/user_model.dart';
 
@@ -165,6 +166,70 @@ class UserReadService {
           'docId': docId,
           'handle': h,
           'areaName': name,
+        },
+      );
+    }
+    return null;
+  }
+
+  Future<TabletModel?> getTabletByPhone(String phone) async {
+    final digits = TabletPhone.normalize(phone);
+    debugPrint(
+      'getTabletByPhone, 조회 시작 - phone=${TabletPhone.mask(digits)}',
+    );
+    if (digits.isEmpty) return null;
+
+    final candidates = <String>{
+      digits,
+      TabletPhone.format(digits),
+    };
+
+    try {
+      final direct = await _getTabletCollectionRef().doc(digits).get();
+      if (direct.exists && direct.data() != null) {
+        return TabletModel.fromMap(direct.id, direct.data()!);
+      }
+
+      for (final candidate in candidates) {
+        final byPhone = await _getTabletCollectionRef()
+            .where('phone', isEqualTo: candidate)
+            .limit(1)
+            .get();
+        if (byPhone.docs.isNotEmpty) {
+          final doc = byPhone.docs.first;
+          return TabletModel.fromMap(doc.id, doc.data());
+        }
+      }
+
+      final byLegacyHandle = await _getTabletCollectionRef()
+          .where('handle', isEqualTo: digits)
+          .limit(1)
+          .get();
+      if (byLegacyHandle.docs.isNotEmpty) {
+        final doc = byLegacyHandle.docs.first;
+        return TabletModel.fromMap(doc.id, doc.data());
+      }
+    } on FirebaseException catch (e, st) {
+      await DevFirebaseDebugDialog.show(
+        operation: 'tablet_accounts.getTabletByPhone',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': 'tablet_accounts',
+          'phone': TabletPhone.mask(digits),
+          'query': 'doc-phone-first-with-legacy-fallback',
+        },
+      );
+      return null;
+    } catch (e, st) {
+      debugPrint('DB 조회 중 예외 발생: $e');
+      await DevFirebaseDebugDialog.show(
+        operation: 'tablet_accounts.getTabletByPhone.parse',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': 'tablet_accounts',
+          'phone': TabletPhone.mask(digits),
         },
       );
     }

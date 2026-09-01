@@ -8,7 +8,7 @@ import '../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../app/utils/location_debug_status.dart';
 import '../../../app/utils/snackbar_helper.dart';
 import '../../../design_system/common_ui/common_ui_components.dart';
-import '../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../design_system/common_ui/common_ui_origin_morph_dialog.dart';
 import '../../../design_system/common_ui/common_ui_theme.dart';
 
 import '../../dev/application/area_state.dart';
@@ -17,8 +17,7 @@ import '../applications/location_state.dart';
 import '../data/services/location_reservation_integrity_service.dart';
 import '../domain/models/location_model.dart';
 import '../domain/models/parking_grid_model.dart';
-import 'sheets/location_setting.dart';
-import 'sheets/widgets/location_draft.dart';
+import 'sheets/location_creation_type_picker_dialog.dart';
 import 'sheets/widgets/parking_grid_preview.dart';
 import '../../../shared/secondary/application/secondary_location_workspace_state.dart';
 import '../../../shared/secondary/widgets/ops_console_dialogs.dart';
@@ -43,6 +42,7 @@ class _LocationManagementState extends State<LocationManagement> {
   String _query = '';
   late final SecondaryLocationWorkspaceState _localWorkspace;
   final TextEditingController _searchController = TextEditingController();
+  final GlobalKey _addLocationButtonKey = GlobalKey();
   final LocationReservationIntegrityService _reservationIntegrityService =
       LocationReservationIntegrityService();
   bool _reservationIntegrityCheckInProgress = false;
@@ -493,20 +493,68 @@ class _LocationManagementState extends State<LocationManagement> {
     }
   }
 
-  Future<void> _handleAddParent(BuildContext context) async {
+  Rect? _sourceRectForContext(BuildContext sourceContext) {
+    final box = sourceContext.findRenderObject() as RenderBox?;
+    if (box == null || !box.attached || !box.hasSize) return null;
+    final origin = box.localToGlobal(Offset.zero);
+    return origin & box.size;
+  }
+
+  Rect? _addLocationSourceRect() {
+    final sourceContext = _addLocationButtonKey.currentContext;
+    if (sourceContext == null) return null;
+    return _sourceRectForContext(sourceContext);
+  }
+
+  Future<void> _handleAddLocation(
+    BuildContext context, {
+    Rect? sourceRect,
+  }) async {
     final area = context.read<AreaState>().currentArea.trim();
     if (area.isEmpty) {
       showFailedSnackbar(
         context,
-        '현재 지역 정보가 없어 부모구역을 생성할 수 없습니다.',
+        '현재 지역 정보가 없어 주차구역을 생성할 수 없습니다.',
         useCommonUi: true,
       );
       return;
     }
-    _log('parent_settings_open_requested mode=create');
-    await HapticFeedback.selectionClick();
-    if (!mounted) return;
-    _workspace.openCreateParent(source: 'location_management_create_parent');
+    final media = MediaQuery.of(context);
+    final resolvedSourceRect = sourceRect ??
+        _addLocationSourceRect() ??
+        Rect.fromCenter(
+          center: Offset(media.size.width * .5, media.size.height * .45),
+          width: 44,
+          height: 44,
+        );
+    _log('location_creation_type_picker_opened area=$area');
+    final selected = await showCommonOriginMorphDialog<LocationCreationType>(
+      context: context,
+      sourceRect: resolvedSourceRect,
+      targetSize: const Size(520, 430),
+      barrierDismissible: true,
+      barrierLabel: '주차구역 생성 방식',
+      builder: (_) => const LocationCreationTypePickerDialog(),
+    );
+    if (!mounted || !context.mounted) return;
+    if (selected == null) {
+      _log('location_creation_type_picker_cancelled area=$area');
+      return;
+    }
+    _log('location_creation_type_selected type=${selected.name} area=$area');
+    context.read<LocationState>().clearSelection();
+    switch (selected) {
+      case LocationCreationType.plain:
+        _workspace.openCreatePlain(
+          source: 'location_management_create_plain',
+        );
+        return;
+      case LocationCreationType.diagram:
+        _workspace.openCreateParent(
+          source: 'location_management_create_parent',
+        );
+        return;
+    }
   }
 
   Future<void> _handleAddChild(
@@ -650,34 +698,15 @@ class _LocationManagementState extends State<LocationManagement> {
       return;
     }
 
-    final area = context.read<AreaState>().currentArea.trim();
-    final existingNameKeysInArea = locationState.locations
-        .where((location) => location.area.trim() == area)
-        .map((location) => _nameKey(location.locationName))
-        .toSet();
-
-    await showCommonOverlayBottomSheet<void>(
-      context: context,
-      useSafeArea: true,
-      builder: (_) => LocationSettingBottomSheet(
-        existingNameKeysInArea: existingNameKeysInArea,
-        editingPlainTextId: resolvedSelected.id,
-        editingPlainTextName: resolvedSelected.locationName,
-        editingPlainTextCapacity: resolvedSelected.capacity,
-        onSave: (draft) async {
-          if (draft is! PlainTextLocationUpdateDraft) return false;
-          return _runWrite(
-            context,
-            (onError) => locationState.updatePlainTextLocation(
-              id: draft.id,
-              name: draft.name,
-              capacity: draft.capacity,
-              area: area,
-              onError: onError,
-            ),
-          );
-        },
-      ),
+    _log(
+      'plain_settings_open_requested mode=edit locationId=${resolvedSelected.id}',
+    );
+    await HapticFeedback.selectionClick();
+    if (!mounted || !context.mounted) return;
+    locationState.clearSelection();
+    _workspace.openEditPlain(
+      resolvedSelected.id,
+      source: 'location_management_edit_plain',
     );
   }
 
@@ -976,9 +1005,10 @@ class _LocationManagementState extends State<LocationManagement> {
         ),
         const SizedBox(width: 4),
         CommonIconButton(
+          key: _addLocationButtonKey,
           icon: Icons.add_location_alt_rounded,
           tooltip: '구역 추가',
-          onPressed: canCreate ? () => _handleAddParent(context) : null,
+          onPressed: canCreate ? () => _handleAddLocation(context) : null,
           haptic: CommonHaptic.selection,
           size: 40,
           iconSize: 20,
@@ -1137,17 +1167,25 @@ class _LocationManagementState extends State<LocationManagement> {
                               ? '현재 지역에 주차 구역이 없습니다'
                               : '일치하는 구역이 없습니다',
                           message: allInArea.isEmpty
-                              ? '부모 구역을 추가해 현장 공간 구조를 등록하세요.'
+                              ? '텍스트형 또는 도면형 주차구역을 선택해 현장 운영 구조를 등록하세요.'
                               : '검색 또는 보기 조건을 조정하세요.',
                           action: allInArea.isEmpty
-                              ? CommonButton(
-                                  label: '구역 추가',
-                                  icon: Icons.add_location_alt_rounded,
-                                  onPressed: currentArea.isEmpty
-                                      ? null
-                                      : () => _handleAddParent(context),
-                                  variant: CommonButtonVariant.primary,
-                                  haptic: CommonHaptic.selection,
+                              ? Builder(
+                                  builder: (buttonContext) => CommonButton(
+                                    label: '구역 추가',
+                                    icon: Icons.add_location_alt_rounded,
+                                    onPressed: currentArea.isEmpty
+                                        ? null
+                                        : () => _handleAddLocation(
+                                              context,
+                                              sourceRect:
+                                                  _sourceRectForContext(
+                                                buttonContext,
+                                              ),
+                                            ),
+                                    variant: CommonButtonVariant.primary,
+                                    haptic: CommonHaptic.selection,
+                                  ),
                                 )
                               : _query.trim().isNotEmpty
                                   ? CommonButton(

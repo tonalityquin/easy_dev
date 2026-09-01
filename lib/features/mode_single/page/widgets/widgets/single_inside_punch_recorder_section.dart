@@ -6,8 +6,10 @@ import '../../../../../app/config/commute_true_false_mode_config.dart';
 import '../../../../../app/init/app_exit_service.dart';
 import '../../../../../app/init/work_schedule_prefs.dart';
 import '../../../../../app/init/missing_weekday_end_time_dialog.dart';
-import '../../../../commute/domain/repositories/commute_true_false_repository.dart';
-import '../../../application/att_brk_repository.dart';
+import '../../../../../app/utils/developer_operation_status_dialog.dart';
+import '../../../../../features/commute/domain/repositories/commute_true_false_repository.dart';
+import '../../../../../features/commute/widgets/common_punch_recorder_surface.dart';
+import '../../../../../features/mode_single/application/att_brk_repository.dart';
 import 'single_punch_card_feedback.dart';
 
 class SingleInsidePunchRecorderSection extends StatefulWidget {
@@ -25,26 +27,24 @@ class SingleInsidePunchRecorderSection extends StatefulWidget {
   final String division;
 
   @override
-  State<SingleInsidePunchRecorderSection> createState() =>
-      _SingleInsidePunchRecorderSectionState();
+  State<SingleInsidePunchRecorderSection> createState() => _SingleInsidePunchRecorderSectionState();
 }
 
-class _SingleInsidePunchRecorderSectionState
-    extends State<SingleInsidePunchRecorderSection> {
+class _SingleInsidePunchRecorderSectionState extends State<SingleInsidePunchRecorderSection> {
   late DateTime _selectedDate;
-
   String? _workInTime;
   String? _breakTime;
   String? _workOutTime;
   bool _loading = true;
   bool _requiresBreak = true;
+  AttBrkModeType? _submitting;
 
   final CommuteTrueFalseRepository _commuteTrueFalseRepo =
-  CommuteTrueFalseRepository();
+      CommuteTrueFalseRepository();
 
-  bool get _hasWorkIn => _workInTime != null && _workInTime!.isNotEmpty;
-
-  bool get _hasBreak => _breakTime != null && _breakTime!.isNotEmpty;
+  bool get _hasWorkIn => (_workInTime ?? '').trim().isNotEmpty;
+  bool get _hasBreak => (_breakTime ?? '').trim().isNotEmpty;
+  bool get _disableWorkInPunch => false;
 
   @override
   void initState() {
@@ -53,42 +53,48 @@ class _SingleInsidePunchRecorderSectionState
     _loadForDate(_selectedDate);
   }
 
+  void _debug(String message) {
+    debugPrint('[SinglePunchRecorder] $message');
+  }
+
   Future<void> _loadForDate(DateTime date) async {
-    setState(() {
-      _loading = true;
-    });
-
-    final events = await AttBrkRepository.instance.getEventsForDate(date);
-    final prefs = await SharedPreferences.getInstance();
-    final requiresBreak = WorkSchedulePrefs.requiresBreakOnDateFromPrefs(
-      prefs,
-      date,
-      defaultWhenUnset: true,
-    );
-
-    setState(() {
-      _selectedDate = date;
-      _workInTime = events[AttBrkModeType.workIn];
-      _breakTime = events[AttBrkModeType.breakTime];
-      _workOutTime = events[AttBrkModeType.workOut];
-      _requiresBreak = requiresBreak;
-      _loading = false;
-    });
+    if (mounted) setState(() => _loading = true);
+    try {
+      final events = await AttBrkRepository.instance.getEventsForDate(date);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.reload();
+      final requiresBreak = WorkSchedulePrefs.requiresBreakOnDateFromPrefs(
+        prefs,
+        date,
+        defaultWhenUnset: true,
+      );
+      if (!mounted) return;
+      setState(() {
+        _selectedDate = date;
+        _workInTime = events[AttBrkModeType.workIn];
+        _breakTime = events[AttBrkModeType.breakTime];
+        _workOutTime = events[AttBrkModeType.workOut];
+        _requiresBreak = requiresBreak;
+        _loading = false;
+      });
+      _debug(
+        'load date=${DateFormat('yyyy-MM-dd').format(date)} workIn=${_workInTime ?? ''} break=${_breakTime ?? ''} workOut=${_workOutTime ?? ''} requiresBreak=$_requiresBreak',
+      );
+    } catch (error, stackTrace) {
+      if (mounted) setState(() => _loading = false);
+      _debug('load_failure error=$error stack=$stackTrace');
+    }
   }
 
   Future<void> _pickDate() async {
     final init = _selectedDate;
-    final first = DateTime(init.year - 1, 1, 1);
-    final last = DateTime(init.year + 1, 12, 31);
-
     final picked = await showDatePicker(
       context: context,
       initialDate: init,
-      firstDate: first,
-      lastDate: last,
+      firstDate: DateTime(init.year - 1, 1, 1),
+      lastDate: DateTime(init.year + 1, 12, 31),
       builder: (context, child) => child ?? const SizedBox.shrink(),
     );
-
     if (picked == null) return;
     await _loadForDate(picked);
   }
@@ -96,23 +102,18 @@ class _SingleInsidePunchRecorderSectionState
   Future<void> _recordClockInAtToCommuteTrueFalse(DateTime clockInAt) async {
     final enabled = await CommuteTrueFalseModeConfig.isEnabled();
     if (!enabled) {
-      debugPrint(
-          '[SimpleInsidePunchRecorder] commute_true_false OFF(기기 설정) → 업데이트 스킵');
+      _debug('commute_true_false_skip reason=disabled');
       return;
     }
-
     final company = widget.division.trim();
     final area = widget.area.trim();
     final workerName = widget.userName.trim();
-
     if (company.isEmpty || area.isEmpty || workerName.isEmpty) {
-      debugPrint(
-        '[SimpleInsidePunchRecorder] commute_true_false(clockInAt) 업데이트 스킵 '
-            '(company="$company", area="$area", workerName="$workerName")',
+      _debug(
+        'commute_true_false_skip reason=missing_identity company=$company area=$area worker=$workerName',
       );
       return;
     }
-
     await _commuteTrueFalseRepo.setClockInAt(
       company: company,
       area: area,
@@ -125,41 +126,16 @@ class _SingleInsidePunchRecorderSectionState
     await AppExitService.exitApp(context);
   }
 
-  Color _accentForType(ColorScheme cs, AttBrkModeType type) {
-    switch (type) {
-      case AttBrkModeType.workIn:
-        return cs.primary;
-      case AttBrkModeType.breakTime:
-        return cs.tertiary;
-      case AttBrkModeType.workOut:
-        return cs.error;
-    }
-  }
-
-  IconData _iconForType(AttBrkModeType type) {
-    switch (type) {
-      case AttBrkModeType.workIn:
-        return Icons.login;
-      case AttBrkModeType.breakTime:
-        return Icons.free_breakfast;
-      case AttBrkModeType.workOut:
-        return Icons.logout;
-    }
-  }
-
   Future<void> _punch(AttBrkModeType type) async {
-    if (_loading) return;
-
-    if (type == AttBrkModeType.breakTime && !_hasWorkIn) {
+    if (_loading || _submitting != null) return;
+    if (type == AttBrkModeType.workIn && _disableWorkInPunch) return;
+    if (type == AttBrkModeType.breakTime && !_hasWorkIn) return;
+    if (type == AttBrkModeType.workOut &&
+        (!_hasWorkIn || (_requiresBreak && !_hasBreak))) {
       return;
     }
-
-    if (type == AttBrkModeType.workOut && (!_hasWorkIn || (_requiresBreak && !_hasBreak))) {
-      return;
-    }
-
+    setState(() => _submitting = type);
     final now = DateTime.now();
-
     final targetDateTime = DateTime(
       _selectedDate.year,
       _selectedDate.month,
@@ -170,286 +146,190 @@ class _SingleInsidePunchRecorderSectionState
       now.millisecond,
       now.microsecond,
     );
-
-    await AttBrkRepository.instance.insertEvent(
-      dateTime: targetDateTime,
-      type: type,
+    _debug(
+      'punch_start type=${type.code} dateTime=${targetDateTime.toIso8601String()}',
     );
-
-    await showSinglePunchCardFeedback(
-      context,
-      type: type,
-      dateTime: targetDateTime,
-      requiresBreak: _requiresBreak,
-    );
-
-    if (type == AttBrkModeType.workIn) {
-      await _recordClockInAtToCommuteTrueFalse(targetDateTime);
+    try {
+      await AttBrkRepository.instance.insertEvent(
+        dateTime: targetDateTime,
+        type: type,
+      );
       if (!mounted) return;
-      await showMissingWeekdayEndTimeDialogIfNeeded(
+      await showSinglePunchCardFeedback(
         context,
-        clockInAt: targetDateTime,
+        type: type,
+        dateTime: targetDateTime,
+        requiresBreak: _requiresBreak,
+      );
+      if (type == AttBrkModeType.workIn) {
+        await _recordClockInAtToCommuteTrueFalse(targetDateTime);
+        if (!mounted) return;
+        await showMissingWeekdayEndTimeDialogIfNeeded(
+          context,
+          clockInAt: targetDateTime,
+        );
+      }
+      if (!mounted) return;
+      await _loadForDate(_selectedDate);
+      _debug('punch_complete type=${type.code}');
+      if (type == AttBrkModeType.workOut && mounted) {
+        await _exitAppAfterClockOut(context);
+      }
+    } catch (error, stackTrace) {
+      _debug('punch_failure type=${type.code} error=$error stack=$stackTrace');
+      rethrow;
+    } finally {
+      if (mounted) setState(() => _submitting = null);
+    }
+  }
+
+  Future<void> _showDeveloperStatus() async {
+    final trace = await DeveloperOperationTrace.start(
+      context: context,
+      title: '출퇴근 기록기 상태',
+      initialMessage: '출퇴근 기록기 상태를 확인하고 있습니다.',
+      useCommonUi: true,
+      developerModeMessage: '개발자 모드 ON: debugPrint 코드를 복사할 수 있습니다.',
+      standardModeMessage: '개발자 모드 OFF',
+    );
+    trace.log('component=SinglePunchRecorder', progress: .16);
+    trace.log(
+      'date=${DateFormat('yyyy-MM-dd').format(_selectedDate)}',
+      progress: .28,
+    );
+    trace.log('workIn=${_workInTime ?? ''}', progress: .4);
+    trace.log('break=${_breakTime ?? ''}', progress: .52);
+    trace.log('workOut=${_workOutTime ?? ''}', progress: .64);
+    trace.log('requiresBreak=$_requiresBreak', progress: .76);
+    trace.log('workInReadOnly=$_disableWorkInPunch', progress: .86);
+    trace.log('submitting=${_submitting?.code ?? ''}', progress: .94);
+    await trace.succeed('출퇴근 기록기 상태 확인을 완료했습니다.');
+  }
+
+  CommonPunchSlotData _workInSlot() {
+    if (_submitting == AttBrkModeType.workIn) {
+      return CommonPunchSlotData(
+        label: '출근',
+        icon: Icons.login_rounded,
+        tone: CommonPunchTone.info,
+        state: CommonPunchSlotState.loading,
+        time: _workInTime,
+        statusLabel: '처리 중',
       );
     }
-
-    await _loadForDate(_selectedDate);
-
-    if (type == AttBrkModeType.workOut) {
-      await _exitAppAfterClockOut(context);
+    if (_disableWorkInPunch) {
+      return CommonPunchSlotData(
+        label: '출근',
+        icon: Icons.login_rounded,
+        tone: CommonPunchTone.info,
+        state: CommonPunchSlotState.readOnly,
+        time: _workInTime,
+        statusLabel: _hasWorkIn ? '로그인 기록' : '기록 없음',
+      );
     }
+    return CommonPunchSlotData(
+      label: '출근',
+      icon: Icons.login_rounded,
+      tone: CommonPunchTone.info,
+      state: _hasWorkIn
+          ? CommonPunchSlotState.completedActionable
+          : CommonPunchSlotState.actionable,
+      time: _workInTime,
+      statusLabel: _hasWorkIn ? '완료' : '기록',
+      onTap: () => _punch(AttBrkModeType.workIn),
+    );
+  }
+
+  CommonPunchSlotData _breakSlot() {
+    if (_submitting == AttBrkModeType.breakTime) {
+      return CommonPunchSlotData(
+        label: '휴게',
+        icon: Icons.coffee_rounded,
+        tone: CommonPunchTone.warning,
+        state: CommonPunchSlotState.loading,
+        time: _breakTime,
+        statusLabel: '처리 중',
+      );
+    }
+    if (!_requiresBreak) {
+      return const CommonPunchSlotData(
+        label: '휴게',
+        icon: Icons.coffee_rounded,
+        tone: CommonPunchTone.warning,
+        state: CommonPunchSlotState.disabled,
+        statusLabel: '휴게 없음',
+      );
+    }
+    if (!_hasWorkIn) {
+      return const CommonPunchSlotData(
+        label: '휴게',
+        icon: Icons.coffee_rounded,
+        tone: CommonPunchTone.warning,
+        state: CommonPunchSlotState.disabled,
+        statusLabel: '대기',
+      );
+    }
+    return CommonPunchSlotData(
+      label: '휴게',
+      icon: Icons.coffee_rounded,
+      tone: CommonPunchTone.warning,
+      state: _hasBreak
+          ? CommonPunchSlotState.completedActionable
+          : CommonPunchSlotState.actionable,
+      time: _breakTime,
+      statusLabel: _hasBreak ? '완료' : '기록',
+      onTap: () => _punch(AttBrkModeType.breakTime),
+    );
+  }
+
+  CommonPunchSlotData _workOutSlot() {
+    if (_submitting == AttBrkModeType.workOut) {
+      return CommonPunchSlotData(
+        label: '퇴근',
+        icon: Icons.logout_rounded,
+        tone: CommonPunchTone.danger,
+        state: CommonPunchSlotState.loading,
+        time: _workOutTime,
+        statusLabel: '처리 중',
+      );
+    }
+    if (!_hasWorkIn || (_requiresBreak && !_hasBreak)) {
+      return const CommonPunchSlotData(
+        label: '퇴근',
+        icon: Icons.logout_rounded,
+        tone: CommonPunchTone.danger,
+        state: CommonPunchSlotState.disabled,
+        statusLabel: '대기',
+      );
+    }
+    final completed = (_workOutTime ?? '').trim().isNotEmpty;
+    return CommonPunchSlotData(
+      label: '퇴근',
+      icon: Icons.logout_rounded,
+      tone: CommonPunchTone.danger,
+      state: completed
+          ? CommonPunchSlotState.completedActionable
+          : CommonPunchSlotState.actionable,
+      time: _workOutTime,
+      statusLabel: completed ? '완료' : '기록',
+      onTap: () => _punch(AttBrkModeType.workOut),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
-    final monthStr = DateFormat('yyyy.MM').format(_selectedDate);
-    final dateStr = DateFormat('MM.dd').format(_selectedDate);
-
-    final bool canPunchWorkIn = true;
-    final bool canPunchBreak = _hasWorkIn && _requiresBreak;
-    final bool canPunchWorkOut = _hasWorkIn && (!_requiresBreak || _hasBreak);
-
-    return Card(
-      elevation: 1,
-      color: cs.surfaceContainerLow,
-      surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: cs.outlineVariant.withOpacity(.8)),
-      ),
-      margin: const EdgeInsets.symmetric(vertical: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.access_time,
-                    size: 16, color: cs.onSurfaceVariant.withOpacity(.9)),
-                const SizedBox(width: 4),
-                Text(
-                  '출퇴근 기록기',
-                  style: textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: cs.onSurface,
-                  ),
-                ),
-                const Spacer(),
-                InkWell(
-                  borderRadius: BorderRadius.circular(999),
-                  onTap: _pickDate,
-                  child: Padding(
-                    padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.calendar_today_rounded,
-                            size: 14, color: cs.onSurfaceVariant),
-                        const SizedBox(width: 4),
-                        Text(
-                          '$monthStr · $dateStr',
-                          style: textTheme.labelMedium?.copyWith(
-                            color: cs.onSurfaceVariant,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              '선택한 날짜($dateStr) 기준으로 출근 · 휴게 · 퇴근을 순서대로 펀칭하세요.',
-              style: textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-            ),
-            const SizedBox(height: 12),
-            if (_loading)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                child: Center(
-                  child: SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: cs.primary),
-                  ),
-                ),
-              )
-            else
-              Column(
-                children: [
-                  Container(
-                    decoration: BoxDecoration(
-                      color: cs.surfaceContainerHigh,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: cs.outlineVariant.withOpacity(.8),
-                        width: 0.8,
-                      ),
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 10),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: _PunchSlot(
-                            label: '출근',
-                            type: AttBrkModeType.workIn,
-                            time: _workInTime,
-                            enabled: canPunchWorkIn,
-                            onTap: () => _punch(AttBrkModeType.workIn),
-                            accent: _accentForType(cs, AttBrkModeType.workIn),
-                            icon: _iconForType(AttBrkModeType.workIn),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: _PunchSlot(
-                            label: '휴게',
-                            type: AttBrkModeType.breakTime,
-                            time: _breakTime,
-                            enabled: canPunchBreak,
-                            onTap: () => _punch(AttBrkModeType.breakTime),
-                            accent:
-                            _accentForType(cs, AttBrkModeType.breakTime),
-                            icon: _iconForType(AttBrkModeType.breakTime),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: _PunchSlot(
-                            label: '퇴근',
-                            type: AttBrkModeType.workOut,
-                            time: _workOutTime,
-                            enabled: canPunchWorkOut,
-                            onTap: () => _punch(AttBrkModeType.workOut),
-                            accent: _accentForType(cs, AttBrkModeType.workOut),
-                            icon: _iconForType(AttBrkModeType.workOut),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: Text(
-                      '날짜를 선택해 과거 기록도 수정/재펀칭할 수 있습니다.',
-                      style: textTheme.labelSmall
-                          ?.copyWith(color: cs.onSurfaceVariant),
-                    ),
-                  ),
-                ],
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _PunchSlot extends StatelessWidget {
-  final String label;
-  final AttBrkModeType type;
-  final String? time;
-  final bool enabled;
-  final VoidCallback onTap;
-
-  final Color accent;
-  final IconData icon;
-
-  const _PunchSlot({
-    required this.label,
-    required this.type,
-    required this.time,
-    required this.enabled,
-    required this.onTap,
-    required this.accent,
-    required this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
-    final bool punched = time != null && time!.isNotEmpty;
-
-    final borderColor = punched
-        ? accent.withOpacity(0.95)
-        : cs.outlineVariant.withOpacity(enabled ? .85 : .45);
-
-    final bgColor = punched ? accent.withOpacity(0.10) : cs.surface;
-
-    final content = Ink(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: borderColor,
-          width: punched ? 1.1 : 0.9,
-        ),
-      ),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                size: 14,
-                color: enabled
-                    ? accent.withOpacity(0.95)
-                    : cs.onSurfaceVariant.withOpacity(0.35),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: enabled
-                      ? accent.withOpacity(0.95)
-                      : cs.onSurfaceVariant.withOpacity(0.35),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Icon(
-            punched ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
-            size: 18,
-            color: punched
-                ? accent.withOpacity(0.95)
-                : cs.outlineVariant.withOpacity(enabled ? .95 : .5),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            punched ? '펀칭 완료' : '미펀칭',
-            style: textTheme.labelSmall?.copyWith(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: punched ? cs.onSurface : cs.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
-    );
-
-    return Opacity(
-      opacity: enabled ? 1.0 : 0.45,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(10),
-        onTap: enabled ? onTap : null,
-        child: content,
-      ),
+    final dateLabel =
+        '${DateFormat('yyyy.MM').format(_selectedDate)} · ${DateFormat('MM.dd').format(_selectedDate)}';
+    return CommonPunchRecorderSurface(
+      dateLabel: dateLabel,
+      onDateTap: _pickDate,
+      loading: _loading,
+      onDeveloperStatus: _showDeveloperStatus,
+      slots: <CommonPunchSlotData>[
+        _workInSlot(),
+        _breakSlot(),
+        _workOutSlot(),
+      ],
     );
   }
 }

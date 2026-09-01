@@ -358,7 +358,7 @@ class _CommonLoginFooterLogo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _CommonLoginImageButton(
-      semanticsLabel: '허브로 돌아가기',
+      semanticsLabel: '모드 터미널로 돌아가기',
       assetPath: 'assets/images/ParkinWorkin_text.png',
       frameSize: CommonLoginImageMetrics.footerLogo,
       touchPadding: CommonLoginImageMetrics.footerTouchPadding,

@@ -64,13 +64,13 @@ class _ServiceLoginFormState extends State<ServiceLoginForm> {
       meta: <String, dynamic>{
         'screen': 'service_login',
         'asset': 'assets/images/pelican.png',
-        'action': 'back_to_selector',
-        'to': AppRoutes.selector,
+        'action': 'back_to_mode_launcher',
+        'to': AppRoutes.modeLauncher,
       },
     );
 
     Navigator.of(context).pushNamedAndRemoveUntil(
-      AppRoutes.selector,
+      AppRoutes.modeLauncher,
       (route) => false,
     );
   }

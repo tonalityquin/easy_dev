@@ -13,7 +13,8 @@ class OverlayAccessGuard {
   };
 
   static String normalizeMode(String? mode) {
-    return (mode ?? '').trim().toLowerCase();
+    final normalized = (mode ?? '').trim().toLowerCase();
+    return normalized == 'simple' ? 'single' : normalized;
   }
 
   static bool isBlockedMode(String? mode) {

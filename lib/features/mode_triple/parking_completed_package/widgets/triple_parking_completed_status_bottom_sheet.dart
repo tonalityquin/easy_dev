@@ -21,6 +21,7 @@ import '../../../../shared/plate/widgets/plate_log_side_dock.dart';
 import '../../../../shared/plate/widgets/parking_completed_common_dialog.dart';
 import '../../../../shared/plate/widgets/parking_completed_status_widgets.dart';
 import '../../../../shared/real_time_table/real_time_table_spec.dart';
+import '../../../../shared/plate/editor/dialogs/plate_parking_picker_dialog.dart';
 
 Future<bool> _showDeleteDialog(BuildContext context, PlateModel plate) async {
   return showParkingCompletedDeleteDialog(context, plate);
@@ -698,6 +699,103 @@ class _StatusSideDockContentState extends State<_StatusSideDockContent> {
     }
   }
 
+  String _resolveAreaForParking() {
+    final plateArea = _plate.area.trim();
+    if (plateArea.isNotEmpty) return plateArea;
+    final widgetArea = widget.area.trim();
+    if (widgetArea.isNotEmpty) return widgetArea;
+    return context.read<AreaState>().currentArea.trim();
+  }
+
+  List<String> _platePreferredParkingAreas() {
+    final out = <String>[];
+    final seen = <String>{};
+
+    void add(String? raw) {
+      final value = (raw ?? '').trim();
+      if (value.isEmpty) return;
+      if (seen.add(value)) out.add(value);
+    }
+
+    add(_plate.parkingPriority1SlotKey);
+    add(_plate.parkingPriority2SlotKey);
+    add(_plate.parkingPriority3SlotKey);
+
+    return out;
+  }
+
+  Future<String?> _pickParkingLocationViaEditor({
+    required String area,
+    required String source,
+  }) async {
+    parkingStatusTraceLog(
+      context,
+      'parking_picker=request source=$source plate=${_plate.plateNumber} area=$area currentLocation=${_plate.location.trim()}',
+    );
+    try {
+      var invalidAreaConfiguration = false;
+      final picked = await showPlateParkingPickerDialog(
+        context: context,
+        currentLocation: _plate.location.trim(),
+        preferredParkingAreas: _platePreferredParkingAreas(),
+        areaOverride: area,
+        onDebug: (message) => parkingStatusTraceLog(context, message),
+        onInvalidAreaConfiguration: () {
+          invalidAreaConfiguration = true;
+          parkingStatusTraceLog(
+            context,
+            'parking_configuration=invalid source=$source reason=mixed_location_types action=close_status_side_dock plate=${_plate.plateNumber} area=$area',
+          );
+          if (mounted) {
+            Navigator.of(context).pop();
+          }
+        },
+      );
+      if (invalidAreaConfiguration) {
+        return null;
+      }
+      if (!mounted) return null;
+      if (picked == null || picked.trim().isEmpty) {
+        parkingStatusTraceLog(
+          context,
+          'parking_picker=result source=$source result=cancelled plate=${_plate.plateNumber}',
+        );
+        return null;
+      }
+      parkingStatusTraceLog(
+        context,
+        'parking_picker=result source=$source result=selected plate=${_plate.plateNumber} location=${picked.trim()}',
+      );
+      return picked.trim();
+    } catch (error, stackTrace) {
+      parkingStatusTraceLog(
+        context,
+        'parking_picker=result source=$source result=failed plate=${_plate.plateNumber} error=$error',
+      );
+      parkingStatusTraceLog(
+        context,
+        'parking_picker=stack_trace source=$source $stackTrace',
+      );
+      final trace = parkingStatusTraceOf(context);
+      if (trace != null && trace.developerMode && mounted) {
+        await trace.showSnapshotStatusDialog(
+          context,
+          title: '주차 위치 선택 실패',
+          description: '주차 위치 선택 과정에서 오류가 발생했습니다.',
+          failure: true,
+        );
+      }
+      if (mounted) {
+        showFailedSnackbar(
+          context,
+          '주차 위치를 불러오지 못했습니다.',
+          useCommonUi: true,
+        );
+      }
+      return null;
+    }
+  }
+
   Future<void> _logDrivingCancel({
     required String plateId,
     required String phase,
@@ -775,6 +873,18 @@ class _StatusSideDockContentState extends State<_StatusSideDockContent> {
 
       final movementPlate = context.read<MovementPlate>();
       final isEntry = _type == PlateType.parkingRequests;
+      String? pickedLocation;
+      final area = _resolveAreaForParking();
+
+      if (isEntry) {
+        pickedLocation = await _pickParkingLocationViaEditor(
+          area: area,
+          source: 'driving_complete',
+        );
+        if (pickedLocation == null || pickedLocation.trim().isEmpty) {
+          return;
+        }
+      }
 
       try {
         parkingStatusTraceLog(
@@ -784,18 +894,21 @@ class _StatusSideDockContentState extends State<_StatusSideDockContent> {
         if (isEntry) {
           await movementPlate.setParkingCompleted(
             _plate.plateNumber,
-            _plate.area,
-            _effectiveLocation,
+            area,
+            pickedLocation!,
             traceLog: (message) => parkingStatusTraceLog(context, message),
           );
         } else if (_type == PlateType.departureRequests) {
           await movementPlate.setDepartureCompleted(
-          _plate,
-          traceLog: (message) => parkingStatusTraceLog(context, message),
-        );
+            _plate,
+            traceLog: (message) => parkingStatusTraceLog(context, message),
+          );
         }
 
         if (!mounted) return;
+        setState(() {
+          _plate = _plate.copyWith(isSelected: false, selectedBy: null);
+        });
         parkingStatusTraceLog(
           context,
           '상태 변경 완료 driving=true to=${isEntry ? "parkingCompleted" : "departureCompleted"} plate=${_plate.plateNumber}',
@@ -803,8 +916,90 @@ class _StatusSideDockContentState extends State<_StatusSideDockContent> {
         await _showCompletionFeedback(isEntry ? '입차 완료' : '출차 완료');
         if (!mounted) return;
         Navigator.pop(context);
-      } catch (_) {
+      } catch (error, stackTrace) {
+        parkingStatusTraceLog(
+          context,
+          '상태 변경 실패 driving=true from=${_type?.name ?? "unknown"} plate=${_plate.plateNumber} error=$error',
+        );
+        parkingStatusTraceLog(context, '상태 변경 stack_trace $stackTrace');
+        final trace = parkingStatusTraceOf(context);
+        if (trace != null && trace.developerMode && mounted) {
+          await trace.showSnapshotStatusDialog(
+            context,
+            title: isEntry ? '입차 완료 실패' : '출차 완료 실패',
+            description: isEntry
+                ? '입차 완료 상태 변경 중 오류가 발생했습니다.'
+                : '출차 완료 상태 변경 중 오류가 발생했습니다.',
+            failure: true,
+          );
+        }
+      }
+    });
+  }
+
+  Future<void> _skipEntryDrivingToParkingCompleted() async {
+    if (_drivingLocked) return;
+
+    await _runPrimary(() async {
+      if (_type != PlateType.parkingRequests) {
         return;
+      }
+
+      final userName = context.read<UserState>().name.trim();
+      final selectedBy = (_plate.selectedBy ?? '').trim();
+      if (_plate.isSelected == true &&
+          selectedBy.isNotEmpty &&
+          selectedBy != userName) {
+        return;
+      }
+
+      final area = _resolveAreaForParking();
+      final picked = await _pickParkingLocationViaEditor(
+        area: area,
+        source: 'direct_complete',
+      );
+      if (picked == null || picked.trim().isEmpty) {
+        return;
+      }
+
+      final movementPlate = context.read<MovementPlate>();
+      try {
+        parkingStatusTraceLog(
+          context,
+          '상태 변경 시작 mode=skip from=parkingRequests to=parkingCompleted plate=${_plate.plateNumber}',
+        );
+        await movementPlate.setParkingCompleted(
+          _plate.plateNumber,
+          area,
+          picked,
+          traceLog: (message) => parkingStatusTraceLog(context, message),
+        );
+        if (!mounted) return;
+        setState(() {
+          _plate = _plate.copyWith(isSelected: false, selectedBy: null);
+        });
+        parkingStatusTraceLog(
+          context,
+          '상태 변경 완료 mode=skip from=parkingRequests to=parkingCompleted plate=${_plate.plateNumber}',
+        );
+        await _showCompletionFeedback('입차 완료');
+        if (!mounted) return;
+        Navigator.pop(context);
+      } catch (error, stackTrace) {
+        parkingStatusTraceLog(
+          context,
+          '상태 변경 실패 mode=skip from=parkingRequests to=parkingCompleted plate=${_plate.plateNumber} error=$error',
+        );
+        parkingStatusTraceLog(context, '상태 변경 stack_trace $stackTrace');
+        final trace = parkingStatusTraceOf(context);
+        if (trace != null && trace.developerMode && mounted) {
+          await trace.showSnapshotStatusDialog(
+            context,
+            title: '입차 완료 실패',
+            description: '입차 완료 상태 변경 중 오류가 발생했습니다.',
+            failure: true,
+          );
+        }
       }
     });
   }
@@ -1300,6 +1495,13 @@ class _StatusSideDockContentState extends State<_StatusSideDockContent> {
         debugAction: 'advance_departure_request',
         icon: Icons.local_shipping_outlined,
         onConfirmResult: primaryOnPressed,
+      );
+    } else if (_type == PlateType.parkingRequests) {
+      lowerRightAction = ParkingStatusDirectionalGearAction(
+        label: '입차 완료',
+        debugAction: 'skip_entry_to_parking_completed',
+        icon: Icons.skip_next_rounded,
+        onConfirm: _skipEntryDrivingToParkingCompleted,
       );
     } else if (_type == PlateType.departureRequests) {
       lowerLeftAction = ParkingStatusDirectionalGearAction(

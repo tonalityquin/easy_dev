@@ -13,13 +13,14 @@ class StatisticsSectorPdfBuilder {
     required pw.Widget Function(pw.Context context) footer,
     required StatisticsDeepReport report,
     required StatisticsPdfDesign design,
+    String sectionNumberPrefix = '06',
   }) {
     final sector = report.sectorReport;
     if (!report.sectorEnabled || sector == null) return;
 
     pw.Widget header(pw.Context context) {
       return design.runningHeader(
-        reportTitle: '방문 구역 분석 보고서',
+        reportTitle: '$sectionNumberPrefix 방문 구역 부록',
         area: report.area,
         rangeLabel: report.scopeLabel,
       );
@@ -37,18 +38,19 @@ class StatisticsSectorPdfBuilder {
             design.sectionHeader(
               titleText: '방문 구역 분석',
               subtitle: '${report.area} · ${report.scopeLabel}',
-              eyebrow: 'SECTOR ANALYTICS',
+              eyebrow: '방문 구역 부록',
+              sectionNumber: '$sectionNumberPrefix.1',
               tone: StatisticsPdfTone.secondary,
             ),
             pw.SizedBox(height: 16),
             design.notice(
               titleText: '방문 구역 원천 데이터 없음',
               message:
-                  '선택한 로그에는 방문 구역 필드가 없어 Sector 통계를 생성하지 않았습니다.',
+                  '선택한 로그에는 방문 구역 필드가 없어 방문 구역 통계를 생성하지 않았습니다.',
               tone: StatisticsPdfTone.warning,
               details: <String>[
-                'Sector 지원 이전 데이터이거나 방문 구역 정보가 저장되지 않은 범위입니다.',
-                '전체 ${sector.totalVehicleCount}대는 기본 통계에 포함되며 방문 구역 분석에서만 제외됩니다.',
+                '방문 구역 지원 이전 데이터이거나 방문 구역 정보가 저장되지 않은 범위입니다.',
+                '전체 ${sector.totalVehicleCount}대는 운영 통계에 포함되며 방문 구역 분석에서만 제외됩니다.',
               ],
             ),
           ],
@@ -66,10 +68,10 @@ class StatisticsSectorPdfBuilder {
         footer: footer,
         build: (context) => [
           design.sectionHeader(
-            titleText: '방문 구역 운영 요약',
+            titleText: '방문 구역 요약',
             subtitle: '${report.area} · ${report.scopeLabel} · 당일 완료 업무 기준',
-            eyebrow: 'SECTOR EXECUTIVE SUMMARY',
-            sectionNumber: 'S1',
+            eyebrow: '방문 구역 부록',
+            sectionNumber: '$sectionNumberPrefix.1',
             tone: StatisticsPdfTone.secondary,
           ),
           pw.SizedBox(height: 12),
@@ -87,7 +89,7 @@ class StatisticsSectorPdfBuilder {
                   : StatisticsPdfTone.warning,
             ),
             StatisticsPdfMetricData(
-              label: 'Sector',
+              label: '방문 구역',
               value: '${sector.sectorCount}개',
               tone: StatisticsPdfTone.secondary,
             ),
@@ -124,12 +126,12 @@ class StatisticsSectorPdfBuilder {
             design.notice(
               titleText: '일부 차량의 방문 구역 원천 데이터 제외',
               message:
-                  '전체 ${sector.totalVehicleCount}대 중 ${sector.analyzableVehicleCount}대만 Sector 통계에 포함했습니다.',
+                  '전체 ${sector.totalVehicleCount}대 중 ${sector.analyzableVehicleCount}대만 방문 구역 통계에 포함했습니다.',
               tone: StatisticsPdfTone.warning,
               details: <String>[
                 '원천 필드 없음 ${sector.unavailableVehicleCount}대',
                 '분석률 ${(sector.analyzableRatio * 100).toStringAsFixed(1)}%',
-                '제외 차량은 기본 차량 로그에 원천 데이터 없음으로 표시됩니다.',
+                '차량 단위 원천 상태는 함께 발신되는 전체 차량 로그 CSV에서 확인할 수 있습니다.',
               ],
             ),
           ],
@@ -148,16 +150,16 @@ class StatisticsSectorPdfBuilder {
         footer: footer,
         build: (context) => [
           design.sectionHeader(
-            titleText: 'Sector별 입차 및 잠금 금액',
+            titleText: '방문 구역별 입차 및 잠금 금액',
             subtitle: '차량 수와 금액을 분리해 방문 구역별 운영 규모를 비교합니다.',
-            eyebrow: 'SECTOR DISTRIBUTION',
-            sectionNumber: 'S2',
+            eyebrow: '방문 구역 부록',
+            sectionNumber: '$sectionNumberPrefix.2',
             tone: StatisticsPdfTone.input,
           ),
           pw.SizedBox(height: 12),
           _horizontalBars(
             design: design,
-            title: 'Sector별 입차 대수',
+            title: '방문 구역별 입차 대수',
             subtitle: '입차 시각이 확인된 당일 완료 차량 기준',
             groups: sector.groups,
             value: (group) => group.inputCount.toDouble(),
@@ -167,7 +169,7 @@ class StatisticsSectorPdfBuilder {
           pw.SizedBox(height: 12),
           _horizontalBars(
             design: design,
-            title: 'Sector별 잠금 금액',
+            title: '방문 구역별 잠금 금액',
             subtitle: '차량별 잠금 정산액 합계',
             groups: sector.groups,
             value: (group) => group.totalLockedFee.toDouble(),
@@ -193,10 +195,10 @@ class StatisticsSectorPdfBuilder {
         footer: footer,
         build: (context) => [
           design.sectionHeader(
-            titleText: '날짜·시간대별 Sector 입차와 출차',
+            titleText: '날짜·시간대별 방문 구역 입차와 출차',
             subtitle: '차량 수 상위 방문 구역을 최대 5개까지 비교합니다.',
-            eyebrow: 'SECTOR TIMELINE',
-            sectionNumber: 'S3',
+            eyebrow: '방문 구역 부록',
+            sectionNumber: '$sectionNumberPrefix.3',
             tone: StatisticsPdfTone.input,
           ),
           pw.SizedBox(height: 10),
@@ -244,10 +246,10 @@ class StatisticsSectorPdfBuilder {
         footer: footer,
         build: (context) => [
           design.sectionHeader(
-            titleText: 'Sector 정산·결제·요일 분석',
+            titleText: '방문 구역 정산·결제·요일 분석',
             subtitle: '금액이 있는 차량만 평균 정산액의 분모에 포함합니다.',
-            eyebrow: 'SECTOR SETTLEMENT',
-            sectionNumber: 'S4',
+            eyebrow: '방문 구역 부록',
+            sectionNumber: '$sectionNumberPrefix.4',
             tone: StatisticsPdfTone.fee,
           ),
           pw.SizedBox(height: 10),
@@ -262,16 +264,7 @@ class StatisticsSectorPdfBuilder {
       ),
     );
 
-    for (final group in sector.groups) {
-      _appendGroupVehicleTables(
-        doc: doc,
-        theme: theme,
-        footer: footer,
-        header: header,
-        group: group,
-        design: design,
-      );
-    }
+
   }
 
   static pw.Widget _integrityPanel(
@@ -283,7 +276,7 @@ class StatisticsSectorPdfBuilder {
           ? '화면·PDF 합계 무결성 정상'
           : '화면·PDF 합계 무결성 확인 필요',
       message: integrity.isValid
-          ? '차량 수, 입차 수와 잠금 금액이 공통 Sector 모델에서 일치합니다.'
+          ? '차량 수, 입차 수와 잠금 금액이 공통 방문 구역 모델에서 일치합니다.'
           : '일부 합계가 일치하지 않아 원천 로그 확인이 필요합니다.',
       tone: integrity.isValid
           ? StatisticsPdfTone.success
@@ -296,44 +289,21 @@ class StatisticsSectorPdfBuilder {
     StatisticsSectorReport report,
     StatisticsPdfDesign design,
   ) {
-    return design.dataTable(
-      headers: const [
-        '방문 구역',
-        '상태',
-        '차량',
-        '입차',
-        '출차',
-        '잠금 금액',
-        '평균 정산',
-        '입차 집중',
-        '출차 집중',
-      ],
-      rows: [
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+      children: [
         for (final group in report.groups)
-          [
-            group.sectorLabel,
-            _stateLabel(group.state),
-            '${group.vehicleCount}대',
-            '${group.inputCount}대',
-            '${group.outputCount}대',
-            '₩${_fmt(group.totalLockedFee)}',
-            group.averageLockedFee == null
-                ? '-'
-                : '₩${_fmt(group.averageLockedFee!.round())}',
-            group.peakInputHour == null
-                ? '-'
-                : '${group.peakInputHour!.toString().padLeft(2, '0')}시',
-            group.peakOutputHour == null
-                ? '-'
-                : '${group.peakOutputHour!.toString().padLeft(2, '0')}시',
-          ],
+          design.listRow(
+            titleText: group.sectorLabel,
+            subtitle:
+                '${_stateLabel(group.state)} · 차량 ${group.vehicleCount}대 · 입차 ${group.inputCount}대 · 출차 ${group.outputCount}대',
+            supporting:
+                '평균 정산 ${group.averageLockedFee == null ? '-' : '₩${_fmt(group.averageLockedFee!.round())}'} · 입차 집중 ${group.peakInputHour == null ? '-' : '${group.peakInputHour!.toString().padLeft(2, '0')}시'} · 출차 집중 ${group.peakOutputHour == null ? '-' : '${group.peakOutputHour!.toString().padLeft(2, '0')}시'}',
+            trailing: '₩${_fmt(group.totalLockedFee)}',
+            tone: _stateTone(group.state),
+            strong: true,
+          ),
       ],
-      numericColumns: const <int>{2, 3, 4, 5, 6},
-      tone: StatisticsPdfTone.secondary,
-      fontSize: 7.1,
-      headerFontSize: 7.2,
-      horizontalPadding: 3.4,
-      verticalPadding: 4.6,
     );
   }
 
@@ -419,7 +389,7 @@ class StatisticsSectorPdfBuilder {
     }
     final labels = dates.toList()..sort();
     return _multiSeriesLineChart(
-      title: '날짜별 Sector 입차 추이',
+      title: '날짜별 방문 구역 입차 추이',
       subtitle: '실제 입차 시각의 날짜를 기준으로 집계합니다.',
       labels: labels,
       groups: groups,
@@ -554,7 +524,7 @@ class StatisticsSectorPdfBuilder {
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 $width $height">',
       )
       ..write(
-        '<rect width="$width" height="$height" rx="14" fill="${design.palette.surfaceHex}"/>',
+        '<rect width="$width" height="$height" fill="${design.palette.surfaceHex}"/>',
       );
     for (int index = 0; index <= 4; index++) {
       final y = top + plotHeight * index / 4;
@@ -625,7 +595,7 @@ class StatisticsSectorPdfBuilder {
     }
     final sortedMethods = methods.toList()..sort();
     return design.chartCard(
-      titleText: 'Sector별 결제수단 누적 금액',
+      titleText: '방문 구역별 결제수단 누적 금액',
       subtitle: '각 방문 구역의 결제수단별 잠금 금액 구성',
       badge: '${sortedMethods.length}개 결제수단',
       tone: StatisticsPdfTone.fee,
@@ -795,7 +765,7 @@ class StatisticsSectorPdfBuilder {
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
-        pw.Text('Sector별 결제수단 금액', style: design.title(size: 10.5)),
+        pw.Text('방문 구역별 결제수단 금액', style: design.title(size: 10.5)),
         pw.SizedBox(height: 6),
         design.dataTable(
           headers: [
@@ -833,7 +803,7 @@ class StatisticsSectorPdfBuilder {
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
-        pw.Text('Sector별 정산 분포 비교', style: design.title(size: 10.5)),
+        pw.Text('방문 구역별 정산 분포 비교', style: design.title(size: 10.5)),
         pw.SizedBox(height: 6),
         design.dataTable(
           headers: const [
@@ -891,7 +861,7 @@ class StatisticsSectorPdfBuilder {
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
-        pw.Text('요일별 Sector 상세 분석', style: design.title(size: 10.5)),
+        pw.Text('요일별 방문 구역 상세 분석', style: design.title(size: 10.5)),
         pw.SizedBox(height: 6),
         design.dataTable(
           headers: const ['방문 구역', '요일', '입차 합계', '대상 일수', '1일 평균'],
@@ -907,88 +877,6 @@ class StatisticsSectorPdfBuilder {
     );
   }
 
-  static void _appendGroupVehicleTables({
-    required pw.Document doc,
-    required pw.ThemeData theme,
-    required pw.Widget Function(pw.Context context) footer,
-    required pw.Widget Function(pw.Context context) header,
-    required StatisticsSectorGroup group,
-    required StatisticsPdfDesign design,
-  }) {
-    const chunkSize = 30;
-    if (group.rows.isEmpty) return;
-    for (int start = 0; start < group.rows.length; start += chunkSize) {
-      final chunk = group.rows.skip(start).take(chunkSize).toList();
-      doc.addPage(
-        pw.MultiPage(
-          theme: theme,
-          pageFormat: PdfPageFormat.a4,
-          margin: const pw.EdgeInsets.fromLTRB(22, 25, 22, 30),
-          header: header,
-          footer: footer,
-          build: (context) => [
-            design.sectionHeader(
-              titleText: '${group.sectorLabel} 차량 로그',
-              subtitle:
-                  '${start + 1} - ${start + chunk.length} / ${group.rows.length}',
-              eyebrow: 'SECTOR VEHICLE APPENDIX',
-              tone: _stateTone(group.state),
-            ),
-            pw.SizedBox(height: 10),
-            design.metricGrid([
-              StatisticsPdfMetricData(
-                label: '차량',
-                value: '${group.vehicleCount}대',
-                tone: _stateTone(group.state),
-              ),
-              StatisticsPdfMetricData(
-                label: '입차',
-                value: '${group.inputCount}대',
-                tone: StatisticsPdfTone.input,
-              ),
-              StatisticsPdfMetricData(
-                label: '잠금 금액',
-                value: '₩${_fmt(group.totalLockedFee)}',
-                tone: StatisticsPdfTone.fee,
-              ),
-            ]),
-            pw.SizedBox(height: 10),
-            design.dataTable(
-              headers: const [
-                'No',
-                '날짜',
-                '차량 번호',
-                '입차',
-                '출차',
-                '정산액',
-                '결제수단',
-              ],
-              rows: [
-                for (final row in chunk)
-                  [
-                    row.no.toString(),
-                    row.dateStr,
-                    row.plateNumber,
-                    _time(row.createdAt),
-                    row.departureTimeEstimated
-                        ? '${_time(row.departureAt)} 추정'
-                        : _time(row.departureAt),
-                    row.fee == null ? '-' : '₩${_fmt(row.fee!)}',
-                    row.paymentMethodLabel,
-                  ],
-              ],
-              numericColumns: const <int>{0, 5},
-              tone: _stateTone(group.state),
-              fontSize: 7,
-              headerFontSize: 7.1,
-              horizontalPadding: 3.4,
-              verticalPadding: 4.3,
-            ),
-          ],
-        ),
-      );
-    }
-  }
 
   static StatisticsPdfTone _stateTone(StatisticsSectorState state) {
     switch (state) {
@@ -1036,12 +924,6 @@ class StatisticsSectorPdfBuilder {
     return '-';
   }
 
-  static String _time(DateTime? value) {
-    if (value == null) return '-';
-    return '${value.hour.toString().padLeft(2, '0')}:'
-        '${value.minute.toString().padLeft(2, '0')}:'
-        '${value.second.toString().padLeft(2, '0')}';
-  }
 
   static String _money(num? value) {
     if (value == null) return '-';

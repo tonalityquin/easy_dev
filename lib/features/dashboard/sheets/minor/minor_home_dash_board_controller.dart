@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../../features/account/applications/user_state.dart';
-import '../../../../../features/dashboard/applications/common/endtime_reminder_service.dart';
-import '../../../../../features/dashboard/applications/common/sheet_upload_result.dart';
+import '../../../account/applications/user_state.dart';
+import '../../applications/common/endtime_reminder_service.dart';
+import '../../applications/common/break_record_result.dart';
+import '../../applications/common/sheet_upload_result.dart';
+import '../../../mode_single/application/att_brk_repository.dart';
 import 'utils/minor_clock_out_save.dart';
 import 'utils/minor_break_save.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -62,7 +64,7 @@ class MinorHomeDashBoardController {
     }
   }
 
-  Future<void> recordBreakTime(BuildContext context) async {
+  Future<BreakRecordResult> recordBreakTime(BuildContext context) async {
     try {
       final userState = Provider.of<UserState>(context, listen: false);
       final now = DateTime.now();
@@ -78,20 +80,40 @@ class MinorHomeDashBoardController {
         'status': '휴게',
       };
 
-      final SheetUploadResult result = await MinorBreakSave.uploadBreakJson(
+      final SheetUploadResult uploadResult = await MinorBreakSave.uploadBreakJson(
         context: context,
         data: breakJson,
       );
 
-      if (result.success) {
-        final prefs = await SharedPreferences.getInstance();
-        final String todayStr = _formatDate(DateTime.now());
-        await prefs.setString(kLastBreakDatePrefsKey, todayStr);
-      } else {
-        debugPrint('휴게 기록 실패: ${result.message}');
+      if (!uploadResult.success) {
+        debugPrint(
+          '[minor_home_dash_board_controller] break_record_failed message=${uploadResult.message}',
+        );
+        return BreakRecordResult.failure(message: uploadResult.message);
       }
-    } catch (e) {
-      debugPrint('휴게 기록 중 오류 발생: $e');
+
+      await AttBrkRepository.instance.insertEvent(
+        dateTime: now,
+        type: AttBrkModeType.breakTime,
+      );
+      final prefs = await SharedPreferences.getInstance();
+      final String todayStr = _formatDate(now);
+      await prefs.setString(kLastBreakDatePrefsKey, todayStr);
+      debugPrint(
+        '[minor_home_dash_board_controller] break_record_complete at=${now.toIso8601String()}',
+      );
+      return BreakRecordResult.success(
+        recordedAt: now,
+        message: uploadResult.message,
+      );
+    } catch (error, stackTrace) {
+      debugPrint(
+        '[minor_home_dash_board_controller] break_record_error error=$error',
+      );
+      debugPrint(stackTrace.toString());
+      return BreakRecordResult.failure(
+        message: '휴게 기록 중 오류가 발생했습니다: $error',
+      );
     }
   }
 

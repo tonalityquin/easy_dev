@@ -15,6 +15,7 @@ import '../../../../design_system/common_ui/common_ui_side_dock.dart';
 import '../../../../design_system/common_ui/common_ui_side_dock_frame.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../features/dev/application/area_state.dart';
+import '../../../../features/location/applications/location_state.dart';
 import '../../../../features/payment/applications/bill_state.dart';
 import '../../../../features/payment/domain/models/bill_model.dart';
 import '../../../../features/sector/applications/sector_state.dart';
@@ -33,7 +34,7 @@ import '../../../plate/editor/widgets/plate_editor_rail.dart';
 import '../../../plate/editor/workspaces/plate_billing_workspace.dart';
 import '../../../plate/editor/workspaces/plate_camera_workspace.dart';
 import '../../../plate/editor/workspaces/plate_memo_workspace.dart';
-import '../../../plate/editor/workspaces/plate_parking_workspace.dart';
+import '../../../plate/editor/widgets/plate_parking_picker_content.dart';
 import '../../../plate/editor/workspaces/plate_sector_workspace.dart';
 import '../../../plate/editor/dialogs/plate_editor_dialog.dart';
 import '../../../plate/editor/workspaces/plate_identity_workspace.dart';
@@ -53,9 +54,9 @@ class _MonthlyFetchResult {
         error = null;
 
   const _MonthlyFetchResult.failure(
-    this.failure, {
-    this.error,
-  })  : data = null,
+      this.failure, {
+        this.error,
+      })  : data = null,
         sourcePath = null;
 
   final PlateStatusRecord? data;
@@ -86,11 +87,11 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
   late final InputPlateController controller;
   final TextEditingController _identityFrontDraftController =
-      TextEditingController();
+  TextEditingController();
   final TextEditingController _identityMidDraftController =
-      TextEditingController();
+  TextEditingController();
   final TextEditingController _identityBackDraftController =
-      TextEditingController();
+  TextEditingController();
   final TextEditingController _memoDraftController = TextEditingController();
   final GlobalKey _overviewPlateAnchorKey = GlobalKey();
   final GlobalKey _identityPlateAnchorKey = GlobalKey();
@@ -136,10 +137,10 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   Set<PlateEditorWorkspace> get _disabledMonthlyWorkspaces =>
       controller.monthlyBillingLocked
           ? const <PlateEditorWorkspace>{
-              PlateEditorWorkspace.variableBilling,
-              PlateEditorWorkspace.regularBilling,
-              PlateEditorWorkspace.memo,
-            }
+        PlateEditorWorkspace.variableBilling,
+        PlateEditorWorkspace.regularBilling,
+        PlateEditorWorkspace.memo,
+      }
           : const <PlateEditorWorkspace>{};
 
   bool get _hasPendingWorkspaceDraft => _memoPending;
@@ -185,7 +186,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       initialMessage: '차량 등록 Side Dock을 준비합니다.',
       useCommonUi: true,
       developerModeMessage:
-          '개발자 모드 ON: 등록 흐름의 debugPrint 코드를 Status Dialog에서 복사할 수 있습니다.',
+      '개발자 모드 ON: 등록 흐름의 debugPrint 코드를 Status Dialog에서 복사할 수 있습니다.',
       standardModeMessage: '개발자 모드 OFF: 등록 흐름을 콘솔에 기록합니다.',
       showDialogImmediately: false,
     );
@@ -213,8 +214,8 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       if (policy.hasSector) sectorState.waitUntilReady(),
     ];
     final preloadFuture = (preloadTasks.isEmpty
-            ? Future<void>.value()
-            : Future.wait<void>(preloadTasks).then<void>((_) {}))
+        ? Future<void>.value()
+        : Future.wait<void>(preloadTasks).then<void>((_) {}))
         .whenComplete(preload.stop);
     await _openInitialScannerFirst();
     if (!mounted) return;
@@ -345,10 +346,10 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   }
 
   Future<void> _handleLiveOcrFollowup(
-    PlateIdentityAuxiliaryResult result, {
-    required String source,
-    bool allowScannerActive = false,
-  }) async {
+      PlateIdentityAuxiliaryResult result, {
+        required String source,
+        bool allowScannerActive = false,
+      }) async {
     if (!mounted) return;
     if (!result.requiresManualCompletion) {
       _log(
@@ -474,7 +475,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   void _handleIdentityDraftChanged() {
     if (!mounted || _syncingIdentityDraft) return;
     final pending = _identityFrontDraftController.text !=
-            controller.controllerFrontDigit.text ||
+        controller.controllerFrontDigit.text ||
         _identityMidDraftController.text != controller.controllerMidDigit.text ||
         _identityBackDraftController.text != controller.controllerBackDigit.text;
     if (_identityPending == pending) {
@@ -616,7 +617,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
           middle: _identityMidDraftController.text,
           back: _identityBackDraftController.text,
           requiredFrontLength:
-              _identityFrontDraftController.text.trim().length == 2 ? 2 : 3,
+          _identityFrontDraftController.text.trim().length == 2 ? 2 : 3,
         );
     setState(() {
       _identityEditing = true;
@@ -691,12 +692,12 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   }
 
   Future<void> _openEditorDialog(
-    PlateEditorWorkspace workspace,
-    PlateEditorPolicy policy, {
-    required String source,
-    List<dynamic> previewImages = const <dynamic>[],
-    int previewIndex = 0,
-  }) async {
+      PlateEditorWorkspace workspace,
+      PlateEditorPolicy policy, {
+        required String source,
+        List<dynamic> previewImages = const <dynamic>[],
+        int previewIndex = 0,
+      }) async {
     if (_busy || _activeDialog != null || _identityEditing) return;
     if (workspace == PlateEditorWorkspace.overview || !policy.supports(workspace)) {
       return;
@@ -768,11 +769,24 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   }
 
   void _applyParking(String location) {
+    final normalized = location.trim();
+    final locations = context.read<LocationState>().locations;
+    final isTower = plateParkingLocationIsTower(
+      normalized,
+      locations: locations,
+    );
+    final displayLocation = plateParkingOverviewLocation(
+      normalized,
+      locations: locations,
+    );
     setState(() {
-      controller.locationController.text = location.trim();
-      controller.isLocationSelected = location.trim().isNotEmpty;
+      controller.locationController.text = normalized;
+      controller.isLocationSelected = normalized.isNotEmpty;
     });
-    _log('parking_slot=auto_applied location=${location.trim()}');
+    _log('parking_location=auto_applied location=$normalized');
+    _log(
+      'parking_display=resolved tower=$isTower internal=$normalized visible=$displayLocation towerSlotVisibility=${isTower ? 'hidden' : 'visible'}',
+    );
     _log('registration_action=state label=입차 완료 parking=true');
   }
 
@@ -844,9 +858,9 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   }
 
   Future<PlateStatusLookupResult> _fetchPlateStatus(
-    String plateNumber,
-    String area,
-  ) {
+      String plateNumber,
+      String area,
+      ) {
     return _plateRepo.lookupPlateStatus(
       plateNumber: plateNumber,
       area: _safeArea(area),
@@ -855,9 +869,9 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   }
 
   Future<_MonthlyFetchResult> _fetchMonthlyPlateStatus(
-    String plateNumber,
-    String area,
-  ) async {
+      String plateNumber,
+      String area,
+      ) async {
     final result = await _plateRepo.lookupPlateStatus(
       plateNumber: plateNumber,
       area: _safeArea(area),
@@ -1022,7 +1036,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       final result = await _fetchMonthlyPlateStatus(plateNumber, area);
       if (!mounted) return;
       final currentPlate =
-          controller.isInputValid() ? controller.buildPlateNumber() : '';
+      controller.isInputValid() ? controller.buildPlateNumber() : '';
       final currentArea = _safeArea(context.read<AreaState>().currentArea);
       final stale = lookupGeneration != _monthlyLookupGeneration ||
           currentPlate != plateNumber ||
@@ -1128,8 +1142,8 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   }
 
   Future<void> _showMonthlyParkingRecognitionDialog(
-    PlateStatusRecord record,
-  ) async {
+      PlateStatusRecord record,
+      ) async {
     if (!mounted) return;
     final rows = <String>[
       '차량번호 ${controller.buildPlateNumber()}',
@@ -1367,9 +1381,9 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   }
 
   PlateIdentityAuxiliaryResult _resolveLiveOcrResult(
-    LiveOcrSessionResult result, {
-    required String source,
-  }) {
+      LiveOcrSessionResult result, {
+        required String source,
+      }) {
     var applied = false;
     var middleSuggestions = const <String>[];
     PlateIdentityFocusTarget focusTarget;
@@ -1423,12 +1437,12 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   }
 
   Future<PlateIdentityAuxiliaryResult> _prepareLiveOcrExit(
-    LiveOcrSessionResult result, {
-    required String source,
-    required Rect sourceRect,
-    required LiveOcrSourceRectRouteController<LiveOcrSessionResult>
+      LiveOcrSessionResult result, {
+        required String source,
+        required Rect sourceRect,
+        required LiveOcrSourceRectRouteController<LiveOcrSessionResult>
         routeController,
-  }) async {
+      }) async {
     final resolved = _resolveLiveOcrResult(result, source: source);
     await _handleLiveOcrFollowup(
       resolved,
@@ -1501,7 +1515,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
         ),
       );
       final result =
-          await Navigator.of(routeContext).push<LiveOcrSessionResult>(route);
+      await Navigator.of(routeContext).push<LiveOcrSessionResult>(route);
       await route.completed;
       if (!mounted) return preparedResult;
       _log(
@@ -1559,7 +1573,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     );
     final success = await controller.submitPlateEntry(
       context,
-      () {
+          () {
         if (mounted) setState(() {});
       },
       onDebug: _log,
@@ -1616,9 +1630,9 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                             .textTheme
                             .titleMedium
                             ?.copyWith(
-                              color: tokens.textPrimary,
-                              fontWeight: FontWeight.w900,
-                            ),
+                          color: tokens.textPrimary,
+                          fontWeight: FontWeight.w900,
+                        ),
                       ),
                     ),
                   ],
@@ -1627,8 +1641,8 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                 Text(
                   '입력한 정보와 촬영한 사진은 저장되지 않습니다.',
                   style: Theme.of(dialogContext).textTheme.bodyMedium?.copyWith(
-                        color: tokens.textSecondary,
-                      ),
+                    color: tokens.textSecondary,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 Row(
@@ -1677,8 +1691,8 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   }
 
   PlateEditorSectionStatus _identityStatus(
-    InputPlateRegistrationPolicy registration,
-  ) {
+      InputPlateRegistrationPolicy registration,
+      ) {
     if (controller.statusLookupInProgress) {
       return PlateEditorSectionStatus.loading;
     }
@@ -1691,17 +1705,17 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
   bool get _hasVariableBillingSelection =>
       controller.selectedBillType == '변동' &&
-      controller.selectedBill?.trim().isNotEmpty == true;
+          controller.selectedBill?.trim().isNotEmpty == true;
 
   bool get _hasRegularBillingSelection =>
       controller.selectedBillType == '정기' &&
-      (controller.selectedBill?.trim().isNotEmpty == true ||
-          controller.countTypeController.text.trim().isNotEmpty);
+          (controller.selectedBill?.trim().isNotEmpty == true ||
+              controller.countTypeController.text.trim().isNotEmpty);
 
   Future<void> _handleOverviewWorkspaceTap(
-    PlateEditorWorkspace workspace,
-    PlateEditorPolicy policy,
-  ) async {
+      PlateEditorWorkspace workspace,
+      PlateEditorPolicy policy,
+      ) async {
     if (controller.monthlyBillingLocked &&
         _isMonthlyLockedWorkspace(workspace)) {
       _log(
@@ -1762,9 +1776,10 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   }
 
   Widget _buildOverview(
-    PlateEditorPolicy policy,
-    InputPlateRegistrationPolicy registration,
-  ) {
+      PlateEditorPolicy policy,
+      InputPlateRegistrationPolicy registration,
+      ) {
+    final locations = context.watch<LocationState>().locations;
     final memo = controller.customStatusController.text.trim();
     final hasParking = controller.locationController.text.trim().isNotEmpty ||
         controller.selectedParkingPriorities.isNotEmpty;
@@ -1791,13 +1806,14 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
         value: controller.locationController.text.trim().isEmpty
             ? ''
             : plateParkingOverviewLocation(
-                controller.locationController.text,
-              ),
+          controller.locationController.text,
+          locations: locations,
+        ),
         status: hasParking
             ? PlateEditorSectionStatus.complete
             : registration.parkingRequired
-                ? PlateEditorSectionStatus.incomplete
-                : PlateEditorSectionStatus.optional,
+            ? PlateEditorSectionStatus.incomplete
+            : PlateEditorSectionStatus.optional,
         onTap: () => unawaited(
           _handleOverviewWorkspaceTap(
             PlateEditorWorkspace.parking,
@@ -1843,9 +1859,9 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
           status: _hasVariableBillingSelection
               ? PlateEditorSectionStatus.complete
               : controller.selectedBillType == '변동' &&
-                      registration.billingRequired
-                  ? PlateEditorSectionStatus.incomplete
-                  : PlateEditorSectionStatus.none,
+              registration.billingRequired
+              ? PlateEditorSectionStatus.incomplete
+              : PlateEditorSectionStatus.none,
           onTap: () => unawaited(
             _handleOverviewWorkspaceTap(
               PlateEditorWorkspace.variableBilling,
@@ -1863,9 +1879,9 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
           status: _hasRegularBillingSelection
               ? PlateEditorSectionStatus.complete
               : controller.selectedBillType == '정기' &&
-                      registration.billingRequired
-                  ? PlateEditorSectionStatus.incomplete
-                  : PlateEditorSectionStatus.none,
+              registration.billingRequired
+              ? PlateEditorSectionStatus.incomplete
+              : PlateEditorSectionStatus.none,
           onTap: null,
         ),
       PlateEditorOverviewSection(
@@ -1877,15 +1893,15 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
         value: controller.statusLookupInProgress
             ? '상태 정보 확인 중'
             : _statusError != null
-                ? _statusError!
-                : memo,
+            ? _statusError!
+            : memo,
         status: controller.statusLookupInProgress
             ? PlateEditorSectionStatus.loading
             : _statusError != null
-                ? PlateEditorSectionStatus.error
-                : memo.isEmpty
-                    ? PlateEditorSectionStatus.none
-                    : PlateEditorSectionStatus.complete,
+            ? PlateEditorSectionStatus.error
+            : memo.isEmpty
+            ? PlateEditorSectionStatus.none
+            : PlateEditorSectionStatus.complete,
         onTap: () => unawaited(
           _handleOverviewWorkspaceTap(
             PlateEditorWorkspace.memo,
@@ -1901,28 +1917,50 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     );
   }
 
-  void _closeEditorDialog(
+  Future<void> _closeForInvalidParkingConfiguration(
     BuildContext dialogContext,
-    PlateEditorWorkspace workspace, {
-    required String reason,
-  }) {
+  ) async {
+    _log(
+      'parking_configuration=invalid reason=mixed_location_types action=close_input_side_dock',
+    );
+    final navigator = Navigator.of(dialogContext, rootNavigator: true);
+    if (navigator.canPop()) {
+      navigator.pop();
+    }
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (!reduceMotion) {
+      await Future<void>.delayed(const Duration(milliseconds: 190));
+    }
+    if (!mounted) return;
+    _log(
+      'close=forced source=parking_mixed_configuration discardPrompt=false',
+    );
+    Navigator.of(context).pop(false);
+  }
+
+  void _closeEditorDialog(
+      BuildContext dialogContext,
+      PlateEditorWorkspace workspace, {
+        required String reason,
+      }) {
     _log('dialog=${workspace.name}_request_close reason=$reason');
     Navigator.of(dialogContext, rootNavigator: true).pop();
   }
 
   Widget _buildVariableBillingWorkspace(
-    BuildContext dialogContext,
-    StateSetter setDialogState,
-  ) {
+      BuildContext dialogContext,
+      StateSetter setDialogState,
+      ) {
     final billState = context.read<BillState>();
     final options = billState.generalBills
         .map(
           (bill) => PlateBillingOption(
-            value: bill.countType,
-            detail:
-                '${bill.basicStandard ?? 0}분 · ${bill.basicAmount ?? 0}원 · 추가 ${bill.addStandard ?? 0}분 ${bill.addAmount ?? 0}원',
-          ),
-        )
+        value: bill.countType,
+        detail:
+        '${bill.basicStandard ?? 0}분 · ${bill.basicAmount ?? 0}원 · 추가 ${bill.addStandard ?? 0}분 ${bill.addAmount ?? 0}원',
+      ),
+    )
         .toList(growable: false);
     final value = _hasVariableBillingSelection
         ? controller.selectedBill!.trim()
@@ -1959,36 +1997,32 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   }
 
   Widget _buildDialogContent(
-    BuildContext dialogContext,
-    PlateEditorWorkspace workspace,
-  ) {
+      BuildContext dialogContext,
+      PlateEditorWorkspace workspace,
+      ) {
     switch (workspace) {
       case PlateEditorWorkspace.overview:
         return const SizedBox.shrink();
       case PlateEditorWorkspace.vehicleIdentity:
         return const SizedBox.shrink();
       case PlateEditorWorkspace.parking:
-        return Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: CommonUiTheme.of(dialogContext).borderSubtle,
-            ),
+        return PlateParkingPickerContent(
+          currentLocation: controller.locationController.text.trim(),
+          preferredParkingAreas: controller.selectedParkingPriorities,
+          onLocationApplied: _applyParking,
+          onClearLocation:
+          widget.isMinorMode ? _clearParkingLocation : null,
+          onExit: () => _closeEditorDialog(
+            dialogContext,
+            PlateEditorWorkspace.parking,
+            reason: 'parking_exit',
           ),
-          clipBehavior: Clip.antiAlias,
-          child: PlateParkingWorkspace(
-            currentLocation: controller.locationController.text.trim(),
-            preferredParkingAreas: controller.selectedParkingPriorities,
-            onLocationApplied: _applyParking,
-            onClearLocation:
-                widget.isMinorMode ? _clearParkingLocation : null,
-            onExit: () => _closeEditorDialog(
-              dialogContext,
-              PlateEditorWorkspace.parking,
-              reason: 'parking_exit',
-            ),
-            onDebug: _log,
-          ),
+          onInvalidAreaConfiguration: () {
+            unawaited(
+              _closeForInvalidParkingConfiguration(dialogContext),
+            );
+          },
+          onDebug: _log,
         );
       case PlateEditorWorkspace.camera:
         return PlateCameraWorkspace(
@@ -2017,7 +2051,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
           onImageDeleted: (image) {
             setState(() {
               controller.capturedImages.removeWhere(
-                (candidate) => candidate.path == image.path,
+                    (candidate) => candidate.path == image.path,
               );
             });
             _log(
@@ -2129,8 +2163,8 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
           title: _identityEditing
               ? '차량 식별정보'
               : plate.isEmpty
-                  ? '신규 차량'
-                  : plate,
+              ? '신규 차량'
+              : plate,
           subtitle: _identityEditing ? '차량번호 입력' : '차량 등록',
           icon: _identityEditing
               ? Icons.badge_rounded
@@ -2163,17 +2197,17 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
             },
             child: _editorTrace?.developerMode == true
                 ? CommonIconButton(
-                    key: const ValueKey<String>('input_plate_debug_action'),
-                    icon: Icons.bug_report_rounded,
-                    tooltip: '디버그 상태',
-                    size: 38,
-                    iconSize: 19,
-                    haptic: CommonHaptic.selection,
-                    onPressed: _showDeveloperStatus,
-                  )
+              key: const ValueKey<String>('input_plate_debug_action'),
+              icon: Icons.bug_report_rounded,
+              tooltip: '디버그 상태',
+              size: 38,
+              iconSize: 19,
+              haptic: CommonHaptic.selection,
+              onPressed: _showDeveloperStatus,
+            )
                 : const SizedBox.shrink(
-                    key: ValueKey<String>('input_plate_debug_action_hidden'),
-                  ),
+              key: ValueKey<String>('input_plate_debug_action_hidden'),
+            ),
           ),
           leadingRail: PlateEditorRail(
             enabled: !_busy && !_identityEditing,
@@ -2192,23 +2226,23 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
           footer: _identityEditing
               ? null
               : PlateEditorFooter(
-                  actionLabel: entryActionLabel,
-                  actionIcon: entryActionIcon,
-                  actionVariant: entryActionVariant,
-                  preserveActionVariantWhenDisabled: true,
-                  loading: controller.isLoading,
-                  onPressed: _busy || pending || !registration.canSubmit
-                      ? null
-                      : _handleSubmit,
-                ),
+            actionLabel: entryActionLabel,
+            actionIcon: entryActionIcon,
+            actionVariant: entryActionVariant,
+            preserveActionVariantWhenDisabled: true,
+            loading: controller.isLoading,
+            onPressed: _busy || pending || !registration.canSubmit
+                ? null
+                : _handleSubmit,
+          ),
           child: AnimatedSwitcher(
             duration: MediaQuery.maybeOf(context)?.disableAnimations == true
                 ? Duration.zero
                 : const Duration(milliseconds: 190),
             reverseDuration:
-                MediaQuery.maybeOf(context)?.disableAnimations == true
-                    ? Duration.zero
-                    : const Duration(milliseconds: 150),
+            MediaQuery.maybeOf(context)?.disableAnimations == true
+                ? Duration.zero
+                : const Duration(milliseconds: 150),
             switchInCurve: Curves.easeOutCubic,
             switchOutCurve: Curves.easeInCubic,
             transitionBuilder: (child, animation) {
@@ -2223,28 +2257,28 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
             },
             child: _identityEditing
                 ? PlateIdentityWorkspace(
-                    key: ValueKey<String>(
-                      'identity:${_identityInitialFocus.name}:${_identityMiddleSuggestions.join('|')}',
-                    ),
-                    frontController: _identityFrontDraftController,
-                    middleController: _identityMidDraftController,
-                    backController: _identityBackDraftController,
-                    pending: _identityPending,
-                    description: '차량번호의 앞자리, 한글, 뒷자리를 입력합니다.',
-                    initialThreeDigit: controller.isThreeDigit,
-                    initialFocusTarget: _identityInitialFocus,
-                    middleSuggestions: _identityMiddleSuggestions,
-                    plateAnchorKey: _identityPlateAnchorKey,
-                    onFocusTargetChanged: _syncControllerIdentityFocus,
-                    onAutoApply: _applyIdentityDraft,
-                    onExit: () =>
-                        _exitIdentityEditor(reason: 'workspace_back'),
-                    onDebug: _log,
-                  )
+              key: ValueKey<String>(
+                'identity:${_identityInitialFocus.name}:${_identityMiddleSuggestions.join('|')}',
+              ),
+              frontController: _identityFrontDraftController,
+              middleController: _identityMidDraftController,
+              backController: _identityBackDraftController,
+              pending: _identityPending,
+              description: '차량번호의 앞자리, 한글, 뒷자리를 입력합니다.',
+              initialThreeDigit: controller.isThreeDigit,
+              initialFocusTarget: _identityInitialFocus,
+              middleSuggestions: _identityMiddleSuggestions,
+              plateAnchorKey: _identityPlateAnchorKey,
+              onFocusTargetChanged: _syncControllerIdentityFocus,
+              onAutoApply: _applyIdentityDraft,
+              onExit: () =>
+                  _exitIdentityEditor(reason: 'workspace_back'),
+              onDebug: _log,
+            )
                 : KeyedSubtree(
-                    key: const ValueKey<String>('input_overview'),
-                    child: _buildOverview(policy, registration),
-                  ),
+              key: const ValueKey<String>('input_overview'),
+              child: _buildOverview(policy, registration),
+            ),
           ),
         ),
       ),

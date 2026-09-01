@@ -13,6 +13,17 @@ class HeadquarterDashboardContext {
     'minor',
   };
 
+  static void clearMode({
+    String source = 'unknown',
+  }) {
+    final previous = currentModeKey.value;
+    if (previous.isEmpty) return;
+    currentModeKey.value = '';
+    debugPrint(
+      '[HQ-DASH-CONTEXT] mode_clear source=$source previous=$previous next=none storage=memory additionalFirebaseRead=0 additionalFirebaseWrite=0',
+    );
+  }
+
   static void publishMode(
     String modeKey, {
     String source = 'unknown',

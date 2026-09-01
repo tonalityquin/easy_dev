@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../design_system/common_ui/common_ui_theme.dart';
 import '../../app/utils/block_dialog/break_duration_blocking_dialog.dart';
 import '../document/backup/backup_form_page.dart';
 import '../document/user_statement/user_statement_form_page.dart';
@@ -10,68 +9,22 @@ import 'document_box_action.dart';
 import 'fielder_document_box_sheet.dart';
 import 'leader_document_box_sheet.dart';
 
-Route<void> _commonDocumentRoute(
-  BuildContext context,
-  Widget page,
-) {
-  final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-  return PageRouteBuilder<void>(
-    fullscreenDialog: true,
-    transitionDuration: reduceMotion ? Duration.zero : CommonUiMotion.overlay,
-    reverseTransitionDuration:
-        reduceMotion ? Duration.zero : CommonUiMotion.component,
-    pageBuilder: (_, __, ___) => CommonUiScope(child: page),
-    transitionsBuilder: (_, animation, __, child) {
-      if (reduceMotion) return child;
-      final curved = CurvedAnimation(
-        parent: animation,
-        curve: CommonUiMotion.enter,
-        reverseCurve: CommonUiMotion.exit,
-      );
-      return FadeTransition(
-        opacity: curved,
-        child: child,
-      );
-    },
-  );
-}
-
 Future<void> executeDocumentBoxAction(
   BuildContext context,
   DocumentBoxAction action,
 ) async {
   switch (action) {
     case DocumentBoxAction.openUserStatementForm:
-      await Navigator.of(context, rootNavigator: true).push(
-        _commonDocumentRoute(
-          context,
-          const UserStatementFormPage(),
-        ),
-      );
+      await showUserStatementSideDock(context: context);
       return;
     case DocumentBoxAction.openWorkEndReportForm:
-      await Navigator.of(context, rootNavigator: true).push(
-        _commonDocumentRoute(
-          context,
-          const DashboardEndReportFormPage(),
-        ),
-      );
+      await showDashboardEndReportSideDock(context: context);
       return;
     case DocumentBoxAction.openWorkStartReportForm:
-      await Navigator.of(context, rootNavigator: true).push(
-        _commonDocumentRoute(
-          context,
-          const DashboardStartReportFormPage(),
-        ),
-      );
+      await showDashboardStartReportSideDock(context: context);
       return;
     case DocumentBoxAction.openBackupForm:
-      await Navigator.of(context, rootNavigator: true).push(
-        _commonDocumentRoute(
-          context,
-          const BackupFormPage(),
-        ),
-      );
+      await showBackupApplicationSideDock(context: context);
       return;
     case DocumentBoxAction.submitLeaderCommuteRecords:
       final proceed = await showBreakDurationBlockingDialog(

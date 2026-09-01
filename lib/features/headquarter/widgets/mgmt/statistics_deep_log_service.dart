@@ -8,6 +8,17 @@ import '../../../../app/config/auth_config.dart';
 import 'statistics_deep_model.dart';
 
 class StatisticsDeepLogService {
+  static final Map<String, StatisticsDeepReport> _memoryCache =
+      <String, StatisticsDeepReport>{};
+  static int _cacheHits = 0;
+  static int _gcsDownloads = 0;
+  static int _gcsDownloadedBytes = 0;
+
+  static int get memoryCacheSize => _memoryCache.length;
+  static int get cacheHits => _cacheHits;
+  static int get gcsDownloads => _gcsDownloads;
+  static int get gcsDownloadedBytes => _gcsDownloadedBytes;
+
   final String bucketName;
 
   StatisticsDeepLogService({String? bucketName})
@@ -20,6 +31,7 @@ class StatisticsDeepLogService {
     required List<String> gcsLogUrls,
     bool sectorEnabled = false,
     void Function(String message)? onLog,
+    void Function(int current, int total)? onProgress,
   }) {
     return loadByDates(
       division: division,
@@ -29,6 +41,7 @@ class StatisticsDeepLogService {
       sectorEnabled: sectorEnabled,
       gcsLogUrls: gcsLogUrls,
       onLog: onLog,
+      onProgress: onProgress,
     );
   }
 
@@ -40,6 +53,7 @@ class StatisticsDeepLogService {
     required List<String> gcsLogUrls,
     bool sectorEnabled = false,
     void Function(String message)? onLog,
+    void Function(int current, int total)? onProgress,
   }) {
     final normalizedStart = _normalizeDate(start);
     final normalizedEnd = _normalizeDate(end);
@@ -64,6 +78,7 @@ class StatisticsDeepLogService {
       sectorEnabled: sectorEnabled,
       gcsLogUrls: gcsLogUrls,
       onLog: onLog,
+      onProgress: onProgress,
     );
   }
 
@@ -75,6 +90,7 @@ class StatisticsDeepLogService {
     String? scopeLabel,
     bool sectorEnabled = false,
     void Function(String message)? onLog,
+    void Function(int current, int total)? onProgress,
   }) async {
     final trimmedDivision = division.trim();
     final trimmedArea = area.trim();
@@ -107,8 +123,8 @@ class StatisticsDeepLogService {
       throw StateError('검증된 상세 업무종료 history에 연결된 GCS 로그가 없습니다.');
     }
 
-    final dateStrs = normalizedDates.map(_yyyymmdd).toSet();
-    final label = scopeLabel?.trim().isNotEmpty == true
+    final requestedDateStrs = normalizedDates.map(_yyyymmdd).toSet();
+    final requestedLabel = scopeLabel?.trim().isNotEmpty == true
         ? scopeLabel!.trim()
         : normalizedDates.length == 1
             ? _yyyymmdd(normalizedDates.first)
@@ -116,6 +132,7 @@ class StatisticsDeepLogService {
 
     final expectedPrefix = '$trimmedDivision/$trimmedArea/logs/';
     final resolved = <String>{};
+    final resolvedDateStrs = <String>{};
     for (final url in requestedUrls) {
       final objectName = _objectNameFromGcsUrl(url);
       if (objectName == null || objectName.isEmpty) {
@@ -125,16 +142,55 @@ class StatisticsDeepLogService {
         throw StateError('상세 업무종료 history의 GCS 로그 경로가 사업부/Area와 일치하지 않습니다.');
       }
       final dateStr = _extractDateStrFromObjectName(objectName);
-      if (dateStr == null || !dateStrs.contains(dateStr)) {
+      if (dateStr == null || !requestedDateStrs.contains(dateStr)) {
         throw StateError('상세 업무종료 history의 GCS 로그 날짜가 통계 범위와 일치하지 않습니다.');
       }
       resolved.add(objectName);
+      resolvedDateStrs.add(dateStr);
     }
     final targetNames = resolved.toList()..sort();
+    final effectiveDateStrs = resolvedDateStrs.toList()..sort();
+    if (targetNames.isEmpty || effectiveDateStrs.isEmpty) {
+      throw StateError('선택 범위에서 실제 원본 날짜를 확인하지 못했습니다.');
+    }
+    final missingDateStrs = requestedDateStrs.difference(resolvedDateStrs).toList()
+      ..sort();
+    final label = missingDateStrs.isEmpty
+        ? requestedLabel
+        : '$requestedLabel · 원본 ${effectiveDateStrs.length}/${requestedDateStrs.length}일';
     _emitLog(
       onLog,
       '[STAT_DEEP] source mode=verified-history-linked objects=${targetNames.length} urls=${requestedUrls.length}',
     );
+    _emitLog(
+      onLog,
+      '[STAT_DEEP] source coverage requestedDates=${requestedDateStrs.length} resolvedDates=${effectiveDateStrs.length} missing=${missingDateStrs.isEmpty ? '-' : missingDateStrs.join(',')}',
+    );
+    final cacheKey = <String>[
+      trimmedDivision,
+      trimmedArea,
+      sectorEnabled ? 'sector' : 'standard',
+      ...requestedUrls,
+    ].join('\u001f');
+    final cached = _memoryCache[cacheKey];
+    if (cached != null) {
+      _cacheHits++;
+      _emitLog(
+        onLog,
+        '[STAT_DEEP] cache hit objects=${targetNames.length} cacheSize=${_memoryCache.length} hits=$_cacheHits',
+      );
+      onProgress?.call(targetNames.length, targetNames.length);
+      return StatisticsDeepReport.fromRows(
+        division: trimmedDivision,
+        area: trimmedArea,
+        scopeLabel: label,
+        rows: cached.rows,
+        objectNames: targetNames,
+        dateStrs: effectiveDateStrs,
+        sectorEnabled: sectorEnabled,
+        diagnostics: cached.diagnostics,
+      );
+    }
 
     final client = await GoogleAuthV7.authedClient(
       [gcs.StorageApi.devstorageReadOnlyScope],
@@ -146,9 +202,10 @@ class StatisticsDeepLogService {
       var sourceCsvRowCount = 0;
       var duplicateMergedCount = 0;
 
-      for (final objectName in targetNames) {
+      for (var objectIndex = 0; objectIndex < targetNames.length; objectIndex++) {
+        final objectName = targetNames[objectIndex];
         final objectDateStr = _extractDateStrFromObjectName(objectName);
-        if (objectDateStr == null || !dateStrs.contains(objectDateStr)) continue;
+        if (objectDateStr == null || !resolvedDateStrs.contains(objectDateStr)) continue;
 
         final rows = await _loadCsvRowsByObjectName(
           storage: storage,
@@ -159,6 +216,7 @@ class StatisticsDeepLogService {
           onLog,
           '[STAT_DEEP] csv object=$objectName rows=${rows.length}',
         );
+        onProgress?.call(objectIndex + 1, targetNames.length);
 
         for (int i = 0; i < rows.length; i++) {
           final row = rows[i];
@@ -254,16 +312,18 @@ class StatisticsDeepLogService {
         '[STAT_DEEP] load complete objects=${targetNames.length} csvRows=$sourceCsvRowCount vehicles=${rows.length} merged=$duplicateMergedCount sectorConflicts=${diagnostics.sectorConflictCount} sectorFields=${diagnostics.sectorFieldPresentCount}/${rows.length}',
       );
 
-      return StatisticsDeepReport.fromRows(
+      final report = StatisticsDeepReport.fromRows(
         division: trimmedDivision,
         area: trimmedArea,
         scopeLabel: label,
         rows: rows,
         objectNames: targetNames,
-        dateStrs: dateStrs.toList()..sort(),
+        dateStrs: effectiveDateStrs,
         sectorEnabled: sectorEnabled,
         diagnostics: diagnostics,
       );
+      _memoryCache[cacheKey] = report;
+      return report;
     } finally {
       client.close();
     }
@@ -334,6 +394,8 @@ class StatisticsDeepLogService {
     }
 
     final bytes = await res.stream.expand((chunk) => chunk).toList();
+    _gcsDownloads++;
+    _gcsDownloadedBytes += bytes.length;
     return _decodeCsv(utf8.decode(bytes));
   }
 

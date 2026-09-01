@@ -7,6 +7,8 @@ typedef LocationSlotReservationKey = ({String parentId, String areaId});
 abstract class LocationRepository {
   Future<List<LocationModel>> getLocationsOnce(String area);
 
+  Future<void> createPlainTextLocation(LocationModel location);
+
   Future<void> createCompositeParent(LocationModel parent);
 
   Future<void> updateCompositeParentWithChildren({

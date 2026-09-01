@@ -16,6 +16,8 @@ import '../../../../app/theme/theme_prefs_controller.dart';
 import '../../../../shared/plate/domain/repositories/plate_repository.dart';
 import '../../../../shared/operational_cache/domain/repositories/operational_local_repository.dart';
 import '../../../dev/application/area_state.dart';
+import '../../../headquarter/application/fab/hub_quick_actions.dart';
+import '../../../launcher/application/launcher_debug_account_override_store.dart';
 import '../../../location/applications/location_state.dart';
 import '../../../payment/applications/bill_state.dart';
 import '../../../tablet/applications/tablet_work_session_state.dart';
@@ -276,8 +278,10 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
     var accountId = '';
     try {
       final prefs = await SharedPreferences.getInstance();
+      final ephemeralDebugSession =
+          await LauncherDebugAccountOverrideStore.isActive();
       accountId = (prefs.getString('personalAccountId') ?? '').trim();
-      if (accountId.isNotEmpty) {
+      if (accountId.isNotEmpty && !ephemeralDebugSession) {
         await FirebaseFirestore.instance.collection('personal_accounts').doc(accountId).set(
           <String, dynamic>{
             'isSaved': false,
@@ -287,6 +291,9 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
           SetOptions(merge: true),
         );
       }
+      debugPrint(
+        '[PERSONAL-LOGOUT] accountId=$accountId debugEphemeral=$ephemeralDebugSession remoteWrite=${accountId.isNotEmpty && !ephemeralDebugSession}',
+      );
 
       await prefs.remove('mode');
       await prefs.remove('phone');
@@ -298,9 +305,15 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
       await prefs.remove('personalName');
       await prefs.remove('personalPhone');
       await prefs.remove('personalEmail');
+      if (ephemeralDebugSession) {
+        await LauncherDebugAccountOverrideStore.discardForLogout(
+          source: 'personal_side_menu',
+        );
+      }
+      await HeadHubActions.resetForLogout();
 
       if (!mounted) return;
-      Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.selector, (route) => false);
+      Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.modeLauncher, (route) => false);
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(
           content: Text('개인형 로그아웃이 완료되었습니다.'),
@@ -318,6 +331,7 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
           'collection': 'personal_accounts',
           'accountId': accountId,
           'write': 'doc(accountId).set(isSaved=false,lastLogoutAt,updatedAt,merge)',
+          'debugOverrideActive': await LauncherDebugAccountOverrideStore.isActive(),
           'queryShape': 'direct-document-write',
           'compositeIndex': 'not-required',
         },

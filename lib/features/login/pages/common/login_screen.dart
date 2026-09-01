@@ -8,6 +8,7 @@ import '../../../../app/theme/brand_theme.dart';
 import '../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../account/applications/user_state.dart';
+import '../../../launcher/application/app_mode_registry.dart';
 import '../../controllers/double/double_login_controller.dart';
 import '../../controllers/minor/minor_login_controller.dart';
 import '../../controllers/personal/personal_login_controller.dart';
@@ -51,38 +52,14 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _prefsLoaded = false;
 
   static String _normalizeMode(String? raw) {
-    final value = (raw ?? '').trim().toLowerCase();
-    switch (value) {
-      case 'service':
-        return 'service';
-      case 'personal':
-      case 'mobile':
-      case 'direct':
-        return 'personal';
-      case 'tablet':
-        return 'tablet';
-      case 'single':
-      case 'simple':
-        return 'single';
-      case 'double':
-      case 'lite':
-      case 'light':
-        return 'double';
-      case 'triple':
-      case 'normal':
-        return 'triple';
-      case 'minor':
-        return 'minor';
-      default:
-        return 'service';
-    }
+    return AppModeRegistry.normalizeModeOrService(raw);
   }
 
   static String? _normalizeModeNullable(String? raw) {
-    if (raw == null) return null;
-    final value = raw.trim();
-    if (value.isEmpty) return null;
-    return _normalizeMode(value);
+    if (raw == null || raw.trim().isEmpty) return null;
+    final mode = AppModeRegistry.normalizeMode(raw);
+    if (mode != null) return mode;
+    return raw.trim().toLowerCase() == 'service' ? 'service' : null;
   }
 
   bool get _usesCommonUi => _mode != 'service';
@@ -203,6 +180,7 @@ class _LoginScreenState extends State<LoginScreen> {
   String _defaultRouteForMode() {
     switch (_mode) {
       case 'personal':
+        return AppRoutes.personal;
       case 'tablet':
         return AppRoutes.tablet;
       case 'single':
@@ -225,7 +203,7 @@ class _LoginScreenState extends State<LoginScreen> {
           context.read<UserState>().session?.selectedArea.trim() ?? '';
       if (selectedArea != 'belivus') {
         if (!mounted) return;
-        Navigator.of(context).pushReplacementNamed(AppRoutes.selector);
+        Navigator.of(context).pushReplacementNamed(AppRoutes.modeLauncher);
         return;
       }
     }
@@ -438,11 +416,11 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                               const SizedBox(height: 18),
                               CommonButton(
-                                label: '허브로 돌아가기',
-                                icon: Icons.hub_rounded,
+                                label: '모드 터미널로 돌아가기',
+                                icon: Icons.terminal_rounded,
                                 expand: true,
                                 onPressed: () => Navigator.of(context)
-                                    .pushReplacementNamed(AppRoutes.selector),
+                                    .pushReplacementNamed(AppRoutes.modeLauncher),
                                 haptic: CommonHaptic.selection,
                               ),
                             ],

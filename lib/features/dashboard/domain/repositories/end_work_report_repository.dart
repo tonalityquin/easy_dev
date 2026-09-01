@@ -104,6 +104,71 @@ class EndWorkReportRepository {
     );
   }
 
+  Future<Map<String, Map<String, dynamic>>> loadAreaMonths({
+    required String division,
+    required String area,
+    required Iterable<String> monthKeys,
+    bool allowLegacyFallback = true,
+  }) async {
+    final normalizedDivision = division.trim();
+    final normalizedArea = area.trim();
+    final keys = monthKeys
+        .map((value) => value.trim())
+        .where((value) => RegExp(r'^\d{6}$').hasMatch(value))
+        .toSet()
+        .toList()
+      ..sort();
+    if (normalizedArea.isEmpty || keys.isEmpty) {
+      return <String, Map<String, dynamic>>{};
+    }
+
+    final rebuilt = <String, Map<String, Map<String, dynamic>>>{};
+    final bestAt = <String, Map<String, DateTime>>{};
+    final areaRef = _firestore.collection('end_work_reports').doc('area_$normalizedArea');
+    final missing = <String>[];
+
+    for (final monthKey in keys) {
+      final monthDoc = await areaRef.collection('months').doc(monthKey).get();
+      if (!monthDoc.exists || monthDoc.data() == null) {
+        missing.add(monthKey);
+        continue;
+      }
+      _mergeOneMonthDocIntoCache(
+        rebuilt: rebuilt,
+        bestAt: bestAt,
+        division: normalizedDivision,
+        monthDoc: monthDoc,
+      );
+    }
+
+    if (allowLegacyFallback && missing.isNotEmpty) {
+      final areaDoc = await areaRef.get();
+      final data = areaDoc.data();
+      if (data != null) {
+        final legacy = _extractAllDaysFromLegacyAreaDoc(
+          docId: areaDoc.id,
+          data: data,
+        );
+        for (final entry in legacy.entries) {
+          final date = DateTime.tryParse(entry.key);
+          if (date == null) continue;
+          final monthKey = '${date.year}${date.month.toString().padLeft(2, '0')}';
+          if (!missing.contains(monthKey)) continue;
+          rebuilt
+              .putIfAbsent(normalizedArea, () => <String, Map<String, dynamic>>{})
+              [entry.key] = entry.value;
+        }
+      }
+    }
+
+    final result = rebuilt[normalizedArea] ?? <String, Map<String, dynamic>>{};
+    dev.log(
+      '[STAT] direct months area=$normalizedArea requested=${keys.length} missing=${missing.length} days=${result.length}',
+      name: 'EndWorkReportRepository',
+    );
+    return result;
+  }
+
   Future<Map<String, Map<String, Map<String, dynamic>>>> buildAreaDateCache({
     required String division,
   }) async {
@@ -193,9 +258,10 @@ class EndWorkReportRepository {
     required Map<String, Map<String, Map<String, dynamic>>> rebuilt,
     required Map<String, Map<String, DateTime>> bestAt,
     required String division,
-    required QueryDocumentSnapshot<Map<String, dynamic>> monthDoc,
+    required DocumentSnapshot<Map<String, dynamic>> monthDoc,
   }) {
     final data = monthDoc.data();
+    if (data == null) return;
 
     final area = (data['area']?.toString().trim().isNotEmpty == true)
         ? data['area']!.toString().trim()
@@ -240,7 +306,7 @@ class EndWorkReportRepository {
     }
   }
 
-  String _inferAreaFromMonthDocRef(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
+  String _inferAreaFromMonthDocRef(DocumentSnapshot<Map<String, dynamic>> doc) {
     try {
       final areaDoc = doc.reference.parent.parent;
       final areaDocId = areaDoc?.id ?? '';

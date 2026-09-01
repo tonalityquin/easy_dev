@@ -68,14 +68,14 @@ class HeadStubPage extends StatelessWidget {
         title: '출/퇴근',
         color: cs.secondary,
         foreground: cs.onSecondary,
-        onTap: () => hr_att.AttendanceCalendar.showAsBottomSheet(context),
+        onTap: () => hr_att.AttendanceCalendar.showAsLeftSideDock(context),
       ),
       _HeadHubAction(
         icon: Icons.free_breakfast_rounded,
         title: '휴게 관리',
         color: cs.tertiary,
         foreground: cs.onTertiary,
-        onTap: () => hr_break.BreakCalendar.showAsBottomSheet(context),
+        onTap: () => hr_break.BreakCalendar.showAsLeftSideDock(context),
       ),
       _HeadHubAction(
         icon: Icons.edit_note_rounded,
@@ -117,14 +117,14 @@ class HeadStubPage extends StatelessWidget {
         title: '근무지 현황',
         color: cs.secondary,
         foreground: cs.onSecondary,
-        onTap: () => mgmt.Field.showAsBottomSheet(context),
+        onTap: () => mgmt.Field.showAsLeftSideDock(context),
       ),
       _HeadHubAction(
         icon: Icons.stacked_line_chart_rounded,
         title: '통계 비교',
         color: cs.tertiary,
         foreground: cs.onTertiary,
-        onTap: () => mgmt_stats.Statistics.showAsBottomSheet(context),
+        onTap: () => mgmt_stats.Statistics.showAsLeftSideDock(context),
       ),
     ];
   }

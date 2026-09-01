@@ -6,6 +6,7 @@ import '../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../features/selector/application/dev_auth.dart';
 import '../../auth/google_auth_session.dart';
 import '../../config/auth_config.dart';
+import '../../config/gmail_sender_config.dart';
 import '../../di/routes.dart';
 import '../../init/app_start_debug_trace.dart';
 import '../../init/app_start_flow_prefs.dart';
@@ -134,6 +135,8 @@ class _AppStartGoogleServicesSetupScreenState
       final identity = await GoogleAuthSession.instance.authenticateAccount(
         bridgeFirebase: false,
       );
+      final gmailSenderInitialized =
+          await GmailSenderConfig.initializeFromEmailIfUnset(identity.email);
       if (_skipping || !mounted) return;
       await AppStartFlowPrefs.setGoogleServicesSetupDone(true);
       if (!mounted) return;
@@ -147,6 +150,7 @@ class _AppStartGoogleServicesSetupScreenState
         'oauth_success',
         meta: <String, Object?>{
           'email': identity.email,
+          'gmailSenderInitialized': gmailSenderInitialized,
           'scopeCount': AppScopes.values.length,
         },
       );

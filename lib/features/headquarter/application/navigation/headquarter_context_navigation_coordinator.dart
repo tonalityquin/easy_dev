@@ -9,11 +9,13 @@ import '../../../../shared/plate/application/double/double_plate_state.dart';
 import '../../../../shared/plate/application/minor/minor_plate_state.dart';
 import '../../../../shared/plate/application/triple/triple_plate_state.dart';
 import '../../../../shared/secondary/side_docks/secondary_side_dock.dart';
+import '../../../../shared/work_session/application/work_area_session_coordinator.dart';
 import '../../../account/applications/user_state.dart';
-import '../../../dashboard/side_docks/common/headquarter_mode_side_dock.dart';
+import '../../../dashboard/side_docks/common/headquarter_work_area_side_dock.dart';
 import '../../../dev/application/area_state.dart';
 import '../../../dev/domain/repositories/area_repo_package/area_repository.dart';
 import '../../../selector/application/dev_auth.dart';
+import '../../../launcher/application/app_mode_registry.dart';
 import '../headquarter_dashboard_context.dart';
 import '../snapshot/headquarter_snapshot_repository.dart';
 
@@ -33,15 +35,12 @@ class HeadquarterContextNavigationCoordinator {
     required String currentScreen,
     String source = 'unknown',
   }) async {
-    final normalizedInput =
+    final normalizedCurrent =
         HeadquarterDashboardContext.normalizeModeKey(currentModeKey);
-    final normalizedCurrent = normalizedInput.isEmpty
-        ? HeadquarterDashboardContext.modeKeyFromScreen(currentScreen)
-        : normalizedInput;
     debugPrint(
-      '[HQ-CONTEXT-NAV] dock_open source=$source screen=$currentScreen currentMode=$normalizedCurrent dataSource=sqlite firebaseRead=0 firebaseWrite=0',
+      '[HQ-CONTEXT-NAV] dock_open source=$source screen=$currentScreen currentMode=$normalizedCurrent selectionOrder=area_then_mode dataSource=sqlite firebaseRead=0 firebaseWrite=0',
     );
-    final result = await showHeadquarterModeSideDock(
+    final result = await showHeadquarterWorkAreaSideDock(
       context: context,
       currentModeKey: normalizedCurrent,
       currentScreen: currentScreen,
@@ -75,7 +74,7 @@ class HeadquarterContextNavigationCoordinator {
       return;
     }
 
-    if (result.modeKey == 'sprint') {
+    if (result.openSprint) {
       await _navigateToSprint(
         context: context,
         currentModeKey: normalizedCurrent,
@@ -132,16 +131,24 @@ class HeadquarterContextNavigationCoordinator {
 
     try {
       trace.log(
-        'navigation_start source=$source currentMode=${currentMode.isEmpty ? 'unknown' : currentMode} targetMode=$targetMode targetArea=$areaName firebaseRead=0 firebaseWrite=0',
+        'navigation_start source=$source currentMode=${currentMode.isEmpty ? 'none' : currentMode} targetMode=${targetMode.isEmpty ? 'none' : targetMode} targetArea=$areaName selectionOrder=area_then_mode firebaseRead=0 firebaseWrite=0',
         progress: 0.08,
       );
-      if (!_workModes.contains(targetMode) || areaName.isEmpty) {
+      if (areaName.isEmpty) {
         await fail('이동할 업무 지역 정보가 올바르지 않습니다.');
         return;
       }
 
       final userState = context.read<UserState>();
       final division = userState.division.trim();
+      final userAreaNames = (userState.session?.areas ?? const <String>[])
+          .map((value) => value.trim())
+          .where((value) => value.isNotEmpty)
+          .toSet();
+      if (!userAreaNames.contains(areaName)) {
+        await fail('현재 계정에서 선택한 업무 지역을 사용할 수 없습니다.');
+        return;
+      }
       if (division.isEmpty) {
         await fail('회사 정보가 없어 업무 지역을 확인할 수 없습니다.');
         return;
@@ -165,13 +172,128 @@ class HeadquarterContextNavigationCoordinator {
         'sqlite_read_complete area=${snapshotArea.name} modes=${snapshotArea.modes.join(',')} isHeadquarter=${snapshotArea.isHeadquarter} capabilities=${snapshotArea.capabilities.map((value) => value.name).join(',')}',
         progress: 0.32,
       );
+
+      if (snapshotArea.isHeadquarter) {
+        final routeName = AppRoutes.headquarterPage;
+        final builder = appRoutes[routeName];
+        if (builder == null) {
+          await fail('이동할 본사 화면을 찾을 수 없습니다.');
+          return;
+        }
+        final areaState = context.read<AreaState>();
+        final currentArea = areaState.currentArea.trim();
+        final previousRecord = areaState.currentRecord;
+        if (currentArea == areaName && previousRecord?.isHeadquarter == true) {
+          HeadquarterDashboardContext.clearMode(
+            source: 'headquarter_context_navigation_noop:$source',
+          );
+          trace.log(
+            'navigation_noop reason=already_headquarter area=$areaName modeIndependent=true',
+            progress: 0.9,
+          );
+          await trace.succeed('현재 본사 업무 지역을 유지합니다.');
+          if (trace.developerMode && context.mounted) {
+            await trace.showSnapshotStatusDialog(
+              context,
+              title: '헤드쿼터 이동 상태',
+              description: '이미 현재 본사 업무 지역입니다.',
+            );
+          }
+          return;
+        }
+
+        if (currentMode.isNotEmpty || currentArea != areaName) {
+          _disableModePlateState(context, currentMode);
+          trace.log(
+            'plate_cleanup mode=${currentMode.isEmpty ? 'none' : currentMode} reason=headquarter_context_change prevents_pre_navigation_refresh=true',
+            progress: 0.44,
+          );
+        }
+        final record = AreaRecord(
+          name: snapshotArea.name,
+          division: snapshotArea.division,
+          email: snapshotArea.email,
+          invite: snapshotArea.invite,
+          communication: snapshotArea.communication,
+          capabilities: snapshotArea.capabilities,
+          modes: snapshotArea.modes.toList(growable: false),
+          isHeadquarter: true,
+        );
+        areaState.applyLocalAreaRecord(
+          record,
+          source: 'headquarter_context_navigation:$source',
+          syncWorkSession: false,
+        );
+        userState.setCurrentAreaLocalOnly(
+          snapshotArea.name,
+          source: 'headquarter_context_navigation:$source',
+        );
+        HeadquarterDashboardContext.clearMode(
+          source: 'headquarter_context_navigation:$source',
+        );
+        final homeArea = userState.area.trim();
+        final homeIsHeadquarter = homeArea.isNotEmpty && homeArea == areaName
+            ? true
+            : null;
+        final sessionResult = await WorkAreaSessionCoordinator.activate(
+          currentArea: snapshotArea.name,
+          division: division,
+          homeArea: homeArea,
+          mode: '',
+          currentIsHeadquarter: true,
+          homeIsHeadquarter: homeIsHeadquarter,
+          source: 'headquarter_context_navigation:$source',
+          persistMode: false,
+          useStoredModeFallback: false,
+        );
+        trace.log(
+          'local_context_applied mode=none area=${snapshotArea.name} isHeadquarter=true homeArea=$homeArea ttsMode=${sessionResult.mode} persistMode=false storedModeFallback=false publishMode=false route=$routeName firebaseRead=0 firebaseWrite=0',
+          progress: 0.78,
+        );
+        await trace.succeed('SQLite 기준 본사 업무 지역 전환이 완료되었습니다.');
+        if (!context.mounted) return;
+        if (trace.developerMode) {
+          await trace.showSnapshotStatusDialog(
+            context,
+            title: '헤드쿼터 이동 상태',
+            description: '본사 · ${snapshotArea.name}로 이동합니다.',
+          );
+        }
+        if (!context.mounted) return;
+        final reduceMotion =
+            MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+        debugPrint(
+          '[HQ-CONTEXT-NAV] navigate source=$source fromMode=${currentMode.isEmpty ? 'none' : currentMode} fromArea=$currentArea toMode=none toArea=${snapshotArea.name} isHeadquarter=true modeIndependent=true persistMode=false publishMode=false storedModeFallback=false route=$routeName dataSource=sqlite firebaseRead=0 firebaseWrite=0 reduceMotion=$reduceMotion',
+        );
+        Navigator.of(context).pushReplacement(
+          _buildRoute(
+            routeName: routeName,
+            builder: builder,
+            reduceMotion: reduceMotion,
+          ),
+        );
+        return;
+      }
+
+      if (!_workModes.contains(targetMode)) {
+        await fail('선택한 지역에서 사용할 업무 모드를 선택하세요.');
+        return;
+      }
+      final userModeIds = AppModeRegistry.supportedModes(
+        userState.session?.modes ?? const <String>[],
+        allowedIds: _workModes,
+      ).map((mode) => mode.id).toSet();
+      if (!userModeIds.contains(targetMode)) {
+        await fail('현재 계정에서 해당 업무 모드를 사용할 수 없습니다.');
+        return;
+      }
       if (!snapshotArea.supportsMode(targetMode)) {
         await fail('선택한 지역은 해당 업무 모드를 지원하지 않습니다.');
         return;
       }
       final routeName = _routeFor(
         modeKey: targetMode,
-        isHeadquarter: snapshotArea.isHeadquarter,
+        isHeadquarter: false,
       );
       final builder = routeName == null ? null : appRoutes[routeName];
       if (routeName == null || builder == null) {
@@ -181,6 +303,12 @@ class HeadquarterContextNavigationCoordinator {
 
       final areaState = context.read<AreaState>();
       final currentArea = areaState.currentArea.trim();
+      final homeArea = userState.area.trim();
+      final previousRecord = areaState.currentRecord;
+      final homeIsHeadquarter =
+          homeArea.isNotEmpty && homeArea == currentArea
+              ? previousRecord?.isHeadquarter
+              : null;
       if (currentMode == targetMode && currentArea == areaName) {
         trace.log(
           'navigation_noop reason=already_current mode=$targetMode area=$areaName',
@@ -199,7 +327,7 @@ class HeadquarterContextNavigationCoordinator {
 
       final modeChanged = currentMode.isNotEmpty && currentMode != targetMode;
       final areaChanged = currentArea != areaName;
-      if (modeChanged || areaChanged || snapshotArea.isHeadquarter) {
+      if (modeChanged || areaChanged) {
         _disableModePlateState(context, currentMode);
         trace.log(
           'plate_cleanup mode=${currentMode.isEmpty ? 'none' : currentMode} reason=context_change prevents_pre_navigation_refresh=true',
@@ -215,11 +343,12 @@ class HeadquarterContextNavigationCoordinator {
         communication: snapshotArea.communication,
         capabilities: snapshotArea.capabilities,
         modes: snapshotArea.modes.toList(growable: false),
-        isHeadquarter: snapshotArea.isHeadquarter,
+        isHeadquarter: false,
       );
       areaState.applyLocalAreaRecord(
         record,
         source: 'headquarter_context_navigation:$source',
+        syncWorkSession: false,
       );
       userState.setCurrentAreaLocalOnly(
         snapshotArea.name,
@@ -229,12 +358,21 @@ class HeadquarterContextNavigationCoordinator {
         targetMode,
         source: 'headquarter_context_navigation:$source',
       );
+      final sessionResult = await WorkAreaSessionCoordinator.activate(
+        currentArea: snapshotArea.name,
+        division: division,
+        homeArea: homeArea,
+        mode: targetMode,
+        currentIsHeadquarter: false,
+        homeIsHeadquarter: homeIsHeadquarter,
+        source: 'headquarter_context_navigation:$source',
+      );
       trace.log(
-        'local_context_applied mode=$targetMode area=${snapshotArea.name} route=$routeName firebaseRead=0 firebaseWrite=0',
-        progress: 0.72,
+        'local_context_applied mode=$targetMode area=${snapshotArea.name} isHeadquarter=false homeArea=$homeArea ttsMode=${sessionResult.mode} foreground=${sessionResult.foregroundServiceRunning} appFallback=${sessionResult.appFallbackListening} route=$routeName firebaseRead=0 firebaseWrite=0',
+        progress: 0.78,
       );
 
-      await trace.succeed('SQLite 기준 업무 지역 전환 준비가 완료되었습니다.');
+      await trace.succeed('SQLite 기준 업무 지역 전환과 TTS 재바인딩이 완료되었습니다.');
       if (!context.mounted) return;
       if (trace.developerMode) {
         await trace.showSnapshotStatusDialog(
@@ -249,7 +387,7 @@ class HeadquarterContextNavigationCoordinator {
       final reduceMotion =
           MediaQuery.maybeOf(context)?.disableAnimations ?? false;
       debugPrint(
-        '[HQ-CONTEXT-NAV] navigate source=$source fromMode=${currentMode.isEmpty ? 'unknown' : currentMode} fromArea=$currentArea toMode=$targetMode toArea=${snapshotArea.name} isHeadquarter=${snapshotArea.isHeadquarter} route=$routeName dataSource=sqlite firebaseRead=0 firebaseWrite=0 reduceMotion=$reduceMotion',
+        '[HQ-CONTEXT-NAV] navigate source=$source fromMode=${currentMode.isEmpty ? 'none' : currentMode} fromArea=$currentArea toMode=$targetMode toArea=${snapshotArea.name} isHeadquarter=false route=$routeName dataSource=sqlite firebaseRead=0 firebaseWrite=0 reduceMotion=$reduceMotion',
       );
       Navigator.of(context).pushReplacement(
         _buildRoute(
@@ -305,7 +443,7 @@ class HeadquarterContextNavigationCoordinator {
         vertical: true,
         scale: true,
         arguments: <String, String>{
-          'returnRouteName': _headquarterRouteFor(currentModeKey) ?? '',
+          'returnRouteName': _headquarterRouteFor(),
         },
       ),
     );
@@ -334,41 +472,23 @@ class HeadquarterContextNavigationCoordinator {
     required String modeKey,
     required bool isHeadquarter,
   }) {
+    if (isHeadquarter) return AppRoutes.headquarterPage;
     switch (modeKey) {
       case 'single':
-        return isHeadquarter
-            ? AppRoutes.singleHeadquarterPage
-            : AppRoutes.singleCommute;
+        return AppRoutes.singleCommute;
       case 'double':
-        return isHeadquarter
-            ? AppRoutes.doubleHeadquarterPage
-            : AppRoutes.doubleTypePage;
+        return AppRoutes.doubleTypePage;
       case 'triple':
-        return isHeadquarter
-            ? AppRoutes.tripleHeadquarterPage
-            : AppRoutes.tripleTypePage;
+        return AppRoutes.tripleTypePage;
       case 'minor':
-        return isHeadquarter
-            ? AppRoutes.minorHeadquarterPage
-            : AppRoutes.minorTypePage;
+        return AppRoutes.minorTypePage;
       default:
         return null;
     }
   }
 
-  static String? _headquarterRouteFor(String modeKey) {
-    switch (HeadquarterDashboardContext.normalizeModeKey(modeKey)) {
-      case 'single':
-        return AppRoutes.singleHeadquarterPage;
-      case 'double':
-        return AppRoutes.doubleHeadquarterPage;
-      case 'triple':
-        return AppRoutes.tripleHeadquarterPage;
-      case 'minor':
-        return AppRoutes.minorHeadquarterPage;
-      default:
-        return null;
-    }
+  static String _headquarterRouteFor() {
+    return AppRoutes.headquarterPage;
   }
 
   static PageRouteBuilder<void> _buildRoute({

@@ -20,10 +20,11 @@ import '../../../account/applications/user_state.dart';
 import '../actions/headquarter_common_actions.dart';
 import '../headquarter_dashboard_context.dart';
 import '../navigation/headquarter_context_navigation_coordinator.dart';
-import '../../widgets/headquarter_dashboard_identity_header.dart';
+import '../../widgets/headquarter_quick_work_context.dart';
 import '../../application/area/area_master_cache.dart';
 import '../../page/sheets/head_memo.dart';
 import '../../../selector/application/dev_auth.dart';
+import '../../../launcher/application/launcher_diagnostics.dart';
 import '../../widgets/hr/attendance_calendar.dart' as hr_att;
 import '../../widgets/hr/break_calendar.dart' as hr_break;
 import '../../widgets/mgmt/field.dart' as mgmt;
@@ -142,6 +143,22 @@ class HeadHubActions {
 
   static void setEnabled(bool value) => enabled.value = value;
 
+  static Future<void> resetForLogout() async {
+    await init();
+    enabled.value = false;
+    _hideOverlay();
+    await _prefs!.setBool(_kEnabledKey, false);
+    LauncherDiagnostics.record(
+      'head_hub_quick_actions_logout_reset',
+      scope: 'logout',
+      meta: const <String, Object?>{
+        'enabled': false,
+        'firebaseReads': 0,
+        'firebaseWrites': 0,
+      },
+    );
+  }
+
   static void toggle() => enabled.value = !enabled.value;
 
   static Future<bool> _openExternalPage({
@@ -218,7 +235,7 @@ class HeadHubActions {
     final trace = await DeveloperOperationTrace.start(
       context: ctx,
       title: '본사 데이터 내려받기',
-      initialMessage: '본사 다운로드 Snapshot 요청을 확인하고 있습니다.',
+      initialMessage: '본사 데이터 내려받기 요청을 확인하고 있습니다.',
       useCommonUi: true,
       developerModeMessage: '개발자 모드 ON: debugPrint 코드를 복사할 수 있습니다.',
       standardModeMessage: '개발자 모드 OFF',
@@ -259,7 +276,7 @@ class HeadHubActions {
 
     try {
       trace.log(
-        'Firebase 데이터를 다운로드한 뒤 하나의 SQLite Snapshot으로 저장합니다.',
+        '본사 운영 데이터를 내려받고 있습니다.',
         progress: 0.2,
       );
       final snapshot = await AreaMasterCache.refreshDivision(
@@ -270,7 +287,7 @@ class HeadHubActions {
         progressEnd: 0.76,
       );
       trace.log(
-        'SQLite Snapshot 저장을 확인했습니다: areas=${snapshot.items.length}, downloadedAt=${snapshot.refreshedAtIso}',
+        '운영 데이터 저장을 확인했습니다: areas=${snapshot.items.length}, downloadedAt=${snapshot.refreshedAtIso}',
         progress: 0.8,
       );
 
@@ -283,15 +300,15 @@ class HeadHubActions {
       }
       if (currentItem == null) {
         throw StateError(
-          '다운로드 Snapshot에서 현재 지역을 찾을 수 없습니다: $currentArea',
+          '내려받은 데이터에서 현재 지역을 찾을 수 없습니다: $currentArea',
         );
       }
       trace.log(
-        '현재 지역 연결 데이터는 SharedPreferences에 복제하지 않고 SQLite Snapshot만 사용합니다: emailPresent=${currentItem.email.trim().isNotEmpty}, invitePresent=${currentItem.invite.trim().isNotEmpty}, communicationPresent=${currentItem.communication.trim().isNotEmpty}',
+        '현재 지역 연결 정보를 확인했습니다: emailPresent=${currentItem.email.trim().isNotEmpty}, invitePresent=${currentItem.invite.trim().isNotEmpty}, communicationPresent=${currentItem.communication.trim().isNotEmpty}',
         progress: 0.9,
       );
       trace.log(
-        '기존 Snapshot row 전량 삭제, 0건 검증, 신규 전량 INSERT와 commit을 완료했습니다.',
+        '기존 데이터를 정리하고 최신 데이터 저장을 완료했습니다.',
         progress: 0.99,
       );
 
@@ -356,9 +373,8 @@ class HeadHubActions {
                     border: Border.all(color: tokens.borderSubtle),
                   ),
                   child: Text(
-                    '${snapshot.items.length}개 지역 정보를 SQLite Snapshot으로 저장했습니다.\n\n'
+                    '${snapshot.items.length}개 지역 정보를 최신 상태로 업데이트했습니다.\n\n'
                     '기준 시각: ${snapshot.refreshedAtIso}\n\n'
-                    '현재 지역($currentArea)의 email · invite · communication도 SQLite Snapshot에 포함되며 SharedPreferences에는 복제하지 않습니다.\n\n'
                     '변경 사항 적용을 위해 앱을 종료합니다. 앱을 다시 실행해 주세요.',
                     style: text.bodyMedium?.copyWith(
                       color: tokens.textSecondary,
@@ -496,7 +512,7 @@ class _HubBubbleState extends State<_HubBubble> {
       _handleHeadquarterModeChanged,
     );
     _recordDebug(
-      'initialized navigation=popup_route dashboardIdentity=quick_dock modeSource=HeadquarterDashboardContext userSource=UserState identityAnimation=fast_fade_scale_y_settle actionCarousel=excluded additionalFirebaseRead=0 additionalFirebaseWrite=0',
+      'initialized navigation=popup_route workContext=dashboard_style modeSource=HeadquarterDashboardContext actionCarousel=excluded',
     );
     _refreshDeveloperMode();
   }
@@ -541,7 +557,7 @@ class _HubBubbleState extends State<_HubBubble> {
       'developer_status_actions count=${configuredActions.length} ids=$configuredActionIds',
     );
     _recordDebug(
-      'developer_status_sections layout=vertical_headers indent=10 sections=$sectionSummary',
+      'developer_status_sections layout=work_context_sticky_search_palette sections=$sectionSummary',
     );
     final panelRoute = _panelRoute;
     _recordDebug(
@@ -568,15 +584,15 @@ class _HubBubbleState extends State<_HubBubble> {
     final currentMode =
         HeadquarterDashboardContext.currentModeKey.value.trim();
     trace.log(
-      'dashboardIdentity=quick_dock, currentMode=${currentMode.isEmpty ? 'unknown' : currentMode}, modeSource=HeadquarterDashboardContext, userSource=UserState, identityAnimation=fast_fade_scale_y_settle, actionCarousel=excluded, additionalFirebaseRead=0, additionalFirebaseWrite=0',
+      'workContext=dashboard_style, currentMode=${currentMode.isEmpty ? 'unknown' : currentMode}, modeSource=HeadquarterDashboardContext, actionCarousel=excluded',
       progress: 0.5,
     );
     trace.log(
-      'layout=vertical_headers, indent=10, sections=$sectionSummary',
+      'layout=work_context_sticky_search_palette sections=$sectionSummary',
       progress: 0.52,
     );
     trace.log(
-      'personal=my_info,work_actions work=memo operations=headquarter_navigation,field,attendance,break,statistics,refresh_area_master system=quick_button,settings,logout support=faq,terms,privacy,contact',
+      'workContext=schedule,punch work=quick_button,memo,refresh_area_master operations=headquarter_navigation,field,attendance,break,statistics settings=logout support=faq,terms,privacy,contact',
       progress: 0.58,
     );
     trace.log(
@@ -677,6 +693,7 @@ class _HubBubbleState extends State<_HubBubble> {
             );
           },
           onDeveloperStatus: _showDeveloperStatus,
+          onDebug: _recordDebug,
         );
       },
       onDidPop: (closeSource) {
@@ -785,35 +802,42 @@ class _HubBubbleState extends State<_HubBubble> {
 
     return <_DockAction>[
       _DockAction(
-        id: 'my_info',
-        category: _QuickActionCategory.personal,
-        icon: Icons.person_rounded,
-        label: '내 정보',
-        description: '계정과 사용자 정보를 확인합니다.',
-        color: tokens.infoContainer,
-        foreground: tokens.onInfoContainer,
+        id: 'headquarter_navigation',
+        category: _QuickActionCategory.work,
+        icon: Icons.location_city_rounded,
+        label: '업무 지역',
+        description: '본사 업무 지역으로 이동합니다.',
+        color: tokens.accentContainer,
+        foreground: tokens.onAccentContainer,
         onTap: () async {
           await closeMenu();
-          await HeadquarterCommonActions.openMyInfo(
-            actionContext,
+          final navigationContext = HeadHubActions._bestContext() ?? actionContext;
+          if (!navigationContext.mounted) return;
+          await HeadquarterContextNavigationCoordinator.openNavigationDock(
+            context: navigationContext,
+            currentModeKey: HeadquarterDashboardContext.currentModeKey.value,
+            currentScreen:
+                ModalRoute.of(navigationContext)?.settings.name ?? 'quick_dock',
             source: 'quick_dock',
           );
         },
       ),
       _DockAction(
-        id: 'work_actions',
-        category: _QuickActionCategory.personal,
-        icon: Icons.work_history_rounded,
-        label: '근무 액션',
-        description: '휴게 사용과 퇴근을 처리합니다.',
+        id: 'quick_button',
+        category: _QuickActionCategory.work,
+        icon: Icons.lightbulb_rounded,
+        label: '퀵버튼 끄기',
+        description: '빠른 실행 핸들을 끕니다.',
         color: tokens.warningContainer,
         foreground: tokens.onWarningContainer,
         onTap: () async {
           await closeMenu();
-          await HeadquarterCommonActions.openWorkActions(
-            actionContext,
+          await HeadquarterCommonActions.run<void>(
             source: 'quick_dock',
-            modeKey: HeadquarterDashboardContext.currentModeKey.value,
+            action: 'disable_quick_button',
+            operation: () async {
+              HeadHubActions.setEnabled(false);
+            },
           );
         },
       ),
@@ -836,23 +860,19 @@ class _HubBubbleState extends State<_HubBubble> {
         },
       ),
       _DockAction(
-        id: 'headquarter_navigation',
-        category: _QuickActionCategory.operations,
-        icon: Icons.location_city_rounded,
-        label: '업무 지역',
-        description: '본사 SQLite 기준 업무 지역으로 이동합니다.',
-        color: tokens.accentContainer,
-        foreground: tokens.onAccentContainer,
+        id: 'refresh_area_master',
+        category: _QuickActionCategory.work,
+        icon: Icons.download_rounded,
+        label: '다운받기',
+        description: '본사 운영 데이터를 최신 상태로 갱신합니다.',
+        color: tokens.infoContainer,
+        foreground: tokens.onInfoContainer,
         onTap: () async {
           await closeMenu();
-          final navigationContext = HeadHubActions._bestContext() ?? actionContext;
-          if (!navigationContext.mounted) return;
-          await HeadquarterContextNavigationCoordinator.openNavigationDock(
-            context: navigationContext,
-            currentModeKey: HeadquarterDashboardContext.currentModeKey.value,
-            currentScreen:
-                ModalRoute.of(navigationContext)?.settings.name ?? 'quick_dock',
+          await HeadquarterCommonActions.run<void>(
             source: 'quick_dock',
+            action: 'refresh_area_master',
+            operation: () => HeadHubActions.refreshAreaMaster(actionContext),
           );
         },
       ),
@@ -866,12 +886,16 @@ class _HubBubbleState extends State<_HubBubble> {
         foreground: tokens.onAccentContainer,
         onTap: () async {
           await closeMenu();
-          await openCommonSheet<dynamic>(
-            (sheetContext) => mgmt.Field.showAsBottomSheet(
-              sheetContext,
-              useCommonUi: true,
-            ),
+          final navigationContext = HeadHubActions._bestContext() ?? actionContext;
+          if (!navigationContext.mounted) {
+            _recordDebug('field_handoff_aborted reason=context_unmounted');
+            return;
+          }
+          _recordDebug(
+            'field_handoff_open side=left motion=operations_210_190',
           );
+          await mgmt.Field.showAsLeftSideDock<dynamic>(navigationContext);
+          _recordDebug('field_handoff_complete');
         },
       ),
       _DockAction(
@@ -884,12 +908,18 @@ class _HubBubbleState extends State<_HubBubble> {
         foreground: tokens.onInfoContainer,
         onTap: () async {
           await closeMenu();
-          await openCommonSheet<dynamic>(
-            (sheetContext) => hr_att.AttendanceCalendar.showAsBottomSheet(
-              sheetContext,
-              useCommonUi: true,
-            ),
+          final navigationContext = HeadHubActions._bestContext() ?? actionContext;
+          if (!navigationContext.mounted) {
+            _recordDebug('attendance_handoff_aborted reason=context_unmounted');
+            return;
+          }
+          _recordDebug(
+            'attendance_handoff_open side=left motion=operations_210_190',
           );
+          await hr_att.AttendanceCalendar.showAsLeftSideDock<dynamic>(
+            navigationContext,
+          );
+          _recordDebug('attendance_session_closed');
         },
       ),
       _DockAction(
@@ -902,12 +932,18 @@ class _HubBubbleState extends State<_HubBubble> {
         foreground: tokens.onWarningContainer,
         onTap: () async {
           await closeMenu();
-          await openCommonSheet<dynamic>(
-            (sheetContext) => hr_break.BreakCalendar.showAsBottomSheet(
-              sheetContext,
-              useCommonUi: true,
-            ),
+          final navigationContext = HeadHubActions._bestContext() ?? actionContext;
+          if (!navigationContext.mounted) {
+            _recordDebug('break_handoff_aborted reason=context_unmounted');
+            return;
+          }
+          _recordDebug(
+            'break_handoff_open side=left motion=operations_210_190',
           );
+          await hr_break.BreakCalendar.showAsLeftSideDock<dynamic>(
+            navigationContext,
+          );
+          _recordDebug('break_session_closed');
         },
       ),
       _DockAction(
@@ -915,74 +951,29 @@ class _HubBubbleState extends State<_HubBubble> {
         category: _QuickActionCategory.operations,
         icon: Icons.stacked_line_chart_rounded,
         label: '통계 비교',
-        description: '입·출차와 정산 추이를 비교합니다.',
+        description: '출차·정산 추이를 비교합니다.',
         color: tokens.accentContainer,
         foreground: tokens.onAccentContainer,
         onTap: () async {
           await closeMenu();
-          await openCommonSheet<dynamic>(
-            (sheetContext) => mgmt_stats.Statistics.showAsBottomSheet(
-              sheetContext,
-              useCommonUi: true,
-            ),
+          final navigationContext =
+              HeadHubActions._bestContext() ?? actionContext;
+          if (!navigationContext.mounted) {
+            _recordDebug('statistics_handoff_aborted reason=context_unmounted');
+            return;
+          }
+          _recordDebug(
+            'statistics_handoff_open side=left motion=operations_210_190',
           );
-        },
-      ),
-      _DockAction(
-        id: 'refresh_area_master',
-        category: _QuickActionCategory.operations,
-        icon: Icons.download_rounded,
-        label: '다운받기',
-        description: '본사 운영 데이터를 최신 Snapshot으로 갱신합니다.',
-        color: tokens.infoContainer,
-        foreground: tokens.onInfoContainer,
-        onTap: () async {
-          await closeMenu();
-          await HeadquarterCommonActions.run<void>(
-            source: 'quick_dock',
-            action: 'refresh_area_master',
-            operation: () => HeadHubActions.refreshAreaMaster(actionContext),
+          await mgmt_stats.Statistics.showAsLeftSideDock<dynamic>(
+            navigationContext,
           );
-        },
-      ),
-      _DockAction(
-        id: 'quick_button',
-        category: _QuickActionCategory.system,
-        icon: Icons.lightbulb_rounded,
-        label: '퀵버튼',
-        description: '빠른 실행 핸들을 끕니다.',
-        color: tokens.warningContainer,
-        foreground: tokens.onWarningContainer,
-        onTap: () async {
-          await closeMenu();
-          await HeadquarterCommonActions.run<void>(
-            source: 'quick_dock',
-            action: 'disable_quick_button',
-            operation: () async {
-              HeadHubActions.setEnabled(false);
-            },
-          );
-        },
-      ),
-      _DockAction(
-        id: 'settings',
-        category: _QuickActionCategory.system,
-        icon: Icons.settings_rounded,
-        label: '환경설정',
-        description: '서비스 환경과 동작 설정을 관리합니다.',
-        color: tokens.accentContainer,
-        foreground: tokens.onAccentContainer,
-        onTap: () async {
-          await closeMenu();
-          await HeadquarterCommonActions.openSettings(
-            actionContext,
-            source: 'quick_dock',
-          );
+          _recordDebug('statistics_session_closed');
         },
       ),
       _DockAction(
         id: 'logout',
-        category: _QuickActionCategory.system,
+        category: _QuickActionCategory.settings,
         icon: Icons.logout_rounded,
         label: '로그아웃',
         description: '현재 계정의 세션을 종료합니다.',
@@ -1310,6 +1301,7 @@ class _HeadQuickActionsRoutePanel extends StatefulWidget {
     required this.onSelect,
     required this.onCloseRequest,
     required this.onDeveloperStatus,
+    required this.onDebug,
   });
 
   final Animation<double> animation;
@@ -1325,6 +1317,7 @@ class _HeadQuickActionsRoutePanel extends StatefulWidget {
   final Future<void> Function(_DockAction action) onSelect;
   final Future<void> Function(String source, bool haptic) onCloseRequest;
   final Future<void> Function() onDeveloperStatus;
+  final ValueChanged<String> onDebug;
 
   @override
   State<_HeadQuickActionsRoutePanel> createState() =>
@@ -1437,6 +1430,7 @@ class _HeadQuickActionsRoutePanelState
                           focusNode: widget.focusNode,
                           developerMode: widget.developerMode,
                           onDeveloperStatus: widget.onDeveloperStatus,
+                          onDebug: widget.onDebug,
                           onSelect: widget.onSelect,
                         ),
                       ),
@@ -1506,33 +1500,29 @@ class _HeadQuickActionsRoutePanelState
 }
 
 enum _QuickActionCategory {
-  personal,
   work,
   operations,
-  system,
+  settings,
   support,
   developer,
 }
 
 extension _QuickActionCategoryUi on _QuickActionCategory {
   static const List<_QuickActionCategory> mainCategories = <_QuickActionCategory>[
-    _QuickActionCategory.personal,
     _QuickActionCategory.work,
     _QuickActionCategory.operations,
-    _QuickActionCategory.system,
+    _QuickActionCategory.settings,
     _QuickActionCategory.support,
   ];
 
   String get label {
     switch (this) {
-      case _QuickActionCategory.personal:
-        return '개인';
       case _QuickActionCategory.work:
         return '업무';
       case _QuickActionCategory.operations:
         return '운영';
-      case _QuickActionCategory.system:
-        return '시스템';
+      case _QuickActionCategory.settings:
+        return '설정';
       case _QuickActionCategory.support:
         return '지원';
       case _QuickActionCategory.developer:
@@ -1547,6 +1537,7 @@ class _CommandPaletteDock extends StatelessWidget {
   final FocusNode focusNode;
   final bool developerMode;
   final Future<void> Function() onDeveloperStatus;
+  final ValueChanged<String> onDebug;
   final Future<void> Function(_DockAction action) onSelect;
 
   const _CommandPaletteDock({
@@ -1555,101 +1546,153 @@ class _CommandPaletteDock extends StatelessWidget {
     required this.focusNode,
     required this.developerMode,
     required this.onDeveloperStatus,
+    required this.onDebug,
     required this.onSelect,
   });
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final text = Theme.of(context).textTheme;
-    final userState = context.watch<UserState>();
-
+    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final queryRaw = controller.text.trim();
     final query = _normalize(queryRaw);
-
-    final filtered = query.isEmpty
-        ? actions
-            .where((action) => !action.hiddenUntilExactQuery)
-            .toList(growable: false)
-        : actions.where((action) {
+    final searching = query.isNotEmpty;
+    final filtered = searching
+        ? actions.where((action) {
             if (action.hiddenUntilExactQuery) {
               return query == _normalize(action.id) ||
                   query == _normalize(action.label);
             }
             return _normalize(action.searchText).contains(query);
-          }).toList(growable: false);
+          }).toList(growable: false)
+        : actions
+            .where((action) => !action.hiddenUntilExactQuery)
+            .toList(growable: false);
+    final titleText = searching ? '검색 결과' : '빠른 실행';
 
-    final titleText = query.isEmpty ? '빠른 실행' : '검색 결과';
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        ValueListenableBuilder<String>(
-          valueListenable: HeadquarterDashboardContext.currentModeKey,
-          builder: (context, modeKey, _) {
-            return HeadquarterDashboardIdentityHeader(
-              name: userState.name,
-              position: userState.position,
-              modeKey: modeKey,
-              variant: HeadquarterDashboardIdentityVariant.quickDock,
-            );
-          },
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                titleText,
-                style: text.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.2,
-                  color: cs.onSurface,
-                ),
-              ),
-            ),
-            AnimatedSwitcher(
-              duration: MediaQuery.maybeOf(context)?.disableAnimations == true
-                  ? Duration.zero
-                  : CommonUiMotion.selection,
-              child: developerMode
-                  ? CommonIconButton(
-                      key: const ValueKey<String>('quick_dock_debug'),
-                      icon: Icons.bug_report_rounded,
-                      tooltip: '상태',
-                      onPressed: onDeveloperStatus,
-                      haptic: CommonHaptic.selection,
-                    )
-                  : const SizedBox.shrink(
-                      key: ValueKey<String>('quick_dock_debug_hidden'),
-                    ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        _SearchField(
-          controller: controller,
-          focusNode: focusNode,
-          onSubmit: () async {
-            if (filtered.isNotEmpty) {
-              await onSelect(filtered.first);
-            }
-          },
-        ),
-        const SizedBox(height: 12),
-        Expanded(
-          child: _PaletteList(
-            query: query,
-            items: filtered,
-            onSelect: onSelect,
+    return CustomScrollView(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      physics: const ClampingScrollPhysics(),
+      slivers: [
+        SliverToBoxAdapter(
+          child: AnimatedSize(
+            duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
+            curve: CommonUiMotion.standard,
+            alignment: Alignment.topCenter,
+            child: searching
+                ? const SizedBox(height: 10)
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const SizedBox(height: 14),
+                      const _PaletteSectionHeader(label: '나의 근무'),
+                      const SizedBox(height: 8),
+                      HeadquarterQuickWorkContext(
+                        developerMode: developerMode,
+                        onDeveloperStatus: onDeveloperStatus,
+                        onDebug: onDebug,
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                  ),
           ),
         ),
+        SliverPersistentHeader(
+          pinned: true,
+          delegate: _QuickSearchHeaderDelegate(
+            titleText: titleText,
+            controller: controller,
+            focusNode: focusNode,
+            onSubmit: () async {
+              if (filtered.isNotEmpty) {
+                await onSelect(filtered.first);
+              }
+            },
+          ),
+        ),
+        _PaletteSliver(
+          query: query,
+          items: filtered,
+          onSelect: onSelect,
+        ),
+        const SliverToBoxAdapter(child: SizedBox(height: 8)),
       ],
     );
   }
 
   static String _normalize(String s) =>
       s.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
+}
+
+class _QuickSearchHeaderDelegate extends SliverPersistentHeaderDelegate {
+  const _QuickSearchHeaderDelegate({
+    required this.titleText,
+    required this.controller,
+    required this.focusNode,
+    required this.onSubmit,
+  });
+
+  final String titleText;
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final Future<void> Function() onSubmit;
+
+  @override
+  double get minExtent => 104;
+
+  @override
+  double get maxExtent => 104;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    final tokens = CommonUiTheme.of(context);
+    final text = Theme.of(context).textTheme;
+    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: tokens.surface.withOpacity(tokens.isDark ? .94 : .97),
+        border: Border(
+          bottom: BorderSide(
+            color: overlapsContent ? tokens.borderStrong : tokens.borderSubtle,
+          ),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.only(top: 8, bottom: 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AnimatedSwitcher(
+              duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+              child: Text(
+                titleText,
+                key: ValueKey<String>(titleText),
+                style: text.titleSmall?.copyWith(
+                  color: tokens.textPrimary,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: .2,
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            _SearchField(
+              controller: controller,
+              focusNode: focusNode,
+              onSubmit: onSubmit,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  bool shouldRebuild(covariant _QuickSearchHeaderDelegate oldDelegate) {
+    return true;
+  }
 }
 
 class _SearchField extends StatelessWidget {
@@ -1710,12 +1753,12 @@ class _SearchField extends StatelessWidget {
   }
 }
 
-class _PaletteList extends StatelessWidget {
+class _PaletteSliver extends StatelessWidget {
   final String query;
   final List<_DockAction> items;
   final Future<void> Function(_DockAction action) onSelect;
 
-  const _PaletteList({
+  const _PaletteSliver({
     required this.query,
     required this.items,
     required this.onSelect,
@@ -1723,85 +1766,88 @@ class _PaletteList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final tokens = CommonUiTheme.of(context);
     final text = Theme.of(context).textTheme;
 
     if (query.isNotEmpty && items.isEmpty) {
-      return Center(
-        child: Text(
-          '검색 결과가 없습니다.',
-          style: text.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
-        ),
-      );
-    }
-
-    if (query.isNotEmpty) {
-      return ListView.separated(
-        padding: EdgeInsets.zero,
-        physics: const ClampingScrollPhysics(),
-        itemCount: items.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 10),
-        itemBuilder: (context, index) {
-          return _StaggeredReveal(
-            key: ValueKey<String>('search_${items[index].id}'),
-            order: index,
-            child: _PaletteTile(
-              action: items[index],
-              onSelect: onSelect,
+      return SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 38),
+          child: Center(
+            child: Text(
+              '검색 결과가 없습니다.',
+              style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
             ),
-          );
-        },
+          ),
+        ),
       );
     }
 
     final children = <Widget>[];
     var revealOrder = 0;
 
-    for (final category in _QuickActionCategoryUi.mainCategories) {
-      final sectionItems = items
-          .where((action) => action.category == category)
-          .toList(growable: false);
-      if (sectionItems.isEmpty) continue;
-
-      if (children.isNotEmpty) {
-        children.add(const SizedBox(height: 14));
-      }
-
-      children.add(
-        _StaggeredReveal(
-          key: ValueKey<String>('header_${category.name}'),
-          order: revealOrder++,
-          offsetY: 6,
-          child: _PaletteSectionHeader(label: category.label),
-        ),
-      );
-      children.add(const SizedBox(height: 8));
-
-      for (var index = 0; index < sectionItems.length; index++) {
-        final action = sectionItems[index];
+    if (query.isNotEmpty) {
+      for (var index = 0; index < items.length; index++) {
+        if (index > 0) children.add(const SizedBox(height: 10));
         children.add(
-          Padding(
-            padding: const EdgeInsets.only(left: 10),
-            child: _StaggeredReveal(
-              key: ValueKey<String>('section_${category.name}_${action.id}'),
-              order: revealOrder++,
-              child: _PaletteTile(
-                action: action,
-                onSelect: onSelect,
-              ),
+          _StaggeredReveal(
+            key: ValueKey<String>('search_${items[index].id}'),
+            order: revealOrder++,
+            child: _PaletteTile(
+              action: items[index],
+              onSelect: onSelect,
             ),
           ),
         );
-        if (index != sectionItems.length - 1) {
-          children.add(const SizedBox(height: 10));
+      }
+    } else {
+      for (final category in _QuickActionCategoryUi.mainCategories) {
+        final sectionItems = items
+            .where((action) => action.category == category)
+            .toList(growable: false);
+        if (sectionItems.isEmpty) continue;
+
+        if (children.isNotEmpty) {
+          children.add(const SizedBox(height: 14));
+        }
+
+        children.add(
+          _StaggeredReveal(
+            key: ValueKey<String>('header_${category.name}'),
+            order: revealOrder++,
+            offsetY: 6,
+            child: _PaletteSectionHeader(label: category.label),
+          ),
+        );
+        children.add(const SizedBox(height: 8));
+
+        for (var index = 0; index < sectionItems.length; index++) {
+          final action = sectionItems[index];
+          children.add(
+            Padding(
+              padding: const EdgeInsets.only(left: 10),
+              child: _StaggeredReveal(
+                key: ValueKey<String>('section_${category.name}_${action.id}'),
+                order: revealOrder++,
+                child: _PaletteTile(
+                  action: action,
+                  onSelect: onSelect,
+                ),
+              ),
+            ),
+          );
+          if (index != sectionItems.length - 1) {
+            children.add(const SizedBox(height: 10));
+          }
         }
       }
     }
 
-    return ListView(
+    return SliverPadding(
       padding: const EdgeInsets.only(bottom: 4),
-      physics: const ClampingScrollPhysics(),
-      children: children,
+      sliver: SliverList(
+        delegate: SliverChildListDelegate(children),
+      ),
     );
   }
 }

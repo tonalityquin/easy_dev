@@ -71,12 +71,12 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
       meta: <String, dynamic>{
         'screen': 'tablet_login',
         'asset': 'assets/images/ParkinWorkin_text.png',
-        'action': 'back_to_selector',
-        'to': AppRoutes.selector,
+        'action': 'back_to_mode_launcher',
+        'to': AppRoutes.modeLauncher,
       },
     );
     Navigator.of(context).pushNamedAndRemoveUntil(
-      AppRoutes.selector,
+      AppRoutes.modeLauncher,
       (route) => false,
     );
   }
@@ -97,9 +97,9 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
         accountFocus: _controller.phoneFocus,
         passwordController: _controller.passwordController,
         passwordFocus: _controller.passwordFocus,
-        accountLabel: '영어 아이디(핸들)',
-        accountIcon: Icons.alternate_email_rounded,
-        accountKeyboardType: TextInputType.text,
+        accountLabel: '전화번호',
+        accountIcon: Icons.phone_rounded,
+        accountKeyboardType: TextInputType.phone,
         onAccountChanged: (value) =>
             _controller.formatPhoneNumber(value, setState),
         obscurePassword: _controller.obscurePassword,

@@ -166,9 +166,9 @@ class _ImageAiModelTestLabScreenState extends State<ImageAiModelTestLabScreen> {
     super.dispose();
   }
 
-  void _goBackToSelector(BuildContext context) {
+  void _goBackToLauncher(BuildContext context) {
     Navigator.of(context).pushNamedAndRemoveUntil(
-      AppRoutes.selector,
+      AppRoutes.modeLauncher,
       (route) => false,
     );
   }
@@ -662,8 +662,8 @@ class _ImageAiModelTestLabScreenState extends State<ImageAiModelTestLabScreen> {
         centerTitle: true,
         actions: [
           IconButton(
-            tooltip: 'Selector로 이동',
-            onPressed: () => _goBackToSelector(context),
+            tooltip: '모드 터미널로 이동',
+            onPressed: () => _goBackToLauncher(context),
             icon: const Icon(Icons.home_rounded),
           ),
         ],

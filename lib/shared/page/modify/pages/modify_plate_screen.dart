@@ -11,8 +11,8 @@ import '../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../design_system/common_ui/common_ui_overlays.dart';
 import '../../../../design_system/common_ui/common_ui_side_dock.dart';
 import '../../../../design_system/common_ui/common_ui_side_dock_frame.dart';
-import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../features/dev/application/area_state.dart';
+import '../../../../features/location/applications/location_state.dart';
 import '../../../../features/payment/applications/bill_state.dart';
 import '../../../../features/payment/domain/models/bill_model.dart';
 import '../../../../features/payment/domain/models/regular_bill_model.dart';
@@ -20,6 +20,7 @@ import '../../../../features/sector/domain/models/sector_model.dart';
 import '../../../plate/domain/enums/plate_type.dart';
 import '../../../plate/domain/models/plate_model.dart';
 import '../../../plate/editor/domain/plate_editor_workspace.dart';
+import '../../../plate/editor/domain/plate_parking_display.dart';
 import '../controllers/modify_plate_controller.dart';
 import '../../../plate/editor/workspaces/plate_camera_workspace.dart';
 import '../../../plate/editor/widgets/plate_editor_footer.dart';
@@ -29,7 +30,7 @@ import '../../../plate/editor/workspaces/plate_memo_workspace.dart';
 import 'workspaces/modify_overview_workspace.dart';
 import 'widgets/modify_photo_section.dart';
 import 'sheets/modify_region_picker_bottom_sheet.dart';
-import '../../../plate/editor/workspaces/plate_parking_workspace.dart';
+import '../../../plate/editor/widgets/plate_parking_picker_content.dart';
 import '../../../plate/editor/workspaces/plate_sector_workspace.dart';
 import '../../../plate/editor/dialogs/plate_editor_dialog.dart';
 
@@ -441,11 +442,24 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
 
   void _applyParking(String location) {
     final previous = _controller.locationController.text.trim();
+    final normalized = location.trim();
+    final locations = context.read<LocationState>().locations;
+    final isTower = plateParkingLocationIsTower(
+      normalized,
+      locations: locations,
+    );
+    final displayLocation = plateParkingOverviewLocation(
+      normalized,
+      locations: locations,
+    );
     setState(() {
-      _controller.locationController.text = location;
+      _controller.locationController.text = normalized;
       _controller.isLocationSelected = true;
     });
-    _log('parking_slot=auto_applied previous=$previous selected=$location');
+    _log('parking_location=auto_applied previous=$previous selected=$normalized');
+    _log(
+      'parking_display=resolved tower=$isTower internal=$normalized visible=$displayLocation towerSlotVisibility=${isTower ? 'hidden' : 'visible'}',
+    );
   }
 
   Future<void> _applySector(SectorModel sector) async {
@@ -591,6 +605,28 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
     } finally {
       if (mounted) setState(() => isLoading = false);
     }
+  }
+
+  Future<void> _closeForInvalidParkingConfiguration(
+    BuildContext dialogContext,
+  ) async {
+    _log(
+      'parking_configuration=invalid reason=mixed_location_types action=close_modify_side_dock',
+    );
+    final navigator = Navigator.of(dialogContext, rootNavigator: true);
+    if (navigator.canPop()) {
+      navigator.pop();
+    }
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (!reduceMotion) {
+      await Future<void>.delayed(const Duration(milliseconds: 190));
+    }
+    if (!mounted) return;
+    _log(
+      'close=forced source=parking_mixed_configuration discardPrompt=false',
+    );
+    Navigator.of(context).pop();
   }
 
   void _closeEditorDialog(
@@ -859,25 +895,21 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
       case PlateEditorWorkspace.vehicleIdentity:
         return const SizedBox.shrink();
       case PlateEditorWorkspace.parking:
-        return Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: CommonUiTheme.of(dialogContext).borderSubtle,
-            ),
+        return PlateParkingPickerContent(
+          currentLocation: _controller.locationController.text.trim(),
+          preferredParkingAreas: _controller.selectedParkingPriorities,
+          onLocationApplied: _applyParking,
+          onExit: () => _closeEditorDialog(
+            dialogContext,
+            PlateEditorWorkspace.parking,
+            reason: 'parking_exit',
           ),
-          clipBehavior: Clip.antiAlias,
-          child: PlateParkingWorkspace(
-            currentLocation: _controller.locationController.text.trim(),
-            preferredParkingAreas: _controller.selectedParkingPriorities,
-            onLocationApplied: _applyParking,
-            onExit: () => _closeEditorDialog(
-              dialogContext,
-              PlateEditorWorkspace.parking,
-              reason: 'parking_exit',
-            ),
-            onDebug: _log,
-          ),
+          onInvalidAreaConfiguration: () {
+            unawaited(
+              _closeForInvalidParkingConfiguration(dialogContext),
+            );
+          },
+          onDebug: _log,
         );
       case PlateEditorWorkspace.camera:
         return PlateCameraWorkspace(

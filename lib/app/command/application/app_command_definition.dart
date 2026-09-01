@@ -7,6 +7,7 @@ class AppCommandDefinition {
     required this.runningMessage,
     required this.successMessage,
     this.launchesSurface = false,
+    this.visibleInHelp = true,
   });
 
   final String command;
@@ -16,4 +17,5 @@ class AppCommandDefinition {
   final String runningMessage;
   final String successMessage;
   final bool launchesSurface;
+  final bool visibleInHelp;
 }

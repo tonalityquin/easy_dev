@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import '../../../shared/area_remote_settings/application/area_snapshot_scope.dart';
 import '../../../app/models/capability.dart';
+import '../../../shared/tts/application/plate_tts_session_diagnostics.dart';
+import '../../../shared/work_session/application/work_area_session_coordinator.dart';
 import '../domain/repositories/area_repo_package/area_repository.dart';
 
 typedef AreaStateLog = void Function(
@@ -96,17 +99,111 @@ class AreaState with ChangeNotifier {
         : null;
   }
 
-  void _notifyForegroundWithArea() {
-    try {
-      FlutterForegroundTask.sendDataToTask({'area': _currentArea});
-      debugPrint(
-        _currentArea.isEmpty
-            ? '[AreaState] FG area clear 전송 완료'
-            : '[AreaState] FG area 전송 완료: $_currentArea',
+  Future<WorkAreaSessionActivationResult?> _syncWorkAreaSession({
+    String source = 'area_state',
+  }) async {
+    final area = _currentArea.trim();
+    final division = _currentDivision.trim();
+    final isHeadquarter = _currentRecord?.isHeadquarter;
+    if (area.isEmpty) {
+      PlateTtsSessionDiagnostics.noteAreaSync(
+        state: 'SKIPPED',
+        source: source,
+        area: area,
       );
-    } catch (error, stackTrace) {
-      debugPrint('[AreaState] FG area 전송 실패: $error\n$stackTrace');
+      PlateTtsSessionDiagnostics.record(
+        'area_state_work_session_sync_skipped',
+        meta: <String, Object?>{
+          'source': source,
+          'division': division,
+          'area': area,
+          'reason': 'area_empty',
+        },
+      );
+      debugPrint(
+        '[AreaState] work session 동기화 생략: source=$source division=$division area=$area reason=area_empty',
+      );
+      return null;
     }
+
+    PlateTtsSessionDiagnostics.noteAreaSync(
+      state: 'SYNCING',
+      source: source,
+      area: area,
+    );
+    PlateTtsSessionDiagnostics.record(
+      'area_state_work_session_sync_start',
+      meta: <String, Object?>{
+        'source': source,
+        'division': division,
+        'area': area,
+        'isHeadquarter': isHeadquarter,
+      },
+    );
+    debugPrint(
+      '[AreaState] work session 동기화 시작: source=$source division=$division area=$area isHeadquarter=$isHeadquarter',
+    );
+
+    try {
+      final result = await WorkAreaSessionCoordinator.activate(
+        currentArea: area,
+        division: division,
+        currentIsHeadquarter: isHeadquarter,
+        source: source,
+      );
+      PlateTtsSessionDiagnostics.noteAreaSync(
+        state: 'READY',
+        source: source,
+        area: area,
+      );
+      PlateTtsSessionDiagnostics.record(
+        'area_state_work_session_sync_complete',
+        meta: <String, Object?>{
+          'source': source,
+          'division': division,
+          'area': area,
+          'isHeadquarter': isHeadquarter,
+          'mode': result.mode,
+          'foregroundServiceRunning': result.foregroundServiceRunning,
+          'foregroundOwner': result.foregroundOwner,
+          'appFallbackListening': result.appFallbackListening,
+          'ready': result.ready,
+        },
+      );
+      debugPrint(
+        '[AreaState] work session 동기화 완료: source=$source division=$division area=$area isHeadquarter=$isHeadquarter mode=${result.mode} foreground=${result.foregroundServiceRunning} foregroundOwner=${result.foregroundOwner} appFallback=${result.appFallbackListening} ready=${result.ready}',
+      );
+      return result;
+    } catch (error, stackTrace) {
+      PlateTtsSessionDiagnostics.noteAreaSync(
+        state: 'FAILED',
+        source: source,
+        area: area,
+      );
+      PlateTtsSessionDiagnostics.record(
+        'area_state_work_session_sync_failed',
+        meta: <String, Object?>{
+          'source': source,
+          'division': division,
+          'area': area,
+          'isHeadquarter': isHeadquarter,
+          'error': error,
+          'stack': stackTrace,
+        },
+      );
+      debugPrint(
+        '[AreaState] work session 동기화 실패: source=$source division=$division area=$area error=$error\n$stackTrace',
+      );
+      rethrow;
+    }
+  }
+
+  void _scheduleWorkAreaSessionSync({String source = 'area_state'}) {
+    unawaited(
+      _syncWorkAreaSession(source: source).catchError(
+        (Object _, StackTrace __) => null,
+      ),
+    );
   }
 
   void _applyRecordToState(AreaRecord record) {
@@ -162,7 +259,19 @@ class AreaState with ChangeNotifier {
     _availableAreas.clear();
     _divisionAreaMap.clear();
     notifyListeners();
-    _notifyForegroundWithArea();
+    PlateTtsSessionDiagnostics.noteAreaSync(
+      state: 'CLEARED',
+      source: 'area_clear:$source',
+      area: '',
+    );
+    PlateTtsSessionDiagnostics.record(
+      'area_state_session_cleared',
+      meta: <String, Object?>{
+        'source': source,
+        'generation': _sessionGeneration,
+        'workSessionActivation': false,
+      },
+    );
     AreaSnapshotScope.clear();
     debugPrint(
       '[AreaState] 세션 캐시 초기화 완료: source=$source, generation=$_sessionGeneration',
@@ -190,7 +299,7 @@ class AreaState with ChangeNotifier {
     );
 
     notifyListeners();
-    _notifyForegroundWithArea();
+    _scheduleWorkAreaSessionSync(source: 'area_local_only');
     debugPrint(
       '[AreaState] local only area 적용: $_currentArea / $_currentDivision / generation=$_sessionGeneration',
     );
@@ -261,7 +370,7 @@ class AreaState with ChangeNotifier {
     }
 
     notifyListeners();
-    _notifyForegroundWithArea();
+    _scheduleWorkAreaSessionSync(source: 'area_login_refresh');
     _emit(
       '[AreaState] 로그인 Area 세션 확정 완료: division=$_currentDivision, area=$_currentArea, generation=$generation',
       onLog: onLog,
@@ -319,12 +428,9 @@ class AreaState with ChangeNotifier {
       throw StateError('본사 여부 fallback AreaRecord가 현재 사용자와 일치하지 않습니다.');
     }
 
-    _applyRecordToState(record);
     if (generation != _sessionGeneration) {
       throw StateError('Area 세션이 변경되어 본사 여부 fallback 결과를 폐기했습니다.');
     }
-    notifyListeners();
-    _notifyForegroundWithArea();
     _emit(
       '[AreaState] isHeadquarter 서버 fallback 완료: value=${record.isHeadquarter}',
       onLog: onLog,
@@ -373,7 +479,7 @@ class AreaState with ChangeNotifier {
         '[AreaState] initializeArea cache hit: area=$area, division=$_currentDivision',
       );
       notifyListeners();
-      _notifyForegroundWithArea();
+      _scheduleWorkAreaSessionSync(source: 'area_initialize_cache');
       return;
     }
 
@@ -395,7 +501,7 @@ class AreaState with ChangeNotifier {
         debugPrint(
           '[AreaState] 사용자 지역 초기화 완료: $_currentArea / $_currentDivision / isHeadquarter=${record.isHeadquarter} / caps=${Cap.human(capabilitiesOfCurrentArea)}',
         );
-        _notifyForegroundWithArea();
+        _scheduleWorkAreaSessionSync(source: 'area_initialize');
       } else {
         debugPrint('[AreaState] 저장소에 해당 지역이 존재하지 않음: $area');
         _currentRecord = null;
@@ -456,6 +562,7 @@ class AreaState with ChangeNotifier {
   void applyLocalAreaRecord(
     AreaRecord record, {
     String source = 'local',
+    bool syncWorkSession = true,
   }) {
     final normalizedArea = record.name.trim();
     if (normalizedArea.isEmpty) {
@@ -468,7 +575,9 @@ class AreaState with ChangeNotifier {
     debugPrint(
       '[AreaState] local area 적용 완료: $_currentArea / division=$_currentDivision / source=$source / remoteRead=0 remoteWrite=0 / caps=${Cap.human(capabilitiesOfCurrentArea)}',
     );
-    _notifyForegroundWithArea();
+    if (syncWorkSession) {
+      _scheduleWorkAreaSessionSync(source: source);
+    }
   }
 
   Future<void> updateAreaPicker(
@@ -526,7 +635,9 @@ class AreaState with ChangeNotifier {
             ? '[AreaState] 지역 동기화: $_currentArea / division=$_currentDivision'
             : '[AreaState] 지역 변경 완료: $_currentArea / division=$_currentDivision';
         debugPrint('$msg / caps=${Cap.human(capabilitiesOfCurrentArea)}');
-        _notifyForegroundWithArea();
+        await _syncWorkAreaSession(
+          source: isSyncing ? 'area_picker_sync' : 'area_change',
+        );
       } else {
         debugPrint('[AreaState] 지역 정보 없음: $newArea');
       }

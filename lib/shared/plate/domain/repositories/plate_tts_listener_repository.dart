@@ -16,11 +16,13 @@ class PlateTtsDocChange {
   final PlateTtsChangeType type;
   final String docId;
   final Map<String, dynamic>? data;
+  final bool hasPendingWrites;
 
   const PlateTtsDocChange({
     required this.type,
     required this.docId,
     required this.data,
+    required this.hasPendingWrites,
   });
 }
 

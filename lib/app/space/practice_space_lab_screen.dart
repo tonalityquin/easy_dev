@@ -15,9 +15,9 @@ class PracticeSpaceLabScreen extends StatelessWidget {
     ),
   ];
 
-  void _goBackToSelector(BuildContext context) {
+  void _goBackToLauncher(BuildContext context) {
     Navigator.of(context).pushNamedAndRemoveUntil(
-      AppRoutes.selector,
+      AppRoutes.modeLauncher,
       (route) => false,
     );
   }
@@ -40,8 +40,8 @@ class PracticeSpaceLabScreen extends StatelessWidget {
         centerTitle: true,
         actions: [
           IconButton(
-            tooltip: 'Selector로 이동',
-            onPressed: () => _goBackToSelector(context),
+            tooltip: '모드 터미널로 이동',
+            onPressed: () => _goBackToLauncher(context),
             icon: const Icon(Icons.home_rounded),
           ),
         ],
@@ -86,8 +86,8 @@ class PracticeSpaceLabScreen extends StatelessWidget {
                 width: double.infinity,
                 child: FilledButton.icon(
                   icon: const Icon(Icons.arrow_back_rounded),
-                  label: const Text('Selector로 돌아가기'),
-                  onPressed: () => _goBackToSelector(context),
+                  label: const Text('모드 터미널로 돌아가기'),
+                  onPressed: () => _goBackToLauncher(context),
                 ),
               ),
             ],

@@ -1,6 +1,12 @@
 import 'package:flutter/foundation.dart';
 
-enum SecondaryLocationView { management, parentSettings, childSettings }
+enum SecondaryLocationView { management, plainSettings, parentSettings, childSettings }
+
+enum LocationPlainSettingsMode { create, edit }
+
+enum LocationPlainSettingsSection { identity, capacity }
+
+enum LocationPlainSettingsSectionState { complete, incomplete, error }
 
 enum LocationParentSettingsMode { create, edit }
 
@@ -20,6 +26,9 @@ class SecondaryLocationWorkspaceState extends ChangeNotifier {
 
   final ValueChanged<String>? _onDebug;
   SecondaryLocationView _view = SecondaryLocationView.management;
+  LocationPlainSettingsMode _plainSettingsMode = LocationPlainSettingsMode.create;
+  LocationPlainSettingsSection _activePlainSettingsSection =
+      LocationPlainSettingsSection.identity;
   LocationParentSettingsMode _settingsMode = LocationParentSettingsMode.create;
   LocationParentSettingsSection _activeSettingsSection =
       LocationParentSettingsSection.identity;
@@ -27,13 +36,23 @@ class SecondaryLocationWorkspaceState extends ChangeNotifier {
       LocationChildSettingsMode.create;
   LocationChildSettingsSection _activeChildSettingsSection =
       LocationChildSettingsSection.identity;
+  String? _editingPlainLocationId;
   String? _editingParentId;
   String? _editingChildId;
   String? _childParentId;
   bool _settingsSaving = false;
   bool _settingsDirty = false;
+  int _plainSettingsNavigationRequestId = 0;
   int _settingsNavigationRequestId = 0;
   int _childSettingsNavigationRequestId = 0;
+  final Map<LocationPlainSettingsSection, LocationPlainSettingsSectionState>
+      _plainSectionStates =
+      <LocationPlainSettingsSection, LocationPlainSettingsSectionState>{
+    LocationPlainSettingsSection.identity:
+        LocationPlainSettingsSectionState.incomplete,
+    LocationPlainSettingsSection.capacity:
+        LocationPlainSettingsSectionState.complete,
+  };
   final Map<LocationParentSettingsSection, LocationParentSettingsSectionState>
       _sectionStates =
       <LocationParentSettingsSection, LocationParentSettingsSectionState>{
@@ -63,28 +82,40 @@ class SecondaryLocationWorkspaceState extends ChangeNotifier {
   bool _showSelectedChildSlotNumbers = false;
 
   SecondaryLocationView get view => _view;
+  LocationPlainSettingsMode get plainSettingsMode => _plainSettingsMode;
+  LocationPlainSettingsSection get activePlainSettingsSection =>
+      _activePlainSettingsSection;
   LocationParentSettingsMode get settingsMode => _settingsMode;
   LocationParentSettingsSection get activeSettingsSection =>
       _activeSettingsSection;
   LocationChildSettingsMode get childSettingsMode => _childSettingsMode;
   LocationChildSettingsSection get activeChildSettingsSection =>
       _activeChildSettingsSection;
+  String? get editingPlainLocationId => _editingPlainLocationId;
   String? get editingParentId => _editingParentId;
   String? get editingChildId => _editingChildId;
   String? get childParentId => _childParentId;
   bool get isManagementView => _view == SecondaryLocationView.management;
+  bool get isPlainSettingsView => _view == SecondaryLocationView.plainSettings;
   bool get isParentSettingsView =>
       _view == SecondaryLocationView.parentSettings;
   bool get isChildSettingsView => _view == SecondaryLocationView.childSettings;
+  bool get isEditingPlainSettings =>
+      _plainSettingsMode == LocationPlainSettingsMode.edit;
   bool get isEditingParentSettings =>
       _settingsMode == LocationParentSettingsMode.edit;
   bool get isEditingChildSettings =>
       _childSettingsMode == LocationChildSettingsMode.edit;
   bool get settingsSaving => _settingsSaving;
   bool get settingsDirty => _settingsDirty;
+  int get plainSettingsNavigationRequestId =>
+      _plainSettingsNavigationRequestId;
   int get settingsNavigationRequestId => _settingsNavigationRequestId;
   int get childSettingsNavigationRequestId =>
       _childSettingsNavigationRequestId;
+  Map<LocationPlainSettingsSection, LocationPlainSettingsSectionState>
+      get plainSectionStates => Map<LocationPlainSettingsSection,
+          LocationPlainSettingsSectionState>.unmodifiable(_plainSectionStates);
   Map<LocationParentSettingsSection, LocationParentSettingsSectionState>
       get sectionStates => Map<LocationParentSettingsSection,
           LocationParentSettingsSectionState>.unmodifiable(_sectionStates);
@@ -98,6 +129,14 @@ class SecondaryLocationWorkspaceState extends ChangeNotifier {
   bool get showOnlySelectedChild => _showOnlySelectedChild;
   bool get showSelectedChildSlotNumbers => _showSelectedChildSlotNumbers;
 
+
+  LocationPlainSettingsSectionState plainStateFor(
+    LocationPlainSettingsSection section,
+  ) {
+    return _plainSectionStates[section] ??
+        LocationPlainSettingsSectionState.incomplete;
+  }
+
   LocationParentSettingsSectionState stateFor(
     LocationParentSettingsSection section,
   ) {
@@ -110,6 +149,13 @@ class SecondaryLocationWorkspaceState extends ChangeNotifier {
   ) {
     return _childSectionStates[section] ??
         LocationChildSettingsSectionState.incomplete;
+  }
+
+  int get incompletePlainSectionCount {
+    return _plainSectionStates.values.where((state) {
+      return state == LocationPlainSettingsSectionState.incomplete ||
+          state == LocationPlainSettingsSectionState.error;
+    }).length;
   }
 
   int get incompleteSectionCount {
@@ -126,18 +172,76 @@ class SecondaryLocationWorkspaceState extends ChangeNotifier {
     }).length;
   }
 
-  void openCreateParent({required String source}) {
+
+  void openCreatePlain({required String source}) {
     _clearParentFocus();
-    _view = SecondaryLocationView.parentSettings;
+    _view = SecondaryLocationView.plainSettings;
+    _plainSettingsMode = LocationPlainSettingsMode.create;
     _settingsMode = LocationParentSettingsMode.create;
+    _childSettingsMode = LocationChildSettingsMode.create;
+    _activePlainSettingsSection = LocationPlainSettingsSection.identity;
     _activeSettingsSection = LocationParentSettingsSection.identity;
+    _activeChildSettingsSection = LocationChildSettingsSection.identity;
+    _editingPlainLocationId = null;
     _editingParentId = null;
     _editingChildId = null;
     _childParentId = null;
     _settingsSaving = false;
     _settingsDirty = false;
+    _plainSettingsNavigationRequestId = 0;
     _settingsNavigationRequestId = 0;
     _childSettingsNavigationRequestId = 0;
+    _resetPlainSectionStates(create: true);
+    log('plain_settings_opened mode=create source=$source');
+    notifyListeners();
+  }
+
+  void openEditPlain(
+    String locationId, {
+    required String source,
+  }) {
+    final normalizedId = locationId.trim();
+    if (normalizedId.isEmpty) {
+      log('plain_settings_open_edit_ignored reason=empty_location_id source=$source');
+      return;
+    }
+    _clearParentFocus();
+    _view = SecondaryLocationView.plainSettings;
+    _plainSettingsMode = LocationPlainSettingsMode.edit;
+    _settingsMode = LocationParentSettingsMode.create;
+    _childSettingsMode = LocationChildSettingsMode.create;
+    _activePlainSettingsSection = LocationPlainSettingsSection.identity;
+    _activeSettingsSection = LocationParentSettingsSection.identity;
+    _activeChildSettingsSection = LocationChildSettingsSection.identity;
+    _editingPlainLocationId = normalizedId;
+    _editingParentId = null;
+    _editingChildId = null;
+    _childParentId = null;
+    _settingsSaving = false;
+    _settingsDirty = false;
+    _plainSettingsNavigationRequestId = 0;
+    _settingsNavigationRequestId = 0;
+    _childSettingsNavigationRequestId = 0;
+    _resetPlainSectionStates(create: false);
+    log('plain_settings_opened mode=edit locationId=$normalizedId source=$source');
+    notifyListeners();
+  }
+
+  void openCreateParent({required String source}) {
+    _clearParentFocus();
+    _view = SecondaryLocationView.parentSettings;
+    _settingsMode = LocationParentSettingsMode.create;
+    _activeSettingsSection = LocationParentSettingsSection.identity;
+    _editingPlainLocationId = null;
+    _editingParentId = null;
+    _editingChildId = null;
+    _childParentId = null;
+    _settingsSaving = false;
+    _settingsDirty = false;
+    _plainSettingsNavigationRequestId = 0;
+    _settingsNavigationRequestId = 0;
+    _childSettingsNavigationRequestId = 0;
+    _resetPlainSectionStates(create: true);
     _resetSectionStates(create: true);
     log('parent_settings_opened mode=create source=$source');
     notifyListeners();
@@ -156,13 +260,16 @@ class SecondaryLocationWorkspaceState extends ChangeNotifier {
     _view = SecondaryLocationView.parentSettings;
     _settingsMode = LocationParentSettingsMode.edit;
     _activeSettingsSection = LocationParentSettingsSection.identity;
+    _editingPlainLocationId = null;
     _editingParentId = normalizedId;
     _editingChildId = null;
     _childParentId = null;
     _settingsSaving = false;
     _settingsDirty = false;
+    _plainSettingsNavigationRequestId = 0;
     _settingsNavigationRequestId = 0;
     _childSettingsNavigationRequestId = 0;
+    _resetPlainSectionStates(create: true);
     _resetSectionStates(create: false);
     log('parent_settings_opened mode=edit parentId=$normalizedId source=$source');
     notifyListeners();
@@ -181,13 +288,16 @@ class SecondaryLocationWorkspaceState extends ChangeNotifier {
     _view = SecondaryLocationView.childSettings;
     _childSettingsMode = LocationChildSettingsMode.create;
     _activeChildSettingsSection = LocationChildSettingsSection.identity;
+    _editingPlainLocationId = null;
     _editingParentId = null;
     _editingChildId = null;
     _childParentId = normalizedParentId;
     _settingsSaving = false;
     _settingsDirty = false;
+    _plainSettingsNavigationRequestId = 0;
     _settingsNavigationRequestId = 0;
     _childSettingsNavigationRequestId = 0;
+    _resetPlainSectionStates(create: true);
     _resetChildSectionStates(create: true);
     log('child_settings_opened mode=create parentId=$normalizedParentId source=$source');
     notifyListeners();
@@ -208,13 +318,16 @@ class SecondaryLocationWorkspaceState extends ChangeNotifier {
     _view = SecondaryLocationView.childSettings;
     _childSettingsMode = LocationChildSettingsMode.edit;
     _activeChildSettingsSection = LocationChildSettingsSection.identity;
+    _editingPlainLocationId = null;
     _editingParentId = null;
     _editingChildId = normalizedChildId;
     _childParentId = normalizedParentId;
     _settingsSaving = false;
     _settingsDirty = false;
+    _plainSettingsNavigationRequestId = 0;
     _settingsNavigationRequestId = 0;
     _childSettingsNavigationRequestId = 0;
+    _resetPlainSectionStates(create: true);
     _resetChildSectionStates(create: false);
     log('child_settings_opened mode=edit childId=$normalizedChildId parentId=$normalizedParentId source=$source');
     notifyListeners();
@@ -227,20 +340,52 @@ class SecondaryLocationWorkspaceState extends ChangeNotifier {
     }
     final previousView = _view;
     _view = SecondaryLocationView.management;
+    _plainSettingsMode = LocationPlainSettingsMode.create;
     _settingsMode = LocationParentSettingsMode.create;
     _childSettingsMode = LocationChildSettingsMode.create;
+    _activePlainSettingsSection = LocationPlainSettingsSection.identity;
     _activeSettingsSection = LocationParentSettingsSection.identity;
     _activeChildSettingsSection = LocationChildSettingsSection.identity;
+    _editingPlainLocationId = null;
     _editingParentId = null;
     _editingChildId = null;
     _childParentId = null;
     _settingsSaving = false;
     _settingsDirty = false;
+    _plainSettingsNavigationRequestId = 0;
     _settingsNavigationRequestId = 0;
     _childSettingsNavigationRequestId = 0;
+    _resetPlainSectionStates(create: true);
     _resetSectionStates(create: true);
     _resetChildSectionStates(create: true);
     log('settings_closed view=${previousView.name} source=$source');
+    notifyListeners();
+  }
+
+
+  void requestPlainSettingsSection(
+    LocationPlainSettingsSection section, {
+    required String source,
+  }) {
+    if (!isPlainSettingsView || _settingsSaving) return;
+    _plainSettingsNavigationRequestId += 1;
+    _activePlainSettingsSection = section;
+    log('plain_settings_section_requested section=${section.name} request=$_plainSettingsNavigationRequestId source=$source');
+    notifyListeners();
+  }
+
+  void selectPlainSettingsSection(
+    LocationPlainSettingsSection section, {
+    required String source,
+  }) {
+    if (!isPlainSettingsView) return;
+    if (_activePlainSettingsSection == section) {
+      log('plain_settings_section_reselected section=${section.name} source=$source');
+      return;
+    }
+    final previous = _activePlainSettingsSection;
+    _activePlainSettingsSection = section;
+    log('plain_settings_section_changed from=${previous.name} to=${section.name} source=$source');
     notifyListeners();
   }
 
@@ -293,6 +438,26 @@ class SecondaryLocationWorkspaceState extends ChangeNotifier {
     final previous = _activeChildSettingsSection;
     _activeChildSettingsSection = section;
     log('child_settings_section_changed from=${previous.name} to=${section.name} source=$source');
+    notifyListeners();
+  }
+
+
+  void updatePlainSectionStates(
+    Map<LocationPlainSettingsSection, LocationPlainSettingsSectionState> states, {
+    required String source,
+  }) {
+    var changed = false;
+    for (final section in LocationPlainSettingsSection.values) {
+      final next = states[section];
+      if (next == null || _plainSectionStates[section] == next) continue;
+      _plainSectionStates[section] = next;
+      changed = true;
+    }
+    if (!changed) return;
+    final summary = LocationPlainSettingsSection.values
+        .map((section) => '${section.name}:${plainStateFor(section).name}')
+        .join('|');
+    log('plain_settings_section_states source=$source $summary');
     notifyListeners();
   }
 
@@ -362,7 +527,7 @@ class SecondaryLocationWorkspaceState extends ChangeNotifier {
     required String title,
     required String source,
   }) {
-    if (isParentSettingsView || isChildSettingsView) {
+    if (isPlainSettingsView || isParentSettingsView || isChildSettingsView) {
       log('parent_focus_open_ignored reason=settings_active source=$source');
       return;
     }
@@ -425,6 +590,7 @@ class SecondaryLocationWorkspaceState extends ChangeNotifier {
 
   void reset({required String source}) {
     final changed = _view != SecondaryLocationView.management ||
+        _editingPlainLocationId != null ||
         _editingParentId != null ||
         _editingChildId != null ||
         _childParentId != null ||
@@ -435,18 +601,23 @@ class SecondaryLocationWorkspaceState extends ChangeNotifier {
         _showSelectedChildSlotNumbers;
     final previous = _focusedParentKey;
     _view = SecondaryLocationView.management;
+    _plainSettingsMode = LocationPlainSettingsMode.create;
     _settingsMode = LocationParentSettingsMode.create;
     _childSettingsMode = LocationChildSettingsMode.create;
+    _activePlainSettingsSection = LocationPlainSettingsSection.identity;
     _activeSettingsSection = LocationParentSettingsSection.identity;
     _activeChildSettingsSection = LocationChildSettingsSection.identity;
+    _editingPlainLocationId = null;
     _editingParentId = null;
     _editingChildId = null;
     _childParentId = null;
     _settingsSaving = false;
     _settingsDirty = false;
+    _plainSettingsNavigationRequestId = 0;
     _settingsNavigationRequestId = 0;
     _childSettingsNavigationRequestId = 0;
     _clearParentFocus();
+    _resetPlainSectionStates(create: true);
     _resetSectionStates(create: true);
     _resetChildSectionStates(create: true);
     log('workspace_reset previous=${previous ?? '-'} source=$source changed=$changed');
@@ -459,6 +630,19 @@ class SecondaryLocationWorkspaceState extends ChangeNotifier {
     _focusedParentTitle = null;
     _showOnlySelectedChild = false;
     _showSelectedChildSlotNumbers = false;
+  }
+
+
+  void _resetPlainSectionStates({required bool create}) {
+    _plainSectionStates
+      ..clear()
+      ..addAll(<LocationPlainSettingsSection, LocationPlainSettingsSectionState>{
+        LocationPlainSettingsSection.identity: create
+            ? LocationPlainSettingsSectionState.incomplete
+            : LocationPlainSettingsSectionState.complete,
+        LocationPlainSettingsSection.capacity:
+            LocationPlainSettingsSectionState.complete,
+      });
   }
 
   void _resetSectionStates({required bool create}) {

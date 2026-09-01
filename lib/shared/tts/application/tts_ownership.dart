@@ -13,6 +13,7 @@ class TtsOwnership {
 
   static Future<TtsOwner> getOwner() async {
     final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
     final v = prefs.getString(_key);
     if (v == TtsOwner.foreground.name) return TtsOwner.foreground;
     return TtsOwner.app;

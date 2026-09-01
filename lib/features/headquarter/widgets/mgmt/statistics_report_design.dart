@@ -227,7 +227,7 @@ class StatisticsPdfDesign {
       fontSize: size,
       color: color ?? palette.ink,
       fontWeight: pw.FontWeight.bold,
-      lineSpacing: 1.1,
+      lineSpacing: 1.08,
     );
   }
 
@@ -235,7 +235,7 @@ class StatisticsPdfDesign {
     return pw.TextStyle(
       fontSize: size,
       color: color ?? palette.ink,
-      lineSpacing: 1.25,
+      lineSpacing: 1.2,
     );
   }
 
@@ -244,37 +244,26 @@ class StatisticsPdfDesign {
       fontSize: size,
       color: color ?? palette.muted,
       fontWeight: pw.FontWeight.bold,
-      letterSpacing: .15,
+      letterSpacing: .12,
     );
   }
 
-  pw.BoxDecoration card({
-    PdfColor? fill,
-    double radius = 14,
-    bool outlined = true,
-  }) {
-    return pw.BoxDecoration(
-      color: fill ?? palette.surface,
-      border: outlined
-          ? pw.Border.all(color: palette.line, width: .65)
-          : null,
-      borderRadius: pw.BorderRadius.circular(radius),
+  pw.Widget divider({double top = 0, double bottom = 0, double width = .45}) {
+    return pw.Padding(
+      padding: pw.EdgeInsets.only(top: top, bottom: bottom),
+      child: pw.Container(height: width, color: palette.line),
     );
   }
 
   pw.Widget tag(StatisticsPdfTagData data) {
     final color = toneColor(data.tone);
-    return pw.Container(
-      padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4.5),
-      decoration: pw.BoxDecoration(
-        color: toneSoft(data.tone),
-        border: pw.Border.all(color: color, width: .45),
-        borderRadius: pw.BorderRadius.circular(6),
-      ),
-      child: pw.Text(
-        data.label,
-        style: label(size: 7.8, color: color),
-      ),
+    return pw.Row(
+      mainAxisSize: pw.MainAxisSize.min,
+      children: [
+        pw.Container(width: 5, height: 5, color: color),
+        pw.SizedBox(width: 5),
+        pw.Text(data.label, style: label(size: 7.8, color: palette.muted)),
+      ],
     );
   }
 
@@ -290,116 +279,67 @@ class StatisticsPdfDesign {
     String? area,
     String? rangeLabel,
   }) {
-    final info = <String>[
-      if ((division ?? '').trim().isNotEmpty) '사업부  ${division!.trim()}',
-      if ((area ?? '').trim().isNotEmpty) 'Area  ${area!.trim()}',
-      if ((rangeLabel ?? '').trim().isNotEmpty) '조회 범위  ${rangeLabel!.trim()}',
-      '생성 시각  ${_fmtDateTime(createdAt)}',
+    final info = <MapEntry<String, String>>[
+      if ((division ?? '').trim().isNotEmpty)
+        MapEntry('사업부', division!.trim()),
+      if ((area ?? '').trim().isNotEmpty) MapEntry('Area', area!.trim()),
+      if ((rangeLabel ?? '').trim().isNotEmpty)
+        MapEntry('조회 범위', rangeLabel!.trim()),
+      MapEntry('생성 시각', _fmtDateTime(createdAt)),
     ];
     return pw.Container(
       color: palette.paper,
+      padding: const pw.EdgeInsets.fromLTRB(38, 34, 38, 34),
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.stretch,
         children: [
-          pw.Container(
-            height: 205,
-            padding: const pw.EdgeInsets.fromLTRB(36, 34, 36, 30),
-            decoration: pw.BoxDecoration(
-              color: palette.primaryDark,
-              borderRadius: const pw.BorderRadius.only(
-                bottomLeft: pw.Radius.circular(28),
-                bottomRight: pw.Radius.circular(28),
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text('PARKINWORKIN', style: label(size: 8.6, color: palette.ink)),
+              pw.Text(reportCode, style: label(size: 7.8, color: palette.muted)),
+            ],
+          ),
+          divider(top: 13, bottom: 32, width: .7),
+          pw.Text(titleText, style: title(size: 27)),
+          pw.SizedBox(height: 9),
+          pw.Text(subtitle, style: body(size: 10.6, color: palette.muted)),
+          if ((description ?? '').trim().isNotEmpty) ...[
+            pw.SizedBox(height: 18),
+            pw.Container(
+              padding: const pw.EdgeInsets.only(left: 11),
+              decoration: pw.BoxDecoration(
+                border: pw.Border(
+                  left: pw.BorderSide(color: palette.primary, width: 2.2),
+                ),
+              ),
+              child: pw.Text(
+                description!.trim(),
+                style: body(size: 9.2, color: palette.muted),
               ),
             ),
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Text(
-                      'PARKINWORKIN',
-                      style: label(size: 9, color: palette.onPrimary),
-                    ),
-                    pw.Container(
-                      padding: const pw.EdgeInsets.symmetric(
-                        horizontal: 9,
-                        vertical: 5,
-                      ),
-                      decoration: pw.BoxDecoration(
-                        color: palette.primary,
-                        borderRadius: pw.BorderRadius.circular(7),
-                      ),
-                      child: pw.Text(
-                        reportCode,
-                        style: label(size: 8, color: palette.onPrimary),
-                      ),
-                    ),
-                  ],
-                ),
-                pw.Spacer(),
-                pw.Text(
-                  titleText,
-                  style: title(size: 30, color: palette.onPrimary),
-                ),
-                pw.SizedBox(height: 8),
-                pw.Text(
-                  subtitle,
-                  style: body(size: 12.5, color: palette.onPrimary),
-                ),
-              ],
+          ],
+          if (tags.isNotEmpty) ...[
+            pw.SizedBox(height: 18),
+            pw.Wrap(
+              spacing: 13,
+              runSpacing: 7,
+              children: [for (final item in tags) tag(item)],
             ),
-          ),
-          pw.Expanded(
-            child: pw.Padding(
-              padding: const pw.EdgeInsets.fromLTRB(34, 26, 34, 30),
-              child: pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  if (tags.isNotEmpty)
-                    pw.Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: [for (final item in tags) tag(item)],
-                    ),
-                  if ((description ?? '').trim().isNotEmpty) ...[
-                    pw.SizedBox(height: 18),
-                    pw.Container(
-                      width: double.infinity,
-                      padding: const pw.EdgeInsets.all(14),
-                      decoration: card(
-                        fill: palette.primarySoft,
-                      ),
-                      child: pw.Text(
-                        description!.trim(),
-                        style: body(size: 10.5, color: palette.primaryDark),
-                      ),
-                    ),
-                  ],
-                  pw.SizedBox(height: 20),
-                  metricGrid(metrics),
-                  pw.Spacer(),
-                  pw.Container(
-                    width: double.infinity,
-                    padding: const pw.EdgeInsets.all(14),
-                    decoration: card(fill: palette.surfaceAlt),
-                    child: pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.start,
-                      children: [
-                        pw.Text('REPORT INFORMATION', style: label(size: 8)),
-                        pw.SizedBox(height: 7),
-                        for (final line in info)
-                          pw.Padding(
-                            padding: const pw.EdgeInsets.only(bottom: 3),
-                            child: pw.Text(line, style: body(size: 9.5)),
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+          ],
+          pw.SizedBox(height: 28),
+          pw.Text('핵심 지표', style: label(size: 8, color: palette.muted)),
+          pw.SizedBox(height: 7),
+          divider(bottom: 1),
+          metricGrid(metrics),
+          pw.Spacer(),
+          divider(bottom: 10),
+          for (final entry in info)
+            _keyValueRow(
+              labelText: entry.key,
+              valueText: entry.value,
+              dense: true,
             ),
-          ),
         ],
       ),
     );
@@ -409,88 +349,61 @@ class StatisticsPdfDesign {
     List<StatisticsPdfMetricData> metrics, {
     StatisticsPdfMetricDensity density = StatisticsPdfMetricDensity.standard,
   }) {
-    final rows = <pw.Widget>[];
-    final horizontalGap = density == StatisticsPdfMetricDensity.compact ? 8.0 : 10.0;
-    final verticalGap = density == StatisticsPdfMetricDensity.compact ? 7.0 : 9.0;
-    for (int start = 0; start < metrics.length; start += 3) {
-      final chunk = metrics.skip(start).take(3).toList();
-      if (rows.isNotEmpty) rows.add(pw.SizedBox(height: verticalGap));
-      rows.add(
-        pw.Row(
-          children: [
-            for (int index = 0; index < chunk.length; index++) ...[
-              if (index > 0) pw.SizedBox(width: horizontalGap),
-              metricCard(chunk[index], density: density),
-            ],
-            for (int index = chunk.length; index < 3; index++) ...[
-              if (index > 0) pw.SizedBox(width: horizontalGap),
-              pw.Expanded(child: pw.SizedBox()),
-            ],
-          ],
-        ),
-      );
-    }
-    return pw.Column(children: rows);
+    final compact = density == StatisticsPdfMetricDensity.compact;
+    return pw.Column(
+      children: [
+        for (int index = 0; index < metrics.length; index++) ...[
+          metricCard(metrics[index], density: density),
+          if (index < metrics.length - 1)
+            divider(width: compact ? .28 : .38),
+        ],
+      ],
+    );
   }
 
   pw.Widget metricCard(
     StatisticsPdfMetricData data, {
     StatisticsPdfMetricDensity density = StatisticsPdfMetricDensity.standard,
   }) {
-    final accent = toneColor(data.tone);
-    final meta = (data.caption ?? '').trim();
     final compact = density == StatisticsPdfMetricDensity.compact;
-    final cardHeight = compact ? 50.0 : 62.0;
-    final radius = compact ? 6.0 : 7.0;
-    final labelSize = compact ? 7.4 : 8.0;
-    final valueSize = compact ? 11.8 : 13.5;
-    final metaSize = compact ? 6.7 : 7.3;
-    final metaHeight = compact ? 8.0 : 9.0;
-    final labelValueGap = compact ? 2.5 : 3.5;
-    final padding = compact
-        ? const pw.EdgeInsets.fromLTRB(10, 7, 9, 6.5)
-        : const pw.EdgeInsets.fromLTRB(12, 8.5, 10, 8);
-    return pw.Expanded(
-      child: pw.Container(
-        height: cardHeight,
-        padding: padding,
-        decoration: pw.BoxDecoration(
-          color: toneSoft(data.tone),
-          border: pw.Border(
-            left: pw.BorderSide(color: accent, width: 3),
-            top: pw.BorderSide(color: palette.line, width: .55),
-            right: pw.BorderSide(color: palette.line, width: .55),
-            bottom: pw.BorderSide(color: palette.line, width: .55),
+    final accent = toneColor(data.tone);
+    final caption = (data.caption ?? '').trim();
+    return pw.Container(
+      width: double.infinity,
+      padding: pw.EdgeInsets.symmetric(
+        vertical: compact ? 6.2 : 8.5,
+        horizontal: 1,
+      ),
+      child: pw.Row(
+        crossAxisAlignment: pw.CrossAxisAlignment.center,
+        children: [
+          pw.Container(width: 2.4, height: compact ? 26 : 32, color: accent),
+          pw.SizedBox(width: compact ? 8 : 10),
+          pw.Expanded(
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text(
+                  data.label,
+                  style: label(size: compact ? 7.5 : 8.1, color: palette.muted),
+                ),
+                if (caption.isNotEmpty) ...[
+                  pw.SizedBox(height: 2),
+                  pw.Text(
+                    caption,
+                    style: body(size: compact ? 6.8 : 7.5, color: palette.muted),
+                  ),
+                ],
+              ],
+            ),
           ),
-          borderRadius: pw.BorderRadius.circular(radius),
-        ),
-        child: pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            pw.Text(
-              data.label,
-              maxLines: 1,
-              style: label(size: labelSize, color: accent),
-            ),
-            pw.SizedBox(height: labelValueGap),
-            pw.Text(
-              data.value,
-              maxLines: 1,
-              style: title(size: valueSize),
-            ),
-            pw.Spacer(),
-            pw.SizedBox(
-              height: metaHeight,
-              child: meta.isEmpty
-                  ? pw.SizedBox()
-                  : pw.Text(
-                      meta,
-                      maxLines: 1,
-                      style: body(size: metaSize, color: palette.muted),
-                    ),
-            ),
-          ],
-        ),
+          pw.SizedBox(width: 12),
+          pw.Text(
+            data.value,
+            textAlign: pw.TextAlign.right,
+            style: title(size: compact ? 12.5 : 16),
+          ),
+        ],
       ),
     );
   }
@@ -505,31 +418,18 @@ class StatisticsPdfDesign {
       if ((rangeLabel ?? '').trim().isNotEmpty) rangeLabel!.trim(),
     ].join('  ·  ');
     return pw.Container(
-      padding: const pw.EdgeInsets.only(bottom: 8),
+      padding: const pw.EdgeInsets.only(bottom: 7),
       decoration: pw.BoxDecoration(
         border: pw.Border(
-          bottom: pw.BorderSide(color: palette.line, width: .55),
+          bottom: pw.BorderSide(color: palette.line, width: .45),
         ),
       ),
       child: pw.Row(
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         children: [
-          pw.Row(
-            children: [
-              pw.Container(
-                width: 7,
-                height: 7,
-                decoration: pw.BoxDecoration(
-                  color: palette.primary,
-                  borderRadius: pw.BorderRadius.circular(3.5),
-                ),
-              ),
-              pw.SizedBox(width: 6),
-              pw.Text(reportTitle, style: label(size: 8.2, color: palette.ink)),
-            ],
-          ),
+          pw.Text(reportTitle, style: label(size: 7.8, color: palette.ink)),
           if (meta.isNotEmpty)
-            pw.Text(meta, style: body(size: 7.5, color: palette.muted)),
+            pw.Text(meta, style: body(size: 7.2, color: palette.muted)),
         ],
       ),
     );
@@ -545,70 +445,47 @@ class StatisticsPdfDesign {
     final accent = toneColor(tone);
     return pw.Container(
       width: double.infinity,
-      padding: const pw.EdgeInsets.fromLTRB(0, 4, 0, 13),
+      padding: const pw.EdgeInsets.fromLTRB(0, 5, 0, 12),
       decoration: pw.BoxDecoration(
         border: pw.Border(
-          bottom: pw.BorderSide(color: palette.line, width: .75),
+          bottom: pw.BorderSide(color: palette.line, width: .6),
         ),
       ),
       child: pw.Row(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          pw.Container(
-            width: 5,
-            height: 48,
-            decoration: pw.BoxDecoration(
-              color: accent,
-              borderRadius: pw.BorderRadius.circular(2.5),
+          if ((sectionNumber ?? '').trim().isNotEmpty) ...[
+            pw.SizedBox(
+              width: 34,
+              child: pw.Text(
+                sectionNumber!.trim(),
+                style: title(size: 12, color: accent),
+              ),
             ),
-          ),
-          pw.SizedBox(width: 11),
+            pw.SizedBox(width: 10),
+          ],
           pw.Expanded(
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
                 if ((eyebrow ?? '').trim().isNotEmpty) ...[
-                  pw.Container(
-                    padding: const pw.EdgeInsets.symmetric(
-                      horizontal: 7,
-                      vertical: 3.5,
-                    ),
-                    decoration: pw.BoxDecoration(
-                      color: toneSoft(tone),
-                      borderRadius: pw.BorderRadius.circular(5),
-                    ),
-                    child: pw.Text(
-                      eyebrow!.trim(),
-                      style: label(size: 7.4, color: accent),
-                    ),
+                  pw.Text(
+                    eyebrow!.trim(),
+                    style: label(size: 7.2, color: accent),
                   ),
-                  pw.SizedBox(height: 6),
+                  pw.SizedBox(height: 5),
                 ],
                 pw.Text(titleText, style: title(size: 18)),
                 if ((subtitle ?? '').trim().isNotEmpty) ...[
                   pw.SizedBox(height: 4),
                   pw.Text(
                     subtitle!.trim(),
-                    style: body(size: 9.2, color: palette.muted),
+                    style: body(size: 9, color: palette.muted),
                   ),
                 ],
               ],
             ),
           ),
-          if ((sectionNumber ?? '').trim().isNotEmpty)
-            pw.Container(
-              width: 31,
-              height: 31,
-              alignment: pw.Alignment.center,
-              decoration: pw.BoxDecoration(
-                color: toneSoft(tone),
-                borderRadius: pw.BorderRadius.circular(10),
-              ),
-              child: pw.Text(
-                sectionNumber!.trim(),
-                style: title(size: 10, color: accent),
-              ),
-            ),
         ],
       ),
     );
@@ -622,23 +499,25 @@ class StatisticsPdfDesign {
     StatisticsPdfTone tone = StatisticsPdfTone.primary,
     double padding = 12,
   }) {
+    final accent = toneColor(tone);
     return pw.Container(
       width: double.infinity,
-      padding: pw.EdgeInsets.all(padding),
-      decoration: card(fill: palette.surface),
+      padding: pw.EdgeInsets.symmetric(vertical: padding * .45),
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
           pw.Row(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            crossAxisAlignment: pw.CrossAxisAlignment.end,
             children: [
+              pw.Container(width: 2.2, height: 28, color: accent),
+              pw.SizedBox(width: 8),
               pw.Expanded(
                 child: pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
-                    pw.Text(titleText, style: title(size: 11.5)),
+                    pw.Text(titleText, style: title(size: 11.8)),
                     if ((subtitle ?? '').trim().isNotEmpty) ...[
-                      pw.SizedBox(height: 3),
+                      pw.SizedBox(height: 2.5),
                       pw.Text(
                         subtitle!.trim(),
                         style: body(size: 8, color: palette.muted),
@@ -648,11 +527,15 @@ class StatisticsPdfDesign {
                 ),
               ),
               if ((badge ?? '').trim().isNotEmpty)
-                tag(StatisticsPdfTagData(label: badge!.trim(), tone: tone)),
+                pw.Text(
+                  badge!.trim(),
+                  style: label(size: 7.3, color: palette.muted),
+                ),
             ],
           ),
           pw.SizedBox(height: 9),
           child,
+          divider(top: 8),
         ],
       ),
     );
@@ -667,30 +550,27 @@ class StatisticsPdfDesign {
     final accent = toneColor(tone);
     return pw.Container(
       width: double.infinity,
-      padding: const pw.EdgeInsets.all(13),
-      decoration: card(fill: toneSoft(tone)),
+      padding: const pw.EdgeInsets.symmetric(vertical: 9),
+      decoration: pw.BoxDecoration(
+        border: pw.Border(
+          bottom: pw.BorderSide(color: palette.line, width: .38),
+        ),
+      ),
       child: pw.Row(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          pw.Container(
-            width: 4,
-            height: details.isEmpty ? 34 : 52,
-            decoration: pw.BoxDecoration(
-              color: accent,
-              borderRadius: pw.BorderRadius.circular(2),
-            ),
-          ),
-          pw.SizedBox(width: 10),
+          pw.Container(width: 2.6, height: details.isEmpty ? 34 : 48, color: accent),
+          pw.SizedBox(width: 9),
           pw.Expanded(
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                pw.Text(titleText, style: title(size: 11.5, color: accent)),
-                pw.SizedBox(height: 4),
-                pw.Text(message, style: body(size: 8.8)),
+                pw.Text(titleText, style: title(size: 10.8, color: accent)),
+                pw.SizedBox(height: 3),
+                pw.Text(message, style: body(size: 8.6)),
                 for (final detail in details) ...[
                   pw.SizedBox(height: 2),
-                  pw.Text(detail, style: body(size: 7.7, color: palette.muted)),
+                  pw.Text(detail, style: body(size: 7.5, color: palette.muted)),
                 ],
               ],
             ),
@@ -734,34 +614,81 @@ class StatisticsPdfDesign {
       );
     }
 
-    return pw.Container(
-      width: double.infinity,
-      decoration: card(fill: palette.surface),
-      child: pw.Table(
-        columnWidths: columnWidths,
-        border: pw.TableBorder.all(color: palette.line, width: .32),
-        children: [
+    return pw.Table(
+      columnWidths: columnWidths,
+      border: pw.TableBorder.all(color: palette.line, width: .28),
+      children: [
+        pw.TableRow(
+          decoration: pw.BoxDecoration(color: palette.surfaceAlt),
+          children: [
+            for (int column = 0; column < headers.length; column++)
+              cell(headers[column], column, header: true),
+          ],
+        ),
+        for (int rowIndex = 0; rowIndex < rows.length; rowIndex++)
           pw.TableRow(
-            decoration: pw.BoxDecoration(color: toneSoft(tone)),
             children: [
               for (int column = 0; column < headers.length; column++)
-                cell(headers[column], column, header: true),
+                cell(
+                  column < rows[rowIndex].length ? rows[rowIndex][column] : '',
+                  column,
+                  header: false,
+                ),
             ],
           ),
-          for (int rowIndex = 0; rowIndex < rows.length; rowIndex++)
-            pw.TableRow(
-              decoration: pw.BoxDecoration(
-                color: rowIndex.isOdd ? palette.surfaceAlt : palette.surface,
-              ),
+      ],
+    );
+  }
+
+  pw.Widget listRow({
+    required String titleText,
+    String? subtitle,
+    String? trailing,
+    String? supporting,
+    StatisticsPdfTone tone = StatisticsPdfTone.neutral,
+    bool strong = false,
+  }) {
+    final accent = toneColor(tone);
+    return pw.Container(
+      width: double.infinity,
+      padding: const pw.EdgeInsets.symmetric(vertical: 8),
+      decoration: pw.BoxDecoration(
+        border: pw.Border(
+          bottom: pw.BorderSide(color: palette.line, width: .36),
+        ),
+      ),
+      child: pw.Row(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Container(width: 2.2, height: strong ? 34 : 28, color: accent),
+          pw.SizedBox(width: 9),
+          pw.Expanded(
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                for (int column = 0; column < headers.length; column++)
-                  cell(
-                    column < rows[rowIndex].length ? rows[rowIndex][column] : '',
-                    column,
-                    header: false,
+                pw.Text(titleText, style: title(size: strong ? 11 : 9.8)),
+                if ((subtitle ?? '').trim().isNotEmpty) ...[
+                  pw.SizedBox(height: 2),
+                  pw.Text(
+                    subtitle!.trim(),
+                    style: body(size: 7.8, color: palette.muted),
                   ),
+                ],
+                if ((supporting ?? '').trim().isNotEmpty) ...[
+                  pw.SizedBox(height: 3),
+                  pw.Text(supporting!.trim(), style: body(size: 8.2)),
+                ],
               ],
             ),
+          ),
+          if ((trailing ?? '').trim().isNotEmpty) ...[
+            pw.SizedBox(width: 12),
+            pw.Text(
+              trailing!.trim(),
+              textAlign: pw.TextAlign.right,
+              style: title(size: strong ? 11.5 : 9.6),
+            ),
+          ],
         ],
       ),
     );
@@ -773,25 +700,43 @@ class StatisticsPdfDesign {
     required String labelText,
   }) {
     return pw.Container(
-      padding: const pw.EdgeInsets.only(top: 8),
+      padding: const pw.EdgeInsets.only(top: 7),
       decoration: pw.BoxDecoration(
         border: pw.Border(
-          top: pw.BorderSide(color: palette.line, width: .55),
+          top: pw.BorderSide(color: palette.line, width: .45),
         ),
       ),
       child: pw.Row(
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         children: [
-          pw.Row(
-            children: [
-              pw.Container(width: 16, height: 2.4, color: palette.primary),
-              pw.SizedBox(width: 6),
-              pw.Text(labelText, style: label(size: 7.2)),
-            ],
-          ),
+          pw.Text(labelText, style: label(size: 7)),
           pw.Text(
             '${_fmtDateTime(createdAt)}  ·  ${context.pageNumber} / ${context.pagesCount}',
-            style: body(size: 7.2, color: palette.muted),
+            style: body(size: 7, color: palette.muted),
+          ),
+        ],
+      ),
+    );
+  }
+
+  pw.Widget _keyValueRow({
+    required String labelText,
+    required String valueText,
+    bool dense = false,
+  }) {
+    return pw.Padding(
+      padding: pw.EdgeInsets.symmetric(vertical: dense ? 3.2 : 5.5),
+      child: pw.Row(
+        children: [
+          pw.SizedBox(
+            width: 82,
+            child: pw.Text(labelText, style: label(size: dense ? 7.4 : 8)),
+          ),
+          pw.Expanded(
+            child: pw.Text(
+              valueText,
+              style: body(size: dense ? 8.3 : 9),
+            ),
           ),
         ],
       ),
@@ -807,6 +752,7 @@ class StatisticsPdfDesign {
     return '$y-$m-$d $hh:$mm';
   }
 }
+
 
 class StatisticsReportDesign {
   static const double radius = 28;

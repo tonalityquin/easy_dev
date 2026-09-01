@@ -16,12 +16,14 @@ class HeadquarterDashboardIdentityHeader extends StatefulWidget {
     required this.position,
     required this.modeKey,
     required this.variant,
+    this.onTap,
   });
 
   final String name;
   final String position;
   final String modeKey;
   final HeadquarterDashboardIdentityVariant variant;
+  final VoidCallback? onTap;
 
   @override
   State<HeadquarterDashboardIdentityHeader> createState() =>
@@ -34,6 +36,7 @@ class _HeadquarterDashboardIdentityHeaderState
   late final AnimationController _controller;
   late final Animation<double> _animation;
   bool _started = false;
+  bool _pressed = false;
 
   bool get _animateEntrance =>
       widget.variant != HeadquarterDashboardIdentityVariant.dashboard;
@@ -208,25 +211,59 @@ class _HeadquarterDashboardIdentityHeaderState
             ],
           ),
         ),
+        if (isQuick && widget.onTap != null) ...[
+          const SizedBox(width: 6),
+          Icon(
+            Icons.chevron_right_rounded,
+            size: 20,
+            color: tokens.iconSecondary,
+          ),
+        ],
       ],
     );
 
     final semantic = Semantics(
       container: true,
+      button: widget.onTap != null,
       label: '본사 대시보드, $modeLabel, 사용자 $name, 직급 $position',
       child: body,
     );
 
     if (isDashboard) return semantic;
 
-    return Container(
+    final radius = BorderRadius.circular(isQuick ? 14 : 16);
+    final panel = Container(
       padding: EdgeInsets.all(isQuick ? 10 : 12),
       decoration: BoxDecoration(
         color: tokens.surfaceOverlay,
-        borderRadius: BorderRadius.circular(isQuick ? 14 : 16),
+        borderRadius: radius,
         border: Border.all(color: tokens.borderSubtle),
       ),
       child: semantic,
+    );
+
+    if (widget.onTap == null) return panel;
+
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    return AnimatedScale(
+      scale: _pressed ? .985 : 1,
+      duration: reduceMotion ? Duration.zero : CommonUiMotion.press,
+      curve: CommonUiMotion.enter,
+      child: Material(
+        color: tokens.transparent,
+        borderRadius: radius,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          borderRadius: radius,
+          onTap: widget.onTap,
+          onHighlightChanged: (value) {
+            if (_pressed == value) return;
+            setState(() => _pressed = value);
+          },
+          child: panel,
+        ),
+      ),
     );
   }
 

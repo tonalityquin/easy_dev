@@ -18,10 +18,14 @@ class WeeklyWorkScheduleEditor extends StatefulWidget {
     super.key,
     required this.source,
     this.initiallyExpanded = false,
+    this.embedded = false,
+    this.onChanged,
   });
 
   final String source;
   final bool initiallyExpanded;
+  final bool embedded;
+  final VoidCallback? onChanged;
 
   @override
   State<WeeklyWorkScheduleEditor> createState() =>
@@ -261,6 +265,7 @@ class _WeeklyWorkScheduleEditorState extends State<WeeklyWorkScheduleEditor> {
         _savingDay = null;
       });
       _log('save_time_complete', day: day, success: true);
+      widget.onChanged?.call();
       _showSnack(
         startTime == null && endTime == null
             ? '$day요일이 휴무로 저장되었습니다.'
@@ -320,6 +325,7 @@ class _WeeklyWorkScheduleEditorState extends State<WeeklyWorkScheduleEditor> {
         _savingDay = null;
       });
       _log('save_break_complete', day: day, success: true);
+      widget.onChanged?.call();
       _showSnack(value ? '$day요일 휴게가 설정되었습니다.' : '$day요일 휴게가 해제되었습니다.');
       return;
     }
@@ -578,6 +584,26 @@ class _WeeklyWorkScheduleEditorState extends State<WeeklyWorkScheduleEditor> {
             ),
           );
 
+    final animatedContent = AnimatedSwitcher(
+      duration: reduceMotion ? Duration.zero : const Duration(milliseconds: 190),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      transitionBuilder: (item, animation) {
+        if (reduceMotion) return item;
+        return FadeTransition(
+          opacity: animation,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 0.025),
+              end: Offset.zero,
+            ).animate(animation),
+            child: item,
+          ),
+        );
+      },
+      child: content,
+    );
+
     return Semantics(
       container: true,
       label: '오늘 근무 일정',
@@ -593,39 +619,20 @@ class _WeeklyWorkScheduleEditorState extends State<WeeklyWorkScheduleEditor> {
             _showDeveloperStatus();
           },
           child: AnimatedSize(
-            duration:
-                reduceMotion ? Duration.zero : CommonUiMotion.component,
+            duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
             curve: Curves.easeOutCubic,
             alignment: Alignment.topCenter,
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: tokens.surface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: tokens.borderSubtle),
-              ),
-              child: AnimatedSwitcher(
-                duration: reduceMotion
-                    ? Duration.zero
-                    : const Duration(milliseconds: 190),
-                switchInCurve: Curves.easeOutCubic,
-                switchOutCurve: Curves.easeInCubic,
-                transitionBuilder: (item, animation) {
-                  if (reduceMotion) return item;
-                  return FadeTransition(
-                    opacity: animation,
-                    child: SlideTransition(
-                      position: Tween<Offset>(
-                        begin: const Offset(0, 0.025),
-                        end: Offset.zero,
-                      ).animate(animation),
-                      child: item,
+            child: widget.embedded
+                ? animatedContent
+                : Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: tokens.surface,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: tokens.borderSubtle),
                     ),
-                  );
-                },
-                child: content,
-              ),
-            ),
+                    child: animatedContent,
+                  ),
           ),
         ),
       ),

@@ -3,8 +3,7 @@ import 'dart:typed_data';
 
 import 'package:googleapis/gmail/v1.dart' as gmail;
 
-import '../../app/auth/google_auth_session.dart';
-import '../../app/auth/google_auth_v7.dart';
+import '../../app/auth/gmail_sender_auth.dart';
 
 class GmailPdfMailer {
   GmailPdfMailer._();
@@ -18,12 +17,13 @@ class GmailPdfMailer {
     required String body,
     String fromName = 'ParkinWorkin',
   }) async {
-    final client = await GoogleAuthV7.authedClient(const <String>[]);
+    final client = await GmailSenderAuth.client();
 
     try {
-      final fromEmail = GoogleAuthSession.instance.currentUser?.email.trim();
+      final senderStatus = await GmailSenderAuth.status();
+      final fromEmail = senderStatus.authenticatedEmail;
 
-      if (fromEmail == null || fromEmail.isEmpty) {
+      if (fromEmail.isEmpty || !senderStatus.matches) {
         throw StateError('Gmail 발신 계정 이메일을 확인할 수 없습니다.');
       }
 

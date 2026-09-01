@@ -23,6 +23,7 @@ class AppCommandDiagnostics {
     String source = '',
     String command = '',
     String result = '',
+    String path = '',
     Object? error,
   }) {
     final fields = <String>[
@@ -32,6 +33,7 @@ class AppCommandDiagnostics {
       if (source.isNotEmpty) 'source=${jsonEncode(source)}',
       if (command.isNotEmpty) 'command=${jsonEncode(command)}',
       if (result.isNotEmpty) 'result=$result',
+      if (path.isNotEmpty) 'path=${jsonEncode(path)}',
       if (error != null) 'error=${jsonEncode(error.toString())}',
     ];
     final line =

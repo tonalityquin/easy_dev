@@ -9,7 +9,6 @@ class SignaturePainter extends CustomPainter {
     required this.overlayName,
     required this.overlayDateText,
     required this.guideColor,
-    required this.hintColor,
     required this.overlayTextColor,
   });
 
@@ -20,7 +19,6 @@ class SignaturePainter extends CustomPainter {
   final String overlayName;
   final String overlayDateText;
   final Color guideColor;
-  final Color hintColor;
   final Color overlayTextColor;
 
   @override
@@ -56,26 +54,6 @@ class SignaturePainter extends CustomPainter {
       }
     }
 
-    if (!points.any((point) => point != null)) {
-      final hintPainter = TextPainter(
-        text: TextSpan(
-          text: '화면 전체가 서명 영역입니다. 서명을 시작해 주세요.',
-          style: TextStyle(
-            color: hintColor,
-            fontSize: 14,
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout(maxWidth: size.width - 16);
-      hintPainter.paint(
-        canvas,
-        Offset(
-          (size.width - hintPainter.width) / 2,
-          (size.height - hintPainter.height) / 2,
-        ),
-      );
-    }
-
     final overlayPainter = TextPainter(
       text: TextSpan(
         text: '서명자: $overlayName   서명일시: $overlayDateText',
@@ -106,7 +84,6 @@ class SignaturePainter extends CustomPainter {
         oldDelegate.overlayName != overlayName ||
         oldDelegate.overlayDateText != overlayDateText ||
         oldDelegate.guideColor != guideColor ||
-        oldDelegate.hintColor != hintColor ||
         oldDelegate.overlayTextColor != overlayTextColor;
   }
 }

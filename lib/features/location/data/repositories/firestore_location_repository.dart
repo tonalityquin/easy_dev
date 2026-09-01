@@ -27,6 +27,11 @@ class FirestoreLocationRepository implements LocationRepository {
   }
 
   @override
+  Future<void> createPlainTextLocation(LocationModel location) {
+    return _writeService.createPlainTextLocation(location);
+  }
+
+  @override
   Future<void> createCompositeParent(LocationModel parent) {
     return _writeService.createCompositeParent(parent);
   }

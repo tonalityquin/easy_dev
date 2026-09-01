@@ -12,7 +12,7 @@ import '../../design_system/common_ui/common_ui_components.dart';
 import '../../design_system/common_ui/common_ui_overlays.dart';
 import '../../design_system/common_ui/common_ui_theme.dart';
 
-import '../../app/auth/google_auth_v7.dart';
+import '../../app/auth/gmail_sender_auth.dart';
 import '../../app/config/email_config.dart';
 import '../../app/utils/status_dialog.dart';
 import '../dev/debug/debug_api_logger.dart';
@@ -441,7 +441,7 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
   }
 
   Future<void> _sendRawViaGmail(String mime) async {
-    final client = await GoogleAuthV7.authedClient(const <String>[]);
+    final client = await GmailSenderAuth.client();
     try {
       final api = gmail.GmailApi(client);
 

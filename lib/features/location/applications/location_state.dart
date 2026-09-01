@@ -148,6 +148,9 @@ class LocationState extends ChangeNotifier {
 
   static String _safeIdSeg(String v) => _normalizeName(v).replaceAll('/', '_');
 
+  static String _plainDocId({required String name, required String area}) =>
+      '${_safeIdSeg(name)}_${area.trim()}';
+
   static String _parentDocId({required String parent, required String area}) =>
       '${_safeIdSeg(parent)}_${area.trim()}';
 
@@ -1616,6 +1619,76 @@ class LocationState extends ChangeNotifier {
     }
   }
 
+
+  Future<bool> createPlainTextLocation({
+    required String name,
+    required int capacity,
+    required String area,
+    void Function(String)? onError,
+  }) async {
+    final cleanArea = area.trim();
+    final cleanName = _normalizeName(name);
+    final cleanNameKey = _nameKey(cleanName);
+
+    if (cleanArea.isEmpty) {
+      onError?.call('⚠️ 지역(area)이 비어 있어 텍스트형 구역을 생성할 수 없습니다.');
+      return false;
+    }
+    if (cleanName.isEmpty) {
+      onError?.call('⚠️ 구역명을 입력하세요.');
+      return false;
+    }
+    if (cleanName.length > 40) {
+      onError?.call('⚠️ 구역명은 40자 이하로 입력해 주세요.');
+      return false;
+    }
+    if (capacity < 0 || capacity > 9999) {
+      onError?.call('⚠️ 수용 가능 차량 수는 0~9999 범위여야 합니다.');
+      return false;
+    }
+
+    try {
+      final snapshot = await _fetchAreaSnapshot(cleanArea);
+      final keys = _buildExistingKeysFromSnapshot(snapshot);
+      if (keys.allNameKeys.contains(cleanNameKey)) {
+        onError?.call('⚠️ "$cleanName" 구역이 이미 존재합니다.');
+        return false;
+      }
+
+      final location = LocationModel(
+        id: _plainDocId(name: cleanName, area: cleanArea),
+        locationName: cleanName,
+        area: cleanArea,
+        parent: null,
+        type: 'single',
+        capacity: capacity,
+        isSelected: false,
+        plateCount: 0,
+      );
+
+      await _repository.createPlainTextLocation(location);
+      await _syncFromFirestoreAfterWrite(cleanArea);
+      debugPrint(
+        '[LocationState] 텍스트형 구역 생성 완료: id=${location.id} area=$cleanArea capacity=$capacity',
+      );
+      return true;
+    } catch (error, stackTrace) {
+      LocationDebugStatus.report(
+        title: '텍스트형 구역 생성 실패',
+        operation: 'LocationState.createPlainTextLocation',
+        error: error,
+        stackTrace: stackTrace,
+        details: <String, Object?>{
+          'area': cleanArea,
+          'name': cleanName,
+          'capacity': capacity,
+        },
+      );
+      onError?.call('🚨 텍스트형 구역 생성 실패: $error');
+      return false;
+    }
+  }
+
   Future<bool> updatePlainTextLocation({
     required String id,
     required String name,
@@ -1638,8 +1711,12 @@ class LocationState extends ChangeNotifier {
       onError?.call('⚠️ 구역명을 입력하세요.');
       return false;
     }
-    if (capacity < 0) {
-      onError?.call('⚠️ 수용 대수(capacity)는 0 이상이어야 합니다.');
+    if (cleanName.length > 40) {
+      onError?.call('⚠️ 구역명은 40자 이하로 입력해 주세요.');
+      return false;
+    }
+    if (capacity < 0 || capacity > 9999) {
+      onError?.call('⚠️ 수용 가능 차량 수는 0~9999 범위여야 합니다.');
       return false;
     }
 

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../app/utils/developer_operation_status_dialog.dart';
+import '../../../design_system/common_ui/common_adaptive_two_line_content.dart';
 import '../../../design_system/common_ui/common_ui_overlays.dart';
 import '../../../design_system/common_ui/common_ui_side_dock.dart';
 import '../../../design_system/common_ui/common_ui_theme.dart';
@@ -57,6 +58,7 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard>
   bool _refreshing = false;
   bool _disposed = false;
   String _lastLayoutLog = '';
+  double? _lastAccountHeightAnimationTarget;
 
   @override
   void initState() {
@@ -750,7 +752,7 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard>
           child: Padding(
             padding: EdgeInsets.symmetric(
               horizontal: compact ? 10 : 14,
-              vertical: compact ? 8 : 12,
+              vertical: compact ? 8 : 10,
             ),
             child: Row(
               children: [
@@ -781,33 +783,31 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard>
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '캘린더 연결',
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w900,
+                  child: CommonAdaptiveTwoLineContent(
+                    gap: compact ? 2 : 3,
+                    title: Text(
+                      '캘린더 연결',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w900,
+                          ),
+                    ),
+                    subtitle: AnimatedSwitcher(
+                      duration: duration,
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      child: Text(
+                        _calendarAccountSubtitle,
+                        key: ValueKey<String>(_calendarAccountSubtitle),
+                        maxLines: compact ? 1 : 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: cs.onSurfaceVariant,
+                              fontWeight: FontWeight.w700,
                             ),
                       ),
-                      SizedBox(height: compact ? 2 : 3),
-                      AnimatedSwitcher(
-                        duration: duration,
-                        switchInCurve: Curves.easeOutCubic,
-                        switchOutCurve: Curves.easeInCubic,
-                        child: Text(
-                          _calendarAccountSubtitle,
-                          key: ValueKey<String>(_calendarAccountSubtitle),
-                          maxLines: compact ? 1 : 2,
-                          overflow: TextOverflow.ellipsis,
-                          style:
-                              Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: cs.onSurfaceVariant,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -904,6 +904,88 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard>
     }
   }
 
+  double _measureTextHeight({
+    required BuildContext context,
+    required String text,
+    required TextStyle style,
+    required int maxLines,
+  }) {
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: style),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: maxLines,
+      ellipsis: '…',
+    )..layout(maxWidth: 320);
+    return painter.height;
+  }
+
+  double _resolveAccountHeight(
+    BuildContext context, {
+    required bool compact,
+    required bool ultra,
+    required bool extreme,
+  }) {
+    final theme = Theme.of(context);
+    if (extreme) {
+      final titleStyle = const TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w900,
+      );
+      final stateStyle = const TextStyle(
+        fontSize: 10,
+        fontWeight: FontWeight.w800,
+      );
+      final contentHeight = [
+        _measureTextHeight(
+          context: context,
+          text: '캘린더 연결',
+          style: titleStyle,
+          maxLines: 1,
+        ),
+        _measureTextHeight(
+          context: context,
+          text: '재인증 필요',
+          style: stateStyle,
+          maxLines: 1,
+        ),
+        17.0,
+      ].reduce((a, b) => a > b ? a : b);
+      final measured = contentHeight + 4;
+      return measured < 40.0 ? 40.0 : measured;
+    }
+
+    final titleStyle = (theme.textTheme.titleSmall ?? const TextStyle()).copyWith(
+      fontWeight: FontWeight.w900,
+    );
+    final subtitleStyle = (theme.textTheme.bodySmall ?? const TextStyle()).copyWith(
+      fontWeight: FontWeight.w700,
+    );
+    final titleHeight = _measureTextHeight(
+      context: context,
+      text: '캘린더 연결',
+      style: titleStyle,
+      maxLines: 1,
+    );
+    final subtitleHeight = _measureTextHeight(
+      context: context,
+      text: compact ? '가' : '가\n가',
+      style: subtitleStyle,
+      maxLines: compact ? 1 : 2,
+    );
+    final textHeight = titleHeight + (compact ? 2 : 3) + subtitleHeight;
+    final iconHeight = compact ? 34.0 : 42.0;
+    final verticalPadding = compact ? 8.0 : 10.0;
+    final contentHeight = textHeight > iconHeight ? textHeight : iconHeight;
+    final measured = contentHeight + verticalPadding * 2;
+    final minimum = ultra
+        ? 56.0
+        : compact
+            ? 60.0
+            : 72.0;
+    return measured < minimum ? minimum : measured;
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -949,14 +1031,25 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard>
         final previewEvents = events.take(previewLimit).toList(growable: false);
         final hiddenCount = events.length - previewEvents.length;
         final accountHeight = widget.showAccountEntry
-            ? extreme
-                ? 40.0
-                : ultra
-                    ? 52.0
-                    : compact
-                        ? 58.0
-                        : 66.0
+            ? _resolveAccountHeight(
+                context,
+                compact: compact,
+                ultra: ultra,
+                extreme: extreme,
+              )
             : 0.0;
+        if (_lastAccountHeightAnimationTarget != accountHeight) {
+          HeadquarterCalendarSideDockDiagnostics.log(
+            "account_row_resize previous=${_lastAccountHeightAnimationTarget?.toStringAsFixed(1) ?? 'none'} target=${accountHeight.toStringAsFixed(1)} durationMs=${duration.inMilliseconds} reduceMotion=$reduceMotion",
+          );
+          _lastAccountHeightAnimationTarget = accountHeight;
+        }
+        final textScale = MediaQuery.textScalerOf(context).scale(14) / 14;
+        final accountPaddingY = extreme
+            ? 0.0
+            : compact
+                ? 8.0
+                : 10.0;
         final headerHeight = 40.0;
         final monthHeight = extreme ? 40.0 : 44.0;
         final weekdaysHeight = extreme ? 15.0 : 18.0;
@@ -988,7 +1081,7 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard>
             .clamp(extreme ? 0.0 : 72.0, 330.0)
             .toDouble();
         final layoutLog =
-            'layout height=${viewportHeight.toStringAsFixed(1)} compact=$compact ultra=$ultra extreme=$extreme preview=${previewEvents.length} hidden=$hiddenCount grid=${gridHeight.toStringAsFixed(1)}';
+            'layout height=${viewportHeight.toStringAsFixed(1)} compact=$compact ultra=$ultra extreme=$extreme textScale=${textScale.toStringAsFixed(2)} accountHeight=${accountHeight.toStringAsFixed(1)} accountPaddingY=${accountPaddingY.toStringAsFixed(1)} preview=${previewEvents.length} hidden=$hiddenCount grid=${gridHeight.toStringAsFixed(1)}';
         if (_lastLayoutLog != layoutLog) {
           _lastLayoutLog = layoutLog;
           HeadquarterCalendarSideDockDiagnostics.log(layoutLog);
@@ -1065,7 +1158,9 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard>
               ),
               SizedBox(height: gap),
               if (widget.showAccountEntry) ...[
-                SizedBox(
+                AnimatedContainer(
+                  duration: duration,
+                  curve: Curves.easeOutCubic,
                   height: accountHeight,
                   child: _buildAccountEntry(
                     context,
@@ -1150,7 +1245,9 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard>
                 ),
               ),
               SizedBox(height: gap * .6),
-              SizedBox(
+              AnimatedContainer(
+                duration: duration,
+                curve: Curves.easeOutCubic,
                 height: gridHeight,
                 child: (_store.initializing || !_store.initialized) &&
                         _initializationError == null

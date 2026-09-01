@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:excel/excel.dart';
 import 'package:googleapis/gmail/v1.dart' as gmail;
+import '../../../../../app/auth/gmail_sender_auth.dart';
 import '../../../../../app/auth/google_auth_session.dart';
 import '../../../../../app/config/email_config.dart';
 import '../../../../dev/debug/debug_api_logger.dart';
@@ -2209,7 +2210,7 @@ class CalendarExcelMailer {
     Map<String, dynamic>? debugExtra,
   }) async {
     try {
-      final client = await GoogleAuthSession.instance.safeClient();
+      final client = await GmailSenderAuth.client();
       final api = gmail.GmailApi(client);
 
       final boundary = '----ParkinWorkin_${DateTime.now().millisecondsSinceEpoch}';

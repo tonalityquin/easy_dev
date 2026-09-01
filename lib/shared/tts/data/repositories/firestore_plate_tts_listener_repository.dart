@@ -79,12 +79,13 @@ class FirestorePlateTtsListenerRepository implements PlateTtsListenerRepository 
       ]);
     }
 
-    return query.snapshots().map((snapshot) {
+    return query.snapshots(includeMetadataChanges: true).map((snapshot) {
       final changes = snapshot.docChanges
           .map((change) => PlateTtsDocChange(
                 type: _mapType(change.type),
                 docId: change.doc.id,
                 data: change.doc.data(),
+                hasPendingWrites: change.doc.metadata.hasPendingWrites,
               ))
           .toList(growable: false);
 

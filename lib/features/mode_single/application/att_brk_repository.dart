@@ -86,7 +86,7 @@ class AttBrkRepository {
 
     if (type.isWork) {
       await db.insert(
-        'simple_work_attendance',
+        AttBrkModeDb.workAttendanceTable,
         <String, Object?>{
           'date': date,
           'type': type.code,
@@ -97,7 +97,7 @@ class AttBrkRepository {
       );
     } else if (type.isBreak) {
       await db.insert(
-        'simple_break_attendance',
+        AttBrkModeDb.breakAttendanceTable,
         <String, Object?>{
           'date': date,
           'type': _breakTypeStart,
@@ -114,13 +114,13 @@ class AttBrkRepository {
     final date = _dateFormatter.format(dateTime);
 
     await db.delete(
-      'simple_work_attendance',
+      AttBrkModeDb.workAttendanceTable,
       where: 'date = ?',
       whereArgs: <Object?>[date],
     );
 
     await db.delete(
-      'simple_break_attendance',
+      AttBrkModeDb.breakAttendanceTable,
       where: 'date = ?',
       whereArgs: <Object?>[date],
     );
@@ -134,7 +134,7 @@ class AttBrkRepository {
     final result = <AttBrkModeType, String>{};
 
     final workRows = await db.query(
-      'simple_work_attendance',
+      AttBrkModeDb.workAttendanceTable,
       columns: ['type', 'time'],
       where: 'date = ?',
       whereArgs: <Object?>[date],
@@ -154,7 +154,7 @@ class AttBrkRepository {
     }
 
     final breakRows = await db.query(
-      'simple_break_attendance',
+      AttBrkModeDb.breakAttendanceTable,
       columns: ['time'],
       where: 'date = ? AND type = ?',
       whereArgs: <Object?>[date, _breakTypeStart],

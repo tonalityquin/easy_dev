@@ -1,3 +1,5 @@
+import '../../../../../shared/auth/tablet_phone.dart';
+
 class TabletModel {
   final String id;
   final List<String> areas;
@@ -10,6 +12,7 @@ class TabletModel {
   final bool isWorking;
   final String name;
   final String password;
+  final String phone;
   final String handle;
   final String? position;
   final String role;
@@ -20,14 +23,15 @@ class TabletModel {
     required this.areas,
     this.currentArea,
     required this.divisions,
-    required this.email,
+    this.email = '',
     this.englishSelectedAreaName,
     this.fixedHolidays = const <String>[],
     required this.isSaved,
     required this.isWorking,
     required this.name,
     required this.password,
-    required this.handle,
+    required this.phone,
+    this.handle = '',
     this.position,
     required this.role,
     this.selectedArea,
@@ -45,6 +49,7 @@ class TabletModel {
     bool? isWorking,
     String? name,
     String? password,
+    String? phone,
     String? handle,
     String? position,
     String? role,
@@ -56,12 +61,14 @@ class TabletModel {
       currentArea: currentArea ?? this.currentArea,
       divisions: divisions ?? this.divisions,
       email: email ?? this.email,
-      englishSelectedAreaName: englishSelectedAreaName ?? this.englishSelectedAreaName,
+      englishSelectedAreaName:
+          englishSelectedAreaName ?? this.englishSelectedAreaName,
       fixedHolidays: fixedHolidays ?? this.fixedHolidays,
       isSaved: isSaved ?? this.isSaved,
       isWorking: isWorking ?? this.isWorking,
       name: name ?? this.name,
       password: password ?? this.password,
+      phone: phone ?? this.phone,
       handle: handle ?? this.handle,
       position: position ?? this.position,
       role: role ?? this.role,
@@ -70,6 +77,11 @@ class TabletModel {
   }
 
   factory TabletModel.fromMap(String id, Map<String, dynamic> data) {
+    final rawPhone = (data['phone'] ?? '').toString();
+    final legacyHandle = (data['handle'] ?? '').toString();
+    final normalizedPhone = TabletPhone.normalize(
+      rawPhone.isNotEmpty ? rawPhone : legacyHandle,
+    );
     return TabletModel(
       id: id,
       areas: List<String>.from(data['areas'] ?? const <String>[]),
@@ -77,12 +89,14 @@ class TabletModel {
       divisions: List<String>.from(data['divisions'] ?? const <String>[]),
       email: data['email'] ?? '',
       englishSelectedAreaName: data['englishSelectedAreaName'],
-      fixedHolidays: List<String>.from(data['fixedHolidays'] ?? const <String>[]),
+      fixedHolidays:
+          List<String>.from(data['fixedHolidays'] ?? const <String>[]),
       isSaved: data['isSaved'] ?? false,
       isWorking: data['isWorking'] ?? false,
       name: data['name'] ?? '',
       password: data['password'] ?? '',
-      handle: data['handle'] ?? data['phone'] ?? '',
+      phone: normalizedPhone,
+      handle: legacyHandle,
       position: data['position'],
       role: data['role'] ?? '',
       selectedArea: data['selectedArea'],
@@ -94,14 +108,15 @@ class TabletModel {
       'areas': areas,
       'currentArea': currentArea,
       'divisions': divisions,
-      'email': email,
       'englishSelectedAreaName': englishSelectedAreaName,
       'fixedHolidays': fixedHolidays,
       'isSaved': isSaved,
       'isWorking': isWorking,
       'name': name,
       'password': password,
-      'handle': handle,
+      'phone': TabletPhone.normalize(phone),
+      if (handle.trim().isNotEmpty) 'handle': handle.trim().toLowerCase(),
+      if (email.trim().isNotEmpty) 'email': email.trim(),
       'position': position,
       'role': role,
       'selectedArea': selectedArea,

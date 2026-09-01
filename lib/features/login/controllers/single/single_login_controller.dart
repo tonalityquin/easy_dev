@@ -4,14 +4,15 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+
+import '../../../../app/di/routes.dart';
 
 import '../../../../app/init/work_schedule_prefs.dart';
 import '../../../../features/account/applications/user_state.dart';
 import '../../../../features/account/domain/repositories/user_repository.dart';
-import '../../../../shared/tts/application/tts_ownership.dart';
-import '../../../../shared/tts/application/tts_user_filters.dart';
+import '../../../../shared/work_session/application/work_area_session_coordinator.dart';
 import '../../../dev/application/area_state.dart';
+import '../../../launcher/application/app_mode_registry.dart';
 import '../area_login_session_refresher.dart';
 import '../../applications/single/single_login_network_service.dart';
 import '../../applications/single/single_login_validate.dart';
@@ -105,14 +106,14 @@ class SingleLoginController {
   }) {
     if (_loginOperationInProgress || _loginCompleted) {
       debugPrint(
-        '[LOGIN-SIMPLE][${_ts()}] login operation blocked: another login operation is already running',
+        '[LOGIN-SINGLE][${_ts()}] login operation blocked: another login operation is already running',
       );
       return false;
     }
     _loginOperationInProgress = true;
     _setLoading(true, label: label, setState: setState);
     debugPrint(
-      '[LOGIN-SIMPLE][${_ts()}] login operation started: $label',
+      '[LOGIN-SINGLE][${_ts()}] login operation started: $label',
     );
     return true;
   }
@@ -120,7 +121,7 @@ class SingleLoginController {
   void _endLoginOperation({StateSetter? setState}) {
     _loginOperationInProgress = false;
     _setLoading(false, setState: setState);
-    debugPrint('[LOGIN-SIMPLE][${_ts()}] login operation finished');
+    debugPrint('[LOGIN-SINGLE][${_ts()}] login operation finished');
   }
 
   bool _hasModeAccessFromList(List<String> modes, String required) {
@@ -129,10 +130,7 @@ class SingleLoginController {
     bool matches(String raw) {
       final v = raw.trim().toLowerCase();
 
-      if (req == 'single') return v == 'single' || v == 'simple';
-      if (req == 'simple') return v == 'single' || v == 'simple';
-
-      return v == req;
+      return AppModeRegistry.normalizeLegacyMode(v) == req;
     }
 
     return modes.any(matches);
@@ -165,7 +163,7 @@ class SingleLoginController {
       );
     } catch (error, stackTrace) {
       debugPrint(
-        '[LOGIN-SIMPLE][${_ts()}] cachedUserJson decode failed: $error\n$stackTrace',
+        '[LOGIN-SINGLE][${_ts()}] cachedUserJson decode failed: $error\n$stackTrace',
       );
       return null;
     }
@@ -176,34 +174,39 @@ class SingleLoginController {
     _notifyState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!context.mounted) return;
-      debugPrint('[LOGIN-SIMPLE][${_ts()}] login success → navigation');
+      debugPrint('[LOGIN-SINGLE][${_ts()}] login success → navigation');
       if (onLoginSucceeded != null) {
         onLoginSucceeded!();
       } else {
-        Navigator.pushReplacementNamed(context, '/single_commute');
+        Navigator.pushReplacementNamed(context, AppRoutes.singleCommute);
       }
     });
   }
 
-  Future<void> _sendAreaToForeground() async {
-    final area = context.read<AreaState>().currentArea;
-    debugPrint(
-      '[LOGIN-SIMPLE][${_ts()}] send area to FG (currentArea="$area")',
+  Future<void> _syncWorkAreaSession({
+    required String source,
+  }) async {
+    final areaState = context.read<AreaState>();
+    final userState = context.read<UserState>();
+    final currentArea = areaState.currentArea.trim();
+    final homeArea = userState.area.trim();
+    final currentRecord = areaState.currentRecord;
+    final result = await WorkAreaSessionCoordinator.activate(
+      currentArea: currentArea,
+      division: areaState.currentDivision.trim().isNotEmpty
+          ? areaState.currentDivision.trim()
+          : userState.division.trim(),
+      homeArea: homeArea,
+      mode: 'single',
+      currentIsHeadquarter: currentRecord?.isHeadquarter,
+      homeIsHeadquarter:
+          homeArea.isNotEmpty && homeArea == currentArea
+              ? currentRecord?.isHeadquarter
+              : null,
+      source: source,
     );
-    if (area.isEmpty) {
-      debugPrint(
-        '[LOGIN-SIMPLE][${_ts()}] currentArea is empty → skip send',
-      );
-      return;
-    }
-
-    final filters = await TtsUserFilters.load();
-    FlutterForegroundTask.sendDataToTask({
-      'area': area,
-      'ttsFilters': filters.toMap(),
-    });
     debugPrint(
-      '[LOGIN-SIMPLE][${_ts()}] sendDataToTask ok (with filters ${filters.toMap()})',
+      '[LOGIN-SINGLE][${_ts()}] work session sync source=$source area=${result.currentArea} mode=${result.mode} foreground=${result.foregroundServiceRunning} appFallback=${result.appFallbackListening}',
     );
   }
 
@@ -214,7 +217,7 @@ class SingleLoginController {
     final session = userState.session;
     if (session == null) {
       debugPrint(
-        '[LOGIN-SIMPLE][${_ts()}] $operationLabel AreaRecord 동기화 중단: 로그인 세션 없음 → Firestore fallback',
+        '[LOGIN-SINGLE][${_ts()}] $operationLabel AreaRecord 동기화 중단: 로그인 세션 없음 → Firestore fallback',
       );
       return _LocalAreaRefreshResult.fallbackToFirestore;
     }
@@ -226,7 +229,7 @@ class SingleLoginController {
 
     if (area.isEmpty || division.isEmpty) {
       debugPrint(
-        '[LOGIN-SIMPLE][${_ts()}] $operationLabel legacy local session detected: division=$division, area=$area → Firestore fallback',
+        '[LOGIN-SINGLE][${_ts()}] $operationLabel legacy local session detected: division=$division, area=$area → Firestore fallback',
       );
       await userState.discardLocalLoginSession(
         source: '$operationLabel-legacy-fallback',
@@ -236,7 +239,7 @@ class SingleLoginController {
 
     try {
       debugPrint(
-        '[LOGIN-SIMPLE][${_ts()}] $operationLabel AreaRecord 서버 강제 동기화 시작: division=$division, area=$area',
+        '[LOGIN-SINGLE][${_ts()}] $operationLabel AreaRecord 서버 강제 동기화 시작: division=$division, area=$area',
       );
       await AreaLoginSessionRefresher.refresh(
         context: context,
@@ -246,12 +249,12 @@ class SingleLoginController {
         operationLabel: operationLabel,
       );
       debugPrint(
-        '[LOGIN-SIMPLE][${_ts()}] $operationLabel AreaRecord 서버 강제 동기화 완료: division=$division, area=$area',
+        '[LOGIN-SINGLE][${_ts()}] $operationLabel AreaRecord 서버 강제 동기화 완료: division=$division, area=$area',
       );
       return _LocalAreaRefreshResult.ready;
     } catch (error, stackTrace) {
       debugPrint(
-        '[LOGIN-SIMPLE][${_ts()}] $operationLabel AreaRecord 서버 강제 동기화 실패: $error\n$stackTrace',
+        '[LOGIN-SINGLE][${_ts()}] $operationLabel AreaRecord 서버 강제 동기화 실패: $error\n$stackTrace',
       );
       await userState.discardLocalLoginSession(
         source: operationLabel,
@@ -269,7 +272,7 @@ class SingleLoginController {
   }) async {
     final isConnected = await SingleLoginNetworkService().isConnected();
     debugPrint(
-      '[LOGIN-SIMPLE][${_ts()}] $operationLabel isConnected=$isConnected',
+      '[LOGIN-SINGLE][${_ts()}] $operationLabel isConnected=$isConnected',
     );
     if (!isConnected || !context.mounted) return false;
 
@@ -278,21 +281,21 @@ class SingleLoginController {
       final user = await userRepository.getUserByPhone(phone);
 
       debugPrint(
-        '[LOGIN-SIMPLE][${_ts()}] $operationLabel 입력값 name="$name" phone="$phone" pwLen=${password.length}',
+        '[LOGIN-SINGLE][${_ts()}] $operationLabel 입력값 name="$name" phone="$phone" pwLen=${password.length}',
       );
       if (user != null) {
         debugPrint(
-          '[LOGIN-SIMPLE][${_ts()}] $operationLabel DB 유저: name=${user.name}, phone=${user.phone}',
+          '[LOGIN-SINGLE][${_ts()}] $operationLabel DB 유저: name=${user.name}, phone=${user.phone}',
         );
       } else {
         debugPrint(
-          '[LOGIN-SIMPLE][${_ts()}] $operationLabel DB에서 사용자 정보 없음',
+          '[LOGIN-SINGLE][${_ts()}] $operationLabel DB에서 사용자 정보 없음',
         );
       }
 
       if (user == null || user.name != name || user.password != password) {
         debugPrint(
-          '[LOGIN-SIMPLE][${_ts()}] $operationLabel auth failed',
+          '[LOGIN-SINGLE][${_ts()}] $operationLabel auth failed',
         );
         return false;
       }
@@ -300,7 +303,7 @@ class SingleLoginController {
       final allowed = _hasModeAccessFromList(user.modes, _requiredMode);
       if (!allowed) {
         debugPrint(
-          '[LOGIN-SIMPLE][${_ts()}] $operationLabel login blocked: modes missing "$_requiredMode"',
+          '[LOGIN-SINGLE][${_ts()}] $operationLabel login blocked: modes missing "$_requiredMode"',
         );
         return false;
       }
@@ -317,13 +320,13 @@ class SingleLoginController {
         operationLabel: operationLabel,
       );
       debugPrint(
-        '[LOGIN-SIMPLE][${_ts()}] $operationLabel AreaRecord 서버 강제 동기화 완료: $divisionToSet/$areaToSet',
+        '[LOGIN-SINGLE][${_ts()}] $operationLabel AreaRecord 서버 강제 동기화 완료: $divisionToSet/$areaToSet',
       );
 
       final userState = context.read<UserState>();
       await userState.updateLoginUser(updatedUser);
       debugPrint(
-        '[LOGIN-SIMPLE][${_ts()}] $operationLabel userState.updateLoginUser done',
+        '[LOGIN-SINGLE][${_ts()}] $operationLabel userState.updateLoginUser done',
       );
 
       await prefs.setString('phone', updatedUser.phone);
@@ -339,26 +342,24 @@ class SingleLoginController {
         user: updatedUser,
       );
       await WorkSchedulePrefs.refreshReminderFromPrefs(prefs);
-      await prefs.setString('mode', 'simple');
-      await TtsOwnership.setOwner(TtsOwner.foreground);
-
+      await prefs.setString('mode', 'single');
       debugPrint(
-        '[LOGIN-SIMPLE][${_ts()}] $operationLabel SharedPreferences 저장 완료: phone=${prefs.getString('phone')}',
+        '[LOGIN-SINGLE][${_ts()}] $operationLabel SharedPreferences 저장 완료: phone=${prefs.getString('phone')}',
       );
 
-      await _sendAreaToForeground();
+      await _syncWorkAreaSession(source: 'legacy_single_firestore_login');
       _navigateAfterLogin();
       return true;
     } catch (error, stackTrace) {
       debugPrint(
-        '[LOGIN-SIMPLE][${_ts()}] $operationLabel Firestore login error: $error\n$stackTrace',
+        '[LOGIN-SINGLE][${_ts()}] $operationLabel Firestore login error: $error\n$stackTrace',
       );
       return false;
     }
   }
 
-  Future<void> _tryAutoLoginFromLocalCache() async {
-    if (!_beginLoginOperation(label: '로그인 정보 확인 중')) return;
+  Future<bool> tryAutoLogin() async {
+    if (!_beginLoginOperation(label: '로그인 정보 확인 중')) return false;
 
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -369,22 +370,22 @@ class SingleLoginController {
 
       final isLoggedIn = userState.isLoggedIn;
       debugPrint(
-        '[LOGIN-SIMPLE][${_ts()}] autoLogin(local-only) → isLoggedIn=$isLoggedIn',
+        '[LOGIN-SINGLE][${_ts()}] autoLogin(local-only) → isLoggedIn=$isLoggedIn',
       );
 
-      if (!isLoggedIn || !context.mounted) return;
+      if (!isLoggedIn || !context.mounted) return false;
 
       final session = userState.session;
-      final allowed =
-          session != null && _hasModeAccessFromList(session.modes, _requiredMode);
+      final allowed = session != null &&
+          _hasModeAccessFromList(session.modes, _requiredMode);
       if (!allowed) {
         debugPrint(
-          '[LOGIN-SIMPLE][${_ts()}] autoLogin blocked: modes missing "$_requiredMode"',
+          '[LOGIN-SINGLE][${_ts()}] autoLogin blocked: modes missing "$_requiredMode"',
         );
         await userState.discardLocalLoginSession(
           source: 'single-auto-mode-blocked',
         );
-        return;
+        return false;
       }
 
       final areaResult = await _refreshLocalSessionArea(
@@ -393,19 +394,19 @@ class SingleLoginController {
       );
 
       if (areaResult == _LocalAreaRefreshResult.ready) {
-        if (!context.mounted || !userState.isLoggedIn) return;
-        await TtsOwnership.setOwner(TtsOwner.foreground);
+        if (!context.mounted || !userState.isLoggedIn) return false;
+        await _syncWorkAreaSession(source: 'legacy_single_auto_login');
         _navigateAfterLogin();
-        return;
+        return true;
       }
 
       if (areaResult == _LocalAreaRefreshResult.fallbackToFirestore &&
           cachedCredentials != null &&
           context.mounted) {
         debugPrint(
-          '[LOGIN-SIMPLE][${_ts()}] autoLogin legacy division fallback → normal Firestore login',
+          '[LOGIN-SINGLE][${_ts()}] autoLogin legacy division fallback → normal Firestore login',
         );
-        await _loginFromFirestoreCredentials(
+        return await _loginFromFirestoreCredentials(
           prefs: prefs,
           name: cachedCredentials.name,
           phone: cachedCredentials.phone,
@@ -413,19 +414,20 @@ class SingleLoginController {
           operationLabel: 'single-auto-legacy-fallback',
         );
       }
+      return false;
     } finally {
       _endLoginOperation();
     }
   }
 
   void initState() {
-    unawaited(_tryAutoLoginFromLocalCache());
+    unawaited(tryAutoLogin());
   }
 
   Future<bool> login(StateSetter setState) async {
     if (_loginOperationInProgress || _loginCompleted) {
       debugPrint(
-        '[LOGIN-SIMPLE][${_ts()}] manual login ignored while login operation or navigation is running',
+        '[LOGIN-SINGLE][${_ts()}] manual login ignored while login operation or navigation is running',
       );
       return false;
     }
@@ -435,7 +437,7 @@ class SingleLoginController {
     final password = passwordController.text.trim();
 
     if (name.isEmpty && phone.isEmpty && password == '00000') {
-      debugPrint('[LOGIN-SIMPLE][${_ts()}] backdoor bypass');
+      debugPrint('[LOGIN-SINGLE][${_ts()}] backdoor bypass');
       return true;
     }
 
@@ -466,15 +468,15 @@ class SingleLoginController {
 
         if (allowed) {
           debugPrint(
-            '[LOGIN-SIMPLE][${_ts()}] local-only login hit (cachedUserJson match)',
+            '[LOGIN-SINGLE][${_ts()}] local-only login hit (cachedUserJson match)',
           );
-          await prefs.setString('mode', 'simple');
+          await prefs.setString('mode', 'single');
 
           final userState = context.read<UserState>();
           await userState.loadUserToLogInLocalOnly();
           final isLoggedIn = userState.isLoggedIn;
           debugPrint(
-            '[LOGIN-SIMPLE][${_ts()}] local-only login result → isLoggedIn=$isLoggedIn',
+            '[LOGIN-SINGLE][${_ts()}] local-only login result → isLoggedIn=$isLoggedIn',
           );
 
           if (isLoggedIn && context.mounted) {
@@ -485,7 +487,9 @@ class SingleLoginController {
 
             if (areaResult == _LocalAreaRefreshResult.ready) {
               if (!context.mounted || !userState.isLoggedIn) return false;
-              await TtsOwnership.setOwner(TtsOwner.foreground);
+              await _syncWorkAreaSession(
+                source: 'legacy_single_local_login',
+              );
               _navigateAfterLogin();
               return true;
             }
@@ -495,16 +499,16 @@ class SingleLoginController {
             }
 
             debugPrint(
-              '[LOGIN-SIMPLE][${_ts()}] local credential legacy division fallback → normal Firestore login',
+              '[LOGIN-SINGLE][${_ts()}] local credential legacy division fallback → normal Firestore login',
             );
           } else {
             debugPrint(
-              '[LOGIN-SIMPLE][${_ts()}] local-only session restore failed → normal Firestore login',
+              '[LOGIN-SINGLE][${_ts()}] local-only session restore failed → normal Firestore login',
             );
           }
         } else {
           debugPrint(
-            '[LOGIN-SIMPLE][${_ts()}] local-only blocked: modes missing "$_requiredMode" → fallback to Firestore',
+            '[LOGIN-SINGLE][${_ts()}] local-only blocked: modes missing "$_requiredMode" → fallback to Firestore',
           );
         }
       }

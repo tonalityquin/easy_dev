@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -7,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../../app/di/routes.dart';
 import '../../../../app/utils/dev_firebase_debug_dialog.dart';
 import '../../../../features/dev/application/area_state.dart';
+import '../../../../features/headquarter/application/fab/hub_quick_actions.dart';
 import '../../../../features/tablet/applications/tablet_pad_mode_state.dart';
 import '../../../../shared/auth/five_digit_password_generator.dart';
 import '../../../selector/application/dev_auth.dart';
@@ -24,6 +26,39 @@ class PersonalLoginResult {
 
   final bool success;
   final String message;
+  final String? copyText;
+}
+
+
+class PersonalAuthenticatedAccount {
+  const PersonalAuthenticatedAccount({
+    required this.documentId,
+    required this.data,
+    required this.name,
+    required this.phone,
+    required this.selectedArea,
+    required this.division,
+  });
+
+  final String documentId;
+  final Map<String, dynamic> data;
+  final String name;
+  final String phone;
+  final String selectedArea;
+  final String division;
+}
+
+class PersonalCredentialAuthenticationResult {
+  const PersonalCredentialAuthenticationResult({
+    required this.success,
+    required this.message,
+    this.account,
+    this.copyText,
+  });
+
+  final bool success;
+  final String message;
+  final PersonalAuthenticatedAccount? account;
   final String? copyText;
 }
 
@@ -71,10 +106,10 @@ class PersonalLoginController {
   void initState() {
     if (_inited) return;
     _inited = true;
-    _restorePersonalSession();
+    unawaited(tryRestoreSession());
   }
 
-  Future<void> _restorePersonalSession() async {
+  Future<bool> tryRestoreSession({bool navigateOnSuccess = true}) async {
     var mode = '';
     var phone = '';
     var selectedArea = '';
@@ -87,21 +122,25 @@ class PersonalLoginController {
         prefs.getString('phone') ?? prefs.getString('personalPhone') ?? '',
       );
       selectedArea = (prefs.getString('selectedArea') ?? '').trim();
-      if (mode != _savedMode || phone.isEmpty || selectedArea.isEmpty) return;
+      if (mode != _savedMode || phone.isEmpty || selectedArea.isEmpty) {
+        return false;
+      }
 
       accountId = _accountDocId(phone: phone, area: selectedArea);
-      if (accountId.isEmpty) return;
+      if (accountId.isEmpty) return false;
 
       final snap = await _personalAccountsRef.doc(accountId).get();
       final data = snap.data();
       final active = (data?['isActive'] as bool?) ?? true;
-      if (!snap.exists || data == null || !active) return;
+      if (!snap.exists || data == null || !active) return false;
 
       final storedPhone = _normalizePhone((data['phone'] ?? phone).toString());
       final storedSelectedArea = _selectedAreaFromData(data);
-      if (storedPhone != phone || storedSelectedArea != selectedArea) return;
+      if (storedPhone != phone || storedSelectedArea != selectedArea) {
+        return false;
+      }
 
-      if (!context.mounted) return;
+      if (!context.mounted) return false;
       final division = _divisionFromData(data);
       final areaState = context.read<AreaState>();
       await AreaLoginSessionRefresher.refresh(
@@ -111,21 +150,29 @@ class PersonalLoginController {
         area: storedSelectedArea,
         operationLabel: 'personal-restore',
       );
-      if (!context.mounted) return;
+      if (!context.mounted) return false;
 
       isLoggedIn = true;
       loggedInAccountId = snap.id;
-      loggedInName = (data['name'] ?? prefs.getString('personalName') ?? '').toString();
+      loggedInName =
+          (data['name'] ?? prefs.getString('personalName') ?? '').toString();
       nameController.text = loggedInName ?? '';
       phoneController.text = _formatPhoneForDisplay(storedPhone);
       context.read<TabletPadModeState>().setMode(_targetPadMode);
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!context.mounted) return;
-        Navigator.of(context).pushReplacementNamed(AppRoutes.personal);
-      });
-      debugPrint('[LOGIN-PERSONAL][${_ts()}] restore personal session ok: ${snap.id}');
+      if (navigateOnSuccess) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!context.mounted) return;
+          Navigator.of(context).pushReplacementNamed(AppRoutes.personal);
+        });
+      }
+      debugPrint(
+        '[LOGIN-PERSONAL][${_ts()}] restore personal session ok: ${snap.id}',
+      );
+      return true;
     } catch (e, st) {
-      debugPrint('[LOGIN-PERSONAL][${_ts()}] restore personal session error: $e\n$st');
+      debugPrint(
+        '[LOGIN-PERSONAL][${_ts()}] restore personal session error: $e\n$st',
+      );
       await DevFirebaseDebugDialog.show(
         context: context,
         operation: 'personal_accounts.restoreSession',
@@ -142,6 +189,7 @@ class PersonalLoginController {
           'compositeIndex': 'not-required',
         },
       );
+      return false;
     }
   }
 
@@ -446,7 +494,21 @@ class PersonalLoginController {
     }
   }
 
-  Future<PersonalLoginResult> login(StateSetter setState) async {
+  Future<PersonalCredentialAuthenticationResult> authenticateCredentials(
+    StateSetter setState,
+  ) async {
+    setState(() => isLoading = true);
+    try {
+      return await _authenticateCredentialsCore();
+    } finally {
+      if (context.mounted) {
+        setState(() => isLoading = false);
+      }
+    }
+  }
+
+  Future<PersonalCredentialAuthenticationResult>
+      _authenticateCredentialsCore() async {
     final name = nameController.text.trim();
     final phoneDigits = _normalizePhone(phoneController.text);
     final password = passwordController.text.trim();
@@ -457,17 +519,22 @@ class PersonalLoginController {
       password: password,
     );
     if (error != null) {
-      return _loginFailureResult(error);
+      final failure = _loginFailureResult(error);
+      return PersonalCredentialAuthenticationResult(
+        success: false,
+        message: failure.message,
+        copyText: failure.copyText,
+      );
     }
-
-    setState(() => isLoading = true);
 
     final isConn = await TabletLoginNetworkService().isConnected();
     if (!isConn) {
-      if (context.mounted) {
-        setState(() => isLoading = false);
-      }
-      return _loginFailureResult('네트워크 연결을 확인하세요.');
+      final failure = _loginFailureResult('네트워크 연결을 확인하세요.');
+      return PersonalCredentialAuthenticationResult(
+        success: false,
+        message: failure.message,
+        copyText: failure.copyText,
+      );
     }
 
     try {
@@ -504,8 +571,17 @@ class PersonalLoginController {
         break;
       }
 
+      PersonalCredentialAuthenticationResult failureResult(String message) {
+        final failure = _loginFailureResult(message);
+        return PersonalCredentialAuthenticationResult(
+          success: false,
+          message: failure.message,
+          copyText: failure.copyText,
+        );
+      }
+
       if (query.docs.isEmpty) {
-        return _loginFailureResult('개인형 계정을 찾을 수 없습니다.');
+        return failureResult('개인형 계정을 찾을 수 없습니다.');
       }
 
       final hasInactiveOnly = query.docs.every((doc) {
@@ -513,73 +589,52 @@ class PersonalLoginController {
         return ((data['isActive'] as bool?) ?? true) == false;
       });
       if (hasInactiveOnly) {
-        return _loginFailureResult('비활성화된 개인형 계정입니다.');
+        return failureResult('비활성화된 개인형 계정입니다.');
       }
 
       if (matchedDoc == null || matchedData == null) {
         if (passwordMissingForMatchedProfile) {
-          return _loginFailureResult('개인형 계정에 비밀번호가 없습니다. 개발자 모드에서 비밀번호가 포함된 계정으로 다시 생성하세요.');
+          return failureResult(
+            '개인형 계정에 비밀번호가 없습니다. 개발자 모드에서 비밀번호가 포함된 계정으로 다시 생성하세요.',
+          );
         }
         if (profileMatched) {
-          return _loginFailureResult('비밀번호가 일치하지 않습니다.');
+          return failureResult('비밀번호가 일치하지 않습니다.');
         }
-        return _loginFailureResult('입력한 계정 정보가 일치하지 않습니다.');
+        return failureResult('입력한 계정 정보가 일치하지 않습니다.');
       }
 
       final storedName = (matchedData['name'] ?? '').toString().trim();
-      final storedPhone = _normalizePhone((matchedData['phone'] ?? '').toString());
+      final storedPhone =
+          _normalizePhone((matchedData['phone'] ?? '').toString());
       final selectedArea = _selectedAreaFromData(matchedData);
       final division = _divisionFromData(matchedData);
       if (selectedArea.isEmpty) {
-        return _loginFailureResult('개인형 계정의 지역 정보가 없습니다.');
+        return failureResult('개인형 계정의 지역 정보가 없습니다.');
       }
 
-      final expectedDocId = _accountDocId(phone: storedPhone, area: selectedArea);
-      if (matchedDoc.id != expectedDocId) {
-        return _loginFailureResult('개인형 계정 문서 ID가 전화번호-지역 구조와 일치하지 않습니다.');
-      }
-
-      if (!context.mounted) {
-        return _loginFailureResult('로그인 화면이 종료되어 Area 세션을 준비할 수 없습니다.');
-      }
-      final areaState = context.read<AreaState>();
-      await AreaLoginSessionRefresher.refresh(
-        context: context,
-        areaState: areaState,
-        division: division,
+      final expectedDocId = _accountDocId(
+        phone: storedPhone,
         area: selectedArea,
-        operationLabel: 'personal',
       );
-
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('mode', _savedMode);
-      await prefs.setString('phone', storedPhone);
-      await prefs.setString('selectedArea', selectedArea);
-      await prefs.setString('division', division);
-      await prefs.setString('role', (matchedData['role'] ?? 'personal').toString());
-      await prefs.setString('position', (matchedData['position'] ?? '').toString());
-      await prefs.setString('personalAccountId', matchedDoc.id);
-      await prefs.setString('personalName', storedName);
-      await prefs.setString('personalPhone', storedPhone);
-
-      await _personalAccountsRef.doc(matchedDoc.id).set(
-        <String, dynamic>{
-          'isSaved': true,
-          'lastLoginAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
-
-      if (context.mounted) {
-        context.read<TabletPadModeState>().setMode(_targetPadMode);
+      if (matchedDoc.id != expectedDocId) {
+        return failureResult(
+          '개인형 계정 문서 ID가 전화번호-지역 구조와 일치하지 않습니다.',
+        );
       }
 
-      isLoggedIn = true;
-      loggedInAccountId = matchedDoc.id;
-      loggedInName = storedName;
-
-      return PersonalLoginResult(success: true, message: '$storedName님, 개인형 로그인에 성공했습니다.');
+      return PersonalCredentialAuthenticationResult(
+        success: true,
+        message: '$storedName님, 개인형 계정 인증에 성공했습니다.',
+        account: PersonalAuthenticatedAccount(
+          documentId: matchedDoc.id,
+          data: Map<String, dynamic>.from(matchedData),
+          name: storedName,
+          phone: storedPhone,
+          selectedArea: selectedArea,
+          division: division,
+        ),
+      );
     } catch (e, st) {
       await DevFirebaseDebugDialog.show(
         context: context,
@@ -596,12 +651,129 @@ class PersonalLoginController {
           'filters': 'phone == $phoneDigits',
           'orderBy': 'none',
           'limit': 20,
-          'compositeIndex': 'not-required-for-this-shape-unless-rules-or-console-error-requires-it',
-          'indexDebug': 'if FirebaseException.code == failed-precondition, use firebase.message console index link',
-          'postLoginWrite': 'doc(matchedDoc.id).set(isSaved,lastLoginAt,updatedAt,merge)',
+          'compositeIndex':
+              'not-required-for-this-shape-unless-rules-or-console-error-requires-it',
+          'indexDebug':
+              'if FirebaseException.code == failed-precondition, use firebase.message console index link',
+          'postLoginWrite':
+              'doc(matchedDoc.id).set(isSaved,lastLoginAt,updatedAt,merge)',
         },
       );
-      return _loginFailureResult('로그인 중 오류가 발생했습니다.', error: e, stackTrace: st);
+      final failure = _loginFailureResult(
+        '로그인 중 오류가 발생했습니다.',
+        error: e,
+        stackTrace: st,
+      );
+      return PersonalCredentialAuthenticationResult(
+        success: false,
+        message: failure.message,
+        copyText: failure.copyText,
+      );
+    }
+  }
+
+  Future<PersonalLoginResult> activateAuthenticatedAccount(
+    PersonalAuthenticatedAccount account, {
+    bool persistSession = true,
+  }) async {
+    try {
+      if (!context.mounted) {
+        return _loginFailureResult(
+          '로그인 화면이 종료되어 Area 세션을 준비할 수 없습니다.',
+        );
+      }
+
+      final areaState = context.read<AreaState>();
+      await AreaLoginSessionRefresher.refresh(
+        context: context,
+        areaState: areaState,
+        division: account.division,
+        area: account.selectedArea,
+        operationLabel: 'personal',
+      );
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('mode', _savedMode);
+      await prefs.setString('phone', account.phone);
+      await prefs.setString('selectedArea', account.selectedArea);
+      await prefs.setString('division', account.division);
+      await prefs.setString(
+        'role',
+        (account.data['role'] ?? 'personal').toString(),
+      );
+      await prefs.setString(
+        'position',
+        (account.data['position'] ?? '').toString(),
+      );
+      await prefs.setString('personalAccountId', account.documentId);
+      await prefs.setString('personalName', account.name);
+      await prefs.setString('personalPhone', account.phone);
+
+      if (persistSession) {
+        await _personalAccountsRef.doc(account.documentId).set(
+          <String, dynamic>{
+            'isSaved': true,
+            'lastLoginAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
+        );
+      }
+      debugPrint(
+        '[LOGIN-PERSONAL][${_ts()}] session activated persistence=${persistSession ? 'persistent' : 'ephemeral'} accountId=${account.documentId} area=${account.selectedArea}',
+      );
+
+      if (context.mounted) {
+        context.read<TabletPadModeState>().setMode(_targetPadMode);
+      }
+
+      isLoggedIn = true;
+      loggedInAccountId = account.documentId;
+      loggedInName = account.name;
+
+      return PersonalLoginResult(
+        success: true,
+        message: '${account.name}님, 개인형 로그인에 성공했습니다.',
+      );
+    } catch (e, st) {
+      await DevFirebaseDebugDialog.show(
+        context: context,
+        operation: 'personal_accounts.activateAuthenticatedAccount',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': 'personal_accounts',
+          'accountId': account.documentId,
+          'phone': account.phone,
+          'area': account.selectedArea,
+          'division': account.division,
+          'write': persistSession
+              ? 'doc(account.documentId).set(isSaved,lastLoginAt,updatedAt,merge)'
+              : 'skipped_ephemeral_debug_session',
+          'persistSession': persistSession,
+        },
+      );
+      return _loginFailureResult(
+        '로그인 세션을 활성화하지 못했습니다.',
+        error: e,
+        stackTrace: st,
+      );
+    }
+  }
+
+  Future<PersonalLoginResult> login(StateSetter setState) async {
+    setState(() => isLoading = true);
+    try {
+      final credential = await _authenticateCredentialsCore();
+      final account = credential.account;
+      if (!credential.success || account == null) {
+        return PersonalLoginResult(
+          success: false,
+          message: credential.message,
+          copyText: credential.copyText,
+        );
+      }
+      return activateAuthenticatedAccount(account);
     } finally {
       if (context.mounted) {
         setState(() => isLoading = false);
@@ -634,6 +806,7 @@ class PersonalLoginController {
       await prefs.remove('personalName');
       await prefs.remove('personalPhone');
       await prefs.remove('personalEmail');
+      await HeadHubActions.resetForLogout();
 
       passwordController.clear();
       isLoggedIn = false;

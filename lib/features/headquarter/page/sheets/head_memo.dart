@@ -10,6 +10,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../../app/auth/gmail_sender_auth.dart';
 import '../../../../app/auth/google_auth_session.dart';
 import '../../../../app/config/email_config.dart';
 import '../../../../app/init/app_navigator.dart';
@@ -3562,7 +3563,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
         boundary: 'headmemo_${now.microsecondsSinceEpoch}',
       );
       final raw = base64UrlEncode(utf8.encode(mime)).replaceAll('=', '');
-      final client = await GoogleAuthSession.instance.safeClient();
+      final client = await GmailSenderAuth.client();
       final api = gmail.GmailApi(client);
       final message = gmail.Message()..raw = raw;
       await api.users.messages.send(message, 'me');

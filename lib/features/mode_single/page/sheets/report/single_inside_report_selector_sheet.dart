@@ -29,7 +29,7 @@ Future<void> openSingleInsideReportSelectorSheet(
       showSingleInsideWorkFullScreenBottomSheet(rootContext);
       break;
     case _SingleReportSheetResult.workEnd:
-      showSingleInsideReportFullScreenBottomSheet(rootContext);
+      await showSingleInsideReportSideDock(rootContext);
       break;
   }
 }

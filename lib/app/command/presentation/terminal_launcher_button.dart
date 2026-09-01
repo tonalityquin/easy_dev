@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../application/app_command_diagnostics.dart';
-import 'command_terminal_window.dart';
+import '../../terminal/presentation/parkinworkin_terminal_navigator.dart';
 
 class TerminalLauncherButton extends StatefulWidget {
   const TerminalLauncherButton({
@@ -28,7 +28,7 @@ class _TerminalLauncherButtonState extends State<TerminalLauncherButton> {
     HapticFeedback.selectionClick();
     setState(() => _opening = true);
     try {
-      await showCommandTerminal(context, source: widget.source);
+      await showParkinWorkinTerminal(context, source: widget.source);
     } finally {
       if (mounted) setState(() => _opening = false);
     }
@@ -60,7 +60,7 @@ class _TerminalLauncherButtonState extends State<TerminalLauncherButton> {
     return Semantics(
       button: true,
       enabled: !_opening,
-      label: 'Pelican Terminal 열기',
+      label: 'ParkinWorkin Terminal 열기',
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onLongPress: _showStatus,

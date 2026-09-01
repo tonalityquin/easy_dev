@@ -35,84 +35,84 @@ class ModifyPhotoSection extends StatelessWidget {
         height: 92,
         child: items.isEmpty
             ? Container(
-                alignment: Alignment.center,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: tokens.surfaceOverlay,
+            borderRadius: BorderRadius.circular(CommonUiShapes.control),
+            border: Border.all(color: tokens.borderSubtle),
+          ),
+          child: Text(
+            '촬영된 사진 없음',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: tokens.textSecondary,
+            ),
+          ),
+        )
+            : ListView.separated(
+          scrollDirection: Axis.horizontal,
+          itemCount: items.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 8),
+          itemBuilder: (context, index) {
+            final item = items[index];
+            final isUrl = item is String;
+            final path = isUrl ? item : (item as XFile).path;
+            final child = ClipRRect(
+              borderRadius: BorderRadius.circular(CommonUiShapes.control),
+              child: Container(
+                width: 92,
                 decoration: BoxDecoration(
                   color: tokens.surfaceOverlay,
-                  borderRadius: BorderRadius.circular(CommonUiShapes.control),
                   border: Border.all(color: tokens.borderSubtle),
                 ),
-                child: Text(
-                  '촬영된 사진 없음',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: tokens.textSecondary,
-                      ),
-                ),
-              )
-            : ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: items.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 8),
-                itemBuilder: (context, index) {
-                  final item = items[index];
-                  final isUrl = item is String;
-                  final path = isUrl ? item : (item as XFile).path;
-                  final child = ClipRRect(
-                    borderRadius: BorderRadius.circular(CommonUiShapes.control),
-                    child: Container(
-                      width: 92,
-                      decoration: BoxDecoration(
-                        color: tokens.surfaceOverlay,
-                        border: Border.all(color: tokens.borderSubtle),
-                      ),
-                      child: isUrl
-                          ? Image.network(
-                              path,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Center(
-                                child: Icon(
-                                  Icons.broken_image_rounded,
-                                  color: tokens.danger,
-                                ),
-                              ),
-                            )
-                          : FutureBuilder<bool>(
-                              future: File(path).exists(),
-                              builder: (context, snapshot) {
-                                if (snapshot.connectionState !=
-                                    ConnectionState.done) {
-                                  return Center(
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: tokens.accent,
-                                    ),
-                                  );
-                                }
-                                if (snapshot.data != true) {
-                                  return Center(
-                                    child: Icon(
-                                      Icons.broken_image_rounded,
-                                      color: tokens.danger,
-                                    ),
-                                  );
-                                }
-                                return Image.file(
-                                  File(path),
-                                  fit: BoxFit.cover,
-                                  cacheWidth: 220,
-                                  filterQuality: FilterQuality.low,
-                                );
-                              },
-                            ),
+                child: isUrl
+                    ? Image.network(
+                  path,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Center(
+                    child: Icon(
+                      Icons.broken_image_rounded,
+                      color: tokens.danger,
                     ),
-                  );
-                  if (onPreviewRequested == null) return child;
-                  return GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () => onPreviewRequested!(items, index),
-                    child: child,
-                  );
-                },
+                  ),
+                )
+                    : FutureBuilder<bool>(
+                  future: File(path).exists(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState !=
+                        ConnectionState.done) {
+                      return Center(
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: tokens.accent,
+                        ),
+                      );
+                    }
+                    if (snapshot.data != true) {
+                      return Center(
+                        child: Icon(
+                          Icons.broken_image_rounded,
+                          color: tokens.danger,
+                        ),
+                      );
+                    }
+                    return Image.file(
+                      File(path),
+                      fit: BoxFit.cover,
+                      cacheWidth: 220,
+                      filterQuality: FilterQuality.low,
+                    );
+                  },
+                ),
               ),
+            );
+            if (onPreviewRequested == null) return child;
+            return GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => onPreviewRequested!(items, index),
+              child: child,
+            );
+          },
+        ),
       ),
     );
   }
@@ -250,9 +250,9 @@ class _ModifySavedPhotosContentState extends State<ModifySavedPhotosContent> {
                   child: Text(
                     '저장된 사진',
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: tokens.textPrimary,
-                          fontWeight: FontWeight.w900,
-                        ),
+                      color: tokens.textPrimary,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                 ),
               ],
@@ -280,9 +280,9 @@ class _ModifySavedPhotosContentState extends State<ModifySavedPhotosContent> {
                     _selectedYearMonth,
                     key: ValueKey<String>(_selectedYearMonth),
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: tokens.textPrimary,
-                          fontWeight: FontWeight.w900,
-                        ),
+                      color: tokens.textPrimary,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -313,7 +313,7 @@ class _ModifySavedPhotosContentState extends State<ModifySavedPhotosContent> {
                       padding: const EdgeInsets.fromLTRB(10, 4, 10, 14),
                       itemCount: 6,
                       gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
+                      const SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: 2,
                         crossAxisSpacing: 8,
                         mainAxisSpacing: 8,
@@ -323,7 +323,7 @@ class _ModifySavedPhotosContentState extends State<ModifySavedPhotosContent> {
                         decoration: BoxDecoration(
                           color: tokens.surfaceOverlay,
                           borderRadius:
-                              BorderRadius.circular(CommonUiShapes.control),
+                          BorderRadius.circular(CommonUiShapes.control),
                           border: Border.all(color: tokens.borderSubtle),
                         ),
                       ),
@@ -349,9 +349,9 @@ class _ModifySavedPhotosContentState extends State<ModifySavedPhotosContent> {
                                   .textTheme
                                   .bodyMedium
                                   ?.copyWith(
-                                    color: tokens.textPrimary,
-                                    fontWeight: FontWeight.w800,
-                                  ),
+                                color: tokens.textPrimary,
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
                             const SizedBox(height: 12),
                             CommonButton(
@@ -372,8 +372,8 @@ class _ModifySavedPhotosContentState extends State<ModifySavedPhotosContent> {
                       child: Text(
                         '저장된 이미지가 없습니다.',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: tokens.textSecondary,
-                            ),
+                          color: tokens.textSecondary,
+                        ),
                       ),
                     );
                   }
@@ -382,7 +382,7 @@ class _ModifySavedPhotosContentState extends State<ModifySavedPhotosContent> {
                     padding: const EdgeInsets.fromLTRB(10, 4, 10, 14),
                     itemCount: urls.length,
                     gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
+                    const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 2,
                       crossAxisSpacing: 8,
                       mainAxisSpacing: 8,
@@ -393,7 +393,7 @@ class _ModifySavedPhotosContentState extends State<ModifySavedPhotosContent> {
                       return Material(
                         color: tokens.surfaceOverlay,
                         borderRadius:
-                            BorderRadius.circular(CommonUiShapes.control),
+                        BorderRadius.circular(CommonUiShapes.control),
                         clipBehavior: Clip.antiAlias,
                         child: InkWell(
                           onTap: () => _openPreview(urls, index),

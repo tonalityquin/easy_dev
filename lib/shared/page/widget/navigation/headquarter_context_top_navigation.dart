@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 
 import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../features/dev/application/area_state.dart';
-import '../../../../features/headquarter/application/headquarter_dashboard_context.dart';
 import '../../../../features/headquarter/application/navigation/headquarter_context_navigation_coordinator.dart';
 
 class HeadquarterContextTopNavigation extends StatefulWidget {
@@ -52,14 +51,16 @@ class _HeadquarterContextTopNavigationState
     final area = areaState.currentArea.trim().isNotEmpty
         ? areaState.currentArea.trim()
         : '지역 없음';
-    final mode = HeadquarterDashboardContext.exactModeLabel(widget.modeKey);
+    final contextLabel = areaState.currentRecord?.isHeadquarter == true
+        ? '본사'
+        : '업무 지역';
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final duration = reduceMotion ? Duration.zero : CommonUiMotion.selection;
-    final contextKey = '$area|$mode';
+    final contextKey = '$area|$contextLabel';
 
     return Semantics(
       button: true,
-      label: '현재 업무 지역 $area, $mode',
+      label: '현재 업무 지역 $area',
       child: AnimatedScale(
         scale: _pressed ? .975 : 1,
         duration: reduceMotion ? Duration.zero : CommonUiMotion.press,
@@ -137,7 +138,7 @@ class _HeadquarterContextTopNavigationState
                                   ),
                             ),
                             Text(
-                              mode,
+                              contextLabel,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: Theme.of(context)

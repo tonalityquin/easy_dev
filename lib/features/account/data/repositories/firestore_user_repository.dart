@@ -25,6 +25,9 @@ class FirestoreUserRepository implements UserRepository {
   Future<TabletModel?> getTabletByHandle(String handle) => _readService.getTabletByHandle(handle);
 
   @override
+  Future<TabletModel?> getTabletByPhone(String phone) => _readService.getTabletByPhone(phone);
+
+  @override
   Future<TabletModel?> getTabletByHandleAndAreaName(String handle, String areaName) =>
       _readService.getTabletByHandleAndAreaName(handle, areaName);
 
@@ -76,7 +79,8 @@ class FirestoreUserRepository implements UserRepository {
   Future<void> updateUser(UserModel user) => _writeService.updateUser(user);
 
   @override
-  Future<void> updateTablet(TabletModel tablet) => _writeService.updateTablet(tablet);
+  Future<void> updateTablet(TabletModel tablet, {String? previousId}) =>
+      _writeService.updateTablet(tablet, previousId: previousId);
 
   @override
   Future<void> deleteUsers(List<String> ids) => _writeService.deleteUsers(ids);
@@ -105,18 +109,18 @@ class FirestoreUserRepository implements UserRepository {
       _statusService.areaPickerCurrentArea(phone, area, currentArea);
 
   @override
-  Future<void> updateLogOutTabletStatus(String handle, String area, {bool? isWorking, bool? isSaved}) =>
-      _statusService.updateLogOutTabletStatus(handle, area, isWorking: isWorking, isSaved: isSaved);
+  Future<void> updateLogOutTabletStatus(String tabletId, {bool? isWorking, bool? isSaved}) =>
+      _statusService.updateLogOutTabletStatus(tabletId, isWorking: isWorking, isSaved: isSaved);
 
   @override
-  Future<void> updateWorkingTabletStatus(String handle, String area, {bool? isWorking, bool? isSaved}) =>
-      _statusService.updateWorkingTabletStatus(handle, area, isWorking: isWorking, isSaved: isSaved);
+  Future<void> updateWorkingTabletStatus(String tabletId, {bool? isWorking, bool? isSaved}) =>
+      _statusService.updateWorkingTabletStatus(tabletId, isWorking: isWorking, isSaved: isSaved);
 
   @override
-  Future<void> updateLoadCurrentAreaTablet(String handle, String area, String currentArea) =>
-      _statusService.updateLoadCurrentAreaTablet(handle, area, currentArea);
+  Future<void> updateLoadCurrentAreaTablet(String tabletId, String currentArea) =>
+      _statusService.updateLoadCurrentAreaTablet(tabletId, currentArea);
 
   @override
-  Future<void> areaPickerCurrentAreaTablet(String handle, String area, String currentArea) =>
-      _statusService.areaPickerCurrentAreaTablet(handle, area, currentArea);
+  Future<void> areaPickerCurrentAreaTablet(String tabletId, String currentArea) =>
+      _statusService.areaPickerCurrentAreaTablet(tabletId, currentArea);
 }

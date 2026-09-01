@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -9,7 +10,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../app/utils/snackbar_helper.dart';
 import '../../../../design_system/common_ui/common_ui_components.dart';
-import '../../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../../design_system/common_ui/common_ui_side_dock.dart';
+import '../../../../design_system/common_ui/common_ui_side_dock_content_dialog.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../account/data/services/user_read_service.dart';
 import '../../../commute/domain/repositories/commute_true_false_repository.dart';
@@ -18,55 +20,43 @@ import '../../../../shared/plate/application/common/area_plate_status_counter.da
 import '../../../../shared/plate/domain/repositories/plate_repository.dart';
 import '../../application/area/area_master_cache.dart';
 
+enum FieldPresentation {
+  page,
+  leftSideDock,
+}
+
 class Field extends StatefulWidget {
   const Field({
     super.key,
-    this.asBottomSheet = false,
-    this.useCommonUi = true,
+    this.presentation = FieldPresentation.page,
   });
 
-  final bool asBottomSheet;
-  final bool useCommonUi;
+  final FieldPresentation presentation;
 
-  static Future<T?> showAsBottomSheet<T>(BuildContext context, {
-    bool useCommonUi = true,
-  }) {
-    Widget buildSheet(BuildContext sheetContext) {
-      final insets = MediaQuery
-          .of(sheetContext)
-          .viewInsets;
-      return Padding(
-        padding: EdgeInsets.only(bottom: insets.bottom),
-        child: FractionallySizedBox(
-          heightFactor: 1,
-          widthFactor: 1,
-          child: Field(
-            asBottomSheet: true,
-            useCommonUi: useCommonUi,
-          ),
+  static Future<T?> showAsLeftSideDock<T>(
+    BuildContext context, {
+    bool useRootNavigator = false,
+  }) async {
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    debugPrint(
+      '[Field] side_dock_push_request side=left motion=operations_210_190 translate=-22_to_0 opacity=0.90_to_1 reduceMotion=$reduceMotion',
+    );
+    try {
+      return await showOperationsLeftSideDock<T>(
+        context: context,
+        barrierLabel: '근무지 현황',
+        useRootNavigator: useRootNavigator,
+        maxWidth: 360,
+        widthFactor: 0.92,
+        barrierDismissible: true,
+        builder: (_) => const Field(
+          presentation: FieldPresentation.leftSideDock,
         ),
       );
+    } finally {
+      debugPrint('[Field] side_dock_closed side=left');
     }
-
-    if (useCommonUi) {
-      return showCommonOverlayBottomSheet<T>(
-        context: context,
-        isScrollControlled: true,
-        useSafeArea: true,
-        builder: buildSheet,
-      );
-    }
-
-    final tokens = CommonUiTheme.of(context);
-    return showModalBottomSheet<T>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      barrierColor: tokens.scrim,
-      elevation: 0,
-      builder: buildSheet,
-    );
   }
 
   @override
@@ -105,6 +95,7 @@ class _FieldState extends State<Field> {
   bool _commuteRemoteLoaded = false;
   bool _plateRemoteLoaded = false;
   bool _developerMode = false;
+  bool _showAreaFilter = false;
   DateTime? _rosterCachedAt;
   DateTime? _commuteCachedAt;
   Map<String, DateTime> _plateCachedAtByArea = <String, DateTime>{};
@@ -122,11 +113,28 @@ class _FieldState extends State<Field> {
   @override
   void initState() {
     super.initState();
+    _developerMode = DevAuth.devModeEnabled.value;
+    DevAuth.devModeEnabled.addListener(_handleDeveloperModeChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _recordDebug('initialized');
+      _recordDebug(
+        'initialized presentation=${widget.presentation.name} developerMode=$_developerMode',
+      );
       unawaited(_refreshDeveloperMode());
       unawaited(_bootstrap());
     });
+  }
+
+  @override
+  void dispose() {
+    DevAuth.devModeEnabled.removeListener(_handleDeveloperModeChanged);
+    super.dispose();
+  }
+
+  void _handleDeveloperModeChanged() {
+    final enabled = DevAuth.devModeEnabled.value;
+    if (!mounted || _developerMode == enabled) return;
+    setState(() => _developerMode = enabled);
+    _recordDebug('developer_mode_notifier=$enabled');
   }
 
   void _recordDebug(String message) {
@@ -139,7 +147,7 @@ class _FieldState extends State<Field> {
   }
 
   Future<void> _refreshDeveloperMode() async {
-    final enabled = await DevAuth.isDeveloperLoggedIn();
+    final enabled = await DevAuth.isDevModeEnabled();
     if (!mounted) return;
     _recordDebug('developer_mode=$enabled');
     if (_developerMode == enabled) return;
@@ -157,19 +165,16 @@ class _FieldState extends State<Field> {
     final plateAge = _cacheAge(_plateCachedAt);
     final parkingCount = _parkingCountForAreas(visibleAreas);
     final departureCount = _departureCountForAreas(visibleAreas);
-    final currentMedia = MediaQuery.maybeOf(context);
-    final viewport = currentMedia?.size;
-    final compactLayout = viewport != null &&
-        (viewport.width <= 390 || viewport.height <= 700);
+    final media = MediaQuery.maybeOf(context);
+    final viewport = media?.size;
+    final surface = context.size;
+    final effectiveWidth = surface?.width ?? viewport?.width;
+    final effectiveHeight = surface?.height ?? viewport?.height;
+    final compactLayout = effectiveWidth != null && effectiveHeight != null
+        ? effectiveWidth <= 390 || effectiveHeight <= 700
+        : false;
     _recordDebug(
-      'developer_status_open areas=${_allAreas
-          .length} active=$activeCount present=$presentCount absent=$absentCount parking=$parkingCount departure=$departureCount plateErrors=${_plateErrorsByArea
-          .length} expandedPresentAreas=${_expandedPresentAreas
-          .length} rosterLoading=$_rosterLoading commuteLoading=$_commuteLoading plateLoading=$_plateLoading compact=$compactLayout viewport=${viewport
-          ?.width.toStringAsFixed(0) ?? '-'}x${viewport?.height.toStringAsFixed(
-          0) ?? '-'} touchTarget=${compactLayout
-          ? _compactTouchTarget
-          : _regularTouchTarget}',
+      'developer_status_open presentation=${widget.presentation.name} filter=$_showAreaFilter areas=${_allAreas.length} visibleAreas=${visibleAreas.length} active=$activeCount present=$presentCount absent=$absentCount parking=$parkingCount departure=$departureCount plateErrors=${_plateErrorsByArea.length} expandedPresentAreas=${_expandedPresentAreas.length} rosterLoading=$_rosterLoading commuteLoading=$_commuteLoading plateLoading=$_plateLoading compact=$compactLayout surface=${effectiveWidth?.toStringAsFixed(0) ?? '-'}x${effectiveHeight?.toStringAsFixed(0) ?? '-'} reduceMotion=${media?.disableAnimations ?? false}',
     );
     final trace = await DeveloperOperationTrace.start(
       context: context,
@@ -180,34 +185,20 @@ class _FieldState extends State<Field> {
       standardModeMessage: '개발자 모드 OFF',
     );
     if (!trace.developerMode) return;
-    final media = MediaQuery.maybeOf(context);
     trace.log(
-      'divisionSet=${(_division ?? '')
-          .trim()
-          .isNotEmpty}, areas=${_allAreas
-          .length}, selectedAreas=${_selectedAreas
-          .length}, expandedPresentAreas=${_expandedPresentAreas
-          .length}, active=$activeCount, present=$presentCount, absent=$absentCount',
+      'presentation=${widget.presentation.name}, filter=$_showAreaFilter, divisionSet=${(_division ?? '').trim().isNotEmpty}, areas=${_allAreas.length}, visibleAreas=${visibleAreas.length}, selectedAreas=${_selectedAreas.length}, expandedPresentAreas=${_expandedPresentAreas.length}, active=$activeCount, present=$presentCount, absent=$absentCount',
       progress: 0.18,
     );
     trace.log(
-      'rosterCache=$_hasRosterCache, rosterRemote=$_rosterRemoteLoaded, rosterAge=${rosterAge
-          ?.inSeconds ??
-          -1}s, rosterLoading=$_rosterLoading, rosterError=${_rosterError !=
-          null}',
+      'rosterCache=$_hasRosterCache, rosterRemote=$_rosterRemoteLoaded, rosterAge=${rosterAge?.inSeconds ?? -1}s, rosterLoading=$_rosterLoading, rosterError=${_rosterError != null}',
       progress: 0.30,
     );
     trace.log(
-      'commuteCache=$_hasCommuteCache, commuteRemote=$_commuteRemoteLoaded, commuteAge=${commuteAge
-          ?.inSeconds ??
-          -1}s, commuteLoading=$_commuteLoading, commuteError=${_commuteError !=
-          null}',
+      'commuteCache=$_hasCommuteCache, commuteRemote=$_commuteRemoteLoaded, commuteAge=${commuteAge?.inSeconds ?? -1}s, commuteLoading=$_commuteLoading, commuteError=${_commuteError != null}',
       progress: 0.40,
     );
     trace.log(
-      'plateCache=$_hasPlateCache, plateRemote=$_plateRemoteLoaded, plateAge=${plateAge
-          ?.inSeconds ?? -1}s, plateLoading=$_plateLoading, plateError=${_plateError !=
-          null}, plateAreaErrors=${_plateErrorsByArea.length}, parking=$parkingCount, departure=$departureCount',
+      'plateCache=$_hasPlateCache, plateRemote=$_plateRemoteLoaded, plateAge=${plateAge?.inSeconds ?? -1}s, plateLoading=$_plateLoading, plateError=${_plateError != null}, plateAreaErrors=${_plateErrorsByArea.length}, parking=$parkingCount, departure=$departureCount',
       progress: 0.48,
     );
     for (final area in visibleAreas) {
@@ -221,14 +212,7 @@ class _FieldState extends State<Field> {
       );
     }
     trace.log(
-      'rosterTtl=${_rosterTtl.inMinutes}m, reduceMotion=${media
-          ?.disableAnimations ??
-          false}, compactLayout=$compactLayout, viewport=${viewport?.width
-          .toStringAsFixed(0) ?? '-'}x${viewport?.height.toStringAsFixed(0) ??
-          '-'}, touchTarget=${compactLayout
-          ? _compactTouchTarget
-          : _regularTouchTarget}, expandedPresentAreas=${_expandedPresentAreas
-          .join(',')}',
+      'rosterTtl=${_rosterTtl.inMinutes}m, reduceMotion=${media?.disableAnimations ?? false}, compactLayout=$compactLayout, surface=${effectiveWidth?.toStringAsFixed(0) ?? '-'}x${effectiveHeight?.toStringAsFixed(0) ?? '-'}, touchTarget=${compactLayout ? _compactTouchTarget : _regularTouchTarget}, expandedPresentAreas=${_expandedPresentAreas.join(',')}',
       progress: 0.56,
     );
     final snapshot = List<String>.of(_debugLines);
@@ -954,48 +938,34 @@ class _FieldState extends State<Field> {
     ]);
   }
 
-  Future<T?> _showFieldBottomSheet<T>({
-    required WidgetBuilder builder,
-  }) {
-    if (widget.useCommonUi) {
-      return showCommonOverlayBottomSheet<T>(
-        context: context,
-        isScrollControlled: true,
-        useSafeArea: true,
-        builder: builder,
-      );
-    }
-    final tokens = CommonUiTheme.of(context);
-    return showModalBottomSheet<T>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      barrierColor: tokens.scrim,
-      elevation: 0,
-      builder: builder,
-    );
-  }
-
-  Future<void> _openAreaPicker() async {
-    if (_allAreas.isEmpty) return;
+  void _openAreaPicker() {
+    if (_allAreas.isEmpty || _showAreaFilter) return;
+    HapticFeedback.selectionClick();
     _recordDebug(
       'filter_open areas=${_allAreas.length} selected=${_selectedAreas.length}',
     );
-    final counts = <String, int>{
-      for (final area in _allAreas) area: _workersByArea[area]?.length ?? 0,
-    };
-    final result = await _showFieldBottomSheet<Set<String>>(
-      builder: (_) =>
-          _AreaPickerSheet(
-            allAreas: _allAreas,
-            areaCounts: counts,
-            initialSelected: _selectedAreas,
-          ),
+    setState(() => _showAreaFilter = true);
+  }
+
+  void _closeAreaPicker({String source = 'back'}) {
+    if (!_showAreaFilter) return;
+    HapticFeedback.lightImpact();
+    _recordDebug('filter_close source=$source');
+    setState(() => _showAreaFilter = false);
+  }
+
+  void _applyAreaPicker(Set<String> result) {
+    final normalized = result.length == _allAreas.length
+        ? <String>{}
+        : result.where(_allAreas.contains).toSet();
+    HapticFeedback.selectionClick();
+    setState(() {
+      _selectedAreas = normalized;
+      _showAreaFilter = false;
+    });
+    _recordDebug(
+      'filter_apply selected=${normalized.isEmpty ? _allAreas.length : normalized.length} all=${normalized.isEmpty}',
     );
-    if (!mounted || result == null) return;
-    setState(() => _selectedAreas = result);
-    _recordDebug('filter_apply selected=${result.length}');
   }
 
   List<String> _visibleAreas() {
@@ -1081,75 +1051,237 @@ class _FieldState extends State<Field> {
 
   @override
   Widget build(BuildContext context) {
-    final content = _buildContent(context);
-    if (widget.asBottomSheet) {
-      return CommonSheetScaffold(
-        title: '근무지 현황',
-        icon: Icons.map_rounded,
-        onClose: () => Navigator.of(context).maybePop(),
-        body: content,
+    if (widget.presentation == FieldPresentation.leftSideDock) {
+      return PopScope(
+        canPop: !_showAreaFilter,
+        onPopInvoked: (didPop) {
+          if (!didPop && _showAreaFilter) {
+            _closeAreaPicker(source: 'system_back');
+          }
+        },
+        child: _buildLeftSideDock(context),
       );
     }
 
     final tokens = CommonUiTheme.of(context);
-    final text = Theme
-        .of(context)
-        .textTheme;
+    final text = Theme.of(context).textTheme;
     return CommonUiScope(
-      child: Scaffold(
-        backgroundColor: tokens.canvas,
-        appBar: AppBar(
-          title: Text(
-            '근무지 현황',
-            style: text.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+      child: PopScope(
+        canPop: !_showAreaFilter,
+        onPopInvoked: (didPop) {
+          if (!didPop && _showAreaFilter) {
+            _closeAreaPicker(source: 'system_back');
+          }
+        },
+        child: Scaffold(
+          backgroundColor: tokens.canvas,
+          appBar: AppBar(
+            title: Text(
+              '근무지 현황',
+              style: text.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            centerTitle: true,
+            actions: [
+              if (_developerMode)
+                IconButton(
+                  tooltip: '개발 상태',
+                  onPressed: _showDeveloperStatus,
+                  icon: const Icon(Icons.terminal_rounded),
+                ),
+            ],
           ),
-          centerTitle: true,
+          body: _buildContentSwitcher(context),
         ),
-        body: content,
       ),
     );
   }
 
+  Widget _buildLeftSideDock(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildFlatDockHeader(context),
+        Divider(height: 1, color: tokens.borderSubtle),
+        Expanded(child: _buildContentSwitcher(context)),
+      ],
+    );
+  }
+
+  String _dockSubtitle() {
+    final division = (_division ?? '').trim();
+    if (division.isEmpty) return '사업부 확인 중';
+    if (_allAreas.isEmpty) return '$division · 지역 확인 중';
+    final visibleCount = _selectedAreas.isEmpty
+        ? _allAreas.length
+        : _selectedAreas.where(_allAreas.contains).length;
+    final areaLabel = visibleCount == _allAreas.length
+        ? '전체 ${_allAreas.length}개 지역'
+        : '${_allAreas.length}개 중 $visibleCount개 지역';
+    return '$division · $areaLabel';
+  }
+
+  Widget _buildFlatDockHeader(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    final text = Theme.of(context).textTheme;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final subtitle = _dockSubtitle();
+
+    return CommonAnimatedReveal(
+      offset: const Offset(-0.025, 0),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(4, 4, 0, 8),
+        child: Row(
+          children: [
+            Icon(
+              Icons.map_rounded,
+              color: tokens.accent,
+              size: 24,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _developerMode ? _showDeveloperStatus : null,
+                onLongPress: _developerMode ? _showDeveloperStatus : null,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 5),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '근무지 현황',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: text.titleMedium?.copyWith(
+                          color: tokens.textPrimary,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      AnimatedSwitcher(
+                        duration: reduceMotion
+                            ? Duration.zero
+                            : CommonUiMotion.selection,
+                        switchInCurve: CommonUiMotion.enter,
+                        switchOutCurve: CommonUiMotion.exit,
+                        transitionBuilder: (child, animation) {
+                          final offset = Tween<Offset>(
+                            begin: const Offset(-0.025, 0),
+                            end: Offset.zero,
+                          ).animate(animation);
+                          return FadeTransition(
+                            opacity: animation,
+                            child: SlideTransition(
+                              position: offset,
+                              child: child,
+                            ),
+                          );
+                        },
+                        child: Text(
+                          subtitle,
+                          key: ValueKey<String>(subtitle),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: text.bodySmall?.copyWith(
+                            color: tokens.textSecondary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            if (_developerMode)
+              IconButton(
+                tooltip: '개발 상태',
+                onPressed: _showDeveloperStatus,
+                icon: Icon(
+                  Icons.terminal_rounded,
+                  color: tokens.iconSecondary,
+                  size: 20,
+                ),
+              ),
+            IconButton(
+              tooltip: '근무지 현황 닫기',
+              onPressed: () {
+                HapticFeedback.lightImpact();
+                _recordDebug('side_dock_close source=header');
+                Navigator.of(context).maybePop();
+              },
+              icon: Icon(
+                Icons.close_rounded,
+                color: tokens.iconPrimary,
+                size: 22,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContentSwitcher(BuildContext context) {
+    final counts = <String, int>{
+      for (final area in _allAreas) area: _workersByArea[area]?.length ?? 0,
+    };
+    return CommonSideDockContentCropSwitcher(
+      activeKey: _showAreaFilter ? 'field_area_filter' : 'field_status',
+      originAlignment: Alignment.centerLeft,
+      duration: const Duration(milliseconds: 220),
+      reverseDuration: const Duration(milliseconds: 180),
+      child: _showAreaFilter
+          ? _AreaFilterView(
+              allAreas: _allAreas,
+              areaCounts: counts,
+              initialSelected: _selectedAreas,
+              onCancel: () => _closeAreaPicker(source: 'filter_back'),
+              onApply: _applyAreaPicker,
+              onDebug: _recordDebug,
+            )
+          : _buildContent(context),
+    );
+  }
+
   Widget _buildContent(BuildContext context) {
-    final reduceMotion = MediaQuery
-        .maybeOf(context)
-        ?.disableAnimations ?? false;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final division = _division;
     return LayoutBuilder(
       builder: (context, constraints) {
         final media = MediaQuery.of(context);
         final compact = constraints.maxWidth <= 390 || media.size.height <= 700;
-        final horizontal = compact ? 12.0 : 16.0;
-        final top = compact ? 8.0 : 12.0;
-        final gap = compact ? 8.0 : 10.0;
+        final horizontal = compact ? 2.0 : 4.0;
         return Padding(
-          padding: EdgeInsets.fromLTRB(horizontal, top, horizontal, 0),
+          padding: EdgeInsets.symmetric(horizontal: horizontal),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               CommonAnimatedReveal(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: _developerMode ? _showDeveloperStatus : null,
-                  onLongPress: _developerMode ? _showDeveloperStatus : null,
-                  child: _buildSummaryCard(context, compact: compact),
-                ),
+                offset: const Offset(-0.02, 0),
+                child: _buildOverviewRow(context, compact: compact),
               ),
-              SizedBox(height: gap),
+              Divider(height: 1, color: CommonUiTheme.of(context).borderSubtle),
               CommonAnimatedReveal(
                 delay: const Duration(milliseconds: 55),
-                child: _buildSyncBar(context, compact: compact),
+                offset: const Offset(-0.02, 0),
+                child: _buildSyncRow(context, compact: compact),
               ),
-              SizedBox(height: gap),
+              Divider(height: 1, color: CommonUiTheme.of(context).borderSubtle),
               Expanded(
                 child: AnimatedSwitcher(
                   duration:
-                  reduceMotion ? Duration.zero : CommonUiMotion.component,
+                      reduceMotion ? Duration.zero : CommonUiMotion.component,
                   switchInCurve: CommonUiMotion.enter,
                   switchOutCurve: CommonUiMotion.exit,
                   transitionBuilder: (child, animation) {
                     if (reduceMotion) return child;
                     final offset = Tween<Offset>(
-                      begin: const Offset(0, 0.018),
+                      begin: const Offset(-0.025, 0),
                       end: Offset.zero,
                     ).animate(animation);
                     return FadeTransition(
@@ -1159,7 +1291,7 @@ class _FieldState extends State<Field> {
                   },
                   child: KeyedSubtree(
                     key: ValueKey<String>(_bodyStateKey(division)),
-                    child: _buildBody(context, division),
+                    child: _buildBody(context, division, compact: compact),
                   ),
                 ),
               ),
@@ -1170,124 +1302,49 @@ class _FieldState extends State<Field> {
     );
   }
 
-  Widget _buildSummaryCard(BuildContext context, {
+  Widget _buildOverviewRow(
+    BuildContext context, {
     required bool compact,
   }) {
     final tokens = CommonUiTheme.of(context);
-    final text = Theme
-        .of(context)
-        .textTheme;
     final visibleAreas = _visibleAreas();
     final activeCount = _activeCountForAreas(visibleAreas);
-    final presentCount = _hasUsableCommute
-        ? _presentCountForAreas(visibleAreas)
-        : 0;
+    final presentCount =
+        _hasUsableCommute ? _presentCountForAreas(visibleAreas) : 0;
     final absentCount = _hasUsableCommute ? activeCount - presentCount : 0;
-    final division = (_division ?? '').trim();
-    final selectedLabel = _selectedAreas.isEmpty ? '전체 지역' : '선택 지역';
 
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.symmetric(
-        horizontal: compact ? 10 : 12,
-        vertical: compact ? 9 : 11,
-      ),
-      decoration: BoxDecoration(
-        color: tokens.surfaceRaised,
-        borderRadius: BorderRadius.circular(CommonUiShapes.card),
-        border: Border.all(color: tokens.borderSubtle),
-        boxShadow: [
-          BoxShadow(
-            color: tokens.shadow,
-            blurRadius: compact ? 8 : 12,
-            offset: Offset(0, compact ? 3 : 5),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: compact ? 32 : 36,
-                height: compact ? 32 : 36,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: tokens.accentContainer,
-                  borderRadius: BorderRadius.circular(CommonUiShapes.control),
-                  border: Border.all(
-                    color: tokens.accent.withOpacity(
-                      tokens.isDark ? 0.54 : 0.30,
-                    ),
-                  ),
-                ),
-                child: Icon(
-                  Icons.groups_2_rounded,
-                  color: tokens.onAccentContainer,
-                  size: compact ? 18 : 20,
-                ),
+    return Semantics(
+      label: '활성 $activeCount명, 출근 $presentCount명, 미출근 $absentCount명',
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 4 : 6,
+          vertical: compact ? 10 : 12,
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: _FlatMetric(
+                label: '활성',
+                value: activeCount,
+                foreground: tokens.accent,
               ),
-              SizedBox(width: compact ? 9 : 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      division.isEmpty ? '사업부 확인 중' : division,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: text.titleSmall?.copyWith(
-                        color: tokens.textPrimary,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 1),
-                    Text(
-                      '$selectedLabel · 활성 계정 · 오늘 출근 · 차량 현황',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: text.bodySmall?.copyWith(
-                        color: tokens.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
+            ),
+            Expanded(
+              child: _FlatMetric(
+                label: '출근',
+                value: presentCount,
+                foreground: tokens.success,
               ),
-            ],
-          ),
-          SizedBox(height: compact ? 8 : 10),
-          Row(
-            children: [
-              Expanded(
-                child: _CompactMetric(
-                  label: '활성',
-                  value: activeCount,
-                  foreground: tokens.accent,
-                  background: tokens.accentContainer,
-                ),
+            ),
+            Expanded(
+              child: _FlatMetric(
+                label: '미출근',
+                value: absentCount,
+                foreground: tokens.warning,
               ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: _CompactMetric(
-                  label: '출근',
-                  value: presentCount,
-                  foreground: tokens.success,
-                  background: tokens.successContainer,
-                ),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: _CompactMetric(
-                  label: '미출근',
-                  value: absentCount,
-                  foreground: tokens.warning,
-                  background: tokens.warningContainer,
-                ),
-              ),
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1320,7 +1377,8 @@ class _FieldState extends State<Field> {
     return status.label;
   }
 
-  Widget _buildSyncBar(BuildContext context, {
+  Widget _buildSyncRow(
+    BuildContext context, {
     required bool compact,
   }) {
     final tokens = CommonUiTheme.of(context);
@@ -1331,111 +1389,131 @@ class _FieldState extends State<Field> {
     final displayLabel = compact ? _compactSyncLabel(status) : status.label;
     final refreshing = _commuteLoading || _rosterLoading || _plateLoading;
 
-    return Container(
-      width: double.infinity,
+    return Padding(
       padding: EdgeInsets.fromLTRB(
-        compact ? 10 : 12,
+        compact ? 4 : 6,
         compact ? 7 : 9,
-        compact ? 6 : 8,
+        0,
         compact ? 7 : 9,
-      ),
-      decoration: BoxDecoration(
-        color: tokens.surfaceRaised,
-        borderRadius: BorderRadius.circular(CommonUiShapes.card),
-        border: Border.all(color: tokens.borderSubtle),
       ),
       child: Row(
         children: [
-          Expanded(
-            child: Row(
-              children: [
-                AnimatedSwitcher(
-                  duration:
-                      reduceMotion ? Duration.zero : CommonUiMotion.selection,
-                  transitionBuilder: (child, animation) {
-                    return FadeTransition(
-                      opacity: animation,
-                      child: ScaleTransition(
-                        scale: Tween<double>(begin: 0.92, end: 1).animate(
-                          animation,
-                        ),
-                        child: child,
-                      ),
-                    );
-                  },
-                  child: Icon(
+          AnimatedSwitcher(
+            duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+            transitionBuilder: (child, animation) {
+              return FadeTransition(
+                opacity: animation,
+                child: ScaleTransition(
+                  scale: Tween<double>(begin: 0.88, end: 1).animate(animation),
+                  child: child,
+                ),
+              );
+            },
+            child: refreshing
+                ? SizedBox(
+                    key: const ValueKey<String>('field_sync_loading'),
+                    width: compact ? 16 : 18,
+                    height: compact ? 16 : 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: status.foreground,
+                    ),
+                  )
+                : Icon(
                     status.icon,
                     key: ValueKey<String>(
                       '${status.label}_${status.icon.codePoint}',
                     ),
-                    size: compact ? 16 : 17,
+                    size: compact ? 16 : 18,
                     color: status.foreground,
                   ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AnimatedSwitcher(
+                  duration:
+                      reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                  child: Text(
+                    displayLabel,
+                    key: ValueKey<String>(displayLabel),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: text.labelMedium?.copyWith(
+                      color: status.foreground,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
-                const SizedBox(width: 7),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      AnimatedSwitcher(
-                        duration: reduceMotion
-                            ? Duration.zero
-                            : CommonUiMotion.selection,
-                        child: Text(
-                          displayLabel,
-                          key: ValueKey<String>(displayLabel),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: text.labelMedium?.copyWith(
-                            color: status.foreground,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 1),
-                      AnimatedSwitcher(
-                        duration: reduceMotion
-                            ? Duration.zero
-                            : CommonUiMotion.selection,
-                        child: Text(
-                          compact
-                              ? _compactUpdatedLabel()
-                              : '출근 ${_syncStamp(_commuteCachedAt)} · 차량 ${_syncStamp(_plateCachedAt)}',
-                          key: ValueKey<String>(
-                            '${_syncStamp(_commuteCachedAt)}_${_syncStamp(_plateCachedAt)}',
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: text.bodySmall?.copyWith(
-                            color: tokens.textSecondary,
-                          ),
-                        ),
-                      ),
-                    ],
+                const SizedBox(height: 1),
+                AnimatedSwitcher(
+                  duration:
+                      reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                  child: Text(
+                    _compactUpdatedLabel(),
+                    key: ValueKey<String>(
+                      '${_syncStamp(_commuteCachedAt)}_${_syncStamp(_plateCachedAt)}',
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: text.bodySmall?.copyWith(
+                      color: tokens.textSecondary,
+                    ),
                   ),
                 ),
               ],
             ),
           ),
-          CommonIconButton(
-            icon: Icons.filter_alt_rounded,
+          IconButton(
             tooltip: '지역 필터',
             onPressed: _allAreas.isEmpty ? null : _openAreaPicker,
-            selected: _selectedAreas.isNotEmpty,
-            haptic: CommonHaptic.selection,
-            size: compact ? _compactTouchTarget : _regularTouchTarget,
-            iconSize: compact ? 18 : 19,
+            icon: AnimatedSwitcher(
+              duration:
+                  reduceMotion ? Duration.zero : CommonUiMotion.selection,
+              child: Icon(
+                _selectedAreas.isEmpty
+                    ? Icons.filter_alt_outlined
+                    : Icons.filter_alt_rounded,
+                key: ValueKey<bool>(_selectedAreas.isNotEmpty),
+                color: _selectedAreas.isEmpty
+                    ? tokens.iconSecondary
+                    : tokens.accent,
+                size: compact ? 19 : 20,
+              ),
+            ),
           ),
-          const SizedBox(width: 4),
-          CommonIconButton(
-            icon: Icons.refresh_rounded,
+          IconButton(
             tooltip: '근무지 현황 새로고침',
-            onPressed: refreshing ? null : _handleRefresh,
-            loading: refreshing,
-            haptic: CommonHaptic.light,
-            size: compact ? _compactTouchTarget : _regularTouchTarget,
-            iconSize: compact ? 18 : 19,
+            onPressed: refreshing
+                ? null
+                : () {
+                    HapticFeedback.lightImpact();
+                    _recordDebug('manual_refresh_tap');
+                    unawaited(_handleRefresh());
+                  },
+            icon: AnimatedSwitcher(
+              duration:
+                  reduceMotion ? Duration.zero : CommonUiMotion.selection,
+              child: refreshing
+                  ? SizedBox(
+                      key: const ValueKey<String>('field_refresh_loading'),
+                      width: compact ? 18 : 20,
+                      height: compact ? 18 : 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: tokens.info,
+                      ),
+                    )
+                  : Icon(
+                      Icons.refresh_rounded,
+                      key: const ValueKey<String>('field_refresh_idle'),
+                      color: tokens.iconPrimary,
+                      size: compact ? 20 : 21,
+                    ),
+            ),
           ),
         ],
       ),
@@ -1526,7 +1604,11 @@ class _FieldState extends State<Field> {
     );
   }
 
-  Widget _buildBody(BuildContext context, String? division) {
+  Widget _buildBody(
+    BuildContext context,
+    String? division, {
+    required bool compact,
+  }) {
     if (division == null) {
       return const _StatePanel(
         icon: Icons.apartment_rounded,
@@ -1546,9 +1628,7 @@ class _FieldState extends State<Field> {
       );
     }
 
-    if (division
-        .trim()
-        .isEmpty) {
+    if (division.trim().isEmpty) {
       return const _StatePanel(
         icon: Icons.domain_disabled_rounded,
         title: '사업부 정보가 없습니다.',
@@ -1633,14 +1713,20 @@ class _FieldState extends State<Field> {
       );
     }
 
-    final size = MediaQuery
-        .of(context)
-        .size;
-    final compact = size.width <= 390 || size.height <= 700;
     return ListView.separated(
-      padding: EdgeInsets.only(bottom: compact ? 16 : 20),
+      padding: EdgeInsets.only(
+        top: compact ? 8 : 10,
+        bottom: compact ? 16 : 20,
+      ),
       itemCount: visibleAreas.length,
-      separatorBuilder: (_, __) => SizedBox(height: compact ? 8 : 10),
+      separatorBuilder: (_, __) => Padding(
+        padding: EdgeInsets.symmetric(vertical: compact ? 7 : 9),
+        child: Divider(
+          height: 1,
+          thickness: 1,
+          color: CommonUiTheme.of(context).borderSubtle,
+        ),
+      ),
       itemBuilder: (context, index) {
         final area = visibleAreas[index];
         final workers = _workersByArea[area] ?? const <_RosterWorker>[];
@@ -1648,7 +1734,13 @@ class _FieldState extends State<Field> {
         return CommonAnimatedReveal(
           key: ValueKey<String>('field_area_$area'),
           delay: Duration(milliseconds: (compact ? 26 : 32) * delayIndex),
-          child: _buildAreaSection(context, area, workers),
+          offset: const Offset(-0.025, 0),
+          child: _buildAreaSection(
+            context,
+            area,
+            workers,
+            compact: compact,
+          ),
         );
       },
     );
@@ -1663,25 +1755,22 @@ class _FieldState extends State<Field> {
         _expandedPresentAreas.remove(area);
       }
     });
+    HapticFeedback.selectionClick();
     _recordDebug(
       'present_group_toggle area=$area expanded=$expanded present=$presentCount absent=$absentCount',
     );
   }
 
-  Widget _buildAreaSection(BuildContext context,
-      String area,
-      List<_RosterWorker> sourceWorkers,) {
+  Widget _buildAreaSection(
+    BuildContext context,
+    String area,
+    List<_RosterWorker> sourceWorkers, {
+    required bool compact,
+  }) {
     final tokens = CommonUiTheme.of(context);
-    final text = Theme
-        .of(context)
-        .textTheme;
-    final size = MediaQuery
-        .of(context)
-        .size;
-    final compact = size.width <= 390 || size.height <= 700;
-    final reduceMotion = MediaQuery
-        .maybeOf(context)
-        ?.disableAnimations ?? false;
+    final text = Theme.of(context).textTheme;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final workers = List<_RosterWorker>.of(sourceWorkers)
       ..sort((a, b) {
         final aPresent = _isPresent(a);
@@ -1689,36 +1778,34 @@ class _FieldState extends State<Field> {
         if (aPresent != bPresent) return aPresent ? 1 : -1;
         return a.name.compareTo(b.name);
       });
-    final absentWorkers = workers.where((worker) => !_isPresent(worker)).toList(
-      growable: false,
-    );
+    final absentWorkers = workers
+        .where((worker) => !_isPresent(worker))
+        .toList(growable: false);
     final presentWorkers = workers.where(_isPresent).toList(growable: false);
     final present = presentWorkers.length;
     final absent = absentWorkers.length;
     final expanded = _expandedPresentAreas.contains(area) && present > 0;
     final summary = compact
         ? absent > 0
-        ? '${workers.length}명 · 미출근 $absent'
-        : '${workers.length}명 · 전원 출근'
+            ? '${workers.length}명 · 미출근 $absent'
+            : '${workers.length}명 · 전원 출근'
         : '${workers.length}명 · 출근 $present · 미출근 $absent';
     final summaryColor = absent > 0 ? tokens.warning : tokens.success;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
       children: [
         Padding(
-          padding: EdgeInsets.symmetric(horizontal: compact ? 1 : 2),
+          padding: EdgeInsets.fromLTRB(
+            compact ? 4 : 6,
+            compact ? 4 : 6,
+            compact ? 4 : 6,
+            compact ? 8 : 10,
+          ),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Container(
-                width: 3,
-                height: compact ? 18 : 20,
-                decoration: BoxDecoration(
-                  color: summaryColor,
-                  borderRadius: BorderRadius.circular(CommonUiShapes.pill),
-                ),
-              ),
-              SizedBox(width: compact ? 7 : 8),
               Expanded(
                 child: Text(
                   area,
@@ -1726,15 +1813,24 @@ class _FieldState extends State<Field> {
                   overflow: TextOverflow.ellipsis,
                   style: text.titleSmall?.copyWith(
                     color: tokens.textPrimary,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 10),
               AnimatedSwitcher(
-                duration: reduceMotion
-                    ? Duration.zero
-                    : CommonUiMotion.selection,
+                duration:
+                    reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                transitionBuilder: (child, animation) {
+                  final offset = Tween<Offset>(
+                    begin: const Offset(0.03, 0),
+                    end: Offset.zero,
+                  ).animate(animation);
+                  return FadeTransition(
+                    opacity: animation,
+                    child: SlideTransition(position: offset, child: child),
+                  );
+                },
                 child: Text(
                   summary,
                   key: ValueKey<String>('$area-$summary'),
@@ -1749,120 +1845,98 @@ class _FieldState extends State<Field> {
             ],
           ),
         ),
-        SizedBox(height: compact ? 6 : 8),
-        Container(
-          decoration: BoxDecoration(
-            color: tokens.surfaceRaised,
-            borderRadius: BorderRadius.circular(CommonUiShapes.card),
-            border: Border.all(color: tokens.borderSubtle),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildAreaVehicleStatus(
-                context,
-                area: area,
-                compact: compact,
-              ),
-              Divider(height: 1, color: tokens.borderSubtle),
-              if (workers.isEmpty)
-                Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: compact ? 12 : 14,
-                    vertical: compact ? 12 : 14,
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.person_off_outlined,
-                        size: 18,
-                        color: tokens.iconSecondary,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          '현재 활성 직원이 없습니다.',
-                          style: text.bodySmall?.copyWith(
-                            color: tokens.textSecondary,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              else ...[
-                if (absentWorkers.isNotEmpty)
-                  _buildWorkerList(
-                    context,
-                    absentWorkers,
-                    compact: compact,
-                    animationPrefix: 'absent',
-                  ),
-                if (presentWorkers.isNotEmpty) ...[
-                  if (absentWorkers.isNotEmpty)
-                    Divider(height: 1, color: tokens.borderSubtle),
-                  _buildPresentDisclosure(
-                    context,
-                    area: area,
-                    presentCount: present,
-                    absentCount: absent,
-                    expanded: expanded,
-                    compact: compact,
-                  ),
-                  AnimatedSize(
-                    duration: reduceMotion
-                        ? Duration.zero
-                        : CommonUiMotion.layout,
-                    curve: CommonUiMotion.standard,
-                    alignment: Alignment.topCenter,
-                    child: AnimatedSwitcher(
-                      duration: reduceMotion
-                          ? Duration.zero
-                          : CommonUiMotion.selection,
-                      switchInCurve: CommonUiMotion.standard,
-                      switchOutCurve: CommonUiMotion.standard,
-                      transitionBuilder: (child, animation) {
-                        final offset = Tween<Offset>(
-                          begin: const Offset(0, -0.025),
-                          end: Offset.zero,
-                        ).animate(animation);
-                        return FadeTransition(
-                          opacity: animation,
-                          child: SlideTransition(
-                            position: offset,
-                            child: child,
-                          ),
-                        );
-                      },
-                      child: expanded
-                          ? Column(
-                              key: ValueKey<String>('present_open_$area'),
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Divider(
-                                  height: 1,
-                                  color: tokens.borderSubtle,
-                                ),
-                                _buildWorkerList(
-                                  context,
-                                  presentWorkers,
-                                  compact: compact,
-                                  animationPrefix: 'present',
-                                ),
-                              ],
-                            )
-                          : SizedBox(
-                              key: ValueKey<String>('present_closed_$area'),
-                            ),
+        Divider(height: 1, color: tokens.borderSubtle),
+        _buildAreaVehicleStatus(
+          context,
+          area: area,
+          compact: compact,
+        ),
+        Divider(height: 1, color: tokens.borderSubtle),
+        if (workers.isEmpty)
+          Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: compact ? 8 : 10,
+              vertical: compact ? 12 : 14,
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.person_off_outlined,
+                  size: 18,
+                  color: tokens.iconSecondary,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '현재 활성 직원이 없습니다.',
+                    style: text.bodySmall?.copyWith(
+                      color: tokens.textSecondary,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                ],
+                ),
               ],
-            ],
-          ),
-        ),
+            ),
+          )
+        else ...[
+          if (absentWorkers.isNotEmpty)
+            _buildWorkerList(
+              context,
+              absentWorkers,
+              compact: compact,
+              animationPrefix: 'absent',
+            ),
+          if (presentWorkers.isNotEmpty) ...[
+            if (absentWorkers.isNotEmpty)
+              Divider(height: 1, color: tokens.borderSubtle),
+            _buildPresentDisclosure(
+              context,
+              area: area,
+              presentCount: present,
+              absentCount: absent,
+              expanded: expanded,
+              compact: compact,
+            ),
+            AnimatedSize(
+              duration: reduceMotion ? Duration.zero : CommonUiMotion.layout,
+              curve: CommonUiMotion.standard,
+              alignment: Alignment.topCenter,
+              child: AnimatedSwitcher(
+                duration:
+                    reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                switchInCurve: CommonUiMotion.standard,
+                switchOutCurve: CommonUiMotion.standard,
+                transitionBuilder: (child, animation) {
+                  final offset = Tween<Offset>(
+                    begin: const Offset(-0.025, 0),
+                    end: Offset.zero,
+                  ).animate(animation);
+                  return FadeTransition(
+                    opacity: animation,
+                    child: SlideTransition(position: offset, child: child),
+                  );
+                },
+                child: expanded
+                    ? Column(
+                        key: ValueKey<String>('present_open_$area'),
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Divider(height: 1, color: tokens.borderSubtle),
+                          _buildWorkerList(
+                            context,
+                            presentWorkers,
+                            compact: compact,
+                            animationPrefix: 'present',
+                          ),
+                        ],
+                      )
+                    : SizedBox(
+                        key: ValueKey<String>('present_closed_$area'),
+                      ),
+              ),
+            ),
+          ],
+        ],
       ],
     );
   }
@@ -1895,24 +1969,23 @@ class _FieldState extends State<Field> {
                 ? 'count_${count.parkingCompleted}_${count.departureCompleted}_${error != null}'
                 : 'empty';
 
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        compact ? 10 : 12,
-        compact ? 8 : 10,
-        compact ? 10 : 12,
-        compact ? 8 : 10,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 8 : 10,
+            vertical: compact ? 7 : 8,
+          ),
+          child: Row(
             children: [
               Icon(
                 Icons.directions_car_filled_rounded,
                 size: compact ? 16 : 18,
                 color: tokens.iconSecondary,
               ),
-              SizedBox(width: compact ? 6 : 7),
+              SizedBox(width: compact ? 7 : 8),
               Expanded(
                 child: Text(
                   '차량 현황',
@@ -1929,9 +2002,7 @@ class _FieldState extends State<Field> {
                   return FadeTransition(
                     opacity: animation,
                     child: ScaleTransition(
-                      scale: Tween<double>(begin: 0.88, end: 1).animate(
-                        animation,
-                      ),
+                      scale: Tween<double>(begin: 0.88, end: 1).animate(animation),
                       child: child,
                     ),
                   );
@@ -1959,62 +2030,145 @@ class _FieldState extends State<Field> {
               ),
             ],
           ),
-          SizedBox(height: compact ? 7 : 8),
+        ),
+        Divider(height: 1, color: tokens.borderSubtle),
+        AnimatedSwitcher(
+          duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
+          switchInCurve: CommonUiMotion.enter,
+          switchOutCurve: CommonUiMotion.exit,
+          transitionBuilder: (child, animation) {
+            if (reduceMotion) return child;
+            final offset = Tween<Offset>(
+              begin: const Offset(-0.025, 0),
+              end: Offset.zero,
+            ).animate(animation);
+            return FadeTransition(
+              opacity: animation,
+              child: SlideTransition(position: offset, child: child),
+            );
+          },
+          child: Column(
+            key: ValueKey<String>('vehicle_${area}_$stateKey'),
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildVehicleRow(
+                context,
+                icon: Icons.local_parking_rounded,
+                label: '입차 완료',
+                value: count?.parkingCompleted,
+                foreground: tokens.info,
+                loading: loadingWithoutValue,
+                compact: compact,
+              ),
+              Divider(height: 1, color: tokens.borderSubtle),
+              _buildVehicleRow(
+                context,
+                icon: Icons.exit_to_app_rounded,
+                label: '출차 완료',
+                value: count?.departureCompleted,
+                foreground: tokens.accent,
+                loading: loadingWithoutValue,
+                compact: compact,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildVehicleRow(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required int? value,
+    required Color foreground,
+    required bool loading,
+    required bool compact,
+  }) {
+    final tokens = CommonUiTheme.of(context);
+    final text = Theme.of(context).textTheme;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final duration = reduceMotion ? Duration.zero : CommonUiMotion.component;
+
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 8 : 10,
+        vertical: compact ? 9 : 10,
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: compact ? 18 : 19, color: foreground),
+          SizedBox(width: compact ? 9 : 10),
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: text.bodySmall?.copyWith(
+                color: tokens.textPrimary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
           AnimatedSwitcher(
-            duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
-            switchInCurve: CommonUiMotion.enter,
-            switchOutCurve: CommonUiMotion.exit,
+            duration: duration,
             transitionBuilder: (child, animation) {
-              if (reduceMotion) return child;
-              final offset = Tween<Offset>(
-                begin: const Offset(0, 0.04),
-                end: Offset.zero,
-              ).animate(animation);
               return FadeTransition(
                 opacity: animation,
-                child: SlideTransition(
-                  position: offset,
+                child: ScaleTransition(
+                  scale: Tween<double>(begin: 0.92, end: 1).animate(animation),
                   child: child,
                 ),
               );
             },
-            child: Row(
-              key: ValueKey<String>('vehicle_${area}_$stateKey'),
-              children: [
-                Expanded(
-                  child: _VehicleMetric(
-                    icon: Icons.local_parking_rounded,
-                    label: '입차 완료',
-                    value: count?.parkingCompleted,
-                    foreground: tokens.info,
-                    background: tokens.infoContainer,
-                    loading: loadingWithoutValue,
-                  ),
-                ),
-                SizedBox(width: compact ? 6 : 8),
-                Expanded(
-                  child: _VehicleMetric(
-                    icon: Icons.exit_to_app_rounded,
-                    label: '출차 완료',
-                    value: count?.departureCompleted,
-                    foreground: tokens.accent,
-                    background: tokens.accentContainer,
-                    loading: loadingWithoutValue,
-                  ),
-                ),
-              ],
-            ),
+            child: loading
+                ? SizedBox(
+                    key: ValueKey<String>('vehicle_row_loading_$label'),
+                    width: 17,
+                    height: 17,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: foreground,
+                    ),
+                  )
+                : value == null
+                    ? Text(
+                        '--',
+                        key: ValueKey<String>('vehicle_row_empty_$label'),
+                        style: text.labelLarge?.copyWith(
+                          color: tokens.textSecondary,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      )
+                    : TweenAnimationBuilder<double>(
+                        key: ValueKey<String>('vehicle_row_${label}_$value'),
+                        tween: Tween<double>(begin: 0, end: value.toDouble()),
+                        duration: duration,
+                        curve: CommonUiMotion.standard,
+                        builder: (context, animatedValue, _) {
+                          return Text(
+                            '${animatedValue.round()}',
+                            style: text.labelLarge?.copyWith(
+                              color: foreground,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          );
+                        },
+                      ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildWorkerList(BuildContext context,
-      List<_RosterWorker> workers, {
-        required bool compact,
-        required String animationPrefix,
-      }) {
+  Widget _buildWorkerList(
+    BuildContext context,
+    List<_RosterWorker> workers, {
+    required bool compact,
+    required String animationPrefix,
+  }) {
     final tokens = CommonUiTheme.of(context);
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -2027,13 +2181,12 @@ class _FieldState extends State<Field> {
             if (index > 0) Divider(height: 1, color: tokens.borderSubtle),
             CommonAnimatedReveal(
               key: ValueKey<String>(
-                'field_${animationPrefix}_${worker.area}_${worker.id}_${worker
-                    .name}',
+                'field_${animationPrefix}_${worker.area}_${worker.id}_${worker.name}',
               ),
               delay: Duration(
                 milliseconds: delayIndex * (compact ? 16 : 20),
               ),
-              offset: const Offset(0, 0.018),
+              offset: const Offset(-0.018, 0),
               child: _buildWorkerRow(
                 context,
                 worker,
@@ -2046,7 +2199,8 @@ class _FieldState extends State<Field> {
     );
   }
 
-  Widget _buildPresentDisclosure(BuildContext context, {
+  Widget _buildPresentDisclosure(
+    BuildContext context, {
     required String area,
     required int presentCount,
     required int absentCount,
@@ -2054,12 +2208,9 @@ class _FieldState extends State<Field> {
     required bool compact,
   }) {
     final tokens = CommonUiTheme.of(context);
-    final text = Theme
-        .of(context)
-        .textTheme;
-    final reduceMotion = MediaQuery
-        .maybeOf(context)
-        ?.disableAnimations ?? false;
+    final text = Theme.of(context).textTheme;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final duration = reduceMotion ? Duration.zero : CommonUiMotion.selection;
 
     return Semantics(
@@ -2072,78 +2223,58 @@ class _FieldState extends State<Field> {
         color: Colors.transparent,
         child: InkWell(
           onTap: () => _togglePresentGroup(area, presentCount, absentCount),
-          child: AnimatedContainer(
-            duration: duration,
-            curve: CommonUiMotion.standard,
+          child: ConstrainedBox(
             constraints: BoxConstraints(
               minHeight: compact ? _compactTouchTarget : _regularTouchTarget,
             ),
-            padding: EdgeInsets.symmetric(
-              horizontal: compact ? 10 : 12,
-              vertical: compact ? 7 : 8,
-            ),
-            color: expanded
-                ? tokens.successContainer.withOpacity(
-                tokens.isDark ? 0.30 : 0.42)
-                : tokens.surfaceRaised,
-            child: Row(
-              children: [
-                AnimatedContainer(
-                  duration: duration,
-                  curve: CommonUiMotion.standard,
-                  width: compact ? 28 : 30,
-                  height: compact ? 28 : 30,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: tokens.successContainer,
-                    borderRadius: BorderRadius.circular(CommonUiShapes.control),
-                    border: Border.all(
-                      color: tokens.success.withOpacity(
-                        tokens.isDark ? 0.46 : 0.26,
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: compact ? 8 : 10,
+                vertical: compact ? 8 : 9,
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.check_rounded,
+                    size: compact ? 18 : 19,
+                    color: tokens.success,
+                  ),
+                  SizedBox(width: compact ? 9 : 10),
+                  Expanded(
+                    child: Text(
+                      '출근 완료 $presentCount명',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: text.bodySmall?.copyWith(
+                        color: tokens.success,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
-                  child: Icon(
-                    Icons.check_rounded,
-                    size: compact ? 16 : 17,
-                    color: tokens.success,
-                  ),
-                ),
-                SizedBox(width: compact ? 8 : 9),
-                Expanded(
-                  child: Text(
-                    '출근 완료 $presentCount명',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: text.bodySmall?.copyWith(
-                      color: tokens.success,
-                      fontWeight: FontWeight.w700,
+                  AnimatedSwitcher(
+                    duration: duration,
+                    child: Text(
+                      expanded ? '숨기기' : '보기',
+                      key: ValueKey<bool>(expanded),
+                      style: text.labelSmall?.copyWith(
+                        color: tokens.textSecondary,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
-                ),
-                AnimatedSwitcher(
-                  duration: duration,
-                  child: Text(
-                    expanded ? '숨기기' : '보기',
-                    key: ValueKey<bool>(expanded),
-                    style: text.labelSmall?.copyWith(
-                      color: tokens.textSecondary,
-                      fontWeight: FontWeight.w700,
+                  SizedBox(width: compact ? 3 : 4),
+                  AnimatedRotation(
+                    duration: duration,
+                    curve: CommonUiMotion.standard,
+                    turns: expanded ? 0.5 : 0,
+                    child: Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      size: compact ? 20 : 22,
+                      color: tokens.iconSecondary,
                     ),
                   ),
-                ),
-                SizedBox(width: compact ? 3 : 4),
-                AnimatedRotation(
-                  duration: duration,
-                  curve: CommonUiMotion.standard,
-                  turns: expanded ? 0.5 : 0,
-                  child: Icon(
-                    Icons.keyboard_arrow_down_rounded,
-                    size: compact ? 20 : 22,
-                    color: tokens.iconSecondary,
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -2155,70 +2286,60 @@ class _FieldState extends State<Field> {
     final dt = _extractDateTime(value);
     if (dt == null) return '출근 기록 없음';
     final now = _nowLocal();
-    final sameDay = dt.year == now.year &&
-        dt.month == now.month &&
-        dt.day == now.day;
+    final sameDay =
+        dt.year == now.year && dt.month == now.month && dt.day == now.day;
     return sameDay
         ? '${_fmtClockTime.format(dt)} 출근'
         : '마지막 출근 ${_fmtLastCompact.format(dt)}';
   }
 
-  Widget _buildWorkerRow(BuildContext context,
-      _RosterWorker worker, {
-        required bool compact,
-      }) {
+  Widget _buildWorkerRow(
+    BuildContext context,
+    _RosterWorker worker, {
+    required bool compact,
+  }) {
     final tokens = CommonUiTheme.of(context);
-    final text = Theme
-        .of(context)
-        .textTheme;
+    final text = Theme.of(context).textTheme;
     final value = _commuteValueFor(worker);
     final present = _isTodayValue(value);
-    final status = present
-        ? _WorkerStatus(
-      label: compact ? '출근' : '오늘 출근',
-      foreground: tokens.success,
-      background: tokens.successContainer,
-      icon: Icons.check_circle_rounded,
-    )
-        : _WorkerStatus(
-      label: compact ? '미출근' : '오늘 미출근',
-      foreground: tokens.warning,
-      background: tokens.warningContainer,
-      icon: Icons.pending_actions_rounded,
-    );
-    final reduceMotion = MediaQuery
-        .maybeOf(context)
-        ?.disableAnimations ?? false;
+    final statusLabel = present
+        ? compact
+            ? '출근'
+            : '오늘 출근'
+        : compact
+            ? '미출근'
+            : '오늘 미출근';
+    final statusColor = present ? tokens.success : tokens.warning;
+    final statusIcon = present
+        ? Icons.check_circle_outline_rounded
+        : Icons.pending_actions_rounded;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final detail = _formatWorkerDetail(value);
 
     return Padding(
-      padding: EdgeInsets.fromLTRB(
-        compact ? 10 : 12,
-        compact ? 8 : 10,
-        compact ? 10 : 12,
-        compact ? 8 : 10,
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 8 : 10,
+        vertical: compact ? 9 : 10,
       ),
       child: Row(
         children: [
-          AnimatedContainer(
+          AnimatedSwitcher(
             duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
-            curve: CommonUiMotion.standard,
-            width: compact ? 32 : 36,
-            height: compact ? 32 : 36,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: status.background,
-              borderRadius: BorderRadius.circular(CommonUiShapes.control),
-              border: Border.all(
-                color: status.foreground.withOpacity(
-                  tokens.isDark ? 0.48 : 0.26,
+            transitionBuilder: (child, animation) {
+              return FadeTransition(
+                opacity: animation,
+                child: ScaleTransition(
+                  scale: Tween<double>(begin: 0.9, end: 1).animate(animation),
+                  child: child,
                 ),
-              ),
-            ),
+              );
+            },
             child: Icon(
-              status.icon,
-              size: compact ? 17 : 19,
-              color: status.foreground,
+              statusIcon,
+              key: ValueKey<bool>(present),
+              size: compact ? 20 : 21,
+              color: statusColor,
             ),
           ),
           SizedBox(width: compact ? 9 : 10),
@@ -2239,7 +2360,7 @@ class _FieldState extends State<Field> {
                 const SizedBox(height: 2),
                 AnimatedSwitcher(
                   duration:
-                  reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                      reduceMotion ? Duration.zero : CommonUiMotion.selection,
                   child: Text(
                     detail,
                     key: ValueKey<String>('${worker.id}-$detail'),
@@ -2254,213 +2375,85 @@ class _FieldState extends State<Field> {
               ],
             ),
           ),
-          SizedBox(width: compact ? 6 : 8),
-          AnimatedContainer(
-            duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
-            curve: CommonUiMotion.standard,
-            padding: EdgeInsets.symmetric(
-              horizontal: compact ? 7 : 8,
-              vertical: compact ? 3 : 4,
-            ),
-            decoration: BoxDecoration(
-              color: status.background,
-              borderRadius: BorderRadius.circular(CommonUiShapes.pill),
-              border: Border.all(
-                color: status.foreground.withOpacity(
-                  tokens.isDark ? 0.50 : 0.28,
-                ),
-              ),
-            ),
-            child: Text(
-              status.label,
-              style: text.labelSmall?.copyWith(
-                color: status.foreground,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _VehicleMetric extends StatelessWidget {
-  const _VehicleMetric({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.foreground,
-    required this.background,
-    required this.loading,
-  });
-
-  final IconData icon;
-  final String label;
-  final int? value;
-  final Color foreground;
-  final Color background;
-  final bool loading;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = CommonUiTheme.of(context);
-    final text = Theme.of(context).textTheme;
-    final reduceMotion =
-        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    final duration =
-        reduceMotion ? Duration.zero : CommonUiMotion.component;
-
-    return AnimatedContainer(
-      duration: duration,
-      curve: CommonUiMotion.standard,
-      constraints: const BoxConstraints(minHeight: 50),
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(CommonUiShapes.control),
-        border: Border.all(
-          color: foreground.withOpacity(tokens.isDark ? 0.44 : 0.24),
-        ),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            icon,
-            size: 18,
-            color: foreground,
-          ),
-          const SizedBox(width: 7),
-          Expanded(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: text.labelSmall?.copyWith(
-                color: foreground,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          const SizedBox(width: 5),
+          SizedBox(width: compact ? 8 : 10),
           AnimatedSwitcher(
-            duration: duration,
+            duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
             transitionBuilder: (child, animation) {
+              final offset = Tween<Offset>(
+                begin: const Offset(0.04, 0),
+                end: Offset.zero,
+              ).animate(animation);
               return FadeTransition(
                 opacity: animation,
-                child: ScaleTransition(
-                  scale: Tween<double>(begin: 0.9, end: 1).animate(animation),
-                  child: child,
-                ),
+                child: SlideTransition(position: offset, child: child),
               );
             },
-            child: loading
-                ? SizedBox(
-                    key: ValueKey<String>('vehicle_metric_loading_$label'),
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: foreground,
-                    ),
-                  )
-                : value == null
-                    ? Text(
-                        '--',
-                        key: ValueKey<String>('vehicle_metric_empty_$label'),
-                        style: text.labelLarge?.copyWith(
-                          color: foreground,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      )
-                    : TweenAnimationBuilder<double>(
-                        tween: Tween<double>(begin: 0, end: value!.toDouble()),
-                        duration: duration,
-                        curve: CommonUiMotion.standard,
-                        builder: (context, animatedValue, child) {
-                          return Text(
-                            '${animatedValue.round()}',
-                            style: text.labelLarge?.copyWith(
-                              color: foreground,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          );
-                        },
-                      ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CompactMetric extends StatelessWidget {
-  const _CompactMetric({
-    required this.label,
-    required this.value,
-    required this.foreground,
-    required this.background,
-  });
-
-  final String label;
-  final int value;
-  final Color foreground;
-  final Color background;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = CommonUiTheme.of(context);
-    final text = Theme
-        .of(context)
-        .textTheme;
-    final reduceMotion = MediaQuery
-        .maybeOf(context)
-        ?.disableAnimations ?? false;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(CommonUiShapes.control),
-        border: Border.all(
-          color: foreground.withOpacity(tokens.isDark ? 0.46 : 0.24),
-        ),
-      ),
-      child: Row(
-        children: [
-          Expanded(
             child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+              statusLabel,
+              key: ValueKey<String>('${worker.id}_$statusLabel'),
               style: text.labelSmall?.copyWith(
-                color: foreground,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          const SizedBox(width: 4),
-          AnimatedSwitcher(
-            duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
-            transitionBuilder: (child, animation) =>
-                FadeTransition(
-                  opacity: animation,
-                  child: ScaleTransition(
-                    scale: Tween<double>(begin: 0.94, end: 1).animate(
-                        animation),
-                    child: child,
-                  ),
-                ),
-            child: Text(
-              '$value',
-              key: ValueKey<int>(value),
-              style: text.labelLarge?.copyWith(
-                color: foreground,
+                color: statusColor,
                 fontWeight: FontWeight.w800,
               ),
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _FlatMetric extends StatelessWidget {
+  const _FlatMetric({
+    required this.label,
+    required this.value,
+    required this.foreground,
+  });
+
+  final String label;
+  final int value;
+  final Color foreground;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: text.labelSmall?.copyWith(
+            color: foreground,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(width: 5),
+        AnimatedSwitcher(
+          duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+          transitionBuilder: (child, animation) {
+            return FadeTransition(
+              opacity: animation,
+              child: ScaleTransition(
+                scale: Tween<double>(begin: 0.92, end: 1).animate(animation),
+                child: child,
+              ),
+            );
+          },
+          child: Text(
+            '$value',
+            key: ValueKey<int>(value),
+            style: text.titleSmall?.copyWith(
+              color: foreground,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -2493,52 +2486,32 @@ class _StatePanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = CommonUiTheme.of(context);
-    final text = Theme
-        .of(context)
-        .textTheme;
+    final text = Theme.of(context).textTheme;
     Color foreground = tokens.iconSecondary;
-    Color background = tokens.surfaceOverlay;
     if (tone == _StateTone.info) {
       foreground = tokens.info;
-      background = tokens.infoContainer;
     } else if (tone == _StateTone.danger) {
       foreground = tokens.danger;
-      background = tokens.dangerContainer;
     }
 
     return Center(
       child: CommonAnimatedReveal(
-        child: Container(
-          width: double.infinity,
-          constraints: const BoxConstraints(maxWidth: 440),
-          padding: const EdgeInsets.all(22),
-          decoration: BoxDecoration(
-            color: tokens.surfaceRaised,
-            borderRadius: BorderRadius.circular(CommonUiShapes.card),
-            border: Border.all(color: tokens.borderSubtle),
-          ),
+        offset: const Offset(-0.02, 0),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 48,
-                height: 48,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: background,
-                  borderRadius: BorderRadius.circular(CommonUiShapes.control),
-                ),
-                child: loading
-                    ? SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.4,
-                    color: foreground,
-                  ),
-                )
-                    : Icon(icon, color: foreground, size: 24),
-              ),
+              loading
+                  ? SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.4,
+                        color: foreground,
+                      ),
+                    )
+                  : Icon(icon, color: foreground, size: 28),
               const SizedBox(height: 14),
               Text(
                 title,
@@ -2560,12 +2533,11 @@ class _StatePanel extends StatelessWidget {
                 ),
               ],
               if (actionLabel != null && onAction != null) ...[
-                const SizedBox(height: 16),
-                CommonButton(
-                  label: actionLabel!,
+                const SizedBox(height: 12),
+                TextButton.icon(
                   onPressed: onAction,
-                  variant: CommonButtonVariant.secondary,
-                  haptic: CommonHaptic.selection,
+                  icon: const Icon(Icons.refresh_rounded, size: 18),
+                  label: Text(actionLabel!),
                 ),
               ],
             ],
@@ -2576,22 +2548,28 @@ class _StatePanel extends StatelessWidget {
   }
 }
 
-class _AreaPickerSheet extends StatefulWidget {
-  const _AreaPickerSheet({
+class _AreaFilterView extends StatefulWidget {
+  const _AreaFilterView({
     required this.allAreas,
     required this.areaCounts,
     required this.initialSelected,
+    required this.onCancel,
+    required this.onApply,
+    required this.onDebug,
   });
 
   final List<String> allAreas;
   final Map<String, int> areaCounts;
   final Set<String> initialSelected;
+  final VoidCallback onCancel;
+  final ValueChanged<Set<String>> onApply;
+  final ValueChanged<String> onDebug;
 
   @override
-  State<_AreaPickerSheet> createState() => _AreaPickerSheetState();
+  State<_AreaFilterView> createState() => _AreaFilterViewState();
 }
 
-class _AreaPickerSheetState extends State<_AreaPickerSheet> {
+class _AreaFilterViewState extends State<_AreaFilterView> {
   late Set<String> _tempSelected;
 
   @override
@@ -2603,70 +2581,100 @@ class _AreaPickerSheetState extends State<_AreaPickerSheet> {
     if (_tempSelected.isEmpty && widget.allAreas.isNotEmpty) {
       _tempSelected = widget.allAreas.toSet();
     }
+    widget.onDebug(
+      'filter_view_enter selected=${_tempSelected.length} areas=${widget.allAreas.length}',
+    );
   }
 
   bool get _isAll => _tempSelected.length == widget.allAreas.length;
 
   void _selectAll() {
+    HapticFeedback.selectionClick();
     setState(() => _tempSelected = widget.allAreas.toSet());
+    widget.onDebug('filter_select_all areas=${widget.allAreas.length}');
   }
 
   void _toggleOne(String area) {
+    HapticFeedback.selectionClick();
+    var changed = false;
     setState(() {
       if (_tempSelected.contains(area)) {
         if (_tempSelected.length > 1) {
           _tempSelected.remove(area);
+          changed = true;
         }
       } else {
         _tempSelected.add(area);
+        changed = true;
       }
     });
+    widget.onDebug(
+      'filter_toggle area=$area changed=$changed selected=${_tempSelected.contains(area)} total=${_tempSelected.length}',
+    );
   }
 
   void _apply() {
-    Navigator.pop<Set<String>>(
-      context,
-      _isAll ? <String>{} : _tempSelected.toSet(),
+    widget.onDebug(
+      'filter_apply_request selected=${_tempSelected.length} all=$_isAll',
     );
+    widget.onApply(_tempSelected.toSet());
   }
 
   @override
   Widget build(BuildContext context) {
     final tokens = CommonUiTheme.of(context);
-    final text = Theme
-        .of(context)
-        .textTheme;
-    final size = MediaQuery
-        .of(context)
-        .size;
+    final text = Theme.of(context).textTheme;
+    final size = MediaQuery.of(context).size;
     final compact = size.width <= 390 || size.height <= 700;
-    return SafeArea(
-      child: DraggableScrollableSheet(
-        initialChildSize: compact ? 0.66 : 0.70,
-        minChildSize: compact ? 0.40 : 0.46,
-        maxChildSize: 0.92,
-        builder: (_, controller) {
-          final selectionLabel = _isAll
-              ? '전체 ${widget.allAreas.length}개 지역'
-              : '${widget.allAreas.length}개 중 ${_tempSelected.length}개 선택';
-          return CommonSheetScaffold(
-            title: '지역 필터',
-            icon: Icons.filter_alt_rounded,
-            onClose: () => Navigator.of(context).maybePop(),
-            body: Column(
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final selectionLabel = _isAll
+        ? '전체 ${widget.allAreas.length}개 지역'
+        : '${widget.allAreas.length}개 중 ${_tempSelected.length}개 선택';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        CommonAnimatedReveal(
+          offset: const Offset(-0.025, 0),
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              0,
+              compact ? 4 : 6,
+              0,
+              compact ? 6 : 8,
+            ),
+            child: Row(
               children: [
-                Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    compact ? 12 : 16,
-                    compact ? 8 : 10,
-                    compact ? 12 : 16,
-                    compact ? 8 : 10,
+                IconButton(
+                  tooltip: '근무지 현황으로 돌아가기',
+                  onPressed: widget.onCancel,
+                  icon: Icon(
+                    Icons.arrow_back_rounded,
+                    color: tokens.iconPrimary,
+                    size: compact ? 21 : 22,
                   ),
-                  child: Row(
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Expanded(
+                      Text(
+                        '지역 필터',
+                        style: text.titleSmall?.copyWith(
+                          color: tokens.textPrimary,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      AnimatedSwitcher(
+                        duration: reduceMotion
+                            ? Duration.zero
+                            : CommonUiMotion.selection,
                         child: Text(
                           selectionLabel,
+                          key: ValueKey<String>(selectionLabel),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: text.bodySmall?.copyWith(
@@ -2675,79 +2683,87 @@ class _AreaPickerSheetState extends State<_AreaPickerSheet> {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      CommonButton(
-                        label: '전체',
-                        onPressed: _selectAll,
-                        variant: CommonButtonVariant.tertiary,
-                        selected: _isAll,
-                        haptic: CommonHaptic.selection,
-                        minHeight: compact
-                            ? _FieldState._compactTouchTarget
-                            : _FieldState._regularTouchTarget,
-                      ),
-                      const SizedBox(width: 6),
-                      CommonButton(
-                        label: '적용',
-                        onPressed: _apply,
-                        haptic: CommonHaptic.selection,
-                        minHeight: compact
-                            ? _FieldState._compactTouchTarget
-                            : _FieldState._regularTouchTarget,
-                      ),
                     ],
                   ),
                 ),
-                Divider(height: 1, color: tokens.borderSubtle),
-                Expanded(
-                  child: ListView.separated(
-                    controller: controller,
-                    padding: EdgeInsets.only(bottom: compact ? 12 : 16),
-                    itemCount: widget.allAreas.length,
-                    separatorBuilder: (_, __) =>
-                        Divider(height: 1, color: tokens.borderSubtle),
-                    itemBuilder: (_, index) {
-                      final area = widget.allAreas[index];
-                      final checked = _tempSelected.contains(area);
-                      final count = widget.areaCounts[area] ?? 0;
-                      return CheckboxListTile(
-                        value: checked,
-                        onChanged: (_) => _toggleOne(area),
-                        controlAffinity: ListTileControlAffinity.leading,
-                        activeColor: tokens.accent,
-                        checkColor: tokens.onAccent,
-                        dense: compact,
-                        visualDensity:
-                        compact ? VisualDensity.compact : VisualDensity
-                            .standard,
-                        contentPadding: EdgeInsets.symmetric(
-                          horizontal: compact ? 12 : 16,
-                        ),
-                        title: Text(
-                          area,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: text.bodyMedium?.copyWith(
-                            color: tokens.textPrimary,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        secondary: Text(
-                          '$count명',
-                          style: text.labelMedium?.copyWith(
-                            color: tokens.textSecondary,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      );
-                    },
+                TextButton(
+                  onPressed: _selectAll,
+                  child: Text(
+                    '전체',
+                    style: TextStyle(
+                      color: _isAll ? tokens.accent : tokens.textSecondary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: _apply,
+                  child: Text(
+                    '적용',
+                    style: TextStyle(
+                      color: tokens.accent,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
               ],
             ),
-          );
-        },
-      ),
+          ),
+        ),
+        Divider(height: 1, color: tokens.borderSubtle),
+        Expanded(
+          child: ListView.separated(
+            padding: EdgeInsets.only(bottom: compact ? 12 : 16),
+            itemCount: widget.allAreas.length,
+            separatorBuilder: (_, __) =>
+                Divider(height: 1, color: tokens.borderSubtle),
+            itemBuilder: (_, index) {
+              final area = widget.allAreas[index];
+              final checked = _tempSelected.contains(area);
+              final count = widget.areaCounts[area] ?? 0;
+              return CommonAnimatedReveal(
+                delay: Duration(milliseconds: (index > 6 ? 6 : index) * 18),
+                offset: const Offset(-0.02, 0),
+                child: CheckboxListTile(
+                  value: checked,
+                  onChanged: (_) => _toggleOne(area),
+                  controlAffinity: ListTileControlAffinity.leading,
+                  activeColor: tokens.accent,
+                  checkColor: tokens.onAccent,
+                  dense: compact,
+                  visualDensity:
+                      compact ? VisualDensity.compact : VisualDensity.standard,
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: compact ? 4 : 6,
+                  ),
+                  title: Text(
+                    area,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: text.bodyMedium?.copyWith(
+                      color: tokens.textPrimary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  secondary: AnimatedSwitcher(
+                    duration: reduceMotion
+                        ? Duration.zero
+                        : CommonUiMotion.selection,
+                    child: Text(
+                      '$count명',
+                      key: ValueKey<String>('$area-$count'),
+                      style: text.labelMedium?.copyWith(
+                        color: tokens.textSecondary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }
@@ -2806,19 +2822,6 @@ class _PlateCache {
   }
 }
 
-class _WorkerStatus {
-  const _WorkerStatus({
-    required this.label,
-    required this.foreground,
-    required this.background,
-    required this.icon,
-  });
-
-  final String label;
-  final Color foreground;
-  final Color background;
-  final IconData icon;
-}
 
 class _SyncStatus {
   const _SyncStatus({

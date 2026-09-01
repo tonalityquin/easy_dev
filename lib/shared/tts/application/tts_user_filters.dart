@@ -50,6 +50,7 @@ class TtsUserFilters {
 
   static Future<TtsUserFilters> load() async {
     final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
 
     final hasAny =
         prefs.containsKey(_kParking) || prefs.containsKey(_kDeparture) || prefs.containsKey(_kCompleted);

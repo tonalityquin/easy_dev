@@ -23,7 +23,7 @@ class CommuteModeSpec {
   static const CommuteModeSpec doubleMode = CommuteModeSpec(
     modeKey: 'double',
     screenTagLabel: 'screen_tag: WorkFlow A commute screen',
-    headquarterRoute: AppRoutes.doubleHeadquarterPage,
+    headquarterRoute: AppRoutes.headquarterPage,
     typeRoute: AppRoutes.doubleTypePage,
     enableDebugTrace: true,
     traceScreenId: 'double_commute_inside',
@@ -32,7 +32,7 @@ class CommuteModeSpec {
   static const CommuteModeSpec minorMode = CommuteModeSpec(
     modeKey: 'minor',
     screenTagLabel: 'screen_tag: minor commute screen',
-    headquarterRoute: AppRoutes.minorHeadquarterPage,
+    headquarterRoute: AppRoutes.headquarterPage,
     typeRoute: AppRoutes.minorTypePage,
     enableDebugTrace: true,
     traceScreenId: 'minor_commute_inside',
@@ -42,7 +42,7 @@ class CommuteModeSpec {
   static const CommuteModeSpec tripleMode = CommuteModeSpec(
     modeKey: 'triple',
     screenTagLabel: 'screen_tag: commute screen',
-    headquarterRoute: AppRoutes.tripleHeadquarterPage,
+    headquarterRoute: AppRoutes.headquarterPage,
     typeRoute: AppRoutes.tripleTypePage,
     enableDebugTrace: false,
     traceScreenId: 'triple_commute_inside',

@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
-import '../../../../../../features/dev/debug/debug_action_recorder.dart';
-import '../../../../../../features/mode_single/application/att_brk_repository.dart';
+import '../../../../dev/debug/debug_action_recorder.dart';
+import '../../../../mode_single/application/att_brk_repository.dart';
 
 void _traceDoublePunch(BuildContext context, AttBrkModeType type, DateTime dateTime) {
   final String name;
@@ -49,7 +49,7 @@ Future<void> showDoubleDashboardPunchCardFeedback(
   await showGeneralDialog<void>(
     context: context,
     barrierDismissible: true,
-    barrierLabel: 'simple_punch_card_feedback',
+    barrierLabel: 'double_punch_card_feedback',
     barrierColor: cs.scrim.withOpacity(0.26),
     transitionDuration: const Duration(milliseconds: 320),
     pageBuilder: (ctx, anim, secondaryAnim) {

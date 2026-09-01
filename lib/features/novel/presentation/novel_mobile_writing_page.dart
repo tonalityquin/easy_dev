@@ -12,6 +12,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../app/auth/gmail_sender_auth.dart';
 import '../../../app/auth/google_auth_session.dart';
 import '../../selector/application/dev_auth.dart';
 
@@ -1055,7 +1056,7 @@ class _NovelMobileWritingPageState extends State<NovelMobileWritingPage> {
         markdownText: md,
         boundary: 'notensystem_${now.microsecondsSinceEpoch}',
       );
-      final client = await GoogleAuthSession.instance.safeClient();
+      final client = await GmailSenderAuth.client();
       final api = gmail.GmailApi(client);
       await api.users.messages.send(gmail.Message()
         ..raw = base64UrlEncode(utf8.encode(rawMime)).replaceAll('=', ''),

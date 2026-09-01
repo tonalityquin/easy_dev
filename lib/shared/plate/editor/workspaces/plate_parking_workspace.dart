@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../../../app/utils/status_dialog.dart';
 import '../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../features/dev/application/area_state.dart';
@@ -11,12 +13,16 @@ import '../../../../features/location/applications/location_state.dart';
 import '../../../../features/location/domain/models/grid_rect.dart';
 import '../../../../features/location/domain/models/location_model.dart';
 import '../../../../features/location/domain/models/parking_grid_model.dart';
+import '../../../../features/selector/application/dev_auth.dart';
 import '../../../parking_dot_map/effective_child_region_geometry.dart';
 import '../../../parking_dot_map/parking_status_dot_map_surface.dart';
 import '../../../parking_spatial/parking_spatial_geometry.dart';
 import '../../../parking_spatial/parking_spatial_transition.dart';
 import '../../domain/repositories/plate_repository.dart';
+import '../domain/plate_parking_area_configuration.dart';
+import '../domain/plate_parking_display.dart';
 import '../widgets/plate_parking_parent_selector.dart';
+import '../widgets/plate_parking_plain_selector.dart';
 
 enum _BlockedSlotKind { parked, departureRequest }
 
@@ -103,17 +109,21 @@ class PlateParkingWorkspace extends StatefulWidget {
     required this.currentLocation,
     required this.onLocationApplied,
     required this.onExit,
+    this.onInvalidAreaConfiguration,
     this.preferredParkingAreas = const <String>[],
     this.onClearLocation,
     this.onDebug,
+    this.areaOverride,
   });
 
   final String currentLocation;
   final ValueChanged<String> onLocationApplied;
   final VoidCallback onExit;
+  final VoidCallback? onInvalidAreaConfiguration;
   final List<String> preferredParkingAreas;
   final VoidCallback? onClearLocation;
   final ValueChanged<String>? onDebug;
+  final String? areaOverride;
 
   @override
   State<PlateParkingWorkspace> createState() => _PlateParkingWorkspaceState();
@@ -136,6 +146,12 @@ class _PlateParkingWorkspaceState extends State<PlateParkingWorkspace>
   Rect? _focusSourceRect;
   Rect? _focusTargetRect;
   bool _focusClosing = false;
+  String? _towerAutoAssigningChildKey;
+  bool _debugDialogShowing = false;
+  final List<String> _debugLines = <String>[];
+  String _lastParkingDisplayDebugSignature = '';
+  String _lastAreaConfigurationSignature = '';
+  bool _invalidAreaConfigurationHandling = false;
 
   @override
   void initState() {
@@ -154,19 +170,37 @@ class _PlateParkingWorkspaceState extends State<PlateParkingWorkspace>
     if (oldWidget.currentLocation != widget.currentLocation) {
       _currentLocation = widget.currentLocation.trim();
     }
+    if (oldWidget.areaOverride != widget.areaOverride) {
+      _syncArea();
+    }
+  }
+
+  String _effectiveArea() {
+    final override = widget.areaOverride?.trim() ?? '';
+    if (override.isNotEmpty) return override;
+    return context.read<AreaState>().currentArea.trim();
+  }
+
+  void _syncArea() {
+    final area = _effectiveArea();
+    if (area == _loadedArea) return;
+    _loadedArea = area;
+    _selectedParentName = null;
+    _recentParentName = null;
+    _blockedByLocation = <String, _BlockedSlotKind>{};
+    _occupancyLoading = false;
+    _occupancyError = null;
+    _lastAreaConfigurationSignature = '';
+    _invalidAreaConfigurationHandling = false;
+    if (area.isNotEmpty) {
+      unawaited(_reloadOccupancy());
+    }
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final area = context.read<AreaState>().currentArea.trim();
-    if (area == _loadedArea) return;
-    _loadedArea = area;
-    _selectedParentName = null;
-    _recentParentName = null;
-    if (area.isNotEmpty) {
-      unawaited(_reloadOccupancy());
-    }
+    _syncArea();
   }
 
   @override
@@ -297,12 +331,116 @@ class _PlateParkingWorkspaceState extends State<PlateParkingWorkspace>
   }
 
   void _debug(String message) {
+    final line = '[PlateParkingWorkspace] $message';
+    debugPrint(line);
+    if (_debugLines.isEmpty || _debugLines.last != line) {
+      _debugLines.add(line);
+      if (_debugLines.length > 220) {
+        _debugLines.removeRange(0, _debugLines.length - 220);
+      }
+    }
     widget.onDebug?.call(message);
   }
 
-  Future<void> _reloadOccupancy() async {
+  String get _debugPrintCode => _debugLines
+      .map((line) => 'debugPrint(${jsonEncode(line)});')
+      .join('\n');
+
+  void _recordParkingDisplayDebug({
+    required String internal,
+    required String visible,
+    required bool isTower,
+  }) {
+    final signature = '$internal|$visible|$isTower';
+    if (_lastParkingDisplayDebugSignature == signature) return;
+    _lastParkingDisplayDebugSignature = signature;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _lastParkingDisplayDebugSignature != signature) return;
+      _debug(
+        'parking_display=header_resolved tower=$isTower internal=$internal visible=$visible towerSlotVisibility=${isTower ? 'hidden' : 'visible'}',
+      );
+    });
+  }
+
+  Future<void> _showDebugStatusDialog() async {
+    if (_debugDialogShowing) return;
+    final enabled = await DevAuth.isDevModeEnabled();
+    if (!enabled || !mounted) return;
+    setState(() => _debugDialogShowing = true);
+    _debug(
+      'parking_debug=status_dialog_open area=$_loadedArea currentLocation=${_currentLocation.trim()} towerAutoAssigning=${_towerAutoAssigningChildKey ?? ''}',
+    );
+    try {
+      final code = _debugPrintCode;
+      await StatusDialog.showSuccess(
+        context,
+        title: '주차 위치 디버그',
+        description: _debugLines.join('\n'),
+        copyText: code,
+        copyButtonLabel: 'debugPrint 코드 복사',
+        visibleDuration: Duration.zero,
+        useCommonUi: true,
+        awaitManualClose: true,
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _debugDialogShowing = false);
+      }
+    }
+  }
+
+  void _reportAreaConfiguration(
+    PlateParkingAreaConfiguration configuration,
+  ) {
+    final signature =
+        '$_loadedArea|${configuration.mode.name}|${configuration.plainCount}|${configuration.diagramCount}';
+    if (_lastAreaConfigurationSignature == signature) return;
+    _lastAreaConfigurationSignature = signature;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _lastAreaConfigurationSignature != signature) return;
+      _debug(
+        'parking_area_configuration=resolved area=$_loadedArea mode=${configuration.mode.name} plainCount=${configuration.plainCount} diagramCount=${configuration.diagramCount}',
+      );
+    });
+  }
+
+  Future<void> _handleMixedAreaConfiguration(
+    PlateParkingAreaConfiguration configuration,
+  ) async {
+    if (_invalidAreaConfigurationHandling || !mounted) return;
+    _invalidAreaConfigurationHandling = true;
+    _debug(
+      'parking_area_configuration=invalid area=$_loadedArea mode=mixed plainCount=${configuration.plainCount} diagramCount=${configuration.diagramCount} action=warn_and_close_side_dock',
+    );
+    await HapticFeedback.mediumImpact();
+    final developerMode = await DevAuth.isDevModeEnabled();
+    if (!mounted) return;
+    await StatusDialog.showFailure(
+      context,
+      title: '주차구역 유형 충돌',
+      description:
+          '현재 지역에 텍스트형과 도면형 주차구역이 함께 등록되어 있습니다. 두 유형은 한 지역에서 동시에 사용할 수 없습니다. 구역 관리에서 하나의 유형으로 통일한 후 다시 시도해 주세요.',
+      copyText: developerMode ? _debugPrintCode : null,
+      copyButtonLabel: 'debugPrint 코드 복사',
+      visibleDuration: Duration.zero,
+      useCommonUi: true,
+      awaitManualClose: true,
+    );
+    if (!mounted) return;
+    _debug(
+      'parking_area_configuration=warning_acknowledged area=$_loadedArea action=close_side_dock',
+    );
+    final onInvalid = widget.onInvalidAreaConfiguration;
+    if (onInvalid != null) {
+      onInvalid();
+    } else {
+      widget.onExit();
+    }
+  }
+
+  Future<bool> _refreshOccupancy() async {
     final area = _loadedArea.trim();
-    if (area.isEmpty || !mounted) return;
+    if (area.isEmpty || !mounted) return false;
     setState(() {
       _occupancyLoading = true;
       _occupancyError = null;
@@ -338,7 +476,7 @@ class _PlateParkingWorkspaceState extends State<PlateParkingWorkspace>
       }
       apply(rows[0], _BlockedSlotKind.parked);
       apply(rows[1], _BlockedSlotKind.departureRequest);
-      if (!mounted) return;
+      if (!mounted) return false;
       setState(() {
         _blockedByLocation = blocked;
         _occupancyLoading = false;
@@ -347,14 +485,20 @@ class _PlateParkingWorkspaceState extends State<PlateParkingWorkspace>
       _debug(
         'parking_spatial=occupancy_ready area=$area blocked=${blocked.length} source=view_firestore',
       );
+      return true;
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted) return false;
       setState(() {
         _occupancyLoading = false;
         _occupancyError = error.toString();
       });
       _debug('parking_spatial=occupancy_error error=$error');
+      return false;
     }
+  }
+
+  Future<void> _reloadOccupancy() async {
+    await _refreshOccupancy();
   }
 
   List<String> _preferredCategories() {
@@ -459,7 +603,133 @@ class _PlateParkingWorkspaceState extends State<PlateParkingWorkspace>
         _nameKey(current.child) == _nameKey(child.locationName);
   }
 
-  bool _isSelectedChild(String parentName, LocationModel child) => false;
+  bool _isSelectedChild(String parentName, LocationModel child) {
+    final assigningKey = _towerAutoAssigningChildKey;
+    if (assigningKey == null || !child.isTowerChild) return false;
+    return assigningKey ==
+        '${_nameKey(parentName)}|${_nameKey(child.locationName)}';
+  }
+
+  int? _firstAvailableTowerSlot(
+    String parentName,
+    LocationModel child,
+  ) {
+    final capacity = _capacityOf(child);
+    if (capacity <= 0) return null;
+    for (var no = 1; no <= capacity; no++) {
+      final key = _slotKey(parentName, child.locationName, no);
+      if (!_blockedByLocation.containsKey(key)) return no;
+    }
+    return null;
+  }
+
+  int _blockedTowerSlotCount(
+    String parentName,
+    LocationModel child,
+  ) {
+    final capacity = _capacityOf(child);
+    if (capacity <= 0) return 0;
+    var count = 0;
+    for (var no = 1; no <= capacity; no++) {
+      if (_blockedByLocation.containsKey(
+        _slotKey(parentName, child.locationName, no),
+      )) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  Future<void> _towerAutoAssignSettle() async {
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (reduceMotion) return;
+    await Future<void>.delayed(const Duration(milliseconds: 170));
+  }
+
+  Future<void> _autoSelectTowerSlot(
+    LocationModel parent,
+    LocationModel child,
+  ) async {
+    if (!child.isTowerChild || _focusClosing || _focusedChild != null) return;
+    if (_towerAutoAssigningChildKey != null) {
+      _debug(
+        'tower_auto_assign=ignored reason=already_running parent=${parent.locationName} child=${child.locationName}',
+      );
+      return;
+    }
+    final capacity = _capacityOf(child);
+    if (capacity <= 0) {
+      _debug(
+        'tower_auto_assign=blocked reason=invalid_capacity parent=${parent.locationName} child=${child.locationName} capacity=$capacity',
+      );
+      HapticFeedback.selectionClick();
+      return;
+    }
+    final assigningKey =
+        '${_nameKey(parent.locationName)}|${_nameKey(child.locationName)}';
+    setState(() => _towerAutoAssigningChildKey = assigningKey);
+    HapticFeedback.selectionClick();
+    _debug(
+      'tower_auto_assign=start parent=${parent.locationName} child=${child.locationName} capacity=$capacity source=tower_tap policy=lowest_available_slot',
+    );
+    try {
+      final current = _selectionData(_currentLocation);
+      final sameTower = current != null &&
+          _nameKey(current.parent) == _nameKey(parent.locationName) &&
+          _nameKey(current.child) == _nameKey(child.locationName);
+      if (sameTower &&
+          current.slotNo > 0 &&
+          current.slotNo <= capacity) {
+        await _towerAutoAssignSettle();
+        if (!mounted) return;
+        _debug(
+          'tower_auto_assign=resolved parent=${parent.locationName} child=${child.locationName} slot=${current.slotNo} resolution=keep_current_slot capacity=$capacity',
+        );
+        _selectSlot(parent.locationName, child, current.slotNo);
+        return;
+      }
+
+      final refreshed = await _refreshOccupancy();
+      if (!mounted) return;
+      if (!refreshed) {
+        _debug(
+          'tower_auto_assign=blocked reason=occupancy_refresh_failed parent=${parent.locationName} child=${child.locationName} capacity=$capacity',
+        );
+        HapticFeedback.mediumImpact();
+        return;
+      }
+
+      final slotNo = _firstAvailableTowerSlot(parent.locationName, child);
+      final blockedCount = _blockedTowerSlotCount(
+        parent.locationName,
+        child,
+      );
+      if (slotNo == null) {
+        _debug(
+          'tower_auto_assign=blocked reason=no_available_slot parent=${parent.locationName} child=${child.locationName} capacity=$capacity blocked=$blockedCount sources=parking_completed_view+departure_requests_view',
+        );
+        HapticFeedback.mediumImpact();
+        return;
+      }
+
+      final slotKey = _slotKey(
+        parent.locationName,
+        child.locationName,
+        slotNo,
+      );
+      await _towerAutoAssignSettle();
+      if (!mounted) return;
+      _debug(
+        'tower_auto_assign=resolved parent=${parent.locationName} child=${child.locationName} slot=$slotNo slotKey=$slotKey capacity=$capacity blocked=$blockedCount free=${math.max(0, capacity - blockedCount)} resolution=lowest_available_slot sources=parking_completed_view+departure_requests_view departure_request_counts_as_occupied=true',
+      );
+      _selectSlot(parent.locationName, child, slotNo);
+    } finally {
+      if (mounted && _towerAutoAssigningChildKey == assigningKey) {
+        setState(() => _towerAutoAssigningChildKey = null);
+      }
+    }
+  }
 
   String _fullLocation(String parent, LocationModel child, int slotNo) {
     ChildSlot? matched;
@@ -479,9 +749,17 @@ class _PlateParkingWorkspaceState extends State<PlateParkingWorkspace>
   void _selectSlot(String parent, LocationModel child, int slotNo) {
     if (_focusClosing) return;
     final full = _fullLocation(parent, child, slotNo);
+    final locations = context.read<LocationState>().locations;
+    final display = plateParkingOverviewLocation(
+      full,
+      locations: locations,
+    );
     HapticFeedback.mediumImpact();
     _debug(
       'parking_slot=selected parent=$parent child=${child.locationName} slot=$slotNo location=$full',
+    );
+    _debug(
+      'parking_display=resolved tower=${child.isTowerChild} internal=$full visible=$display towerSlotVisibility=${child.isTowerChild ? 'hidden' : 'visible'}',
     );
     widget.onLocationApplied(full);
     _currentLocation = full;
@@ -490,7 +768,27 @@ class _PlateParkingWorkspaceState extends State<PlateParkingWorkspace>
     widget.onExit();
   }
 
+  void _selectPlainLocation(LocationModel location) {
+    if (_invalidAreaConfigurationHandling) return;
+    final value = _normalizeName(location.locationName);
+    if (value.isEmpty) return;
+    HapticFeedback.mediumImpact();
+    _debug(
+      'parking_plain=selected area=$_loadedArea location=$value capacity=${location.capacity}',
+    );
+    widget.onLocationApplied(value);
+    _currentLocation = value;
+    _debug(
+      'parking_location=auto_applied type=plain location=$value',
+    );
+    _debug(
+      'parking_dialog=close reason=plain_auto_apply location=$value',
+    );
+    widget.onExit();
+  }
+
   void _clearCurrentLocation() {
+    if (_towerAutoAssigningChildKey != null) return;
     if (widget.onClearLocation == null || _currentLocation.isEmpty) return;
     final previous = _currentLocation;
     setState(() {
@@ -516,6 +814,16 @@ class _PlateParkingWorkspaceState extends State<PlateParkingWorkspace>
     LocationModel child,
     Rect globalSourceRect,
   ) async {
+    if (_towerAutoAssigningChildKey != null) {
+      _debug(
+        'parking_child=ignored reason=tower_auto_assigning parent=${parent.locationName} child=${child.locationName}',
+      );
+      return;
+    }
+    if (child.isTowerChild) {
+      await _autoSelectTowerSlot(parent, child);
+      return;
+    }
     if (_focusedChild != null || _focusClosing) return;
     final rootContext = _rootKey.currentContext;
     final rootObject = rootContext?.findRenderObject();
@@ -606,12 +914,6 @@ class _PlateParkingWorkspaceState extends State<PlateParkingWorkspace>
     return left.length.compareTo(right.length);
   }
 
-  List<LocationModel> _topLevels(List<LocationModel> locations) {
-    final result = locations.where((location) => !_isCompositeChild(location)).toList()
-      ..sort((a, b) => _naturalCompare(a.locationName, b.locationName));
-    return result;
-  }
-
   List<LocationModel> _childrenFor(
     LocationModel parent,
     List<LocationModel> locations,
@@ -635,6 +937,20 @@ class _PlateParkingWorkspaceState extends State<PlateParkingWorkspace>
   Widget _buildHeader(BuildContext context) {
     final tokens = CommonUiTheme.of(context);
     final current = _currentLocation.trim();
+    final locations = context.watch<LocationState>().locations;
+    final displayCurrent = plateParkingOverviewLocation(
+      current,
+      locations: locations,
+    );
+    final currentIsTower = plateParkingLocationIsTower(
+      current,
+      locations: locations,
+    );
+    _recordParkingDisplayDebug(
+      internal: current,
+      visible: displayCurrent,
+      isTower: currentIsTower,
+    );
     final canClear = current.isNotEmpty && widget.onClearLocation != null;
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 9, 12, 9),
@@ -652,8 +968,10 @@ class _PlateParkingWorkspaceState extends State<PlateParkingWorkspace>
                   ? Duration.zero
                   : const Duration(milliseconds: 160),
               child: Text(
-                current.isEmpty ? '현재 주차 위치가 없습니다.' : '현재 $current',
-                key: ValueKey<String>(current),
+                current.isEmpty
+                    ? '현재 주차 위치가 없습니다.'
+                    : '현재 $displayCurrent',
+                key: ValueKey<String>(displayCurrent),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -662,6 +980,18 @@ class _PlateParkingWorkspaceState extends State<PlateParkingWorkspace>
                     ),
               ),
             ),
+          ),
+          ValueListenableBuilder<bool>(
+            valueListenable: DevAuth.devModeEnabled,
+            builder: (context, enabled, _) {
+              if (!enabled) return const SizedBox.shrink();
+              return IconButton(
+                onPressed: _debugDialogShowing
+                    ? null
+                    : () => unawaited(_showDebugStatusDialog()),
+                icon: const Icon(Icons.bug_report_outlined, size: 19),
+              );
+            },
           ),
           if (canClear) ...[
             const SizedBox(width: 8),
@@ -677,6 +1007,7 @@ class _PlateParkingWorkspaceState extends State<PlateParkingWorkspace>
   }
 
   void _selectParent(LocationModel parent) {
+    if (_towerAutoAssigningChildKey != null) return;
     if (_focusedChild != null || _focusClosing) return;
     HapticFeedback.selectionClick();
     setState(() {
@@ -693,6 +1024,7 @@ class _PlateParkingWorkspaceState extends State<PlateParkingWorkspace>
 
   void _showParentSelector({required String reason}) {
     final previous = _selectedParentName?.trim() ?? '';
+    if (_towerAutoAssigningChildKey != null) return;
     if (previous.isEmpty || _focusedChild != null || _focusClosing) return;
     HapticFeedback.selectionClick();
     setState(() => _selectedParentName = null);
@@ -780,21 +1112,23 @@ class _PlateParkingWorkspaceState extends State<PlateParkingWorkspace>
     );
   }
 
-  Widget _buildMain(
+  Widget _buildDiagramMain(
     BuildContext context,
     List<LocationModel> locations,
+    List<LocationModel> diagramParents,
   ) {
-    final topLevels = _topLevels(locations)
+    final topLevels = diagramParents
         .where((parent) {
           final grid = parent.parkingGrid;
           return grid != null && grid.rows > 0 && grid.cols > 0;
         })
-        .toList(growable: false);
+        .toList(growable: false)
+      ..sort((a, b) => _naturalCompare(a.locationName, b.locationName));
     if (topLevels.isEmpty) {
       return _SpatialMessage(
         icon: Icons.map_outlined,
         title: '표시할 주차 공간이 없습니다.',
-        message: '현재 지역에서 사용할 수 있는 부모 주차 그리드를 확인할 수 없습니다.',
+        message: '현재 지역의 도면형 주차구역에 사용할 수 있는 주차 그리드가 없습니다.',
         actionLabel: '닫기',
         onAction: widget.onExit,
       );
@@ -839,6 +1173,53 @@ class _PlateParkingWorkspaceState extends State<PlateParkingWorkspace>
             )
           : _buildSelectedParentStage(context, selectedParent, locations),
     );
+  }
+
+  Widget _buildMain(
+    BuildContext context,
+    List<LocationModel> locations,
+  ) {
+    final configuration = PlateParkingAreaConfiguration.resolve(locations);
+    _reportAreaConfiguration(configuration);
+    switch (configuration.mode) {
+      case PlateParkingAreaMode.mixed:
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          unawaited(_handleMixedAreaConfiguration(configuration));
+        });
+        return const _SpatialLoading();
+      case PlateParkingAreaMode.plain:
+        final plain = List<LocationModel>.of(configuration.plainLocations)
+          ..sort((a, b) => _naturalCompare(a.locationName, b.locationName));
+        if (_selectedParentName != null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted || _selectedParentName == null) return;
+            setState(() => _selectedParentName = null);
+          });
+        }
+        return PlateParkingPlainSelector(
+          key: const ValueKey<String>('plain_selector'),
+          locations: plain,
+          currentLocation: _currentLocation,
+          area: _loadedArea,
+          onSelected: _selectPlainLocation,
+          onDebug: _debug,
+        );
+      case PlateParkingAreaMode.diagram:
+        return _buildDiagramMain(
+          context,
+          locations,
+          configuration.diagramParents,
+        );
+      case PlateParkingAreaMode.empty:
+        return _SpatialMessage(
+          icon: Icons.info_outline_rounded,
+          title: '사용할 주차 구역이 없습니다.',
+          message: '현재 지역의 주차구역 구성을 확인해 주세요.',
+          actionLabel: '닫기',
+          onAction: widget.onExit,
+        );
+    }
   }
 
   Widget _buildFocusOverlay(BuildContext context) {
@@ -890,7 +1271,11 @@ class _PlateParkingWorkspaceState extends State<PlateParkingWorkspace>
               parent.locationName,
               _childrenFor(
                 parent,
-                context.read<LocationState>().locations,
+                context
+                    .read<LocationState>()
+                    .locations
+                    .where((location) => location.area.trim() == _loadedArea)
+                    .toList(growable: false),
               ),
             ),
             occupancyLoading: _occupancyLoading,
@@ -908,8 +1293,10 @@ class _PlateParkingWorkspaceState extends State<PlateParkingWorkspace>
   @override
   Widget build(BuildContext context) {
     final tokens = CommonUiTheme.of(context);
-    final currentArea =
+    final observedArea =
         context.select<AreaState, String>((state) => state.currentArea.trim());
+    final overrideArea = widget.areaOverride?.trim() ?? '';
+    final currentArea = overrideArea.isNotEmpty ? overrideArea : observedArea;
     return PopScope(
       canPop: _focusedChild == null && _selectedParentName == null,
       onPopInvoked: (didPop) {
@@ -1555,6 +1942,8 @@ class _ChildRegionLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final tone = selected || current ? cs.primary : cs.onSurface;
     return AnimatedScale(
       scale: selected ? 1.04 : 1,
@@ -1580,7 +1969,19 @@ class _ChildRegionLabel extends StatelessWidget {
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (recommended) ...[
+                if (selected) ...[
+                  SizedBox(
+                    width: 12,
+                    height: 12,
+                    child: CircularProgressIndicator(
+                      value: reduceMotion ? 1 : null,
+                      strokeWidth: 1.6,
+                      color: cs.primary,
+                      backgroundColor: cs.primary.withOpacity(.14),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                ] else if (recommended) ...[
                   Icon(Icons.auto_awesome_rounded, size: 12, color: cs.primary),
                   const SizedBox(width: 3),
                 ],
@@ -1886,65 +2287,10 @@ class _SpatialChildFocusState extends State<_SpatialChildFocus> {
     );
   }
 
-  Widget _buildTowerGrid(BuildContext context) {
-    final capacity = math.max(0, widget.child.capacity);
-    if (capacity <= 0) {
-      return const _SpatialMessage(
-        icon: Icons.layers_clear_outlined,
-        title: '선택할 슬롯이 없습니다.',
-        message: '이 타워 구역의 슬롯 수를 확인할 수 없습니다.',
-      );
-    }
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final columns = constraints.maxWidth >= 620
-            ? 8
-            : constraints.maxWidth >= 420
-                ? 6
-                : 4;
-        return GridView.builder(
-          padding: const EdgeInsets.all(14),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: columns,
-            mainAxisSpacing: 8,
-            crossAxisSpacing: 8,
-            childAspectRatio: 1.1,
-          ),
-          itemCount: capacity,
-          itemBuilder: (context, index) {
-            final no = index + 1;
-            final state = _slotState(no);
-            return _TowerSlotButton(
-              no: no,
-              state: state,
-              enabled: widget.interactionEnabled && _selectable(state),
-              onTap: () {
-                if (!_selectable(state)) {
-                  widget.onDebug(
-                    'parking_slot=blocked parent=${widget.parent.locationName} child=${widget.child.locationName} slot=$no state=${state.name} tower=true',
-                  );
-                  return;
-                }
-                widget.onSlotSelected(
-                  widget.parent.locationName,
-                  widget.child,
-                  no,
-                );
-              },
-            );
-          },
-        );
-      },
-    );
-  }
-
   Widget _buildMapBody(
     BuildContext context,
     GridRect? childRect,
   ) {
-    if (widget.child.isTowerChild) {
-      return _buildTowerGrid(context);
-    }
     if (childRect == null) {
       if (widget.progress < .9) {
         return const SizedBox.expand();
@@ -2299,92 +2645,6 @@ class _SpatialSlotMarker extends StatelessWidget {
                   ),
                 ),
               ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TowerSlotButton extends StatelessWidget {
-  const _TowerSlotButton({
-    required this.no,
-    required this.state,
-    required this.enabled,
-    required this.onTap,
-  });
-
-  final int no;
-  final _SpatialSlotState state;
-  final bool enabled;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final selected = state == _SpatialSlotState.selected;
-    final current = state == _SpatialSlotState.current;
-    final blocked = state == _SpatialSlotState.occupied ||
-        state == _SpatialSlotState.departureRequest;
-    return AnimatedScale(
-      scale: selected ? 1.035 : 1,
-      duration: (MediaQuery.maybeOf(context)?.disableAnimations ?? false)
-          ? Duration.zero
-          : const Duration(milliseconds: 150),
-      curve: Curves.easeOutCubic,
-      child: Material(
-        color: selected
-            ? cs.primaryContainer
-            : current
-                ? cs.tertiaryContainer
-                : blocked
-                    ? cs.surfaceContainerHighest
-                    : cs.surface,
-        borderRadius: BorderRadius.circular(10),
-        child: InkWell(
-          onTap: enabled ? onTap : null,
-          borderRadius: BorderRadius.circular(10),
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: selected
-                    ? cs.primary
-                    : current
-                        ? cs.tertiary
-                        : cs.outlineVariant,
-                width: selected ? 2 : 1,
-              ),
-            ),
-            alignment: Alignment.center,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  selected
-                      ? Icons.check_rounded
-                      : current
-                          ? Icons.my_location_rounded
-                          : blocked
-                              ? Icons.lock_outline_rounded
-                              : Icons.local_parking_rounded,
-                  size: 17,
-                  color: enabled || selected || current
-                      ? cs.onSurface
-                      : cs.onSurfaceVariant,
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  '$no',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w900,
-                    color: enabled || selected || current
-                        ? cs.onSurface
-                        : cs.onSurfaceVariant,
-                  ),
-                ),
-              ],
             ),
           ),
         ),

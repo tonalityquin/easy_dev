@@ -10,15 +10,18 @@ import 'package:googleapis/gmail/v1.dart' as gmail;
 
 import '../../../../design_system/common_ui/common_ui_overlays.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
-import '../../../../app/auth/google_auth_v7.dart';
+import '../../../../app/auth/gmail_sender_auth.dart';
 import '../../../../app/config/email_config.dart';
 import '../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../dashboard/domain/models/end_work_sector_metrics.dart';
-import 'statistics_chart_b_page.dart';
+import '../../../selector/application/dev_auth.dart';
+import 'statistics_sector_area_comparison_page.dart';
 import 'statistics_deep_log_service.dart';
 import 'statistics_deep_model.dart';
+import 'statistics_expandable_chart.dart';
 import 'statistics_report_design.dart';
 import 'statistics_sector_pdf_builder.dart';
+import 'statistics_vehicle_log_csv.dart';
 
 class StatisticsChartPage extends StatefulWidget {
   const StatisticsChartPage({
@@ -42,18 +45,67 @@ class StatisticsChartPage extends StatefulWidget {
   State<StatisticsChartPage> createState() => _StatisticsChartPageState();
 }
 
+enum _AnalyticsSection {
+  overview,
+  trend,
+  sector,
+  detail,
+  areaComparison,
+  hourly,
+  payment,
+  weekday,
+}
+
+enum _AnalyticsMetric { departure, fee }
+
+enum _AnalyticsHourlyMetric { input, output }
+
+enum _AnalyticsPaymentMetric { vehicles, fee }
+
+class _AnalyticsScope {
+  final String sectorId;
+  final String sectorName;
+
+  const _AnalyticsScope.all()
+      : sectorId = '',
+        sectorName = '';
+
+  const _AnalyticsScope.sector({
+    required this.sectorId,
+    required this.sectorName,
+  });
+
+  bool get isAll => sectorId.isEmpty && sectorName.isEmpty;
+
+  String get key => isAll ? 'all' : '$sectorId\u0000$sectorName';
+
+  String get label {
+    if (isAll) return '전체';
+    if (sectorName.trim().isNotEmpty) return sectorName.trim();
+    return sectorId.trim();
+  }
+}
+
 class _StatisticsChartPageState extends State<StatisticsChartPage> {
   final TextEditingController _mailSubjectCtrl = TextEditingController();
   final TextEditingController _mailBodyCtrl = TextEditingController();
-  final ScrollController _scrollController = ScrollController();
   final StatisticsDeepLogService _deepLogService = StatisticsDeepLogService();
+  final GlobalKey _areaComparisonKey = GlobalKey();
+  final List<String> _debugLines = <String>[];
   bool _sending = false;
   bool _deepLoading = false;
-  bool _tocOpen = false;
-  String _selectedId = 'cover';
+  bool _developerMode = false;
+  int _deepProgressCurrent = 0;
+  int _deepProgressTotal = 0;
+  _AnalyticsSection _selectedSection = _AnalyticsSection.overview;
+  _AnalyticsMetric _selectedMetric = _AnalyticsMetric.departure;
+  _AnalyticsHourlyMetric _hourlyMetric = _AnalyticsHourlyMetric.output;
+  _AnalyticsPaymentMetric _paymentMetric = _AnalyticsPaymentMetric.vehicles;
+  _AnalyticsScope _selectedScope = const _AnalyticsScope.all();
+  DateTime? _selectedObservation;
+  String? _selectedWeekdaySectionId;
   StatisticsDeepReport? _deepReport;
   String? _deepLabel;
-  late Map<String, GlobalKey> _sectionKeys;
 
   Future<T?> _showChartDialog<T>({
     required WidgetBuilder builder,
@@ -73,75 +125,55 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
     );
   }
 
-  Future<DateTimeRange?> _showChartRangePicker({
-    required BuildContext anchorContext,
-    required DateTime firstDate,
-    required DateTime lastDate,
-    required DateTimeRange initialDateRange,
-  }) {
-    if (widget.useCommonUi) {
-      return showCommonDateRangePicker(
-        context: anchorContext,
-        firstDate: firstDate,
-        lastDate: lastDate,
-        initialDateRange: initialDateRange,
-        cancelText: '취소',
-        confirmText: '적용',
-      );
-    }
-    return showDateRangePicker(
-      context: anchorContext,
-      firstDate: firstDate,
-      lastDate: lastDate,
-      initialDateRange: initialDateRange,
-      cancelText: '취소',
-      confirmText: '적용',
-    );
-  }
 
   @override
   void initState() {
     super.initState();
-    _sectionKeys = <String, GlobalKey>{};
+    _developerMode = DevAuth.devModeEnabled.value;
+    DevAuth.devModeEnabled.addListener(_handleDeveloperModeChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _recordDebug(
+        'analytics_initialized area=${widget.area} division=${widget.division} developerMode=$_developerMode',
+      );
+    });
   }
 
   @override
   void dispose() {
+    DevAuth.devModeEnabled.removeListener(_handleDeveloperModeChanged);
     _mailSubjectCtrl.dispose();
     _mailBodyCtrl.dispose();
-    _scrollController.dispose();
     super.dispose();
   }
 
-  void _syncSectionKeys(_ChartAReport report) {
-    _sectionKeys = <String, GlobalKey>{
-      'cover': GlobalKey(),
-      'summary': GlobalKey(),
-      for (final section in report.sections) section.id: GlobalKey(),
-    };
+  void _handleDeveloperModeChanged() {
+    final enabled = DevAuth.devModeEnabled.value;
+    if (!mounted || enabled == _developerMode) return;
+    setState(() => _developerMode = enabled);
+    _recordDebug('developer_mode=$enabled');
   }
 
-  Future<void> _scrollTo(String id) async {
-    if (id.endsWith('_group')) return;
-    final key = _sectionKeys[id];
-    final context = key?.currentContext;
-    if (context == null) return;
-    setState(() {
-      _selectedId = id;
-      _tocOpen = false;
-    });
-    final reduceMotion =
-        MediaQuery.maybeOf(this.context)?.disableAnimations ?? false;
-    await Scrollable.ensureVisible(
-      context,
-      duration: reduceMotion ? Duration.zero : CommonUiMotion.layout,
-      curve: CommonUiMotion.enter,
-      alignment: 0.02,
-    );
+  void _recordDebug(String message) {
+    final line = '[StatisticsAnalytics] $message';
+    _debugLines.add(line);
+    if (_debugLines.length > 180) {
+      _debugLines.removeRange(0, _debugLines.length - 180);
+    }
+    debugPrint(line);
   }
 
   Set<String> _reportDateKeys(_ChartAReport report) {
     return report.rows.map((row) => row.dateStr).toSet();
+  }
+
+  bool _rowHasRawSource(_ChartARow row) {
+    return row.historyLogsUrls.any((value) => value.trim().isNotEmpty);
+  }
+
+  List<_ChartARow> _rowsMissingRawSources(Iterable<_ChartARow> rows) {
+    return rows.where((row) => !_rowHasRawSource(row)).toList()
+      ..sort((a, b) => a.date.compareTo(b.date));
   }
 
   bool _deepReportMatchesChartReport(
@@ -223,15 +255,92 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
     return _SectorCrossIntegrity.compare(expected: expected, actual: actual);
   }
 
+  Future<bool> _confirmExportRawDataIfNeeded(_ChartAReport report) async {
+    final deep = _deepReport;
+    if (deep != null && _deepReportMatchesChartReport(deep, report)) return true;
+    final missingRawRows = _rowsMissingRawSources(report.rows);
+    if (missingRawRows.isNotEmpty) {
+      final missingDates = missingRawRows.map((row) => row.dateStr).join(', ');
+      _recordDebug(
+        'export_raw_blocked available=${report.rows.length - missingRawRows.length}/${report.rows.length} missing=$missingDates',
+      );
+      await _showChartDialog<void>(
+        barrierDismissible: true,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('보고서 발신 불가'),
+          content: Text(
+            'PDF와 전체 차량 로그 CSV를 함께 발신하려면 비교 날짜 전체에 원본 차량 로그가 필요합니다. 원본이 없는 날짜: $missingDates',
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('확인'),
+            ),
+          ],
+        ),
+      );
+      return false;
+    }
+    final linkedUrls = report.rows
+        .expand((row) => row.historyLogsUrls)
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toSet();
+    if (linkedUrls.isEmpty) {
+      _recordDebug('export_raw_blocked reason=noLinkedGcsUrls');
+      await _showChartDialog<void>(
+        barrierDismissible: true,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('보고서 발신 불가'),
+          content: const Text(
+            '전체 차량 로그 CSV를 만들 수 있는 원본 차량 로그가 연결되어 있지 않습니다.',
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('확인'),
+            ),
+          ],
+        ),
+      );
+      return false;
+    }
+    final confirmed = await _showChartDialog<bool>(
+      barrierDismissible: true,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('보고서 원본 데이터 준비'),
+        content: Text(
+          'PDF와 전체 차량 로그 CSV를 함께 발신합니다. CSV 생성을 위해 비교 날짜 ${report.rows.length}일의 원본 차량 로그를 불러옵니다.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('원본 준비 후 발신'),
+          ),
+        ],
+      ),
+    );
+    _recordDebug(
+      'export_raw_confirmed=${confirmed == true} urls=${linkedUrls.length} dates=${report.rows.length}',
+    );
+    return confirmed == true;
+  }
+
   Future<void> _openMailDialogAndSend(_ChartAReport report) async {
     HapticFeedback.selectionClick();
     if (report.rows.isEmpty) return;
+    final rawValidationAccepted = await _confirmExportRawDataIfNeeded(report);
+    if (!rawValidationAccepted) return;
 
     final draft = await _showChartDialog<_MailDraft>(
       barrierDismissible: true,
       builder: (ctx) => _MailComposeDialog(
         initialSubject: _mailSubjectCtrl.text.trim().isEmpty
-            ? '통계 그래프 A 리포트 (${report.rangeLabel})'
+            ? '출차·정산 비교 리포트 (${report.rangeLabel})'
             : _mailSubjectCtrl.text.trim(),
         initialBody: _mailBodyCtrl.text,
       ),
@@ -253,20 +362,27 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
     try {
       trace = await DeveloperOperationTrace.start(
         context: context,
-        title: '통계 PDF 방문 구역 집계',
-        initialMessage: '방문 구역 통계를 포함한 PDF를 준비하고 있습니다.',
+        title: '통계 보고서 및 차량 CSV 발신',
+        initialMessage: '분석 PDF와 전체 차량 로그 CSV를 함께 준비하고 있습니다.',
         useCommonUi: widget.useCommonUi,
         developerModeMessage:
-            '개발자 모드 ON: PDF 생성 및 발신 로그를 복사할 수 있습니다.',
+            '개발자 모드 ON: PDF·CSV 생성 및 발신 로그를 복사할 수 있습니다.',
         standardModeMessage:
-            '개발자 모드 OFF: PDF 생성 및 발신 로그를 콘솔에 기록합니다.',
+            '개발자 모드 OFF: PDF·CSV 생성 및 발신 로그를 콘솔에 기록합니다.',
       );
       trace.log(
         'range=${report.rangeLabel} days=${report.metrics.dayCount} '
         'sectorEnabled=${report.sectorMetrics != null} '
         'sectorCount=${report.sectorMetrics?.sectorCount ?? 0}',
-        progress: .12,
+        progress: .08,
       );
+      final missingRawRows = _rowsMissingRawSources(report.rows);
+      if (missingRawRows.isNotEmpty) {
+        await trace.fail(
+          '전체 차량 로그 CSV에 필요한 원본 날짜가 누락되었습니다: ${missingRawRows.map((row) => row.dateStr).join(', ')}',
+        );
+        return;
+      }
       final expectedGcsLogUrls = report.rows
           .expand((row) => row.historyLogsUrls)
           .map((value) => value.trim())
@@ -276,8 +392,12 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
         ..sort();
       trace.log(
         'history linkedGcsUrls=${expectedGcsLogUrls.length}',
-        progress: .13,
+        progress: .1,
       );
+      if (expectedGcsLogUrls.isEmpty) {
+        await trace.fail('전체 차량 로그 CSV에 사용할 연결 GCS 로그가 없습니다.');
+        return;
+      }
       for (final row in report.rows) {
         if (!row.historyAggregated && row.historyEntryCount <= 1) continue;
         trace.log(
@@ -291,27 +411,23 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
           'sectorEntries=${row.historySectorEntryCount} '
           'mode=${row.historyAggregationMode} '
           'aggregated=${row.historyAggregated}',
+          progress: .12,
+        );
+      }
+      StatisticsDeepReport? deepReportForExport = _deepReport;
+      if (deepReportForExport != null &&
+          !_deepReportMatchesChartReport(deepReportForExport, report)) {
+        trace.log('raw=reload reason=dateScopeMismatch');
+        deepReportForExport = null;
+      } else if (deepReportForExport != null) {
+        trace.log(
+          'raw=reuse reason=fullScopeReady vehicles=${deepReportForExport.rows.length}',
           progress: .14,
         );
       }
-      StatisticsDeepReport? deepReportForPdf = _deepReport;
-      if (expectedGcsLogUrls.isNotEmpty && deepReportForPdf != null) {
-        trace.log('deep=reload reason=historyLinkedObjects');
-        deepReportForPdf = null;
-      } else if (deepReportForPdf != null &&
-          !_deepReportMatchesChartReport(deepReportForPdf, report)) {
-        trace.log('deep=reload reason=dateScopeMismatch');
-        deepReportForPdf = null;
-      }
       final area = widget.area.trim();
       final sectorEnabled = widget.areaSectorEnabled[area] == true;
-      if (sectorEnabled &&
-          report.sectorMetrics != null &&
-          expectedGcsLogUrls.isEmpty) {
-        await trace.fail('상세 업무종료 history에 연결된 GCS 로그가 없어 Sector PDF를 검증할 수 없습니다.');
-        return;
-      }
-      if (sectorEnabled && report.sectorMetrics != null && deepReportForPdf == null) {
+      if (deepReportForExport == null) {
         final dates = report.rows
             .map((row) => DateTime.tryParse(row.dateStr))
             .whereType<DateTime>()
@@ -319,40 +435,48 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
             .toSet()
             .toList()
           ..sort((a, b) => a.compareTo(b));
-        if (dates.isEmpty) {
-          await trace.fail('Sector PDF에 필요한 조회 날짜를 구성하지 못했습니다.');
+        if (dates.length != report.rows.length) {
+          await trace.fail('전체 차량 로그 CSV에 필요한 조회 날짜를 구성하지 못했습니다.');
           return;
         }
         trace.log(
-          'deep=autoLoad area=$area dates=${dates.length} sectorEnabled=true',
+          'raw=autoLoad area=$area dates=${dates.length} sectorEnabled=$sectorEnabled',
           progress: .16,
         );
-        deepReportForPdf = await _deepLogService.loadByDates(
+        final loadedReport = await _deepLogService.loadByDates(
           division: widget.division.trim(),
           area: area,
           dates: dates,
           scopeLabel: report.rangeLabel,
-          sectorEnabled: true,
+          sectorEnabled: sectorEnabled,
           gcsLogUrls: expectedGcsLogUrls,
           onLog: (message) {
-            trace?.log(message, progress: .17);
+            trace?.log(message, progress: .18);
           },
         );
+        if (!_deepReportMatchesChartReport(loadedReport, report)) {
+          await trace.fail(
+            '원본 차량 로그의 실제 날짜 범위가 비교 날짜 전체와 일치하지 않습니다.',
+          );
+          return;
+        }
+        deepReportForExport = loadedReport;
         if (mounted) {
           setState(() {
-            _deepReport = deepReportForPdf;
-            _deepLabel = deepReportForPdf!.scopeLabel;
+            _deepReport = loadedReport;
+            _deepLabel = loadedReport.scopeLabel;
           });
         }
       }
-      final deepSector = deepReportForPdf?.sectorReport;
+      final exportReport = deepReportForExport;
+      final deepSector = exportReport.sectorReport;
       if (sectorEnabled && report.sectorMetrics != null && deepSector == null) {
-        await trace.fail('Sector 집계가 존재하지만 연결된 상세 GCS 보고서를 구성하지 못했습니다.');
+        await trace.fail('방문 구역 집계가 존재하지만 연결된 상세 GCS 보고서를 구성하지 못했습니다.');
         return;
       }
       if (deepSector != null) {
         for (final line in deepSector.integrity.debugLines) {
-          trace.log(line, progress: .18);
+          trace.log(line, progress: .2);
         }
         for (final group in deepSector.groups) {
           trace.log(
@@ -363,7 +487,7 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
           );
         }
         if (!deepSector.integrity.isValid) {
-          await trace.fail('화면·PDF Sector 합계 무결성 검증에 실패했습니다.');
+          await trace.fail('화면·PDF 방문 구역 합계 무결성 검증에 실패했습니다.');
           return;
         }
         trace.log(
@@ -397,7 +521,7 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
             trace.log(line, progress: .24);
           }
           if (!cross.isValid) {
-            await trace.fail('검증된 상세 업무종료 history와 연결 GCS 로그의 Sector 합계가 일치하지 않습니다.');
+            await trace.fail('검증된 상세 업무종료 history와 연결 GCS 로그의 방문 구역 합계가 일치하지 않습니다.');
             return;
           }
         }
@@ -405,7 +529,7 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
 
       final cfg = await EmailConfig.load();
       if (!EmailConfig.isValidToList(cfg.to)) {
-        await trace.fail('PDF 수신자 설정이 올바르지 않습니다.');
+        await trace.fail('보고서 수신자 설정이 올바르지 않습니다.');
         return;
       }
       final toCsv = cfg.to
@@ -416,42 +540,79 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
 
       if (!mounted) return;
       final pdfPalette = StatisticsReportDesign.pdfPalette(context);
+      const numberingSchema = '01>02>03>04>05>06';
       trace.log(
         'pdf=build sectorGroups=${deepSector?.groups.length ?? 0} '
-        'design=app-theme-v3 ${pdfPalette.debugLabel}',
+        'design=list-surface-v1 scope=full_area numbering=$numberingSchema '
+        'raw=05.x appendix=06.x vehicleLog=excluded ${pdfPalette.debugLabel}',
         progress: .34,
+      );
+      _recordDebug(
+        'pdf_build style=list-surface-v1 scope=full_area '
+        'deep=true sectorGroups=${deepSector?.groups.length ?? 0} '
+        'numbering=$numberingSchema raw=05.x appendix=06.x vehicleLog=excluded',
       );
       final pdfBytes = await _buildStatsPdfBytes(
         report: report,
-        deepReport: deepReportForPdf,
+        deepReport: exportReport,
         palette: pdfPalette,
       );
-      final filename =
-          '${_safeFileName('통계그래프A_${_dateTag(DateTime.now())}')}.pdf';
+      final csvResult = StatisticsVehicleLogCsv.build(exportReport);
+      final rangeTag = _reportRangeTag(report);
+      final areaTag = area.isEmpty ? '전체' : area;
+      final pdfFilename =
+          '${_safeFileName('출차정산분석_${areaTag}_$rangeTag')}.pdf';
+      final csvFilename =
+          '${_safeFileName('전체차량로그_${areaTag}_$rangeTag')}.csv';
       trace.log(
-        'pdf=ready bytes=${pdfBytes.length} filename=$filename',
-        progress: .62,
+        'pdf=ready bytes=${pdfBytes.length} filename=$pdfFilename',
+        progress: .56,
+      );
+      trace.log(
+        'csv=ready rows=${csvResult.rowCount} bytes=${csvResult.bytes.length} '
+        'encoding=utf8_bom reuseDeepReport=true filename=$csvFilename',
+        progress: .64,
+      );
+      _recordDebug(
+        'csv_ready rows=${csvResult.rowCount} bytes=${csvResult.bytes.length} '
+        'scope=full_area dates=${exportReport.dateStrs.length} '
+        'encoding=utf8_bom reuseDeepReport=true duplicatesMerged=${exportReport.diagnostics.duplicateMergedCount}',
       );
 
+      final attachments = <_MailAttachment>[
+        _MailAttachment(
+          filename: pdfFilename,
+          mimeType: 'application/pdf',
+          bytes: pdfBytes,
+        ),
+        _MailAttachment(
+          filename: csvFilename,
+          mimeType: 'text/csv; charset=utf-8',
+          bytes: csvResult.bytes,
+        ),
+      ];
+      trace.log(
+        'attachments=${attachments.length} pdf=1 csv=1',
+        progress: .72,
+      );
       await _sendEmailViaGmail(
-        pdfBytes: pdfBytes,
-        filename: filename,
+        attachments: attachments,
         to: toCsv,
         subject: subject,
         body: body,
       );
-      trace.log('gmail=sent recipients=$toCsv', progress: .92);
+      trace.log('gmail=sent recipients=$toCsv attachments=2', progress: .92);
       await trace.succeed(
         deepSector != null
-            ? '방문 구역 통계를 포함한 PDF 발신이 완료되었습니다.'
-            : '방문 구역 집계가 없는 통계 PDF 발신이 완료되었습니다.',
+            ? '방문 구역 분석 PDF와 전체 차량 로그 CSV 발신이 완료되었습니다.'
+            : '분석 PDF와 전체 차량 로그 CSV 발신이 완료되었습니다.',
       );
     } catch (e, st) {
       debugPrint('메일 전송 실패: $e');
       debugPrint('$st');
       if (trace != null) {
         await trace.fail(
-          '통계 PDF 생성 또는 발신에 실패했습니다.',
+          '통계 PDF·차량 CSV 생성 또는 발신에 실패했습니다.',
           error: e,
           stackTrace: st,
         );
@@ -499,10 +660,18 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
     final design = StatisticsReportDesign.pdf(palette);
     final doc = pw.Document();
     final createdAt = DateTime.now();
+    final activePdfSections = <String>[
+      '01',
+      '02',
+      if (report.sectorMetrics != null) '03',
+      '04',
+      if (deepReport != null) '05',
+      if (deepReport?.sectorReport != null) '06',
+    ].join('>');
     debugPrint(
-      '[STAT_PDF_DESIGN] build style=app-theme-v3 ${palette.debugLabel} '
+      '[STAT_PDF_DESIGN] build style=list-surface-v1 ${palette.debugLabel} '
       'days=${report.metrics.dayCount} deep=${deepReport != null} '
-      'sector=${deepReport?.sectorReport != null}',
+      'sector=${deepReport?.sectorReport != null} schema=01>02>03>04>05>06 active=$activePdfSections vehicleLog=excluded',
     );
 
     pw.Widget footer(pw.Context context) {
@@ -558,19 +727,19 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
         ),
       if (deepReport != null)
         StatisticsPdfMetricData(
-          label: '심화 차량',
+          label: '원본 차량',
           value: '${_fmt(deepReport.rows.length)}대',
           tone: StatisticsPdfTone.input,
         ),
       if (deepReport != null)
         StatisticsPdfMetricData(
-          label: '심화 입차',
+          label: '원본 입차',
           value: '${_fmt(deepReport.overallSection.metrics.inputTotalSum)}대',
           tone: StatisticsPdfTone.input,
         ),
       if (deepReport != null)
         StatisticsPdfMetricData(
-          label: '심화 출차',
+          label: '원본 출차',
           value: '${_fmt(deepReport.overallSection.metrics.outputTotalSum)}대',
           tone: StatisticsPdfTone.output,
         ),
@@ -592,17 +761,17 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
         tone: StatisticsPdfTone.secondary,
       ),
       const StatisticsPdfTagData(
-        label: 'Statistics Graph A',
+        label: '운영 분석',
         tone: StatisticsPdfTone.output,
       ),
       if (deepReport != null)
         const StatisticsPdfTagData(
-          label: 'Deep Statistics B',
+          label: '원본 로그 분석',
           tone: StatisticsPdfTone.input,
         ),
       if (deepReport?.sectorReport != null)
         const StatisticsPdfTagData(
-          label: 'Sector Analytics',
+          label: '방문 구역 분석',
           tone: StatisticsPdfTone.success,
         ),
     ];
@@ -613,11 +782,11 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
         pageFormat: PdfPageFormat.a4,
         margin: pw.EdgeInsets.zero,
         build: (context) => design.cover(
-          reportCode: 'STATISTICS REPORT',
+          reportCode: 'OPERATIONS REPORT',
           titleText: '통계 운영 분석 보고서',
-          subtitle: '출차·정산·입차·방문 구역 데이터를 하나의 운영 문서로 구성했습니다.',
+          subtitle: '전체 Area의 운영 결과와 원본 로그 기반 분석을 한 흐름으로 정리했습니다.',
           description:
-              '앱의 통계 화면과 동일한 지표 순서와 상태 체계를 사용하며, 화면과 PDF는 같은 집계 모델을 공유합니다.',
+              '전체 Area 운영 결과를 요약한 공식 보고서입니다. 원본 로그가 준비된 범위는 시간대·결제·방문 구역 분석을 제공하며 차량 단위 로그는 별도 CSV로 첨부합니다.',
           createdAt: createdAt,
           tags: coverTags,
           metrics: coverMetrics,
@@ -628,47 +797,134 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
       ),
     );
 
-    final tocRows = <List<String>>[
-      ['01', '경영 요약', '핵심 KPI와 날짜별 운영 결과'],
-      for (int index = 0; index < report.sections.length; index++)
-        [
-          (index + 2).toString().padLeft(2, '0'),
-          report.sections[index].title,
-          report.sections[index].subtitle,
+    final overviewSection = report.sections.firstWhere(
+      (section) => section.type == _ChartASectionType.overview,
+    );
+    final dailySection = report.sections.firstWhere(
+      (section) => section.type == _ChartASectionType.dailyTable,
+    );
+
+    doc.addPage(
+      pw.MultiPage(
+        theme: theme,
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.fromLTRB(28, 26, 28, 30),
+        header: header,
+        footer: footer,
+        build: (context) => [
+          design.sectionHeader(
+            titleText: '운영 요약',
+            subtitle: '전체 Area의 출차·정산·방문 구역 핵심 결과를 먼저 확인합니다.',
+            eyebrow: 'OPERATIONS SUMMARY',
+            sectionNumber: '01',
+            tone: StatisticsPdfTone.primary,
+          ),
+          pw.SizedBox(height: 10),
+          _pdfASectionMetrics(overviewSection, design),
+          if (report.metrics.maxDeparture != null) ...[
+            pw.SizedBox(height: 8),
+            design.listRow(
+              titleText: '최고 출차',
+              subtitle: report.metrics.maxDeparture!.dateStr,
+              trailing: '${_fmt(report.metrics.maxDeparture!.departure)}대',
+              tone: StatisticsPdfTone.output,
+              strong: true,
+            ),
+          ],
+          if (report.metrics.maxFee != null)
+            design.listRow(
+              titleText: '최고 정산',
+              subtitle: report.metrics.maxFee!.dateStr,
+              trailing: '₩${_fmt(report.metrics.maxFee!.fee)}',
+              tone: StatisticsPdfTone.fee,
+              strong: true,
+            ),
         ],
-    ];
-    if (deepReport != null) {
-      var number = tocRows.length + 1;
-      tocRows.add([
-        number.toString().padLeft(2, '0'),
-        deepReport.overallSection.title,
-        deepReport.scopeLabel,
-      ]);
-      number++;
-      if (deepReport.sectorEnabled && deepReport.sectorReport != null) {
-        tocRows.add([
-          number.toString().padLeft(2, '0'),
-          '방문 구역 분석',
-          'Sector별 입차·출차·정산·결제수단·요일·차량 로그',
-        ]);
-        number++;
-      }
-      for (final section in deepReport.dailySections) {
-        tocRows.add([
-          number.toString().padLeft(2, '0'),
-          section.title,
-          section.subtitle,
-        ]);
-        number++;
-      }
-      for (final section in deepReport.weekdaySections) {
-        tocRows.add([
-          number.toString().padLeft(2, '0'),
-          section.title,
-          section.subtitle,
-        ]);
-        number++;
-      }
+      ),
+    );
+
+    doc.addPage(
+      pw.MultiPage(
+        theme: theme,
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.fromLTRB(28, 26, 28, 30),
+        header: header,
+        footer: footer,
+        build: (context) => [
+          design.sectionHeader(
+            titleText: '기간 변화',
+            subtitle: '출차와 정산을 같은 날짜 조건으로 분리해 비교합니다.',
+            eyebrow: 'PERIOD CHANGE',
+            sectionNumber: '02',
+            tone: StatisticsPdfTone.output,
+          ),
+          pw.SizedBox(height: 10),
+          _pdfLineBars(
+            design: design,
+            title: '출차 흐름',
+            subtitle: '날짜별 완료 차량의 출차 대수와 규모를 비교합니다.',
+            rows: report.rows,
+            valueOf: (row) => row.departure.toDouble(),
+            suffix: '대',
+            decimal: false,
+            tone: StatisticsPdfTone.output,
+          ),
+          pw.SizedBox(height: 6),
+          _pdfLineBars(
+            design: design,
+            title: '정산금 흐름',
+            subtitle: '날짜별 잠금 정산금의 규모를 비교합니다.',
+            rows: report.rows,
+            valueOf: (row) => row.fee.toDouble(),
+            suffix: '원',
+            decimal: false,
+            tone: StatisticsPdfTone.fee,
+          ),
+        ],
+      ),
+    );
+
+    if (report.sectorMetrics != null) {
+      doc.addPage(
+        pw.MultiPage(
+          theme: theme,
+          pageFormat: PdfPageFormat.a4,
+          margin: const pw.EdgeInsets.fromLTRB(28, 26, 28, 30),
+          header: header,
+          footer: footer,
+          build: (context) => [
+            design.sectionHeader(
+              titleText: '방문 구역',
+              subtitle: '방문 구역별 차량 수, 잠금 금액과 전체 대비 비중을 확인합니다.',
+              eyebrow: 'VISIT AREA',
+              sectionNumber: '03',
+              tone: StatisticsPdfTone.secondary,
+            ),
+            pw.SizedBox(height: 10),
+            _pdfASectionMetrics(
+              report.sections.firstWhere(
+                (section) => section.type == _ChartASectionType.sector,
+              ),
+              design,
+            ),
+            pw.SizedBox(height: 8),
+            _pdfSectorTable(report.sectorMetrics!, design),
+            if (report.sectorMetrics!.legacyFeeClassification) ...[
+              pw.SizedBox(height: 8),
+              design.notice(
+                titleText: '구버전 방문 구역 금액 분류',
+                message:
+                    '미지정과 데이터 확인 필요 잠금 금액이 통합되어 있을 수 있습니다.',
+                tone: StatisticsPdfTone.warning,
+                details: const <String>[
+                  '차량 수는 분리되지만 과거 집계값만으로 금액을 정확히 재분류할 수 없습니다.',
+                  '차량 단위 원천 값은 함께 발신되는 전체 차량 로그 CSV에서 확인할 수 있습니다.',
+                ],
+              ),
+            ],
+          ],
+        ),
+      );
     }
 
     doc.addPage(
@@ -680,125 +936,17 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
         footer: footer,
         build: (context) => [
           design.sectionHeader(
-            titleText: '문서 구성',
-            subtitle: '화면에서 확인한 지표를 운영 의사결정 순서로 재배치했습니다.',
-            eyebrow: 'REPORT MAP',
-            sectionNumber: '01',
+            titleText: '날짜별 내역',
+            subtitle: '날짜별 출차·정산·이전 비교일 변화와 기간 내 비중을 연속 목록으로 정리합니다.',
+            eyebrow: 'DAILY RECORDS',
+            sectionNumber: '04',
+            tone: StatisticsPdfTone.neutral,
           ),
-          pw.SizedBox(height: 14),
-          design.notice(
-            titleText: '읽는 순서',
-            message: '핵심 요약에서 전체 흐름을 확인한 뒤 세부 통계와 차량 로그로 이동합니다.',
-            tone: StatisticsPdfTone.primary,
-          ),
-          pw.SizedBox(height: 12),
-          design.dataTable(
-            headers: const ['No', '섹션', '주요 내용'],
-            rows: tocRows,
-            columnWidths: const <int, pw.TableColumnWidth>{
-              0: pw.FixedColumnWidth(34),
-              1: pw.FlexColumnWidth(1.2),
-              2: pw.FlexColumnWidth(2.1),
-            },
-            tone: StatisticsPdfTone.primary,
-            fontSize: 8.5,
-            headerFontSize: 8.5,
-            verticalPadding: 6,
-          ),
+          pw.SizedBox(height: 8),
+          _pdfARowsTable(dailySection.rows, design),
         ],
       ),
     );
-
-    for (int sectionIndex = 0;
-        sectionIndex < report.sections.length;
-        sectionIndex++) {
-      final section = report.sections[sectionIndex];
-      doc.addPage(
-        pw.MultiPage(
-          theme: theme,
-          pageFormat: PdfPageFormat.a4,
-          margin: const pw.EdgeInsets.fromLTRB(28, 26, 28, 30),
-          header: header,
-          footer: footer,
-          build: (context) => [
-            design.sectionHeader(
-              titleText: section.title,
-              subtitle: section.subtitle,
-              eyebrow: 'STATISTICS GRAPH A',
-              sectionNumber: (sectionIndex + 2).toString().padLeft(2, '0'),
-              tone: _pdfSectionTone(section.type),
-            ),
-            pw.SizedBox(height: 12),
-            _pdfASectionMetrics(section, design),
-            pw.SizedBox(height: 12),
-            if (section.type == _ChartASectionType.overview) ...[
-              _pdfLineBars(
-                design: design,
-                title: '날짜별 출차 흐름',
-                subtitle: '날짜별 완료 차량의 출차 대수를 비교합니다.',
-                rows: section.rows,
-                valueOf: (row) => row.departure.toDouble(),
-                suffix: '대',
-                decimal: false,
-                tone: StatisticsPdfTone.output,
-              ),
-              pw.SizedBox(height: 10),
-              _pdfLineBars(
-                design: design,
-                title: '날짜별 정산금 흐름',
-                subtitle: '날짜별 잠금 정산금의 규모를 비교합니다.',
-                rows: section.rows,
-                valueOf: (row) => row.fee.toDouble(),
-                suffix: '원',
-                decimal: false,
-                tone: StatisticsPdfTone.fee,
-              ),
-            ] else if (section.type == _ChartASectionType.departure) ...[
-              _pdfLineBars(
-                design: design,
-                title: '출차 대수 추이',
-                subtitle: '전일 대비 증감과 함께 확인합니다.',
-                rows: section.rows,
-                valueOf: (row) => row.departure.toDouble(),
-                suffix: '대',
-                decimal: false,
-                tone: StatisticsPdfTone.output,
-              ),
-            ] else if (section.type == _ChartASectionType.fee) ...[
-              _pdfLineBars(
-                design: design,
-                title: '정산금 추이',
-                subtitle: '전일 대비 잠금 금액 증감을 확인합니다.',
-                rows: section.rows,
-                valueOf: (row) => row.fee.toDouble(),
-                suffix: '원',
-                decimal: false,
-                tone: StatisticsPdfTone.fee,
-              ),
-            ] else if (section.type == _ChartASectionType.sector &&
-                section.sectorMetrics != null) ...[
-              _pdfSectorTable(section.sectorMetrics!, design),
-              if (section.sectorMetrics!.legacyFeeClassification) ...[
-                pw.SizedBox(height: 10),
-                design.notice(
-                  titleText: '구버전 Sector 금액 분류',
-                  message:
-                      '이 보고서는 미지정과 데이터 확인 필요 잠금 금액이 통합되어 있을 수 있습니다.',
-                  tone: StatisticsPdfTone.warning,
-                  details: const <String>[
-                    '차량 수는 분리되지만 과거 집계값만으로 금액을 정확히 재분류할 수 없습니다.',
-                    '개별 차량 로그가 있는 범위는 심화 Sector 재집계값을 우선 확인합니다.',
-                  ],
-                ),
-              ],
-            ],
-            if (section.type == _ChartASectionType.dailyTable) ...[
-              _pdfARowsTable(section.rows, design),
-            ],
-          ],
-        ),
-      );
-    }
 
     if (deepReport != null) {
       _addDeepReportSectionsToPdf(
@@ -807,6 +955,7 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
         footer: footer,
         report: deepReport,
         design: design,
+        rawSectionNumber: '05',
       );
       StatisticsSectorPdfBuilder.append(
         doc: doc,
@@ -814,29 +963,19 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
         footer: footer,
         report: deepReport,
         design: design,
+        sectionNumberPrefix: '06',
       );
     }
 
     final bytes = await doc.save();
     debugPrint(
-      '[STAT_PDF_DESIGN] complete bytes=${bytes.length} style=app-theme-v3',
+      '[STAT_PDF_DESIGN] complete bytes=${bytes.length} style=list-surface-v1 schema=01>02>03>04>05>06 active=$activePdfSections vehicleLog=excluded',
+    );
+    _recordDebug(
+      'pdf_complete style=list-surface-v1 bytes=${bytes.length} '
+      'deep=${deepReport != null} sector=${deepReport?.sectorReport != null} numberingSchema=01>02>03>04>05>06 active=$activePdfSections vehicleLog=excluded',
     );
     return bytes;
-  }
-
-  StatisticsPdfTone _pdfSectionTone(_ChartASectionType type) {
-    switch (type) {
-      case _ChartASectionType.overview:
-        return StatisticsPdfTone.primary;
-      case _ChartASectionType.departure:
-        return StatisticsPdfTone.output;
-      case _ChartASectionType.fee:
-        return StatisticsPdfTone.fee;
-      case _ChartASectionType.sector:
-        return StatisticsPdfTone.secondary;
-      case _ChartASectionType.dailyTable:
-        return StatisticsPdfTone.neutral;
-    }
   }
 
   pw.Widget _pdfASectionMetrics(
@@ -921,49 +1060,57 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
     EndWorkSectorMetrics metrics,
     StatisticsPdfDesign design,
   ) {
-    final rows = <List<String>>[
-      for (final item in metrics.items)
-        <String>[
-          item.sectorName,
-          '${item.vehicleCount}대',
-          '₩${_fmt(item.totalLockedFee.round())}',
-          metrics.assignedVehicleCount == 0
-              ? '0.0%'
-              : '${(item.vehicleCount / metrics.assignedVehicleCount * 100).toStringAsFixed(1)}%',
-        ],
-      if (metrics.unassignedVehicleCount > 0)
-        <String>[
-          '미지정',
-          '${metrics.unassignedVehicleCount}대',
-          '₩${_fmt(metrics.unassignedLockedFee.round())}',
-          metrics.totalVehicleCount == 0
-              ? '0.0%'
-              : '${(metrics.unassignedVehicleCount / metrics.totalVehicleCount * 100).toStringAsFixed(1)}%',
-        ],
-      if (metrics.invalidSectorVehicleCount > 0)
-        <String>[
-          '데이터 확인 필요',
-          '${metrics.invalidSectorVehicleCount}대',
-          '₩${_fmt(metrics.invalidSectorLockedFee.round())}',
-          metrics.totalVehicleCount == 0
-              ? '0.0%'
-              : '${(metrics.invalidSectorVehicleCount / metrics.totalVehicleCount * 100).toStringAsFixed(1)}%',
-        ],
-    ];
-    return design.dataTable(
-      headers: const ['방문 구역', '차량 수', '잠금 금액', '비중'],
-      rows: rows,
-      numericColumns: const <int>{1, 2, 3},
-      columnWidths: const <int, pw.TableColumnWidth>{
-        0: pw.FlexColumnWidth(1.7),
-        1: pw.FlexColumnWidth(.8),
-        2: pw.FlexColumnWidth(1.2),
-        3: pw.FlexColumnWidth(.7),
-      },
-      tone: StatisticsPdfTone.secondary,
-      fontSize: 8.4,
-      headerFontSize: 8.4,
-      verticalPadding: 6,
+    pw.Widget row({
+      required String name,
+      required int vehicles,
+      required int fee,
+      required double share,
+      required StatisticsPdfTone tone,
+    }) {
+      return design.listRow(
+        titleText: name,
+        subtitle:
+            '차량 ${_fmt(vehicles)}대 · 전체 대비 ${(share * 100).toStringAsFixed(1)}%',
+        trailing: '₩${_fmt(fee)}',
+        tone: tone,
+        strong: true,
+      );
+    }
+
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+      children: [
+        for (final item in metrics.items)
+          row(
+            name: item.sectorName,
+            vehicles: item.vehicleCount,
+            fee: item.totalLockedFee.round(),
+            share: metrics.assignedVehicleCount == 0
+                ? 0
+                : item.vehicleCount / metrics.assignedVehicleCount,
+            tone: StatisticsPdfTone.secondary,
+          ),
+        if (metrics.unassignedVehicleCount > 0)
+          row(
+            name: '미지정',
+            vehicles: metrics.unassignedVehicleCount,
+            fee: metrics.unassignedLockedFee.round(),
+            share: metrics.totalVehicleCount == 0
+                ? 0
+                : metrics.unassignedVehicleCount / metrics.totalVehicleCount,
+            tone: StatisticsPdfTone.warning,
+          ),
+        if (metrics.invalidSectorVehicleCount > 0)
+          row(
+            name: '데이터 확인 필요',
+            vehicles: metrics.invalidSectorVehicleCount,
+            fee: metrics.invalidSectorLockedFee.round(),
+            share: metrics.totalVehicleCount == 0
+                ? 0
+                : metrics.invalidSectorVehicleCount / metrics.totalVehicleCount,
+            tone: StatisticsPdfTone.danger,
+          ),
+      ],
     );
   }
 
@@ -1057,36 +1204,21 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
     List<_ChartARow> rows,
     StatisticsPdfDesign design,
   ) {
-    return design.dataTable(
-      headers: const [
-        'No',
-        '날짜',
-        '출차',
-        '정산금',
-        '출차 증감',
-        '정산금 증감',
-        '출차 비중',
-        '정산금 비중',
-      ],
-      rows: [
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+      children: [
         for (final row in rows)
-          [
-            row.no.toString(),
-            row.dateStr,
-            '${_fmt(row.departure)}대',
-            '₩${_fmt(row.fee)}',
-            _signed(row.departureDelta, suffix: '대'),
-            _signed(row.feeDelta, prefix: '₩'),
-            '${(row.departureShare * 100).toStringAsFixed(1)}%',
-            '${(row.feeShare * 100).toStringAsFixed(1)}%',
-          ],
+          design.listRow(
+            titleText: row.dateStr,
+            subtitle:
+                '출차 ${_fmt(row.departure)}대 · ${(row.departureShare * 100).toStringAsFixed(1)}%   정산 ₩${_fmt(row.fee)} · ${(row.feeShare * 100).toStringAsFixed(1)}%',
+            supporting:
+                '이전 비교일  출차 ${_signed(row.departureDelta, suffix: '대')}   정산 ${_signed(row.feeDelta, prefix: '₩')}',
+            trailing: row.no.toString().padLeft(2, '0'),
+            tone: StatisticsPdfTone.neutral,
+            strong: true,
+          ),
       ],
-      numericColumns: const <int>{0, 2, 3, 4, 5, 6, 7},
-      tone: StatisticsPdfTone.neutral,
-      fontSize: 7.2,
-      headerFontSize: 7.4,
-      horizontalPadding: 3.5,
-      verticalPadding: 4.5,
     );
   }
 
@@ -1096,10 +1228,11 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
     required pw.Widget Function(pw.Context context) footer,
     required StatisticsDeepReport report,
     required StatisticsPdfDesign design,
+    required String rawSectionNumber,
   }) {
     pw.Widget header(pw.Context context) {
       return design.runningHeader(
-        reportTitle: '심화 통계 보고서',
+        reportTitle: '원본 분석 보고서',
         area: report.area,
         rangeLabel: report.scopeLabel,
       );
@@ -1262,71 +1395,10 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
       return pw.Column(children: items);
     }
 
-    void addVehicleTables(StatisticsDeepSection section) {
-      const chunkSize = 28;
-      for (int start = 0; start < section.rows.length; start += chunkSize) {
-        final chunk = section.rows.skip(start).take(chunkSize).toList();
-        doc.addPage(
-          pw.MultiPage(
-            theme: theme,
-            pageFormat: PdfPageFormat.a4,
-            margin: const pw.EdgeInsets.fromLTRB(22, 25, 22, 30),
-            header: header,
-            footer: footer,
-            build: (context) => [
-              design.sectionHeader(
-                titleText: '${section.title} 차량 로그',
-                subtitle:
-                    '${start + 1} - ${start + chunk.length} / ${section.rows.length}',
-                eyebrow: 'VEHICLE LOG',
-                tone: StatisticsPdfTone.neutral,
-              ),
-              pw.SizedBox(height: 10),
-              design.dataTable(
-                headers: [
-                  'No',
-                  '날짜',
-                  '차량 번호',
-                  if (report.sectorEnabled) '방문 구역',
-                  '입차',
-                  '출차',
-                  '정산액',
-                  '결제수단',
-                ],
-                rows: [
-                  for (final row in chunk)
-                    [
-                      row.no.toString(),
-                      row.dateStr,
-                      row.plateNumber,
-                      if (report.sectorEnabled) row.sectorLabel,
-                      _fmtPdfTime(row.createdAt),
-                      row.departureTimeEstimated
-                          ? '${_fmtPdfTime(row.departureAt)} 추정'
-                          : _fmtPdfTime(row.departureAt),
-                      row.fee == null ? '-' : '₩${_fmt(row.fee!)}',
-                      row.paymentMethodLabel,
-                    ],
-                ],
-                numericColumns: report.sectorEnabled
-                    ? const <int>{0, 6}
-                    : const <int>{0, 5},
-                tone: StatisticsPdfTone.neutral,
-                fontSize: report.sectorEnabled ? 6.8 : 7.1,
-                headerFontSize: report.sectorEnabled ? 6.9 : 7.2,
-                horizontalPadding: 3.1,
-                verticalPadding: 4.4,
-              ),
-            ],
-          ),
-        );
-      }
-    }
 
     void addSection(
       StatisticsDeepSection section, {
-      required bool includeVehicleTable,
-      required int index,
+      required String sectionNumber,
     }) {
       doc.addPage(
         pw.MultiPage(
@@ -1339,8 +1411,8 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
             design.sectionHeader(
               titleText: section.title,
               subtitle: section.subtitle,
-              eyebrow: 'DEEP STATISTICS B',
-              sectionNumber: index.toString().padLeft(2, '0'),
+              eyebrow: '원본 로그 분석',
+              sectionNumber: sectionNumber,
               tone: StatisticsPdfTone.input,
             ),
             pw.SizedBox(height: 12),
@@ -1350,38 +1422,34 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
           ],
         ),
       );
-      if (includeVehicleTable) addVehicleTables(section);
     }
 
-    var index = 1;
     addSection(
       report.overallSection,
-      includeVehicleTable: true,
-      index: index,
+      sectionNumber: rawSectionNumber,
     );
-    index++;
+    var rawSubsectionIndex = 1;
     for (final section in report.dailySections) {
-      addSection(section, includeVehicleTable: false, index: index);
-      index++;
+      addSection(
+        section,
+        sectionNumber: '$rawSectionNumber.${rawSubsectionIndex++}',
+      );
     }
     for (final section in report.weekdaySections) {
-      addSection(section, includeVehicleTable: false, index: index);
-      index++;
+      addSection(
+        section,
+        sectionNumber: '$rawSectionNumber.${rawSubsectionIndex++}',
+      );
     }
   }
 
   Future<void> _sendEmailViaGmail({
-    required Uint8List pdfBytes,
-    required String filename,
+    required List<_MailAttachment> attachments,
     required String to,
     required String subject,
     required String body,
   }) async {
-    const scopes = <String>[
-      'https://www.googleapis.com/auth/gmail.send',
-    ];
-
-    final client = await GoogleAuthV7.authedClient(scopes);
+    final client = await GmailSenderAuth.client();
     final api = gmail.GmailApi(client);
 
     try {
@@ -1397,15 +1465,23 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
         ..writeln('Content-Type: text/plain; charset="utf-8"')
         ..writeln('Content-Transfer-Encoding: 7bit')
         ..writeln()
-        ..writeln(body)
-        ..writeln()
-        ..writeln('--$boundary')
-        ..writeln('Content-Type: application/pdf; name="$filename"')
-        ..writeln('Content-Disposition: attachment; filename="$filename"')
-        ..writeln('Content-Transfer-Encoding: base64')
-        ..writeln()
-        ..writeln(base64.encode(pdfBytes))
-        ..writeln('--$boundary--');
+        ..writeln(body);
+
+      for (final attachment in attachments) {
+        sb
+          ..writeln()
+          ..writeln('--$boundary')
+          ..writeln(
+            'Content-Type: ${attachment.mimeType}; name="${attachment.filename}"',
+          )
+          ..writeln(
+            'Content-Disposition: attachment; filename="${attachment.filename}"',
+          )
+          ..writeln('Content-Transfer-Encoding: base64')
+          ..writeln()
+          ..writeln(base64.encode(attachment.bytes));
+      }
+      sb.writeln('--$boundary--');
 
       final raw = base64UrlEncode(utf8.encode(sb.toString())).replaceAll('=', '');
       final msg = gmail.Message()..raw = raw;
@@ -1415,129 +1491,70 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
     }
   }
 
-  Future<_DeepLoadRequest?> _pickDeepLoadRequest(_ChartAReport report) async {
-    final sortedDates = report.rows.map((e) => e.date).toList()..sort((a, b) => a.compareTo(b));
-    if (sortedDates.isEmpty) return null;
-    if (sortedDates.length == 1) {
-      final only = sortedDates.first;
-      return _DeepLoadRequest.dates(dates: <DateTime>[only], label: _dateOnly(only));
-    }
 
-    return _showChartDialog<_DeepLoadRequest>(
-      barrierDismissible: true,
-      builder: (ctx) {
-        final cs = Theme.of(ctx).colorScheme;
-        final first = sortedDates.first;
-        final last = sortedDates.last;
-        return AlertDialog(
-          title: const Text('심화 통계 범위 선택'),
-          content: SizedBox(
-            width: 390,
-            child: ListView(
-              shrinkWrap: true,
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.dataset_rounded),
-                  title: const Text('가져온 날짜 모두'),
-                  subtitle: Text('${_dateOnly(first)} ~ ${_dateOnly(last)} / ${sortedDates.length}일'),
-                  onTap: () => Navigator.of(ctx).pop(
-                    _DeepLoadRequest.dates(
-                      dates: sortedDates,
-                      label: '${_dateOnly(first)} ~ ${_dateOnly(last)}',
-                    ),
-                  ),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.date_range_rounded),
-                  title: const Text('기간 지정'),
-                  subtitle: const Text('시작일과 종료일을 선택합니다.'),
-                  onTap: () async {
-                    final picked = await _showChartRangePicker(
-                      anchorContext: ctx,
-                      firstDate: first,
-                      lastDate: last,
-                      initialDateRange: DateTimeRange(
-                        start: first,
-                        end: last,
-                      ),
-                    );
-                    if (picked == null) return;
-                    final a = DateTime(picked.start.year, picked.start.month, picked.start.day);
-                    final b = DateTime(picked.end.year, picked.end.month, picked.end.day);
-                    Navigator.of(ctx).pop(
-                      _DeepLoadRequest.range(
-                        start: a,
-                        end: b,
-                        label: '${_dateOnly(a)} ~ ${_dateOnly(b)}',
-                      ),
-                    );
-                  },
-                ),
-                Divider(color: cs.outlineVariant),
-                for (final date in sortedDates)
-                  ListTile(
-                    leading: const Icon(Icons.event_rounded),
-                    title: Text(_dateOnly(date)),
-                    onTap: () => Navigator.of(ctx).pop(
-                      _DeepLoadRequest.dates(
-                        dates: <DateTime>[date],
-                        label: _dateOnly(date),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(null),
-              child: const Text('취소'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Future<void> _openDeepStatistics(_ChartAReport report) async {
+  Future<void> _loadRawAnalysis(
+    _ChartAReport report,
+    _DeepLoadRequest request,
+    _AnalyticsSection targetSection,
+  ) async {
     if (_deepLoading) return;
 
     final division = widget.division.trim();
     final area = widget.area.trim();
     if (division.isEmpty || area.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('심화 통계에 필요한 사업부/지역 정보가 없습니다.')),
+        const SnackBar(content: Text('원본 분석에 필요한 사업부/지역 정보가 없습니다.')),
       );
       return;
     }
 
-    final request = await _pickDeepLoadRequest(report);
-    if (request == null) return;
-
-    setState(() => _deepLoading = true);
+    setState(() {
+      _deepLoading = true;
+      _deepProgressCurrent = 0;
+      _deepProgressTotal = 0;
+    });
+    _recordDebug(
+      'raw_load_start target=${targetSection.name} scope=${request.label}',
+    );
     DeveloperOperationTrace? trace;
     try {
       final sectorEnabled = widget.areaSectorEnabled[area] == true;
       trace = await DeveloperOperationTrace.start(
         context: context,
-        title: '심화 통계 조회',
-        initialMessage: '완료 업무 로그를 조회하고 통계를 구성하고 있습니다.',
-        useCommonUi: widget.useCommonUi,
+        title: '통계 원본 분석',
+        initialMessage: '완료 업무 원본 로그를 조회하고 분석하고 있습니다.',
+        useCommonUi: true,
         developerModeMessage:
-            '개발자 모드 ON: 상세 집계·Sector·무결성 로그를 복사할 수 있습니다.',
+            '개발자 모드 ON: 원본 집계·Sector·무결성 로그를 복사할 수 있습니다.',
         standardModeMessage:
-            '개발자 모드 OFF: 심화 통계 로그를 콘솔에 기록합니다.',
+            '개발자 모드 OFF: 원본 분석 로그를 콘솔에 기록합니다.',
       );
       trace.log(
         'division=$division area=$area scope=${request.label} '
         'dates=${request.isRange ? 'range' : request.dates.length} '
-        'sectorEnabled=$sectorEnabled',
+        'sectorEnabled=$sectorEnabled target=${targetSection.name}',
         progress: .08,
       );
 
       final selectedRows = _rowsForRequest(report, request);
       if (selectedRows.isEmpty) {
         await trace.fail('선택 범위에 저장된 통계 보고서가 없습니다.');
+        return;
+      }
+      final missingRawRows = _rowsMissingRawSources(selectedRows);
+      final availableRawDateCount = selectedRows.length - missingRawRows.length;
+      final missingRawDates = missingRawRows.map((row) => row.dateStr).join(',');
+      trace.log(
+        'rawCoverage=$availableRawDateCount/${selectedRows.length} missing=${missingRawDates.isEmpty ? '-' : missingRawDates}',
+        progress: .1,
+      );
+      _recordDebug(
+        'raw_scope_coverage target=${targetSection.name} available=$availableRawDateCount/${selectedRows.length} missing=${missingRawDates.isEmpty ? '-' : missingRawDates}',
+      );
+      if (missingRawRows.isNotEmpty) {
+        await trace.fail(
+          '선택 범위의 모든 날짜에 검증된 원본 차량 로그가 필요합니다. 원본이 없는 날짜: ${missingRawRows.map((row) => row.dateStr).join(', ')}',
+        );
         return;
       }
       final selectedDates = selectedRows.map((row) => row.date).toList();
@@ -1574,6 +1591,14 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
         gcsLogUrls: linkedGcsLogUrls,
         onLog: (message) {
           trace?.log(message, progress: .24);
+          _recordDebug(message);
+        },
+        onProgress: (current, total) {
+          if (!mounted) return;
+          setState(() {
+            _deepProgressCurrent = current;
+            _deepProgressTotal = total;
+          });
         },
       );
 
@@ -1592,50 +1617,20 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
         for (final line in sector.integrity.debugLines) {
           trace.log(line, progress: .68);
         }
-        for (final group in sector.groups) {
-          trace.log(
-            'sector=${group.sectorLabel} key=${group.key} '
-            'vehicles=${group.vehicleCount} input=${group.inputCount} '
-            'output=${group.outputCount} fee=${group.totalLockedFee} '
-            'estimatedOutput=${group.estimatedDepartureCount}',
-            progress: .78,
-          );
-        }
       }
       if (sectorEnabled && sector == null) {
         await trace.fail('Sector 지원 Area이지만 Sector 보고서가 생성되지 않았습니다.');
         return;
       }
       if (sector != null && !sector.integrity.isValid) {
-        await trace.fail('심화 통계 Sector 합계 무결성 검증에 실패했습니다.');
+        await trace.fail('원본 분석 Sector 합계 무결성 검증에 실패했습니다.');
         return;
       }
-      if (sector != null) {
-        trace.log(
-          'sector source total=${sector.totalVehicleCount} '
-          'analyzable=${sector.analyzableVehicleCount} '
-          'unavailable=${sector.unavailableVehicleCount} '
-          'complete=${sector.sourceFieldComplete}',
-          progress: .82,
-        );
-      }
       final expectedSector = _sectorMetricsForRequest(report, request);
-      if (sector != null && !sector.sourceFieldComplete) {
-        trace.log(
-          'sector cross validation skipped because source fields are unavailable for ${sector.unavailableVehicleCount} vehicles',
-        );
-      }
-      if (expectedSector?.legacyFeeClassification == true) {
-        trace.log('sector cross validation skipped for legacy fee classification');
-      }
       if (sector != null &&
           expectedSector != null &&
           sector.sourceFieldComplete &&
           !expectedSector.legacyFeeClassification) {
-        trace.log(
-          'cross source expected=firestoreVerifiedDetailedGcsHistoryAggregate actual=gcsVerifiedHistoryLinkedCsvMerge',
-          progress: .83,
-        );
         final cross = _crossValidateSectorMetrics(
           expected: expectedSector,
           actual: sector,
@@ -1644,7 +1639,9 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
           trace.log(line, progress: .84);
         }
         if (!cross.isValid) {
-          await trace.fail('검증된 상세 업무종료 history와 연결 GCS 로그의 Sector 합계가 일치하지 않습니다.');
+          await trace.fail(
+            '검증된 상세 업무종료 history와 연결 GCS 로그의 Sector 합계가 일치하지 않습니다.',
+          );
           return;
         }
       }
@@ -1653,128 +1650,183 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
       setState(() {
         _deepReport = deep;
         _deepLabel = deep.scopeLabel;
+        _selectedSection = targetSection;
+        if (_selectedObservation == null && deep.dateStrs.isNotEmpty) {
+          _selectedObservation = DateTime.tryParse(deep.dateStrs.last);
+        }
+        if (deep.weekdaySections.isNotEmpty) {
+          _selectedWeekdaySectionId ??= deep.weekdaySections.first.id;
+        }
       });
+      _recordDebug(
+        'raw_load_success target=${targetSection.name} scope=${deep.scopeLabel} objects=${deep.objectNames.length} vehicles=${deep.rows.length}',
+      );
       await trace.succeed(
         sectorEnabled
-            ? 'Sector 통계와 차량 로그 구성이 완료되었습니다.'
-            : '심화 통계 구성이 완료되었습니다.',
+            ? '원본 로그와 방문 구역 검증이 완료되었습니다.'
+            : '원본 로그 분석이 완료되었습니다.',
       );
-
-      if (!mounted) return;
-      final chartPage = StatisticsChartBPage(
-        report: deep,
-        availableAreas: widget.availableAreas,
-        areaSectorEnabled: widget.areaSectorEnabled,
-        useCommonUi: widget.useCommonUi,
-      );
-      final reduceMotion =
-          MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-      final route = widget.useCommonUi
-          ? PageRouteBuilder<StatisticsDeepReport>(
-              transitionDuration:
-                  reduceMotion ? Duration.zero : CommonUiMotion.overlay,
-              reverseTransitionDuration:
-                  reduceMotion ? Duration.zero : CommonUiMotion.overlay,
-              pageBuilder: (_, __, ___) => CommonUiScope(child: chartPage),
-              transitionsBuilder: (_, animation, __, child) {
-                if (reduceMotion) return child;
-                final curved = CurvedAnimation(
-                  parent: animation,
-                  curve: CommonUiMotion.enter,
-                  reverseCurve: CommonUiMotion.exit,
-                );
-                return FadeTransition(
-                  opacity: curved,
-                  child: SlideTransition(
-                    position: Tween<Offset>(
-                      begin: const Offset(0.025, 0),
-                      end: Offset.zero,
-                    ).animate(curved),
-                    child: child,
-                  ),
-                );
-              },
-            )
-          : MaterialPageRoute<StatisticsDeepReport>(
-              builder: (_) => chartPage,
-            );
-      final visible =
-          await Navigator.of(context).push<StatisticsDeepReport>(route);
-
-      if (!mounted) return;
-      final nextModel = visible ?? deep;
-      setState(() {
-        _deepReport = nextModel;
-        _deepLabel = nextModel.scopeLabel;
-      });
     } catch (e, st) {
+      _recordDebug('raw_load_failed error=$e');
       debugPrint('[STAT_DEEP] load failed: $e');
       debugPrint('$st');
       if (trace != null) {
         await trace.fail(
-          '심화 통계 조회에 실패했습니다.',
+          '원본 로그 분석에 실패했습니다.',
           error: e,
           stackTrace: st,
         );
       }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('심화 통계 로드 실패: $e')),
+        SnackBar(content: Text('원본 로그 분석 실패: $e')),
       );
     } finally {
-      if (mounted) setState(() => _deepLoading = false);
+      if (mounted) {
+        setState(() => _deepLoading = false);
+      }
     }
   }
 
-  Widget _buildDeepActionButton({
-    required _ChartAReport report,
-  }) {
+
+
+  @override
+  Widget build(BuildContext context) {
+    final baseReport = _ChartAReport.from(
+      widget.reportDataMap,
+      sectorEnabled: widget.areaSectorEnabled[widget.area.trim()] == true,
+    );
+    final scopeOptions = _analyticsScopeOptions(baseReport);
+    final activeScope = _resolveAnalyticsScope(scopeOptions, _selectedScope);
+    final report = _scopeChartReport(baseReport, activeScope);
     final cs = Theme.of(context).colorScheme;
-    final hasDeep = _deepReport != null;
-    final bg = _deepLoading
-        ? cs.surfaceContainerHighest
-        : hasDeep
-        ? cs.tertiaryContainer
-        : cs.secondaryContainer;
-    final fg = _deepLoading
-        ? cs.onSurfaceVariant
-        : hasDeep
-        ? cs.onTertiaryContainer
-        : cs.onSecondaryContainer;
-    final label = hasDeep && (_deepLabel ?? '').trim().isNotEmpty ? '심화 ${_deepLabel!.trim()}' : '심화';
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: InkWell(
-        onTap: report.rows.isNotEmpty && !_deepLoading ? () => _openDeepStatistics(report) : null,
-        borderRadius: BorderRadius.circular(999),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-          decoration: BoxDecoration(
-            color: bg,
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: cs.outlineVariant.withOpacity(0.5)),
-          ),
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final selectedObservation = _effectiveObservation(report);
+    final eligibleAreas = widget.availableAreas
+        .where((area) => widget.areaSectorEnabled[area] == true)
+        .toSet()
+        .toList()
+      ..sort();
+
+    return PopScope(
+      canPop: !_sending && !_deepLoading,
+      child: ColoredBox(
+        color: cs.surface,
+        child: SafeArea(
           child: Row(
-            mainAxisSize: MainAxisSize.min,
             children: [
-              if (_deepLoading)
-                SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2.2, color: fg),
-                )
-              else
-                Icon(Icons.auto_graph_rounded, size: 18, color: fg),
-              const SizedBox(width: 6),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 150),
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: fg, fontWeight: FontWeight.w900),
+              Expanded(
+                child: Column(
+                  children: [
+                    _AnalyticsHeader(
+                      area: widget.area,
+                      rangeLabel: report.rangeLabel,
+                      dayCount: report.metrics.dayCount,
+                      scopeLabel: activeScope.label,
+                      deepLabel: _deepLabel,
+                      loading: _deepLoading,
+                      progressCurrent: _deepProgressCurrent,
+                      progressTotal: _deepProgressTotal,
+                      onClose: _sending || _deepLoading
+                          ? null
+                          : () => Navigator.of(context).maybePop(),
+                    ),
+                    if (scopeOptions.length > 1)
+                      _AnalyticsScopeBar(
+                        scopes: scopeOptions,
+                        selected: activeScope,
+                        onSelected: _selectScope,
+                      ),
+                    Divider(height: 1, color: cs.outlineVariant),
+                    Expanded(
+                      child: baseReport.rows.isEmpty
+                          ? const _AEmptyState()
+                          : Stack(
+                              children: [
+                                Positioned.fill(
+                                  child: Offstage(
+                                    offstage: _selectedSection ==
+                                        _AnalyticsSection.areaComparison,
+                                    child: AnimatedSwitcher(
+                                      duration: reduceMotion
+                                          ? Duration.zero
+                                          : CommonUiMotion.selection,
+                                      switchInCurve: CommonUiMotion.enter,
+                                      switchOutCurve: CommonUiMotion.exit,
+                                      transitionBuilder: (child, animation) {
+                                        if (reduceMotion) return child;
+                                        final offset = Tween<Offset>(
+                                          begin: const Offset(0, 0.018),
+                                          end: Offset.zero,
+                                        ).animate(animation);
+                                        return FadeTransition(
+                                          opacity: animation,
+                                          child: SlideTransition(
+                                            position: offset,
+                                            child: child,
+                                          ),
+                                        );
+                                      },
+                                      child: KeyedSubtree(
+                                        key: ValueKey<String>(
+                                          '${_selectedSection.name}|${_selectedMetric.name}|${activeScope.key}|${selectedObservation?.toIso8601String() ?? '-'}|${_deepReport?.scopeLabel ?? '-'}',
+                                        ),
+                                        child: _buildAnalyticsContent(
+                                          report: report,
+                                          baseReport: baseReport,
+                                          scope: activeScope,
+                                          selectedObservation:
+                                              selectedObservation,
+                                          eligibleAreas: eligibleAreas,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                if (eligibleAreas.length >= 2)
+                                  Positioned.fill(
+                                    child: Offstage(
+                                      offstage: _selectedSection !=
+                                          _AnalyticsSection.areaComparison,
+                                      child: StatisticsSectorAreaComparisonPage(
+                                        key: _areaComparisonKey,
+                                        division: widget.division,
+                                        areas: eligibleAreas,
+                                        dates: baseReport.rows
+                                            .map((row) => row.date)
+                                            .toList(),
+                                        useCommonUi: true,
+                                        embedded: true,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                    ),
+                  ],
                 ),
+              ),
+              VerticalDivider(width: 1, thickness: 1, color: cs.outlineVariant),
+              _AnalyticsRail(
+                selectedSection: _selectedSection,
+                sectorAvailable: baseReport.sectorMetrics != null,
+                areaComparisonAvailable: eligibleAreas.length >= 2,
+                developerMode: _developerMode,
+                sending: _sending,
+                rawLoading: _deepLoading,
+                rawReady: _deepReport != null,
+                onSelect: (section) => _selectSection(
+                  section,
+                  scope: activeScope,
+                  selectedObservation: selectedObservation,
+                ),
+                onPdf: _sending
+                    ? null
+                    : () => _openMailDialogAndSend(baseReport),
+                onDeveloper: !_developerMode
+                    ? null
+                    : () => _showDeveloperStatus(baseReport),
               ),
             ],
           ),
@@ -1783,131 +1835,311 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
     );
   }
 
-  Widget _buildSendActionButton(_ChartAReport report) {
-    final cs = Theme.of(context).colorScheme;
-    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    final duration = reduceMotion ? Duration.zero : CommonUiMotion.selection;
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: FilledButton.icon(
-        onPressed: _sending || report.rows.isEmpty
-            ? null
-            : () => _openMailDialogAndSend(report),
-        icon: AnimatedSwitcher(
-          duration: duration,
-          switchInCurve: CommonUiMotion.enter,
-          switchOutCurve: CommonUiMotion.exit,
-          child: _sending
-              ? SizedBox(
-                  key: const ValueKey<String>('statistics_pdf_sending'),
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: cs.onPrimary,
-                  ),
-                )
-              : const Icon(
-                  Icons.picture_as_pdf_rounded,
-                  key: ValueKey<String>('statistics_pdf_ready'),
-                ),
-        ),
-        label: AnimatedSwitcher(
-          duration: duration,
-          child: Text(
-            _sending ? '발신 중' : 'PDF 발신',
-            key: ValueKey<bool>(_sending),
-          ),
-        ),
-      ),
+  DateTime? _effectiveObservation(_ChartAReport report) {
+    if (report.rows.isEmpty) return null;
+    final selected = _selectedObservation;
+    if (selected != null && report.rows.any((row) => _sameDate(row.date, selected))) {
+      return selected;
+    }
+    return report.rows.last.date;
+  }
+
+  bool _sameDate(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  void _selectSection(
+    _AnalyticsSection section, {
+    required _AnalyticsScope scope,
+    required DateTime? selectedObservation,
+  }) {
+    HapticFeedback.selectionClick();
+    _recordDebug(
+      'rail_select section=${section.name} scope=${scope.label} observation=${selectedObservation == null ? '-' : _dateOnly(selectedObservation)} deepReady=${_deepReport != null}',
+    );
+    setState(() {
+      _selectedSection = section;
+      if (section == _AnalyticsSection.areaComparison) {
+        _selectedScope = const _AnalyticsScope.all();
+      }
+    });
+  }
+
+  void _selectScope(_AnalyticsScope scope) {
+    if (scope.key == _selectedScope.key) return;
+    HapticFeedback.selectionClick();
+    setState(() => _selectedScope = scope);
+    _recordDebug(
+      'scope_select key=${scope.key} label=${scope.label} rawReuse=${_deepReport != null}',
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final report = _ChartAReport.from(
-      widget.reportDataMap,
-      sectorEnabled: widget.areaSectorEnabled[widget.area.trim()] == true,
-    );
-    _syncSectionKeys(report);
-    final cs = Theme.of(context).colorScheme;
-
-    return PopScope(
-      canPop: !_sending && !_deepLoading,
-      child: Scaffold(
-        backgroundColor: cs.surface,
-        appBar: AppBar(
-          title: const Text('통계 그래프 A'),
-          actions: [
-            _buildDeepActionButton(report: report),
-            _buildSendActionButton(report),
-            IconButton(
-              tooltip: _tocOpen ? '목차 닫기' : '목차 열기',
-              onPressed: () => setState(() => _tocOpen = !_tocOpen),
-              icon: Icon(_tocOpen ? Icons.close_rounded : Icons.menu_book_rounded),
-            ),
-            const SizedBox(width: 8),
-          ],
-        ),
-        body: report.rows.isEmpty
-            ? const _AEmptyState()
-            : LayoutBuilder(
-          builder: (context, constraints) {
-            return Stack(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
-                  child: SingleChildScrollView(
-                    controller: _scrollController,
-                    physics: const BouncingScrollPhysics(),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        KeyedSubtree(
-                          key: _sectionKeys['cover'],
-                          child: _AReportCover(
-                            report: report,
-                            division: widget.division,
-                            area: widget.area,
-                            deepReport: _deepReport,
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        KeyedSubtree(
-                          key: _sectionKeys['summary'],
-                          child: _AReportSummary(report: report),
-                        ),
-                        const SizedBox(height: 14),
-                        for (final section in report.sections) ...[
-                          KeyedSubtree(
-                            key: _sectionKeys[section.id],
-                            child: _ASectionView(section: section),
-                          ),
-                          const SizedBox(height: 14),
-                        ],
-                        const SizedBox(height: 24),
-                      ],
-                    ),
-                  ),
-                ),
-                if (_tocOpen)
-                  _AReportTocOverlay(
-                    width: math.min(390.0, math.max(300.0, constraints.maxWidth * 0.86)),
-                    report: report,
-                    selectedId: _selectedId,
-                    onTap: _scrollTo,
-                    onClose: () => setState(() => _tocOpen = false),
-                  ),
-              ],
-            );
+  Widget _buildAnalyticsContent({
+    required _ChartAReport report,
+    required _ChartAReport baseReport,
+    required _AnalyticsScope scope,
+    required DateTime? selectedObservation,
+    required List<String> eligibleAreas,
+  }) {
+    switch (_selectedSection) {
+      case _AnalyticsSection.overview:
+        return _AnalyticsOverviewView(
+          report: report,
+          scopeLabel: scope.label,
+          selectedObservation: selectedObservation,
+          onSelectObservation: _selectObservation,
+        );
+      case _AnalyticsSection.trend:
+        return _AnalyticsTrendView(
+          report: report,
+          scopeLabel: scope.label,
+          metric: _selectedMetric,
+          selectedObservation: selectedObservation,
+          onMetricChanged: (metric) {
+            HapticFeedback.selectionClick();
+            setState(() => _selectedMetric = metric);
+            _recordDebug('trend_metric=${metric.name}');
           },
-        ),
-      ),
+          onSelectObservation: _selectObservation,
+        );
+      case _AnalyticsSection.sector:
+        final metrics = baseReport.sectorMetrics;
+        if (metrics == null) {
+          return const _AnalyticsEmptyView(
+            icon: Icons.grid_off_rounded,
+            title: '방문 구역 데이터가 없습니다.',
+            description: '이 Area 또는 선택 날짜에는 방문 구역 집계가 없습니다.',
+          );
+        }
+        return _AnalyticsSectorView(
+          metrics: metrics,
+          selectedScope: scope,
+          onScopeSelected: _selectScope,
+        );
+      case _AnalyticsSection.detail:
+        return _AnalyticsDetailView(
+          rows: report.rows,
+          selectedObservation: selectedObservation,
+          onSelectObservation: _selectObservation,
+        );
+      case _AnalyticsSection.areaComparison:
+        if (eligibleAreas.length < 2) {
+          return const _AnalyticsEmptyView(
+            icon: Icons.compare_arrows_rounded,
+            title: '비교 가능한 Area가 부족합니다.',
+            description: '방문 구역을 지원하는 Area가 2개 이상 필요합니다.',
+          );
+        }
+        return const SizedBox.shrink();
+      case _AnalyticsSection.hourly:
+        return _buildRawSectionGate(
+          report: baseReport,
+          scope: scope,
+          selectedObservation: selectedObservation,
+          target: _AnalyticsSection.hourly,
+          readyBuilder: (deep) => _AnalyticsHourlyView(
+            report: deep,
+            selectedObservation: selectedObservation,
+            metric: _hourlyMetric,
+            onMetricChanged: (metric) {
+              HapticFeedback.selectionClick();
+              setState(() => _hourlyMetric = metric);
+              _recordDebug('hourly_metric=${metric.name}');
+            },
+          ),
+        );
+      case _AnalyticsSection.payment:
+        return _buildRawSectionGate(
+          report: baseReport,
+          scope: scope,
+          selectedObservation: selectedObservation,
+          target: _AnalyticsSection.payment,
+          readyBuilder: (deep) => _AnalyticsPaymentView(
+            report: deep,
+            selectedObservation: selectedObservation,
+            metric: _paymentMetric,
+            onMetricChanged: (metric) {
+              HapticFeedback.selectionClick();
+              setState(() => _paymentMetric = metric);
+              _recordDebug('payment_metric=${metric.name}');
+            },
+          ),
+        );
+      case _AnalyticsSection.weekday:
+        return _buildRawSectionGate(
+          report: baseReport,
+          scope: scope,
+          selectedObservation: selectedObservation,
+          target: _AnalyticsSection.weekday,
+          requireWholeComparison: true,
+          readyBuilder: (deep) => _AnalyticsWeekdayView(
+            report: deep,
+            selectedId: _selectedWeekdaySectionId,
+            onSelect: (id) {
+              HapticFeedback.selectionClick();
+              setState(() => _selectedWeekdaySectionId = id);
+              _recordDebug('weekday_select=$id');
+            },
+          ),
+        );
+    }
+  }
+
+  Widget _buildRawSectionGate({
+    required _ChartAReport report,
+    required _AnalyticsScope scope,
+    required DateTime? selectedObservation,
+    required _AnalyticsSection target,
+    required Widget Function(StatisticsDeepReport deep) readyBuilder,
+    bool requireWholeComparison = false,
+  }) {
+    final deep = _deepReport;
+    final selectedKey = selectedObservation == null
+        ? null
+        : _dateOnly(selectedObservation);
+    final selectedReady = deep != null &&
+        (selectedKey == null || deep.dateStrs.contains(selectedKey));
+    final wholeReady = deep != null && _deepReportMatchesChartReport(deep, report);
+    if (deep != null && (requireWholeComparison ? wholeReady : selectedReady)) {
+      return readyBuilder(_scopeDeepReport(deep, scope));
+    }
+
+    _ChartARow? selectedRow;
+    if (selectedObservation != null) {
+      for (final row in report.rows) {
+        if (_sameDate(row.date, selectedObservation)) {
+          selectedRow = row;
+          break;
+        }
+      }
+    }
+    final selectedAvailable = selectedRow != null && _rowHasRawSource(selectedRow);
+    final availableDateCount =
+        report.rows.where(_rowHasRawSource).length;
+    final allAvailable = report.rows.isNotEmpty &&
+        availableDateCount == report.rows.length;
+    final title = switch (target) {
+      _AnalyticsSection.hourly => '시간대 분석',
+      _AnalyticsSection.payment => '결제 분석',
+      _AnalyticsSection.weekday => '요일 분석',
+      _ => '원본 분석',
+    };
+    return _RawAnalysisGate(
+      title: title,
+      loading: _deepLoading,
+      progressCurrent: _deepProgressCurrent,
+      progressTotal: _deepProgressTotal,
+      selectedDate: selectedObservation,
+      selectedAvailable: selectedAvailable && !requireWholeComparison,
+      allAvailable: allAvailable,
+      availableDateCount: availableDateCount,
+      totalDateCount: report.rows.length,
+      onSelected: selectedAvailable && !requireWholeComparison && selectedObservation != null
+          ? () => _loadRawAnalysis(
+                report,
+                _DeepLoadRequest.dates(
+                  dates: <DateTime>[selectedObservation],
+                  label: _dateOnly(selectedObservation),
+                ),
+                target,
+              )
+          : null,
+      onAll: allAvailable
+          ? () => _loadRawAnalysis(
+                report,
+                _DeepLoadRequest.dates(
+                  dates: report.rows.map((row) => row.date).toList(),
+                  label: report.rangeLabel,
+                ),
+                target,
+              )
+          : null,
     );
+  }
+
+  void _selectObservation(DateTime value) {
+    HapticFeedback.selectionClick();
+    setState(() => _selectedObservation = value);
+    _recordDebug('observation_select=${_dateOnly(value)}');
+  }
+
+  Future<void> _showDeveloperStatus(_ChartAReport report) async {
+    if (!_developerMode || !mounted) return;
+    final selectedObservation = _effectiveObservation(report);
+    final missingRawRows = _rowsMissingRawSources(report.rows);
+    final availableRawDateCount = report.rows.length - missingRawRows.length;
+    final missingRawDates = missingRawRows.map((row) => row.dateStr).join(',');
+    final activeScope = _resolveAnalyticsScope(
+      _analyticsScopeOptions(report),
+      _selectedScope,
+    );
+    final scopedReport = _scopeChartReport(report, activeScope);
+    final deepForStatus = _deepReport;
+    final scopedDeep = deepForStatus == null
+        ? null
+        : _scopeDeepReport(deepForStatus, activeScope);
+    final csvFullScopeReady = deepForStatus != null &&
+        _deepReportMatchesChartReport(deepForStatus, report);
+    final csvRows = csvFullScopeReady ? deepForStatus.rows.length : 0;
+    _recordDebug(
+      'developer_status_open section=${_selectedSection.name} scope=${activeScope.label} metric=${_selectedMetric.name} observation=${selectedObservation == null ? '-' : _dateOnly(selectedObservation)} rawCoverage=$availableRawDateCount/${report.rows.length} rawMissing=${missingRawDates.isEmpty ? '-' : missingRawDates} deepReady=${_deepReport != null} deepCache=${StatisticsDeepLogService.memoryCacheSize} deepHits=${StatisticsDeepLogService.cacheHits} deepDownloads=${StatisticsDeepLogService.gcsDownloads} deepBytes=${StatisticsDeepLogService.gcsDownloadedBytes}',
+    );
+    final trace = await DeveloperOperationTrace.start(
+      context: context,
+      title: '통계 분석 상태',
+      initialMessage: 'Analytics Side Dock 상태와 원본 분석 비용 정보를 수집하고 있습니다.',
+      useCommonUi: true,
+      developerModeMessage: '개발자 모드 ON: debugPrint 코드를 복사할 수 있습니다.',
+      standardModeMessage: '개발자 모드 OFF',
+    );
+    if (!trace.developerMode) return;
+    final media = MediaQuery.maybeOf(context);
+    trace.log(
+      'division=${widget.division}, area=${widget.area}, range=${report.rangeLabel}, days=${report.rows.length}, section=${_selectedSection.name}, scope=${activeScope.label}, scopeKey=${activeScope.key}, metric=${_selectedMetric.name}, observation=${selectedObservation == null ? '-' : _dateOnly(selectedObservation)}',
+      progress: .18,
+    );
+    trace.log(
+      'departure=${report.metrics.totalDeparture}, fee=${report.metrics.totalFee}, sectorAvailable=${report.sectorMetrics != null}, availableAreas=${widget.availableAreas.length}',
+      progress: .3,
+    );
+    trace.log(
+      'scope=${activeScope.label}, scopeDeparture=${scopedReport.metrics.totalDeparture}, scopeFee=${scopedReport.metrics.totalFee}, scopeRawVehicles=${scopedDeep?.rows.length ?? 0}',
+      progress: .4,
+    );
+    trace.log(
+      'rawCoverage=$availableRawDateCount/${report.rows.length}, rawMissing=${missingRawDates.isEmpty ? '-' : missingRawDates}, rawReady=${_deepReport != null}, rawScope=${_deepReport?.scopeLabel ?? '-'}, rawSampleDates=${_deepReport?.dateStrs.length ?? 0}, rawObjects=${_deepReport?.objectNames.length ?? 0}, rawVehicles=${_deepReport?.rows.length ?? 0}, progress=$_deepProgressCurrent/$_deepProgressTotal',
+      progress: .52,
+    );
+    trace.log(
+      'deepMemoryCache=${StatisticsDeepLogService.memoryCacheSize}, deepCacheHits=${StatisticsDeepLogService.cacheHits}, deepGcsDownloads=${StatisticsDeepLogService.gcsDownloads}, deepGcsBytes=${StatisticsDeepLogService.gcsDownloadedBytes}, reduceMotion=${media?.disableAnimations ?? false}',
+      progress: .62,
+    );
+    trace.log(
+      'pdfDesign=list-surface-v1, pdfScope=full_area, pdfVehicleLog=excluded, pdfNumberingSchema=01>02>03>04>05>06, pdfRawSubsections=05.x, pdfSectorAppendix=06.x, csvVehicleLog=attached_on_send, csvEncoding=utf8_bom, csvRows=$csvRows, csvFullScopeReady=$csvFullScopeReady, csvReuseDeepReport=$csvFullScopeReady, attachments=2',
+      progress: .65,
+    );
+    final chartLogs = StatisticsChartInteractionLog.lines;
+    trace.log(
+      'chartInteractions=${chartLogs.length}',
+      progress: .66,
+    );
+    for (var i = 0; i < chartLogs.length; i++) {
+      trace.log(
+        chartLogs[i],
+        progress: .66 + ((i + 1) / math.max(chartLogs.length, 1)) * .12,
+      );
+    }
+    final snapshot = List<String>.of(_debugLines);
+    for (var i = 0; i < snapshot.length; i++) {
+      trace.log(
+        snapshot[i],
+        progress: .78 + ((i + 1) / math.max(snapshot.length, 1)) * .18,
+      );
+    }
+    await trace.succeed('통계 분석 상태 수집이 완료되었습니다.');
   }
 
   String _safeFileName(String raw) {
-    final s = raw.trim().isEmpty ? '통계그래프A' : raw.trim();
+    final s = raw.trim().isEmpty ? '출차정산분석' : raw.trim();
     return s.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
   }
 
@@ -1915,19 +2147,105 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
     return '${dt.year.toString().padLeft(4, '0')}${dt.month.toString().padLeft(2, '0')}${dt.day.toString().padLeft(2, '0')}';
   }
 
+  String _reportRangeTag(_ChartAReport report) {
+    if (report.rows.isEmpty) return _dateTag(DateTime.now());
+    final dates = report.rows.map((row) => row.date).toList()
+      ..sort((a, b) => a.compareTo(b));
+    final first = _dateTag(dates.first);
+    final last = _dateTag(dates.last);
+    return first == last ? first : '$first-$last';
+  }
+
 }
 
-class _AReportCover extends StatelessWidget {
-  final _ChartAReport report;
-  final String division;
-  final String area;
-  final StatisticsDeepReport? deepReport;
 
-  const _AReportCover({
-    required this.report,
-    required this.division,
+class _AnalyticsHeader extends StatelessWidget {
+  final String area;
+  final String rangeLabel;
+  final int dayCount;
+  final String scopeLabel;
+  final String? deepLabel;
+  final bool loading;
+  final int progressCurrent;
+  final int progressTotal;
+  final VoidCallback? onClose;
+
+  const _AnalyticsHeader({
     required this.area,
-    required this.deepReport,
+    required this.rangeLabel,
+    required this.dayCount,
+    required this.scopeLabel,
+    required this.deepLabel,
+    required this.loading,
+    required this.progressCurrent,
+    required this.progressTotal,
+    required this.onClose,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(22, 16, 10, 14),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '출차·정산 분석',
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '${area.trim().isEmpty ? 'Area 미지정' : area.trim()} · $rangeLabel · 비교 $dayCount일 · $scopeLabel',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: cs.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (loading || deepLabel != null) ...[
+                  const SizedBox(height: 5),
+                  Text(
+                    loading
+                        ? progressTotal > 0
+                            ? '원본 로그 분석 중 · $progressCurrent / $progressTotal'
+                            : '원본 로그 분석 준비 중'
+                        : '원본 분석 준비됨 · $deepLabel',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: loading ? cs.primary : cs.tertiary,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: '닫기',
+            onPressed: onClose,
+            icon: const Icon(Icons.close_rounded),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+
+class _AnalyticsScopeBar extends StatelessWidget {
+  final List<_AnalyticsScope> scopes;
+  final _AnalyticsScope selected;
+  final ValueChanged<_AnalyticsScope> onSelected;
+
+  const _AnalyticsScopeBar({
+    required this.scopes,
+    required this.selected,
+    required this.onSelected,
   });
 
   @override
@@ -1935,47 +2253,36 @@ class _AReportCover extends StatelessWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     return Container(
-      padding: const EdgeInsets.all(22),
-      decoration: StatisticsReportDesign.screenPanel(context, emphasized: true),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(18, 7, 18, 9),
+      color: cs.surface,
+      child: Row(
         children: [
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              StatisticsReportDesign.screenPill(context: context, icon: Icons.insights_rounded, text: 'Statistics Graph A', strong: true),
-              if (division.trim().isNotEmpty) StatisticsReportDesign.screenPill(context: context, icon: Icons.apartment_rounded, text: division.trim()),
-              if (area.trim().isNotEmpty) StatisticsReportDesign.screenPill(context: context, icon: Icons.location_on_rounded, text: area.trim()),
-              if (deepReport != null) StatisticsReportDesign.screenPill(context: context, icon: Icons.auto_graph_rounded, text: 'B 심화 포함'),
-            ],
-          ),
-          const SizedBox(height: 20),
           Text(
-            '통계 그래프 A',
-            style: theme.textTheme.headlineMedium?.copyWith(
+            '분석 범위',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: cs.onSurfaceVariant,
               fontWeight: FontWeight.w900,
-              color: cs.onPrimaryContainer,
             ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            '날짜별 출차와 정산금 집계를 보고서형 화면으로 재구성했습니다.',
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: cs.onPrimaryContainer.withOpacity(0.78),
-              fontWeight: FontWeight.w700,
+          const SizedBox(width: 10),
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              child: Row(
+                children: [
+                  for (var i = 0; i < scopes.length; i++) ...[
+                    ChoiceChip(
+                      label: Text(scopes[i].label),
+                      selected: scopes[i].key == selected.key,
+                      onSelected: (_) => onSelected(scopes[i]),
+                    ),
+                    if (i != scopes.length - 1) const SizedBox(width: 7),
+                  ],
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: 20),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              _CoverMetric(label: '대상 기간', value: report.rangeLabel, icon: Icons.date_range_rounded),
-              _CoverMetric(label: '대상 날짜', value: '${report.metrics.dayCount}일', icon: Icons.event_note_rounded),
-              _CoverMetric(label: '출차 합계', value: '${_fmt(report.metrics.totalDeparture)}대', icon: Icons.logout_rounded),
-              _CoverMetric(label: '정산금 합계', value: '₩${_fmt(report.metrics.totalFee)}', icon: Icons.payments_rounded),
-            ],
           ),
         ],
       ),
@@ -1983,43 +2290,361 @@ class _AReportCover extends StatelessWidget {
   }
 }
 
-class _CoverMetric extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
+class _AnalyticsRail extends StatelessWidget {
+  final _AnalyticsSection selectedSection;
+  final bool sectorAvailable;
+  final bool areaComparisonAvailable;
+  final bool developerMode;
+  final bool sending;
+  final bool rawLoading;
+  final bool rawReady;
+  final ValueChanged<_AnalyticsSection> onSelect;
+  final VoidCallback? onPdf;
+  final VoidCallback? onDeveloper;
 
-  const _CoverMetric({required this.label, required this.value, required this.icon});
+  const _AnalyticsRail({
+    required this.selectedSection,
+    required this.sectorAvailable,
+    required this.areaComparisonAvailable,
+    required this.developerMode,
+    required this.sending,
+    required this.rawLoading,
+    required this.rawReady,
+    required this.onSelect,
+    required this.onPdf,
+    required this.onDeveloper,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return SizedBox(
+      width: 68,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Column(
+          children: [
+            _AnalyticsRailButton(
+              icon: Icons.dashboard_rounded,
+              tooltip: '개요',
+              selected: selectedSection == _AnalyticsSection.overview,
+              onTap: () => onSelect(_AnalyticsSection.overview),
+            ),
+            _AnalyticsRailButton(
+              icon: Icons.show_chart_rounded,
+              tooltip: '추이',
+              selected: selectedSection == _AnalyticsSection.trend,
+              onTap: () => onSelect(_AnalyticsSection.trend),
+            ),
+            if (sectorAvailable)
+              _AnalyticsRailButton(
+                icon: Icons.grid_view_rounded,
+                tooltip: '방문 구역',
+                selected: selectedSection == _AnalyticsSection.sector,
+                onTap: () => onSelect(_AnalyticsSection.sector),
+              ),
+            _AnalyticsRailButton(
+              icon: Icons.table_chart_rounded,
+              tooltip: '상세',
+              selected: selectedSection == _AnalyticsSection.detail,
+              onTap: () => onSelect(_AnalyticsSection.detail),
+            ),
+            const SizedBox(height: 8),
+            Divider(indent: 12, endIndent: 12, color: cs.outlineVariant),
+            Text(
+              '원본',
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: cs.onSurfaceVariant,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 9,
+                  ),
+            ),
+            const SizedBox(height: 4),
+            _AnalyticsRailButton(
+              icon: Icons.schedule_rounded,
+              tooltip: '시간대 · 원본 로그 기반',
+              selected: selectedSection == _AnalyticsSection.hourly,
+              badge: rawLoading ? '…' : rawReady ? '✓' : null,
+              onTap: () => onSelect(_AnalyticsSection.hourly),
+            ),
+            _AnalyticsRailButton(
+              icon: Icons.payments_rounded,
+              tooltip: '결제 · 원본 로그 기반',
+              selected: selectedSection == _AnalyticsSection.payment,
+              badge: rawReady ? '✓' : null,
+              onTap: () => onSelect(_AnalyticsSection.payment),
+            ),
+            _AnalyticsRailButton(
+              icon: Icons.calendar_view_week_rounded,
+              tooltip: '요일 · 원본 로그 기반',
+              selected: selectedSection == _AnalyticsSection.weekday,
+              badge: rawReady ? '✓' : null,
+              onTap: () => onSelect(_AnalyticsSection.weekday),
+            ),
+            if (areaComparisonAvailable)
+              _AnalyticsRailButton(
+                icon: Icons.compare_arrows_rounded,
+                tooltip: 'Area 방문 구역 비교',
+                selected: selectedSection == _AnalyticsSection.areaComparison,
+                onTap: () => onSelect(_AnalyticsSection.areaComparison),
+              ),
+            const Spacer(),
+            Divider(indent: 12, endIndent: 12, color: cs.outlineVariant),
+            _AnalyticsRailButton(
+              icon: sending ? Icons.hourglass_top_rounded : Icons.attach_file_rounded,
+              tooltip: sending ? '보고서 준비 중' : 'PDF + 차량 CSV 발신',
+              selected: false,
+              onTap: onPdf,
+            ),
+            if (developerMode)
+              _AnalyticsRailButton(
+                icon: Icons.terminal_rounded,
+                tooltip: '개발자 상태',
+                selected: false,
+                onTap: onDeveloper,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AnalyticsRailButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final bool selected;
+  final String? badge;
+  final VoidCallback? onTap;
+
+  const _AnalyticsRailButton({
+    required this.icon,
+    required this.tooltip,
+    required this.selected,
+    required this.onTap,
+    this.badge,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    return Tooltip(
+      message: tooltip,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+            curve: CommonUiMotion.enter,
+            width: 48,
+            height: 46,
+            decoration: BoxDecoration(
+              color: selected ? cs.secondaryContainer : Colors.transparent,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                AnimatedSwitcher(
+                  duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                  switchInCurve: CommonUiMotion.enter,
+                  switchOutCurve: CommonUiMotion.exit,
+                  transitionBuilder: (child, animation) {
+                    if (reduceMotion) return child;
+                    return FadeTransition(
+                      opacity: animation,
+                      child: ScaleTransition(
+                        scale: Tween<double>(begin: .88, end: 1).animate(animation),
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: Icon(
+                    icon,
+                    key: ValueKey<int>(icon.codePoint),
+                    color: selected
+                        ? cs.onSecondaryContainer
+                        : cs.onSurfaceVariant,
+                  ),
+                ),
+                if (badge != null)
+                  Positioned(
+                    right: 4,
+                    top: 3,
+                    child: Text(
+                      badge!,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: cs.primary,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 9,
+                          ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AnalyticsOverviewView extends StatelessWidget {
+  final _ChartAReport report;
+  final String scopeLabel;
+  final DateTime? selectedObservation;
+  final ValueChanged<DateTime> onSelectObservation;
+
+  const _AnalyticsOverviewView({
+    required this.report,
+    required this.scopeLabel,
+    required this.selectedObservation,
+    required this.onSelectObservation,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final m = report.metrics;
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(22, 20, 22, 32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _AnalyticsMetricBand(metrics: m),
+          const SizedBox(height: 22),
+          _AnalyticsSectionTitle(
+            icon: Icons.insights_rounded,
+            title: '기간 흐름',
+            subtitle: report.rows.length < 3
+                ? '선택한 날짜 사이의 직접 변화를 비교합니다.'
+                : '출차와 정산을 같은 날짜 축에서 각각 확인합니다.',
+          ),
+          const SizedBox(height: 12),
+          _AnalyticsAdaptiveOverviewTrend(
+            rows: report.rows,
+            scopeLabel: scopeLabel,
+          ),
+          const SizedBox(height: 22),
+          _AnalyticsSectionTitle(
+            icon: Icons.bolt_rounded,
+            title: '주요 변화',
+            subtitle: '선택한 데이터에서 확인되는 관측값만 정리합니다.',
+          ),
+          const SizedBox(height: 10),
+          _AnalyticsInsightList(report: report),
+          const SizedBox(height: 22),
+          _ObservationSelector(
+            rows: report.rows,
+            selectedObservation: selectedObservation,
+            onSelected: onSelectObservation,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AnalyticsMetricBand extends StatelessWidget {
+  final _ChartAMetrics metrics;
+
+  const _AnalyticsMetricBand({required this.metrics});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     return Container(
-      constraints: const BoxConstraints(minWidth: 170),
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.symmetric(vertical: 12),
       decoration: BoxDecoration(
-        color: cs.surface.withOpacity(0.72),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: cs.outlineVariant.withOpacity(0.7)),
+        border: Border(
+          top: BorderSide(color: cs.outlineVariant),
+          bottom: BorderSide(color: cs.outlineVariant),
+        ),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(color: cs.primaryContainer, borderRadius: BorderRadius.circular(14)),
-            child: Icon(icon, color: cs.onPrimaryContainer),
-          ),
-          const SizedBox(width: 10),
-          Flexible(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final children = [
+            _AnalyticsMetricBlock(
+              label: '출차',
+              value: '${_fmt(metrics.totalDeparture)}대',
+              secondary: '선택일 평균 ${metrics.averageDeparture.toStringAsFixed(1)}대',
+            ),
+            _AnalyticsMetricBlock(
+              label: '정산',
+              value: '₩${_fmt(metrics.totalFee)}',
+              secondary: '선택일 평균 ₩${_fmt(metrics.averageFee.round())}',
+            ),
+          ];
+          if (constraints.maxWidth < 560) {
+            return Column(
               children: [
-                Text(label, style: theme.textTheme.labelMedium?.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w800)),
-                const SizedBox(height: 3),
-                Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+                children[0],
+                Divider(color: cs.outlineVariant),
+                children[1],
               ],
+            );
+          }
+          return Row(
+            children: [
+              Expanded(child: children[0]),
+              SizedBox(
+                height: 66,
+                child: VerticalDivider(color: cs.outlineVariant),
+              ),
+              Expanded(child: children[1]),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _AnalyticsMetricBlock extends StatelessWidget {
+  final String label;
+  final String value;
+  final String secondary;
+
+  const _AnalyticsMetricBlock({
+    required this.label,
+    required this.value,
+    required this.secondary,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: cs.onSurfaceVariant,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            value,
+            style: theme.textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            secondary,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: cs.onSurfaceVariant,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ],
@@ -2028,36 +2653,392 @@ class _CoverMetric extends StatelessWidget {
   }
 }
 
-class _AReportSummary extends StatelessWidget {
+class _AnalyticsSectionTitle extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  const _AnalyticsSectionTitle({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: Icon(icon, color: cs.primary, size: 20),
+        ),
+        const SizedBox(width: 9),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: cs.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AnalyticsAdaptiveOverviewTrend extends StatelessWidget {
+  final List<_ChartARow> rows;
+  final String scopeLabel;
+
+  const _AnalyticsAdaptiveOverviewTrend({
+    required this.rows,
+    required this.scopeLabel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (rows.length <= 1) {
+      final row = rows.isEmpty ? null : rows.first;
+      return _AnalyticsEmptyView(
+        icon: Icons.event_rounded,
+        title: row == null ? '선택된 날짜가 없습니다.' : row.dateStr,
+        description: row == null
+            ? '비교할 날짜를 선택해 주세요.'
+            : '출차 ${_fmt(row.departure)}대 · 정산 ₩${_fmt(row.fee)}',
+      );
+    }
+    if (rows.length == 2) {
+      return _TwoPointComparison(rows: rows);
+    }
+    return _AChartGrid(
+      children: [
+        _DateLineChartCard(
+          title: '출차 추이',
+          subtitle: '선택 날짜 기준 출차 변화',
+          rows: rows,
+          valueOf: (row) => row.departure.toDouble(),
+          valueText: (value) => '${_fmt(value.round())}대',
+          icon: Icons.logout_rounded,
+          scopeLabel: scopeLabel,
+        ),
+        _DateLineChartCard(
+          title: '정산 추이',
+          subtitle: '선택 날짜 기준 정산 변화',
+          rows: rows,
+          valueOf: (row) => row.fee.toDouble(),
+          valueText: (value) => '₩${_fmt(value.round())}',
+          icon: Icons.payments_rounded,
+          scopeLabel: scopeLabel,
+        ),
+      ],
+    );
+  }
+}
+
+class _TwoPointComparison extends StatelessWidget {
+  final List<_ChartARow> rows;
+
+  const _TwoPointComparison({required this.rows});
+
+  @override
+  Widget build(BuildContext context) {
+    final first = rows.first;
+    final second = rows.last;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(color: cs.outlineVariant),
+          bottom: BorderSide(color: cs.outlineVariant),
+        ),
+      ),
+      child: Column(
+        children: [
+          _TwoPointRow(
+            label: '출차',
+            start: '${_fmt(first.departure)}대',
+            end: '${_fmt(second.departure)}대',
+            delta: _signed(second.departure - first.departure, suffix: '대'),
+          ),
+          const SizedBox(height: 14),
+          _TwoPointRow(
+            label: '정산',
+            start: '₩${_fmt(first.fee)}',
+            end: '₩${_fmt(second.fee)}',
+            delta: _signed(second.fee - first.fee, prefix: '₩'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TwoPointRow extends StatelessWidget {
+  final String label;
+  final String start;
+  final String end;
+  final String delta;
+
+  const _TwoPointRow({
+    required this.label,
+    required this.start,
+    required this.end,
+    required this.delta,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      children: [
+        SizedBox(
+          width: 54,
+          child: Text(label, style: theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w900)),
+        ),
+        Expanded(child: Text(start, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800))),
+        const Icon(Icons.arrow_forward_rounded, size: 18),
+        const SizedBox(width: 10),
+        Expanded(child: Text(end, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900))),
+        const SizedBox(width: 12),
+        Text(delta, style: theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w900)),
+      ],
+    );
+  }
+}
+
+class _AnalyticsInsightList extends StatelessWidget {
   final _ChartAReport report;
 
-  const _AReportSummary({required this.report});
+  const _AnalyticsInsightList({required this.report});
 
   @override
   Widget build(BuildContext context) {
     final m = report.metrics;
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: StatisticsReportDesign.screenPanel(context),
+    final lines = <String>[];
+    if (m.maxDeparture != null) {
+      lines.add('${m.maxDeparture!.dateStr} · 출차 ${_fmt(m.maxDeparture!.departure)}대로 비교 기간 최고');
+    }
+    if (m.maxFee != null) {
+      lines.add('${m.maxFee!.dateStr} · 정산 ₩${_fmt(m.maxFee!.fee)}로 비교 기간 최고');
+    }
+    if (report.rows.length >= 2) {
+      final last = report.rows.last;
+      final previous = report.rows[report.rows.length - 2];
+      final feeRate = previous.fee == 0
+          ? null
+          : (last.fee - previous.fee) / previous.fee * 100;
+      if (feeRate != null) {
+        lines.add('${last.dateStr} · 정산이 이전 비교일보다 ${feeRate >= 0 ? '+' : ''}${feeRate.toStringAsFixed(1)}% 변화');
+      }
+    }
+    if (lines.isEmpty) {
+      lines.add('선택 데이터에서 비교 가능한 주요 변화가 없습니다.');
+    }
+    return Column(
+      children: [
+        for (final line in lines)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 5),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.only(top: 3),
+                  child: Icon(Icons.circle, size: 7),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    line,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          height: 1.35,
+                        ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _ObservationSelector extends StatelessWidget {
+  final List<_ChartARow> rows;
+  final DateTime? selectedObservation;
+  final ValueChanged<DateTime> onSelected;
+
+  const _ObservationSelector({
+    required this.rows,
+    required this.selectedObservation,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (final row in rows)
+          ChoiceChip(
+            label: Text(row.dateStr.substring(5)),
+            selected: selectedObservation != null &&
+                selectedObservation!.year == row.date.year &&
+                selectedObservation!.month == row.date.month &&
+                selectedObservation!.day == row.date.day,
+            onSelected: (_) => onSelected(row.date),
+          ),
+      ],
+    );
+  }
+}
+
+class _AnalyticsTrendView extends StatelessWidget {
+  final _ChartAReport report;
+  final String scopeLabel;
+  final _AnalyticsMetric metric;
+  final DateTime? selectedObservation;
+  final ValueChanged<_AnalyticsMetric> onMetricChanged;
+  final ValueChanged<DateTime> onSelectObservation;
+
+  const _AnalyticsTrendView({
+    required this.report,
+    required this.scopeLabel,
+    required this.metric,
+    required this.selectedObservation,
+    required this.onMetricChanged,
+    required this.onSelectObservation,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final row = selectedObservation == null
+        ? report.rows.last
+        : report.rows.firstWhere(
+            (item) =>
+                item.date.year == selectedObservation!.year &&
+                item.date.month == selectedObservation!.month &&
+                item.date.day == selectedObservation!.day,
+            orElse: () => report.rows.last,
+          );
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(22, 20, 22, 32),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const _ASectionHeaderLine(
-            icon: Icons.dashboard_customize_rounded,
-            title: '보고서 요약',
-            subtitle: '통계 그래프 A의 전체 기간 핵심 지표입니다.',
+          _AnalyticsSectionTitle(
+            icon: Icons.show_chart_rounded,
+            title: '추이',
+            subtitle: '같은 날짜 축에서 출차 또는 정산 변화에 집중합니다.',
+          ),
+          const SizedBox(height: 12),
+          SegmentedButton<_AnalyticsMetric>(
+            segments: const [
+              ButtonSegment(value: _AnalyticsMetric.departure, label: Text('출차'), icon: Icon(Icons.logout_rounded)),
+              ButtonSegment(value: _AnalyticsMetric.fee, label: Text('정산'), icon: Icon(Icons.payments_rounded)),
+            ],
+            selected: <_AnalyticsMetric>{metric},
+            onSelectionChanged: (values) => onMetricChanged(values.first),
+          ),
+          const SizedBox(height: 16),
+          if (report.rows.length <= 2)
+            _AnalyticsAdaptiveOverviewTrend(
+              rows: report.rows,
+              scopeLabel: scopeLabel,
+            )
+          else
+            _DateLineChartCard(
+              title: metric == _AnalyticsMetric.departure ? '출차 추이' : '정산 추이',
+              subtitle: '선택 날짜 전체 흐름',
+              rows: report.rows,
+              valueOf: metric == _AnalyticsMetric.departure
+                  ? (item) => item.departure.toDouble()
+                  : (item) => item.fee.toDouble(),
+              valueText: metric == _AnalyticsMetric.departure
+                  ? (value) => '${_fmt(value.round())}대'
+                  : (value) => '₩${_fmt(value.round())}',
+              icon: metric == _AnalyticsMetric.departure
+                  ? Icons.logout_rounded
+                  : Icons.payments_rounded,
+              scopeLabel: scopeLabel,
+            ),
+          const SizedBox(height: 18),
+          _ObservationSelector(
+            rows: report.rows,
+            selectedObservation: selectedObservation,
+            onSelected: onSelectObservation,
           ),
           const SizedBox(height: 14),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
+          _SelectedObservationSummary(row: row, metric: metric),
+        ],
+      ),
+    );
+  }
+}
+
+class _SelectedObservationSummary extends StatelessWidget {
+  final _ChartARow row;
+  final _AnalyticsMetric metric;
+
+  const _SelectedObservationSummary({required this.row, required this.metric});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final value = metric == _AnalyticsMetric.departure
+        ? '${_fmt(row.departure)}대'
+        : '₩${_fmt(row.fee)}';
+    final delta = metric == _AnalyticsMetric.departure
+        ? _signed(row.departureDelta, suffix: '대')
+        : _signed(row.feeDelta, prefix: '₩');
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(color: cs.outlineVariant),
+          bottom: BorderSide(color: cs.outlineVariant),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(row.dateStr, style: theme.textTheme.labelLarge?.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 3),
+                Text(value, style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              _MetricTile(label: '출차 합계', value: '${_fmt(m.totalDeparture)}대', icon: Icons.logout_rounded),
-              _MetricTile(label: '출차 평균', value: '${m.averageDeparture.toStringAsFixed(1)}대', icon: Icons.functions_rounded),
-              _MetricTile(label: '정산금 합계', value: '₩${_fmt(m.totalFee)}', icon: Icons.payments_rounded),
-              _MetricTile(label: '정산금 평균', value: '₩${_fmt(m.averageFee.round())}', icon: Icons.query_stats_rounded),
-              _MetricTile(label: '최고 출차', value: m.maxDeparture == null ? '-' : '${m.maxDeparture!.dateStr} · ${m.maxDeparture!.departure}대', icon: Icons.trending_up_rounded),
-              _MetricTile(label: '최고 정산금', value: m.maxFee == null ? '-' : '${m.maxFee!.dateStr} · ₩${_fmt(m.maxFee!.fee)}', icon: Icons.workspace_premium_rounded),
+              Text('이전 비교일 대비', style: theme.textTheme.labelMedium?.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 3),
+              Text(row.no == 1 ? '기준값' : delta, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
             ],
           ),
         ],
@@ -2066,172 +3047,1356 @@ class _AReportSummary extends StatelessWidget {
   }
 }
 
-class _ASectionView extends StatelessWidget {
-  final _ChartASection section;
+class _AnalyticsSectorView extends StatefulWidget {
+  final EndWorkSectorMetrics metrics;
+  final _AnalyticsScope selectedScope;
+  final ValueChanged<_AnalyticsScope> onScopeSelected;
 
-  const _ASectionView({required this.section});
+  const _AnalyticsSectorView({
+    required this.metrics,
+    required this.selectedScope,
+    required this.onScopeSelected,
+  });
+
+  @override
+  State<_AnalyticsSectorView> createState() => _AnalyticsSectorViewState();
+}
+
+enum _AnalyticsSectorMetric { vehicles, fee }
+
+class _AnalyticsSectorViewState extends State<_AnalyticsSectorView> {
+  _AnalyticsSectorMetric _metric = _AnalyticsSectorMetric.vehicles;
 
   @override
   Widget build(BuildContext context) {
-    final sectorMetrics = section.sectorMetrics;
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: StatisticsReportDesign.screenPanel(context),
+    final items = widget.metrics.items;
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(22, 20, 22, 32),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _ASectionHeaderLine(
-            icon: section.icon,
-            title: section.title,
-            subtitle: section.subtitle,
+          const _AnalyticsSectionTitle(
+            icon: Icons.grid_view_rounded,
+            title: '방문 구역',
+            subtitle: '전체 집계와 같은 선택 날짜 조건으로 방문 구역별 차량 수와 정산을 비교합니다.',
+          ),
+          const SizedBox(height: 12),
+          SegmentedButton<_AnalyticsSectorMetric>(
+            segments: const [
+              ButtonSegment(
+                value: _AnalyticsSectorMetric.vehicles,
+                label: Text('차량 수'),
+              ),
+              ButtonSegment(
+                value: _AnalyticsSectorMetric.fee,
+                label: Text('정산금'),
+              ),
+            ],
+            selected: <_AnalyticsSectorMetric>{_metric},
+            onSelectionChanged: (values) {
+              HapticFeedback.selectionClick();
+              setState(() => _metric = values.first);
+              StatisticsChartInteractionLog.log(
+                'sector_metric=${values.first.name}',
+              );
+            },
           ),
           const SizedBox(height: 14),
-          if (section.type == _ChartASectionType.sector &&
-              sectorMetrics != null) ...[
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                _MetricTile(
-                  label: '방문 구역',
-                  value: '${sectorMetrics.sectorCount}개',
-                  icon: Icons.grid_view_rounded,
+          if (items.isEmpty)
+            const _AnalyticsEmptyView(
+              icon: Icons.grid_off_rounded,
+              title: '집계된 방문 구역이 없습니다.',
+              description: '선택 날짜에 배정된 방문 구역 데이터가 없습니다.',
+            )
+          else
+            _SectorComparisonChart(
+              items: items,
+              metric: _metric,
+            ),
+          const SizedBox(height: 18),
+          Text(
+            '분석 범위 선택',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w900,
                 ),
-                _MetricTile(
-                  label: '지정 차량',
-                  value: '${sectorMetrics.assignedVehicleCount}대',
-                  icon: Icons.check_circle_outline_rounded,
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              ChoiceChip(
+                label: const Text('전체'),
+                selected: widget.selectedScope.isAll,
+                onSelected: (_) =>
+                    widget.onScopeSelected(const _AnalyticsScope.all()),
+              ),
+              for (final item in items)
+                ChoiceChip(
+                  label: Text(
+                    item.sectorName.trim().isEmpty
+                        ? item.sectorId
+                        : item.sectorName,
+                  ),
+                  selected: widget.selectedScope.key ==
+                      _AnalyticsScope.sector(
+                        sectorId: item.sectorId.trim(),
+                        sectorName: item.sectorName.trim(),
+                      ).key,
+                  onSelected: (_) => widget.onScopeSelected(
+                    _AnalyticsScope.sector(
+                      sectorId: item.sectorId.trim(),
+                      sectorName: item.sectorName.trim(),
+                    ),
+                  ),
                 ),
-                _MetricTile(
-                  label: '미지정 차량',
-                  value: '${sectorMetrics.unassignedVehicleCount}대',
-                  icon: Icons.help_outline_rounded,
+            ],
+          ),
+          if (widget.metrics.unassignedVehicleCount > 0 ||
+              widget.metrics.invalidSectorVehicleCount > 0) ...[
+            const SizedBox(height: 18),
+            _ASectorBreakdownCard(metrics: widget.metrics),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SectorComparisonChart extends StatelessWidget {
+  final List<EndWorkSectorMetricItem> items;
+  final _AnalyticsSectorMetric metric;
+
+  const _SectorComparisonChart({
+    required this.items,
+    required this.metric,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final title = metric == _AnalyticsSectorMetric.vehicles
+        ? '방문 구역별 차량 수'
+        : '방문 구역별 정산금';
+    final subtitle = metric == _AnalyticsSectorMetric.vehicles
+        ? '같은 비교 날짜 범위에서 방문 구역별 차량 수를 비교합니다.'
+        : '같은 비교 날짜 범위에서 방문 구역별 정산금을 비교합니다.';
+    return StatisticsExpandableChart(
+      title: title,
+      subtitle: subtitle,
+      debugLabel: 'sector_${metric.name}',
+      preview: SizedBox(
+        height: 300,
+        child: _SectorBarChart(
+          items: items,
+          metric: metric,
+          interactive: false,
+          landscape: false,
+        ),
+      ),
+      expandedBuilder: (context, landscape) => _ExpandedSectorBarChart(
+        items: items,
+        metric: metric,
+        landscape: landscape,
+      ),
+    );
+  }
+}
+
+class _SectorBarChart extends StatelessWidget {
+  final List<EndWorkSectorMetricItem> items;
+  final _AnalyticsSectorMetric metric;
+  final bool interactive;
+  final bool landscape;
+  final int? selectedIndex;
+  final ValueChanged<int>? onSelected;
+
+  const _SectorBarChart({
+    required this.items,
+    required this.metric,
+    required this.interactive,
+    required this.landscape,
+    this.selectedIndex,
+    this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final values = items
+        .map(
+          (item) => metric == _AnalyticsSectorMetric.vehicles
+              ? item.vehicleCount.toDouble()
+              : item.totalLockedFee.toDouble(),
+        )
+        .toList();
+    final maxY = _chartMaxY(values);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final minWidth = items.length * (landscape ? 104.0 : 86.0) + 72;
+        final width = math.max(constraints.maxWidth, minWidth);
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          child: SizedBox(
+            width: width,
+            height: constraints.maxHeight.isFinite
+                ? constraints.maxHeight
+                : landscape
+                    ? 430
+                    : 310,
+            child: BarChart(
+              BarChartData(
+                minY: 0,
+                maxY: maxY,
+                alignment: BarChartAlignment.spaceAround,
+                gridData: FlGridData(
+                  show: true,
+                  drawVerticalLine: false,
                 ),
-                _MetricTile(
-                  label: '지정 잠금 금액',
-                  value: '₩${_fmt(sectorMetrics.assignedLockedFee.round())}',
-                  icon: Icons.payments_rounded,
+                borderData: FlBorderData(show: false),
+                barTouchData: BarTouchData(
+                  enabled: interactive,
+                  touchCallback: interactive
+                      ? (event, response) {
+                          final spot = response?.spot;
+                          if (spot == null) return;
+                          onSelected?.call(spot.touchedBarGroupIndex);
+                        }
+                      : null,
+                  touchTooltipData: BarTouchTooltipData(
+                    tooltipBgColor: cs.inverseSurface,
+                    fitInsideHorizontally: true,
+                    fitInsideVertically: true,
+                    getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                      final index = group.x.toInt();
+                      if (index < 0 || index >= items.length) return null;
+                      final item = items[index];
+                      final valueText = metric == _AnalyticsSectorMetric.vehicles
+                          ? '${item.vehicleCount}대'
+                          : '₩${_fmt(item.totalLockedFee.round())}';
+                      return BarTooltipItem(
+                        '${item.sectorName}\n$valueText',
+                        TextStyle(
+                          color: cs.onInverseSurface,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      );
+                    },
+                  ),
                 ),
-                _MetricTile(
-                  label: '미지정 잠금 금액',
-                  value: '₩${_fmt(sectorMetrics.unassignedLockedFee.round())}',
-                  icon: Icons.money_off_rounded,
+                titlesData: FlTitlesData(
+                  topTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                  rightTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: metric == _AnalyticsSectorMetric.fee
+                          ? landscape
+                              ? 70
+                              : 58
+                          : 42,
+                      getTitlesWidget: (value, meta) => Text(
+                        metric == _AnalyticsSectorMetric.fee
+                            ? _compactChartValue(value)
+                            : value.round().toString(),
+                        style: TextStyle(
+                          fontSize: landscape ? 10 : 9,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: landscape ? 54 : 48,
+                      getTitlesWidget: (value, meta) {
+                        final index = value.round();
+                        if (index < 0 || index >= items.length) {
+                          return const SizedBox.shrink();
+                        }
+                        return SideTitleWidget(
+                          axisSide: meta.axisSide,
+                          space: 7,
+                          child: SizedBox(
+                            width: landscape ? 96 : 76,
+                            child: Text(
+                              items[index].sectorName,
+                              textAlign: TextAlign.center,
+                              maxLines: landscape ? 2 : 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: landscape ? 11 : 9,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
                 ),
-                _MetricTile(
-                  label: '데이터 확인 필요',
-                  value: '${sectorMetrics.invalidSectorVehicleCount}대',
-                  icon: Icons.rule_rounded,
-                ),
-                _MetricTile(
-                  label: '확인 필요 잠금 금액',
-                  value: '₩${_fmt(sectorMetrics.invalidSectorLockedFee.round())}',
-                  icon: Icons.warning_amber_rounded,
-                ),
+                barGroups: [
+                  for (var i = 0; i < items.length; i++)
+                    BarChartGroupData(
+                      x: i,
+                      barRods: [
+                        BarChartRodData(
+                          toY: values[i],
+                          width: landscape ? 28 : 20,
+                          color: selectedIndex == null || selectedIndex == i
+                              ? cs.primary
+                              : cs.primary.withOpacity(.42),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                      ],
+                    ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ExpandedSectorBarChart extends StatefulWidget {
+  final List<EndWorkSectorMetricItem> items;
+  final _AnalyticsSectorMetric metric;
+  final bool landscape;
+
+  const _ExpandedSectorBarChart({
+    required this.items,
+    required this.metric,
+    required this.landscape,
+  });
+
+  @override
+  State<_ExpandedSectorBarChart> createState() =>
+      _ExpandedSectorBarChartState();
+}
+
+class _ExpandedSectorBarChartState extends State<_ExpandedSectorBarChart> {
+  int? _selectedIndex;
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = _selectedIndex == null ||
+            _selectedIndex! < 0 ||
+            _selectedIndex! >= widget.items.length
+        ? null
+        : widget.items[_selectedIndex!];
+    final totalVehicles = widget.items.fold<int>(
+      0,
+      (sum, item) => sum + item.vehicleCount,
+    );
+    final totalFee = widget.items.fold<num>(
+      0,
+      (sum, item) => sum + item.totalLockedFee,
+    );
+    return Column(
+      children: [
+        Expanded(
+          child: _SectorBarChart(
+            items: widget.items,
+            metric: widget.metric,
+            interactive: true,
+            landscape: widget.landscape,
+            selectedIndex: _selectedIndex,
+            onSelected: (index) {
+              if (index < 0 || index >= widget.items.length) return;
+              HapticFeedback.selectionClick();
+              setState(() => _selectedIndex = index);
+              StatisticsChartInteractionLog.log(
+                'select chart=sector_${widget.metric.name} index=$index sector=${widget.items[index].sectorName}',
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 10),
+        StatisticsChartSelectionPanel(
+          title: selected == null
+              ? '막대를 눌러 방문 구역 상세값을 확인하세요.'
+              : selected.sectorName,
+          values: selected == null
+              ? const <String>[]
+              : <String>[
+                  '${selected.vehicleCount}대',
+                  '₩${_fmt(selected.totalLockedFee.round())}',
+                  totalVehicles == 0
+                      ? '차량 비중 0.0%'
+                      : '차량 비중 ${(selected.vehicleCount / totalVehicles * 100).toStringAsFixed(1)}%',
+                  totalFee == 0
+                      ? '정산 비중 0.0%'
+                      : '정산 비중 ${(selected.totalLockedFee / totalFee * 100).toStringAsFixed(1)}%',
+                ],
+          icon: Icons.grid_view_rounded,
+        ),
+      ],
+    );
+  }
+}
+
+class _AnalyticsDetailView extends StatelessWidget {
+  final List<_ChartARow> rows;
+  final DateTime? selectedObservation;
+  final ValueChanged<DateTime> onSelectObservation;
+
+  const _AnalyticsDetailView({
+    required this.rows,
+    required this.selectedObservation,
+    required this.onSelectObservation,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(22, 20, 22, 32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const _AnalyticsSectionTitle(
+            icon: Icons.table_chart_rounded,
+            title: '날짜별 상세',
+            subtitle: '출차·정산·이전 비교일 대비 변화·기간 비중을 한 번만 표시합니다.',
+          ),
+          const SizedBox(height: 14),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            child: DataTable(
+              headingRowColor: WidgetStatePropertyAll(cs.surfaceContainerHighest),
+              columns: const [
+                DataColumn(label: Text('날짜')),
+                DataColumn(label: Text('출차')),
+                DataColumn(label: Text('정산')),
+                DataColumn(label: Text('출차 변화')),
+                DataColumn(label: Text('정산 변화')),
+                DataColumn(label: Text('출차 비중')),
+                DataColumn(label: Text('정산 비중')),
+              ],
+              rows: [
+                for (final row in rows)
+                  DataRow(
+                    selected: selectedObservation != null &&
+                        selectedObservation!.year == row.date.year &&
+                        selectedObservation!.month == row.date.month &&
+                        selectedObservation!.day == row.date.day,
+                    onSelectChanged: (_) => onSelectObservation(row.date),
+                    cells: [
+                      DataCell(Text(row.dateStr)),
+                      DataCell(Text('${_fmt(row.departure)}대')),
+                      DataCell(Text('₩${_fmt(row.fee)}')),
+                      DataCell(Text(row.no == 1 ? '-' : _signed(row.departureDelta, suffix: '대'))),
+                      DataCell(Text(row.no == 1 ? '-' : _signed(row.feeDelta, prefix: '₩'))),
+                      DataCell(Text('${(row.departureShare * 100).toStringAsFixed(1)}%')),
+                      DataCell(Text('${(row.feeShare * 100).toStringAsFixed(1)}%')),
+                    ],
+                  ),
               ],
             ),
-            if (sectorMetrics.legacyFeeClassification) ...[
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RawAnalysisGate extends StatelessWidget {
+  final String title;
+  final bool loading;
+  final int progressCurrent;
+  final int progressTotal;
+  final DateTime? selectedDate;
+  final bool selectedAvailable;
+  final bool allAvailable;
+  final int availableDateCount;
+  final int totalDateCount;
+  final VoidCallback? onSelected;
+  final VoidCallback? onAll;
+
+  const _RawAnalysisGate({
+    required this.title,
+    required this.loading,
+    required this.progressCurrent,
+    required this.progressTotal,
+    required this.selectedDate,
+    required this.selectedAvailable,
+    required this.allAvailable,
+    required this.availableDateCount,
+    required this.totalDateCount,
+    required this.onSelected,
+    required this.onAll,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final transitionDuration =
+        reduceMotion ? Duration.zero : CommonUiMotion.selection;
+    final coverageComplete =
+        totalDateCount > 0 && availableDateCount == totalDateCount;
+    final selectedDateValue = selectedDate;
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(28),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.cloud_download_outlined, size: 36, color: cs.primary),
               const SizedBox(height: 14),
+              Text(title, style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
+              const SizedBox(height: 8),
+              Text(
+                '이 분석은 검증된 원본 차량 로그를 사용합니다. 범위를 선택한 뒤 명시적으로 분석을 시작할 때만 GCS 원본을 불러옵니다.',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: cs.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
+                  height: 1.45,
+                ),
+              ),
+              const SizedBox(height: 12),
               AnimatedContainer(
-                duration: MediaQuery.maybeOf(context)?.disableAnimations == true
-                    ? Duration.zero
-                    : CommonUiMotion.layout,
-                curve: CommonUiMotion.enter,
-                padding: const EdgeInsets.all(14),
+                duration: transitionDuration,
+                curve: CommonUiMotion.standard,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.tertiaryContainer,
-                  borderRadius: BorderRadius.circular(16),
+                  color: coverageComplete
+                      ? cs.primaryContainer
+                      : cs.errorContainer,
+                  borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
-                  '구버전 보고서에서는 미지정과 데이터 확인 필요 잠금 금액이 통합되어 있을 수 있습니다.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onTertiaryContainer,
-                        fontWeight: FontWeight.w700,
+                  '원본 사용 가능 $availableDateCount / $totalDateCount일',
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: coverageComplete
+                        ? cs.onPrimaryContainer
+                        : cs.onErrorContainer,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              if (!coverageComplete) ...[
+                const SizedBox(height: 8),
+                Text(
+                  '비교 날짜 전체 분석은 모든 비교 날짜에 원본 로그가 있을 때 사용할 수 있습니다.',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: cs.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 18),
+              AnimatedSwitcher(
+                duration: transitionDuration,
+                switchInCurve: CommonUiMotion.enter,
+                switchOutCurve: CommonUiMotion.exit,
+                child: loading
+                    ? Column(
+                        key: const ValueKey<String>('raw-loading'),
+                        children: [
+                          CircularProgressIndicator(
+                            value: progressTotal > 0
+                                ? progressCurrent / progressTotal
+                                : null,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            progressTotal > 0
+                                ? '원본 로그 분석 중 · $progressCurrent / $progressTotal'
+                                : '원본 로그 분석 준비 중',
+                            style: theme.textTheme.labelLarge?.copyWith(
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      )
+                    : Column(
+                        key: const ValueKey<String>('raw-actions'),
+                        children: [
+                          if (selectedDateValue != null)
+                            FilledButton.tonalIcon(
+                              onPressed: selectedAvailable ? onSelected : null,
+                              icon: const Icon(Icons.event_rounded),
+                              label: Text('${_dateOnly(selectedDateValue)} 분석'),
+                            ),
+                          const SizedBox(height: 8),
+                          FilledButton.icon(
+                            onPressed: allAvailable ? onAll : null,
+                            icon: const Icon(Icons.dataset_rounded),
+                            label: const Text('비교 날짜 전체 분석'),
+                          ),
+                        ],
                       ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AnalyticsHourlyView extends StatelessWidget {
+  final StatisticsDeepReport report;
+  final DateTime? selectedObservation;
+  final _AnalyticsHourlyMetric metric;
+  final ValueChanged<_AnalyticsHourlyMetric> onMetricChanged;
+
+  const _AnalyticsHourlyView({
+    required this.report,
+    required this.selectedObservation,
+    required this.metric,
+    required this.onMetricChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final section = _deepSectionForObservation(report, selectedObservation);
+    final values = metric == _AnalyticsHourlyMetric.input
+        ? section.metrics.inputTotalCounts
+        : section.metrics.outputTotalCounts;
+    final peak = _peakIndex(values);
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(22, 20, 22, 32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _AnalyticsSectionTitle(
+            icon: Icons.schedule_rounded,
+            title: '시간대',
+            subtitle: '${section.subtitle} · 원본 차량 ${section.rows.length}대 기준',
+          ),
+          const SizedBox(height: 12),
+          SegmentedButton<_AnalyticsHourlyMetric>(
+            segments: const [
+              ButtonSegment(value: _AnalyticsHourlyMetric.input, label: Text('입차'), icon: Icon(Icons.login_rounded)),
+              ButtonSegment(value: _AnalyticsHourlyMetric.output, label: Text('출차'), icon: Icon(Icons.logout_rounded)),
+            ],
+            selected: <_AnalyticsHourlyMetric>{metric},
+            onSelectionChanged: (values) => onMetricChanged(values.first),
+          ),
+          const SizedBox(height: 16),
+          _HourlyBarChart(
+            values: values,
+            title: metric == _AnalyticsHourlyMetric.input ? '입차 시간대' : '출차 시간대',
+          ),
+          const SizedBox(height: 14),
+          Text(
+            peak == null ? '확인 가능한 시간대 데이터가 없습니다.' : '피크 ${peak.toString().padLeft(2, '0')}:00 · ${values[peak]}대',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HourlyBarChart extends StatelessWidget {
+  final List<int> values;
+  final String title;
+
+  const _HourlyBarChart({required this.values, required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          title,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w900,
+              ),
+        ),
+        const SizedBox(height: 10),
+        StatisticsExpandableChart(
+          title: title,
+          subtitle: '시간대별 차량 분포',
+          debugLabel: 'hourly_$title',
+          preview: SizedBox(
+            height: 310,
+            child: _HourlyBarChartBody(
+              values: values,
+              interactive: false,
+              landscape: false,
+            ),
+          ),
+          expandedBuilder: (context, landscape) => _ExpandedHourlyBarChart(
+            values: values,
+            title: title,
+            landscape: landscape,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _HourlyBarChartBody extends StatelessWidget {
+  final List<int> values;
+  final bool interactive;
+  final bool landscape;
+  final int? selectedIndex;
+  final ValueChanged<int>? onSelected;
+
+  const _HourlyBarChartBody({
+    required this.values,
+    required this.interactive,
+    required this.landscape,
+    this.selectedIndex,
+    this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final maxValue = values.fold<int>(
+      0,
+      (current, value) => math.max(current, value).toInt(),
+    );
+    final maxY = math.max(maxValue * 1.2, 1).toDouble();
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = math.max(
+          constraints.maxWidth,
+          values.length * (landscape ? 36.0 : 28.0) + 54,
+        );
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          child: SizedBox(
+            width: width,
+            height: constraints.maxHeight.isFinite
+                ? constraints.maxHeight
+                : landscape
+                    ? 430
+                    : 310,
+            child: BarChart(
+              BarChartData(
+                minY: 0,
+                maxY: maxY,
+                borderData: FlBorderData(show: false),
+                gridData: FlGridData(show: true, drawVerticalLine: false),
+                barTouchData: BarTouchData(
+                  enabled: interactive,
+                  touchCallback: interactive
+                      ? (event, response) {
+                          final spot = response?.spot;
+                          if (spot == null) return;
+                          onSelected?.call(spot.touchedBarGroupIndex);
+                        }
+                      : null,
+                  touchTooltipData: BarTouchTooltipData(
+                    tooltipBgColor: cs.inverseSurface,
+                    fitInsideHorizontally: true,
+                    fitInsideVertically: true,
+                    getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                      final hour = group.x.toInt();
+                      if (hour < 0 || hour >= values.length) return null;
+                      return BarTooltipItem(
+                        '${hour.toString().padLeft(2, '0')}:00\n${values[hour]}대',
+                        TextStyle(
+                          color: cs.onInverseSurface,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                titlesData: FlTitlesData(
+                  topTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                  rightTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: landscape ? 42 : 34,
+                      getTitlesWidget: (value, meta) => Text(
+                        value.round().toString(),
+                        style: TextStyle(
+                          fontSize: landscape ? 10 : 9,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: landscape ? 32 : 28,
+                      interval: landscape ? 2 : 3,
+                      getTitlesWidget: (value, meta) {
+                        final hour = value.round();
+                        final step = landscape ? 2 : 3;
+                        if (hour < 0 || hour > 23 || hour % step != 0) {
+                          return const SizedBox.shrink();
+                        }
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 7),
+                          child: Text(
+                            '$hour시',
+                            style: TextStyle(
+                              fontSize: landscape ? 10 : 9,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                barGroups: [
+                  for (var i = 0; i < values.length; i++)
+                    BarChartGroupData(
+                      x: i,
+                      barRods: [
+                        BarChartRodData(
+                          toY: values[i].toDouble(),
+                          width: landscape ? 14 : 10,
+                          color: selectedIndex == null || selectedIndex == i
+                              ? cs.primary
+                              : cs.primary.withOpacity(.38),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ],
+                    ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ExpandedHourlyBarChart extends StatefulWidget {
+  final List<int> values;
+  final String title;
+  final bool landscape;
+
+  const _ExpandedHourlyBarChart({
+    required this.values,
+    required this.title,
+    required this.landscape,
+  });
+
+  @override
+  State<_ExpandedHourlyBarChart> createState() =>
+      _ExpandedHourlyBarChartState();
+}
+
+class _ExpandedHourlyBarChartState extends State<_ExpandedHourlyBarChart> {
+  int? _selectedIndex;
+
+  @override
+  Widget build(BuildContext context) {
+    final index = _selectedIndex;
+    return Column(
+      children: [
+        Expanded(
+          child: _HourlyBarChartBody(
+            values: widget.values,
+            interactive: true,
+            landscape: widget.landscape,
+            selectedIndex: index,
+            onSelected: (next) {
+              if (next < 0 || next >= widget.values.length) return;
+              HapticFeedback.selectionClick();
+              setState(() => _selectedIndex = next);
+              StatisticsChartInteractionLog.log(
+                'select chart=${widget.title} hour=$next value=${widget.values[next]}',
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 10),
+        StatisticsChartSelectionPanel(
+          title: index == null
+              ? '막대를 눌러 시간대별 상세값을 확인하세요.'
+              : '${index.toString().padLeft(2, '0')}:00 ~ ${index.toString().padLeft(2, '0')}:59',
+          values: index == null
+              ? const <String>[]
+              : <String>['${widget.values[index]}대'],
+          icon: Icons.schedule_rounded,
+        ),
+      ],
+    );
+  }
+}
+
+class _AnalyticsPaymentView extends StatelessWidget {
+  final StatisticsDeepReport report;
+  final DateTime? selectedObservation;
+  final _AnalyticsPaymentMetric metric;
+  final ValueChanged<_AnalyticsPaymentMetric> onMetricChanged;
+
+  const _AnalyticsPaymentView({
+    required this.report,
+    required this.selectedObservation,
+    required this.metric,
+    required this.onMetricChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedObservationValue = selectedObservation;
+    final rows = _deepRowsForObservation(report, selectedObservationValue);
+    final vehicleCounts = <String, int>{};
+    final fees = <String, int>{};
+    for (final row in rows) {
+      final label = row.paymentMethodLabel;
+      vehicleCounts[label] = (vehicleCounts[label] ?? 0) + 1;
+      fees[label] = (fees[label] ?? 0) + (row.fee ?? 0);
+    }
+    final source =
+        metric == _AnalyticsPaymentMetric.vehicles ? vehicleCounts : fees;
+    final entries = source.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final total = entries.fold<int>(0, (sum, entry) => sum + entry.value);
+    final scopeText = selectedObservationValue == null
+        ? report.scopeLabel
+        : _dateOnly(selectedObservationValue);
+    final title = metric == _AnalyticsPaymentMetric.vehicles
+        ? '결제수단별 차량 수'
+        : '결제수단별 정산금';
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(22, 20, 22, 32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _AnalyticsSectionTitle(
+            icon: Icons.payments_rounded,
+            title: '결제',
+            subtitle: '$scopeText · 원본 차량 ${rows.length}대 기준',
+          ),
+          const SizedBox(height: 12),
+          SegmentedButton<_AnalyticsPaymentMetric>(
+            segments: const [
+              ButtonSegment(
+                value: _AnalyticsPaymentMetric.vehicles,
+                label: Text('차량 수'),
+              ),
+              ButtonSegment(
+                value: _AnalyticsPaymentMetric.fee,
+                label: Text('정산금'),
+              ),
+            ],
+            selected: <_AnalyticsPaymentMetric>{metric},
+            onSelectionChanged: (values) => onMetricChanged(values.first),
+          ),
+          const SizedBox(height: 16),
+          if (entries.isEmpty)
+            const _AnalyticsEmptyView(
+              icon: Icons.money_off_rounded,
+              title: '결제 데이터가 없습니다.',
+              description: '선택 범위의 원본 로그에서 결제 정보를 확인할 수 없습니다.',
+            )
+          else
+            StatisticsExpandableChart(
+              title: title,
+              subtitle: scopeText,
+              debugLabel: 'payment_${metric.name}',
+              preview: _PaymentBarsList(
+                entries: entries,
+                total: total,
+                metric: metric,
+              ),
+              expandedBuilder: (context, landscape) => _ExpandedPaymentBars(
+                entries: entries,
+                total: total,
+                metric: metric,
+                landscape: landscape,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PaymentBarsList extends StatelessWidget {
+  final List<MapEntry<String, int>> entries;
+  final int total;
+  final _AnalyticsPaymentMetric metric;
+  final int? selectedIndex;
+  final ValueChanged<int>? onSelected;
+  final bool expanded;
+
+  const _PaymentBarsList({
+    required this.entries,
+    required this.total,
+    required this.metric,
+    this.selectedIndex,
+    this.onSelected,
+    this.expanded = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final children = <Widget>[];
+    for (var i = 0; i < entries.length; i++) {
+      final entry = entries[i];
+      children.add(
+        _HorizontalMetricBar(
+          label: entry.key,
+          value: entry.value,
+          total: total,
+          valueText: metric == _AnalyticsPaymentMetric.vehicles
+              ? '${entry.value}대'
+              : '₩${_fmt(entry.value)}',
+          selected: selectedIndex == i,
+          onTap: onSelected == null ? null : () => onSelected!(i),
+        ),
+      );
+      if (i != entries.length - 1) {
+        children.add(const SizedBox(height: 10));
+      }
+    }
+    if (!expanded) {
+      return Column(children: children);
+    }
+    return ListView(
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+      children: children,
+    );
+  }
+}
+
+class _ExpandedPaymentBars extends StatefulWidget {
+  final List<MapEntry<String, int>> entries;
+  final int total;
+  final _AnalyticsPaymentMetric metric;
+  final bool landscape;
+
+  const _ExpandedPaymentBars({
+    required this.entries,
+    required this.total,
+    required this.metric,
+    required this.landscape,
+  });
+
+  @override
+  State<_ExpandedPaymentBars> createState() => _ExpandedPaymentBarsState();
+}
+
+class _ExpandedPaymentBarsState extends State<_ExpandedPaymentBars> {
+  int? _selectedIndex;
+
+  @override
+  Widget build(BuildContext context) {
+    final index = _selectedIndex;
+    final selected = index == null || index < 0 || index >= widget.entries.length
+        ? null
+        : widget.entries[index];
+    final ratio = selected == null || widget.total <= 0
+        ? 0.0
+        : selected.value / widget.total;
+    final bars = _PaymentBarsList(
+      entries: widget.entries,
+      total: widget.total,
+      metric: widget.metric,
+      selectedIndex: index,
+      expanded: true,
+      onSelected: (next) {
+        HapticFeedback.selectionClick();
+        setState(() => _selectedIndex = next);
+        StatisticsChartInteractionLog.log(
+          'select chart=payment_${widget.metric.name} index=$next label=${widget.entries[next].key} value=${widget.entries[next].value}',
+        );
+      },
+    );
+    final detail = StatisticsChartSelectionPanel(
+      title: selected == null
+          ? '막대 영역을 눌러 결제 상세값을 확인하세요.'
+          : selected.key,
+      values: selected == null
+          ? const <String>[]
+          : <String>[
+              widget.metric == _AnalyticsPaymentMetric.vehicles
+                  ? '${selected.value}대'
+                  : '₩${_fmt(selected.value)}',
+              '전체 대비 ${(ratio * 100).toStringAsFixed(1)}%',
+            ],
+      icon: Icons.payments_rounded,
+    );
+    if (widget.landscape) {
+      return Row(
+        children: [
+          Expanded(flex: 3, child: bars),
+          const SizedBox(width: 12),
+          Expanded(flex: 2, child: Align(alignment: Alignment.topCenter, child: detail)),
+        ],
+      );
+    }
+    return Column(
+      children: [
+        Expanded(child: bars),
+        const SizedBox(height: 10),
+        detail,
+      ],
+    );
+  }
+}
+
+class _HorizontalMetricBar extends StatelessWidget {
+  final String label;
+  final int value;
+  final int total;
+  final String valueText;
+  final bool selected;
+  final VoidCallback? onTap;
+
+  const _HorizontalMetricBar({
+    required this.label,
+    required this.value,
+    required this.total,
+    required this.valueText,
+    this.selected = false,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final ratio = total <= 0 ? 0.0 : value / total;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final content = AnimatedContainer(
+      duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+      curve: CommonUiMotion.standard,
+      padding: EdgeInsets.all(selected ? 10 : 0),
+      decoration: BoxDecoration(
+        color: selected ? cs.secondaryContainer : Colors.transparent,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: selected ? cs.onSecondaryContainer : cs.onSurface,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              Text(
+                valueText,
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: selected ? cs.onSecondaryContainer : cs.onSurface,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '${(ratio * 100).toStringAsFixed(1)}%',
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: selected
+                      ? cs.onSecondaryContainer
+                      : cs.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ],
-            const SizedBox(height: 14),
-            _ASectorBreakdownCard(metrics: sectorMetrics),
-          ] else ...[
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                _MetricTile(
-                  label: '대상 날짜',
-                  value: '${section.metrics.dayCount}일',
-                  icon: Icons.event_rounded,
-                ),
-                _MetricTile(
-                  label: '출차 합계',
-                  value: '${_fmt(section.metrics.totalDeparture)}대',
-                  icon: Icons.logout_rounded,
-                ),
-                _MetricTile(
-                  label: '출차 평균',
-                  value: '${section.metrics.averageDeparture.toStringAsFixed(1)}대',
-                  icon: Icons.functions_rounded,
-                ),
-                _MetricTile(
-                  label: '정산금 합계',
-                  value: '₩${_fmt(section.metrics.totalFee)}',
-                  icon: Icons.payments_rounded,
-                ),
-                _MetricTile(
-                  label: '정산금 평균',
-                  value: '₩${_fmt(section.metrics.averageFee.round())}',
-                  icon: Icons.query_stats_rounded,
-                ),
-              ],
+          ),
+          const SizedBox(height: 6),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(99),
+            child: LinearProgressIndicator(
+              value: ratio,
+              minHeight: selected ? 11 : 8,
+              backgroundColor: selected
+                  ? cs.surface.withOpacity(.72)
+                  : cs.surfaceContainerHighest,
             ),
-            const SizedBox(height: 14),
-            if (section.type == _ChartASectionType.overview)
-              _AChartGrid(
-                children: [
-                  _DateLineChartCard(
-                    title: '날짜별 출차 흐름',
-                    subtitle: '출차 대수 추이',
-                    rows: section.rows,
-                    valueOf: (row) => row.departure.toDouble(),
-                    valueText: (v) => '${_fmt(v.round())}대',
-                    icon: Icons.logout_rounded,
-                  ),
-                  _DateLineChartCard(
-                    title: '날짜별 정산금 흐름',
-                    subtitle: '정산금 추이',
-                    rows: section.rows,
-                    valueOf: (row) => row.fee.toDouble(),
-                    valueText: (v) => '₩${_fmt(v.round())}',
-                    icon: Icons.payments_rounded,
-                  ),
-                ],
-              )
-            else if (section.type == _ChartASectionType.departure)
-              _DateLineChartCard(
-                title: '출차 대수 분석',
-                subtitle: '날짜별 출차 대수와 증감 흐름',
-                rows: section.rows,
-                valueOf: (row) => row.departure.toDouble(),
-                valueText: (v) => '${_fmt(v.round())}대',
-                icon: Icons.logout_rounded,
-              )
-            else if (section.type == _ChartASectionType.fee)
-              _DateLineChartCard(
-                title: '정산금 분석',
-                subtitle: '날짜별 정산금과 증감 흐름',
-                rows: section.rows,
-                valueOf: (row) => row.fee.toDouble(),
-                valueText: (v) => '₩${_fmt(v.round())}',
-                icon: Icons.payments_rounded,
-              )
-            else
-              _ADailyTableCard(rows: section.rows),
-            if (section.type != _ChartASectionType.dailyTable) ...[
-              const SizedBox(height: 14),
-              _ADailyTableCard(rows: section.rows),
-            ],
-          ],
+          ),
         ],
+      ),
+    );
+    if (onTap == null) return content;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: content,
+      ),
+    );
+  }
+}
+
+class _AnalyticsWeekdayView extends StatelessWidget {
+  final StatisticsDeepReport report;
+  final String? selectedId;
+  final ValueChanged<String> onSelect;
+
+  const _AnalyticsWeekdayView({
+    required this.report,
+    required this.selectedId,
+    required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final sections = report.weekdaySections;
+    if (sections.isEmpty) {
+      return const _AnalyticsEmptyView(
+        icon: Icons.calendar_view_week_rounded,
+        title: '요일 비교 표본이 부족합니다.',
+        description: '같은 요일이 2일 이상 포함되어야 요일별 분석을 제공합니다.',
+      );
+    }
+    final section = sections.firstWhere(
+      (item) => item.id == selectedId,
+      orElse: () => sections.first,
+    );
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(22, 20, 22, 32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const _AnalyticsSectionTitle(
+            icon: Icons.calendar_view_week_rounded,
+            title: '요일',
+            subtitle: '동일 요일이 2일 이상 포함된 경우에만 표본을 묶어 비교합니다.',
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final item in sections)
+                ChoiceChip(
+                  label: Text(item.title.replaceAll(' 심화 통계', '')),
+                  selected: item.id == section.id,
+                  onSelected: (_) => onSelect(item.id),
+                ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          _AnalyticsMetricBand(
+            metrics: _ChartAMetrics(
+              dayCount: section.sourceDateCount,
+              totalDeparture: section.metrics.outputTotalSum,
+              totalFee: section.totalFee,
+              averageDeparture: section.metrics.outputTotalSum / section.sourceDateCount,
+              averageFee: section.totalFee / section.sourceDateCount,
+              maxDeparture: null,
+              minDeparture: null,
+              maxFee: null,
+              minFee: null,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            '${section.title} · 표본 ${section.sourceDateCount}일',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 12),
+          _HourlyBarChart(
+            values: section.metrics.outputAverageCounts.map((value) => value.round()).toList(),
+            title: '평균 출차 시간대',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+StatisticsDeepSection _deepSectionForObservation(
+  StatisticsDeepReport report,
+  DateTime? observation,
+) {
+  if (observation == null) return report.overallSection;
+  final key = _dateOnly(observation);
+  return report.dailySections.firstWhere(
+    (section) => section.dateStrs.contains(key),
+    orElse: () => report.overallSection,
+  );
+}
+
+List<StatisticsDeepVehicleRow> _deepRowsForObservation(
+  StatisticsDeepReport report,
+  DateTime? observation,
+) {
+  if (observation == null) return report.rows;
+  final key = _dateOnly(observation);
+  return report.rows.where((row) => row.dateStr == key).toList();
+}
+
+int? _peakIndex(List<int> values) {
+  if (values.isEmpty) return null;
+  var maxValue = 0;
+  int? index;
+  for (var i = 0; i < values.length; i++) {
+    if (values[i] > maxValue) {
+      maxValue = values[i];
+      index = i;
+    }
+  }
+  return index;
+}
+
+class _AnalyticsEmptyView extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String description;
+
+  const _AnalyticsEmptyView({
+    required this.icon,
+    required this.title,
+    required this.description,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 38, color: cs.onSurfaceVariant),
+              const SizedBox(height: 12),
+              Text(title, textAlign: TextAlign.center, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+              const SizedBox(height: 6),
+              Text(description, textAlign: TextAlign.center, style: theme.textTheme.bodyMedium?.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700, height: 1.4)),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -2264,25 +4429,34 @@ class _ASectorBreakdownCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '방문 구역별 합계',
+              '집계 예외',
               style: theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w900,
               ),
             ),
-            const SizedBox(height: 12),
-            for (final item in metrics.items) ...[
-              _ASectorBreakdownRow(
-                label: item.sectorName,
-                vehicleCount: item.vehicleCount,
-                lockedFee: item.totalLockedFee,
+            const SizedBox(height: 4),
+            Text(
+              '정상 방문 구역과 분리해 데이터 품질 상태를 표시합니다.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: cs.onSurfaceVariant,
+                fontWeight: FontWeight.w700,
               ),
-              const SizedBox(height: 8),
-            ],
+            ),
+            const SizedBox(height: 12),
             if (metrics.unassignedVehicleCount > 0)
               _ASectorBreakdownRow(
                 label: '미지정',
                 vehicleCount: metrics.unassignedVehicleCount,
                 lockedFee: metrics.unassignedLockedFee,
+              ),
+            if (metrics.unassignedVehicleCount > 0 &&
+                metrics.invalidSectorVehicleCount > 0)
+              const SizedBox(height: 8),
+            if (metrics.invalidSectorVehicleCount > 0)
+              _ASectorBreakdownRow(
+                label: '확인 필요',
+                vehicleCount: metrics.invalidSectorVehicleCount,
+                lockedFee: metrics.invalidSectorLockedFee,
               ),
           ],
         ),
@@ -2376,6 +4550,7 @@ class _AChartGrid extends StatelessWidget {
 class _DateLineChartCard extends StatelessWidget {
   final String title;
   final String subtitle;
+  final String scopeLabel;
   final List<_ChartARow> rows;
   final double Function(_ChartARow row) valueOf;
   final String Function(double value) valueText;
@@ -2384,6 +4559,7 @@ class _DateLineChartCard extends StatelessWidget {
   const _DateLineChartCard({
     required this.title,
     required this.subtitle,
+    required this.scopeLabel,
     required this.rows,
     required this.valueOf,
     required this.valueText,
@@ -2396,8 +4572,6 @@ class _DateLineChartCard extends StatelessWidget {
     final cs = theme.colorScheme;
     final values = rows.map(valueOf).toList();
     final hasData = values.any((v) => v > 0);
-    final maxY = _chartMaxY(values);
-    final pointWidth = 58.0;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -2416,385 +4590,286 @@ class _DateLineChartCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
-                    Text(subtitle, style: theme.textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700)),
+                    Text(
+                      title,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    Text(
+                      '$scopeLabel · $subtitle',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ],
                 ),
               ),
             ],
           ),
           const SizedBox(height: 14),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final width = math.max(constraints.maxWidth, rows.length * pointWidth + 24);
-              return SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                physics: const BouncingScrollPhysics(),
-                child: SizedBox(
-                  width: width,
-                  height: 260,
-                  child: hasData
-                      ? LineChart(
-                    LineChartData(
-                      minX: 0,
-                      maxX: math.max(rows.length - 1, 0).toDouble(),
-                      minY: 0,
-                      maxY: maxY,
-                      gridData: FlGridData(show: true, drawVerticalLine: false, horizontalInterval: maxY / 4),
-                      borderData: FlBorderData(show: false),
-                      titlesData: FlTitlesData(
-                        topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                        leftTitles: AxisTitles(
-                          sideTitles: SideTitles(
-                            showTitles: true,
-                            reservedSize: 46,
-                            getTitlesWidget: (value, meta) {
-                              return Text(
-                                valueText(value),
-                                style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700),
-                              );
-                            },
-                          ),
-                        ),
-                        bottomTitles: AxisTitles(
-                          sideTitles: SideTitles(
-                            showTitles: true,
-                            reservedSize: 30,
-                            interval: _axisLabelStep(rows.length).toDouble(),
-                            getTitlesWidget: (value, meta) {
-                              final index = value.round();
-                              if (index < 0 || index >= rows.length) return const SizedBox.shrink();
-                              return Padding(
-                                padding: const EdgeInsets.only(top: 7),
-                                child: Text(
-                                  rows[index].dateStr.substring(5),
-                                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800),
-                                ),
-                              );
-                            },
-                          ),
+          if (!hasData)
+            SizedBox(
+              height: 220,
+              child: Center(
+                child: Text(
+                  '표시할 데이터가 없습니다.',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: cs.onSurfaceVariant,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            )
+          else
+            StatisticsExpandableChart(
+              title: '$scopeLabel · $title',
+              subtitle: subtitle,
+              debugLabel: 'date_line_${scopeLabel}_$title',
+              preview: SizedBox(
+                height: 260,
+                child: _DateLineChart(
+                  rows: rows,
+                  valueOf: valueOf,
+                  valueText: valueText,
+                  interactive: false,
+                  landscape: false,
+                ),
+              ),
+              expandedBuilder: (context, landscape) => _ExpandedDateLineChart(
+                rows: rows,
+                valueOf: valueOf,
+                valueText: valueText,
+                title: title,
+                landscape: landscape,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DateLineChart extends StatelessWidget {
+  final List<_ChartARow> rows;
+  final double Function(_ChartARow row) valueOf;
+  final String Function(double value) valueText;
+  final bool interactive;
+  final bool landscape;
+  final ValueChanged<int>? onSelected;
+
+  const _DateLineChart({
+    required this.rows,
+    required this.valueOf,
+    required this.valueText,
+    required this.interactive,
+    required this.landscape,
+    this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final values = rows.map(valueOf).toList();
+    final maxY = _chartMaxY(values);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final pointWidth = landscape ? 74.0 : 58.0;
+        final width = math.max(
+          constraints.maxWidth,
+          rows.length * pointWidth + 32,
+        );
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          child: SizedBox(
+            width: width,
+            height: constraints.maxHeight.isFinite
+                ? constraints.maxHeight
+                : landscape
+                    ? 430
+                    : 300,
+            child: LineChart(
+              LineChartData(
+                minX: 0,
+                maxX: math.max(rows.length - 1, 0).toDouble(),
+                minY: 0,
+                maxY: maxY,
+                gridData: FlGridData(
+                  show: true,
+                  drawVerticalLine: false,
+                  horizontalInterval: maxY / 4,
+                ),
+                borderData: FlBorderData(show: false),
+                titlesData: FlTitlesData(
+                  topTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                  rightTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: landscape ? 66 : 48,
+                      getTitlesWidget: (value, meta) => Text(
+                        valueText(value),
+                        style: TextStyle(
+                          fontSize: landscape ? 10 : 9,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
-                      lineTouchData: LineTouchData(
-                        touchTooltipData: LineTouchTooltipData(
-                          getTooltipItems: (spots) {
-                            return spots.map((spot) {
-                              final index = spot.x.round().clamp(0, rows.length - 1);
-                              return LineTooltipItem(
-                                '${rows[index].dateStr}\n${valueText(spot.y)}',
-                                TextStyle(color: cs.onInverseSurface, fontWeight: FontWeight.w900),
-                              );
-                            }).toList();
-                          },
-                        ),
-                      ),
-                      lineBarsData: [
-                        LineChartBarData(
-                          spots: List.generate(rows.length, (i) => FlSpot(i.toDouble(), valueOf(rows[i]))),
-                          isCurved: true,
-                          color: cs.primary,
-                          barWidth: 3.2,
-                          dotData: const FlDotData(show: true),
-                          belowBarData: BarAreaData(show: true, color: cs.primary.withOpacity(0.10)),
-                        ),
-                      ],
                     ),
-                  )
-                      : Center(
-                    child: Text(
-                      '표시할 데이터가 없습니다.',
-                      style: theme.textTheme.titleSmall?.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w800),
+                  ),
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: landscape ? 34 : 30,
+                      interval: landscape
+                          ? math.max(1, _axisLabelStep(rows.length) ~/ 2)
+                              .toDouble()
+                          : _axisLabelStep(rows.length).toDouble(),
+                      getTitlesWidget: (value, meta) {
+                        final index = value.round();
+                        if (index < 0 || index >= rows.length) {
+                          return const SizedBox.shrink();
+                        }
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 7),
+                          child: Text(
+                            rows[index].dateStr.substring(5),
+                            style: TextStyle(
+                              fontSize: landscape ? 11 : 10,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ),
+                lineTouchData: LineTouchData(
+                  enabled: interactive,
+                  touchCallback: interactive
+                      ? (event, response) {
+                          final spots = response?.lineBarSpots;
+                          if (spots == null || spots.isEmpty) return;
+                          final index = spots.first.x.round();
+                          if (index < 0 || index >= rows.length) return;
+                          onSelected?.call(index);
+                        }
+                      : null,
+                  touchTooltipData: LineTouchTooltipData(
+                    tooltipBgColor: cs.inverseSurface,
+                    fitInsideHorizontally: true,
+                    fitInsideVertically: true,
+                    getTooltipItems: (spots) {
+                      return spots.map((spot) {
+                        final index = spot.x.round().clamp(0, rows.length - 1).toInt();
+                        return LineTooltipItem(
+                          '${rows[index].dateStr}\n${valueText(spot.y)}',
+                          TextStyle(
+                            color: cs.onInverseSurface,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        );
+                      }).toList();
+                    },
+                  ),
+                ),
+                lineBarsData: [
+                  LineChartBarData(
+                    spots: List.generate(
+                      rows.length,
+                      (i) => FlSpot(i.toDouble(), valueOf(rows[i])),
+                    ),
+                    isCurved: true,
+                    color: cs.primary,
+                    barWidth: landscape ? 3.6 : 3.2,
+                    dotData: const FlDotData(show: true),
+                    belowBarData: BarAreaData(
+                      show: true,
+                      color: cs.primary.withOpacity(0.10),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ExpandedDateLineChart extends StatefulWidget {
+  final List<_ChartARow> rows;
+  final double Function(_ChartARow row) valueOf;
+  final String Function(double value) valueText;
+  final String title;
+  final bool landscape;
+
+  const _ExpandedDateLineChart({
+    required this.rows,
+    required this.valueOf,
+    required this.valueText,
+    required this.title,
+    required this.landscape,
+  });
+
+  @override
+  State<_ExpandedDateLineChart> createState() =>
+      _ExpandedDateLineChartState();
+}
+
+class _ExpandedDateLineChartState extends State<_ExpandedDateLineChart> {
+  int? _selectedIndex;
+
+  @override
+  Widget build(BuildContext context) {
+    final row = _selectedIndex == null ||
+            _selectedIndex! < 0 ||
+            _selectedIndex! >= widget.rows.length
+        ? null
+        : widget.rows[_selectedIndex!];
+    final value = row == null ? null : widget.valueOf(row);
+    return Column(
+      children: [
+        Expanded(
+          child: _DateLineChart(
+            rows: widget.rows,
+            valueOf: widget.valueOf,
+            valueText: widget.valueText,
+            interactive: true,
+            landscape: widget.landscape,
+            onSelected: (index) {
+              HapticFeedback.selectionClick();
+              setState(() => _selectedIndex = index);
+              StatisticsChartInteractionLog.log(
+                'select chart=${widget.title} index=$index date=${widget.rows[index].dateStr} value=${widget.valueText(widget.valueOf(widget.rows[index]))}',
               );
             },
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ADailyTableCard extends StatelessWidget {
-  final List<_ChartARow> rows;
-
-  const _ADailyTableCard({required this.rows});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: cs.outlineVariant.withOpacity(0.7)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.table_chart_rounded, color: cs.primary),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text('날짜별 상세표', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
-              ),
-              Text('${rows.length}건', style: theme.textTheme.labelLarge?.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w900)),
-            ],
-          ),
-          const SizedBox(height: 12),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            child: DataTable(
-              headingRowColor: WidgetStatePropertyAll(cs.surfaceContainerHighest),
-              columns: const [
-                DataColumn(label: Text('넘버링')),
-                DataColumn(label: Text('날짜')),
-                DataColumn(label: Text('출차 대수')),
-                DataColumn(label: Text('정산금')),
-                DataColumn(label: Text('출차 증감')),
-                DataColumn(label: Text('정산금 증감')),
-                DataColumn(label: Text('출차 비중')),
-                DataColumn(label: Text('정산금 비중')),
-              ],
-              rows: [
-                for (final row in rows)
-                  DataRow(
-                    cells: [
-                      DataCell(Text(row.no.toString())),
-                      DataCell(Text(row.dateStr)),
-                      DataCell(Text('${_fmt(row.departure)}대')),
-                      DataCell(Text('₩${_fmt(row.fee)}')),
-                      DataCell(Text(_signed(row.departureDelta, suffix: '대'))),
-                      DataCell(Text(_signed(row.feeDelta, prefix: '₩'))),
-                      DataCell(Text('${(row.departureShare * 100).toStringAsFixed(1)}%')),
-                      DataCell(Text('${(row.feeShare * 100).toStringAsFixed(1)}%')),
-                    ],
-                  ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ASectionHeaderLine extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-
-  const _ASectionHeaderLine({required this.icon, required this.title, required this.subtitle});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 42,
-          height: 42,
-          decoration: BoxDecoration(color: cs.primaryContainer, borderRadius: BorderRadius.circular(16)),
-          child: Icon(icon, color: cs.onPrimaryContainer),
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
-              const SizedBox(height: 3),
-              Text(subtitle, style: theme.textTheme.bodyMedium?.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700)),
-            ],
-          ),
+        const SizedBox(height: 10),
+        StatisticsChartSelectionPanel(
+          title: row == null
+              ? '그래프의 점을 눌러 날짜별 상세값을 확인하세요.'
+              : row.dateStr,
+          values: row == null || value == null
+              ? const <String>[]
+              : <String>[
+                  widget.valueText(value),
+                  row.no == 1
+                      ? '첫 비교값'
+                      : widget.title.contains('정산')
+                          ? '이전 비교일 ${_signed(row.feeDelta, prefix: '₩')}'
+                          : '이전 비교일 ${_signed(row.departureDelta, suffix: '대')}',
+                ],
+          icon: Icons.show_chart_rounded,
         ),
       ],
-    );
-  }
-}
-
-class _MetricTile extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-
-  const _MetricTile({required this.label, required this.value, required this.icon});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    return Container(
-      width: 210,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: cs.outlineVariant.withOpacity(0.7)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: cs.primary),
-          const SizedBox(height: 10),
-          Text(label, style: theme.textTheme.labelMedium?.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 4),
-          Text(value, maxLines: 2, overflow: TextOverflow.ellipsis, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
-        ],
-      ),
-    );
-  }
-}
-
-class _AReportTocOverlay extends StatelessWidget {
-  final double width;
-  final _ChartAReport report;
-  final String selectedId;
-  final ValueChanged<String> onTap;
-  final VoidCallback onClose;
-
-  const _AReportTocOverlay({
-    required this.width,
-    required this.report,
-    required this.selectedId,
-    required this.onTap,
-    required this.onClose,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Positioned.fill(
-      child: Stack(
-        children: [
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: onClose,
-            child: Container(color: CommonUiTheme.of(context).scrim),
-          ),
-          Align(
-            alignment: Alignment.centerRight,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-              child: SizedBox(
-                width: width,
-                height: double.infinity,
-                child: _AReportTocPanel(
-                  report: report,
-                  selectedId: selectedId,
-                  onTap: onTap,
-                  onClose: onClose,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AReportTocPanel extends StatelessWidget {
-  final _ChartAReport report;
-  final String selectedId;
-  final ValueChanged<String> onTap;
-  final VoidCallback onClose;
-
-  const _AReportTocPanel({
-    required this.report,
-    required this.selectedId,
-    required this.onTap,
-    required this.onClose,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: StatisticsReportDesign.screenTocPanel(context),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('목차', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
-                    const SizedBox(height: 2),
-                    Text('통계 그래프 A', style: theme.textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700)),
-                  ],
-                ),
-              ),
-              IconButton(
-                tooltip: '목차 닫기',
-                onPressed: onClose,
-                icon: const Icon(Icons.close_rounded),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Expanded(
-            child: ListView.builder(
-              physics: const BouncingScrollPhysics(),
-              itemCount: report.tocItems.length,
-              itemBuilder: (context, index) {
-                final item = report.tocItems[index];
-                final selected = selectedId == item.id;
-                return Padding(
-                  padding: EdgeInsets.only(left: item.level * 14.0, bottom: 6),
-                  child: InkWell(
-                    onTap: item.isGroup ? null : () => onTap(item.id),
-                    borderRadius: BorderRadius.circular(16),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-                      decoration: BoxDecoration(
-                        color: selected ? cs.primaryContainer : item.isGroup ? cs.surfaceContainerHighest : CommonUiTheme.of(context).transparent,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: selected ? cs.primary.withOpacity(0.45) : cs.outlineVariant.withOpacity(0.45),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            item.isGroup ? Icons.folder_rounded : Icons.article_rounded,
-                            size: 18,
-                            color: selected ? cs.onPrimaryContainer : cs.onSurfaceVariant,
-                          ),
-                          const SizedBox(width: 9),
-                          Expanded(
-                            child: Text(
-                              item.title,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.labelLarge?.copyWith(
-                                fontWeight: item.isGroup || selected ? FontWeight.w900 : FontWeight.w700,
-                                color: selected ? cs.onPrimaryContainer : null,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -2816,7 +4891,7 @@ class _AEmptyState extends StatelessWidget {
           children: [
             Icon(Icons.insert_chart_outlined_rounded, size: 56, color: cs.primary),
             const SizedBox(height: 14),
-            Text('통계 그래프 A에 표시할 데이터가 없습니다.', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+            Text('출차·정산 비교에 표시할 데이터가 없습니다.', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
             const SizedBox(height: 6),
             Text('업무 통계 확인 시트에서 날짜 데이터를 선택한 뒤 다시 열어 주세요.', textAlign: TextAlign.center, style: theme.textTheme.bodyMedium?.copyWith(color: cs.onSurfaceVariant)),
           ],
@@ -2952,6 +5027,145 @@ class _SectorCrossIntegrity {
   }
 }
 
+
+List<_AnalyticsScope> _analyticsScopeOptions(_ChartAReport report) {
+  final metrics = report.sectorMetrics;
+  final scopes = <_AnalyticsScope>[const _AnalyticsScope.all()];
+  if (metrics == null) return scopes;
+  for (final item in metrics.items) {
+    final id = item.sectorId.trim();
+    final name = item.sectorName.trim();
+    if (id.isEmpty && name.isEmpty) continue;
+    scopes.add(
+      _AnalyticsScope.sector(
+        sectorId: id,
+        sectorName: name,
+      ),
+    );
+  }
+  return scopes;
+}
+
+_AnalyticsScope _resolveAnalyticsScope(
+  List<_AnalyticsScope> scopes,
+  _AnalyticsScope selected,
+) {
+  for (final scope in scopes) {
+    if (scope.key == selected.key) return scope;
+  }
+  return const _AnalyticsScope.all();
+}
+
+EndWorkSectorMetricItem? _sectorItemForScope(
+  EndWorkSectorMetrics? metrics,
+  _AnalyticsScope scope,
+) {
+  if (metrics == null || scope.isAll) return null;
+  for (final item in metrics.items) {
+    final id = item.sectorId.trim();
+    final name = item.sectorName.trim();
+    if (scope.sectorId.isNotEmpty && id == scope.sectorId) {
+      if (scope.sectorName.isEmpty || name == scope.sectorName) return item;
+    }
+    if (scope.sectorId.isEmpty &&
+        scope.sectorName.isNotEmpty &&
+        name == scope.sectorName) {
+      return item;
+    }
+  }
+  return null;
+}
+
+_ChartAReport _scopeChartReport(
+  _ChartAReport source,
+  _AnalyticsScope scope,
+) {
+  if (scope.isAll) return source;
+  final rawRows = <_ChartARow>[];
+  for (final row in source.rows) {
+    final item = _sectorItemForScope(row.sectorMetrics, scope);
+    rawRows.add(
+      _ChartARow(
+        no: row.no,
+        date: row.date,
+        departure: item?.vehicleCount ?? 0,
+        fee: item?.totalLockedFee.round() ?? 0,
+        departureDelta: 0,
+        feeDelta: 0,
+        departureShare: 0,
+        feeShare: 0,
+        historyEntryCount: row.historyEntryCount,
+        historyDetailedEntryCount: row.historyDetailedEntryCount,
+        historyExcludedEntryCount: row.historyExcludedEntryCount,
+        historyFirstEntryCount: row.historyFirstEntryCount,
+        historyUnverifiedDetailedEntryCount:
+            row.historyUnverifiedDetailedEntryCount,
+        historyLegacyDetailedEntryCount: row.historyLegacyDetailedEntryCount,
+        historyAggregationMode: row.historyAggregationMode,
+        historyLogsUrls: row.historyLogsUrls,
+        historyAggregated: row.historyAggregated,
+        historySectorEntryCount: row.historySectorEntryCount,
+        sectorMetrics: row.sectorMetrics,
+      ),
+    );
+  }
+  final totalDeparture =
+      rawRows.fold<int>(0, (sum, row) => sum + row.departure);
+  final totalFee = rawRows.fold<int>(0, (sum, row) => sum + row.fee);
+  final rows = <_ChartARow>[];
+  for (var i = 0; i < rawRows.length; i++) {
+    final current = rawRows[i];
+    final previous = i == 0 ? null : rawRows[i - 1];
+    rows.add(
+      current.copyWith(
+        no: i + 1,
+        departureDelta:
+            previous == null ? 0 : current.departure - previous.departure,
+        feeDelta: previous == null ? 0 : current.fee - previous.fee,
+        departureShare:
+            totalDeparture == 0 ? 0 : current.departure / totalDeparture,
+        feeShare: totalFee == 0 ? 0 : current.fee / totalFee,
+      ),
+    );
+  }
+  return _ChartAReport(
+    rows: rows,
+    rangeLabel: source.rangeLabel,
+    metrics: _ChartAMetrics.fromRows(rows),
+    sectorMetrics: source.sectorMetrics,
+    sections: source.sections,
+    tocItems: source.tocItems,
+  );
+}
+
+StatisticsDeepReport _scopeDeepReport(
+  StatisticsDeepReport source,
+  _AnalyticsScope scope,
+) {
+  if (scope.isAll) return source;
+  final rows = source.rows.where((row) {
+    if (row.sectorState != StatisticsSectorState.assigned) return false;
+    final id = row.normalizedSectorId;
+    final name = row.normalizedSectorName;
+    if (scope.sectorId.isNotEmpty && id == scope.sectorId) {
+      return scope.sectorName.isEmpty || name == scope.sectorName;
+    }
+    return scope.sectorId.isEmpty &&
+        scope.sectorName.isNotEmpty &&
+        name == scope.sectorName;
+  }).toList();
+  return StatisticsDeepReport.fromRows(
+    division: source.division,
+    area: source.area,
+    scopeLabel: '${source.scopeLabel} · ${scope.label}',
+    rows: rows,
+    objectNames: source.objectNames,
+    dateStrs: source.dateStrs,
+    sectorEnabled: source.sectorEnabled,
+    diagnostics: source.diagnostics,
+  );
+}
+
 class _ChartAReport {
   final List<_ChartARow> rows;
   final String rangeLabel;
@@ -3085,7 +5299,7 @@ class _ChartAReport {
       _ChartASection(
         id: 'daily_table',
         title: '날짜별 상세표',
-        subtitle: '출차·정산금·전일 대비 증감·기간 내 비중을 함께 정리했습니다.',
+        subtitle: '출차·정산금·이전 비교일 대비 증감·기간 내 비중을 함께 정리했습니다.',
         type: _ChartASectionType.dailyTable,
         icon: Icons.table_chart_rounded,
         rows: rows,
@@ -3095,7 +5309,7 @@ class _ChartAReport {
     final toc = <_ChartATocItem>[
       const _ChartATocItem(id: 'cover', title: '표지', level: 0),
       const _ChartATocItem(id: 'summary', title: '보고서 요약', level: 0),
-      const _ChartATocItem(id: 'a_group', title: '통계 그래프 A 본문', level: 0, isGroup: true),
+      const _ChartATocItem(id: 'a_group', title: '출차·정산 비교 본문', level: 0, isGroup: true),
       for (final section in sections) _ChartATocItem(id: section.id, title: section.title, level: 1),
     ];
 
@@ -3283,6 +5497,18 @@ class _MailDraft {
   const _MailDraft({required this.subject, required this.body});
 }
 
+class _MailAttachment {
+  final String filename;
+  final String mimeType;
+  final Uint8List bytes;
+
+  const _MailAttachment({
+    required this.filename,
+    required this.mimeType,
+    required this.bytes,
+  });
+}
+
 class _MailComposeDialog extends StatefulWidget {
   final String initialSubject;
   final String initialBody;
@@ -3318,7 +5544,7 @@ class _MailComposeDialogState extends State<_MailComposeDialog> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return AlertDialog(
-      title: const Text('PDF 메일 발신'),
+      title: const Text('PDF + 차량 CSV 메일 발신'),
       content: SizedBox(
         width: 520,
         child: Column(
@@ -3345,7 +5571,7 @@ class _MailComposeDialogState extends State<_MailComposeDialog> {
             Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                '수신자는 설정(EmailConfig)에서 관리됩니다.',
+                'PDF와 전체 차량 로그 CSV를 함께 첨부하며 수신자는 설정(EmailConfig)에서 관리됩니다.',
                 style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, fontWeight: FontWeight.w600),
               ),
             ),
@@ -3399,30 +5625,11 @@ class _DeepLoadRequest {
     );
   }
 
-  factory _DeepLoadRequest.range({
-    required DateTime start,
-    required DateTime end,
-    required String label,
-  }) {
-    return _DeepLoadRequest._(
-      dates: const <DateTime>[],
-      start: start,
-      end: end,
-      label: label,
-    );
-  }
-
   bool get isRange => start != null && end != null;
 }
 
 String _dateOnly(DateTime dt) => dt.toIso8601String().split('T').first;
 
-String _fmtPdfTime(DateTime? dt) {
-  if (dt == null) return '-';
-  final hh = dt.hour.toString().padLeft(2, '0');
-  final mm = dt.minute.toString().padLeft(2, '0');
-  return '$hh:$mm';
-}
 
 int _chartInt(Object? value) {
   if (value is int) return value;
@@ -3464,6 +5671,23 @@ String _signed(int value, {String prefix = '', String suffix = ''}) {
   final sign = value > 0 ? '+' : '-';
   final absValue = value.abs();
   return '$sign$prefix${_fmt(absValue)}$suffix';
+}
+
+String _compactChartValue(double value) {
+  final abs = value.abs();
+  if (abs >= 100000000) {
+    final v = value / 100000000;
+    return '${v.toStringAsFixed(v.abs() >= 10 ? 0 : 1)}억';
+  }
+  if (abs >= 10000) {
+    final v = value / 10000;
+    return '${v.toStringAsFixed(v.abs() >= 10 ? 0 : 1)}만';
+  }
+  if (abs >= 1000) {
+    final v = value / 1000;
+    return '${v.toStringAsFixed(v.abs() >= 10 ? 0 : 1)}천';
+  }
+  return value.round().toString();
 }
 
 int _axisLabelStep(int len, {int maxLabels = 7}) {

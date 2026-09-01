@@ -26,7 +26,7 @@ class LocalAttendanceReader {
     final db = await _database;
     final date = _formatDate(dateTime);
     final rows = await db.query(
-      'simple_work_attendance',
+      AttBrkModeDb.workAttendanceTable,
       columns: <String>['type', 'time'],
       where: 'date = ?',
       whereArgs: <Object?>[date],
@@ -80,7 +80,7 @@ class LocalAttendanceReader {
     required String type,
   }) async {
     final rows = await db.query(
-      'simple_work_attendance',
+      AttBrkModeDb.workAttendanceTable,
       columns: <String>['date', 'time', 'created_at'],
       where: 'type = ?',
       whereArgs: <Object?>[type],

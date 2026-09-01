@@ -10,6 +10,8 @@ import '../../../plate/domain/enums/plate_type.dart';
 import '../../../plate/domain/repositories/plate_tts_listener_repository.dart';
 import '../../application/parking_requests_dirty_hub.dart';
 import '../../application/plate_tts_event_hub.dart';
+import '../../application/plate_tts_session_protocol.dart';
+import '../../application/plate_tts_session_diagnostics.dart';
 import '../../application/tts_manager.dart';
 import '../../application/tts_ownership.dart';
 import '../../application/tts_user_filters.dart';
@@ -119,6 +121,7 @@ class PlateTtsListenerService {
 
   static bool _enabled = true;
   static TtsUserFilters _filters = TtsUserFilters.defaults();
+  static bool _preferInMemoryFilters = false;
 
   static String? _lastKnownArea;
 
@@ -148,6 +151,7 @@ class PlateTtsListenerService {
   static Future<String> _loadModeSafe() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      await prefs.reload();
       return (prefs.getString('mode') ?? '').trim();
     } catch (e) {
       debugPrint('[PlateTtsListenerService] mode load failed: $e');
@@ -183,6 +187,7 @@ class PlateTtsListenerService {
 
   static Future<void> setFilters(TtsUserFilters filters) async {
     _filters = filters;
+    _preferInMemoryFilters = true;
     await _filters.save();
     _log('filters saved: $filters');
     await _applyEffectiveMasterPolicy(reason: 'setFilters(saved)');
@@ -196,6 +201,7 @@ class PlateTtsListenerService {
 
   static void updateFilters(TtsUserFilters filters) {
     _filters = filters;
+    _preferInMemoryFilters = true;
     _log('filters updated (in-memory): $filters');
     Future.microtask(
         () => _applyEffectiveMasterPolicy(reason: 'updateFilters'));
@@ -207,11 +213,16 @@ class PlateTtsListenerService {
   static StreamSubscription<PlateTtsChangeBatch>? _subscription;
   static final Map<String, String?> _lastTypes = {};
   static final Map<String, DateTime> _lastSpokenAt = {};
+  static final Set<String> _pendingAddedDocIds = <String>{};
 
   static int _listenSeq = 0;
 
   static String? _currentArea;
   static String? _currentMode;
+
+  static bool get isListening => _subscription != null;
+  static String get currentArea => (_currentArea ?? '').trim();
+  static String get currentMode => (_currentMode ?? '').trim();
 
   static DateTime? _baselineUpdatedAt;
   static String? _baselineDocId;
@@ -225,9 +236,19 @@ class PlateTtsListenerService {
   static int _readsRemoved = 0;
   static int _readsEmptySnapshots = 0;
 
-  static void start(String currentArea, {bool force = false}) {
-    _lastKnownArea = currentArea;
-    Future.microtask(() => _startListening(currentArea, force: force));
+  static Future<bool> start(
+    String currentArea, {
+    bool force = false,
+    String? mode,
+    TtsUserFilters? filters,
+  }) async {
+    _lastKnownArea = currentArea.trim();
+    return _startListening(
+      currentArea,
+      force: force,
+      mode: mode,
+      filters: filters,
+    );
   }
 
   static Future<void> _ensureFirebaseInThisIsolate() async {
@@ -282,7 +303,8 @@ class PlateTtsListenerService {
         return;
       }
 
-      final mode = await _loadModeSafe();
+      final currentMode = (_currentMode ?? '').trim();
+      final mode = currentMode.isNotEmpty ? currentMode : await _loadModeSafe();
 
       _currentMode = mode;
 
@@ -302,7 +324,12 @@ class PlateTtsListenerService {
         final area = _lastKnownArea!.trim();
         _log(
             'policy($reason): effective master ON + no subscription → restart(area=$area)');
-        await _startListening(area, force: true);
+        await _startListening(
+          area,
+          force: true,
+          mode: mode,
+          filters: _filters,
+        );
       } else {
         _log(
             'policy($reason): effective master ON (subscription=${_subscription != null})');
@@ -328,10 +355,15 @@ class PlateTtsListenerService {
     _baselineDocId = null;
     _lastTypes.clear();
     _lastSpokenAt.clear();
+    _pendingAddedDocIds.clear();
   }
 
-  static Future<void> _startListening(String currentArea,
-      {bool force = false}) async {
+  static Future<bool> _startListening(
+    String currentArea, {
+    bool force = false,
+    String? mode,
+    TtsUserFilters? filters,
+  }) async {
     await _ensureFirebaseInThisIsolate();
 
     await PlateLocalNotificationService.instance.ensureInitialized();
@@ -339,7 +371,7 @@ class PlateTtsListenerService {
     final area = currentArea.trim();
     if (area.isEmpty) {
       _log('start ignored: empty area');
-      return;
+      return false;
     }
 
     if (!await _isOwnerForThisIsolate(
@@ -347,17 +379,19 @@ class PlateTtsListenerService {
       _log(
           'start aborted: not owner (role=$_localRole owner=$_cachedOwner area=$area)');
       await stop();
-      return;
+      return false;
     }
 
-    final mode = await _loadModeSafe();
+    final explicitMode = (mode ?? '').trim();
+    final resolvedMode =
+        explicitMode.isNotEmpty ? explicitMode : await _loadModeSafe();
 
     if (!force &&
         _subscription != null &&
         _currentArea == area &&
-        _currentMode == mode) {
-      _log('start no-op: already listening (area=$area, mode=$mode)');
-      return;
+        _currentMode == resolvedMode) {
+      _log('start no-op: already listening (area=$area, mode=$resolvedMode)');
+      return true;
     }
 
     _listenSeq += 1;
@@ -365,29 +399,39 @@ class PlateTtsListenerService {
 
     _lastKnownArea = area;
 
-    await _hydrateFromPrefsSafe(
-        reason: 'start(area=$area, seq=$mySeq, force=$force)', force: true);
+    if (filters != null) {
+      _enabled = true;
+      _filters = filters;
+      _preferInMemoryFilters = true;
+      _lastHydratedAt = DateTime.now();
+      _log('session filters applied: ${filters.toMap()}');
+    } else {
+      _preferInMemoryFilters = false;
+      await _hydrateFromPrefsSafe(
+          reason: 'start(area=$area, seq=$mySeq, force=$force)', force: true);
+    }
 
-    _currentMode = mode;
+    _currentMode = resolvedMode;
 
-    if (!_effectiveMasterOnForMode(mode)) {
+    if (!_effectiveMasterOnForMode(resolvedMode)) {
       _log(
           'start aborted: effective master OFF → stop() and return (seq=$mySeq)');
       await stop();
-      return;
+      return false;
     }
 
     await _subscription?.cancel();
     _subscription = null;
     _lastTypes.clear();
     _lastSpokenAt.clear();
+    _pendingAddedDocIds.clear();
 
     _baselineUpdatedAt = null;
     _baselineDocId = null;
 
     _currentArea = area;
 
-    final isTablet = _isTabletMode(mode);
+    final isTablet = _isTabletMode(resolvedMode);
 
     final typesToMonitor = <PlateType>[
       if (!isTablet) PlateType.parkingRequests,
@@ -396,7 +440,7 @@ class PlateTtsListenerService {
     ];
 
     _log(
-        'listen config: area=$area mode=$mode isTablet=$isTablet types=${typesToMonitor.map((e) => e.firestoreValue).toList()} (seq=$mySeq)');
+        'listen config: area=$area mode=$resolvedMode isTablet=$isTablet types=${typesToMonitor.map((e) => e.firestoreValue).toList()} (seq=$mySeq)');
 
     try {
       await _fetchBaseline(area, typesToMonitor);
@@ -433,17 +477,14 @@ class PlateTtsListenerService {
           return;
         }
 
-        await _hydrateFromPrefsSafe(
-            reason: 'snapshot(area=$_currentArea, seq=$mySeq)', force: false);
+        if (!_preferInMemoryFilters) {
+          await _hydrateFromPrefsSafe(
+              reason: 'snapshot(area=$_currentArea, seq=$mySeq)', force: false);
+        }
 
         if (!_effectiveMasterOnForMode(_currentMode ?? '')) {
           _log('snapshot aborted: effective master OFF → stop() (seq=$mySeq)');
           await stop();
-          return;
-        }
-
-        if (snapshot.hasPendingWrites) {
-          _log('skip local pendingWrites snapshot (seq=$mySeq)');
           return;
         }
 
@@ -493,6 +534,41 @@ class PlateTtsListenerService {
           if (data == null) continue;
 
           final docId = change.docId;
+          if (change.hasPendingWrites) {
+            if (change.type == PlateTtsChangeType.added) {
+              _pendingAddedDocIds.add(docId);
+            }
+            _log(
+              'defer local pendingWrites change type=${change.type} id=$docId (seq=$mySeq)',
+            );
+            PlateTtsSessionDiagnostics.record(
+              'pending_write_deferred',
+              meta: <String, Object?>{
+                'area': _currentArea ?? '',
+                'docId': docId,
+                'changeType': change.type.name,
+                'seq': mySeq,
+              },
+            );
+            continue;
+          }
+          final wasPendingAdded = _pendingAddedDocIds.remove(docId);
+          final effectiveChangeType =
+              wasPendingAdded ? PlateTtsChangeType.added : change.type;
+          if (wasPendingAdded) {
+            _log(
+              'pending added confirmed by server id=$docId originalType=${change.type} (seq=$mySeq)',
+            );
+            PlateTtsSessionDiagnostics.record(
+              'pending_added_confirmed',
+              meta: <String, Object?>{
+                'area': _currentArea ?? '',
+                'docId': docId,
+                'originalType': change.type.name,
+                'seq': mySeq,
+              },
+            );
+          }
           final newType = data['type'] as String?;
 
           final plateNumber = _readPlateNumber(data);
@@ -511,7 +587,7 @@ class PlateTtsListenerService {
           final isDepartureCompletedUiEvent =
               _isTabletMode(_currentMode ?? '') &&
                   newType == PlateType.departureCompleted.firestoreValue &&
-                  (change.type == PlateTtsChangeType.added ||
+                  (effectiveChangeType == PlateTtsChangeType.added ||
                       prevTypeForUi == null ||
                       prevTypeForUi != newType);
 
@@ -529,7 +605,7 @@ class PlateTtsListenerService {
             continue;
           }
 
-          if (change.type == PlateTtsChangeType.added) {
+          if (effectiveChangeType == PlateTtsChangeType.added) {
             if (_dedup(docId)) {
               if (newType == PlateType.parkingRequests.firestoreValue) {
                 final utter = '입차 요청';
@@ -575,7 +651,7 @@ class PlateTtsListenerService {
             } else {
               _log('dedup skip added id=$docId (seq=$mySeq)');
             }
-          } else if (change.type == PlateTtsChangeType.modified) {
+          } else if (effectiveChangeType == PlateTtsChangeType.modified) {
             final prevType = _lastTypes[docId];
             final typeChanged = prevType != null && prevType != newType;
 
@@ -624,7 +700,9 @@ class PlateTtsListenerService {
                   'ignore modified (no type change or dedup) id=$docId (seq=$mySeq)');
             }
           } else {
-            _log('ignore changeType=${change.type} id=$docId (seq=$mySeq)');
+            _log(
+              'ignore changeType=$effectiveChangeType id=$docId (seq=$mySeq)',
+            );
           }
 
           _lastTypes[docId] = newType;
@@ -640,7 +718,15 @@ class PlateTtsListenerService {
         }
       }, onError: (e, st) {
         if (mySeq != _listenSeq) return;
+        final failedSubscription = _subscription;
+        _subscription = null;
+        unawaited(failedSubscription?.cancel());
         _log('listen error: $e\n$st (seq=$mySeq)');
+        _emitSessionStatus(
+          event: 'listener_stream_error',
+          reason: e.toString(),
+          listening: false,
+        );
         unawaited(
           DevFirebaseDebugDialog.show(
             operation: 'tts.plates.listen',
@@ -659,12 +745,19 @@ class PlateTtsListenerService {
         _annotateUsage(area: _currentArea, source: 'PlateTTS.listen.error');
       }, onDone: () {
         if (mySeq != _listenSeq) return;
+        _subscription = null;
         _log('listen done (seq=$mySeq)');
         _printReadSummary(prefix: 'READ SUMMARY (done)');
         _annotateUsage(area: _currentArea, source: 'PlateTTS.listen.done');
       });
+      return _subscription != null;
     } catch (e, st) {
       _log('START ERROR: $e\n$st (seq=$mySeq)');
+      _emitSessionStatus(
+        event: 'listener_start_error',
+        reason: e.toString(),
+        listening: false,
+      );
       unawaited(
         DevFirebaseDebugDialog.show(
           operation: 'tts.plates.start',
@@ -672,7 +765,7 @@ class PlateTtsListenerService {
           stackTrace: st,
           details: <String, Object?>{
             'area': area,
-            'mode': mode,
+            'mode': resolvedMode,
             'seq': mySeq,
             'role': _localRole.name,
             'typesToMonitor': typesToMonitor.map((e) => e.firestoreValue).toList(growable: false),
@@ -680,6 +773,7 @@ class PlateTtsListenerService {
         ),
       );
       _printReadSummary(prefix: 'READ SUMMARY (start-error)');
+      return false;
     }
   }
 
@@ -802,10 +896,30 @@ class PlateTtsListenerService {
 
   static Future<void> _safeSpeak(String text) async {
     if (!await _isOwnerForThisIsolate(reason: 'speak', force: false)) return;
+    PlateTtsSessionDiagnostics.record(
+      'speak_request',
+      meta: <String, Object?>{
+        'area': _currentArea ?? '',
+        'mode': _currentMode ?? '',
+        'role': _localRole.name,
+        'text': text,
+      },
+    );
     try {
       await TtsManager.speak(text);
-    } catch (e) {
+    } catch (e, st) {
       _log('TTS error: $e');
+      PlateTtsSessionDiagnostics.record(
+        'speak_failed',
+        meta: <String, Object?>{
+          'area': _currentArea ?? '',
+          'mode': _currentMode ?? '',
+          'role': _localRole.name,
+          'text': text,
+          'error': e,
+          'stack': st,
+        },
+      );
     }
   }
 
@@ -979,6 +1093,29 @@ class PlateTtsListenerService {
   static void _annotateUsage({required String? area, required String source}) {
     final a = (area == null || area.isEmpty) ? '(unknown)' : area;
     _log('USAGE(annotate): area=$a source=$source');
+  }
+
+  static void _emitSessionStatus({
+    required String event,
+    required String reason,
+    required bool listening,
+  }) {
+    if (_localRole != TtsOwner.foreground) return;
+    try {
+      FlutterForegroundTask.sendDataToMain(<String, dynamic>{
+        'kind': PlateTtsSessionProtocol.statusKind,
+        'event': event,
+        'area': (_currentArea ?? _lastKnownArea ?? '').trim(),
+        'mode': (_currentMode ?? '').trim(),
+        'listening': listening,
+        'masterOn': _effectiveMasterOnForMode(_currentMode ?? ''),
+        'reason': reason,
+        'source': 'plate_tts_listener_service',
+        'ts': DateTime.now().millisecondsSinceEpoch,
+      });
+    } catch (e) {
+      debugPrint('[PlateTTS] session status send failed: $e');
+    }
   }
 
   static void _log(String msg) {

@@ -2,428 +2,253 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../app/di/routes.dart';
-import 'dialogs/plate_billing_count_dialog.dart';
+import '../application/debug_session_controller.dart';
+import '../presentation/debug_tool_shell.dart';
 import 'sheets/dev_quick_actions.dart';
-import 'sheets/local_prefs_bottom_sheet.dart';
-import 'sheets/sqlite_explorer_bottom_sheet.dart';
 
-double _contrastRatio(Color a, Color b) {
-  final la = a.computeLuminance();
-  final lb = b.computeLuminance();
-  final l1 = la >= lb ? la : lb;
-  final l2 = la >= lb ? lb : la;
-  return (l1 + 0.05) / (l2 + 0.05);
-}
+const Color _debugAccent = Color(0xFF6D5DFB);
 
-Color _resolveLogoTint({
-  required Color background,
-  required Color preferred,
-  required Color fallback,
-  double minContrast = 3.0,
-}) {
-  if (_contrastRatio(preferred, background) >= minContrast) return preferred;
-  return fallback;
-}
-
-class _BrandTintedLogo extends StatelessWidget {
-  const _BrandTintedLogo({required this.height});
-
-  static const String _assetPath = 'assets/images/ParkinWorkin_text.png';
-  static const double _minContrast = 3.0;
-
-  final double height;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final bg = cs.background;
-
-    final tint = _resolveLogoTint(
-      background: bg,
-      preferred: cs.primary,
-      fallback: cs.onBackground,
-      minContrast: _minContrast,
-    );
-
-    return Image.asset(
-      _assetPath,
-      fit: BoxFit.contain,
-      height: height,
-      color: tint,
-      colorBlendMode: BlendMode.srcIn,
-    );
-  }
-}
-
-@immutable
-class _DevTokens {
-  const _DevTokens({
-    required this.pageBackground,
-    required this.appBarBackground,
-    required this.appBarForeground,
-    required this.divider,
-    required this.cardSurface,
-    required this.cardBorder,
-    required this.headerTintSurface,
-    required this.headerBadgeBg,
-    required this.headerBadgeFg,
-    required this.headerTextColor,
-    required this.bubbleChipBgOn,
-    required this.bubbleChipBgOff,
-    required this.bubbleChipBorderOn,
-    required this.bubbleChipBorderOff,
-    required this.bubbleChipTextOn,
-    required this.bubbleChipTextOff,
-  });
-
-  final Color pageBackground;
-  final Color appBarBackground;
-  final Color appBarForeground;
-  final Color divider;
-
-  final Color cardSurface;
-  final Color cardBorder;
-
-
-  final Color headerTintSurface;
-  final Color headerBadgeBg;
-  final Color headerBadgeFg;
-  final Color headerTextColor;
-
-  final Color bubbleChipBgOn;
-  final Color bubbleChipBgOff;
-  final Color bubbleChipBorderOn;
-  final Color bubbleChipBorderOff;
-  final Color bubbleChipTextOn;
-  final Color bubbleChipTextOff;
-
-  factory _DevTokens.of(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    final headerTint = Color.alphaBlend(
-      cs.primary.withOpacity(0.16),
-      cs.surfaceContainerLow,
-    );
-    final badgeBg = cs.primary;
-    final badgeFg = cs.onPrimary;
-
-    return _DevTokens(
-      pageBackground: cs.background,
-      appBarBackground: cs.background,
-      appBarForeground: cs.onSurface,
-      divider: cs.outlineVariant,
-      cardSurface: cs.surface,
-      cardBorder: cs.outlineVariant.withOpacity(0.85),
-      headerTintSurface: headerTint,
-      headerBadgeBg: badgeBg,
-      headerBadgeFg: badgeFg,
-      headerTextColor: cs.onSurface,
-      bubbleChipBgOn: cs.primary.withOpacity(0.12),
-      bubbleChipBgOff: cs.surfaceVariant,
-      bubbleChipBorderOn: cs.primary.withOpacity(0.35),
-      bubbleChipBorderOff: cs.outlineVariant,
-      bubbleChipTextOn: cs.primary,
-      bubbleChipTextOff: cs.outline,
-    );
-  }
-}
-
-
-class DevStubPage extends StatefulWidget {
+class DevStubPage extends StatelessWidget {
   const DevStubPage({super.key});
 
   @override
-  State<DevStubPage> createState() => _DevStubPageState();
-}
-
-class _DevStubPageState extends State<DevStubPage> {
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      DevQuickActions.enableDeveloperMode();
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final tokens = _DevTokens.of(context);
-    final text = Theme.of(context).textTheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    final media = MediaQuery.of(context);
-    final bool isShort = media.size.height < 640;
-    final bool keyboardOpen = media.viewInsets.bottom > 0;
-    final double footerHeight = (isShort || keyboardOpen) ? 72 : 120;
-
-    return PopScope(
-      canPop: false,
-      child: Scaffold(
-        backgroundColor: tokens.pageBackground,
-        appBar: AppBar(
-          backgroundColor: tokens.appBarBackground,
-          surfaceTintColor: Colors.transparent,
-          elevation: 0,
-          scrolledUnderElevation: 0,
-          centerTitle: true,
-          systemOverlayStyle: SystemUiOverlayStyle(
-            statusBarColor: Colors.transparent,
-            statusBarIconBrightness:
-                isDark ? Brightness.light : Brightness.dark,
-            statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
-          ),
-          title: Text(
-            '개발 허브',
-            style: text.titleMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.2,
-              color: tokens.appBarForeground,
-            ),
-          ),
-          iconTheme: IconThemeData(color: tokens.appBarForeground),
-          actionsIconTheme: IconThemeData(color: tokens.appBarForeground),
-          bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(1),
-            child: Container(height: 1, color: tokens.divider),
-          ),
-        ),
-        body: SafeArea(
-          child: Container(
-            color: tokens.pageBackground,
-            width: double.infinity,
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _HeaderBanner(tokens: tokens),
-                const SizedBox(height: 16),
-                Expanded(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final width = constraints.maxWidth;
-                      final crossAxisCount = width >= 1100
-                          ? 4
-                          : width >= 800
-                              ? 3
-                              : 2;
-
-                      const spacing = 12.0;
-                      final textScale = MediaQuery.of(context)
-                          .textScaleFactor
-                          .clamp(1.0, 1.3);
-
-                      final tileWidth =
-                          (width - spacing * (crossAxisCount - 1)) /
-                              crossAxisCount;
-                      const baseTileHeight = 150.0;
-                      final tileHeight = baseTileHeight * textScale;
-                      final childAspectRatio = tileWidth / tileHeight;
-
-                      final cs = Theme.of(context).colorScheme;
-
-                      final cards = <Widget>[
-                        _ActionCard(
-                          icon: Icons.computer_rounded,
-                          title: '로컬 컴퓨터',
-                          subtitle: 'SharedPreferences',
-                          bg: cs.surfaceVariant,
-                          fg: cs.onSurfaceVariant,
-                          onTap: () {
-                            showModalBottomSheet(
-                              context: context,
-                              isScrollControlled: true,
-                              backgroundColor: Colors.transparent,
-                              builder: (_) => const LocalPrefsBottomSheet(),
-                            );
-                          },
-                        ),
-                        _ActionCard(
-                          icon: Icons.receipt_long_rounded,
-                          title: '청구',
-                          subtitle: '회사 · 지역별 생성 대수',
-                          bg: cs.tertiaryContainer,
-                          fg: cs.onTertiaryContainer,
-                          tintColor: cs.tertiary.withOpacity(0.08),
-                          onTap: () {
-                            showPlateBillingCountDialog(context);
-                          },
-                        ),
-                        _ActionCard(
-                          icon: Icons.storage_rounded,
-                          title: 'SQLite',
-                          subtitle: 'DB 탐색기 · 미리보기',
-                          bg: cs.primaryContainer,
-                          fg: cs.onPrimaryContainer,
-                          tintColor: cs.secondary.withOpacity(0.08),
-                          onTap: () {
-                            showModalBottomSheet(
-                              context: context,
-                              isScrollControlled: true,
-                              backgroundColor: Colors.transparent,
-                              builder: (_) => const Material(
-                                borderRadius: BorderRadius.vertical(
-                                  top: Radius.circular(16),
-                                ),
-                                clipBehavior: Clip.antiAlias,
-                                child: SizedBox(
-                                  height: 560,
-                                  child: SQLiteExplorerBottomSheet(),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ];
-
-                      return GridView.builder(
-                        padding: EdgeInsets.zero,
-                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: crossAxisCount,
-                          mainAxisSpacing: spacing,
-                          crossAxisSpacing: spacing,
-                          childAspectRatio: childAspectRatio,
-                        ),
-                        itemCount: cards.length,
-                        itemBuilder: (context, i) => cards[i],
-                      );
-                    },
+    return ValueListenableBuilder<bool>(
+      valueListenable: DebugSessionController.enabled,
+      builder: (context, enabled, _) {
+        final reduceMotion = MediaQuery.of(context).disableAnimations;
+        return Scaffold(
+          body: AnimatedSwitcher(
+            duration:
+                reduceMotion ? Duration.zero : const Duration(milliseconds: 180),
+            child: enabled
+                ? _DebugHub(
+                    key: const ValueKey<String>('debug_hub_active'),
+                    reduceMotion: reduceMotion,
+                  )
+                : const _DebugInactive(
+                    key: ValueKey<String>('debug_hub_inactive'),
                   ),
-                ),
-              ],
-            ),
           ),
-        ),
-        bottomNavigationBar: AnimatedOpacity(
-          opacity: keyboardOpen ? 0.0 : 1.0,
-          duration: const Duration(milliseconds: 160),
-          child: SafeArea(
-            top: false,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: tokens.pageBackground,
-                border:
-                    Border(top: BorderSide(color: tokens.divider, width: 1)),
-              ),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(8),
-                  onTap: () => Navigator.of(context).pushNamedAndRemoveUntil(
-                    AppRoutes.selector,
-                    (route) => false,
-                  ),
-                  child: SizedBox(
-                    height: footerHeight,
-                    child: Center(
-                      child: _BrandTintedLogo(height: footerHeight),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
 
-class _HeaderBanner extends StatelessWidget {
-  const _HeaderBanner({required this.tokens});
+class _DebugHub extends StatelessWidget {
+  const _DebugHub({super.key, required this.reduceMotion});
 
-  final _DevTokens tokens;
+  final bool reduceMotion;
+
+  Future<void> _showStatus(BuildContext context) async {
+    await DebugSessionController.showStatus(
+      context,
+      source: 'developer_hub',
+      description: const <String>[
+        'DEBUG session: ACTIVE',
+        'Route: Developer Hub',
+        'SharedPreferences: available',
+        'SQLite Explorer: available',
+      ].join('\n'),
+    );
+  }
+
+  Future<void> _exitDebug(BuildContext context) async {
+    HapticFeedback.mediumImpact();
+    DebugSessionController.record(
+      'debug_exit_from_tool',
+      source: 'developer_hub',
+    );
+    Navigator.of(context).pushNamedAndRemoveUntil(
+      AppRoutes.modeLauncher,
+      (route) => false,
+    );
+    if (!reduceMotion) {
+      await Future<void>.delayed(const Duration(milliseconds: 160));
+    }
+    await DebugSessionController.disable(source: 'developer_hub');
+  }
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: tokens.headerTintSurface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: tokens.divider.withOpacity(0.85)),
-      ),
-      child: Row(
+    return SafeArea(
+      child: Column(
         children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: tokens.headerBadgeBg,
-              shape: BoxShape.circle,
+          DebugToolHeader(
+            title: 'Developer Hub',
+            breadcrumb: 'Developer / Hub',
+            meta: 'DEBUG session active',
+            onClose: () => Navigator.of(context).pushNamedAndRemoveUntil(
+              AppRoutes.modeLauncher,
+              (route) => false,
             ),
-            alignment: Alignment.center,
-            child:
-                Icon(Icons.developer_mode_rounded, color: tokens.headerBadgeFg),
+            onStatus: () => _showStatus(context),
+            onDebugExit: () => _exitDebug(context),
           ),
-          const SizedBox(width: 12),
           Expanded(
-            child: Text(
-              '개발 허브 입니다.',
-              style: text.bodyMedium?.copyWith(
-                color: tokens.headerTextColor,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          ValueListenableBuilder<bool>(
-            valueListenable: DevQuickActions.enabled,
-            builder: (context, on, _) {
-              return Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color:
-                          on ? tokens.bubbleChipBgOn : tokens.bubbleChipBgOff,
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(
-                        color: on
-                            ? tokens.bubbleChipBorderOn
-                            : tokens.bubbleChipBorderOff,
-                      ),
-                    ),
-                    child: Text(
-                      on ? '개발자 모드 ON' : '개발자 모드 OFF',
-                      style: text.labelMedium?.copyWith(
-                        color: on
-                            ? tokens.bubbleChipTextOn
-                            : tokens.bubbleChipTextOff,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: .2,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Switch.adaptive(
-                    value: on,
-                    onChanged: (v) async {
-                      if (v) {
-                        await DevQuickActions.enableDeveloperMode();
-                      } else {
-                        await DevQuickActions.disableDeveloperMode();
-                      }
-                      HapticFeedback.selectionClick();
-                      if (!context.mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            v
-                                ? '개발자 모드와 개발 버블이 켜졌습니다.'
-                                : '개발자 모드와 개발 버블이 꺼졌습니다.',
-                          ),
-                          behavior: SnackBarBehavior.floating,
-                          duration: const Duration(milliseconds: 900),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final compact = constraints.maxWidth < 680;
+                return ListView(
+                  padding: const EdgeInsets.fromLTRB(20, 22, 20, 32),
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        color: Color.alphaBlend(
+                          _debugAccent.withOpacity(0.09),
+                          cs.surfaceContainerLow,
                         ),
-                      );
-                    },
-                  ),
-                ],
-              );
-            },
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: _debugAccent.withOpacity(0.32),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: _debugAccent.withOpacity(0.13),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            alignment: Alignment.center,
+                            child: const Icon(
+                              Icons.terminal_rounded,
+                              color: _debugAccent,
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'DEBUG ACTIVE',
+                                  style: text.titleMedium?.copyWith(
+                                    color: _debugAccent,
+                                    fontFamily: 'monospace',
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 0.6,
+                                  ),
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  '로컬 상태와 데이터베이스를 검사하는 개발자 세션입니다.',
+                                  style: text.bodySmall?.copyWith(
+                                    color: cs.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Text(
+                      '검사',
+                      style: text.labelLarge?.copyWith(
+                        color: cs.onSurfaceVariant,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 9),
+                    if (compact) ...[
+                      _DebugHubAction(
+                        index: 0,
+                        reduceMotion: reduceMotion,
+                        icon: Icons.tune_rounded,
+                        title: 'SharedPreferences',
+                        description: '로컬 설정 값을 검색하고 수정합니다.',
+                        onTap: () => DevQuickActions.openSheetExclusively(
+                          (ctx) => DevQuickActions.showLocalPrefsSheet(ctx),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      _DebugHubAction(
+                        index: 1,
+                        reduceMotion: reduceMotion,
+                        icon: Icons.storage_rounded,
+                        title: 'SQLite Explorer',
+                        description: 'DB, 테이블, 행과 스키마를 검사합니다.',
+                        onTap: () => DevQuickActions.openSheetExclusively(
+                          (ctx) => DevQuickActions.showSQLiteExplorerSheet(ctx),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      _DebugHubAction(
+                        index: 2,
+                        reduceMotion: reduceMotion,
+                        icon: Icons.monitor_heart_outlined,
+                        title: 'Status',
+                        description: 'debugPrint 로그를 확인하고 코드를 복사합니다.',
+                        onTap: () => _showStatus(context),
+                      ),
+                    ] else
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: _DebugHubAction(
+                              index: 0,
+                              reduceMotion: reduceMotion,
+                              icon: Icons.tune_rounded,
+                              title: 'SharedPreferences',
+                              description: '로컬 설정 값을 검색하고 수정합니다.',
+                              onTap: () => DevQuickActions.openSheetExclusively(
+                                (ctx) => DevQuickActions.showLocalPrefsSheet(ctx),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _DebugHubAction(
+                              index: 1,
+                              reduceMotion: reduceMotion,
+                              icon: Icons.storage_rounded,
+                              title: 'SQLite Explorer',
+                              description: 'DB, 테이블, 행과 스키마를 검사합니다.',
+                              onTap: () => DevQuickActions.openSheetExclusively(
+                                (ctx) => DevQuickActions.showSQLiteExplorerSheet(ctx),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _DebugHubAction(
+                              index: 2,
+                              reduceMotion: reduceMotion,
+                              icon: Icons.monitor_heart_outlined,
+                              title: 'Status',
+                              description: 'debugPrint 로그를 확인하고 코드를 복사합니다.',
+                              onTap: () => _showStatus(context),
+                            ),
+                          ),
+                        ],
+                      ),
+                    const SizedBox(height: 24),
+                    Text(
+                      '세션',
+                      style: text.labelLarge?.copyWith(
+                        color: cs.onSurfaceVariant,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 9),
+                    OutlinedButton.icon(
+                      onPressed: () => _exitDebug(context),
+                      icon: const Icon(Icons.logout_rounded),
+                      label: const Text('DEBUG 종료'),
+                    ),
+                  ],
+                );
+              },
+            ),
           ),
         ],
       ),
@@ -431,88 +256,134 @@ class _HeaderBanner extends StatelessWidget {
   }
 }
 
-class _ActionCard extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-
-  final Color bg;
-  final Color fg;
-
-  final Color? tintColor;
-
-  final VoidCallback? onTap;
-
-  const _ActionCard({
+class _DebugHubAction extends StatelessWidget {
+  const _DebugHubAction({
+    required this.index,
+    required this.reduceMotion,
     required this.icon,
     required this.title,
-    required this.subtitle,
-    required this.bg,
-    required this.fg,
-    this.tintColor,
-    this.onTap,
+    required this.description,
+    required this.onTap,
   });
+
+  final int index;
+  final bool reduceMotion;
+  final IconData icon;
+  final String title;
+  final String description;
+  final Future<void> Function() onTap;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-
-    return Card(
-      color: cs.surface,
-      elevation: 1,
-      clipBehavior: Clip.antiAlias,
-      surfaceTintColor: tintColor ?? bg,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
-      ),
+    final card = Material(
+      color: cs.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(16),
       child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(12),
+        borderRadius: BorderRadius.circular(16),
+        onTap: () {
+          HapticFeedback.selectionClick();
+          onTap();
+        },
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 124),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: cs.outlineVariant.withOpacity(0.8)),
+          ),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: onTap,
-                  customBorder: const CircleBorder(),
-                  child: Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: bg,
-                      shape: BoxShape.circle,
-                    ),
-                    alignment: Alignment.center,
-                    child: Icon(icon, color: fg, size: 26),
-                  ),
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: _debugAccent.withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(12),
                 ),
+                alignment: Alignment.center,
+                child: Icon(icon, color: _debugAccent, size: 20),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 12),
               Text(
                 title,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontWeight: FontWeight.w800,
-                  color: cs.onSurface,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 3),
               Text(
-                subtitle,
+                description,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                    ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (reduceMotion) return card;
+    return TweenAnimationBuilder<double>(
+      duration: Duration(milliseconds: 180 + index * 35),
+      curve: Curves.easeOutCubic,
+      tween: Tween<double>(begin: 0, end: 1),
+      builder: (context, value, child) {
+        return Opacity(
+          opacity: value,
+          child: Transform.translate(
+            offset: Offset(0, 7 * (1 - value)),
+            child: child,
+          ),
+        );
+      },
+      child: card,
+    );
+  }
+}
+
+class _DebugInactive extends StatelessWidget {
+  const _DebugInactive({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return SafeArea(
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.terminal_outlined,
+                size: 40,
+                color: cs.onSurfaceVariant,
+              ),
+              const SizedBox(height: 14),
+              Text(
+                'DEBUG 세션이 비활성 상태입니다.',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: cs.onSurfaceVariant,
-                  fontSize: 12,
-                  height: 1.15,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
+              const SizedBox(height: 7),
+              Text(
+                '파킨워킨 터미널에서 debug 명령으로 활성화할 수 있습니다.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                    ),
+              ),
+              const SizedBox(height: 18),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pushNamedAndRemoveUntil(
+                  AppRoutes.modeLauncher,
+                  (route) => false,
                 ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                softWrap: true,
+                child: const Text('돌아가기'),
               ),
             ],
           ),

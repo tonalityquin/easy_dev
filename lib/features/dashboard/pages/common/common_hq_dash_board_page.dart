@@ -24,31 +24,33 @@ class CommonHqDashBoardPage extends StatelessWidget {
         : normalizedMode;
 
     debugPrint(
-      '[HQ_DASHBOARD][${DateTime.now().toIso8601String()}] screen=$screenName mode=$effectiveMode layout=fixed calendar=direct verticalScroll=false modeTrigger=removed contextPublisher=scope additionalFirebaseRead=0 additionalFirebaseWrite=0',
+      '[HQ_DASHBOARD][${DateTime.now().toIso8601String()}] screen=$screenName mode=$effectiveMode layout=fixed calendar=direct verticalScroll=false modeTrigger=removed contextPublisher=${effectiveMode.isEmpty ? 'none' : 'scope'} additionalFirebaseRead=0 additionalFirebaseWrite=0',
     );
 
-    return HeadquarterDashboardContextScope(
-      modeKey: effectiveMode,
-      source: 'common_hq_dashboard:$screenName',
-      child: ColoredBox(
-        color: tokens.canvas,
-        child: SafeArea(
-          top: false,
-          bottom: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-            child: SizedBox.expand(
-              child: CommonAnimatedReveal(
-                child: HeadquarterCalendarCard(
-                  useCommonUi: true,
-                  showAccountEntry: true,
-                  fillViewport: true,
-                ),
+    final content = ColoredBox(
+      color: tokens.canvas,
+      child: SafeArea(
+        top: false,
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+          child: SizedBox.expand(
+            child: CommonAnimatedReveal(
+              child: HeadquarterCalendarCard(
+                useCommonUi: true,
+                showAccountEntry: true,
+                fillViewport: true,
               ),
             ),
           ),
         ),
       ),
+    );
+    if (effectiveMode.isEmpty) return content;
+    return HeadquarterDashboardContextScope(
+      modeKey: effectiveMode,
+      source: 'common_hq_dashboard:$screenName',
+      child: content,
     );
   }
 }
