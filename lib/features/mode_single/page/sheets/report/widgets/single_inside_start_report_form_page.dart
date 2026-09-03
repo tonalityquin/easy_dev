@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -8,9 +9,11 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../../../app/config/email_config.dart';
+import '../../../../../../app/utils/status_dialog.dart';
 import '../../../../../../shared/utils/gmail_pdf_mailer.dart';
 import '../../../../../dev/application/area_state.dart';
 import '../../../../../dev/debug/debug_api_logger.dart';
+import '../../../../../selector/application/dev_auth.dart';
 import 'single_inside_report_styles.dart';
 
 class SingleInsideStartReportFormPage extends StatefulWidget {
@@ -37,6 +40,8 @@ class _SingleInsideStartReportFormPageState
   String? _selectedArea;
   bool _sending = false;
   int _currentPageIndex = 0;
+  static const int _maxDebugLines = 160;
+  final List<String> _debugLines = <String>[];
 
   static const String _tReport = 'report';
   static const String _tReportStart = 'report/start';
@@ -50,6 +55,45 @@ class _SingleInsideStartReportFormPageState
   static const String _prefsHasSpecialNoteKey =
       'singleInsideStartReport.hasSpecialNote';
   static const String _prefsContentKey = 'singleInsideStartReport.content';
+
+  void _recordDebug(String message) {
+    final normalized = message.trim();
+    if (normalized.isEmpty) return;
+    final line =
+        '[SingleStartReportDock][${DateTime.now().toIso8601String()}] $normalized';
+    _debugLines.add(line);
+    if (_debugLines.length > _maxDebugLines) {
+      _debugLines.removeRange(0, _debugLines.length - _maxDebugLines);
+    }
+    debugPrint(line);
+  }
+
+  String get _debugPrintCode {
+    if (_debugLines.isEmpty) {
+      return 'debugPrint(${jsonEncode('[SingleStartReportDock] 기록된 로그가 없습니다.')});';
+    }
+    return _debugLines
+        .map((line) => 'debugPrint(${jsonEncode(line)});')
+        .join('\n');
+  }
+
+  Future<void> _showDeveloperStatus() async {
+    final enabled = await DevAuth.isDevModeEnabled();
+    if (!enabled || !mounted) return;
+    _recordDebug(
+      'developer_status_open page=$_currentPageIndex sending=$_sending special=${_hasSpecialNote ?? 'unset'} area=${_selectedArea ?? ''}',
+    );
+    await StatusDialog.showSuccess(
+      context,
+      title: '업무 시작 보고 상태',
+      description: '업무 시작 보고 Side Dock의 debugPrint 코드를 복사할 수 있습니다.',
+      copyText: _debugPrintCode,
+      copyButtonLabel: 'debugPrint 코드 복사',
+      visibleDuration: Duration.zero,
+      useCommonUi: true,
+      awaitManualClose: true,
+    );
+  }
 
   Future<void> _logApiError({
     required String tag,
@@ -79,11 +123,15 @@ class _SingleInsideStartReportFormPageState
   }
 
   Future<void> _initializeForm() async {
+    _recordDebug('initialize_start');
     _updateMailBody(force: true);
     await _loadSelectedArea();
     await _loadDraft();
     _updateMailSubject();
     _updateMailBody(force: true);
+    _recordDebug(
+      'initialize_complete area=${_selectedArea ?? ''} special=${_hasSpecialNote ?? 'unset'}',
+    );
   }
 
   Future<void> _loadSelectedArea() async {
@@ -353,6 +401,7 @@ class _SingleInsideStartReportFormPageState
 
   Future<void> _exitPage() async {
     if (_sending || !mounted) return;
+    _recordDebug('app_bar_back page=$_currentPageIndex');
     Navigator.of(context).pop();
   }
 
@@ -376,6 +425,7 @@ class _SingleInsideStartReportFormPageState
   }
 
   Future<void> _showPreview() async {
+    _recordDebug('preview_open page=$_currentPageIndex sending=$_sending');
     HapticFeedback.lightImpact();
     _updateMailBody(force: true);
     final text = _buildPreviewText(context);
@@ -832,7 +882,13 @@ class _SingleInsideStartReportFormPageState
   }
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+    _recordDebug(
+      'submit_start page=$_currentPageIndex sending=$_sending special=${_hasSpecialNote ?? 'unset'} contentLength=${_contentCtrl.text.trim().length}',
+    );
+    if (!_formKey.currentState!.validate()) {
+      _recordDebug('submit_blocked validation=false');
+      return;
+    }
 
     if (_hasSpecialNote == null) {
       await _goToPage(0);
@@ -886,11 +942,13 @@ class _SingleInsideStartReportFormPageState
       );
 
       await _clearDraft();
+      _recordDebug('submit_complete filename=$filename.pdf');
 
       if (!mounted) return;
       await _showSubmitSuccessDialogAndClose();
       if (!mounted) return;
     } catch (e) {
+      _recordDebug('submit_failure error=$e');
       await _logApiError(
         tag: 'SingleInsideStartReportFormPage._submit',
         message: '업무 시작 보고서 제출 실패',
@@ -1442,6 +1500,90 @@ class _SingleInsideStartReportFormPageState
     );
   }
 
+  Future<void> _handleDeveloperMenuSelection(String value) async {
+    _recordDebug('developer_menu_select value=$value page=$_currentPageIndex');
+    if (value == 'status') {
+      await _showDeveloperStatus();
+    }
+  }
+
+  Widget _buildAppBarPreviewAction(BuildContext context) {
+    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final duration = reduceMotion
+        ? Duration.zero
+        : const Duration(milliseconds: 160);
+
+    return AnimatedOpacity(
+      duration: duration,
+      curve: Curves.easeOutCubic,
+      opacity: _sending ? 0.45 : 1,
+      child: AnimatedScale(
+        duration: duration,
+        curve: Curves.easeOutCubic,
+        scale: _sending ? 0.94 : 1,
+        child: IconButton(
+          tooltip: '미리보기',
+          onPressed: _sending ? null : _showPreview,
+          icon: const Icon(Icons.visibility_outlined),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDeveloperAppBarMenu(BuildContext context) {
+    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final duration = reduceMotion
+        ? Duration.zero
+        : const Duration(milliseconds: 180);
+
+    return ValueListenableBuilder<bool>(
+      valueListenable: DevAuth.devModeEnabled,
+      builder: (context, enabled, _) {
+        return AnimatedSwitcher(
+          duration: duration,
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          transitionBuilder: (child, animation) {
+            return FadeTransition(
+              opacity: animation,
+              child: ScaleTransition(
+                scale: Tween<double>(begin: 0.92, end: 1).animate(animation),
+                child: child,
+              ),
+            );
+          },
+          child: enabled
+              ? PopupMenuButton<String>(
+                  key: const ValueKey<String>('singleStartReportDevMenu'),
+                  tooltip: '개발자 메뉴',
+                  onOpened: () {
+                    _recordDebug(
+                      'developer_menu_open page=$_currentPageIndex',
+                    );
+                  },
+                  onSelected: _handleDeveloperMenuSelection,
+                  itemBuilder: (context) => const <PopupMenuEntry<String>>[
+                    PopupMenuItem<String>(
+                      value: 'status',
+                      child: Row(
+                        children: [
+                          Icon(Icons.bug_report_rounded),
+                          SizedBox(width: 10),
+                          Flexible(child: Text('상태 확인')),
+                        ],
+                      ),
+                    ),
+                  ],
+                  icon: const Icon(Icons.more_vert_rounded),
+                )
+              : const SizedBox(
+                  key: ValueKey<String>('singleStartReportDevMenuHidden'),
+                ),
+        );
+      },
+    );
+  }
+
   Widget? _buildBottomActionBar() {
     final cs = Theme.of(context).colorScheme;
 
@@ -1568,13 +1710,19 @@ class _SingleInsideStartReportFormPageState
         backgroundColor: cs.surface,
         appBar: AppBar(
           automaticallyImplyLeading: false,
+          leadingWidth: 48,
           leading: IconButton(
             tooltip: '뒤로가기',
             onPressed: _sending ? null : _exitPage,
             icon: const Icon(Icons.arrow_back_ios_new_rounded),
           ),
-          title: const Text('업무 시작 보고서 작성'),
-          centerTitle: true,
+          titleSpacing: 0,
+          title: const Text(
+            '업무 시작 보고서',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          centerTitle: false,
           backgroundColor: cs.surface,
           foregroundColor: cs.onSurface,
           elevation: 0,
@@ -1586,15 +1734,9 @@ class _SingleInsideStartReportFormPageState
             ),
           ),
           actions: [
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: ElevatedButton.icon(
-                onPressed: _showPreview,
-                icon: const Icon(Icons.visibility_outlined),
-                label: const Text('미리보기'),
-                style: SingleReportButtonStyles.smallPrimary(context),
-              ),
-            ),
+            _buildAppBarPreviewAction(context),
+            _buildDeveloperAppBarMenu(context),
+            const SizedBox(width: 4),
           ],
         ),
         bottomNavigationBar: _buildBottomActionBar(),
@@ -1606,6 +1748,7 @@ class _SingleInsideStartReportFormPageState
               controller: _pageController,
               physics: const NeverScrollableScrollPhysics(),
               onPageChanged: (index) {
+                _recordDebug('page_changed from=$_currentPageIndex to=$index');
                 setState(() {
                   _currentPageIndex = index;
                 });

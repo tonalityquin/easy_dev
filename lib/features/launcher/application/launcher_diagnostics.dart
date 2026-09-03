@@ -7,6 +7,7 @@ import '../../../app/auth/gmail_sender_diagnostics.dart';
 import '../../../app/init/app_start_debug_trace.dart';
 import '../../../app/init/startup_tasks.dart';
 import '../../../app/utils/status_dialog.dart';
+import '../../attendance/application/attendance_diagnostics.dart';
 import '../../selector/application/dev_auth.dart';
 import '../../../shared/tts/application/plate_tts_session_diagnostics.dart';
 
@@ -23,6 +24,7 @@ class LauncherDiagnostics {
       ...AppStartDebugTrace.lines,
       ...GmailSenderDiagnostics.lines,
       ...PlateTtsSessionDiagnostics.lines,
+      ...AttendanceDiagnostics.lines,
       ..._lines,
     ];
     if (merged.isEmpty) {
@@ -72,6 +74,7 @@ class LauncherDiagnostics {
         'appStartLines': AppStartDebugTrace.lines.length,
         'gmailSenderLines': GmailSenderDiagnostics.lines.length,
         'plateTtsSessionLines': PlateTtsSessionDiagnostics.lines.length,
+        'attendanceLines': AttendanceDiagnostics.lines.length,
       },
     );
     await StatusDialog.showSuccess(

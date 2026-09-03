@@ -7,15 +7,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../app/init/app_exit_service.dart';
 import '../../../app/init/work_schedule_prefs.dart';
 import '../../../design_system/common_ui/common_ui_theme.dart';
+import '../../attendance/application/common_attendance_service.dart';
+import '../../attendance/widgets/common_attendance_punch_feedback.dart';
 import '../../commute/widgets/common_punch_recorder_surface.dart';
-import '../../dashboard/sheets/double/widgets/double_dashboard_punch_card_feedback.dart';
-import '../../dashboard/sheets/minor/widgets/minor_dashboard_punch_card_feedback.dart';
-import '../../dashboard/sheets/triple/widgets/triple_dashboard_punch_card_feedback.dart';
 import '../../dashboard/widgets/widgets/schedule/weekly_work_schedule_editor.dart';
 import '../../mode_single/application/att_brk_repository.dart';
-import '../../mode_single/page/widgets/widgets/single_punch_card_feedback.dart';
 import '../application/actions/headquarter_common_actions.dart';
-import '../application/headquarter_dashboard_context.dart';
 
 class HeadquarterQuickWorkContext extends StatefulWidget {
   const HeadquarterQuickWorkContext({
@@ -129,46 +126,16 @@ class _HeadquarterQuickWorkContextState
   }
 
   Future<void> _showPunchFeedback(
-    String modeKey,
     AttBrkModeType type,
     DateTime recordedAt,
   ) async {
     if (!mounted) return;
-    switch (modeKey) {
-      case 'double':
-        await showDoubleDashboardPunchCardFeedback(
-          context,
-          type: type,
-          dateTime: recordedAt,
-          requiresBreak: _requiresBreak,
-        );
-        return;
-      case 'triple':
-        await showTripleDashboardPunchCardFeedback(
-          context,
-          type: type,
-          dateTime: recordedAt,
-          requiresBreak: _requiresBreak,
-        );
-        return;
-      case 'minor':
-        await showMinorDashboardPunchCardFeedback(
-          context,
-          type: type,
-          dateTime: recordedAt,
-          requiresBreak: _requiresBreak,
-        );
-        return;
-      case 'single':
-      default:
-        await showSinglePunchCardFeedback(
-          context,
-          type: type,
-          dateTime: recordedAt,
-          requiresBreak: _requiresBreak,
-        );
-        return;
-    }
+    await showCommonAttendancePunchFeedback(
+      context,
+      type: type,
+      dateTime: recordedAt,
+      requiresBreak: _requiresBreak,
+    );
   }
 
   Future<void> _recordBreak() async {
@@ -183,24 +150,21 @@ class _HeadquarterQuickWorkContextState
       return;
     }
     setState(() => _submitting = AttBrkModeType.breakTime);
-    final modeKey = HeadquarterDashboardContext.currentModeKey.value;
-    _debug('break_start mode=$modeKey');
+    _debug('break_start context=headquarter');
     try {
       await HeadquarterCommonActions.recordBreak(
         context,
         source: 'quick_dock_work_context',
-        modeKey: modeKey,
         onRecorded: (recordedAt) => _showPunchFeedback(
-          modeKey,
           AttBrkModeType.breakTime,
           recordedAt,
         ),
       );
       if (!mounted) return;
       await _load(reason: 'break_complete');
-      _debug('break_complete mode=$modeKey recorded=${_breakTime ?? ''}');
+      _debug('break_complete context=headquarter recorded=${_breakTime ?? ''}');
     } catch (error, stackTrace) {
-      _debug('break_failure mode=$modeKey error=$error stack=$stackTrace');
+      _debug('break_failure context=headquarter error=$error stack=$stackTrace');
       rethrow;
     } finally {
       if (mounted) setState(() => _submitting = null);
@@ -221,28 +185,22 @@ class _HeadquarterQuickWorkContextState
 
     final isRepunch = _hasWorkOut;
     final previousWorkOut = (_workOutTime ?? '').trim();
-    final modeKey = HeadquarterDashboardContext.currentModeKey.value;
 
     setState(() => _submitting = AttBrkModeType.workOut);
     _debug(
-      'clock_out_start mode=$modeKey operation=${isRepunch ? 'repunch' : 'initial'} previous=$previousWorkOut',
+      'clock_out_start context=headquarter operation=${isRepunch ? 'repunch' : 'initial'} previous=$previousWorkOut',
     );
 
     try {
       if (isRepunch) {
-        await _repunchClockOut(
-          modeKey: modeKey,
-          previousWorkOut: previousWorkOut,
-        );
+        await _repunchClockOut(previousWorkOut: previousWorkOut);
         return;
       }
 
       await HeadquarterCommonActions.clockOut(
         context,
         source: 'quick_dock_work_context',
-        modeKey: modeKey,
         onRecorded: (recordedAt) => _showPunchFeedback(
-          modeKey,
           AttBrkModeType.workOut,
           recordedAt,
         ),
@@ -250,11 +208,11 @@ class _HeadquarterQuickWorkContextState
       if (!mounted) return;
       await _load(reason: 'clock_out_complete');
       _debug(
-        'clock_out_complete mode=$modeKey operation=initial recorded=${_workOutTime ?? ''}',
+        'clock_out_complete context=headquarter operation=initial recorded=${_workOutTime ?? ''}',
       );
     } catch (error, stackTrace) {
       _debug(
-        'clock_out_failure mode=$modeKey operation=${isRepunch ? 'repunch' : 'initial'} error=$error stack=$stackTrace',
+        'clock_out_failure context=headquarter operation=${isRepunch ? 'repunch' : 'initial'} error=$error stack=$stackTrace',
       );
       rethrow;
     } finally {
@@ -263,26 +221,29 @@ class _HeadquarterQuickWorkContextState
   }
 
   Future<void> _repunchClockOut({
-    required String modeKey,
     required String previousWorkOut,
   }) async {
     final recordedAt = DateTime.now();
     _debug(
-      'clock_out_repunch_write_start mode=$modeKey date=${_dateKey(recordedAt)} previous=$previousWorkOut target=${DateFormat('HH:mm').format(recordedAt)} at=${recordedAt.toIso8601String()}',
+      'clock_out_repunch_write_start context=headquarter date=${_dateKey(recordedAt)} previous=$previousWorkOut target=${DateFormat('HH:mm').format(recordedAt)} at=${recordedAt.toIso8601String()}',
     );
 
-    await AttBrkRepository.instance.insertEvent(
-      dateTime: recordedAt,
-      type: AttBrkModeType.workOut,
+    final result = await CommonAttendanceService.replaceClockOut(
+      context,
+      source: 'headquarter_quick_work_context_repunch',
+      isHeadquarter: true,
+      recordedAt: recordedAt,
     );
+    if (!result.success) {
+      throw StateError(result.message);
+    }
 
     _debug(
-      'clock_out_repunch_write_complete mode=$modeKey previous=$previousWorkOut target=${DateFormat('HH:mm').format(recordedAt)} storage=local_replace',
+      'clock_out_repunch_write_complete context=headquarter previous=$previousWorkOut target=${DateFormat('HH:mm').format(recordedAt)} storage=common_attendance_local_replace',
     );
 
     if (!mounted) return;
     await _showPunchFeedback(
-      modeKey,
       AttBrkModeType.workOut,
       recordedAt,
     );
@@ -290,19 +251,19 @@ class _HeadquarterQuickWorkContextState
     if (!mounted) return;
     await _load(reason: 'clock_out_repunch_complete');
     _debug(
-      'clock_out_repunch_complete mode=$modeKey previous=$previousWorkOut current=${_workOutTime ?? ''}',
+      'clock_out_repunch_complete context=headquarter previous=$previousWorkOut current=${_workOutTime ?? ''}',
     );
 
     if (!mounted) return;
     if (widget.developerMode) {
       _debug(
-        'clock_out_repunch_developer_status mode=$modeKey date=${_dateKey(_selectedDate)} workIn=${_workInTime ?? ''} break=${_breakTime ?? ''} workOut=${_workOutTime ?? ''} requiresBreak=$_requiresBreak',
+        'clock_out_repunch_developer_status context=headquarter date=${_dateKey(_selectedDate)} workIn=${_workInTime ?? ''} break=${_breakTime ?? ''} workOut=${_workOutTime ?? ''} requiresBreak=$_requiresBreak',
       );
       await widget.onDeveloperStatus();
     }
 
     if (!mounted) return;
-    _debug('clock_out_repunch_exit mode=$modeKey');
+    _debug('clock_out_repunch_exit context=headquarter');
     await AppExitService.exitApp(context, useCommonUi: true);
   }
 

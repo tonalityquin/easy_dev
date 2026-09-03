@@ -1,410 +1,242 @@
-import 'package:flutter/material.dart';
+import 'dart:convert';
 
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import '../../../../../app/utils/status_dialog.dart';
+import '../../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../../design_system/common_ui/common_ui_side_dock.dart';
+import '../../../../../design_system/common_ui/common_ui_side_dock_frame.dart';
+import '../../../../../design_system/common_ui/common_ui_theme.dart';
+import '../../../../../shared/document/work_start_report/dashboard_start_report_form_page.dart';
+import '../../../../../shared/secondary/widgets/ops_console_widgets.dart';
+import '../../../../selector/application/dev_auth.dart';
 import '../../widgets/widgets/single_inside_report_bottom_sheet.dart';
-import '../../widgets/widgets/single_inside_work_bottom_sheet.dart';
 
 enum _SingleReportSheetResult {
   workStart,
   workEnd,
 }
 
-Future<void> openSingleInsideReportSelectorSheet(
-    BuildContext context,
-    ) async {
-  final rootContext = context;
+class _SingleReportSelectorDiagnostics {
+  static const int _limit = 100;
+  static final List<String> _lines = <String>[];
 
-  final _SingleReportSheetResult? result =
-  await showModalBottomSheet<_SingleReportSheetResult>(
-    context: context,
-    useRootNavigator: false,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    builder: (ctx) => const _SingleReportSelectorSheet(),
-  );
-
-  if (result == null) return;
-
-  switch (result) {
-    case _SingleReportSheetResult.workStart:
-      showSingleInsideWorkFullScreenBottomSheet(rootContext);
-      break;
-    case _SingleReportSheetResult.workEnd:
-      await showSingleInsideReportSideDock(rootContext);
-      break;
+  static void log(String message) {
+    final normalized = message.trim();
+    if (normalized.isEmpty) return;
+    final line =
+        '[SingleReportSelector][${DateTime.now().toIso8601String()}] $normalized';
+    _lines.add(line);
+    if (_lines.length > _limit) {
+      _lines.removeRange(0, _lines.length - _limit);
+    }
+    debugPrint(line);
   }
-}
 
-class _SingleReportSelectorSheet extends StatelessWidget {
-  const _SingleReportSelectorSheet();
+  static String get debugPrintCode {
+    if (_lines.isEmpty) {
+      return 'debugPrint(${jsonEncode('[SingleReportSelector] 기록된 로그가 없습니다.')});';
+    }
+    return _lines.map((line) => 'debugPrint(${jsonEncode(line)});').join('\n');
+  }
 
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return DraggableScrollableSheet(
-      expand: false,
-      initialChildSize: 0.86,
-      minChildSize: 0.5,
-      maxChildSize: 0.96,
-      builder: (ctx, scrollController) {
-        final textTheme = Theme.of(context).textTheme;
-
-        final options = <_ReportOption>[
-          _ReportOption(
-            result: _SingleReportSheetResult.workStart,
-            title: '업무 시작 보고서',
-            subtitle: '근무 시작 시 작성하는 보고서',
-            tagLabel: '업무 시작 보고',
-            
-            accentColor: cs.primary,
-            iconData: Icons.wb_sunny_outlined,
-          ),
-          _ReportOption(
-            result: _SingleReportSheetResult.workEnd,
-            title: '업무 종료 보고서',
-            subtitle: '근무 종료 시 작성하는 보고서',
-            tagLabel: '업무 종료 보고',
-            accentColor: cs.error,
-            iconData: Icons.nights_stay_outlined,
-          ),
-        ];
-
-        return Container(
-          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-          child: Column(
-            children: [
-              const _SheetHandle(),
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    
-                    color: cs.surface,
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-                    boxShadow: [
-                      BoxShadow(
-                        color: cs.shadow.withOpacity(0.10),
-                        blurRadius: 12,
-                        offset: const Offset(0, -2),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      const _BinderSpine(),
-                      VerticalDivider(
-                        width: 0,
-                        thickness: 0.8,
-                        color: cs.outlineVariant.withOpacity(0.8),
-                      ),
-                      Expanded(
-                        child: Column(
-                          children: [
-                            const _SheetHeader(),
-                            Divider(
-                              height: 1,
-                              thickness: 0.8,
-                              color: cs.outlineVariant.withOpacity(0.8),
-                            ),
-                            Expanded(
-                              child: ListView.builder(
-                                controller: scrollController,
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                itemCount: options.length,
-                                itemBuilder: (context, index) {
-                                  final option = options[index];
-                                  return _SingleReportListItem(
-                                    option: option,
-                                    textTheme: textTheme,
-                                    onTap: () {
-                                      Navigator.of(context).pop(option.result);
-                                    },
-                                  );
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
+  static Future<void> showStatus(BuildContext context) async {
+    final enabled = await DevAuth.isDevModeEnabled();
+    if (!enabled || !context.mounted) return;
+    log('developer_status_open');
+    await StatusDialog.showSuccess(
+      context,
+      title: '업무 보고 상태',
+      description: <String>[
+        'Single 업무 보고 선택 상태',
+        '업무 시작=Dashboard 공용',
+        '업무 종료=Single 전용',
+        'debugPrint 코드를 복사할 수 있습니다.',
+      ].join('\n'),
+      copyText: debugPrintCode,
+      copyButtonLabel: 'debugPrint 코드 복사',
+      visibleDuration: Duration.zero,
+      useCommonUi: true,
+      awaitManualClose: true,
     );
   }
 }
 
-class _SheetHandle extends StatelessWidget {
-  const _SheetHandle();
+Future<void> openSingleInsideReportSelectorSheet(BuildContext context) async {
+  _SingleReportSelectorDiagnostics.log('route_push');
+  final result = await showOperationsRightSideDock<_SingleReportSheetResult>(
+    context: context,
+    useRootNavigator: false,
+    barrierLabel: '업무 보고',
+    maxWidth: 360,
+    widthFactor: .92,
+    barrierDismissible: true,
+    builder: (_) => const _SingleReportSelectorDock(),
+  );
+  _SingleReportSelectorDiagnostics.log(
+    'route_closed result=${result?.name ?? 'none'}',
+  );
+  if (result == null || !context.mounted) return;
+
+  switch (result) {
+    case _SingleReportSheetResult.workStart:
+      _SingleReportSelectorDiagnostics.log(
+        'open work_start target=dashboard_shared',
+      );
+      await showDashboardStartReportSideDock(context: context);
+      _SingleReportSelectorDiagnostics.log(
+        'closed work_start target=dashboard_shared',
+      );
+      break;
+    case _SingleReportSheetResult.workEnd:
+      await showSingleInsideReportSideDock(context);
+      break;
+  }
+}
+
+class _SingleReportSelectorDock extends StatelessWidget {
+  const _SingleReportSelectorDock();
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return Center(
-      child: Container(
-        width: 64,
-        height: 6,
-        margin: const EdgeInsets.only(bottom: 10),
-        decoration: BoxDecoration(
-          color: cs.outlineVariant.withOpacity(0.9),
-          borderRadius: BorderRadius.circular(999),
+    final tokens = CommonUiTheme.of(context);
+    return CommonSideDockFrame(
+      title: '업무 보고',
+      subtitle: 'Single',
+      icon: Icons.assignment_outlined,
+      onClose: () => Navigator.of(context).pop(),
+      onLongPress: () => _SingleReportSelectorDiagnostics.showStatus(context),
+      headerAction: ValueListenableBuilder<bool>(
+        valueListenable: DevAuth.devModeEnabled,
+        builder: (context, enabled, _) {
+          if (!enabled) return const SizedBox.shrink();
+          return IconButton(
+            tooltip: '상태 확인',
+            onPressed: () => _SingleReportSelectorDiagnostics.showStatus(context),
+            icon: const Icon(Icons.bug_report_rounded),
+          );
+        },
+      ),
+      child: OpsDockListSurface(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CommonAnimatedReveal(
+              child: _SingleReportSelectorRow(
+                icon: Icons.wb_sunny_outlined,
+                label: '업무 시작 보고서',
+                onTap: () {
+                  _SingleReportSelectorDiagnostics.log('select work_start');
+                  HapticFeedback.selectionClick();
+                  Navigator.of(context).pop(_SingleReportSheetResult.workStart);
+                },
+              ),
+            ),
+            Divider(height: 1, thickness: 1, color: tokens.borderSubtle),
+            CommonAnimatedReveal(
+              delay: const Duration(milliseconds: 60),
+              child: _SingleReportSelectorRow(
+                icon: Icons.nights_stay_outlined,
+                label: '업무 종료 보고서',
+                onTap: () {
+                  _SingleReportSelectorDiagnostics.log('select work_end');
+                  HapticFeedback.selectionClick();
+                  Navigator.of(context).pop(_SingleReportSheetResult.workEnd);
+                },
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _BinderSpine extends StatelessWidget {
-  const _BinderSpine();
+class _SingleReportSelectorRow extends StatefulWidget {
+  const _SingleReportSelectorRow({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  State<_SingleReportSelectorRow> createState() =>
+      _SingleReportSelectorRowState();
+}
+
+class _SingleReportSelectorRowState extends State<_SingleReportSelectorRow> {
+  bool _pressed = false;
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final tokens = CommonUiTheme.of(context);
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
-    return Container(
-      width: 32,
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHigh,
-        borderRadius: const BorderRadius.only(topLeft: Radius.circular(24)),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: List.generate(
-          5,
-              (index) => Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Container(
-              width: 10,
-              height: 10,
-              decoration: BoxDecoration(
-                color: cs.outlineVariant.withOpacity(0.9),
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: cs.shadow.withOpacity(0.15),
-                    blurRadius: 2,
-                    offset: const Offset(0, 1),
+    return Semantics(
+      button: true,
+      label: widget.label,
+      child: AnimatedScale(
+        scale: _pressed ? .985 : 1,
+        duration: reduceMotion ? Duration.zero : CommonUiMotion.press,
+        curve: CommonUiMotion.enter,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: widget.onTap,
+            onHighlightChanged: (value) {
+              if (!mounted || _pressed == value) return;
+              setState(() => _pressed = value);
+            },
+            child: AnimatedContainer(
+              duration:
+                  reduceMotion ? Duration.zero : CommonUiMotion.selection,
+              curve: CommonUiMotion.standard,
+              color: _pressed
+                  ? tokens.surfaceSelected.withOpacity(.6)
+                  : Colors.transparent,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: Row(
+                children: [
+                  AnimatedContainer(
+                    duration:
+                        reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                    curve: CommonUiMotion.standard,
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: tokens.accentContainer,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(widget.icon, color: tokens.accent, size: 21),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      widget.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: tokens.textPrimary,
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: tokens.iconSecondary,
+                    size: 22,
                   ),
                 ],
               ),
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SheetHeader extends StatelessWidget {
-  const _SheetHeader();
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: cs.primaryContainer.withOpacity(0.75),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              Icons.assignment_outlined,
-              size: 22,
-              color: cs.onPrimaryContainer,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '업무 보고',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: cs.onSurface,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '업무 시작/종료 보고서를 선택해 작성하세요.',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: textTheme.bodySmall?.copyWith(
-                    color: cs.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          IconButton(
-            tooltip: '닫기',
-            icon: Icon(
-              Icons.close,
-              size: 20,
-              color: cs.onSurfaceVariant,
-            ),
-            onPressed: () => Navigator.of(context).maybePop(),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ReportOption {
-  final _SingleReportSheetResult result;
-  final String title;
-  final String subtitle;
-  final String tagLabel;
-  final Color accentColor;
-  final IconData iconData;
-
-  const _ReportOption({
-    required this.result,
-    required this.title,
-    required this.subtitle,
-    required this.tagLabel,
-    required this.accentColor,
-    required this.iconData,
-  });
-}
-
-class _SingleReportListItem extends StatelessWidget {
-  final _ReportOption option;
-  final TextTheme? textTheme;
-  final VoidCallback onTap;
-
-  const _SingleReportListItem({
-    required this.option,
-    required this.textTheme,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final accentColor = option.accentColor;
-    final theme = textTheme ?? Theme.of(context).textTheme;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Ink(
-          decoration: BoxDecoration(
-            color: cs.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: cs.outlineVariant.withOpacity(0.65)),
-            boxShadow: [
-              BoxShadow(
-                color: cs.shadow.withOpacity(0.06),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Container(
-                width: 6,
-                height: 80,
-                decoration: BoxDecoration(
-                  color: accentColor,
-                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(16)),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      CircleAvatar(
-                        radius: 20,
-                        backgroundColor: accentColor.withOpacity(0.16),
-                        child: Icon(
-                          option.iconData,
-                          color: accentColor,
-                          size: 20,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              option.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.bodyLarge?.copyWith(
-                                fontWeight: FontWeight.w700,
-                                color: cs.onSurface,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              option.subtitle,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.bodySmall?.copyWith(
-                                color: cs.onSurfaceVariant,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                  decoration: BoxDecoration(
-                                    color: accentColor.withOpacity(0.16),
-                                    borderRadius: BorderRadius.circular(999),
-                                  ),
-                                  child: Text(
-                                    option.tagLabel,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: theme.labelSmall?.copyWith(
-                                      color: accentColor,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 4),
-              Padding(
-                padding: const EdgeInsets.only(right: 10),
-                child: Icon(
-                  Icons.chevron_right,
-                  size: 22,
-                  color: cs.onSurfaceVariant.withOpacity(0.75),
-                ),
-              ),
-            ],
           ),
         ),
       ),

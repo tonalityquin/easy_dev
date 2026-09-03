@@ -242,6 +242,11 @@ class _UserSettingSectionEditorDialogState
 
   Future<void> _showDeveloperTrace() async {
     widget.trace.log('개발자 로그 Status Dialog 요청: section=${widget.section.name}');
+    if (widget.section == UserSettingsSection.schedule) {
+      widget.trace.log(
+        '휴게 정책 상태: timeIndependent=true breakDays=${_breakDays.length} breakEnabledWithoutScheduledTimes=true',
+      );
+    }
     await widget.trace.showSnapshotStatusDialog(
       context,
       title: '$_title 편집 로그',
@@ -274,7 +279,6 @@ class _UserSettingSectionEditorDialogState
         (isStart
             ? const TimeOfDay(hour: 9, minute: 0)
             : const TimeOfDay(hour: 18, minute: 0));
-    final wasHoliday = _startByDay[day] == null && _endByDay[day] == null;
     final picked = await showCommonTimePicker(
       context: context,
       initialTime: initial,
@@ -302,9 +306,6 @@ class _UserSettingSectionEditorDialogState
             ..[day] = const TimeOfDay(hour: 9, minute: 0);
         }
       }
-      if (wasHoliday) {
-        _breakDays = <String>{..._breakDays, day};
-      }
     });
     widget.trace.log('근무 시간 변경: day=$day field=${isStart ? 'start' : 'end'}');
   }
@@ -314,13 +315,11 @@ class _UserSettingSectionEditorDialogState
       if (value) {
         _startByDay = Map<String, TimeOfDay?>.of(_startByDay)..[day] = null;
         _endByDay = Map<String, TimeOfDay?>.of(_endByDay)..[day] = null;
-        _breakDays = <String>{..._breakDays}..remove(day);
       } else {
         _startByDay = Map<String, TimeOfDay?>.of(_startByDay)
           ..[day] = _startByDay[day] ?? const TimeOfDay(hour: 9, minute: 0);
         _endByDay = Map<String, TimeOfDay?>.of(_endByDay)
           ..[day] = _endByDay[day] ?? const TimeOfDay(hour: 18, minute: 0);
-        _breakDays = <String>{..._breakDays, day};
       }
     });
     widget.trace.log('휴무 상태 변경: day=$day holiday=$value');
@@ -330,14 +329,12 @@ class _UserSettingSectionEditorDialogState
     setState(() {
       _breakDays = <String>{..._breakDays};
       if (value) {
-        if (_startByDay[day] != null && _endByDay[day] != null) {
-          _breakDays.add(day);
-        }
+        _breakDays.add(day);
       } else {
         _breakDays.remove(day);
       }
     });
-    widget.trace.log('휴게 상태 변경: day=$day break=$value');
+    widget.trace.log('휴게 상태 변경: day=$day break=$value timeIndependent=true');
   }
 
   Widget _inlineError(BuildContext context, String? message) {
@@ -564,7 +561,7 @@ class _UserSettingSectionEditorDialogState
     final end = _endByDay[day];
     final working = start != null && end != null;
     final holiday = start == null && end == null;
-    final hasBreak = _breakDays.contains(day) && working;
+    final hasBreak = _breakDays.contains(day);
     final partial = (start == null) != (end == null);
     final invalidRange =
         start != null && end != null && _toMinutes(start) > _toMinutes(end);
@@ -573,7 +570,7 @@ class _UserSettingSectionEditorDialogState
         ? '시간 확인 필요'
         : working
             ? '${_formatTime(start)} ~ ${_formatTime(end)} · ${hasBreak ? '휴게 있음' : '휴게 없음'}'
-            : '휴무';
+            : '휴무 · ${hasBreak ? '휴게 있음' : '휴게 없음'}';
     final color = invalid
         ? tokens.danger
         : working
@@ -668,8 +665,7 @@ class _UserSettingSectionEditorDialogState
               Expanded(
                 child: CheckboxListTile(
                   value: hasBreak,
-                  onChanged:
-                      working ? (value) => _toggleBreak(day, value ?? false) : null,
+                  onChanged: (value) => _toggleBreak(day, value ?? false),
                   dense: true,
                   contentPadding: EdgeInsets.zero,
                   controlAffinity: ListTileControlAffinity.leading,

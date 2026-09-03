@@ -430,6 +430,84 @@ CREATE TABLE IF NOT EXISTS area_capabilities (
     return null;
   }
 
+  Future<HeadquarterSnapshotArea> updateAreaEmail({
+    required String division,
+    required String area,
+    required String email,
+  }) async {
+    final normalizedDivision = division.trim();
+    final normalizedArea = area.trim();
+    final normalizedEmail = email.trim();
+    if (normalizedDivision.isEmpty) {
+      throw ArgumentError('division is empty');
+    }
+    if (normalizedArea.isEmpty) {
+      throw ArgumentError('area is empty');
+    }
+    if (normalizedEmail.isEmpty) {
+      throw ArgumentError('email is empty');
+    }
+
+    final db = await database;
+    await db.transaction((txn) async {
+      final existingRows = await txn.query(
+        'areas',
+        columns: const <String>['email'],
+        where: 'division = ? AND area_name = ?',
+        whereArgs: <Object?>[normalizedDivision, normalizedArea],
+        limit: 2,
+      );
+      if (existingRows.length != 1) {
+        throw StateError(
+          'SQLite area email target verification failed: division=$normalizedDivision area=$normalizedArea count=${existingRows.length}',
+        );
+      }
+
+      final affected = await txn.update(
+        'areas',
+        <String, Object?>{'email': normalizedEmail},
+        where: 'division = ? AND area_name = ?',
+        whereArgs: <Object?>[normalizedDivision, normalizedArea],
+        conflictAlgorithm: ConflictAlgorithm.abort,
+      );
+      if (affected != 1) {
+        throw StateError(
+          'SQLite area email update failed: division=$normalizedDivision area=$normalizedArea affected=$affected',
+        );
+      }
+
+      final verifyRows = await txn.query(
+        'areas',
+        columns: const <String>['email'],
+        where: 'division = ? AND area_name = ?',
+        whereArgs: <Object?>[normalizedDivision, normalizedArea],
+        limit: 2,
+      );
+      if (verifyRows.length != 1) {
+        throw StateError(
+          'SQLite area email read-back failed: division=$normalizedDivision area=$normalizedArea count=${verifyRows.length}',
+        );
+      }
+      final storedEmail = (verifyRows.single['email'] ?? '').toString().trim();
+      if (storedEmail != normalizedEmail) {
+        throw StateError(
+          'SQLite area email value verification failed: expected=$normalizedEmail actual=$storedEmail',
+        );
+      }
+    });
+
+    final updated = await readArea(
+      division: normalizedDivision,
+      area: normalizedArea,
+    );
+    if (updated == null || updated.email.trim() != normalizedEmail) {
+      throw StateError(
+        'SQLite area email post-transaction verification failed: division=$normalizedDivision area=$normalizedArea',
+      );
+    }
+    return updated;
+  }
+
   Future<HeadquarterSnapshotDiagnostics?> readDiagnostics(String division) async {
     final snapshot = await readSnapshot(division);
     if (snapshot == null) return null;

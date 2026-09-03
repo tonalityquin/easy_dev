@@ -24,7 +24,7 @@ class CommonHqDashBoardPage extends StatelessWidget {
         : normalizedMode;
 
     debugPrint(
-      '[HQ_DASHBOARD][${DateTime.now().toIso8601String()}] screen=$screenName mode=$effectiveMode layout=fixed calendar=direct verticalScroll=false modeTrigger=removed contextPublisher=${effectiveMode.isEmpty ? 'none' : 'scope'} additionalFirebaseRead=0 additionalFirebaseWrite=0',
+      '[HQ_DASHBOARD][${DateTime.now().toIso8601String()}] screen=$screenName mode=$effectiveMode layout=fixed calendar=list_surface connection=operations_left_side_dock verticalScroll=false modeTrigger=removed contextPublisher=${effectiveMode.isEmpty ? 'none' : 'scope'} additionalFirebaseRead=0 additionalFirebaseWrite=0',
     );
 
     final content = ColoredBox(

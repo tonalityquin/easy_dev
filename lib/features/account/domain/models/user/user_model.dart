@@ -52,11 +52,7 @@ class UserModel {
           _normalizeWeekdayMap(startTimeByWeekday),
           _normalizeWeekdayMap(endTimeByWeekday),
         ),
-        breakDays = _normalizeBreakDaysForWorkingMap(
-          breakDays: breakDays,
-          startByWeekday: _normalizeWeekdayMap(startTimeByWeekday),
-          endByWeekday: _normalizeWeekdayMap(endTimeByWeekday),
-        );
+        breakDays = _normalizeDayList(breakDays);
 
   UserModel copyWith({
     String? id,
@@ -279,21 +275,4 @@ class UserModel {
     ];
   }
 
-  static List<String> _normalizeBreakDaysForWorkingMap({
-    required Iterable<String> breakDays,
-    required Map<String, TimeOfDay?> startByWeekday,
-    required Map<String, TimeOfDay?> endByWeekday,
-  }) {
-    final breakSet = _normalizeDayList(breakDays).toSet();
-    final out = <String>[];
-    for (final day in weekdays) {
-      if (!breakSet.contains(day)) continue;
-      if (startByWeekday[day] == null || endByWeekday[day] == null) continue;
-      out.add(day);
-    }
-    for (final value in breakSet) {
-      if (!weekdays.contains(value)) out.add(value);
-    }
-    return out;
-  }
 }

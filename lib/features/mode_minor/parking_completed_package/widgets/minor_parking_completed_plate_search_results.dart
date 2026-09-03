@@ -186,11 +186,11 @@ class _PlateManagementRow extends StatelessWidget {
   Color _typeTone(CommonUiTokens tokens, PlateType? type) {
     switch (type) {
       case PlateType.parkingRequests:
-        return tokens.info;
+        return tokens.statusParkingRequested;
       case PlateType.parkingCompleted:
-        return tokens.success;
+        return tokens.statusParkingCompleted;
       case PlateType.departureRequests:
-        return tokens.danger;
+        return tokens.statusDepartureRequested;
       case PlateType.departureCompleted:
         return tokens.textSecondary;
       default:

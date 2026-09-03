@@ -138,7 +138,7 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
       _endByDay = <String, TimeOfDay?>{
         for (final day in _days) day: null,
       };
-      _breakDays = <String>{};
+      _breakDays = Set<String>.of(_days);
       return;
     }
     _nameController.text = user.name;
@@ -158,7 +158,7 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
     }
     _startByDay = _normalizeWeekMap(user.startTimeByWeekday);
     _endByDay = _normalizeWeekMap(user.endTimeByWeekday);
-    _breakDays = _normalizeDaySet(user.breakDays).intersection(_workingDaySet());
+    _breakDays = _normalizeDaySet(user.breakDays);
   }
 
   String? _normalizeModeToken(String raw) {
@@ -209,11 +209,10 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
     return out;
   }
 
-  List<String> _normalizedBreakDaysForWorkingDays() {
-    final workingDays = _workingDaySet();
+  List<String> _normalizedBreakDays() {
     return <String>[
       for (final day in _days)
-        if (workingDays.contains(day) && _breakDays.contains(day)) day,
+        if (_breakDays.contains(day)) day,
     ];
   }
 
@@ -332,7 +331,7 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
         case UserSettingsSection.schedule:
           _startByDay = _normalizeWeekMap(draft.startByDay);
           _endByDay = _normalizeWeekMap(draft.endByDay);
-          _breakDays = _normalizeDaySet(draft.breakDays).intersection(_workingDaySet());
+          _breakDays = _normalizeDaySet(draft.breakDays);
           break;
       }
       _saveError = null;
@@ -618,10 +617,10 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
         progress: 0.28,
       );
 
-      final normalizedBreakDays = _normalizedBreakDaysForWorkingDays();
+      final normalizedBreakDays = _normalizedBreakDays();
       final workingDays = _workingDaySet().toList(growable: false);
       trace.log(
-        '근무 일정 정규화 완료: 근무일 ${workingDays.length}일, 휴게일 ${normalizedBreakDays.length}일',
+        '근무 일정 정규화 완료: 근무일 ${workingDays.length}일, 휴게일 ${normalizedBreakDays.length}일, 휴게정책=time_independent',
         progress: 0.42,
       );
 
@@ -881,9 +880,9 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
 
   String _scheduleSummary() {
     final workingDays = _workingDaySet();
-    final breakDays = _normalizedBreakDaysForWorkingDays();
+    final breakDays = _normalizedBreakDays();
     if (!_scheduleOk) return '근무 시간 확인 필요';
-    if (workingDays.isEmpty) return '전체 휴무';
+    if (workingDays.isEmpty) return '전체 휴무 · 휴게 ${breakDays.length}일';
     return '근무 ${workingDays.length}일 · 휴게 ${breakDays.length}일';
   }
 

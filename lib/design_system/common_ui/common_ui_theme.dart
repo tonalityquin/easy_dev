@@ -158,6 +158,10 @@ class CommonUiTokens {
 
   bool get isDark => brightness == Brightness.dark;
 
+  Color get statusParkingRequested => danger;
+  Color get statusParkingRequestedContainer => dangerContainer;
+  Color get onStatusParkingRequestedContainer => onDangerContainer;
+
   factory CommonUiTokens.fromTheme(ThemeData theme) {
     return theme.brightness == Brightness.dark
         ? const CommonUiTokens.dark()
@@ -209,9 +213,9 @@ class CommonUiTokens {
         statusParkingCompleted = const Color(0xFF0F7A46),
         statusParkingCompletedContainer = const Color(0xFFDDF5E8),
         onStatusParkingCompletedContainer = const Color(0xFF0B4F31),
-        statusDepartureRequested = const Color(0xFFA64B00),
-        statusDepartureRequestedContainer = const Color(0xFFFFE8CC),
-        onStatusDepartureRequestedContainer = const Color(0xFF663000),
+        statusDepartureRequested = const Color(0xFF1F6D99),
+        statusDepartureRequestedContainer = const Color(0xFFDDF1FA),
+        onStatusDepartureRequestedContainer = const Color(0xFF164B68),
         statusSettlementPending = const Color(0xFF76519C),
         statusSettlementPendingContainer = const Color(0xFFF0E3FF),
         onStatusSettlementPendingContainer = const Color(0xFF49246A),
@@ -273,9 +277,9 @@ class CommonUiTokens {
         statusParkingCompleted = const Color(0xFF54D18B),
         statusParkingCompletedContainer = const Color(0xFF153D2A),
         onStatusParkingCompletedContainer = const Color(0xFFC7F5D9),
-        statusDepartureRequested = const Color(0xFFFFB45A),
-        statusDepartureRequestedContainer = const Color(0xFF4A3013),
-        onStatusDepartureRequestedContainer = const Color(0xFFFFE0AE),
+        statusDepartureRequested = const Color(0xFF69C5EF),
+        statusDepartureRequestedContainer = const Color(0xFF163B4C),
+        onStatusDepartureRequestedContainer = const Color(0xFFD4F2FF),
         statusSettlementPending = const Color(0xFFD6A7FF),
         statusSettlementPendingContainer = const Color(0xFF3D2850),
         onStatusSettlementPendingContainer = const Color(0xFFF2DFFF),

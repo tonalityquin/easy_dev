@@ -127,6 +127,8 @@ class MinorParkingCompletedRealTimeTable extends StatelessWidget {
       screen: 'minor_reverse_table_embedded',
       description: '자동 갱신됩니다.',
       viewModeAuto: const RealTimeViewModeAutoSpec(),
+      useListContextSurface: true,
+      showColoredSwipeChevrons: true,
       bodyBuilder: statusPreview
           ? (ctx, spec, ctrl) => RealTimeStatusPreviewBody(
                 controller: ctrl,

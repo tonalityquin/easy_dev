@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../../../shared/plate/domain/enums/plate_type.dart';
 import '../../../../../../shared/plate/domain/models/plate_model.dart';
 
@@ -19,6 +20,7 @@ class DoubleDepartureCompletedPlateSearchResults extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final tokens = CommonUiTheme.of(context);
     final currency = NumberFormat("#,###", "ko_KR");
 
     return Column(
@@ -54,7 +56,7 @@ class DoubleDepartureCompletedPlateSearchResults extends StatelessWidget {
             final backgroundColor = selected ? cs.tertiaryContainer.withOpacity(0.45) : cs.surface;
             final borderColor = selected ? cs.tertiary.withOpacity(0.75) : cs.outlineVariant.withOpacity(0.85);
 
-            final (typeFg, typeBg) = _typeChipColors(cs, plate.typeEnum);
+            final (typeFg, typeBg) = _typeChipColors(tokens, cs, plate.typeEnum);
 
             final typeChip = _buildChip(
               cs: cs,
@@ -263,18 +265,18 @@ class DoubleDepartureCompletedPlateSearchResults extends StatelessWidget {
         '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}:${time.second.toString().padLeft(2, '0')}';
   }
 
-  (Color fg, Color bg) _typeChipColors(ColorScheme cs, PlateType? type) {
+  (Color fg, Color bg) _typeChipColors(CommonUiTokens tokens, ColorScheme cs, PlateType? type) {
     switch (type) {
       case PlateType.parkingRequests:
-        return (cs.primary, cs.primary.withOpacity(0.10));
+        return (tokens.statusParkingRequested, tokens.statusParkingRequestedContainer.withOpacity(0.72));
       case PlateType.parkingCompleted:
-        return (cs.tertiary, cs.tertiaryContainer.withOpacity(0.55));
+        return (tokens.statusParkingCompleted, tokens.statusParkingCompletedContainer.withOpacity(0.72));
       case PlateType.departureRequests:
-        return (cs.error, cs.errorContainer.withOpacity(0.55));
+        return (tokens.statusDepartureRequested, tokens.statusDepartureRequestedContainer.withOpacity(0.72));
       case PlateType.departureCompleted:
         return (cs.onSurfaceVariant, cs.surfaceContainerLow);
       default:
-        return (cs.primary, cs.primary.withOpacity(0.10));
+        return (tokens.accent, tokens.accentContainer.withOpacity(0.72));
     }
   }
 

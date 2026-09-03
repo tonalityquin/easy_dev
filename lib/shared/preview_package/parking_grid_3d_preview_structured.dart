@@ -1040,20 +1040,20 @@ class _ParkingGrid3DPainter extends CustomPainter {
       ));
     }
 
-    const parkedGreen = Color(0xFF2E7D32);
-    const departRed = Color(0xFFC62828);
-    const reqOrange = Color(0xFFFFA000);
+    final tokens = cs.brightness == Brightness.dark
+        ? const CommonUiTokens.dark()
+        : const CommonUiTokens.light();
 
     Color statusBaseColor(ParkingSlotStatus s) {
       switch (s) {
         case ParkingSlotStatus.parked:
-          return parkedGreen;
+          return tokens.statusParkingCompleted;
         case ParkingSlotStatus.departureInProgress:
-          return cs.error;
+          return tokens.statusDepartureRequested;
         case ParkingSlotStatus.departureRequest:
-          return departRed;
+          return tokens.statusDepartureRequested;
         case ParkingSlotStatus.parkingRequest:
-          return reqOrange;
+          return tokens.statusParkingRequested;
         case ParkingSlotStatus.empty:
           return cs.surfaceContainerLow;
       }
@@ -1735,20 +1735,20 @@ class _ParkingGrid3DPainter extends CustomPainter {
 
     final ts = model.towerStatus;
     if (ts != ParkingSlotStatus.empty) {
-      const parkedGreen = Color(0xFF2E7D32);
-      const departRed = Color(0xFFC62828);
-      const reqOrange = Color(0xFFFFA000);
+      final tokens = cs.brightness == Brightness.dark
+          ? const CommonUiTokens.dark()
+          : const CommonUiTokens.light();
 
       Color statusBase(ParkingSlotStatus s) {
         switch (s) {
           case ParkingSlotStatus.parked:
-            return parkedGreen;
+            return tokens.statusParkingCompleted;
           case ParkingSlotStatus.departureInProgress:
-            return cs.error;
+            return tokens.statusDepartureRequested;
           case ParkingSlotStatus.departureRequest:
-            return departRed;
+            return tokens.statusDepartureRequested;
           case ParkingSlotStatus.parkingRequest:
-            return reqOrange;
+            return tokens.statusParkingRequested;
           case ParkingSlotStatus.empty:
             return palette.towerTop;
         }

@@ -32,9 +32,9 @@ class TabletPlateSearchResultSection extends StatelessWidget {
     switch (type) {
       case PlateType.parkingRequests:
         return _StatusColors(
-          foreground: tokens.info,
-          background: tokens.infoContainer,
-          onBackground: tokens.onInfoContainer,
+          foreground: tokens.statusParkingRequested,
+          background: tokens.statusParkingRequestedContainer,
+          onBackground: tokens.onStatusParkingRequestedContainer,
         );
       case PlateType.parkingCompleted:
         return _StatusColors(

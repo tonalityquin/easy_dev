@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../../../shared/plate/domain/enums/plate_type.dart';
 import '../../../../../../shared/plate/domain/models/plate_model.dart';
 class MinorDepartureCompletedPlateSearchResults extends StatelessWidget {
@@ -20,6 +21,7 @@ class MinorDepartureCompletedPlateSearchResults extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final tokens = CommonUiTheme.of(context);
     final currency = NumberFormat("#,###", "ko_KR");
 
     return Column(
@@ -73,8 +75,8 @@ class MinorDepartureCompletedPlateSearchResults extends StatelessWidget {
             final borderColor =
             plate.isSelected ? Colors.green : cs.outlineVariant.withOpacity(0.85);
 
-            final labelColor = _getLabelColor(plate.typeEnum, cs);
-            final labelBgColor = _getLabelBackground(plate.typeEnum, cs);
+            final labelColor = _getLabelColor(plate.typeEnum, tokens, cs);
+            final labelBgColor = _getLabelBackground(plate.typeEnum, tokens, cs);
 
             final typeChip = _buildChip(
               text: typeLabel,
@@ -277,33 +279,33 @@ class MinorDepartureCompletedPlateSearchResults extends StatelessWidget {
         '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}:${time.second.toString().padLeft(2, '0')}';
   }
 
-  Color _getLabelColor(PlateType? type, ColorScheme cs) {
+  Color _getLabelColor(PlateType? type, CommonUiTokens tokens, ColorScheme cs) {
     switch (type) {
       case PlateType.parkingRequests:
-        return cs.primary;
+        return tokens.statusParkingRequested;
       case PlateType.parkingCompleted:
-        return Colors.green;
+        return tokens.statusParkingCompleted;
       case PlateType.departureRequests:
-        return Colors.orange;
+        return tokens.statusDepartureRequested;
       case PlateType.departureCompleted:
         return cs.onSurfaceVariant;
       default:
-        return cs.primary;
+        return tokens.accent;
     }
   }
 
-  Color _getLabelBackground(PlateType? type, ColorScheme cs) {
+  Color _getLabelBackground(PlateType? type, CommonUiTokens tokens, ColorScheme cs) {
     switch (type) {
       case PlateType.parkingRequests:
-        return cs.primaryContainer.withOpacity(0.35);
+        return tokens.statusParkingRequestedContainer.withOpacity(0.72);
       case PlateType.parkingCompleted:
-        return Colors.green.shade50;
+        return tokens.statusParkingCompletedContainer.withOpacity(0.72);
       case PlateType.departureRequests:
-        return Colors.orange.shade50;
+        return tokens.statusDepartureRequestedContainer.withOpacity(0.72);
       case PlateType.departureCompleted:
-        return cs.surfaceVariant.withOpacity(0.55);
+        return cs.surfaceContainerLow.withOpacity(0.72);
       default:
-        return cs.primaryContainer.withOpacity(0.35);
+        return tokens.accentContainer.withOpacity(0.72);
     }
   }
 

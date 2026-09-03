@@ -434,6 +434,10 @@ class TerminalSessionController extends ChangeNotifier {
     _busy = false;
     _runningCommand = '';
     notifyListeners();
+    await ServiceSettingsCommandHandler.showEmailEditDeveloperStatus(
+      context,
+      succeeded: result.succeeded,
+    );
     return AppCommandExecutionResult(
       state: result.succeeded
           ? AppCommandExecutionState.success

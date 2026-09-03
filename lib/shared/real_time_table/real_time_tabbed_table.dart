@@ -53,6 +53,8 @@ class RealTimeTabbedTable extends StatefulWidget {
       )? bodyBuilder;
 
   final RealTimeViewModeAutoSpec? viewModeAuto;
+  final bool useListContextSurface;
+  final bool showColoredSwipeChevrons;
 
   const RealTimeTabbedTable({
     super.key,
@@ -63,6 +65,8 @@ class RealTimeTabbedTable extends StatefulWidget {
     required this.description,
     this.bodyBuilder,
     this.viewModeAuto,
+    this.useListContextSurface = false,
+    this.showColoredSwipeChevrons = false,
   }) : assert(tabs.length > 0);
 
   @override
@@ -77,6 +81,11 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
   static const double _tableSwipeVisualActivationDistance = 14;
   static const double _tableSwipeCommitDistanceThreshold = 42;
   static const double _tableSwipeVelocityThreshold = 320;
+  static const double _tableSwipeHintIdleOpacity = .40;
+  static const double _tableSwipeHintActiveOpacity = .88;
+  static const double _tableSwipeHintOppositeOpacity = .12;
+  static const double _tableSwipeHintMaxTranslate = 4;
+  static const double _tableSwipeHintMaxScale = 1.06;
   static const Duration _parentSelectorReopenCooldown =
       Duration(milliseconds: 180);
 
@@ -99,6 +108,9 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
   int _swipePhysicalDirection = 0;
   int _swipeTableStep = 0;
   int _swipeDestinationIndex = -1;
+  bool _tableSwipeHintSettlingCommit = false;
+  double _tableSwipeHintSettleStartIntensity = 0;
+  double _tableSwipeHintSettleStartControllerValue = 0;
   String? _lastTableContextBarLayoutSignature;
 
   double _modeReelDragDistance = 0;
@@ -866,6 +878,64 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
       _swipeTableStep = tableStep;
       _swipeDestinationIndex = destinationIndex;
     });
+    if (widget.showColoredSwipeChevrons &&
+        destinationIndex >= 0 &&
+        destinationIndex < widget.tabs.length) {
+      final target = widget.tabs[destinationIndex];
+      _debugLog('table_swipe_hint_target', <String, Object?>{
+        'screen': widget.screen,
+        'edge': physicalDirection < 0 ? 'right' : 'left',
+        'physicalDirection': _physicalDirectionLabel(physicalDirection),
+        'targetTable': target.id,
+        'targetStatusColor': _statusVisualRole(target),
+        'idleOpacity': _tableSwipeHintIdleOpacity,
+        'activeOpacity': _tableSwipeHintActiveOpacity,
+        'oppositeOpacity': _tableSwipeHintOppositeOpacity,
+        'maxTranslateDp': _tableSwipeHintMaxTranslate,
+        'maxScale': _tableSwipeHintMaxScale,
+      });
+    }
+  }
+
+  double _tableSwipeHintIntentProgress(double rawDistance) {
+    final magnitude = rawDistance.abs();
+    if (magnitude <= _tableSwipeVisualActivationDistance) return 0;
+    final range = math.max(
+      1.0,
+      _tableSwipeCommitDistanceThreshold -
+          _tableSwipeVisualActivationDistance,
+    );
+    return ((magnitude - _tableSwipeVisualActivationDistance) / range)
+        .clamp(0.0, 1.0)
+        .toDouble();
+  }
+
+  double _tableSwipeHintStrength() {
+    if (_horizontalDragActive) {
+      return _tableSwipeHintIntentProgress(_horizontalDragDistance);
+    }
+    if (!_tableTransitioning ||
+        _swipePhysicalDirection == 0 ||
+        _tableSwipeHintSettleStartIntensity <= 0) {
+      return 0;
+    }
+    final controllerValue =
+        _tableSwipeController.value.clamp(0.0, 1.0).toDouble();
+    final start =
+        _tableSwipeHintSettleStartControllerValue.clamp(0.0, 1.0).toDouble();
+    if (_tableSwipeHintSettlingCommit) {
+      final remaining = 1 - start;
+      if (remaining <= .0001) return 0;
+      final t = ((controllerValue - start) / remaining)
+          .clamp(0.0, 1.0)
+          .toDouble();
+      return _tableSwipeHintSettleStartIntensity *
+          (1 - Curves.easeOutCubic.transform(t));
+    }
+    if (start <= .0001) return 0;
+    final t = (controllerValue / start).clamp(0.0, 1.0).toDouble();
+    return _tableSwipeHintSettleStartIntensity *
+        Curves.easeOutCubic.transform(t);
   }
 
   double _tableSwipeVisualDistance(double rawDistance) {
@@ -1064,6 +1134,11 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     final tableStep = physicalDirection == 0
         ? 0
         : _tableStepForPhysicalDirection(physicalDirection);
+    final hintTargetIndex = tableStep == 0 ? -1 : _targetTableIndex(tableStep);
+    final hintTargetSpec = hintTargetIndex >= 0 &&
+            hintTargetIndex < widget.tabs.length
+        ? widget.tabs[hintTargetIndex]
+        : null;
     _debugLog('table_swipe_cancelled', <String, Object?>{
       'reason': reason,
       'physicalDirection': physicalDirection == 0
@@ -1081,12 +1156,27 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
       'snapBack': snapBack,
       'snapBackDurationMs': duration.inMilliseconds,
       'table': widget.tabs[_currentTableIndex].id,
+      'swipeHintEnabled': widget.showColoredSwipeChevrons,
+      'swipeHintEdge': physicalDirection == 0
+          ? 'none'
+          : physicalDirection < 0
+              ? 'right'
+              : 'left',
+      'swipeHintTarget': hintTargetSpec?.id ?? 'none',
+      'swipeHintTargetColor':
+          hintTargetSpec == null ? 'none' : _statusVisualRole(hintTargetSpec),
+      'statusSignatureScheme':
+          'parking_requests=danger;parking_completed=success;departure_requests=info',
       'pageStructure': 'stable_stack',
       'currentPageState': 'preserved',
       'rowMountReveal': 'disabled',
       'verticalRowReplay': false,
     });
 
+    _tableSwipeHintSettlingCommit = false;
+    _tableSwipeHintSettleStartIntensity =
+        _tableSwipeHintIntentProgress(distance);
+    _tableSwipeHintSettleStartControllerValue = progress;
     _tableTransitioning = snapBack;
     try {
       if (!snapBack || duration == Duration.zero) {
@@ -1101,6 +1191,9 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     } finally {
       _horizontalDragDistance = 0;
       _tableTransitioning = false;
+      _tableSwipeHintSettlingCommit = false;
+      _tableSwipeHintSettleStartIntensity = 0;
+      _tableSwipeHintSettleStartControllerValue = 0;
       _clearTableSwipeVisualState(rebuild: false);
       _endTableSwipeGuard();
       if (mounted) {
@@ -1119,6 +1212,10 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
             'velocity=${velocity.toStringAsFixed(1)} progress=${progress.toStringAsFixed(3)}',
             'snapBack=$snapBack snapBackDurationMs=${duration.inMilliseconds}',
             'tapJitterProtected=${!visualActivated}',
+            'swipeHintEnabled=${widget.showColoredSwipeChevrons}',
+            'swipeHintEdge=${physicalDirection == 0 ? 'none' : physicalDirection < 0 ? 'right' : 'left'} target=${hintTargetSpec?.id ?? 'none'} targetColor=${hintTargetSpec == null ? 'none' : _statusVisualRole(hintTargetSpec)}',
+            'swipeHintIdleOpacity=$_tableSwipeHintIdleOpacity swipeHintActiveOpacity=$_tableSwipeHintActiveOpacity swipeHintOppositeOpacity=$_tableSwipeHintOppositeOpacity',
+            'swipeHintMaxTranslateDp=$_tableSwipeHintMaxTranslate swipeHintMaxScale=$_tableSwipeHintMaxScale',
             'pageStructure=stable_stack currentPageState=preserved',
             'rowMountReveal=disabled verticalRowReplay=false horizontalOnly=true',
             'firebaseAdditionalRead=0 firebaseAdditionalWrite=0',
@@ -1166,6 +1263,13 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     final direction = _physicalDirectionLabel(physicalDirection);
     final visualActivatedAtCommit = _tableSwipeVisualActivated;
 
+    _tableSwipeHintSettlingCommit = true;
+    _tableSwipeHintSettleStartIntensity = math.max(
+      _tableSwipeHintIntentProgress(distance),
+      source == 'gesture' ? .72 : .88,
+    ).toDouble();
+    _tableSwipeHintSettleStartControllerValue = progress;
+
     _debugLog('table_transition_start', <String, Object?>{
       'screen': widget.screen,
       'source': source,
@@ -1194,6 +1298,19 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
       'statusVisual': 'rail+ambient_wash+responsive_context_bar',
       'fromStatusColor': _statusVisualRole(fromSpec),
       'toStatusColor': _statusVisualRole(toSpec),
+      'swipeHintEnabled': widget.showColoredSwipeChevrons,
+      'swipeHintEdge': physicalDirection < 0 ? 'right' : 'left',
+      'swipeHintTarget': toSpec.id,
+      'swipeHintTargetColor': _statusVisualRole(toSpec),
+      'statusSignatureScheme':
+          'parking_requests=danger;parking_completed=success;departure_requests=info',
+      'swipeHintStartIntensity':
+          _tableSwipeHintSettleStartIntensity.toStringAsFixed(3),
+      'swipeHintIdleOpacity': _tableSwipeHintIdleOpacity,
+      'swipeHintActiveOpacity': _tableSwipeHintActiveOpacity,
+      'swipeHintOppositeOpacity': _tableSwipeHintOppositeOpacity,
+      'swipeHintMaxTranslateDp': _tableSwipeHintMaxTranslate,
+      'swipeHintMaxScale': _tableSwipeHintMaxScale,
     });
 
     _tableTransitioning = true;
@@ -1268,6 +1385,11 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
             'contextBarTableLabel=${toSpec.label}',
             'contextBarLayout=${_tableContextLayoutMode(MediaQuery.sizeOf(context).width)} contextBarWidth=${MediaQuery.sizeOf(context).width.toStringAsFixed(1)}',
             'statusColor=${_statusVisualRole(toSpec)}',
+            'contextSurface=${widget.useListContextSurface ? 'list_surface' : 'card_surface'}',
+            'swipeHintEnabled=${widget.showColoredSwipeChevrons}',
+            'swipeHintEdge=${physicalDirection < 0 ? 'right' : 'left'} target=${toSpec.id} targetColor=${_statusVisualRole(toSpec)}',
+            'swipeHintIdleOpacity=$_tableSwipeHintIdleOpacity activeOpacity=$_tableSwipeHintActiveOpacity oppositeOpacity=$_tableSwipeHintOppositeOpacity',
+            'swipeHintMaxTranslateDp=$_tableSwipeHintMaxTranslate maxScale=$_tableSwipeHintMaxScale',
             'statusVisualPointer=ignored statusVisualSemantics=excluded',
             'hudPointer=ignored hudSemantics=excluded',
           ],
@@ -1275,6 +1397,9 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
       );
     } finally {
       _tableTransitioning = false;
+      _tableSwipeHintSettlingCommit = false;
+      _tableSwipeHintSettleStartIntensity = 0;
+      _tableSwipeHintSettleStartControllerValue = 0;
       _endTableSwipeGuard();
       if (mounted) {
         setState(() {});
@@ -2558,14 +2683,14 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     final id = spec.id.trim().toLowerCase();
     final collection = spec.collection.trim().toLowerCase();
     if (id == 'parking_requests' || collection == 'parking_requests_view') {
-      return tokens.danger;
+      return tokens.statusParkingRequested;
     }
     if (id == 'parking_completed' || collection == 'parking_completed_view') {
-      return tokens.success;
+      return tokens.statusParkingCompleted;
     }
     if (id == 'departure_requests' ||
         collection == 'departure_requests_view') {
-      return tokens.info;
+      return tokens.statusDepartureRequested;
     }
     return tokens.accent;
   }
@@ -2629,6 +2754,14 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
         'table': spec.id,
         'tableLabel': spec.label,
         'statusColor': _statusVisualRole(spec),
+        'statusSignatureScheme':
+            'parking_requests=danger;parking_completed=success;departure_requests=info',
+        'contextSurface':
+            widget.useListContextSurface ? 'list_surface' : 'card_surface',
+        'swipeHintEnabled': widget.showColoredSwipeChevrons,
+        'swipeHintStyle': widget.showColoredSwipeChevrons
+            ? 'signature_color_chevron'
+            : 'none',
         'smallPhoneResponsive': true,
         'firebaseAdditionalRead': 0,
       });
@@ -2645,75 +2778,88 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     final regular = layout == 'regular';
     final narrow = layout == 'narrow';
     final label = regular ? sortState.summaryLabel : sortState.timeOrderLabel;
-    final horizontalPadding = regular ? 11.0 : narrow ? 8.0 : 9.0;
+    final horizontalPadding = regular ? 11.0 : narrow ? 6.0 : 8.0;
     final iconSize = regular ? 17.0 : 16.0;
-    return Semantics(
-      label: '현재 정렬, ${sortState.timeOrderLabel}',
-      child: AnimatedContainer(
-        duration: reduceMotion
-            ? Duration.zero
-            : const Duration(milliseconds: 190),
-        curve: Curves.easeOutCubic,
-        constraints: const BoxConstraints(minHeight: 44),
-        padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
-        decoration: BoxDecoration(
-          color: cs.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(13),
-          border: Border.all(
-            color: cs.outlineVariant.withOpacity(.62),
-          ),
-        ),
-        child: Row(
-          children: <Widget>[
-            if (!narrow) ...<Widget>[
-              Icon(
-                Icons.table_rows_rounded,
-                size: iconSize,
-                color: cs.onSurfaceVariant,
-              ),
-              SizedBox(width: regular ? 7 : 5),
-            ],
-            Expanded(
-              child: AnimatedSwitcher(
-                duration: reduceMotion
-                    ? Duration.zero
-                    : const Duration(milliseconds: 180),
-                switchInCurve: Curves.easeOutCubic,
-                switchOutCurve: Curves.easeInCubic,
-                transitionBuilder: (child, animation) {
-                  return FadeTransition(
-                    opacity: animation,
-                    child: SlideTransition(
-                      position: Tween<Offset>(
-                        begin: const Offset(0, .12),
-                        end: Offset.zero,
-                      ).animate(animation),
-                      child: child,
-                    ),
-                  );
-                },
-                child: Align(
-                  key: ValueKey<String>('sort:$layout:$label'),
+
+    Widget content({required FontWeight fontWeight}) {
+      return Row(
+        children: <Widget>[
+          if (!narrow) ...<Widget>[
+            Icon(
+              Icons.table_rows_rounded,
+              size: iconSize,
+              color: cs.onSurfaceVariant,
+            ),
+            SizedBox(width: regular ? 7 : 5),
+          ],
+          Expanded(
+            child: AnimatedSwitcher(
+              duration: reduceMotion
+                  ? Duration.zero
+                  : const Duration(milliseconds: 180),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (child, animation) {
+                return FadeTransition(
+                  opacity: animation,
+                  child: SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(0, .12),
+                      end: Offset.zero,
+                    ).animate(animation),
+                    child: child,
+                  ),
+                );
+              },
+              child: Align(
+                key: ValueKey<String>('sort:$layout:$label'),
+                alignment: Alignment.centerLeft,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
                   alignment: Alignment.centerLeft,
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      label,
-                      maxLines: 1,
-                      softWrap: false,
-                      style: text.labelMedium?.copyWith(
-                        color: cs.onSurfaceVariant,
-                        fontWeight: FontWeight.w900,
-                      ),
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    softWrap: false,
+                    style: text.labelMedium?.copyWith(
+                      color: cs.onSurfaceVariant,
+                      fontWeight: fontWeight,
                     ),
                   ),
                 ),
               ),
             ),
-          ],
-        ),
-      ),
+          ),
+        ],
+      );
+    }
+
+    return Semantics(
+      label: '현재 정렬, ${sortState.timeOrderLabel}',
+      child: widget.useListContextSurface
+          ? SizedBox(
+              height: 44,
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+                child: content(fontWeight: FontWeight.w700),
+              ),
+            )
+          : AnimatedContainer(
+              duration: reduceMotion
+                  ? Duration.zero
+                  : const Duration(milliseconds: 190),
+              curve: Curves.easeOutCubic,
+              constraints: const BoxConstraints(minHeight: 44),
+              padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(13),
+                border: Border.all(
+                  color: cs.outlineVariant.withOpacity(.62),
+                ),
+              ),
+              child: content(fontWeight: FontWeight.w900),
+            ),
     );
   }
 
@@ -2722,6 +2868,71 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     required CommonUiTokens tokens,
     required bool reduceMotion,
   }) {
+    if (widget.useListContextSurface) {
+      return AnimatedBuilder(
+        animation: _statusVisualPulseController,
+        builder: (context, _) {
+          final currentIndex =
+              _currentTableIndex.clamp(0, widget.tabs.length - 1);
+          final currentSpec = widget.tabs[currentIndex];
+          final signatureColor = _statusHudColor(currentSpec, tokens);
+          final pulse = reduceMotion
+              ? 0.0
+              : _statusVisualPulseStrength(_statusVisualPulseController.value);
+          final color = Color.lerp(
+                signatureColor.withOpacity(tokens.isDark ? .88 : .84),
+                signatureColor,
+                pulse,
+              ) ??
+              signatureColor;
+          return Semantics(
+            label: '현재 테이블, ${currentSpec.label}',
+            child: SizedBox(
+              height: 44,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: AnimatedSwitcher(
+                  duration: reduceMotion
+                      ? Duration.zero
+                      : const Duration(milliseconds: 180),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  transitionBuilder: (child, animation) {
+                    return FadeTransition(
+                      opacity: animation,
+                      child: SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(.06, 0),
+                          end: Offset.zero,
+                        ).animate(animation),
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: Center(
+                    key: ValueKey<String>('status:${currentSpec.id}'),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        currentSpec.label,
+                        maxLines: 1,
+                        softWrap: false,
+                        style: text.labelMedium?.copyWith(
+                          color: color,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: .1,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      );
+    }
+
     return AnimatedBuilder(
       animation: Listenable.merge(<Listenable>[
         _tableSwipeController,
@@ -2829,6 +3040,80 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     );
   }
 
+  Widget _buildTableSwipeEdgeChevron({
+    required bool leftEdge,
+    required CommonUiTokens tokens,
+    required bool reduceMotion,
+    required double extent,
+  }) {
+    if (!widget.showColoredSwipeChevrons ||
+        !_gatesLoaded ||
+        _enabledTableIndices().length <= 1) {
+      return SizedBox(width: extent, height: 44);
+    }
+    final targetStep = leftEdge ? -1 : 1;
+    final targetIndex = _targetTableIndex(targetStep);
+    if (targetIndex < 0 || targetIndex >= widget.tabs.length) {
+      return SizedBox(width: extent, height: 44);
+    }
+    final targetSpec = widget.tabs[targetIndex];
+    final targetColor = _statusHudColor(targetSpec, tokens);
+    final selectedDirection = leftEdge ? 1 : -1;
+    return ExcludeSemantics(
+      child: IgnorePointer(
+        child: AnimatedBuilder(
+          animation: _tableSwipeController,
+          builder: (context, _) {
+            final strength = _tableSwipeHintStrength();
+            final hasDirection = _swipePhysicalDirection != 0;
+            final selected =
+                hasDirection && _swipePhysicalDirection == selectedDirection;
+            final opacity = !hasDirection
+                ? _tableSwipeHintIdleOpacity
+                : selected
+                    ? _tableSwipeHintIdleOpacity +
+                        ((_tableSwipeHintActiveOpacity -
+                                _tableSwipeHintIdleOpacity) *
+                            strength)
+                    : _tableSwipeHintIdleOpacity +
+                        ((_tableSwipeHintOppositeOpacity -
+                                _tableSwipeHintIdleOpacity) *
+                            strength);
+            final translate = reduceMotion || !selected
+                ? 0.0
+                : (leftEdge ? 1.0 : -1.0) *
+                    _tableSwipeHintMaxTranslate *
+                    strength;
+            final scale = reduceMotion || !selected
+                ? 1.0
+                : 1 + ((_tableSwipeHintMaxScale - 1) * strength);
+            return SizedBox(
+              width: extent,
+              height: 44,
+              child: Center(
+                child: Transform.translate(
+                  offset: Offset(translate, 0),
+                  child: Transform.scale(
+                    scale: scale,
+                    child: Icon(
+                      leftEdge
+                          ? Icons.chevron_right_rounded
+                          : Icons.chevron_left_rounded,
+                      size: 20,
+                      color: targetColor.withOpacity(
+                        opacity.clamp(0.0, 1.0).toDouble(),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
   Widget _buildTableContextBar(ColorScheme cs) {
     final tableMode = (_viewMode?.mode ?? TypeViewMode.table) ==
         TypeViewMode.table;
@@ -2876,11 +3161,17 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
                       final layout = _tableContextLayoutMode(width);
                       final regular = layout == 'regular';
                       final narrow = layout == 'narrow';
-                      final horizontalPadding =
-                          regular ? 12.0 : narrow ? 8.0 : 10.0;
+                      final horizontalPadding = widget.useListContextSurface
+                          ? 4.0
+                          : regular
+                              ? 12.0
+                              : narrow
+                                  ? 8.0
+                                  : 10.0;
                       final gap = regular ? 8.0 : narrow ? 4.0 : 6.0;
                       final leftFlex = regular ? 58 : narrow ? 46 : 52;
                       final rightFlex = 100 - leftFlex;
+                      final edgeExtent = narrow ? 28.0 : 30.0;
                       final spec = widget.tabs[
                           _currentTableIndex.clamp(0, widget.tabs.length - 1)];
                       _scheduleTableContextBarLayoutTrace(
@@ -2890,6 +3181,69 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
                         spec: spec,
                       );
                       final canSwipe = _canSwipeTables();
+                      final listSurfaceChildren = <Widget>[
+                        if (widget.showColoredSwipeChevrons)
+                          _buildTableSwipeEdgeChevron(
+                            leftEdge: true,
+                            tokens: tokens,
+                            reduceMotion: reduceMotion,
+                            extent: edgeExtent,
+                          ),
+                        Expanded(
+                          flex: leftFlex,
+                          child: _buildTableContextSortSurface(
+                            cs: cs,
+                            text: text,
+                            sortState: sortState,
+                            layout: layout,
+                            reduceMotion: reduceMotion,
+                          ),
+                        ),
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: gap),
+                          child: Container(
+                            width: 1,
+                            height: 18,
+                            color: cs.outlineVariant.withOpacity(.48),
+                          ),
+                        ),
+                        Expanded(
+                          flex: rightFlex,
+                          child: _buildTableContextStatusSurface(
+                            text: text,
+                            tokens: tokens,
+                            reduceMotion: reduceMotion,
+                          ),
+                        ),
+                        if (widget.showColoredSwipeChevrons)
+                          _buildTableSwipeEdgeChevron(
+                            leftEdge: false,
+                            tokens: tokens,
+                            reduceMotion: reduceMotion,
+                            extent: edgeExtent,
+                          ),
+                      ];
+                      final cardSurfaceChildren = <Widget>[
+                        Expanded(
+                          flex: leftFlex,
+                          child: _buildTableContextSortSurface(
+                            cs: cs,
+                            text: text,
+                            sortState: sortState,
+                            layout: layout,
+                            reduceMotion: reduceMotion,
+                          ),
+                        ),
+                        SizedBox(width: gap),
+                        Expanded(
+                          flex: rightFlex,
+                          child: _buildTableContextStatusSurface(
+                            text: text,
+                            tokens: tokens,
+                            reduceMotion: reduceMotion,
+                          ),
+                        ),
+                      ];
                       return GestureDetector(
                         behavior: HitTestBehavior.translucent,
                         excludeFromSemantics: true,
@@ -2923,27 +3277,9 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
                           child: SizedBox(
                             height: 44,
                             child: Row(
-                              children: <Widget>[
-                                Expanded(
-                                  flex: leftFlex,
-                                  child: _buildTableContextSortSurface(
-                                    cs: cs,
-                                    text: text,
-                                    sortState: sortState,
-                                    layout: layout,
-                                    reduceMotion: reduceMotion,
-                                  ),
-                                ),
-                                SizedBox(width: gap),
-                                Expanded(
-                                  flex: rightFlex,
-                                  child: _buildTableContextStatusSurface(
-                                    text: text,
-                                    tokens: tokens,
-                                    reduceMotion: reduceMotion,
-                                  ),
-                                ),
-                              ],
+                              children: widget.useListContextSurface
+                                  ? listSurfaceChildren
+                                  : cardSurfaceChildren,
                             ),
                           ),
                         ),
@@ -2986,6 +3322,8 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
         'reason': 'reduce_motion',
         'table': spec.id,
         'statusColor': _statusVisualRole(spec),
+        'statusSignatureScheme':
+            'parking_requests=danger;parking_completed=success;departure_requests=info',
       });
       return;
     }

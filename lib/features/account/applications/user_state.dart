@@ -539,17 +539,11 @@ class UserState extends ChangeNotifier {
   List<String> _normalizedBreakDaysForUser({
     required UserModel user,
     required SharedPreferences prefs,
-    required Map<String, TimeOfDay?> startByWeekday,
-    required Map<String, TimeOfDay?> endByWeekday,
   }) {
     final raw = prefs.containsKey(WorkSchedulePrefs.breakDaysKey)
         ? WorkSchedulePrefs.readBreakDaysFromPrefs(prefs)
         : user.breakDays;
-    return WorkSchedulePrefs.normalizeBreakDaysForWorkingMap(
-      breakDays: raw,
-      startByDay: startByWeekday,
-      endByDay: endByWeekday,
-    );
+    return WorkSchedulePrefs.normalizeBreakDays(raw);
   }
 
   Future<bool> setCurrentUserWeekdayEndTime({
@@ -593,26 +587,13 @@ class UserState extends ChangeNotifier {
       _user!.endTimeByWeekday,
     );
 
-    final wasWorking = normalizedStart[day] != null && normalizedEnd[day] != null;
-
     normalizedStart[day] = startTime;
     normalizedEnd[day] = endTime;
 
-    final breakSet = _user!.breakDays
-        .map((value) => value.trim())
-        .where((value) => value.isNotEmpty)
-        .toSet();
+    final breakDays = WorkSchedulePrefs.normalizeBreakDays(_user!.breakDays);
 
-    if (startTime == null && endTime == null) {
-      breakSet.remove(day);
-    } else if (!wasWorking) {
-      breakSet.add(day);
-    }
-
-    final breakDays = WorkSchedulePrefs.normalizeBreakDaysForWorkingMap(
-      breakDays: breakSet,
-      startByDay: normalizedStart,
-      endByDay: normalizedEnd,
+    debugPrint(
+      '[USER-STATE][${DateTime.now().toIso8601String()}] weekday_work_time_local day=$day startConfigured=${startTime != null} endConfigured=${endTime != null} breakPreserved=${breakDays.contains(day)} breakPolicy=time_independent',
     );
 
     final current = _user!;
@@ -675,10 +656,6 @@ class UserState extends ChangeNotifier {
       _user!.endTimeByWeekday,
     );
 
-    if (hasBreak && (normalizedStart[day] == null || normalizedEnd[day] == null)) {
-      return false;
-    }
-
     final breakSet = _user!.breakDays
         .map((value) => value.trim())
         .where((value) => value.isNotEmpty)
@@ -690,10 +667,10 @@ class UserState extends ChangeNotifier {
       breakSet.remove(day);
     }
 
-    final breakDays = WorkSchedulePrefs.normalizeBreakDaysForWorkingMap(
-      breakDays: breakSet,
-      startByDay: normalizedStart,
-      endByDay: normalizedEnd,
+    final breakDays = WorkSchedulePrefs.normalizeBreakDays(breakSet);
+
+    debugPrint(
+      '[USER-STATE][${DateTime.now().toIso8601String()}] break_day_local day=$day hasBreak=$hasBreak startConfigured=${normalizedStart[day] != null} endConfigured=${normalizedEnd[day] != null} breakPolicy=time_independent',
     );
 
     final updatedUser = _user!.copyWith(breakDays: breakDays);
@@ -1157,8 +1134,6 @@ class UserState extends ChangeNotifier {
       final effectiveBreakDays = _normalizedBreakDaysForUser(
         user: userData,
         prefs: prefs,
-        startByWeekday: effectiveStartByWeekday,
-        endByWeekday: effectiveEndByWeekday,
       );
 
       final cachedDivision = userData.divisions.firstOrNull?.trim() ?? '';
@@ -1236,8 +1211,6 @@ class UserState extends ChangeNotifier {
       final effectiveBreakDays = _normalizedBreakDaysForUser(
         user: userData,
         prefs: prefs,
-        startByWeekday: effectiveStartByWeekday,
-        endByWeekday: effectiveEndByWeekday,
       );
 
       userData = userData.copyWith(
@@ -1381,7 +1354,10 @@ class UserState extends ChangeNotifier {
     }
 
     if (_user == null) return;
-    _user = _user!.copyWith(currentArea: normalizedArea);
+    _user = _user!.copyWith(
+      currentArea: normalizedArea,
+      selectedArea: normalizedArea,
+    );
     _session = UserSessionAccount(_user!);
     notifyListeners();
     debugPrint(
@@ -1411,7 +1387,10 @@ class UserState extends ChangeNotifier {
 
     if (_user == null) return;
 
-    _user = _user!.copyWith(currentArea: newArea);
+    _user = _user!.copyWith(
+      currentArea: newArea,
+      selectedArea: newArea,
+    );
     _session = UserSessionAccount(_user!);
     notifyListeners();
 

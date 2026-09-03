@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import '../../design_system/common_ui/common_ui_theme.dart';
 import '../../../features/location/domain/models/grid_rect.dart';
 import '../../../features/location/domain/models/location_model.dart';
 import '../../../features/location/domain/models/parking_grid_model.dart';

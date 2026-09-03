@@ -300,7 +300,7 @@ String _statusLabel(PlateType? type) {
 Color _statusForeground(CommonUiTokens tokens, PlateType? type) {
   switch (type) {
     case PlateType.parkingRequests:
-      return tokens.statusSettlementPending;
+      return tokens.statusParkingRequested;
     case PlateType.parkingCompleted:
       return tokens.statusParkingCompleted;
     case PlateType.departureRequests:
@@ -315,7 +315,7 @@ Color _statusForeground(CommonUiTokens tokens, PlateType? type) {
 Color _statusBackground(CommonUiTokens tokens, PlateType? type) {
   switch (type) {
     case PlateType.parkingRequests:
-      return tokens.statusSettlementPendingContainer;
+      return tokens.statusParkingRequestedContainer;
     case PlateType.parkingCompleted:
       return tokens.statusParkingCompletedContainer;
     case PlateType.departureRequests:

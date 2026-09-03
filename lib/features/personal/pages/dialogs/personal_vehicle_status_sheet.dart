@@ -300,7 +300,7 @@ class _StatusHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final tokens = CommonUiTheme.of(context);
     final text = Theme.of(context).textTheme;
     final type = plate?.typeEnum;
     final label = loading
@@ -315,7 +315,7 @@ class _StatusHero extends StatelessWidget {
             : plate == null
                 ? '현재 지점에서 주차 중인 차량 정보를 찾지 못했습니다.'
                 : '${plate!.location.isEmpty ? '위치 미지정' : plate!.location} · ${_formatDateTime(plate!.requestTime)}';
-    final colors = _statusColors(cs, type, loading: loading, error: error != null);
+    final colors = _statusColors(tokens, type, loading: loading, error: error != null);
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -490,20 +490,20 @@ IconData _statusIcon(PlateType? type, {required bool loading, required bool erro
   }
 }
 
-(Color, Color) _statusColors(ColorScheme cs, PlateType? type, {required bool loading, required bool error}) {
-  if (error) return (cs.onErrorContainer, cs.errorContainer);
-  if (loading) return (cs.onSecondaryContainer, cs.secondaryContainer);
+(Color, Color) _statusColors(CommonUiTokens tokens, PlateType? type, {required bool loading, required bool error}) {
+  if (error) return (tokens.onDangerContainer, tokens.dangerContainer);
+  if (loading) return (tokens.onStatusSettlementPendingContainer, tokens.statusSettlementPendingContainer);
   switch (type) {
     case PlateType.parkingCompleted:
-      return (cs.onPrimaryContainer, cs.primaryContainer);
+      return (tokens.onStatusParkingCompletedContainer, tokens.statusParkingCompletedContainer);
     case PlateType.departureRequests:
-      return (cs.onTertiaryContainer, cs.tertiaryContainer);
+      return (tokens.onStatusDepartureRequestedContainer, tokens.statusDepartureRequestedContainer);
     case PlateType.departureCompleted:
-      return (cs.onSurfaceVariant, cs.surfaceContainerHigh);
+      return (tokens.onStatusSynchronizedContainer, tokens.statusSynchronizedContainer);
     case PlateType.parkingRequests:
-      return (cs.onSecondaryContainer, cs.secondaryContainer);
+      return (tokens.onStatusParkingRequestedContainer, tokens.statusParkingRequestedContainer);
     case null:
-      return (cs.onSurfaceVariant, cs.surfaceContainerHighest);
+      return (tokens.onStatusOfflineContainer, tokens.statusOfflineContainer);
   }
 }
 
@@ -523,7 +523,7 @@ Color _statusForeground(
     case PlateType.departureCompleted:
       return tokens.statusSynchronized;
     case PlateType.parkingRequests:
-      return tokens.statusSettlementPending;
+      return tokens.statusParkingRequested;
     case null:
       return tokens.statusOffline;
   }
@@ -545,7 +545,7 @@ Color _statusBackground(
     case PlateType.departureCompleted:
       return tokens.statusSynchronizedContainer;
     case PlateType.parkingRequests:
-      return tokens.statusSettlementPendingContainer;
+      return tokens.statusParkingRequestedContainer;
     case null:
       return tokens.statusOfflineContainer;
   }

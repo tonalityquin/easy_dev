@@ -4,7 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
 import '../../../app/command/presentation/terminal_launcher_button.dart';
 import '../../../app/init/app_exit_service.dart';
 import '../../../app/init/db_connection_status_section.dart';
@@ -12,20 +12,31 @@ import '../../../app/init/logout_helper.dart';
 import '../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../app/utils/status_dialog.dart';
 import '../../../design_system/common_ui/common_adaptive_two_line_content.dart';
+import '../../../design_system/common_ui/common_ui_components.dart';
+import '../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../shared/area_remote_settings/application/area_remote_settings_sync.dart';
+import '../../../shared/secondary/application/secondary_info.dart';
+import '../../../shared/secondary/application/secondary_state.dart';
+import '../../../shared/secondary/side_docks/secondary_side_dock.dart';
+import '../../../shared/secondary/widgets/ops_console_widgets.dart';
 import '../../account/applications/user_state.dart';
-import '../../dashboard/applications/common/endtime_reminder_service.dart';
+import '../../attendance/application/common_attendance_service.dart';
 import '../../dev/debug/debug_api_logger.dart';
 import '../../selector/application/dev_auth.dart';
 import '../controllers/single_inside_controller.dart';
-import 'widgets/single_inside_document_box_button_section.dart';
-import 'widgets/single_inside_header_widget_section.dart';
-import 'widgets/single_inside_report_button_section.dart';
+import 'sheets/document/single_document_box_sheet.dart';
+import 'sheets/report/single_inside_report_selector_sheet.dart';
 import 'widgets/widgets/single_inside_punch_recorder_section.dart';
+import 'widgets/widgets/single_inside_work_schedule_section.dart';
 
 enum SingleInsideMode {
   leader,
   fieldUser,
+}
+
+bool _singleOperationsRoleAllowed(RoleType role) {
+  return role == RoleType.dev ||
+      role == RoleType.adminBillMonthlyTablet;
 }
 
 const String _tSingle = 'Single';
@@ -34,12 +45,13 @@ const String _tPrefs = 'prefs';
 const String _tUi = 'ui';
 
 enum _SingleInsideMenuAction {
+  developerStatus,
   logout,
   exitApp,
 }
 
 class _SingleInsideLayoutDiagnostics {
-  static const int _limit = 120;
+  static const int _limit = 160;
   static final List<String> _lines = <String>[];
 
   static void log(String message) {
@@ -69,7 +81,7 @@ class _SingleInsideLayoutDiagnostics {
     if (!enabled || !context.mounted) return;
     await StatusDialog.showSuccess(
       context,
-      title: '지사 레이아웃 상태',
+      title: 'Single 상태',
       description: description,
       copyText: debugPrintCode,
       copyButtonLabel: 'debugPrint 코드 복사',
@@ -92,9 +104,8 @@ Color _resolveLogoTint({
   required Color background,
   required Color preferred,
   required Color fallback,
-  double minContrast = 3.0,
 }) {
-  if (_contrastRatio(preferred, background) >= minContrast) return preferred;
+  if (_contrastRatio(preferred, background) >= 3.0) return preferred;
   return fallback;
 }
 
@@ -125,29 +136,24 @@ class _BrandTintedLogo extends StatelessWidget {
     required this.height,
     this.preferredColor,
     this.fallbackColor,
-    this.minContrast = 3.0,
   });
 
   final String assetPath;
   final double height;
   final Color? preferredColor;
   final Color? fallbackColor;
-  final double minContrast;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-
     final bg = theme.scaffoldBackgroundColor;
     final preferred = preferredColor ?? cs.primary;
     final fallback = fallbackColor ?? cs.onBackground;
-
     final tint = _resolveLogoTint(
       background: bg,
       preferred: preferred,
       fallback: fallback,
-      minContrast: minContrast,
     );
 
     return Image.asset(
@@ -156,6 +162,7 @@ class _BrandTintedLogo extends StatelessWidget {
       height: height,
       color: tint,
       colorBlendMode: BlendMode.srcIn,
+      filterQuality: FilterQuality.high,
     );
   }
 }
@@ -174,45 +181,40 @@ class SingleInsideScreen extends StatefulWidget {
 
 class _SingleInsideScreenState extends State<SingleInsideScreen> {
   final controller = SingleInsideController();
-
-  static const String _kPelicanTagAsset = 'assets/images/pelican_text.png';
-  static const double _kTagExtraHeight = 70.0;
+  String _lastLayoutSignature = '';
+  String _lastModeSignature = '';
+  String _lastUserSignature = '';
+  int _scheduleRevision = 0;
 
   @override
   void initState() {
     super.initState();
+    _SingleInsideLayoutDiagnostics.log('screen_init');
     controller.initialize(context);
-
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final userState = context.read<UserState>();
-
       await userState.ensureTodayClockInStatus();
       if (!mounted) return;
-
+      _SingleInsideLayoutDiagnostics.log(
+        'clock_state isWorking=${userState.isWorking} hasClockInToday=${userState.hasClockInToday}',
+      );
       if (userState.isWorking && !userState.hasClockInToday) {
-        await _resetStaleWorkingState(userState);
+        await _resetStaleWorkingState();
       }
-      if (!mounted) return;
     });
   }
 
-
-  double _calcFooterHeight(BuildContext context) {
-    final media = MediaQuery.of(context);
-    final bool isShort = media.size.height < 640;
-    final bool keyboardOpen = media.viewInsets.bottom > 0;
-    return (isShort || keyboardOpen) ? 72 : 120;
-  }
-
-  Future<void> _resetStaleWorkingState(UserState userState) async {
+  Future<void> _resetStaleWorkingState() async {
     try {
-      await userState.isHeWorking();
-
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('isWorking', false);
-
-      await EndTimeReminderService.instance.cancel();
+      _SingleInsideLayoutDiagnostics.log('stale_working_state_reset_start');
+      await CommonAttendanceService.resetStaleWorkingState(
+        context,
+        source: 'single_inside_stale_guard',
+        modeKey: 'single',
+      );
+      _SingleInsideLayoutDiagnostics.log('stale_working_state_reset_complete');
     } catch (e) {
+      _SingleInsideLayoutDiagnostics.log('stale_working_state_reset_failure error=$e');
       await _logApiError(
         tag: 'SingleInsideScreen._resetStaleWorkingState',
         message: 'stale working state 리셋 실패',
@@ -224,12 +226,14 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
 
   Future<void> _handleLogout(BuildContext context) async {
     try {
+      _SingleInsideLayoutDiagnostics.log('logout_start');
       await LogoutHelper.logoutAndGoToLogin(
         context,
         checkWorking: false,
         delay: const Duration(milliseconds: 500),
       );
     } catch (e) {
+      _SingleInsideLayoutDiagnostics.log('logout_failure error=$e');
       await _logApiError(
         tag: 'SingleInsideScreen._handleLogout',
         message: '로그아웃 처리 실패',
@@ -240,11 +244,12 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
     }
   }
 
-
   Future<void> _handleAppExit(BuildContext context) async {
     try {
+      _SingleInsideLayoutDiagnostics.log('app_exit_start');
       await AppExitService.exitApp(context);
     } catch (e) {
+      _SingleInsideLayoutDiagnostics.log('app_exit_failure error=$e');
       await _logApiError(
         tag: 'SingleInsideScreen._handleAppExit',
         message: '앱 종료 처리 실패',
@@ -255,11 +260,27 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
     }
   }
 
+  Future<void> _showDeveloperStatus() async {
+    final media = MediaQuery.maybeOf(context);
+    final userState = context.read<UserState>();
+    final secondaryState = context.read<SecondaryState>();
+    _SingleInsideLayoutDiagnostics.log(
+      'developer_status_open viewport=${media?.size.width.toStringAsFixed(1)}x${media?.size.height.toStringAsFixed(1)} role=${userState.session?.role ?? ''} normalizedRole=${secondaryState.role.name} area=${userState.currentArea} division=${userState.division} operationsVisible=${_singleOperationsRoleAllowed(secondaryState.role) && secondaryState.canAccess(Section.user)} secondaryUserAccess=${secondaryState.canAccess(Section.user)}',
+    );
+    await _SingleInsideLayoutDiagnostics.showStatus(
+      context,
+      description: 'Single 화면, 운영 관리 노출 정책, 업무 Surface의 debugPrint 코드를 복사할 수 있습니다.',
+    );
+  }
+
   Future<void> _handleMenuAction(
-      BuildContext context,
-      _SingleInsideMenuAction action,
-      ) async {
+    BuildContext context,
+    _SingleInsideMenuAction action,
+  ) async {
     switch (action) {
+      case _SingleInsideMenuAction.developerStatus:
+        await _showDeveloperStatus();
+        break;
       case _SingleInsideMenuAction.logout:
         await _handleLogout(context);
         break;
@@ -269,119 +290,201 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
     }
   }
 
-  Widget _buildScreenTag(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-
-    final base = theme.textTheme.labelSmall ??
-        const TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-        );
-
-    final fontSize = (base.fontSize ?? 11).toDouble();
-    final tagImageHeight = fontSize + _kTagExtraHeight;
-    final tagPreferredTint = cs.onSurfaceVariant.withOpacity(0.80);
-
-    return Positioned(
-      top: 12,
-      left: 12,
-      child: IgnorePointer(
-        child: Semantics(
-          label: 'screen_tag: Single screen (image)',
-          child: ExcludeSemantics(
-            child: _BrandTintedLogo(
-              assetPath: _kPelicanTagAsset,
-              height: tagImageHeight,
-              preferredColor: tagPreferredTint,
-              fallbackColor: cs.onBackground,
-              minContrast: 3.0,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   SingleInsideMode _resolveMode(UserState userState) {
     if (widget.mode != null) return widget.mode!;
-
-    String role = '';
-    final session = userState.session;
-    if (session != null) {
-      role = session.role.trim();
+    final role = userState.session?.role.trim() ?? '';
+    final mode = role == 'fieldCommon'
+        ? SingleInsideMode.fieldUser
+        : SingleInsideMode.leader;
+    final signature = 'role=$role mode=${mode.name}';
+    if (_lastModeSignature != signature) {
+      _lastModeSignature = signature;
+      _SingleInsideLayoutDiagnostics.log('mode_resolved $signature');
     }
-
-    debugPrint('[SingleInsideScreen] resolved role="$role"');
-
-    if (role == 'fieldCommon') {
-      return SingleInsideMode.fieldUser;
-    }
-
-    return SingleInsideMode.leader;
+    return mode;
   }
 
-  Widget _buildTerminalLauncher(BuildContext context) {
-    final reduceMotion =
-        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-
-    return Positioned(
-      top: 16,
-      left: 0,
-      right: 0,
-      child: TweenAnimationBuilder<double>(
-        duration:
-            reduceMotion ? Duration.zero : const Duration(milliseconds: 220),
-        curve: Curves.easeOutCubic,
-        tween: Tween<double>(begin: 0, end: 1),
-        builder: (context, value, child) {
-          return Opacity(
-            opacity: value,
-            child: Transform.translate(
-              offset: Offset(0, (1 - value) * -6),
-              child: child,
+  PreferredSizeWidget _buildAppBar(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    return AppBar(
+      titleSpacing: NavigationToolbar.kMiddleSpacing,
+      leadingWidth: 48,
+      leading: const SizedBox.shrink(),
+      title: const TerminalLauncherButton(source: 'single_branch'),
+      centerTitle: true,
+      backgroundColor: tokens.surface,
+      foregroundColor: tokens.textPrimary,
+      elevation: 0,
+      surfaceTintColor: tokens.transparent,
+      shadowColor: tokens.transparent,
+      toolbarHeight: kToolbarHeight,
+      shape: Border(bottom: BorderSide(color: tokens.borderSubtle)),
+      actions: [
+        ValueListenableBuilder<bool>(
+          valueListenable: DevAuth.devModeEnabled,
+          builder: (context, developerMode, _) {
+            return PopupMenuButton<_SingleInsideMenuAction>(
+              tooltip: '메뉴',
+              onSelected: (value) async {
+                await _handleMenuAction(context, value);
+              },
+              itemBuilder: (context) => [
+                if (developerMode)
+                  const PopupMenuItem<_SingleInsideMenuAction>(
+                    value: _SingleInsideMenuAction.developerStatus,
+                    child: Row(
+                      children: [
+                        Icon(Icons.bug_report_rounded),
+                        SizedBox(width: 8),
+                        Text('상태 확인'),
+                      ],
+                    ),
+                  ),
+                PopupMenuItem<_SingleInsideMenuAction>(
+                  value: _SingleInsideMenuAction.logout,
+                  child: Row(
+                    children: [
+                      Icon(Icons.logout, color: tokens.danger),
+                      const SizedBox(width: 8),
+                      const Text('로그아웃'),
+                    ],
+                  ),
+                ),
+                PopupMenuItem<_SingleInsideMenuAction>(
+                  value: _SingleInsideMenuAction.exitApp,
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.power_settings_new_rounded,
+                        color: tokens.danger,
+                      ),
+                      const SizedBox(width: 8),
+                      const Text('앱 종료'),
+                    ],
+                  ),
+                ),
+              ],
+              icon: const Icon(Icons.more_vert_rounded),
+            );
+          },
+        ),
+      ],
+      flexibleSpace: SafeArea(
+        bottom: false,
+        child: Stack(
+          children: [
+            IgnorePointer(
+              child: Align(
+                alignment: Alignment.topLeft,
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 12, top: 4),
+                  child: Semantics(
+                    label: 'Single',
+                    child: ExcludeSemantics(
+                      child: CommonAnimatedReveal(
+                        offset: const Offset(-0.035, 0),
+                        child: _BrandTintedLogo(
+                          assetPath: 'assets/images/pelican_text.png',
+                          height: 54,
+                          preferredColor: tokens.accent,
+                          fallbackColor: tokens.textPrimary,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ),
-          );
-        },
-        child: const Align(
-          alignment: Alignment.topCenter,
-          child: TerminalLauncherButton(source: 'single_branch'),
+            IgnorePointer(
+              child: Align(
+                alignment: Alignment.topRight,
+                child: Padding(
+                  padding: const EdgeInsets.only(
+                    right: 52,
+                    top: 4,
+                    bottom: 4,
+                  ),
+                  child: SizedBox(
+                    height: kToolbarHeight - 8,
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          maxWidth: 116,
+                          maxHeight: kToolbarHeight - 8,
+                        ),
+                        child: const FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerRight,
+                          child: DbConnectionStatusAppBarSection(
+                            liveLabel: 'live DB',
+                            storageLabel: '스토리지 DB',
+                            spacing: 4,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildMenu(BuildContext context, ColorScheme cs) {
-    return Positioned(
-      top: 16,
-      right: 16,
-      child: PopupMenuButton<_SingleInsideMenuAction>(
-        onSelected: (value) async {
-          await _handleMenuAction(context, value);
-        },
-        itemBuilder: (context) => [
-          PopupMenuItem<_SingleInsideMenuAction>(
-            value: _SingleInsideMenuAction.logout,
-            child: Row(
-              children: [
-                Icon(Icons.logout, color: cs.error),
-                const SizedBox(width: 8),
-                const Text('로그아웃'),
-              ],
-            ),
-          ),
-          PopupMenuItem<_SingleInsideMenuAction>(
-            value: _SingleInsideMenuAction.exitApp,
-            child: Row(
-              children: [
-                Icon(Icons.power_settings_new_rounded, color: cs.error),
-                const SizedBox(width: 8),
-                const Text('앱 종료'),
-              ],
-            ),
-          ),
-        ],
-        icon: const Icon(Icons.more_vert),
+  Future<void> _openReport(BuildContext context) async {
+    _SingleInsideLayoutDiagnostics.log('work_surface_open target=report');
+    HapticFeedback.selectionClick();
+    await openSingleInsideReportSelectorSheet(context);
+    _SingleInsideLayoutDiagnostics.log('work_surface_closed target=report');
+  }
+
+  Future<void> _openDocuments(BuildContext context) async {
+    _SingleInsideLayoutDiagnostics.log('work_surface_open target=document');
+    HapticFeedback.selectionClick();
+    await openSingleDocumentBox(context);
+    _SingleInsideLayoutDiagnostics.log('work_surface_closed target=document');
+  }
+
+  Future<void> _openOperations(BuildContext context) async {
+    final state = context.read<SecondaryState>();
+    final roleAllowed = _singleOperationsRoleAllowed(state.role);
+    final sectionAllowed = state.canAccess(Section.user);
+    final allowed = roleAllowed && sectionAllowed;
+    _SingleInsideLayoutDiagnostics.log(
+      'work_surface_open target=user_management allowed=$allowed role=${state.role.name} roleAllowed=$roleAllowed sectionAllowed=$sectionAllowed reason=${state.accessDebugReason(Section.user)}',
+    );
+    if (!allowed) return;
+    HapticFeedback.selectionClick();
+    await showSecondarySideDock<void>(
+      context: context,
+      barrierLabel: '운영 관리',
+      initialSection: Section.user,
+    );
+    _SingleInsideLayoutDiagnostics.log('work_surface_closed target=user_management');
+  }
+
+  void _handleScheduleChanged() {
+    if (!mounted) return;
+    setState(() => _scheduleRevision++);
+    _SingleInsideLayoutDiagnostics.log(
+      'work_schedule_changed revision=$_scheduleRevision',
+    );
+  }
+
+  Widget _buildCompactBrand(double availableHeight) {
+    if (availableHeight < 720) return const SizedBox.shrink();
+    const height = 48.0;
+    return CommonAnimatedReveal(
+      offset: const Offset(0, -0.025),
+      child: const SizedBox(
+        height: height,
+        child: _BrandTintedLogo(
+          assetPath: 'assets/images/ParkinWorkin_logo.png',
+          height: height,
+        ),
       ),
     );
   }
@@ -393,96 +496,328 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
     required String userName,
     required String area,
     required String division,
-    required double footerHeight,
+    required bool showOperations,
   }) {
-    return SingleChildScrollView(
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 64, 24, 24),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxHeight < 560;
+        final veryCompact = constraints.maxHeight < 430;
+        final horizontal = constraints.maxWidth < 420 ? 12.0 : 18.0;
+        final vertical = veryCompact ? 6.0 : compact ? 8.0 : 12.0;
+        final gap = veryCompact ? 4.0 : compact ? 6.0 : 10.0;
+        final signature =
+            'fixed_layout viewport=${constraints.maxWidth.toStringAsFixed(1)}x${constraints.maxHeight.toStringAsFixed(1)} compact=$compact veryCompact=$veryCompact horizontal=$horizontal vertical=$vertical showOperations=$showOperations mode=${mode.name} scheduleRevision=$_scheduleRevision';
+        if (_lastLayoutSignature != signature) {
+          _lastLayoutSignature = signature;
+          _SingleInsideLayoutDiagnostics.log(signature);
+        }
+
+        return Padding(
+          padding: EdgeInsets.fromLTRB(horizontal, vertical, horizontal, vertical),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const SingleInsideHeaderWidgetSection(),
-              const SizedBox(height: 12),
-              const DbConnectionStatusSection(),
-              const SizedBox(height: 12),
+              _buildCompactBrand(constraints.maxHeight),
+              if (constraints.maxHeight >= 720) SizedBox(height: gap),
+              SingleInsideWorkScheduleSection(
+                onChanged: _handleScheduleChanged,
+              ),
+              SizedBox(height: gap),
               SingleInsidePunchRecorderSection(
                 userId: userId,
                 userName: userName,
                 area: area,
                 division: division,
+                scheduleRevision: _scheduleRevision,
               ),
-              const SizedBox(height: 6),
-              if (mode == SingleInsideMode.leader)
-                const _CommonModeButtonGrid()
-              else
-                const _TeamModeButtonGrid(),
-              const SizedBox(height: 1),
-              Center(
-                child: SizedBox(
-                  height: footerHeight,
-                  child: _BrandTintedLogo(
-                    assetPath: 'assets/images/ParkinWorkin_text.png',
-                    height: footerHeight,
+              SizedBox(height: gap),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: CommonAnimatedReveal(
+                    delay: const Duration(milliseconds: 90),
+                    offset: const Offset(0, 0.035),
+                    child: _SingleInsideWorkListSurface(
+                      showReport: mode == SingleInsideMode.leader,
+                      showOperations: showOperations,
+                      compact: compact,
+                      veryCompact: veryCompact,
+                      onReport: () => _openReport(context),
+                      onDocuments: () => _openDocuments(context),
+                      onOperations: () => _openOperations(context),
+                    ),
                   ),
                 ),
               ),
-              const SizedBox(height: 24),
             ],
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final footerHeight = _calcFooterHeight(context);
+    return CommonUiScope(
+      child: Builder(
+        builder: (context) {
+          final tokens = CommonUiTheme.of(context);
+          return PopScope(
+            canPop: false,
+            child: Scaffold(
+              backgroundColor: tokens.canvas,
+              appBar: _buildAppBar(context),
+              bottomNavigationBar: const _SingleInsideDataDownloadDock(),
+              body: Consumer2<UserState, SecondaryState>(
+                builder: (context, userState, secondaryState, _) {
+                  final mode = _resolveMode(userState);
+                  final session = userState.session;
+                  if (session == null) {
+                    return Center(
+                      child: CircularProgressIndicator(color: tokens.accent),
+                    );
+                  }
 
-    return PopScope(
-      canPop: false,
-      child: Scaffold(
-        bottomNavigationBar: const _SingleInsideDataDownloadDock(),
-        body: Consumer<UserState>(
-          builder: (context, userState, _) {
-            final mode = _resolveMode(userState);
+                  final userId = session.id;
+                  final userName = session.displayName;
+                  final area = userState.currentArea;
+                  final division = userState.division;
+                  final roleAllowed =
+                      _singleOperationsRoleAllowed(secondaryState.role);
+                  final sectionAllowed =
+                      secondaryState.canAccess(Section.user);
+                  final showOperations = roleAllowed && sectionAllowed;
 
-            final session = userState.session;
-            if (session == null) {
-              return Center(
-                child: CircularProgressIndicator(color: cs.primary),
-              );
-            }
+                  final userSignature =
+                      'userId=$userId userName=$userName area=$area division=$division normalizedRole=${secondaryState.role.name} operationsVisible=$showOperations roleAllowed=$roleAllowed secondaryUserAccess=$sectionAllowed';
+                  if (_lastUserSignature != userSignature) {
+                    _lastUserSignature = userSignature;
+                    _SingleInsideLayoutDiagnostics.log(
+                      'punch_props $userSignature',
+                    );
+                  }
 
-            final String userId = session.id;
-            final String userName = session.displayName;
-            final String area = userState.currentArea;
-            final String division = userState.division;
-
-            debugPrint(
-              '[SingleInsideScreen] punchRecorder props → '
-                  'userId="$userId", userName="$userName", area="$area", division="$division"',
-            );
-
-            return SafeArea(
-              child: Stack(
-                children: [
-                  _buildContent(
+                  return _buildContent(
                     context: context,
                     mode: mode,
                     userId: userId,
                     userName: userName,
                     area: area,
                     division: division,
-                    footerHeight: footerHeight,
+                    showOperations: showOperations,
+                  );
+                },
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _SingleInsideWorkListSurface extends StatelessWidget {
+  const _SingleInsideWorkListSurface({
+    required this.showReport,
+    required this.showOperations,
+    required this.compact,
+    required this.veryCompact,
+    required this.onReport,
+    required this.onDocuments,
+    required this.onOperations,
+  });
+
+  final bool showReport;
+  final bool showOperations;
+  final bool compact;
+  final bool veryCompact;
+  final VoidCallback onReport;
+  final VoidCallback onDocuments;
+  final VoidCallback onOperations;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    final rows = <Widget>[
+      if (showReport)
+        _SingleInsideWorkRow(
+          icon: Icons.assignment_outlined,
+          label: '업무 보고',
+          enabled: true,
+          compact: compact,
+          veryCompact: veryCompact,
+          onTap: onReport,
+        ),
+      _SingleInsideWorkRow(
+        icon: Icons.folder_open_rounded,
+        label: '서류함 열기',
+        enabled: true,
+        compact: compact,
+        veryCompact: veryCompact,
+        onTap: onDocuments,
+      ),
+      if (showOperations)
+        CommonAnimatedReveal(
+          delay: const Duration(milliseconds: 60),
+          offset: const Offset(0, 0.025),
+          child: _SingleInsideWorkRow(
+            icon: Icons.admin_panel_settings_outlined,
+            label: '운영 관리',
+            enabled: true,
+            compact: compact,
+            veryCompact: veryCompact,
+            onTap: onOperations,
+          ),
+        ),
+    ];
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 720),
+      child: OpsDockListSurface(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (var index = 0; index < rows.length; index++) ...[
+              if (index > 0)
+                Divider(height: 1, thickness: 1, color: tokens.borderSubtle),
+              rows[index],
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SingleInsideWorkRow extends StatefulWidget {
+  const _SingleInsideWorkRow({
+    required this.icon,
+    required this.label,
+    required this.enabled,
+    required this.compact,
+    required this.veryCompact,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool enabled;
+  final bool compact;
+  final bool veryCompact;
+  final VoidCallback onTap;
+
+  @override
+  State<_SingleInsideWorkRow> createState() => _SingleInsideWorkRowState();
+}
+
+class _SingleInsideWorkRowState extends State<_SingleInsideWorkRow> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final foreground =
+        widget.enabled ? tokens.textPrimary : tokens.textDisabled;
+    final iconColor = widget.enabled ? tokens.accent : tokens.iconDisabled;
+    final verticalPadding = widget.veryCompact
+        ? 3.0
+        : widget.compact
+            ? 8.0
+            : 11.0;
+    final iconBox = widget.veryCompact
+        ? 30.0
+        : widget.compact
+            ? 34.0
+            : 38.0;
+    final iconSize = widget.veryCompact
+        ? 18.0
+        : widget.compact
+            ? 19.0
+            : 21.0;
+
+    return Semantics(
+      button: true,
+      enabled: widget.enabled,
+      label: widget.label,
+      child: AnimatedScale(
+        scale: _pressed ? .985 : 1,
+        duration: reduceMotion ? Duration.zero : CommonUiMotion.press,
+        curve: CommonUiMotion.enter,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: widget.enabled ? widget.onTap : null,
+            onHighlightChanged: widget.enabled
+                ? (value) {
+                    if (!mounted || _pressed == value) return;
+                    setState(() => _pressed = value);
+                  }
+                : null,
+            child: AnimatedContainer(
+              duration:
+                  reduceMotion ? Duration.zero : CommonUiMotion.selection,
+              curve: CommonUiMotion.standard,
+              padding: EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: verticalPadding,
+              ),
+              color: _pressed
+                  ? tokens.surfaceSelected.withOpacity(.6)
+                  : Colors.transparent,
+              child: Row(
+                children: [
+                  AnimatedContainer(
+                    duration:
+                        reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                    curve: CommonUiMotion.standard,
+                    width: iconBox,
+                    height: iconBox,
+                    decoration: BoxDecoration(
+                      color: widget.enabled
+                          ? tokens.accentContainer
+                          : tokens.surfaceDisabled,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(
+                      widget.icon,
+                      color: iconColor,
+                      size: iconSize,
+                    ),
                   ),
-                  _buildScreenTag(context),
-                  _buildTerminalLauncher(context),
-                  _buildMenu(context, cs),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      widget.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: foreground,
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  AnimatedSwitcher(
+                    duration:
+                        reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                    child: Icon(
+                      widget.enabled
+                          ? Icons.chevron_right_rounded
+                          : Icons.lock_outline_rounded,
+                      key: ValueKey<bool>(widget.enabled),
+                      color: widget.enabled
+                          ? tokens.iconSecondary
+                          : tokens.iconDisabled,
+                      size: 22,
+                    ),
+                  ),
                 ],
               ),
-            );
-          },
+            ),
+          ),
         ),
       ),
     );
@@ -918,38 +1253,3 @@ class _SingleInsideDataDownloadDockState
   }
 }
 
-class _CommonModeButtonGrid extends StatelessWidget {
-  const _CommonModeButtonGrid();
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: const [
-        Row(
-          children: [
-            Expanded(child: SingleInsideReportButtonSection()),
-            SizedBox(width: 12),
-            Expanded(child: SingleInsideDocumentBoxButtonSection()),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _TeamModeButtonGrid extends StatelessWidget {
-  const _TeamModeButtonGrid();
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: const [
-        Row(
-          children: [
-            Expanded(child: SingleInsideDocumentBoxButtonSection()),
-          ],
-        ),
-      ],
-    );
-  }
-}

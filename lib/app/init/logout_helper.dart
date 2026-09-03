@@ -3,7 +3,6 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../app/di/routes.dart';
 import '../../features/account/applications/user_state.dart';
 import '../../features/dashboard/applications/common/firebase_google_auth_bridge.dart';
 import '../../features/dev/application/area_state.dart';
@@ -15,6 +14,7 @@ import '../../shared/tts/services/plate/plate_tts_listener_service.dart';
 import '../utils/block_dialog/blocking_dialog.dart';
 import '../utils/developer_operation_status_dialog.dart';
 import '../utils/snackbar_helper.dart';
+import 'logout_completion_exit_dialog.dart';
 
 class LogoutHelper {
   static Future<void> logoutAndGoToLogin(
@@ -23,8 +23,21 @@ class LogoutHelper {
     bool checkWorking = false,
     Duration delay = const Duration(milliseconds: 500),
     bool useCommonUi = false,
+  }) {
+    return logoutAndExit(
+      context,
+      checkWorking: checkWorking,
+      delay: delay,
+      useCommonUi: useCommonUi,
+    );
+  }
+
+  static Future<void> logoutAndExit(
+    BuildContext context, {
+    bool checkWorking = false,
+    Duration delay = const Duration(milliseconds: 500),
+    bool useCommonUi = false,
   }) async {
-    final target = route ?? AppRoutes.modeLauncher;
     final trace = await DeveloperOperationTrace.start(
       context: context,
       title: '로그아웃 상태',
@@ -114,13 +127,15 @@ class LogoutHelper {
         );
       }
 
+      trace.log(
+        '로그아웃이 성공적으로 완료되었습니다. 앱 종료 Dialog를 표시합니다.',
+        progress: 0.98,
+      );
       await trace.succeed('로그아웃과 Area 세션 캐시 초기화가 완료되었습니다.');
 
       if (!context.mounted) return;
-      Navigator.of(context).pushNamedAndRemoveUntil(target, (route) => false);
-      showSuccessSnackbar(
+      await LogoutCompletionExitDialog.show(
         context,
-        '로그아웃 되었습니다.',
         useCommonUi: useCommonUi,
       );
     } catch (e, st) {

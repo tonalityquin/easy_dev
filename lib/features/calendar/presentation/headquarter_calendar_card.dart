@@ -10,11 +10,12 @@ import '../../../design_system/common_ui/common_ui_side_dock.dart';
 import '../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../shared/calendar/calendar_public_text.dart';
 import '../../../shared/google_calendar/google_event_colors.dart';
+import '../../../shared/secondary/widgets/ops_console_widgets.dart';
 import '../../selector/application/dev_auth.dart';
 import '../../sprint/application/sprint_mode_store.dart';
 import '../../sprint/domain/sprint_models.dart';
 import '../../sprint/pages/sprint_external_event_editor_sheet.dart';
-import '../../sprint/pages/sprint_project_workspace_sheet.dart';
+import 'headquarter_calendar_account_side_dock.dart';
 import '../../sprint/pages/sprint_task_detail_sheet.dart';
 import 'headquarter_calendar_side_dock.dart';
 
@@ -310,7 +311,7 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard>
     if (_store.editableCalendarProfiles.isEmpty) {
       await _showInfoDialog(
         title: '일정 추가',
-        message: '일정 변경 권한이 있는 캘린더를 먼저 연결하세요.',
+        message: '일정을 추가할 수 있는 캘린더가 없습니다.',
       );
       return;
     }
@@ -593,7 +594,7 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard>
     );
   }
 
-  Future<void> _openAccountSheet() async {
+  Future<void> _openAccountSideDock() async {
     if (!_store.initialized ||
         _store.calendarState == SprintCalendarConnectionState.syncing) {
       return;
@@ -602,36 +603,36 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard>
     final trace = await DeveloperOperationTrace.start(
       context: context,
       title: '캘린더 연결',
-      initialMessage: '캘린더 연결 BottomSheet를 엽니다.',
+      initialMessage: '캘린더 연결 Left Side Dock을 엽니다.',
       useCommonUi: widget.useCommonUi,
       showDialogImmediately: false,
       developerModeMessage:
-          '개발자 모드 ON: 계정 BottomSheet 동작 로그를 완료 후 복사할 수 있습니다.',
+          '개발자 모드 ON: 계정 Side Dock 동작 로그를 완료 후 복사할 수 있습니다.',
       standardModeMessage:
-          '개발자 모드 OFF: 계정 BottomSheet 동작 로그를 콘솔에 기록합니다.',
+          '개발자 모드 OFF: 계정 Side Dock 동작 로그를 콘솔에 기록합니다.',
     );
     if (!mounted) return;
     trace.log('before ${_calendarAccountDiagnostics()}', progress: 0.18);
     HapticFeedback.selectionClick();
 
     try {
-      await showSprintAccountSheet(
+      await showHeadquarterCalendarAccountSideDock(
         context: context,
         store: _store,
       );
       if (!mounted) return;
       _store.ensureCalendarRangeFor(_monthAnchor, immediate: true);
       trace.log('after ${_calendarAccountDiagnostics()}', progress: 0.86);
-      await trace.succeed('캘린더 연결 BottomSheet를 닫았습니다.');
+      await trace.succeed('캘린더 연결 Left Side Dock을 닫았습니다.');
       if (!mounted || !trace.developerMode) return;
       await trace.showSnapshotStatusDialog(
         context,
         title: '캘린더 연결',
-        description: '계정 BottomSheet 동작의 debugPrint 코드를 복사할 수 있습니다.',
+        description: '계정 Side Dock 동작의 debugPrint 코드를 복사할 수 있습니다.',
       );
     } catch (error, stackTrace) {
       await trace.fail(
-        '캘린더 연결 BottomSheet 처리에 실패했습니다.',
+        '캘린더 연결 Left Side Dock 처리에 실패했습니다.',
         error: error,
         stackTrace: stackTrace,
       );
@@ -657,182 +658,95 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard>
         _store.initialized && state != SprintCalendarConnectionState.syncing;
     final errorState = state == SprintCalendarConnectionState.failed ||
         state == SprintCalendarConnectionState.reauthenticationRequired;
+    final tokens = CommonUiTheme.of(context);
     final cs = Theme.of(context).colorScheme;
-
-    if (extreme) {
-      return AnimatedContainer(
-        duration: duration,
-        curve: Curves.easeOutCubic,
-        decoration: BoxDecoration(
-          color: errorState
-              ? cs.errorContainer.withOpacity(.32)
-              : cs.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(13),
-          border: Border.all(
-            color: errorState
-                ? cs.error.withOpacity(.26)
-                : cs.outlineVariant.withOpacity(.58),
-          ),
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(13),
-            onTap: enabled ? _openAccountSheet : null,
-            onLongPress: _showAccountDeveloperStatus,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 9),
-              child: Row(
-                children: [
-                  Icon(
+    return GestureDetector(
+      onLongPress: _showAccountDeveloperStatus,
+      child: OpsDockSelectableRowSurface(
+        selected: false,
+      selectionColor: tokens.accent,
+      selectedContainer: tokens.accentContainer,
+      onTap: enabled ? _openAccountSideDock : () {},
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 10 : 12,
+        vertical: extreme ? 7 : compact ? 8 : 10,
+      ),
+      child: Row(
+        children: [
+          AnimatedSwitcher(
+            duration: duration,
+            child: state == SprintCalendarConnectionState.syncing
+                ? const SizedBox(
+                    key: ValueKey<String>('hq-calendar-account-syncing'),
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2.2),
+                  )
+                : Icon(
                     errorState
                         ? Icons.event_busy_outlined
-                        : Icons.event_available_outlined,
-                    color: errorState ? cs.error : cs.primary,
-                    size: 17,
-                  ),
-                  const SizedBox(width: 7),
-                  Expanded(
-                    child: Text(
-                      '캘린더 연결',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w900,
-                      ),
+                        : profileCount > 1
+                            ? Icons.calendar_view_month_rounded
+                            : Icons.event_available_outlined,
+                    key: ValueKey<String>(
+                      'hq-calendar-account-${state.name}-$profileCount',
                     ),
+                    color: errorState ? cs.error : tokens.accent,
+                    size: 20,
                   ),
-                  AnimatedSwitcher(
-                    duration: duration,
-                    child: Text(
-                      _calendarStateLabel(state),
-                      key: ValueKey<SprintCalendarConnectionState>(state),
-                      style: TextStyle(
-                        color: errorState ? cs.error : cs.onSurfaceVariant,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                      ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: CommonAdaptiveTwoLineContent(
+              gap: compact ? 2 : 3,
+              title: Text(
+                'Google Calendar',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w900,
                     ),
-                  ),
-                  const SizedBox(width: 4),
-                  Icon(
-                    Icons.chevron_right_rounded,
-                    color: cs.onSurfaceVariant,
-                    size: 17,
-                  ),
-                ],
+              ),
+              subtitle: Text(
+                _calendarAccountSubtitle,
+                maxLines: compact ? 1 : 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: tokens.textSecondary,
+                      fontWeight: FontWeight.w700,
+                    ),
               ),
             ),
           ),
-        ),
-      );
-    }
-
-    return AnimatedContainer(
-      duration: duration,
-      curve: Curves.easeOutCubic,
-      decoration: BoxDecoration(
-        color: errorState
-            ? cs.errorContainer.withOpacity(.32)
-            : cs.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: errorState
-              ? cs.error.withOpacity(.26)
-              : cs.outlineVariant.withOpacity(.58),
-        ),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: enabled ? _openAccountSheet : null,
-          onLongPress: _showAccountDeveloperStatus,
-          child: Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: compact ? 10 : 14,
-              vertical: compact ? 8 : 10,
+          const SizedBox(width: 8),
+          AnimatedSwitcher(
+            duration: duration,
+            transitionBuilder: (child, animation) => FadeTransition(
+              opacity: animation,
+              child: ScaleTransition(
+                scale: Tween<double>(begin: .96, end: 1).animate(animation),
+                child: child,
+              ),
             ),
-            child: Row(
-              children: [
-                AnimatedContainer(
-                  duration: duration,
-                  curve: Curves.easeOutCubic,
-                  width: compact ? 34 : 42,
-                  height: compact ? 34 : 42,
-                  decoration: BoxDecoration(
-                    color: errorState
-                        ? cs.errorContainer
-                        : cs.primaryContainer,
-                    borderRadius: BorderRadius.circular(13),
-                  ),
-                  alignment: Alignment.center,
-                  child: AnimatedSwitcher(
-                    duration: duration,
-                    child: Icon(
-                      profileCount > 1
-                          ? Icons.calendar_view_month_rounded
-                          : Icons.event_available_outlined,
-                      key: ValueKey<int>(profileCount),
-                      color: errorState
-                          ? cs.onErrorContainer
-                          : cs.onPrimaryContainer,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: CommonAdaptiveTwoLineContent(
-                    gap: compact ? 2 : 3,
-                    title: Text(
-                      '캘린더 연결',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w900,
-                          ),
-                    ),
-                    subtitle: AnimatedSwitcher(
-                      duration: duration,
-                      switchInCurve: Curves.easeOutCubic,
-                      switchOutCurve: Curves.easeInCubic,
-                      child: Text(
-                        _calendarAccountSubtitle,
-                        key: ValueKey<String>(_calendarAccountSubtitle),
-                        maxLines: compact ? 1 : 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: cs.onSurfaceVariant,
-                              fontWeight: FontWeight.w700,
-                            ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                AnimatedSwitcher(
-                  duration: duration,
-                  child: state == SprintCalendarConnectionState.syncing
-                      ? const SizedBox(
-                          key: ValueKey<String>('hq-calendar-account-syncing'),
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(strokeWidth: 2.4),
-                        )
-                      : Icon(
-                          Icons.chevron_right_rounded,
-                          key: const ValueKey<String>(
-                            'hq-calendar-account-ready',
-                          ),
-                          color: enabled
-                              ? cs.onSurfaceVariant
-                              : cs.outline.withOpacity(.5),
-                        ),
-                ),
-              ],
+            child: Text(
+              _calendarStateLabel(state),
+              key: ValueKey<SprintCalendarConnectionState>(state),
+              style: TextStyle(
+                color: errorState ? cs.error : tokens.textSecondary,
+                fontSize: 11,
+                fontWeight: FontWeight.w900,
+              ),
             ),
           ),
+          const SizedBox(width: 4),
+          Icon(
+            Icons.chevron_right_rounded,
+            color: enabled
+                ? tokens.textSecondary
+                : tokens.textSecondary.withOpacity(.45),
+            size: 18,
+          ),
+          ],
         ),
       ),
     );
@@ -1087,76 +1001,11 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard>
           HeadquarterCalendarSideDockDiagnostics.log(layoutLog);
         }
 
-        final content = Container(
-          padding: EdgeInsets.all(outerPadding),
-          decoration: BoxDecoration(
-            color: cs.surface,
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: cs.outlineVariant.withOpacity(.65)),
-            boxShadow: <BoxShadow>[
-              BoxShadow(
-                color: tokens.shadow,
-                blurRadius: 18,
-                offset: const Offset(0, 7),
-              ),
-            ],
-          ),
+        final listSurface = OpsDockListSurface(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              SizedBox(
-                height: headerHeight,
-                child: Row(
-                  children: [
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: tokens.accentContainer,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      alignment: Alignment.center,
-                      child: Icon(
-                        Icons.calendar_month_rounded,
-                        color: tokens.onAccentContainer,
-                        size: 18,
-                      ),
-                    ),
-                    const SizedBox(width: 9),
-                    Expanded(
-                      child: Text(
-                        '일정',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              color: tokens.textPrimary,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: -.15,
-                            ),
-                      ),
-                    ),
-                    ValueListenableBuilder<bool>(
-                      valueListenable: DevAuth.devModeEnabled,
-                      builder: (context, enabled, child) {
-                        if (!enabled) return const SizedBox.shrink();
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 4),
-                          child: IconButton(
-                            onPressed: _showCalendarDeveloperStatus,
-                            tooltip: '상태',
-                            visualDensity: VisualDensity.compact,
-                            icon: Icon(
-                              Icons.bug_report_outlined,
-                              color: tokens.textSecondary,
-                              size: 18,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                    if (widget.headerTrailing != null) widget.headerTrailing!,
-                  ],
-                ),
-              ),
-              SizedBox(height: gap),
               if (widget.showAccountEntry) ...[
                 AnimatedContainer(
                   duration: duration,
@@ -1169,7 +1018,7 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard>
                     extreme: extreme,
                   ),
                 ),
-                SizedBox(height: gap),
+                Divider(height: 1, thickness: 1, color: tokens.borderSubtle),
               ],
               SizedBox(
                 height: monthHeight,
@@ -1181,12 +1030,33 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard>
                       icon: const Icon(Icons.chevron_left_rounded),
                     ),
                     Expanded(
-                      child: Text(
-                        '${_visibleMonth.year}년 ${_visibleMonth.month.toString().padLeft(2, '0')}월',
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w900,
+                      child: AnimatedSwitcher(
+                        duration: reduceMotion
+                            ? Duration.zero
+                            : const Duration(milliseconds: 180),
+                        transitionBuilder: (child, animation) {
+                          if (reduceMotion) return child;
+                          return FadeTransition(
+                            opacity: animation,
+                            child: SlideTransition(
+                              position: Tween<Offset>(
+                                begin: const Offset(.035, 0),
+                                end: Offset.zero,
+                              ).animate(animation),
+                              child: child,
                             ),
+                          );
+                        },
+                        child: Text(
+                          '${_visibleMonth.year}년 ${_visibleMonth.month.toString().padLeft(2, '0')}월',
+                          key: ValueKey<String>(
+                            '${_visibleMonth.year}-${_visibleMonth.month}',
+                          ),
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w900,
+                              ),
+                        ),
                       ),
                     ),
                     IconButton(
@@ -1216,39 +1086,42 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard>
                     IconButton(
                       onPressed: _store.initialized ? _openCreate : null,
                       visualDensity: VisualDensity.compact,
-                      icon: const Icon(Icons.add_circle_rounded),
+                      icon: const Icon(Icons.add_rounded),
                       tooltip: '일정 추가',
                     ),
                   ],
                 ),
               ),
-              SizedBox(height: gap),
-              SizedBox(
-                height: weekdaysHeight,
-                child: Row(
-                  children: _weekdays
-                      .map(
-                        (day) => Expanded(
-                          child: Center(
-                            child: Text(
-                              day,
-                              style: TextStyle(
-                                color: cs.onSurfaceVariant,
-                                fontWeight: FontWeight.w900,
-                                fontSize: compact ? 11 : 12,
+              Divider(height: 1, thickness: 1, color: tokens.borderSubtle),
+              Padding(
+                padding: EdgeInsets.fromLTRB(5, gap * .55, 5, gap * .35),
+                child: SizedBox(
+                  height: weekdaysHeight,
+                  child: Row(
+                    children: _weekdays
+                        .map(
+                          (day) => Expanded(
+                            child: Center(
+                              child: Text(
+                                day,
+                                style: TextStyle(
+                                  color: cs.onSurfaceVariant,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: compact ? 11 : 12,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                      )
-                      .toList(growable: false),
+                        )
+                        .toList(growable: false),
+                  ),
                 ),
               ),
-              SizedBox(height: gap * .6),
               AnimatedContainer(
                 duration: duration,
                 curve: Curves.easeOutCubic,
                 height: gridHeight,
+                padding: EdgeInsets.fromLTRB(4, 0, 4, gap * .35),
                 child: (_store.initializing || !_store.initialized) &&
                         _initializationError == null
                     ? const Center(child: CircularProgressIndicator())
@@ -1276,70 +1149,145 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard>
                             compact: compact,
                           ),
               ),
-              SizedBox(height: gap),
-              SizedBox(
-                height: selectedHeaderHeight,
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        '${_selectedDay.month}월 ${_selectedDay.day}일 ${_weekdays[_selectedDay.weekday % 7]}요일',
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w900,
-                            ),
-                      ),
-                    ),
-                    AnimatedSwitcher(
-                      duration: duration,
-                      child: Text(
-                        '${events.length}개',
-                        key: ValueKey<int>(events.length),
-                        style: TextStyle(
-                          color: cs.onSurfaceVariant,
-                          fontWeight: FontWeight.w800,
+              Divider(height: 1, thickness: 1, color: tokens.borderSubtle),
+              Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: compact ? 10 : 12,
+                  vertical: gap * .45,
+                ),
+                child: SizedBox(
+                  height: selectedHeaderHeight,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '${_selectedDay.month}월 ${_selectedDay.day}일 ${_weekdays[_selectedDay.weekday % 7]}요일',
+                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w900,
+                              ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-              SizedBox(height: gap * .6),
-              SizedBox(
-                height: previewHeight,
-                child: AnimatedSwitcher(
-                  duration: duration,
-                  switchInCurve: Curves.easeOutCubic,
-                  switchOutCurve: Curves.easeInCubic,
-                  transitionBuilder: (child, animation) {
-                    if (reduceMotion) return child;
-                    return FadeTransition(
-                      opacity: animation,
-                      child: SlideTransition(
-                        position: Tween<Offset>(
-                          begin: const Offset(0, .035),
-                          end: Offset.zero,
-                        ).animate(animation),
-                        child: child,
+                      AnimatedSwitcher(
+                        duration: duration,
+                        transitionBuilder: (child, animation) => FadeTransition(
+                          opacity: animation,
+                          child: ScaleTransition(
+                            scale: Tween<double>(begin: .96, end: 1)
+                                .animate(animation),
+                            child: child,
+                          ),
+                        ),
+                        child: Text(
+                          '${events.length}개',
+                          key: ValueKey<int>(events.length),
+                          style: TextStyle(
+                            color: cs.onSurfaceVariant,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
                       ),
-                    );
-                  },
-                  child: Align(
-                    key: ValueKey<String>(
-                      '${_dateKey(_selectedDay)}-${events.map((event) => event.id).join('|')}',
-                    ),
-                    alignment: Alignment.topCenter,
-                    child: _buildPreviewArea(
-                      events: events,
-                      previewEvents: previewEvents,
-                      hiddenCount: hiddenCount,
-                      compact: compact,
-                      ultra: ultra,
-                    ),
+                    ],
                   ),
                 ),
               ),
+              if (previewHeight > 0) ...[
+                Divider(height: 1, thickness: 1, color: tokens.borderSubtle),
+                SizedBox(
+                  height: previewHeight,
+                  child: AnimatedSwitcher(
+                    duration: duration,
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (child, animation) {
+                      if (reduceMotion) return child;
+                      return FadeTransition(
+                        opacity: animation,
+                        child: SlideTransition(
+                          position: Tween<Offset>(
+                            begin: const Offset(0, .035),
+                            end: Offset.zero,
+                          ).animate(animation),
+                          child: child,
+                        ),
+                      );
+                    },
+                    child: Align(
+                      key: ValueKey<String>(
+                        '${_dateKey(_selectedDay)}-${events.map((event) => event.id).join('|')}',
+                      ),
+                      alignment: Alignment.topCenter,
+                      child: _buildPreviewArea(
+                        events: events,
+                        previewEvents: previewEvents,
+                        hiddenCount: hiddenCount,
+                        compact: compact,
+                        ultra: ultra,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
+        );
+
+        final header = SizedBox(
+          height: headerHeight,
+          child: Row(
+            children: [
+              Icon(Icons.calendar_month_rounded, color: tokens.accent, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '일정',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: tokens.textPrimary,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -.15,
+                      ),
+                ),
+              ),
+              ValueListenableBuilder<bool>(
+                valueListenable: DevAuth.devModeEnabled,
+                builder: (context, enabled, child) {
+                  if (!enabled) return const SizedBox.shrink();
+                  return IconButton(
+                    onPressed: _showCalendarDeveloperStatus,
+                    tooltip: '상태',
+                    visualDensity: VisualDensity.compact,
+                    icon: Icon(
+                      Icons.bug_report_outlined,
+                      color: tokens.textSecondary,
+                      size: 18,
+                    ),
+                  );
+                },
+              ),
+              if (widget.headerTrailing != null) widget.headerTrailing!,
+            ],
+          ),
+        );
+
+        final content = Padding(
+          padding: EdgeInsets.all(outerPadding),
+          child: widget.fillViewport && constraints.maxHeight.isFinite
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    header,
+                    SizedBox(height: gap),
+                    Expanded(child: listSurface),
+                  ],
+                )
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    header,
+                    SizedBox(height: gap),
+                    listSurface,
+                  ],
+                ),
         );
 
         if (!widget.fillViewport || !constraints.maxHeight.isFinite) {
@@ -1363,27 +1311,44 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard>
     if (events.isEmpty) {
       return _EmptyBox(onAdd: _openCreate, compact: compact);
     }
+    final tokens = CommonUiTheme.of(context);
+    final children = <Widget>[];
+    for (final event in previewEvents) {
+      if (children.isNotEmpty) {
+        children.add(
+          Divider(height: 1, thickness: 1, color: tokens.borderSubtle),
+        );
+      }
+      children.add(
+        _EventTile(
+          event: event,
+          color: _itemColor(context, event),
+          onTap: () => _openItem(event),
+          compact: true,
+          ultra: ultra,
+        ),
+      );
+    }
+    if (hiddenCount > 0) {
+      if (children.isNotEmpty) {
+        children.add(
+          Divider(height: 1, thickness: 1, color: tokens.borderSubtle),
+        );
+      }
+      children.add(
+        _MoreEventsButton(
+          hiddenCount: hiddenCount,
+          onTap: _openFullScheduleDock,
+          compact: compact,
+        ),
+      );
+    }
     return Column(
       key: ValueKey<String>(
         '${_dateKey(_selectedDay)}-${events.map((event) => event.id).join('|')}',
       ),
       mainAxisSize: MainAxisSize.min,
-      children: [
-        for (final event in previewEvents)
-          _EventTile(
-            event: event,
-            color: _itemColor(context, event),
-            onTap: () => _openItem(event),
-            compact: true,
-            ultra: ultra,
-          ),
-        if (hiddenCount > 0)
-          _MoreEventsButton(
-            hiddenCount: hiddenCount,
-            onTap: _openFullScheduleDock,
-            compact: compact,
-          ),
-      ],
+      children: children,
     );
   }
 
@@ -1629,36 +1594,34 @@ class _DayCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final tokens = CommonUiTheme.of(context);
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final duration =
+        reduceMotion ? Duration.zero : const Duration(milliseconds: 140);
     final foreground = selected
-        ? cs.onPrimary
+        ? cs.primary
         : inMonth
             ? cs.onSurface
-            : cs.onSurfaceVariant.withOpacity(.45);
-    final background = selected
-        ? cs.primary
-        : today
-            ? cs.primaryContainer.withOpacity(.45)
-            : tokens.transparent;
+            : cs.onSurfaceVariant.withOpacity(.42);
+    final indicator = important ? cs.error : cs.primary;
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(8),
       child: AnimatedContainer(
-        duration:
-            reduceMotion ? Duration.zero : const Duration(milliseconds: 160),
+        duration: duration,
         curve: Curves.easeOutCubic,
-        margin: EdgeInsets.all(dense ? .5 : compact ? 1 : 2),
+        margin: EdgeInsets.all(dense ? .5 : compact ? 1 : 1.5),
         padding: dense
             ? EdgeInsets.zero
-            : EdgeInsets.fromLTRB(3, compact ? 3 : 5, 3, compact ? 2 : 4),
+            : EdgeInsets.fromLTRB(3, compact ? 2 : 4, 3, compact ? 2 : 3),
         decoration: BoxDecoration(
-          color: background,
-          borderRadius: BorderRadius.circular(12),
-          border: today && !selected
-              ? Border.all(color: cs.primary.withOpacity(.45))
-              : null,
+          color: selected ? cs.primary.withOpacity(.08) : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: selected
+              ? Border.all(color: cs.primary, width: 1.2)
+              : today
+                  ? Border.all(color: cs.primary.withOpacity(.42), width: 1)
+                  : null,
         ),
         child: dense
             ? Stack(
@@ -1668,9 +1631,8 @@ class _DayCell extends StatelessWidget {
                     '$day',
                     style: TextStyle(
                       color: foreground,
-                      fontWeight: selected || today
-                          ? FontWeight.w900
-                          : FontWeight.w700,
+                      fontWeight:
+                          selected || today ? FontWeight.w900 : FontWeight.w700,
                       fontSize: 9,
                       height: 1,
                     ),
@@ -1678,15 +1640,12 @@ class _DayCell extends StatelessWidget {
                   if (count > 0)
                     Positioned(
                       bottom: 1,
-                      child: Container(
-                        width: 5,
-                        height: 5,
+                      child: AnimatedContainer(
+                        duration: duration,
+                        width: important ? 6 : 5,
+                        height: important ? 6 : 5,
                         decoration: BoxDecoration(
-                          color: selected
-                              ? cs.onPrimary
-                              : important
-                                  ? cs.error
-                                  : cs.secondary,
+                          color: indicator,
                           shape: BoxShape.circle,
                         ),
                       ),
@@ -1694,51 +1653,54 @@ class _DayCell extends StatelessWidget {
                 ],
               )
             : Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
                     '$day',
                     style: TextStyle(
                       color: foreground,
-                      fontWeight: selected || today
-                          ? FontWeight.w900
-                          : FontWeight.w700,
+                      fontWeight:
+                          selected || today ? FontWeight.w900 : FontWeight.w700,
                       fontSize: compact ? 11 : 12,
                     ),
                   ),
-                  const Spacer(),
-                  if (count > 0)
-                    AnimatedContainer(
-                      duration: reduceMotion
-                          ? Duration.zero
-                          : const Duration(milliseconds: 160),
-                      constraints: BoxConstraints(minWidth: compact ? 18 : 20),
-                      height: compact ? 15 : 18,
-                      padding: const EdgeInsets.symmetric(horizontal: 5),
-                      decoration: BoxDecoration(
-                        color: selected
-                            ? cs.onPrimary.withOpacity(.2)
-                            : important
-                                ? cs.errorContainer
-                                : cs.secondaryContainer,
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        count > 99 ? '99+' : '$count',
-                        style: TextStyle(
-                          color: selected
-                              ? cs.onPrimary
-                              : important
-                                  ? cs.onErrorContainer
-                                  : cs.onSecondaryContainer,
-                          fontSize: compact ? 8 : 9,
-                          fontWeight: FontWeight.w900,
-                          height: 1,
-                        ),
-                      ),
-                    )
-                  else
-                    SizedBox(height: compact ? 15 : 18),
+                  SizedBox(height: compact ? 2 : 3),
+                  AnimatedSwitcher(
+                    duration: duration,
+                    child: count <= 0
+                        ? SizedBox(
+                            key: const ValueKey<String>('day-empty'),
+                            height: compact ? 8 : 10,
+                          )
+                        : Row(
+                            key: ValueKey<String>('day-count-$count-$important'),
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                width: important ? 6 : 5,
+                                height: important ? 6 : 5,
+                                decoration: BoxDecoration(
+                                  color: indicator,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              if (!compact) ...[
+                                const SizedBox(width: 3),
+                                Text(
+                                  count > 99 ? '99+' : '$count',
+                                  style: TextStyle(
+                                    color: selected
+                                        ? cs.primary
+                                        : cs.onSurfaceVariant,
+                                    fontSize: 8,
+                                    fontWeight: FontWeight.w900,
+                                    height: 1,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                  ),
                 ],
               ),
       ),
@@ -1763,97 +1725,83 @@ class _EventTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final tokens = CommonUiTheme.of(context);
-    final reduceMotion =
-        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    final duration =
-        reduceMotion ? Duration.zero : const Duration(milliseconds: 180);
-    return Padding(
-      padding: EdgeInsets.only(bottom: ultra ? 3 : compact ? 4 : 7),
-      child: Material(
-        color: tokens.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
-          child: AnimatedContainer(
-            duration: duration,
-            curve: Curves.easeOutCubic,
-            padding: EdgeInsets.symmetric(
-              horizontal: compact ? 9 : 11,
-              vertical: ultra ? 5 : compact ? 7 : 11,
-            ),
+    final cs = Theme.of(context).colorScheme;
+    return OpsDockSelectableRowSurface(
+      selected: false,
+      selectionColor: color,
+      selectedContainer: color.withOpacity(.12),
+      onTap: onTap,
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 10 : 12,
+        vertical: ultra ? 5 : compact ? 7 : 10,
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: ultra ? 28 : compact ? 30 : 34,
+            height: ultra ? 28 : compact ? 30 : 34,
             decoration: BoxDecoration(
-              color: Color.alphaBlend(color.withOpacity(.07), cs.surface),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: color.withOpacity(.2)),
+              color: color.withOpacity(.10),
+              borderRadius: BorderRadius.circular(compact ? 8 : 10),
             ),
-            child: Row(
+            alignment: Alignment.center,
+            child: Icon(event.icon, color: color, size: compact ? 17 : 19),
+          ),
+          SizedBox(width: compact ? 8 : 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                AnimatedContainer(
-                  duration: duration,
-                  width: ultra ? 28 : compact ? 30 : 34,
-                  height: ultra ? 28 : compact ? 30 : 34,
-                  decoration: BoxDecoration(
-                    color: color.withOpacity(.12),
-                    borderRadius: BorderRadius.circular(compact ? 9 : 11),
-                  ),
-                  child: Icon(event.icon, color: color, size: compact ? 17 : 19),
-                ),
-                SizedBox(width: compact ? 8 : 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        event.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.w900),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        '${_HeadquarterCalendarCardState._rangeLabel(event)} · ${event.profileLabel}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: cs.onSurfaceVariant,
-                          fontSize: compact ? 11 : 12,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
+                Text(
+                  event.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: tokens.textPrimary,
+                    fontWeight: FontWeight.w900,
                   ),
                 ),
-                if (event.isTask)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 6),
-                    child: Icon(
-                      Icons.bolt_rounded,
-                      color: color,
-                      size: 17,
-                    ),
-                  )
-                else if (!event.editable)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 6),
-                    child: Icon(
-                      Icons.lock_outline_rounded,
-                      color: cs.onSurfaceVariant,
-                      size: 17,
-                    ),
+                const SizedBox(height: 3),
+                Text(
+                  '${_HeadquarterCalendarCardState._rangeLabel(event)} · ${event.profileLabel}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: tokens.textSecondary,
+                    fontSize: compact ? 11 : 12,
+                    fontWeight: FontWeight.w700,
                   ),
-                const Icon(Icons.chevron_right_rounded, size: 18),
+                ),
               ],
             ),
           ),
-        ),
+          if (event.isTask)
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: Icon(Icons.bolt_rounded, color: color, size: 17),
+            )
+          else if (!event.editable)
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: Icon(
+                Icons.lock_outline_rounded,
+                color: cs.onSurfaceVariant,
+                size: 17,
+              ),
+            ),
+          Icon(
+            Icons.chevron_right_rounded,
+            color: tokens.textSecondary,
+            size: 18,
+          ),
+        ],
       ),
     );
   }
 }
 
-class _MoreEventsButton extends StatefulWidget {
+class _MoreEventsButton extends StatelessWidget {
   const _MoreEventsButton({
     required this.hiddenCount,
     required this.onTap,
@@ -1865,94 +1813,39 @@ class _MoreEventsButton extends StatefulWidget {
   final bool compact;
 
   @override
-  State<_MoreEventsButton> createState() => _MoreEventsButtonState();
-}
-
-class _MoreEventsButtonState extends State<_MoreEventsButton> {
-  bool _pressed = false;
-  bool _hovered = false;
-  bool _focused = false;
-
-  @override
   Widget build(BuildContext context) {
     final tokens = CommonUiTheme.of(context);
-    final reduceMotion =
-        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    final duration = reduceMotion ? Duration.zero : CommonUiMotion.selection;
-    return FocusableActionDetector(
-      onShowHoverHighlight: (value) {
-        if (mounted) setState(() => _hovered = value);
+    return OpsDockSelectableRowSurface(
+      selected: false,
+      selectionColor: tokens.accent,
+      selectedContainer: tokens.accentContainer,
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
       },
-      onShowFocusHighlight: (value) {
-        if (mounted) setState(() => _focused = value);
-      },
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTapDown: (_) => setState(() => _pressed = true),
-        onTapCancel: () => setState(() => _pressed = false),
-        onTapUp: (_) {
-          setState(() => _pressed = false);
-          HapticFeedback.selectionClick();
-          widget.onTap();
-        },
-        child: AnimatedScale(
-          duration: reduceMotion ? Duration.zero : CommonUiMotion.press,
-          curve: CommonUiMotion.standard,
-          scale: _pressed ? .98 : 1,
-          child: AnimatedContainer(
-            duration: duration,
-            curve: CommonUiMotion.enter,
-            padding: EdgeInsets.symmetric(
-              horizontal: widget.compact ? 10 : 12,
-              vertical: widget.compact ? 7 : 9,
-            ),
-            decoration: BoxDecoration(
-              color: _hovered ? tokens.surfaceSelected : tokens.surfaceRaised,
-              borderRadius: BorderRadius.circular(13),
-              border: Border.all(
-                color: _focused
-                    ? tokens.focusRing
-                    : _hovered
-                        ? tokens.accent.withOpacity(.36)
-                        : tokens.borderSubtle,
-                width: _focused ? 2 : 1,
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 10 : 12,
+        vertical: compact ? 7 : 9,
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.view_agenda_outlined, color: tokens.accent, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '+ $hiddenCount개 일정 더 보기',
+              style: TextStyle(
+                color: tokens.textPrimary,
+                fontWeight: FontWeight.w900,
               ),
-              boxShadow: _hovered
-                  ? [
-                      BoxShadow(
-                        color: tokens.shadow.withOpacity(tokens.isDark ? .22 : .08),
-                        blurRadius: 9,
-                        offset: const Offset(0, 4),
-                      ),
-                    ]
-                  : const [],
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.view_agenda_outlined, color: tokens.accent, size: 18),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    '+ ${widget.hiddenCount}개 일정 더 보기',
-                    style: TextStyle(
-                      color: tokens.textPrimary,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
-                AnimatedSlide(
-                  duration: duration,
-                  offset: _hovered ? const Offset(.12, 0) : Offset.zero,
-                  child: Icon(
-                    Icons.chevron_right_rounded,
-                    color: tokens.textSecondary,
-                    size: 18,
-                  ),
-                ),
-              ],
             ),
           ),
-        ),
+          Icon(
+            Icons.chevron_right_rounded,
+            color: tokens.textSecondary,
+            size: 18,
+          ),
+        ],
       ),
     );
   }
@@ -1966,30 +1859,75 @@ class _EmptyBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: compact ? 10 : 12),
-      decoration: BoxDecoration(
-        border: Border.all(color: cs.outlineVariant),
-        borderRadius: BorderRadius.circular(14),
+    final tokens = CommonUiTheme.of(context);
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final duration =
+        reduceMotion ? Duration.zero : const Duration(milliseconds: 180);
+    return OpsDockSelectableRowSurface(
+      selected: false,
+      selectionColor: tokens.accent,
+      selectedContainer: tokens.accentContainer,
+      onTap: () {
+        HeadquarterCalendarSideDockDiagnostics.log(
+          'empty_schedule_add_request',
+        );
+        HapticFeedback.selectionClick();
+        onAdd();
+      },
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 10 : 12,
+        vertical: compact ? 7 : 9,
       ),
       child: Row(
         children: [
-          const Expanded(
+          AnimatedContainer(
+            duration: duration,
+            curve: Curves.easeOutCubic,
+            width: compact ? 30 : 34,
+            height: compact ? 30 : 34,
+            decoration: BoxDecoration(
+              color: tokens.accentContainer.withOpacity(.55),
+              borderRadius: BorderRadius.circular(compact ? 8 : 10),
+            ),
+            alignment: Alignment.center,
+            child: Icon(
+              Icons.event_available_outlined,
+              color: tokens.accent,
+              size: compact ? 17 : 19,
+            ),
+          ),
+          SizedBox(width: compact ? 8 : 10),
+          Expanded(
             child: Text(
               '선택한 날짜에 일정이 없습니다.',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: tokens.textPrimary,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
-          TextButton.icon(
-            onPressed: onAdd,
-            style: TextButton.styleFrom(
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          const SizedBox(width: 8),
+          AnimatedSwitcher(
+            duration: duration,
+            child: Row(
+              key: const ValueKey<String>('empty-calendar-add'),
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.add_rounded, color: tokens.accent, size: 18),
+                const SizedBox(width: 4),
+                Text(
+                  '일정 추가',
+                  style: TextStyle(
+                    color: tokens.accent,
+                    fontWeight: FontWeight.w900,
+                    fontSize: compact ? 11 : 12,
+                  ),
+                ),
+              ],
             ),
-            icon: const Icon(Icons.add_rounded, size: 18),
-            label: const Text('일정 추가'),
           ),
         ],
       ),

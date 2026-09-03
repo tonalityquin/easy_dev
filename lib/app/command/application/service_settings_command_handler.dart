@@ -1,19 +1,20 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../app/auth/gmail_sender_auth.dart';
-import '../../../app/auth/gmail_sender_diagnostics.dart';
 import '../../../app/config/email_config.dart';
-import '../../../app/config/gmail_sender_config.dart';
 import '../../../app/config/overlay_edge_side_config.dart';
 import '../../../app/config/overlay_mode_config.dart';
 import '../../../app/theme/brand_theme.dart';
 import '../../../app/theme/theme_prefs_controller.dart';
+import '../../../app/utils/status_dialog.dart';
 import '../../../features/dev/application/debug_session_controller.dart';
 import '../../../features/selector/application/dev_auth.dart';
+import '../../../shared/area_remote_settings/application/area_snapshot_scope.dart';
 import 'terminal_command_path.dart';
 
 class ServiceSettingsCommandResult {
@@ -135,7 +136,7 @@ class ServiceSettingsCommandHandler {
         return _email(args.skip(1).toList());
       case 'edit':
         if (args.length == 2 && args[1] == 'email') {
-          return _beginEmailEdit();
+          return await _beginEmailEdit();
         }
         return const ServiceSettingsCommandResult.failure(<String>[
           '[error] edit',
@@ -332,14 +333,115 @@ class ServiceSettingsCommandHandler {
     ];
   }
 
+  static final List<String> _areaEmailDebugLines = <String>[];
+
+  static void _recordAreaEmailDebug(
+    String event, {
+    String source = '',
+    Map<String, Object?> meta = const <String, Object?>{},
+  }) {
+    final fields = <String>[
+      '[AREA_EMAIL]',
+      'timestamp=${DateTime.now().toIso8601String()}',
+      'event=$event',
+      if (source.isNotEmpty) 'source=${jsonEncode(source)}',
+      'division=${jsonEncode(AreaSnapshotScope.division)}',
+      'area=${jsonEncode(AreaSnapshotScope.area)}',
+    ];
+    for (final entry in meta.entries) {
+      fields.add('${entry.key}=${jsonEncode(entry.value?.toString() ?? '')}');
+    }
+    final line = fields.join(' ');
+    debugPrint(line);
+    _areaEmailDebugLines.add(line);
+    if (_areaEmailDebugLines.length > 160) {
+      _areaEmailDebugLines.removeRange(
+        0,
+        _areaEmailDebugLines.length - 160,
+      );
+    }
+  }
+
+  static String get _areaEmailDebugPrintCode {
+    if (_areaEmailDebugLines.isEmpty) {
+      return 'debugPrint(${jsonEncode('[AREA_EMAIL] 기록된 로그가 없습니다.')});';
+    }
+    return _areaEmailDebugLines
+        .map((line) => 'debugPrint(${jsonEncode(line)});')
+        .join('\n');
+  }
+
+  static Future<void> showEmailEditDeveloperStatus(
+    BuildContext context, {
+    required bool succeeded,
+  }) async {
+    if (!context.mounted) return;
+    final enabled = await DevAuth.isDevModeEnabled();
+    if (!enabled || !context.mounted) return;
+    var storedEmail = '';
+    try {
+      final area = await AreaSnapshotScope.readCurrentArea();
+      storedEmail = area?.email.trim() ?? '';
+    } catch (error, stackTrace) {
+      _recordAreaEmailDebug(
+        'developer_status_read_failed',
+        meta: <String, Object?>{'error': error},
+      );
+      debugPrint('[AREA_EMAIL] developer status read failed error=$error');
+      debugPrint(stackTrace.toString());
+    }
+    if (!context.mounted) return;
+    _recordAreaEmailDebug(
+      'developer_status_open',
+      meta: <String, Object?>{
+        'succeeded': succeeded,
+        'storedEmail': storedEmail,
+        'lines': _areaEmailDebugLines.length,
+      },
+    );
+    final description = <String>[
+      'division=${AreaSnapshotScope.division.isEmpty ? '-' : AreaSnapshotScope.division}',
+      'area=${AreaSnapshotScope.area.isEmpty ? '-' : AreaSnapshotScope.area}',
+      'email=${storedEmail.isEmpty ? '-' : storedEmail}',
+      'inputMode=gmail_local_part',
+      'gmailSuffix=${EmailConfig.gmailSuffix}',
+      'storage=headquarter_snapshot.db/areas.email',
+    ].join('\n');
+    if (succeeded) {
+      await StatusDialog.showSuccess(
+        context,
+        title: '수신 이메일 상태',
+        description: description,
+        copyText: _areaEmailDebugPrintCode,
+        copyButtonLabel: 'debugPrint 코드 복사',
+        visibleDuration: Duration.zero,
+        useCommonUi: true,
+        awaitManualClose: true,
+      );
+      return;
+    }
+    await StatusDialog.showFailure(
+      context,
+      title: '수신 이메일 상태',
+      description: description,
+      copyText: _areaEmailDebugPrintCode,
+      copyButtonLabel: 'debugPrint 코드 복사',
+      visibleDuration: Duration.zero,
+      useCommonUi: true,
+      awaitManualClose: true,
+    );
+  }
+
   static Future<List<String>> _emailHelpLines({
     bool includeCurrent = true,
   }) async {
-    final status = await GmailSenderAuth.status();
+    final area = await AreaSnapshotScope.readCurrentArea();
+    final current = area?.email.trim() ?? '';
     return <String>[
       'EMAIL',
-      if (includeCurrent) ...status.statusLines,
-      'local-part only  ${GmailSenderConfig.suffix}',
+      if (includeCurrent) 'division     ${AreaSnapshotScope.division.isEmpty ? '-' : AreaSnapshotScope.division}',
+      if (includeCurrent) 'area         ${AreaSnapshotScope.area.isEmpty ? '-' : AreaSnapshotScope.area}',
+      if (includeCurrent) 'current      ${current.isEmpty ? '-' : current}',
       '',
       'COMMAND',
       'email',
@@ -355,19 +457,22 @@ class ServiceSettingsCommandHandler {
         'edit email',
       ]);
     }
-    final status = await GmailSenderAuth.status();
-    GmailSenderDiagnostics.record(
+    final area = await AreaSnapshotScope.readCurrentArea();
+    final current = area?.email.trim() ?? '';
+    _recordAreaEmailDebug(
       'terminal_status',
       meta: <String, Object?>{
-        'configured': status.configuredEmail.isEmpty ? '-' : status.configuredEmail,
-        'authenticated': status.authenticatedEmail.isEmpty ? '-' : status.authenticatedEmail,
-        'state': status.state,
+        'bound': AreaSnapshotScope.isBound,
+        'found': area != null,
+        'email': current,
       },
     );
     return ServiceSettingsCommandResult.success(<String>[
       'EMAIL STATUS',
       '────────────────────────────────',
-      ...status.statusLines,
+      'division       ${AreaSnapshotScope.division.isEmpty ? '-' : AreaSnapshotScope.division}',
+      'area           ${AreaSnapshotScope.area.isEmpty ? '-' : AreaSnapshotScope.area}',
+      'email          ${current.isEmpty ? '-' : current}',
       '────────────────────────────────',
       '',
       '수정하려면:',
@@ -375,14 +480,39 @@ class ServiceSettingsCommandHandler {
     ]);
   }
 
-  static ServiceSettingsCommandResult _beginEmailEdit() {
-    GmailSenderDiagnostics.record('terminal_edit_begin');
-    return const ServiceSettingsCommandResult.success(
+  static Future<ServiceSettingsCommandResult> _beginEmailEdit() async {
+    if (!AreaSnapshotScope.isBound) {
+      _recordAreaEmailDebug('terminal_edit_begin_rejected', meta: const <String, Object?>{'reason': 'scope_not_bound'});
+      return const ServiceSettingsCommandResult.failure(<String>[
+        '[error] 현재 domain이 바인딩되어 있지 않습니다.',
+        'email',
+      ]);
+    }
+    final area = await AreaSnapshotScope.readCurrentArea();
+    if (area == null) {
+      _recordAreaEmailDebug('terminal_edit_begin_rejected', meta: const <String, Object?>{'reason': 'area_not_found'});
+      return ServiceSettingsCommandResult.failure(<String>[
+        '[error] 로컬 domain 데이터를 찾을 수 없습니다.',
+        'division       ${AreaSnapshotScope.division}',
+        'area           ${AreaSnapshotScope.area}',
+        'email',
+      ]);
+    }
+    final current = area.email.trim();
+    _recordAreaEmailDebug(
+      'terminal_edit_begin',
+      meta: <String, Object?>{'current': current},
+    );
+    return ServiceSettingsCommandResult.success(
       <String>[
         'EMAIL EDIT',
         '────────────────────────────────',
+        'division       ${AreaSnapshotScope.division}',
+        'area           ${AreaSnapshotScope.area}',
+        'current        ${current.isEmpty ? '-' : current}',
+        '',
         'Gmail 앞자리만 입력하세요.',
-        'domain          @gmail.com',
+        '여러 주소는 쉼표로 구분할 수 있습니다.',
         'cancel로 취소할 수 있습니다.',
         '────────────────────────────────',
       ],
@@ -391,49 +521,98 @@ class ServiceSettingsCommandHandler {
   }
 
   static Future<ServiceSettingsCommandResult> submitEmailEdit(
-    String rawLocalPart, {
+    String rawLocalParts, {
     required String source,
   }) async {
-    final localPart = GmailSenderConfig.normalizeLocalPart(rawLocalPart);
-    GmailSenderDiagnostics.record(
+    final normalizedLocalParts =
+        EmailConfig.normalizeGmailLocalPartList(rawLocalParts);
+    final localPartsValid =
+        EmailConfig.isValidGmailLocalPartList(normalizedLocalParts);
+    _recordAreaEmailDebug(
       'terminal_edit_submit',
+      source: source,
       meta: <String, Object?>{
-        'source': source,
-        'length': localPart.length,
+        'inputMode': 'gmail_local_part',
+        'gmailSuffix': EmailConfig.gmailSuffix,
+        'localParts': normalizedLocalParts,
+        'valid': localPartsValid,
       },
     );
-    if (!GmailSenderConfig.isValidLocalPart(localPart)) {
+    if (!AreaSnapshotScope.isBound) {
+      _recordAreaEmailDebug(
+        'terminal_edit_failed',
+        source: source,
+        meta: const <String, Object?>{'reason': 'scope_not_bound'},
+      );
       return const ServiceSettingsCommandResult.failure(<String>[
-        '[error] Gmail 앞자리를 확인하세요.',
-        '영문 소문자, 숫자, 마침표만 사용할 수 있습니다.',
-        '마침표는 처음·끝·연속으로 사용할 수 없습니다.',
+        '[error] 현재 domain이 바인딩되어 있지 않습니다.',
+        'email',
       ]);
     }
-    final before = await GmailSenderConfig.readEmail() ?? '-';
+    if (!localPartsValid) {
+      _recordAreaEmailDebug(
+        'terminal_edit_failed',
+        source: source,
+        meta: <String, Object?>{
+          'reason': 'invalid_gmail_local_part',
+          'inputMode': 'gmail_local_part',
+        },
+      );
+      return ServiceSettingsCommandResult.failure(<String>[
+        '[error] Gmail 앞자리를 확인하세요.',
+        '${EmailConfig.gmailSuffix}을 제외한 앞자리만 입력해야 합니다.',
+        '여러 주소는 쉼표로 구분할 수 있습니다.',
+      ]);
+    }
+
+    final completedEmail =
+        EmailConfig.gmailAddressListFromLocalParts(normalizedLocalParts);
+    final beforeConfig = await EmailConfig.load();
+    final before = beforeConfig.to.trim();
     try {
-      final status = await GmailSenderAuth.authenticateAndSetLocalPart(localPart);
+      final saved = await EmailConfig.saveLocal(completedEmail);
+      final after = saved.to.trim();
+      _recordAreaEmailDebug(
+        'terminal_edit_complete',
+        source: source,
+        meta: <String, Object?>{
+          'inputMode': 'gmail_local_part',
+          'gmailSuffix': EmailConfig.gmailSuffix,
+          'inputLocalParts': normalizedLocalParts,
+          'before': before,
+          'after': after,
+          'storage': 'headquarter_snapshot.db/areas.email',
+        },
+      );
       return ServiceSettingsCommandResult.success(
         <String>[
-          'email: $before -> ${status.configuredEmail}',
-          'oauth: ${status.state}',
-          '[ok] Gmail 발신 계정 준비 완료',
+          'division       ${AreaSnapshotScope.division}',
+          'area           ${AreaSnapshotScope.area}',
+          'email: ${before.isEmpty ? '-' : before} -> $after',
+          '[ok] recipient email updated',
         ],
         nextPath: TerminalCommandPath.setting,
       );
     } catch (error, stackTrace) {
-      GmailSenderDiagnostics.record(
+      _recordAreaEmailDebug(
         'terminal_edit_failed',
+        source: source,
         meta: <String, Object?>{
-          'source': source,
+          'reason': 'save_failed',
+          'inputMode': 'gmail_local_part',
+          'gmailSuffix': EmailConfig.gmailSuffix,
+          'inputLocalParts': normalizedLocalParts,
+          'completedEmail': completedEmail,
           'error': error,
         },
       );
-      debugPrint('[GMAIL_SENDER] terminal edit failed error=$error');
+      debugPrint('[AREA_EMAIL] terminal edit failed error=$error');
       debugPrint(stackTrace.toString());
       return ServiceSettingsCommandResult.failure(<String>[
-        '[error] Gmail 계정 인증을 완료하지 못했습니다.',
-        'configured     $before',
-        'requested      ${GmailSenderConfig.emailForLocalPart(localPart)}',
+        '[error] 수신 이메일을 저장하지 못했습니다.',
+        'division       ${AreaSnapshotScope.division}',
+        'area           ${AreaSnapshotScope.area}',
+        'current        ${before.isEmpty ? '-' : before}',
         'email',
       ]);
     }

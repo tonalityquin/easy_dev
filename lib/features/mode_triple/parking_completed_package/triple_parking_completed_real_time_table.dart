@@ -99,6 +99,8 @@ class TripleParkingCompletedRealTimeTable extends StatelessWidget {
       screen: 'triple_reverse_table_embedded',
       description: '자동 갱신됩니다.',
       viewModeAuto: const RealTimeViewModeAutoSpec(),
+      useListContextSurface: true,
+      showColoredSwipeChevrons: true,
       bodyBuilder: statusPreview
           ? (ctx, spec, ctrl) => RealTimeStatusPreviewBody(
                 controller: ctrl,

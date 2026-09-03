@@ -151,23 +151,10 @@ class WorkSchedulePrefs {
     ];
   }
 
-  static List<String> normalizeBreakDaysForWorkingMap({
-    required Iterable<String> breakDays,
-    required Map<String, TimeOfDay?> startByDay,
-    required Map<String, TimeOfDay?> endByDay,
-  }) {
-    final breakSet = normalizeDayList(breakDays).toSet();
-    final out = <String>[];
-    for (final day in days) {
-      if (!breakSet.contains(day)) continue;
-      if (startByDay[day] == null || endByDay[day] == null) continue;
-      out.add(day);
-    }
-    for (final value in breakSet) {
-      if (!days.contains(value)) out.add(value);
-    }
-    return out;
+  static List<String> normalizeBreakDays(Iterable<String> breakDays) {
+    return normalizeDayList(breakDays);
   }
+
 
   static Map<String, TimeOfDay?> _fillLegacyDays(
     TimeOfDay? time, {
@@ -289,11 +276,7 @@ class WorkSchedulePrefs {
       startByDay: normalizedStart,
       endByDay: normalizedEnd,
     );
-    final normalizedBreakDays = normalizeBreakDaysForWorkingMap(
-      breakDays: breakDays,
-      startByDay: normalizedStart,
-      endByDay: normalizedEnd,
-    );
+    final normalizedBreakDays = normalizeBreakDays(breakDays);
 
     await prefs.setString(startMapKey, encodeDayTimeMap(normalizedStart));
     await prefs.setString(endMapKey, encodeDayTimeMap(normalizedEnd));
@@ -313,11 +296,7 @@ class WorkSchedulePrefs {
       prefs: prefs,
       startByDay: startByDay,
       endByDay: endByDay,
-      breakDays: normalizeBreakDaysForWorkingMap(
-        breakDays: user.breakDays,
-        startByDay: startByDay,
-        endByDay: endByDay,
-      ),
+      breakDays: normalizeBreakDays(user.breakDays),
     );
   }
 

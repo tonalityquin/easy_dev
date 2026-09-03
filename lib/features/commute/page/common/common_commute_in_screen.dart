@@ -13,7 +13,7 @@ import '../../../../app/utils/status_dialog.dart';
 import '../../../../app/tutorial/widgets/app_start_cinematic_reveal.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../account/applications/user_state.dart';
-import '../../../dashboard/applications/common/endtime_reminder_service.dart';
+import '../../../attendance/application/common_attendance_service.dart';
 import '../../../dev/debug/debug_action_recorder.dart';
 import '../../../launcher/application/launcher_diagnostics.dart';
 import '../../../launcher/widgets/app_power_action_control.dart';
@@ -58,7 +58,7 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
       MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
   String get _screenId =>
-      widget.spec.traceScreenId ?? '${widget.spec.modeKey}_commute_inside';
+      widget.spec.traceScreenId ?? '${widget.spec.diagnosticKey}_commute_inside';
 
   @override
   void initState() {
@@ -72,7 +72,7 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
     LauncherDiagnostics.record(
       'commute_power_gate_init',
       scope: 'commute_power',
-      meta: <String, Object?>{'mode': widget.spec.modeKey},
+      meta: <String, Object?>{'mode': widget.spec.diagnosticKey},
     );
     unawaited(DevAuth.isDevModeEnabled());
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -98,7 +98,7 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
     LauncherDiagnostics.record(
       'commute_working_check_start',
       scope: 'commute_power',
-      meta: <String, Object?>{'mode': widget.spec.modeKey},
+      meta: <String, Object?>{'mode': widget.spec.diagnosticKey},
     );
 
     await userState.ensureTodayClockInStatus();
@@ -108,9 +108,9 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
       LauncherDiagnostics.record(
         'commute_stale_working_detected',
         scope: 'commute_power',
-        meta: <String, Object?>{'mode': widget.spec.modeKey},
+        meta: <String, Object?>{'mode': widget.spec.diagnosticKey},
       );
-      await _resetStaleWorkingState(userState);
+      await _resetStaleWorkingState();
     }
     if (!mounted) return;
 
@@ -119,7 +119,7 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
         'commute_redirect_working',
         scope: 'commute_power',
         meta: <String, Object?>{
-          'mode': widget.spec.modeKey,
+          'mode': widget.spec.diagnosticKey,
           'hasClockInToday': userState.hasClockInToday,
         },
       );
@@ -134,7 +134,7 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
     LauncherDiagnostics.record(
       'commute_power_gate_ready',
       scope: 'commute_power',
-      meta: <String, Object?>{'mode': widget.spec.modeKey},
+      meta: <String, Object?>{'mode': widget.spec.diagnosticKey},
     );
     if (_reduceMotion) {
       _revealController.value = 1;
@@ -143,11 +143,13 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
     }
   }
 
-  Future<void> _resetStaleWorkingState(UserState userState) async {
-    await userState.isHeWorking();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(kIsWorkingPrefsKey, false);
-    await EndTimeReminderService.instance.cancel();
+  Future<void> _resetStaleWorkingState() async {
+    await CommonAttendanceService.resetStaleWorkingState(
+      context,
+      source: 'commute_gate_stale:${widget.spec.diagnosticKey}',
+      modeKey: widget.spec.modeKey,
+      isHeadquarter: widget.spec.isHeadquarterContext ? true : null,
+    );
   }
 
   Future<void> _handleLogout() async {
@@ -158,7 +160,7 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
     LauncherDiagnostics.record(
       'commute_logout_requested',
       scope: 'commute_power',
-      meta: <String, Object?>{'mode': widget.spec.modeKey},
+      meta: <String, Object?>{'mode': widget.spec.diagnosticKey},
     );
     await LogoutHelper.logoutAndGoToLogin(
       context,
@@ -176,7 +178,7 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
     LauncherDiagnostics.record(
       'commute_exit_requested',
       scope: 'commute_power',
-      meta: <String, Object?>{'mode': widget.spec.modeKey},
+      meta: <String, Object?>{'mode': widget.spec.diagnosticKey},
     );
     await AppExitService.exitApp(context, useCommonUi: true);
   }
@@ -192,7 +194,7 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
       'commute_mode_launcher_requested',
       scope: 'commute_power',
       meta: <String, Object?>{
-        'mode': widget.spec.modeKey,
+        'mode': widget.spec.diagnosticKey,
         'savedModeCleared': true,
       },
     );
@@ -222,7 +224,7 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
       'commute_clock_in_issue_start',
       scope: 'commute_power',
       meta: <String, Object?>{
-        'mode': widget.spec.modeKey,
+        'mode': widget.spec.diagnosticKey,
         'stage': _stage.name,
         'issueVisible': _showClockInIssueResolution,
       },
@@ -261,7 +263,7 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
       'commute_clock_in_issue_action_hidden',
       scope: 'commute_power',
       meta: <String, Object?>{
-        'mode': widget.spec.modeKey,
+        'mode': widget.spec.diagnosticKey,
         'reason': 'resolved',
       },
     );
@@ -269,7 +271,7 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
       'commute_clock_in_issue_complete',
       scope: 'commute_power',
       meta: <String, Object?>{
-        'mode': widget.spec.modeKey,
+        'mode': widget.spec.diagnosticKey,
         'working': userState.isWorking,
         'clockInToday': userState.hasClockInToday,
       },
@@ -293,7 +295,7 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
       'commute_clock_in_issue_failure',
       scope: 'commute_power',
       meta: <String, Object?>{
-        'mode': widget.spec.modeKey,
+        'mode': widget.spec.diagnosticKey,
         'reason': reason,
         if (detail.isNotEmpty) 'detail': detail,
         if (stackTrace.isNotEmpty) 'stack': stackTrace,
@@ -325,7 +327,7 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
       'commute_clock_in_issue_failure_developer_status',
       scope: 'commute_power',
       meta: <String, Object?>{
-        'mode': widget.spec.modeKey,
+        'mode': widget.spec.diagnosticKey,
         'reason': reason,
         if (detail.isNotEmpty) 'detail': detail,
       },
@@ -338,13 +340,13 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
     LauncherDiagnostics.record(
       'commute_status_requested',
       scope: 'commute_power',
-      meta: <String, Object?>{'mode': widget.spec.modeKey},
+      meta: <String, Object?>{'mode': widget.spec.diagnosticKey},
     );
     await LauncherDiagnostics.showStatus(
       context,
       title: 'Commute Power Status',
       description: <String>[
-        'Mode: ${widget.spec.modeKey}',
+        'Context: ${widget.spec.diagnosticKey}',
         'Stage: ${_stage.name}',
         'Working: ${userState.isWorking}',
         'Clock-in today: ${userState.hasClockInToday}',
@@ -368,7 +370,7 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
       'commute_power_exit_start',
       scope: 'commute_power',
       meta: <String, Object?>{
-        'mode': widget.spec.modeKey,
+        'mode': widget.spec.diagnosticKey,
         'destination': destination,
         'route': route,
       },
@@ -383,7 +385,7 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
       'commute_power_exit_complete',
       scope: 'commute_power',
       meta: <String, Object?>{
-        'mode': widget.spec.modeKey,
+        'mode': widget.spec.diagnosticKey,
         'destination': destination,
         'route': route,
       },
@@ -410,7 +412,7 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
         'commute_clock_in_issue_action_hidden',
         scope: 'commute_power',
         meta: <String, Object?>{
-          'mode': widget.spec.modeKey,
+          'mode': widget.spec.diagnosticKey,
           'reason': 'clock_in_retry',
         },
       );
@@ -418,7 +420,7 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
     LauncherDiagnostics.record(
       'commute_power_pressed',
       scope: 'commute_power',
-      meta: <String, Object?>{'mode': widget.spec.modeKey},
+      meta: <String, Object?>{'mode': widget.spec.diagnosticKey},
     );
     _trace(
       '출근 파워 버튼',
@@ -440,7 +442,7 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
         'commute_power_result',
         scope: 'commute_power',
         meta: <String, Object?>{
-          'mode': widget.spec.modeKey,
+          'mode': widget.spec.diagnosticKey,
           'resultType': result.type.name,
           'destination': result.destination.name,
         },
@@ -485,7 +487,7 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
           'commute_clock_in_issue_action_revealed',
           scope: 'commute_power',
           meta: <String, Object?>{
-            'mode': widget.spec.modeKey,
+            'mode': widget.spec.diagnosticKey,
             'reason': 'already_worked',
           },
         );
@@ -495,7 +497,7 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
             'commute_clock_in_issue_developer_status',
             scope: 'commute_power',
             meta: <String, Object?>{
-              'mode': widget.spec.modeKey,
+              'mode': widget.spec.diagnosticKey,
               'reason': 'already_worked',
             },
           );
@@ -530,7 +532,7 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
             'commute_power_navigate',
             scope: 'commute_power',
             meta: <String, Object?>{
-              'mode': widget.spec.modeKey,
+              'mode': widget.spec.diagnosticKey,
               'destination': 'headquarter',
               'route': widget.spec.headquarterRoute,
             },
@@ -554,7 +556,7 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
             'commute_power_navigate',
             scope: 'commute_power',
             meta: <String, Object?>{
-              'mode': widget.spec.modeKey,
+              'mode': widget.spec.diagnosticKey,
               'destination': 'type',
               'route': widget.spec.typeRoute,
             },
@@ -588,7 +590,7 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
         'commute_power_exception',
         scope: 'commute_power',
         meta: <String, Object?>{
-          'mode': widget.spec.modeKey,
+          'mode': widget.spec.diagnosticKey,
           'error': error,
           'stack': stackTrace,
         },

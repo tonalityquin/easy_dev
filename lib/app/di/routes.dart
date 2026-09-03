@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import '../../features/community/page/community_stub_page.dart';
 import '../../features/community/page/faq_page.dart';
 import '../../features/commute/page/double/double_commute_in_screen.dart';
+import '../../features/commute/page/headquarter/headquarter_commute_in_screen.dart';
 import '../../features/commute/page/minor/minor_commute_in_screen.dart';
+import '../../features/commute/page/single/single_commute_in_screen.dart';
 import '../../features/commute/page/triple/triple_commute_in_screen.dart';
 import '../../features/commute/widgets/commute_destination_cinematic_entry.dart';
 import '../../features/dashboard/pages/common/headquarter_page.dart';
@@ -59,10 +61,12 @@ class AppRoutes {
 
   static const commute = '/commute';
   static const singleCommute = '/single_commute';
+  static const singleInside = '/single_inside';
   static const doubleCommute = '/double_commute';
   static const tripleCommute = '/triple_commute';
   static const minorCommute = '/minor_commute';
 
+  static const headquarterCommute = '/headquarter_commute';
   static const headquarterPage = '/headquarter_page';
   static const singleHeadquarterPage = '/single_headquarter_page';
   static const doubleHeadquarterPage = '/double_headquarter_page';
@@ -147,8 +151,13 @@ final Map<String, WidgetBuilder> appRoutes = {
   AppRoutes.tripleLogin: _buildModeLauncherPage,
   AppRoutes.minorLogin: _buildModeLauncherPage,
   AppRoutes.practiceSpaceLab: (context) => const PracticeSpaceLabScreen(),
+  AppRoutes.headquarterCommute: (context) => const HeadquarterCommuteInScreen(),
   AppRoutes.doubleCommute: (context) => const DoubleCommuteInScreen(),
-  AppRoutes.singleCommute: (context) => const SingleInsideScreen(),
+  AppRoutes.singleCommute: (context) => const SingleCommuteInScreen(),
+  AppRoutes.singleInside: (context) => const CommuteDestinationCinematicEntry(
+        routeName: AppRoutes.singleInside,
+        child: SingleInsideScreen(),
+      ),
   AppRoutes.tripleCommute: (context) => const TripleCommuteInScreen(),
   AppRoutes.minorCommute: (context) => const MinorCommuteInScreen(),
   AppRoutes.headquarterPage: (context) =>

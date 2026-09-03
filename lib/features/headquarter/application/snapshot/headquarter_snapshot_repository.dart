@@ -21,6 +21,18 @@ class HeadquarterSnapshotRepository {
     );
   }
 
+  Future<HeadquarterSnapshotArea> updateAreaEmail({
+    required String division,
+    required String area,
+    required String email,
+  }) {
+    return HeadquarterSnapshotDatabase.instance.updateAreaEmail(
+      division: division,
+      area: area,
+      email: email,
+    );
+  }
+
   Future<HeadquarterSnapshotDiagnostics?> readDiagnostics(String division) {
     return HeadquarterSnapshotDatabase.instance.readDiagnostics(division);
   }

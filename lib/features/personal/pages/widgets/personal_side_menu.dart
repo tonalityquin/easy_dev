@@ -4,9 +4,10 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../../app/di/routes.dart';
 import '../../../../app/init/app_exit_service.dart';
+import '../../../../app/init/logout_completion_exit_dialog.dart';
 import '../../../../app/utils/dev_firebase_debug_dialog.dart';
+import '../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../app/theme/brand_theme.dart';
 import '../../../../app/utils/ops_delayed_refresh_gate.dart';
 import '../../../../design_system/common_ui/common_ui_components.dart';
@@ -275,14 +276,33 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
   }
 
   Future<void> _logout() async {
+    final trace = await DeveloperOperationTrace.start(
+      context: context,
+      title: '개인형 로그아웃 상태',
+      initialMessage: '개인형 로그아웃을 시작합니다.',
+      useCommonUi: true,
+      developerModeMessage:
+          '개발자 모드 ON: 개인형 로그아웃 단계를 Status Dialog에 표시합니다.',
+      standardModeMessage:
+          '개발자 모드 OFF: 개인형 로그아웃 단계를 debugPrint로 기록합니다.',
+    );
+
     var accountId = '';
     try {
       final prefs = await SharedPreferences.getInstance();
       final ephemeralDebugSession =
           await LauncherDebugAccountOverrideStore.isActive();
       accountId = (prefs.getString('personalAccountId') ?? '').trim();
+      trace.log(
+        '개인형 계정 로그아웃 상태를 정리합니다. accountId=${accountId.isEmpty ? '-' : accountId}, debugEphemeral=$ephemeralDebugSession',
+        progress: 0.18,
+      );
+
       if (accountId.isNotEmpty && !ephemeralDebugSession) {
-        await FirebaseFirestore.instance.collection('personal_accounts').doc(accountId).set(
+        await FirebaseFirestore.instance
+            .collection('personal_accounts')
+            .doc(accountId)
+            .set(
           <String, dynamic>{
             'isSaved': false,
             'lastLogoutAt': FieldValue.serverTimestamp(),
@@ -290,10 +310,13 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
           },
           SetOptions(merge: true),
         );
+        trace.log('개인형 원격 로그아웃 상태 반영이 완료되었습니다.', progress: 0.38);
+      } else {
+        trace.log(
+          '개인형 원격 로그아웃 상태 반영을 생략했습니다.',
+          progress: 0.38,
+        );
       }
-      debugPrint(
-        '[PERSONAL-LOGOUT] accountId=$accountId debugEphemeral=$ephemeralDebugSession remoteWrite=${accountId.isNotEmpty && !ephemeralDebugSession}',
-      );
 
       await prefs.remove('mode');
       await prefs.remove('phone');
@@ -305,36 +328,34 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
       await prefs.remove('personalName');
       await prefs.remove('personalPhone');
       await prefs.remove('personalEmail');
+      trace.log('개인형 로컬 로그인 정보 제거가 완료되었습니다.', progress: 0.68);
+
       if (ephemeralDebugSession) {
         await LauncherDebugAccountOverrideStore.discardForLogout(
           source: 'personal_side_menu',
         );
+        trace.log('Debug ephemeral 스냅샷을 폐기했습니다.', progress: 0.78);
       }
+
       await HeadHubActions.resetForLogout();
+      trace.log('본사 퀵버튼 상태를 초기화했습니다.', progress: 0.9);
+      trace.log(
+        '개인형 로그아웃이 성공적으로 완료되었습니다. 앱 종료 Dialog를 표시합니다.',
+        progress: 0.98,
+      );
+      await trace.succeed('개인형 로그아웃이 완료되었습니다.');
 
       if (!mounted) return;
-      Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.modeLauncher, (route) => false);
-      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-        const SnackBar(
-          content: Text('개인형 로그아웃이 완료되었습니다.'),
-          behavior: SnackBarBehavior.floating,
-        ),
+      await LogoutCompletionExitDialog.show(
+        context,
+        useCommonUi: true,
+        onExit: _exitApp,
       );
     } catch (e, st) {
-      await DevFirebaseDebugDialog.show(
-        context: context,
-        operation: 'personal.sideMenu.logout',
+      await trace.fail(
+        '개인형 로그아웃 처리에 실패했습니다.',
         error: e,
         stackTrace: st,
-        useCommonUi: true,
-        details: <String, Object?>{
-          'collection': 'personal_accounts',
-          'accountId': accountId,
-          'write': 'doc(accountId).set(isSaved=false,lastLogoutAt,updatedAt,merge)',
-          'debugOverrideActive': await LauncherDebugAccountOverrideStore.isActive(),
-          'queryShape': 'direct-document-write',
-          'compositeIndex': 'not-required',
-        },
       );
       if (!mounted) return;
       _showSnack('로그아웃 중 오류가 발생했습니다.', success: false);

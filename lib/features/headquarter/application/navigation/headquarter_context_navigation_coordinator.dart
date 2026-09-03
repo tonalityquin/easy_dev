@@ -174,7 +174,7 @@ class HeadquarterContextNavigationCoordinator {
       );
 
       if (snapshotArea.isHeadquarter) {
-        final routeName = AppRoutes.headquarterPage;
+        final routeName = AppRoutes.headquarterCommute;
         final builder = appRoutes[routeName];
         if (builder == null) {
           await fail('이동할 본사 화면을 찾을 수 없습니다.');
@@ -472,16 +472,16 @@ class HeadquarterContextNavigationCoordinator {
     required String modeKey,
     required bool isHeadquarter,
   }) {
-    if (isHeadquarter) return AppRoutes.headquarterPage;
+    if (isHeadquarter) return AppRoutes.headquarterCommute;
     switch (modeKey) {
       case 'single':
         return AppRoutes.singleCommute;
       case 'double':
-        return AppRoutes.doubleTypePage;
+        return AppRoutes.doubleCommute;
       case 'triple':
-        return AppRoutes.tripleTypePage;
+        return AppRoutes.tripleCommute;
       case 'minor':
-        return AppRoutes.minorTypePage;
+        return AppRoutes.minorCommute;
       default:
         return null;
     }

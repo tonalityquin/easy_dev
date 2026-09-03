@@ -94,9 +94,6 @@ class ModeLauncherController extends ChangeNotifier {
   List<LauncherWorkAreaOption> _availableWorkAreas = <LauncherWorkAreaOption>[];
   LauncherWorkAreaOption? _selectedWorkArea;
   List<AppModeDefinition> _supportedModes = <AppModeDefinition>[];
-  String _workAreaListSource = 'none';
-  int _workAreaListFirebaseReads = 0;
-  bool _workAreaHeadquarterFastPath = false;
   String? _pendingTargetRoute;
   String? _pendingAutoSubmitText;
   String _runningCommand = '';
@@ -1229,7 +1226,7 @@ class ModeLauncherController extends ChangeNotifier {
           'areaCount': _availableWorkAreas.length,
           'firebaseReads': 0,
           'firebaseWrites': 0,
-          'dataSource': _workAreaListSource,
+          'dataSource': 'sqlite',
         },
       );
     } else if (_supportedModes.isNotEmpty) {
@@ -1687,6 +1684,10 @@ class ModeLauncherController extends ChangeNotifier {
     _busy = false;
     _runningCommand = '';
     notifyListeners();
+    await ServiceSettingsCommandHandler.showEmailEditDeveloperStatus(
+      context,
+      succeeded: result.succeeded,
+    );
     return const ModeLauncherSubmitResult();
   }
 
@@ -1738,15 +1739,14 @@ class ModeLauncherController extends ChangeNotifier {
         _supportedModes = account.supportedModes;
         _availableWorkAreas = <LauncherWorkAreaOption>[];
         _selectedWorkArea = null;
-        LauncherWorkAreaResolution? restoredWorkAreaResolution;
+        LauncherWorkAreaResolution? restoreWorkAreaResolution;
         if (account.kind == TerminalAccountKind.user && account.user != null) {
-          restoredWorkAreaResolution = await _resolveWorkAreasForAccount(
+          restoreWorkAreaResolution = await _resolveLauncherWorkAreas(
             context,
             account: account,
             reduceMotion: reduceMotion,
-            flow: 'restore',
           );
-          _availableWorkAreas = restoredWorkAreaResolution.areas;
+          _availableWorkAreas = restoreWorkAreaResolution.areas;
         }
         _enteredName = account.displayName;
         _append(TerminalLineType.success, '[ OK ] ${restored.message}');
@@ -1775,11 +1775,11 @@ class ModeLauncherController extends ChangeNotifier {
             LauncherDiagnostics.record(
               'auth_restore_work_area_selection_blocked',
               meta: <String, Object?>{
-                'reason': 'no_authorized_area',
-                'firebaseReads':
-                    restoredWorkAreaResolution?.firebaseAreaDocumentReads ?? 0,
+                'reason': 'work_area_resolution_empty',
+                'dataSource': restoreWorkAreaResolution?.dataSource ?? 'none',
+                'firebaseAreaDocumentReads':
+                    restoreWorkAreaResolution?.firebaseAreaDocumentReads ?? 0,
                 'firebaseWrites': 0,
-                'dataSource': restoredWorkAreaResolution?.dataSource ?? 'none',
               },
             );
             _errorSerial += 1;
@@ -1795,12 +1795,10 @@ class ModeLauncherController extends ChangeNotifier {
               'firstArea': firstArea.areaName,
               'firstIsHeadquarter': firstArea.isHeadquarter,
               'savedMode': savedModeAllowed ? savedMode.id : '',
-              'firebaseReads':
-                  restoredWorkAreaResolution?.firebaseAreaDocumentReads ?? 0,
+              'firebaseAreaDocumentReads':
+                  restoreWorkAreaResolution?.firebaseAreaDocumentReads ?? 0,
               'firebaseWrites': 0,
-              'dataSource': restoredWorkAreaResolution?.dataSource ?? 'none',
-              'headquarterFastPath':
-                  restoredWorkAreaResolution?.headquarterFastPath ?? false,
+              'dataSource': restoreWorkAreaResolution?.dataSource ?? 'none',
             },
           );
           final autoSelectReason = _workAreaAutoSelectReason();
@@ -1821,10 +1819,9 @@ class ModeLauncherController extends ChangeNotifier {
                 'supportedModes': firstArea.supportedModes
                     .map((mode) => mode.id)
                     .join(','),
-                'firebaseReads':
-                    restoredWorkAreaResolution?.firebaseAreaDocumentReads ?? 0,
+                'firebaseAreaDocumentReads':
+                    restoreWorkAreaResolution?.firebaseAreaDocumentReads ?? 0,
                 'firebaseWrites': 0,
-                'dataSource': restoredWorkAreaResolution?.dataSource ?? 'none',
               },
             );
           } else {
@@ -2115,11 +2112,10 @@ class ModeLauncherController extends ChangeNotifier {
   }
 
 
-  Future<LauncherWorkAreaResolution> _resolveWorkAreasForAccount(
+  Future<LauncherWorkAreaResolution> _resolveLauncherWorkAreas(
     BuildContext context, {
     required TerminalAuthenticatedAccount account,
     required bool reduceMotion,
-    required String flow,
   }) async {
     final user = account.user;
     if (user == null) {
@@ -2127,92 +2123,121 @@ class ModeLauncherController extends ChangeNotifier {
         hasSnapshot: false,
         division: '',
         areas: <LauncherWorkAreaOption>[],
-        dataSource: 'none',
+        dataSource: 'user_missing',
       );
     }
-
-    final localResolution = await LauncherWorkAreaResolver.resolve(
+    final local = await LauncherWorkAreaResolver.resolve(
       user: user,
       accountModes: account.supportedModes,
     );
-    if (localResolution.hasSnapshot) {
-      _workAreaListSource = localResolution.dataSource;
-      _workAreaListFirebaseReads = localResolution.firebaseAreaDocumentReads;
-      _workAreaHeadquarterFastPath = localResolution.headquarterFastPath;
-      LauncherDiagnostics.record(
-        'auth_work_area_resolution_complete',
-        meta: <String, Object?>{
-          'flow': flow,
-          'division': localResolution.division,
-          'dataSource': localResolution.dataSource,
-          'areaCount': localResolution.areas.length,
-          'firebaseAreaDocumentReads':
-              localResolution.firebaseAreaDocumentReads,
-          'headquarterFastPath': localResolution.headquarterFastPath,
-        },
-      );
-      return localResolution;
-    }
-
-    LauncherDiagnostics.record(
-      'auth_work_area_local_snapshot_miss',
-      meta: <String, Object?>{
-        'flow': flow,
-        'division': localResolution.division,
-        'authorizedAreaCount': user.areas
-            .map((value) => value.trim())
-            .where((value) => value.isNotEmpty)
-            .toSet()
-            .length,
-        'firebaseAreaDocumentReads': 0,
-      },
-    );
-    _runningCommand = 'AREAS VERIFY';
+    if (local.hasSnapshot || local.areas.isNotEmpty) return local;
     await _appendPaced(
       TerminalLineType.running,
-      'Checking authorized work areas',
+      'Local work area snapshot unavailable',
       reduceMotion,
     );
-    await _commandDelay(reduceMotion);
-    if (_disposed || !context.mounted) return localResolution;
-
-    final repository = context.read<AreaRepository>();
-    final serverResolution = await LauncherWorkAreaServerResolver.resolve(
+    final authorizedAreaCount = user.areas
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toSet()
+        .length;
+    await _appendPaced(
+      TerminalLineType.running,
+      authorizedAreaCount == 1
+          ? 'Checking authorized work area'
+          : 'Restoring primary work area',
+      reduceMotion,
+    );
+    final resolved = await LauncherWorkAreaServerResolver.resolve(
       user: user,
       accountModes: account.supportedModes,
-      areaRepository: repository,
+      areaRepository: context.read<AreaRepository>(),
     );
-    _workAreaListSource = serverResolution.dataSource;
-    _workAreaListFirebaseReads = serverResolution.firebaseAreaDocumentReads;
-    _workAreaHeadquarterFastPath = serverResolution.headquarterFastPath;
-
-    if (!_disposed && context.mounted) {
-      await _appendPaced(
-        serverResolution.areas.isEmpty
-            ? TerminalLineType.error
-            : TerminalLineType.success,
-        serverResolution.areas.isEmpty
-            ? '[ERROR] 사용할 수 있는 업무 지역을 확인하지 못했습니다.'
-            : '[ OK ] 업무 지역 확인 완료',
-        reduceMotion,
-      );
-    }
     LauncherDiagnostics.record(
-      'auth_work_area_resolution_complete',
+      'auth_work_area_snapshot_miss_fallback_complete',
       meta: <String, Object?>{
-        'flow': flow,
-        'division': serverResolution.division,
-        'dataSource': serverResolution.dataSource,
-        'areaCount': serverResolution.areas.length,
-        'firebaseAreaDocumentReads':
-            serverResolution.firebaseAreaDocumentReads,
-        'headquarterFastPath': serverResolution.headquarterFastPath,
-        'verifiedRecordCount': serverResolution.areas
-            .where((area) => area.hasVerifiedAreaRecord)
-            .length,
+        'authorizedAreaCount': authorizedAreaCount,
+        'availableAreaCount': resolved.areas.length,
+        'dataSource': resolved.dataSource,
+        'firebaseAreaDocumentReads': resolved.firebaseAreaDocumentReads,
+        'serverFallbackUsed': resolved.serverFallbackUsed,
       },
     );
-    return serverResolution;
+    return resolved;
+  }
+
+  Future<LauncherWorkAreaOption?> _verifyBootstrapWorkArea(
+    BuildContext context, {
+    required TerminalAuthenticatedAccount account,
+    required LauncherWorkAreaOption area,
+    required bool reduceMotion,
+  }) async {
+    if (!area.requiresServerAreaResolution) return area;
+    final user = account.user;
+    if (user == null) return null;
+    _busy = true;
+    _runningCommand = 'AREA';
+    _append(
+      TerminalLineType.running,
+      'Verifying ${area.areaName}',
+    );
+    LauncherDiagnostics.record(
+      'auth_work_area_first_array_verification_start',
+      meta: <String, Object?>{
+        'division': area.division,
+        'area': area.areaName,
+        'arrayIndex': 0,
+        'firebaseAreaDocumentReadAttempt': 1,
+      },
+    );
+    notifyListeners();
+    await _commandDelay(reduceMotion);
+    final verified = await LauncherWorkAreaServerResolver.verifyArea(
+      division: area.division,
+      areaName: area.areaName,
+      accountModes: account.supportedModes,
+      areaRepository: context.read<AreaRepository>(),
+      source: 'multi_area_first_array_selection',
+    );
+    _busy = false;
+    _runningCommand = '';
+    if (verified == null) {
+      LauncherDiagnostics.record(
+        'auth_work_area_first_array_verification_failed',
+        meta: <String, Object?>{
+          'division': area.division,
+          'area': area.areaName,
+          'arrayIndex': 0,
+          'firebaseAreaDocumentReads': 1,
+        },
+      );
+      notifyListeners();
+      return null;
+    }
+    final index = _availableWorkAreas.indexWhere(
+      (item) => item.areaName == area.areaName,
+    );
+    if (index >= 0) {
+      final updated = List<LauncherWorkAreaOption>.of(_availableWorkAreas);
+      updated[index] = verified;
+      _availableWorkAreas = updated;
+    }
+    LauncherDiagnostics.record(
+      'auth_work_area_first_array_verification_success',
+      meta: <String, Object?>{
+        'division': verified.division,
+        'area': verified.areaName,
+        'arrayIndex': 0,
+        'isHeadquarter': verified.isHeadquarter,
+        'supportedModes': verified.supportedModes
+            .map((mode) => mode.id)
+            .join(','),
+        'firebaseAreaDocumentReads': 1,
+        'verifiedRecordReusedForActivation': true,
+      },
+    );
+    notifyListeners();
+    return verified;
   }
 
   String? _workAreaAutoSelectReason() {
@@ -2269,9 +2294,6 @@ class ModeLauncherController extends ChangeNotifier {
     _availableWorkAreas = <LauncherWorkAreaOption>[];
     _selectedWorkArea = null;
     _supportedModes = <AppModeDefinition>[];
-    _workAreaListSource = 'none';
-    _workAreaListFirebaseReads = 0;
-    _workAreaHeadquarterFastPath = false;
     _selectedMode = null;
     _enteredName = '';
     _enteredPhone = '';
@@ -2323,7 +2345,7 @@ class ModeLauncherController extends ChangeNotifier {
         'area': workArea.areaName,
         'isHeadquarter': true,
         'modeIndependent': true,
-        'postLoginRoute': AppRoutes.headquarterPage,
+        'postLoginRoute': AppRoutes.headquarterCommute,
         'sessionPersistence': TerminalAuthCoordinator.sessionPersistenceId(
           _sessionPersistence,
         ),
@@ -2370,17 +2392,16 @@ class ModeLauncherController extends ChangeNotifier {
         'modeIndependent': true,
         'persistMode': false,
         'publishMode': false,
-        'targetRoute': AppRoutes.headquarterPage,
-        'firebaseAreaSelectionQueries': activated.firebaseAreaValidationReads,
-        'firebaseWorkAreaListQueries': _workAreaListFirebaseReads,
+        'targetRoute': AppRoutes.headquarterCommute,
+        'firebaseAreaSelectionQueries': workArea.hasVerifiedAreaRecord ? 0 : 1,
+        'firebaseWorkAreaListQueries': 0,
+        'verifiedAreaRecordReused': workArea.hasVerifiedAreaRecord,
         'workAreaListSource': workArea.dataSource,
-        'headquarterFastPath': _workAreaHeadquarterFastPath,
-        'verifiedAreaRecordReused': activated.verifiedAreaRecordReused,
       },
     );
     notifyListeners();
     return const ModeLauncherSubmitResult(
-      targetRoute: AppRoutes.headquarterPage,
+      targetRoute: AppRoutes.headquarterCommute,
     );
   }
 
@@ -2405,8 +2426,6 @@ class ModeLauncherController extends ChangeNotifier {
         'isHeadquarter': false,
         'mode': mode.id,
         'postLoginRoute': mode.postLoginRoute,
-        'workAreaListSource': workArea?.dataSource ?? _workAreaListSource,
-        'verifiedAreaRecord': workArea?.hasVerifiedAreaRecord ?? false,
         'sessionPersistence': TerminalAuthCoordinator.sessionPersistenceId(
           _sessionPersistence,
         ),
@@ -2454,10 +2473,10 @@ class ModeLauncherController extends ChangeNotifier {
         'area': workArea?.areaName ?? '',
         'mode': mode.id,
         'targetRoute': mode.postLoginRoute,
-        'firebaseAreaSelectionQueries': activated.firebaseAreaValidationReads,
-        'firebaseWorkAreaListQueries': _workAreaListFirebaseReads,
-        'workAreaListSource': workArea?.dataSource ?? _workAreaListSource,
-        'verifiedAreaRecordReused': activated.verifiedAreaRecordReused,
+        'firebaseAreaSelectionQueries': workArea?.hasVerifiedAreaRecord == true ? 0 : 1,
+        'firebaseWorkAreaListQueries': 0,
+        'verifiedAreaRecordReused': workArea?.hasVerifiedAreaRecord == true,
+        'workAreaListSource': workArea?.dataSource ?? 'none',
       },
     );
     notifyListeners();
@@ -2657,16 +2676,12 @@ class ModeLauncherController extends ChangeNotifier {
 
           if (account.kind == TerminalAccountKind.user && account.user != null) {
             _runningCommand = 'AREAS';
-            await _appendPaced(
-              TerminalLineType.running,
-              'Loading work areas from local snapshot',
-              reduceMotion,
-            );
-            final resolution = await _resolveWorkAreasForAccount(
+            _append(TerminalLineType.running, 'Loading work areas from local snapshot');
+            notifyListeners();
+            final resolution = await _resolveLauncherWorkAreas(
               context,
               account: account,
               reduceMotion: reduceMotion,
-              flow: 'manual',
             );
             if (_disposed || !context.mounted) {
               _busy = false;
@@ -2680,16 +2695,17 @@ class ModeLauncherController extends ChangeNotifier {
             if (_availableWorkAreas.isEmpty) {
               _append(
                 TerminalLineType.error,
-                '[ERROR] 사용할 수 있는 업무 지역이 없습니다.',
+                '[ERROR] 업무 지역 정보를 불러오지 못했습니다.',
               );
               LauncherDiagnostics.record(
                 'auth_work_area_selection_blocked',
                 meta: <String, Object?>{
-                  'reason': 'no_authorized_area',
+                  'reason': 'work_area_resolution_empty',
                   'division': resolution.division,
-                  'firebaseReads': resolution.firebaseAreaDocumentReads,
-                  'firebaseWrites': 0,
                   'dataSource': resolution.dataSource,
+                  'firebaseAreaDocumentReads':
+                      resolution.firebaseAreaDocumentReads,
+                  'firebaseWrites': 0,
                 },
               );
               _errorSerial += 1;
@@ -2707,13 +2723,12 @@ class ModeLauncherController extends ChangeNotifier {
                 'snapshotAvailable': resolution.hasSnapshot,
                 'requiresServerHeadquarterVerification':
                     firstArea.requiresServerHeadquarterVerification,
-                'firebaseReads': resolution.firebaseAreaDocumentReads,
+                'requiresServerAreaResolution':
+                    firstArea.requiresServerAreaResolution,
+                'firebaseAreaDocumentReads':
+                    resolution.firebaseAreaDocumentReads,
                 'firebaseWrites': 0,
                 'dataSource': resolution.dataSource,
-                'headquarterFastPath': resolution.headquarterFastPath,
-                'verifiedRecordCount': _availableWorkAreas
-                    .where((area) => area.hasVerifiedAreaRecord)
-                    .length,
               },
             );
             final autoSelectReason = _workAreaAutoSelectReason();
@@ -2733,9 +2748,9 @@ class ModeLauncherController extends ChangeNotifier {
                   'supportedModes': firstArea.supportedModes
                       .map((mode) => mode.id)
                       .join(','),
-                  'firebaseReads': resolution.firebaseAreaDocumentReads,
+                  'firebaseAreaDocumentReads':
+                      resolution.firebaseAreaDocumentReads,
                   'firebaseWrites': 0,
-                  'dataSource': resolution.dataSource,
                 },
               );
               notifyListeners();
@@ -2797,13 +2812,37 @@ class ModeLauncherController extends ChangeNotifier {
           _resetAccountSelection();
           return const ModeLauncherSubmitResult();
         }
-        final area = _findWorkArea(input);
+        var area = _findWorkArea(input);
         if (area == null) {
           _append(TerminalLineType.error, '[DENIED] 지원하지 않는 업무 지역입니다.');
           _appendWorkAreaList();
           _errorSerial += 1;
           notifyListeners();
           return const ModeLauncherSubmitResult();
+        }
+        final requiredServerResolution = area.requiresServerAreaResolution;
+        if (requiredServerResolution) {
+          final verifiedArea = await _verifyBootstrapWorkArea(
+            context,
+            account: account,
+            area: area,
+            reduceMotion: reduceMotion,
+          );
+          if (_disposed || !context.mounted) {
+            _busy = false;
+            _runningCommand = '';
+            return const ModeLauncherSubmitResult();
+          }
+          if (verifiedArea == null) {
+            _append(
+              TerminalLineType.error,
+              '[ERROR] 선택한 업무 지역 정보를 확인하지 못했습니다.',
+            );
+            _errorSerial += 1;
+            notifyListeners();
+            return const ModeLauncherSubmitResult();
+          }
+          area = verifiedArea;
         }
         _selectedWorkArea = area;
         _supportedModes = area.supportedModes;
@@ -2815,10 +2854,11 @@ class ModeLauncherController extends ChangeNotifier {
             'supportedModes': area.supportedModes.map((mode) => mode.id).join(','),
             'requiresServerHeadquarterVerification':
                 area.requiresServerHeadquarterVerification,
-            'firebaseReads': _workAreaListFirebaseReads,
+            'requiredServerAreaResolution': requiredServerResolution,
+            'verifiedAreaRecord': area.hasVerifiedAreaRecord,
+            'firebaseAreaDocumentReads': requiredServerResolution ? 1 : 0,
             'firebaseWrites': 0,
             'dataSource': area.dataSource,
-            'verifiedAreaRecord': area.hasVerifiedAreaRecord,
           },
         );
         if (area.isHeadquarter) {

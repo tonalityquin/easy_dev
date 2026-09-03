@@ -130,6 +130,12 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
     ),
   ];
 
+  static const Set<Section> _debugVisibleSections = <Section>{
+    Section.local,
+    Section.backend,
+    Section.area,
+  };
+
   final _SecondaryDockDebugLog _debugLog = _SecondaryDockDebugLog();
   late final SecondaryAccountWorkspaceState _accountWorkspace;
   late final SecondaryTabletWorkspaceState _tabletWorkspace;
@@ -146,6 +152,7 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
   void initState() {
     super.initState();
     _selectedSection = widget.initialSection;
+    _devModeEnabled = DevAuth.devModeEnabled.value;
     _accountWorkspace = SecondaryAccountWorkspaceState(onDebug: _debugLog.log);
     _tabletWorkspace = SecondaryTabletWorkspaceState(onDebug: _debugLog.log);
     _billWorkspace = SecondaryBillWorkspaceState(onDebug: _debugLog.log);
@@ -187,23 +194,43 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
     if (_devModeEnabled == enabled) return;
     setState(() => _devModeEnabled = enabled);
     _debugLog.log('developer_mode_changed enabled=$enabled');
+    _logAccessSnapshot(context.read<SecondaryState>());
+  }
+
+  bool _isSectionVisible(Section section) {
+    return !_debugVisibleSections.contains(section) || _devModeEnabled;
+  }
+
+  List<_SecondaryRailItem> _visibleRailItems(
+    List<_SecondaryRailItem> items,
+  ) {
+    return items
+        .where((item) => _isSectionVisible(item.section))
+        .toList(growable: false);
   }
 
   void _logAccessSnapshot(SecondaryState state) {
     final access = <String>[];
     for (final item in <_SecondaryRailItem>[..._primaryItems, ..._bottomItems]) {
+      final visible = _isSectionVisible(item.section);
       final allowed = state.canAccess(item.section);
       final reason = allowed ? 'allowed' : state.accessDebugReason(item.section);
-      access.add('${item.section.name}:$allowed:$reason');
+      access.add(
+        '${item.section.name}:visible=$visible:allowed=$allowed:$reason',
+      );
     }
     _debugLog.log(
-      'access_snapshot role=${state.role.name} devLoggedIn=${state.devLoggedIn} ${access.join('|')}',
+      'access_snapshot role=${state.role.name} devMode=$_devModeEnabled devLoggedIn=${state.devLoggedIn} ${access.join('|')}',
     );
   }
 
-  Section _effectiveSection(SecondaryState state) {
-    if (state.canAccess(_selectedSection)) return _selectedSection;
+  Section? _effectiveSection(SecondaryState state) {
+    if (_isSectionVisible(_selectedSection) &&
+        state.canAccess(_selectedSection)) {
+      return _selectedSection;
+    }
     for (final item in <_SecondaryRailItem>[..._primaryItems, ..._bottomItems]) {
+      if (!_isSectionVisible(item.section)) continue;
       if (state.canAccess(item.section)) {
         if (_selectedSection != item.section && !_fallbackScheduled) {
           _fallbackScheduled = true;
@@ -218,17 +245,23 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
             _locationWorkspace.reset(source: 'selection_fallback');
             setState(() => _selectedSection = item.section);
             _debugLog.log(
-              'selection_fallback target=${item.section.name}',
+              'selection_fallback target=${item.section.name} devMode=$_devModeEnabled',
             );
           });
         }
         return item.section;
       }
     }
-    return Section.local;
+    return null;
   }
 
   Future<void> _selectSection(SecondaryState state, Section section) async {
+    if (!_isSectionVisible(section)) {
+      _debugLog.log(
+        'rail_hidden_blocked section=${section.name} devMode=$_devModeEnabled',
+      );
+      return;
+    }
     final allowed = state.canAccess(section);
     final debugReason = state.accessDebugReason(section);
     _debugLog.log(
@@ -1351,8 +1384,11 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
                 billWorkspace, _) {
           final sectorWorkspace = context.watch<SecondarySectorWorkspaceState>();
           final monthlyWorkspace = context.watch<SecondaryMonthlyWorkspaceState>();
+          final visiblePrimaryItems = _visibleRailItems(_primaryItems);
+          final visibleBottomItems = _visibleRailItems(_bottomItems);
           final selected = _effectiveSection(state);
-          final selectedTitle = _sectionDisplayTitle(selected);
+          final selectedTitle =
+              selected == null ? '' : _sectionDisplayTitle(selected);
           final locationFocus =
               selected == Section.location && _locationWorkspace.isParentFocus;
           final locationPlainSettingsFocus = selected == Section.location &&
@@ -1443,7 +1479,11 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
                                       : locationChildSettingsFocus
                                       ? locationChildSettingsTitle
                                       : selectedTitle;
-          final subtitle = area.isEmpty ? contextTitle : '$area · $contextTitle';
+          final subtitle = contextTitle.isEmpty
+              ? area
+              : area.isEmpty
+                  ? contextTitle
+                  : '$area · $contextTitle';
 
           return PopScope(
             canPop: !settingsFocus,
@@ -1451,13 +1491,13 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
               if (didPop || !settingsFocus) return;
               if (settingsSaving) {
                 _debugLog.log(
-                  'settings_route_pop_blocked saving=true section=${selected.name}',
+                  'settings_route_pop_blocked saving=true section=${selected?.name ?? 'none'}',
                 );
                 return;
               }
               FocusManager.instance.primaryFocus?.unfocus();
               _debugLog.log(
-                'settings_route_pop_intercepted section=${selected.name}',
+                'settings_route_pop_intercepted section=${selected?.name ?? 'none'}',
               );
               if (accountSettingsFocus) {
                 _backAccountSettingsWorkspace(source: 'settings_system_back');
@@ -1682,9 +1722,9 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
                                                           : 'secondary-global-rail',
                                 ),
                                 child: _SecondaryQuickActionRail(
-                                  primaryItems: _primaryItems,
-                                  bottomItems: _bottomItems,
-                                  selectedSection: selected,
+                                  primaryItems: visiblePrimaryItems,
+                                  bottomItems: visibleBottomItems,
+                                  selectedSection: selected ?? _selectedSection,
                                   accountMode: accountWorkspace.mode,
                                   showAccountModes: !accountSettingsFocus &&
                                       !tabletSettingsFocus &&
@@ -1868,13 +1908,19 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
                                         ),
                                       );
                                     },
-                                    child: _contentFor(
-                                      selected,
-                                      accountWorkspace,
-                                      tabletWorkspace,
-                                      billWorkspace,
-                                      sectorWorkspace,
-                                    ),
+                                    child: selected == null
+                                        ? const SizedBox.shrink(
+                                            key: ValueKey<String>(
+                                              'secondary-no-visible-access',
+                                            ),
+                                          )
+                                        : _contentFor(
+                                            selected,
+                                            accountWorkspace,
+                                            tabletWorkspace,
+                                            billWorkspace,
+                                            sectorWorkspace,
+                                          ),
                                   ),
                                   Positioned.fill(
                                     child: IgnorePointer(

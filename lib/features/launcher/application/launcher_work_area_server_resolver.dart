@@ -22,7 +22,7 @@ class LauncherWorkAreaServerResolver {
 
     if (division.isEmpty || authorizedAreas.isEmpty) {
       LauncherDiagnostics.record(
-        'auth_work_area_direct_fetch_blocked',
+        'auth_work_area_server_bootstrap_blocked',
         meta: <String, Object?>{
           'division': division,
           'authorizedAreaCount': authorizedAreas.length,
@@ -35,191 +35,166 @@ class LauncherWorkAreaServerResolver {
         hasSnapshot: false,
         division: division,
         areas: const <LauncherWorkAreaOption>[],
-        dataSource: 'server_unavailable',
+        dataSource: 'server_bootstrap_unavailable',
         serverFallbackUsed: true,
       );
     }
 
-    final accountModeIds = accountModes.map((mode) => mode.id).toSet();
-    final fetched = <String, AreaRecord?>{};
-    var readAttempts = 0;
-
-    Future<AreaRecord?> fetchArea(String areaName, String phase) async {
-      if (fetched.containsKey(areaName)) return fetched[areaName];
-      readAttempts += 1;
+    if (authorizedAreas.length == 1) {
+      final areaName = authorizedAreas.first;
       LauncherDiagnostics.record(
-        'auth_work_area_direct_fetch_record_start',
+        'auth_work_area_single_server_fetch_start',
         meta: <String, Object?>{
           'division': division,
           'area': areaName,
-          'phase': phase,
           'documentId': '$division-$areaName',
-          'firebaseAreaDocumentReadAttempt': readAttempts,
+          'authorizedAreaCount': 1,
+          'firebaseAreaDocumentReadAttempt': 1,
+          'firebaseWrites': 0,
         },
       );
-      try {
-        final record = await areaRepository.getAreaByName(
-          areaName,
-          division: division,
-          serverOnly: true,
-        );
-        fetched[areaName] = record;
-        LauncherDiagnostics.record(
-          record == null
-              ? 'auth_work_area_direct_fetch_record_missing'
-              : 'auth_work_area_direct_fetch_record_success',
-          meta: <String, Object?>{
-            'division': division,
-            'area': areaName,
-            'phase': phase,
-            'documentId': '$division-$areaName',
-            'isHeadquarter': record?.isHeadquarter,
-            'modes': record?.modes.join(',') ?? '',
-            'firebaseAreaDocumentReads': readAttempts,
-          },
-        );
-        return record;
-      } catch (error, stackTrace) {
-        fetched[areaName] = null;
-        LauncherDiagnostics.record(
-          'auth_work_area_direct_fetch_record_error',
-          meta: <String, Object?>{
-            'division': division,
-            'area': areaName,
-            'phase': phase,
-            'documentId': '$division-$areaName',
-            'firebaseAreaDocumentReads': readAttempts,
-            'error': error,
-            'stack': stackTrace,
-          },
-        );
-        return null;
-      }
+      final option = await verifyArea(
+        division: division,
+        areaName: areaName,
+        accountModes: accountModes,
+        areaRepository: areaRepository,
+        source: 'single_area_snapshot_miss',
+      );
+      return LauncherWorkAreaResolution(
+        hasSnapshot: false,
+        division: division,
+        areas: option == null
+            ? const <LauncherWorkAreaOption>[]
+            : <LauncherWorkAreaOption>[option],
+        dataSource: option == null
+            ? 'server_single_area_missing'
+            : 'server_single_area',
+        firebaseAreaDocumentReads: 1,
+        serverFallbackUsed: true,
+        headquarterFastPath: option?.isHeadquarter == true,
+      );
     }
 
+    final firstArea = authorizedAreas.first;
+    final headquarterCandidate = firstArea == division;
+    final option = LauncherWorkAreaOption(
+      division: division,
+      areaName: firstArea,
+      isHeadquarter: headquarterCandidate,
+      supportedModes: const <AppModeDefinition>[],
+      requiresServerHeadquarterVerification: headquarterCandidate,
+      requiresServerAreaResolution: true,
+      dataSource: 'user_profile_first_area',
+    );
     LauncherDiagnostics.record(
-      'auth_work_area_direct_fetch_start',
+      'auth_work_area_multi_first_bootstrap_ready',
       meta: <String, Object?>{
         'division': division,
         'authorizedAreaCount': authorizedAreas.length,
         'authorizedAreas': authorizedAreas.join(','),
-        'headquarterCandidateAvailable': authorizedAreas.contains(division),
+        'selectedArrayIndex': 0,
+        'selectedArea': firstArea,
+        'headquarterCandidate': headquarterCandidate,
+        'firebaseAreaDocumentReads': 0,
         'firebaseWrites': 0,
+        'dataSource': 'user_profile_first_area',
       },
     );
+    return LauncherWorkAreaResolution(
+      hasSnapshot: false,
+      division: division,
+      areas: <LauncherWorkAreaOption>[option],
+      dataSource: 'user_profile_first_area',
+      firebaseAreaDocumentReads: 0,
+      serverFallbackUsed: true,
+      headquarterFastPath: headquarterCandidate,
+    );
+  }
 
-    if (authorizedAreas.contains(division)) {
-      final candidate = await fetchArea(division, 'headquarter_fast_path');
-      if (candidate != null && candidate.isHeadquarter) {
-        final modes = AppModeRegistry.supportedModes(
-          candidate.modes,
-          allowedIds: accountModeIds,
-        );
-        final option = LauncherWorkAreaOption(
-          division: division,
-          areaName: candidate.name.trim(),
-          isHeadquarter: true,
-          supportedModes: List<AppModeDefinition>.unmodifiable(modes),
-          verifiedAreaRecord: candidate,
-          dataSource: 'server_hq_fast_path',
-        );
+  static Future<LauncherWorkAreaOption?> verifyArea({
+    required String division,
+    required String areaName,
+    required List<AppModeDefinition> accountModes,
+    required AreaRepository areaRepository,
+    required String source,
+  }) async {
+    final normalizedDivision = division.trim();
+    final normalizedArea = areaName.trim();
+    if (normalizedDivision.isEmpty || normalizedArea.isEmpty) return null;
+    LauncherDiagnostics.record(
+      'auth_work_area_server_record_start',
+      meta: <String, Object?>{
+        'division': normalizedDivision,
+        'area': normalizedArea,
+        'documentId': '$normalizedDivision-$normalizedArea',
+        'source': source,
+        'firebaseAreaDocumentReadAttempt': 1,
+      },
+    );
+    try {
+      final record = await areaRepository.getAreaByName(
+        normalizedArea,
+        division: normalizedDivision,
+        serverOnly: true,
+      );
+      if (record == null) {
         LauncherDiagnostics.record(
-          'auth_work_area_direct_fetch_complete',
+          'auth_work_area_server_record_missing',
           meta: <String, Object?>{
-            'division': division,
-            'requestedAreaCount': 1,
-            'successfulAreaCount': 1,
-            'availableAreaCount': 1,
-            'headquarterCount': 1,
-            'headquarterFastPath': true,
-            'firebaseAreaDocumentReads': readAttempts,
-            'firebaseWrites': 0,
-            'dataSource': 'server_hq_fast_path',
+            'division': normalizedDivision,
+            'area': normalizedArea,
+            'documentId': '$normalizedDivision-$normalizedArea',
+            'source': source,
+            'firebaseAreaDocumentReads': 1,
           },
         );
-        return LauncherWorkAreaResolution(
-          hasSnapshot: false,
-          division: division,
-          areas: <LauncherWorkAreaOption>[option],
-          dataSource: 'server_hq_fast_path',
-          firebaseAreaDocumentReads: readAttempts,
-          serverFallbackUsed: true,
-          headquarterFastPath: true,
-        );
+        return null;
       }
-    }
-
-    final remainingAreas = authorizedAreas
-        .where((areaName) => !fetched.containsKey(areaName))
-        .toList(growable: false);
-    await Future.wait(
-      remainingAreas.map(
-        (areaName) => fetchArea(areaName, 'authorized_area'),
-      ),
-    );
-
-    final areas = <LauncherWorkAreaOption>[];
-    for (final areaName in authorizedAreas) {
-      final record = fetched[areaName];
-      if (record == null) continue;
+      final accountModeIds = accountModes.map((mode) => mode.id).toSet();
       final modes = AppModeRegistry.supportedModes(
         record.modes,
         allowedIds: accountModeIds,
       );
-      if (!record.isHeadquarter && modes.isEmpty) {
-        LauncherDiagnostics.record(
-          'auth_work_area_direct_fetch_record_filtered',
-          meta: <String, Object?>{
-            'division': division,
-            'area': record.name,
-            'reason': 'effective_mode_empty',
-            'recordModes': record.modes.join(','),
-            'accountModes': accountModeIds.join(','),
-          },
-        );
-        continue;
-      }
-      areas.add(
-        LauncherWorkAreaOption(
-          division: division,
-          areaName: record.name.trim(),
-          isHeadquarter: record.isHeadquarter,
-          supportedModes: List<AppModeDefinition>.unmodifiable(modes),
-          verifiedAreaRecord: record,
-          dataSource: 'server_authorized_areas',
-        ),
+      final option = LauncherWorkAreaOption(
+        division: normalizedDivision,
+        areaName: record.name.trim(),
+        isHeadquarter: record.isHeadquarter,
+        supportedModes: List<AppModeDefinition>.unmodifiable(modes),
+        verifiedAreaRecord: record,
+        dataSource: source == 'single_area_snapshot_miss'
+            ? 'server_single_area'
+            : 'server_first_area_verified',
       );
+      LauncherDiagnostics.record(
+        'auth_work_area_server_record_success',
+        meta: <String, Object?>{
+          'division': normalizedDivision,
+          'area': record.name.trim(),
+          'documentId': '$normalizedDivision-$normalizedArea',
+          'source': source,
+          'isHeadquarter': record.isHeadquarter,
+          'recordModes': record.modes.join(','),
+          'effectiveModes': modes.map((mode) => mode.id).join(','),
+          'firebaseAreaDocumentReads': 1,
+          'firebaseWrites': 0,
+        },
+      );
+      return option;
+    } catch (error, stackTrace) {
+      LauncherDiagnostics.record(
+        'auth_work_area_server_record_error',
+        meta: <String, Object?>{
+          'division': normalizedDivision,
+          'area': normalizedArea,
+          'documentId': '$normalizedDivision-$normalizedArea',
+          'source': source,
+          'firebaseAreaDocumentReads': 1,
+          'firebaseWrites': 0,
+          'error': error,
+          'stack': stackTrace,
+        },
+      );
+      return null;
     }
-
-    areas.sort((a, b) {
-      if (a.isHeadquarter != b.isHeadquarter) {
-        return a.isHeadquarter ? -1 : 1;
-      }
-      return a.areaName.toLowerCase().compareTo(b.areaName.toLowerCase());
-    });
-
-    LauncherDiagnostics.record(
-      'auth_work_area_direct_fetch_complete',
-      meta: <String, Object?>{
-        'division': division,
-        'requestedAreaCount': readAttempts,
-        'successfulAreaCount': fetched.values.whereType<AreaRecord>().length,
-        'availableAreaCount': areas.length,
-        'headquarterCount': areas.where((area) => area.isHeadquarter).length,
-        'headquarterFastPath': false,
-        'firebaseAreaDocumentReads': readAttempts,
-        'firebaseWrites': 0,
-        'dataSource': 'server_authorized_areas',
-      },
-    );
-
-    return LauncherWorkAreaResolution(
-      hasSnapshot: false,
-      division: division,
-      areas: List<LauncherWorkAreaOption>.unmodifiable(areas),
-      dataSource: 'server_authorized_areas',
-      firebaseAreaDocumentReads: readAttempts,
-      serverFallbackUsed: true,
-    );
   }
 }

@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import '../../../features/launcher/application/mode_launcher_controller.dart';
 import '../../auth/gmail_sender_auth.dart';
+import '../../config/email_config.dart';
 import '../../../features/selector/application/dev_auth.dart';
 import '../../../features/dev/presentation/debug_caution_surface.dart';
 import '../../command/application/app_command_registry.dart';
@@ -2089,10 +2090,29 @@ class _TerminalPromptState extends State<_TerminalPrompt> {
                       switchOutCurve: Curves.easeInCubic,
                       transitionBuilder: (child, animation) => FadeTransition(
                         opacity: animation,
-                        child: SizeTransition(
-                          sizeFactor: animation,
-                          axis: Axis.horizontal,
-                          child: child,
+                        child: SlideTransition(
+                          position: Tween<Offset>(
+                            begin: const Offset(0.06, 0),
+                            end: Offset.zero,
+                          ).animate(
+                            CurvedAnimation(
+                              parent: animation,
+                              curve: Curves.easeOutCubic,
+                            ),
+                          ),
+                          child: ScaleTransition(
+                            scale: Tween<double>(begin: 0.96, end: 1).animate(
+                              CurvedAnimation(
+                                parent: animation,
+                                curve: Curves.easeOutCubic,
+                              ),
+                            ),
+                            child: SizeTransition(
+                              sizeFactor: animation,
+                              axis: Axis.horizontal,
+                              child: child,
+                            ),
+                          ),
                         ),
                       ),
                       child: widget.emailEditMode
@@ -2102,7 +2122,7 @@ class _TerminalPromptState extends State<_TerminalPrompt> {
                               child: Align(
                                 alignment: Alignment.centerLeft,
                                 child: Text(
-                                  '@gmail.com',
+                                  EmailConfig.gmailSuffix,
                                   maxLines: 1,
                                   softWrap: false,
                                   style: TextStyle(

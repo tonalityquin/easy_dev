@@ -13,18 +13,30 @@ import '../../../../account/domain/models/session_account.dart';
 
 final ValueNotifier<int> _weeklyWorkScheduleRevision = ValueNotifier<int>(0);
 
+enum WeeklyWorkSchedulePresentation {
+  inline,
+  summaryOnly,
+  editorOnly,
+}
+
 class WeeklyWorkScheduleEditor extends StatefulWidget {
   const WeeklyWorkScheduleEditor({
     super.key,
     required this.source,
     this.initiallyExpanded = false,
     this.embedded = false,
+    this.presentation = WeeklyWorkSchedulePresentation.inline,
+    this.compactSummary = false,
+    this.onEditRequested,
     this.onChanged,
   });
 
   final String source;
   final bool initiallyExpanded;
   final bool embedded;
+  final WeeklyWorkSchedulePresentation presentation;
+  final bool compactSummary;
+  final VoidCallback? onEditRequested;
   final VoidCallback? onChanged;
 
   @override
@@ -48,7 +60,10 @@ class _WeeklyWorkScheduleEditorState extends State<WeeklyWorkScheduleEditor> {
   void initState() {
     super.initState();
     _selectedDay = _dayForDate(DateTime.now());
-    _editorExpanded = widget.initiallyExpanded;
+    _editorExpanded =
+        widget.presentation == WeeklyWorkSchedulePresentation.editorOnly
+            ? true
+            : widget.initiallyExpanded;
     _weeklyWorkScheduleRevision.addListener(_handleSharedScheduleChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -199,11 +214,8 @@ class _WeeklyWorkScheduleEditorState extends State<WeeklyWorkScheduleEditor> {
       prefs,
       fallback: fallbackBreakDays,
     );
-    final normalizedBreakDays = WorkSchedulePrefs.normalizeBreakDaysForWorkingMap(
-      breakDays: breakDays,
-      startByDay: startMap,
-      endByDay: endMap,
-    ).toSet();
+    final normalizedBreakDays =
+        WorkSchedulePrefs.normalizeBreakDays(breakDays).toSet();
 
     if (!mounted) return;
     setState(() {
@@ -237,7 +249,6 @@ class _WeeklyWorkScheduleEditorState extends State<WeeklyWorkScheduleEditor> {
       return;
     }
 
-    final wasHoliday = _startByDay[day] == null && _endByDay[day] == null;
     setState(() => _savingDay = day);
     _log('save_time_start', day: day);
 
@@ -255,13 +266,6 @@ class _WeeklyWorkScheduleEditorState extends State<WeeklyWorkScheduleEditor> {
       setState(() {
         _startByDay = Map<String, TimeOfDay?>.of(_startByDay)..[day] = startTime;
         _endByDay = Map<String, TimeOfDay?>.of(_endByDay)..[day] = endTime;
-        final nextBreakDays = <String>{..._breakDays};
-        if (startTime == null && endTime == null) {
-          nextBreakDays.remove(day);
-        } else if (wasHoliday) {
-          nextBreakDays.add(day);
-        }
-        _breakDays = nextBreakDays;
         _savingDay = null;
       });
       _log('save_time_complete', day: day, success: true);
@@ -297,11 +301,6 @@ class _WeeklyWorkScheduleEditorState extends State<WeeklyWorkScheduleEditor> {
 
   Future<void> _toggleBreakDay(String day, bool value) async {
     if (_savingDay != null) return;
-    if (_startByDay[day] == null || _endByDay[day] == null) {
-      _showSnack('근무 시간이 있는 요일만 휴게를 설정할 수 있습니다.');
-      return;
-    }
-
     HapticFeedback.selectionClick();
     setState(() => _savingDay = day);
     _log('save_break_start', day: day);
@@ -375,6 +374,14 @@ class _WeeklyWorkScheduleEditorState extends State<WeeklyWorkScheduleEditor> {
 
   void _toggleEditor() {
     HapticFeedback.selectionClick();
+    if (widget.presentation == WeeklyWorkSchedulePresentation.summaryOnly) {
+      _log('external_editor_open_request');
+      widget.onEditRequested?.call();
+      return;
+    }
+    if (widget.presentation == WeeklyWorkSchedulePresentation.editorOnly) {
+      return;
+    }
     setState(() {
       _editorExpanded = !_editorExpanded;
       if (_editorExpanded) {
@@ -407,7 +414,9 @@ class _WeeklyWorkScheduleEditorState extends State<WeeklyWorkScheduleEditor> {
       standardModeMessage: '개발자 모드 OFF',
     );
     trace.log('component=weekly_work_schedule_editor', progress: 0.12);
-    trace.log('source=${widget.source}', progress: 0.18);
+    trace.log('source=${widget.source}', progress: 0.16);
+    trace.log('presentation=${widget.presentation.name}', progress: 0.2);
+    trace.log('compactSummary=${widget.compactSummary}', progress: 0.24);
     trace.log('today=$today', progress: 0.27);
     trace.log('todayStartConfigured=${todayStart != null}', progress: 0.36);
     trace.log('todayEndConfigured=${todayEnd != null}', progress: 0.45);
@@ -418,7 +427,10 @@ class _WeeklyWorkScheduleEditorState extends State<WeeklyWorkScheduleEditor> {
     trace.log('selectedEndConfigured=${selectedEnd != null}', progress: 0.86);
     trace.log('saving=${_savingDay != null}', progress: 0.92);
     trace.log('syncMode=shared_editor_revision', progress: 0.95);
-    trace.log('scheduleStorage=local_only', progress: 0.97);
+    trace.log('scheduleStorage=local_only', progress: 0.94);
+    trace.log('breakPolicy=time_independent', progress: 0.97);
+    trace.log('breakEnabledWithoutScheduledTimes=true', progress: 0.98);
+    trace.log('clockOutRequiresBreakWhenConfigured=true', progress: 0.99);
     await trace.succeed('공용 근무 일정 편집기 상태 확인을 완료했습니다.');
   }
 
@@ -456,6 +468,142 @@ class _WeeklyWorkScheduleEditorState extends State<WeeklyWorkScheduleEditor> {
     );
   }
 
+  Widget _buildSummaryBody({
+    required CommonUiTokens tokens,
+    required TextTheme text,
+    required DateTime now,
+    required String today,
+  }) {
+    final compact = widget.compactSummary;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _formatDate(now),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style:
+                        (compact ? text.labelMedium : text.labelLarge)?.copyWith(
+                      color: tokens.textSecondary,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  SizedBox(height: compact ? 1 : 3),
+                  Text(
+                    '오늘 근무 일정',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: text.titleSmall?.copyWith(
+                      color: tokens.textPrimary,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.15,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            _ScheduleStatusBadge(
+              status: _statusOf(today),
+              tokens: tokens,
+              compact: compact,
+            ),
+          ],
+        ),
+        SizedBox(height: compact ? 7 : 12),
+        _animatedContent(
+          key:
+              'today_${_statusOf(today).name}_${_formatTime(_startByDay[today])}_${_formatTime(_endByDay[today])}_${_breakDays.contains(today)}',
+          child: _TodayScheduleSummary(
+            status: _statusOf(today),
+            startTime: _startByDay[today],
+            endTime: _endByDay[today],
+            hasBreak: _breakDays.contains(today),
+            formatTime: _formatTime,
+            onEdit: _toggleEditor,
+            compact: compact,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEditorBody({
+    required CommonUiTokens tokens,
+    required TextTheme text,
+    required bool reduceMotion,
+    required bool showInlineHeader,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (showInlineHeader) ...[
+          Divider(height: 1, color: tokens.borderSubtle),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '요일별 일정 수정',
+                  style: text.labelLarge?.copyWith(
+                    color: tokens.textPrimary,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: _savingDay == null ? _toggleEditor : null,
+                icon: const Icon(
+                  Icons.keyboard_arrow_up_rounded,
+                  size: 18,
+                ),
+                label: const Text('완료'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+        ],
+        _WeekdaySelector(
+          days: _days,
+          selectedDay: _selectedDay,
+          saving: _savingDay != null,
+          reduceMotion: reduceMotion,
+          onSelect: _selectDay,
+        ),
+        const SizedBox(height: 12),
+        _animatedContent(
+          key:
+              'editor_${_selectedDay}_${_statusOf(_selectedDay).name}_${_formatTime(_startByDay[_selectedDay])}_${_formatTime(_endByDay[_selectedDay])}_${_breakDays.contains(_selectedDay)}_${_savingDay == _selectedDay}',
+          child: _ScheduleEditor(
+            day: _selectedDay,
+            status: _statusOf(_selectedDay),
+            startTime: _startByDay[_selectedDay],
+            endTime: _endByDay[_selectedDay],
+            hasBreak: _breakDays.contains(_selectedDay),
+            isSaving: _savingDay == _selectedDay,
+            formatTime: _formatTime,
+            onPickStart: () => _pickWeeklyTime(
+              day: _selectedDay,
+              isStart: true,
+            ),
+            onPickEnd: () => _pickWeeklyTime(
+              day: _selectedDay,
+              isStart: false,
+            ),
+            onHolidayChanged: (value) => _setHoliday(_selectedDay, value),
+            onBreakChanged: (value) => _toggleBreakDay(_selectedDay, value),
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final tokens = CommonUiTheme.of(context);
@@ -464,125 +612,70 @@ class _WeeklyWorkScheduleEditorState extends State<WeeklyWorkScheduleEditor> {
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final now = DateTime.now();
     final today = _dayForDate(now);
+    final compactLoading = widget.presentation ==
+            WeeklyWorkSchedulePresentation.summaryOnly &&
+        widget.compactSummary;
 
-    final content = _loading
-        ? KeyedSubtree(
-            key: const ValueKey<String>('schedule_loading'),
-            child: _ScheduleLoading(tokens: tokens),
-          )
-        : KeyedSubtree(
+    late final Widget content;
+    if (_loading) {
+      content = KeyedSubtree(
+        key: const ValueKey<String>('schedule_loading'),
+        child: _ScheduleLoading(
+          tokens: tokens,
+          compact: compactLoading,
+        ),
+      );
+    } else {
+      switch (widget.presentation) {
+        case WeeklyWorkSchedulePresentation.summaryOnly:
+          content = KeyedSubtree(
+            key: const ValueKey<String>('schedule_summary'),
+            child: _buildSummaryBody(
+              tokens: tokens,
+              text: text,
+              now: now,
+              today: today,
+            ),
+          );
+          break;
+        case WeeklyWorkSchedulePresentation.editorOnly:
+          content = KeyedSubtree(
+            key: const ValueKey<String>('schedule_editor'),
+            child: _buildEditorBody(
+              tokens: tokens,
+              text: text,
+              reduceMotion: reduceMotion,
+              showInlineHeader: false,
+            ),
+          );
+          break;
+        case WeeklyWorkSchedulePresentation.inline:
+          content = KeyedSubtree(
             key: const ValueKey<String>('schedule_content'),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _formatDate(now),
-                            style: text.labelLarge?.copyWith(
-                              color: tokens.textSecondary,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            '오늘 근무 일정',
-                            style: text.titleSmall?.copyWith(
-                              color: tokens.textPrimary,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 0.15,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    _ScheduleStatusBadge(
-                      status: _statusOf(today),
-                      tokens: tokens,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                _animatedContent(
-                  key:
-                      'today_${_statusOf(today).name}_${_formatTime(_startByDay[today])}_${_formatTime(_endByDay[today])}_${_breakDays.contains(today)}',
-                  child: _TodayScheduleSummary(
-                    status: _statusOf(today),
-                    startTime: _startByDay[today],
-                    endTime: _endByDay[today],
-                    hasBreak: _breakDays.contains(today),
-                    formatTime: _formatTime,
-                    onEdit: _toggleEditor,
-                  ),
+                _buildSummaryBody(
+                  tokens: tokens,
+                  text: text,
+                  now: now,
+                  today: today,
                 ),
                 if (_editorExpanded) ...[
                   const SizedBox(height: 12),
-                  Divider(height: 1, color: tokens.borderSubtle),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          '요일별 일정 수정',
-                          style: text.labelLarge?.copyWith(
-                            color: tokens.textPrimary,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ),
-                      TextButton.icon(
-                        onPressed:
-                            _savingDay == null ? _toggleEditor : null,
-                        icon: const Icon(
-                          Icons.keyboard_arrow_up_rounded,
-                          size: 18,
-                        ),
-                        label: const Text('완료'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  _WeekdaySelector(
-                    days: _days,
-                    selectedDay: _selectedDay,
-                    saving: _savingDay != null,
+                  _buildEditorBody(
+                    tokens: tokens,
+                    text: text,
                     reduceMotion: reduceMotion,
-                    onSelect: _selectDay,
-                  ),
-                  const SizedBox(height: 12),
-                  _animatedContent(
-                    key:
-                        'editor_${_selectedDay}_${_statusOf(_selectedDay).name}_${_formatTime(_startByDay[_selectedDay])}_${_formatTime(_endByDay[_selectedDay])}_${_breakDays.contains(_selectedDay)}_${_savingDay == _selectedDay}',
-                    child: _ScheduleEditor(
-                      day: _selectedDay,
-                      status: _statusOf(_selectedDay),
-                      startTime: _startByDay[_selectedDay],
-                      endTime: _endByDay[_selectedDay],
-                      hasBreak: _breakDays.contains(_selectedDay),
-                      isSaving: _savingDay == _selectedDay,
-                      formatTime: _formatTime,
-                      onPickStart: () => _pickWeeklyTime(
-                        day: _selectedDay,
-                        isStart: true,
-                      ),
-                      onPickEnd: () => _pickWeeklyTime(
-                        day: _selectedDay,
-                        isStart: false,
-                      ),
-                      onHolidayChanged: (value) =>
-                          _setHoliday(_selectedDay, value),
-                      onBreakChanged: (value) =>
-                          _toggleBreakDay(_selectedDay, value),
-                    ),
+                    showInlineHeader: true,
                   ),
                 ],
               ],
             ),
           );
+          break;
+      }
+    }
 
     final animatedContent = AnimatedSwitcher(
       duration: reduceMotion ? Duration.zero : const Duration(milliseconds: 190),
@@ -604,9 +697,16 @@ class _WeeklyWorkScheduleEditorState extends State<WeeklyWorkScheduleEditor> {
       child: content,
     );
 
+    final padding = widget.compactSummary &&
+            widget.presentation == WeeklyWorkSchedulePresentation.summaryOnly
+        ? const EdgeInsets.symmetric(horizontal: 11, vertical: 9)
+        : const EdgeInsets.all(12);
+
     return Semantics(
       container: true,
-      label: '오늘 근무 일정',
+      label: widget.presentation == WeeklyWorkSchedulePresentation.editorOnly
+          ? '요일별 근무 일정 수정'
+          : '오늘 근무 일정',
       child: Material(
         color: tokens.transparent,
         child: GestureDetector(
@@ -614,7 +714,7 @@ class _WeeklyWorkScheduleEditorState extends State<WeeklyWorkScheduleEditor> {
           onLongPress: () {
             HapticFeedback.mediumImpact();
             debugPrint(
-              '[WeeklyWorkScheduleEditor] source=${widget.source} event=developer_status_request',
+              '[WeeklyWorkScheduleEditor] source=${widget.source} event=developer_status_request presentation=${widget.presentation.name}',
             );
             _showDeveloperStatus();
           },
@@ -625,7 +725,7 @@ class _WeeklyWorkScheduleEditorState extends State<WeeklyWorkScheduleEditor> {
             child: widget.embedded
                 ? animatedContent
                 : Container(
-                    padding: const EdgeInsets.all(12),
+                    padding: padding,
                     decoration: BoxDecoration(
                       color: tokens.surface,
                       borderRadius: BorderRadius.circular(16),
@@ -638,19 +738,24 @@ class _WeeklyWorkScheduleEditorState extends State<WeeklyWorkScheduleEditor> {
       ),
     );
   }
+
 }
 
 enum _ScheduleStatus { working, holiday, partial }
 
 class _ScheduleLoading extends StatelessWidget {
-  const _ScheduleLoading({required this.tokens});
+  const _ScheduleLoading({
+    required this.tokens,
+    this.compact = false,
+  });
 
   final CommonUiTokens tokens;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 92,
+      height: compact ? 64 : 92,
       child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -663,7 +768,7 @@ class _ScheduleLoading extends StatelessWidget {
                 color: tokens.accent,
               ),
             ),
-            const SizedBox(height: 9),
+            SizedBox(height: compact ? 6 : 9),
             Text(
               '오늘 근무 일정을 불러오는 중입니다.',
               textAlign: TextAlign.center,
@@ -683,10 +788,12 @@ class _ScheduleStatusBadge extends StatelessWidget {
   const _ScheduleStatusBadge({
     required this.status,
     required this.tokens,
+    this.compact = false,
   });
 
   final _ScheduleStatus status;
   final CommonUiTokens tokens;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -711,7 +818,10 @@ class _ScheduleStatusBadge extends StatelessWidget {
         break;
     }
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 8 : 9,
+        vertical: compact ? 4 : 6,
+      ),
       decoration: BoxDecoration(
         color: background,
         borderRadius: BorderRadius.circular(999),
@@ -735,6 +845,7 @@ class _TodayScheduleSummary extends StatelessWidget {
     required this.hasBreak,
     required this.formatTime,
     required this.onEdit,
+    this.compact = false,
   });
 
   final _ScheduleStatus status;
@@ -743,6 +854,7 @@ class _TodayScheduleSummary extends StatelessWidget {
   final bool hasBreak;
   final String Function(TimeOfDay? value) formatTime;
   final VoidCallback onEdit;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -756,8 +868,8 @@ class _TodayScheduleSummary extends StatelessWidget {
             child: Row(
               children: [
                 Container(
-                  width: 38,
-                  height: 38,
+                  width: compact ? 32 : 38,
+                  height: compact ? 32 : 38,
                   decoration: BoxDecoration(
                     color: tokens.surfaceSelected,
                     shape: BoxShape.circle,
@@ -765,16 +877,23 @@ class _TodayScheduleSummary extends StatelessWidget {
                   child: Icon(
                     Icons.event_busy_rounded,
                     color: tokens.iconSecondary,
-                    size: 20,
+                    size: compact ? 18 : 20,
                   ),
                 ),
-                const SizedBox(width: 10),
+                SizedBox(width: compact ? 8 : 10),
                 Expanded(
-                  child: Text(
-                    '오늘은 휴무일입니다.',
-                    style: text.bodyMedium?.copyWith(
-                      color: tokens.textPrimary,
-                      fontWeight: FontWeight.w800,
+                  child: AnimatedSwitcher(
+                    duration:
+                        (MediaQuery.maybeOf(context)?.disableAnimations ?? false)
+                            ? Duration.zero
+                            : CommonUiMotion.selection,
+                    child: Text(
+                      '오늘은 휴무일입니다. · ${hasBreak ? '휴게 있음' : '휴게 없음'}',
+                      key: ValueKey<bool>(hasBreak),
+                      style: text.bodyMedium?.copyWith(
+                        color: tokens.textPrimary,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
                 ),
@@ -795,7 +914,7 @@ class _TodayScheduleSummary extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: EdgeInsets.all(compact ? 8 : 10),
             decoration: BoxDecoration(
               color: tokens.dangerContainer,
               borderRadius: BorderRadius.circular(13),
@@ -821,7 +940,7 @@ class _TodayScheduleSummary extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: compact ? 4 : 8),
           Align(
             alignment: Alignment.centerRight,
             child: TextButton.icon(
@@ -858,11 +977,14 @@ class _TodayScheduleSummary extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 10),
+        SizedBox(height: compact ? 6 : 10),
         Row(
           children: [
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+              padding: EdgeInsets.symmetric(
+                horizontal: compact ? 8 : 9,
+                vertical: compact ? 5 : 7,
+              ),
               decoration: BoxDecoration(
                 color: hasBreak
                     ? tokens.warningContainer
@@ -1062,7 +1184,7 @@ class _ScheduleEditor extends StatelessWidget {
     final text = Theme.of(context).textTheme;
     final isHoliday = status == _ScheduleStatus.holiday;
     final hasPartial = status == _ScheduleStatus.partial;
-    final effectiveBreak = hasBreak && !isHoliday && !hasPartial;
+    final effectiveBreak = hasBreak;
 
     return Container(
       padding: const EdgeInsets.all(10),
@@ -1148,7 +1270,7 @@ class _ScheduleEditor extends StatelessWidget {
                   label: '휴게',
                   icon: Icons.coffee_rounded,
                   selected: effectiveBreak,
-                  enabled: !isSaving && !isHoliday && !hasPartial,
+                  enabled: !isSaving,
                   selectedBackground: tokens.warningContainer,
                   selectedForeground: tokens.onWarningContainer,
                   onChanged: onBreakChanged,
@@ -1203,15 +1325,16 @@ class _ScheduleTimeButton extends StatelessWidget {
       child: InkWell(
         onTap: enabled ? onPressed : null,
         borderRadius: BorderRadius.circular(13),
-        child: Ink(
-          height: 48,
-          padding: const EdgeInsets.symmetric(horizontal: 9),
-          decoration: BoxDecoration(
-            color: enabled ? tokens.surface : tokens.surfaceDisabled,
-            borderRadius: BorderRadius.circular(13),
-            border: Border.all(color: tokens.borderSubtle),
-          ),
-          child: Row(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Ink(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+            decoration: BoxDecoration(
+              color: enabled ? tokens.surface : tokens.surfaceDisabled,
+              borderRadius: BorderRadius.circular(13),
+              border: Border.all(color: tokens.borderSubtle),
+            ),
+            child: Row(
             children: [
               Icon(
                 icon,
@@ -1244,6 +1367,7 @@ class _ScheduleTimeButton extends StatelessWidget {
                 ),
               ),
             ],
+            ),
           ),
         ),
       ),
@@ -1283,7 +1407,8 @@ class _ScheduleToggle extends StatelessWidget {
         child: AnimatedContainer(
           duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
           curve: Curves.easeOutCubic,
-          height: 40,
+          constraints: const BoxConstraints(minHeight: 40),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           decoration: BoxDecoration(
             color: !enabled
                 ? tokens.surfaceDisabled

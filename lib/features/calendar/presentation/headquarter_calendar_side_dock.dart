@@ -8,6 +8,7 @@ import '../../../design_system/common_ui/common_ui_components.dart';
 import '../../../design_system/common_ui/common_ui_side_dock.dart';
 import '../../../design_system/common_ui/common_ui_side_dock_frame.dart';
 import '../../../design_system/common_ui/common_ui_theme.dart';
+import '../../../shared/secondary/widgets/ops_console_widgets.dart';
 import '../../selector/application/dev_auth.dart';
 
 @immutable
@@ -225,7 +226,7 @@ class _HeadquarterCalendarSideDockState
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
       child: CommonSideDockFrame(
         title: _dateTitle,
-        subtitle: '선택 날짜의 전체 일정',
+        subtitle: '',
         icon: Icons.calendar_month_rounded,
         onClose: () => Navigator.of(context).pop(),
         onLongPress: _developerMode ? _showStatus : null,
@@ -251,31 +252,63 @@ class _HeadquarterCalendarSideDockState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const CommonSideDockSection(
-              title: '전체 일정',
-              subtitle: '선택 날짜의 일정을 시간순으로 확인합니다.',
-              order: 1,
-              child: SizedBox.shrink(),
-            ),
-            const SizedBox(height: 6),
             Expanded(
-              child: entries.isEmpty
-                  ? const _DockEmptyState()
-                  : ListView.builder(
-                      padding: const EdgeInsets.only(right: 2, bottom: 4),
-                      physics: const BouncingScrollPhysics(),
-                      itemCount: entries.length,
-                      itemBuilder: (context, index) {
-                        final entry = entries[index];
-                        return CommonSideDockReveal(
-                          order: index + 2,
-                          child: _DockEventTile(
-                            entry: entry,
-                            onTap: () => _openEntry(entry),
-                          ),
-                        );
-                      },
-                    ),
+              child: AnimatedSwitcher(
+                duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false
+                    ? Duration.zero
+                    : CommonUiMotion.selection,
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(0, .025),
+                      end: Offset.zero,
+                    ).animate(animation),
+                    child: child,
+                  ),
+                ),
+                child: entries.isEmpty
+                    ? const _DockEmptyState(
+                        key: ValueKey<String>('calendar-dock-empty'),
+                      )
+                    : KeyedSubtree(
+                        key: ValueKey<String>(
+                          'calendar-dock-${entries.map((entry) => entry.id).join("|")}',
+                        ),
+                        child: ListView(
+                          padding: const EdgeInsets.only(right: 2, bottom: 4),
+                          physics: const BouncingScrollPhysics(),
+                          children: [
+                            CommonSideDockReveal(
+                              order: 1,
+                              child: OpsDockListSurface(
+                                child: Column(
+                                  children: [
+                                    for (var index = 0;
+                                        index < entries.length;
+                                        index++) ...[
+                                      if (index > 0)
+                                        Divider(
+                                          height: 1,
+                                          thickness: 1,
+                                          color: tokens.borderSubtle,
+                                        ),
+                                      _DockEventTile(
+                                        entry: entries[index],
+                                        onTap: () =>
+                                            _openEntry(entries[index]),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+              ),
             ),
           ],
         ),
@@ -335,7 +368,7 @@ class _CountPill extends StatelessWidget {
   }
 }
 
-class _DockEventTile extends StatefulWidget {
+class _DockEventTile extends StatelessWidget {
   const _DockEventTile({
     required this.entry,
     required this.onTap,
@@ -345,146 +378,80 @@ class _DockEventTile extends StatefulWidget {
   final Future<void> Function() onTap;
 
   @override
-  State<_DockEventTile> createState() => _DockEventTileState();
-}
-
-class _DockEventTileState extends State<_DockEventTile> {
-  bool _pressed = false;
-  bool _hovered = false;
-  bool _focused = false;
-
-  @override
   Widget build(BuildContext context) {
     final tokens = CommonUiTheme.of(context);
-    final reduceMotion =
-        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    final duration = reduceMotion ? Duration.zero : CommonUiMotion.selection;
-    final entry = widget.entry;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 7),
-      child: FocusableActionDetector(
-        onShowHoverHighlight: (value) {
-          if (mounted) setState(() => _hovered = value);
-        },
-        onShowFocusHighlight: (value) {
-          if (mounted) setState(() => _focused = value);
-        },
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTapDown: (_) => setState(() => _pressed = true),
-          onTapCancel: () => setState(() => _pressed = false),
-          onTapUp: (_) {
-            setState(() => _pressed = false);
-            widget.onTap();
-          },
-          child: AnimatedScale(
-            scale: _pressed ? .985 : 1,
-            duration: reduceMotion ? Duration.zero : CommonUiMotion.press,
-            curve: CommonUiMotion.standard,
-            child: AnimatedContainer(
-              duration: duration,
-              curve: CommonUiMotion.enter,
-              padding: const EdgeInsets.all(11),
-              decoration: BoxDecoration(
-                color: _hovered
-                    ? tokens.surfaceSelected
-                    : Color.alphaBlend(
-                        entry.color.withOpacity(.06),
-                        tokens.surfaceRaised,
-                      ),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: _focused
-                      ? tokens.focusRing
-                      : entry.color.withOpacity(_hovered ? .34 : .20),
-                  width: _focused ? 2 : 1,
+    return OpsDockSelectableRowSurface(
+      selected: false,
+      selectionColor: entry.color,
+      selectedContainer: entry.color.withOpacity(.12),
+      onTap: onTap,
+      child: Row(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: entry.color.withOpacity(.10),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            alignment: Alignment.center,
+            child: Icon(entry.icon, color: entry.color, size: 19),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  entry.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: tokens.textPrimary,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
-                boxShadow: _hovered
-                    ? [
-                        BoxShadow(
-                          color: tokens.shadow.withOpacity(tokens.isDark ? .22 : .08),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ]
-                    : const [],
-              ),
-              child: Row(
-                children: [
-                  AnimatedContainer(
-                    duration: duration,
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: entry.color.withOpacity(.12),
-                      borderRadius: BorderRadius.circular(11),
-                    ),
-                    alignment: Alignment.center,
-                    child: Icon(entry.icon, color: entry.color, size: 19),
+                const SizedBox(height: 3),
+                Text(
+                  entry.subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: tokens.textSecondary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          entry.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: tokens.textPrimary,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          entry.subtitle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: tokens.textSecondary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (entry.task)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 6),
-                      child: Icon(Icons.bolt_rounded, color: entry.color, size: 17),
-                    )
-                  else if (entry.readOnly)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 6),
-                      child: Icon(
-                        Icons.lock_outline_rounded,
-                        color: tokens.textSecondary,
-                        size: 17,
-                      ),
-                    ),
-                  AnimatedSlide(
-                    duration: duration,
-                    offset: _hovered ? const Offset(.12, 0) : Offset.zero,
-                    child: Icon(
-                      Icons.chevron_right_rounded,
-                      color: tokens.textSecondary,
-                      size: 18,
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
-        ),
+          if (entry.task)
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: Icon(Icons.bolt_rounded, color: entry.color, size: 17),
+            )
+          else if (entry.readOnly)
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: Icon(
+                Icons.lock_outline_rounded,
+                color: tokens.textSecondary,
+                size: 17,
+              ),
+            ),
+          Icon(
+            Icons.chevron_right_rounded,
+            color: tokens.textSecondary,
+            size: 18,
+          ),
+        ],
       ),
     );
   }
 }
 
 class _DockEmptyState extends StatelessWidget {
-  const _DockEmptyState();
+  const _DockEmptyState({super.key});
 
   @override
   Widget build(BuildContext context) {

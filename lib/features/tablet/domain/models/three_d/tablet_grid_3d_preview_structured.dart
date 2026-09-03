@@ -1586,23 +1586,23 @@ class _ParkingGrid3DPainter extends CustomPainter {
       return false;
     }
 
-    const departRed = Color(0xFFC62828);
-    const reqAmber = Color(0xFFE09A00);
-    const parkedBlue = Color(0xFF2F6FA8);
+    final tokens = cs.brightness == Brightness.dark
+        ? const CommonUiTokens.dark()
+        : const CommonUiTokens.light();
 
     Color statusColor(ParkingSlotStatus s) {
       switch (s) {
         case ParkingSlotStatus.departureRequest:
-          return _ColorUtil.ensureContrast(departRed, palette.parkingSlotTop,
-                  fallback: cs.error, target: 2.0)
+          return _ColorUtil.ensureContrast(tokens.statusDepartureRequested, palette.parkingSlotTop,
+                  fallback: tokens.statusDepartureRequested, target: 2.0)
               .withOpacity(0.96);
         case ParkingSlotStatus.parkingRequest:
-          return _ColorUtil.ensureContrast(reqAmber, palette.parkingSlotTop,
-                  fallback: cs.tertiary, target: 2.0)
+          return _ColorUtil.ensureContrast(tokens.statusParkingRequested, palette.parkingSlotTop,
+                  fallback: tokens.statusParkingRequested, target: 2.0)
               .withOpacity(0.94);
         case ParkingSlotStatus.parked:
-          return _ColorUtil.ensureContrast(parkedBlue, palette.parkingSlotTop,
-                  fallback: cs.primary, target: 2.0)
+          return _ColorUtil.ensureContrast(tokens.statusParkingCompleted, palette.parkingSlotTop,
+                  fallback: tokens.statusParkingCompleted, target: 2.0)
               .withOpacity(0.90);
         case ParkingSlotStatus.empty:
           return palette.parkingSlotOutline.withOpacity(0.0);
@@ -2835,25 +2835,28 @@ class _ParkingGrid3DPainter extends CustomPainter {
     final bg = cs.surfaceContainerLowest;
     final isLightTheme = bg.computeLuminance() > 0.5;
 
+    final tokens = cs.brightness == Brightness.dark
+        ? const CommonUiTokens.dark()
+        : const CommonUiTokens.light();
     Color accent = palette.towerMark;
     final ts = model.towerStatus;
     if (ts != ParkingSlotStatus.empty) {
       switch (ts) {
         case ParkingSlotStatus.parked:
-          accent = const Color(0xFF2E9B54);
+          accent = tokens.statusParkingCompleted;
           break;
         case ParkingSlotStatus.departureRequest:
-          accent = const Color(0xFFD84A3A);
+          accent = tokens.statusDepartureRequested;
           break;
         case ParkingSlotStatus.parkingRequest:
-          accent = const Color(0xFFE09A00);
+          accent = tokens.statusParkingRequested;
           break;
         case ParkingSlotStatus.empty:
           accent = palette.towerMark;
           break;
       }
       accent = _ColorUtil.ensureContrast(accent, bg,
-          fallback: cs.primary, target: 2.0);
+          fallback: tokens.accent, target: 2.0);
     }
 
     final stoneTop = _ColorUtil.mix(

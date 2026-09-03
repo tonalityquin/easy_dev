@@ -28,4 +28,17 @@ class AreaSnapshotScope {
       area: _area,
     );
   }
+
+  static Future<HeadquarterSnapshotArea> updateCurrentAreaEmail(
+    String email,
+  ) async {
+    if (!isBound) {
+      throw StateError('area snapshot scope is not bound');
+    }
+    return HeadquarterSnapshotRepository.instance.updateAreaEmail(
+      division: _division,
+      area: _area,
+      email: email,
+    );
+  }
 }

@@ -2,14 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../../../app/config/commute_true_false_mode_config.dart';
 import '../../../../../app/init/app_exit_service.dart';
 import '../../../../../app/init/work_schedule_prefs.dart';
 import '../../../../../app/utils/developer_operation_status_dialog.dart';
-import '../../../../../features/commute/domain/repositories/commute_true_false_repository.dart';
+import '../../../../../features/attendance/application/attendance_diagnostics.dart';
+import '../../../../../features/attendance/application/common_attendance_service.dart';
+import '../../../../../features/attendance/widgets/common_attendance_punch_feedback.dart';
 import '../../../../../features/commute/widgets/common_punch_recorder_surface.dart';
 import '../../../../../features/mode_single/application/att_brk_repository.dart';
-import 'double_dashboard_punch_card_feedback.dart';
 
 class DoubleDashboardInsidePunchRecorderSection extends StatefulWidget {
   const DoubleDashboardInsidePunchRecorderSection({
@@ -38,11 +38,9 @@ class _DoubleDashboardInsidePunchRecorderSectionState extends State<DoubleDashbo
   bool _requiresBreak = true;
   AttBrkModeType? _submitting;
 
-  final CommuteTrueFalseRepository _commuteTrueFalseRepo =
-      CommuteTrueFalseRepository();
-
   bool get _hasWorkIn => (_workInTime ?? '').trim().isNotEmpty;
   bool get _hasBreak => (_breakTime ?? '').trim().isNotEmpty;
+  bool get _hasWorkOut => (_workOutTime ?? '').trim().isNotEmpty;
   bool get _disableWorkInPunch => true;
 
   @override
@@ -98,37 +96,17 @@ class _DoubleDashboardInsidePunchRecorderSectionState extends State<DoubleDashbo
     await _loadForDate(picked);
   }
 
-  Future<void> _recordClockInAtToCommuteTrueFalse(DateTime clockInAt) async {
-    final enabled = await CommuteTrueFalseModeConfig.isEnabled();
-    if (!enabled) {
-      _debug('commute_true_false_skip reason=disabled');
-      return;
-    }
-    final company = widget.division.trim();
-    final area = widget.area.trim();
-    final workerName = widget.userName.trim();
-    if (company.isEmpty || area.isEmpty || workerName.isEmpty) {
-      _debug(
-        'commute_true_false_skip reason=missing_identity company=$company area=$area worker=$workerName',
-      );
-      return;
-    }
-    await _commuteTrueFalseRepo.setClockInAt(
-      company: company,
-      area: area,
-      workerName: workerName,
-      clockInAt: clockInAt,
-    );
-  }
-
   Future<void> _exitAppAfterClockOut(BuildContext context) async {
     await AppExitService.exitApp(context);
   }
 
   Future<void> _punch(AttBrkModeType type) async {
     if (_loading || _submitting != null) return;
-    if (type == AttBrkModeType.workIn && _disableWorkInPunch) return;
-    if (type == AttBrkModeType.breakTime && !_hasWorkIn) return;
+    if (type == AttBrkModeType.workIn) return;
+    if (type == AttBrkModeType.breakTime &&
+        (!_requiresBreak || !_hasWorkIn || _hasWorkOut)) {
+      return;
+    }
     if (type == AttBrkModeType.workOut &&
         (!_hasWorkIn || (_requiresBreak && !_hasBreak))) {
       return;
@@ -145,32 +123,52 @@ class _DoubleDashboardInsidePunchRecorderSectionState extends State<DoubleDashbo
       now.millisecond,
       now.microsecond,
     );
+    final repunch = type == AttBrkModeType.workOut &&
+        (_workOutTime ?? '').trim().isNotEmpty;
     _debug(
-      'punch_start type=${type.code} dateTime=${targetDateTime.toIso8601String()}',
+      'punch_start type=${type.code} mode=double repunch=$repunch dateTime=${targetDateTime.toIso8601String()}',
     );
     try {
-      await AttBrkRepository.instance.insertEvent(
-        dateTime: targetDateTime,
-        type: type,
-      );
+      final result = type == AttBrkModeType.breakTime
+          ? await CommonAttendanceService.recordBreak(
+              context,
+              source: 'double_punch_recorder',
+              modeKey: 'double',
+              recordedAt: targetDateTime,
+            )
+          : repunch
+              ? await CommonAttendanceService.replaceClockOut(
+                  context,
+                  source: 'double_punch_recorder_repunch',
+                  modeKey: 'double',
+                  recordedAt: targetDateTime,
+                )
+              : await CommonAttendanceService.clockOut(
+                  context,
+                  source: 'double_punch_recorder',
+                  modeKey: 'double',
+                  recordedAt: targetDateTime,
+                );
+      if (!result.success) {
+        throw StateError(result.message);
+      }
       if (!mounted) return;
-      await showDoubleDashboardPunchCardFeedback(
+      await showCommonAttendancePunchFeedback(
         context,
         type: type,
         dateTime: targetDateTime,
         requiresBreak: _requiresBreak,
       );
-      if (type == AttBrkModeType.workIn) {
-        await _recordClockInAtToCommuteTrueFalse(targetDateTime);
-      }
       if (!mounted) return;
       await _loadForDate(_selectedDate);
-      _debug('punch_complete type=${type.code}');
+      _debug('punch_complete type=${type.code} mode=double repunch=$repunch');
       if (type == AttBrkModeType.workOut && mounted) {
         await _exitAppAfterClockOut(context);
       }
     } catch (error, stackTrace) {
-      _debug('punch_failure type=${type.code} error=$error stack=$stackTrace');
+      _debug(
+        'punch_failure type=${type.code} mode=double repunch=$repunch error=$error stack=$stackTrace',
+      );
       rethrow;
     } finally {
       if (mounted) setState(() => _submitting = null);
@@ -194,9 +192,16 @@ class _DoubleDashboardInsidePunchRecorderSectionState extends State<DoubleDashbo
     trace.log('workIn=${_workInTime ?? ''}', progress: .4);
     trace.log('break=${_breakTime ?? ''}', progress: .52);
     trace.log('workOut=${_workOutTime ?? ''}', progress: .64);
-    trace.log('requiresBreak=$_requiresBreak', progress: .76);
-    trace.log('workInReadOnly=$_disableWorkInPunch', progress: .86);
-    trace.log('submitting=${_submitting?.code ?? ''}', progress: .94);
+    trace.log('requiresBreak=$_requiresBreak', progress: .72);
+    trace.log('hasWorkOut=$_hasWorkOut', progress: .78);
+    trace.log('breakPolicy=time_independent', progress: .82);
+    trace.log('breakAllowedWithoutScheduledTimes=true', progress: .86);
+    trace.log('clockOutRequiresBreakWhenConfigured=true', progress: .9);
+    trace.log('workInReadOnly=$_disableWorkInPunch', progress: .94);
+    trace.log('submitting=${_submitting?.code ?? ''}', progress: .97);
+    for (final line in AttendanceDiagnostics.lines) {
+      trace.log(line);
+    }
     await trace.succeed('출퇴근 기록기 상태 확인을 완료했습니다.');
   }
 
@@ -263,6 +268,18 @@ class _DoubleDashboardInsidePunchRecorderSectionState extends State<DoubleDashbo
         tone: CommonPunchTone.warning,
         state: CommonPunchSlotState.disabled,
         statusLabel: '대기',
+      );
+    }
+    if (_hasWorkOut) {
+      return CommonPunchSlotData(
+        label: '휴게',
+        icon: Icons.coffee_rounded,
+        tone: CommonPunchTone.warning,
+        state: _hasBreak
+            ? CommonPunchSlotState.readOnly
+            : CommonPunchSlotState.disabled,
+        time: _breakTime,
+        statusLabel: _hasBreak ? '완료' : '종료',
       );
     }
     return CommonPunchSlotData(

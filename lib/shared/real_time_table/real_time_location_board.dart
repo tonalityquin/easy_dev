@@ -29,6 +29,49 @@ const double _kParentPageMinVelocity = 520.0;
 const Duration _kZonePeekShowDuration = Duration(milliseconds: 160);
 const Duration _kZonePeekHideDuration = Duration(milliseconds: 130);
 
+
+Color _statusSignatureColor(ParkingSlotStatus status, CommonUiTokens tokens) {
+  switch (status) {
+    case ParkingSlotStatus.parkingRequest:
+      return tokens.statusParkingRequested;
+    case ParkingSlotStatus.parked:
+      return tokens.statusParkingCompleted;
+    case ParkingSlotStatus.departureRequest:
+    case ParkingSlotStatus.departureInProgress:
+      return tokens.statusDepartureRequested;
+    case ParkingSlotStatus.empty:
+      return tokens.borderStrong;
+  }
+}
+
+Color _statusSignatureContainer(ParkingSlotStatus status, CommonUiTokens tokens) {
+  switch (status) {
+    case ParkingSlotStatus.parkingRequest:
+      return tokens.statusParkingRequestedContainer;
+    case ParkingSlotStatus.parked:
+      return tokens.statusParkingCompletedContainer;
+    case ParkingSlotStatus.departureRequest:
+    case ParkingSlotStatus.departureInProgress:
+      return tokens.statusDepartureRequestedContainer;
+    case ParkingSlotStatus.empty:
+      return tokens.surfaceRaised;
+  }
+}
+
+Color _statusSignatureOnContainer(ParkingSlotStatus status, CommonUiTokens tokens) {
+  switch (status) {
+    case ParkingSlotStatus.parkingRequest:
+      return tokens.onStatusParkingRequestedContainer;
+    case ParkingSlotStatus.parked:
+      return tokens.onStatusParkingCompletedContainer;
+    case ParkingSlotStatus.departureRequest:
+    case ParkingSlotStatus.departureInProgress:
+      return tokens.onStatusDepartureRequestedContainer;
+    case ParkingSlotStatus.empty:
+      return tokens.textSecondary;
+  }
+}
+
 class RealTimeLocationBoard extends StatefulWidget {
   const RealTimeLocationBoard({
     super.key,
@@ -2059,21 +2102,15 @@ class _TowerStatusSlotCardState extends State<_TowerStatusSlotCard> {
     final duration = widget.reduceMotion
         ? Duration.zero
         : const Duration(milliseconds: 150);
-    final background = _usesDepartureTone
-        ? tokens.statusDepartureRequestedContainer
-        : occupied
-            ? cs.primaryContainer
-            : cs.surface;
-    final border = _usesDepartureTone
-        ? tokens.statusDepartureRequested
-        : occupied
-            ? cs.primary
-            : cs.outlineVariant;
-    final foreground = _usesDepartureTone
-        ? tokens.onStatusDepartureRequestedContainer
-        : occupied
-            ? cs.primary
-            : cs.onSurfaceVariant;
+    final background = occupied
+        ? _statusSignatureContainer(widget.slot.status, tokens)
+        : cs.surface;
+    final border = occupied
+        ? _statusSignatureColor(widget.slot.status, tokens)
+        : cs.outlineVariant;
+    final foreground = occupied
+        ? _statusSignatureOnContainer(widget.slot.status, tokens)
+        : cs.onSurfaceVariant;
     final semantics = occupied
         ? '${widget.zone.group} ${widget.zone.child} 슬롯 ${widget.slot.no}, 번호판 ${row.plateNumber}, $_statusLabel, 상태 처리 빠른 실행'
         : '${widget.zone.group} ${widget.zone.child} 슬롯 ${widget.slot.no}, 빈 슬롯';
@@ -3748,14 +3785,9 @@ class _OccupiedSlotLabel extends StatelessWidget {
         reduceMotion ? Duration.zero : const Duration(milliseconds: 180);
     final pressDuration =
         reduceMotion ? Duration.zero : const Duration(milliseconds: 90);
-    final background = _usesDepartureTone
-        ? tokens.statusDepartureRequestedContainer
-        : cs.primaryContainer;
-    final border =
-        _usesDepartureTone ? tokens.statusDepartureRequested : cs.primary;
-    final foreground = _usesDepartureTone
-        ? tokens.onStatusDepartureRequestedContainer
-        : cs.primary;
+    final background = _statusSignatureContainer(entry.slot.status, tokens);
+    final border = _statusSignatureColor(entry.slot.status, tokens);
+    final foreground = _statusSignatureOnContainer(entry.slot.status, tokens);
     final marker = _usesDepartureTone
         ? tokens.statusDepartureRequested
         : Colors.transparent;

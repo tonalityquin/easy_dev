@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../account/applications/user_state.dart';
-import '../../../mode_single/application/att_brk_repository.dart';
-import '../../applications/common/endtime_reminder_service.dart';
+import '../../../attendance/application/common_attendance_service.dart';
 import '../../applications/common/break_record_result.dart';
 
 class SingleHomeDashBoardController {
@@ -13,58 +10,36 @@ class SingleHomeDashBoardController {
     BuildContext context,
   ) async {
     if (!userState.isWorking) {
-      await userState.isHeWorking();
+      debugPrint(
+        '[SingleHomeDashBoardController] work_status_ignored reason=clock_in_requires_common_gate',
+      );
       return;
     }
-
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('isWorking', false);
-    await EndTimeReminderService.instance.cancel();
-    await userState.isHeWorking();
-    debugPrint(
-      '[SingleHomeDashBoardController] clockout_local_state_updated isWorking=${userState.isWorking}',
+    final result = await CommonAttendanceService.clockOut(
+      context,
+      source: 'single_home_dashboard_controller',
+      modeKey: 'single',
     );
+    if (!result.success) {
+      debugPrint(
+        '[SingleHomeDashBoardController] clock_out_failed message=${result.message}',
+      );
+    }
   }
 
   Future<BreakRecordResult> recordBreakTime(BuildContext context) async {
-    final userState = Provider.of<UserState>(context, listen: false);
-    final session = userState.session;
-    if (session == null) {
-      const message = '사용자 세션을 확인할 수 없습니다.';
-      debugPrint(
-        '[SingleHomeDashBoardController] break_record_failed message=$message',
-      );
-      return BreakRecordResult.failure(message: message);
+    final result = await CommonAttendanceService.recordBreak(
+      context,
+      source: 'single_home_dashboard_controller',
+      modeKey: 'single',
+    );
+    final recordedAt = result.recordedAt;
+    if (!result.success || recordedAt == null) {
+      return BreakRecordResult.failure(message: result.message);
     }
-
-    final now = DateTime.now();
-    try {
-      await AttBrkRepository.instance.insertEventAndUpload(
-        dateTime: now,
-        type: AttBrkModeType.breakTime,
-        userId: session.id,
-        userName: session.displayName,
-        area: userState.currentArea,
-        division: userState.division,
-      );
-
-      final prefs = await SharedPreferences.getInstance();
-      final date =
-          '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-      await prefs.setString('last_break_date', date);
-      debugPrint(
-        '[SingleHomeDashBoardController] break_record_complete at=${now.toIso8601String()} area=${userState.currentArea} division=${userState.division}',
-      );
-      return BreakRecordResult.success(recordedAt: now);
-    } catch (error, stackTrace) {
-      debugPrint(
-        '[SingleHomeDashBoardController] break_record_error error=$error',
-      );
-      debugPrint(stackTrace.toString());
-      return BreakRecordResult.failure(
-        message: '휴게 기록 중 오류가 발생했습니다: $error',
-      );
-    }
+    return BreakRecordResult.success(
+      recordedAt: recordedAt,
+      message: result.message,
+    );
   }
-
 }

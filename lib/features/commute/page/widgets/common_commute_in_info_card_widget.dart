@@ -200,7 +200,7 @@ class _CommonCommuteInInfoCardWidgetState
                     _InfoRow(
                       icon: Icons.location_on_rounded,
                       label: 'Sector.',
-                      value: userState.area,
+                      value: userState.currentArea,
                     ),
                   ],
                 ),

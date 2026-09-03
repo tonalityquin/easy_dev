@@ -105,10 +105,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
         ? rawBreakDays
             .map((value) => value.toString().trim())
             .where(
-              (day) =>
-                  _CreateUserAccountDraft.weekdays.contains(day) &&
-                  startByWeekday[day] != null &&
-                  endByWeekday[day] != null,
+              (day) => _CreateUserAccountDraft.weekdays.contains(day),
             )
             .toSet()
             .toList(growable: false)
@@ -563,6 +560,10 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
       trace.log(
         '현재 소속 확정: division=${draft.division} area=${draft.area} id=${draft.documentId}',
         progress: 0.16,
+      );
+      trace.log(
+        '휴게 정책: timeIndependent=true breakDays=${user.breakDays.length} breakEnabledWithoutScheduledTimes=true',
+        progress: 0.3,
       );
       trace.log(
         'DevUserWriteService 전용 경로로 계정 생성을 요청합니다. breakDays=${user.breakDays.join(',')}',
@@ -1469,6 +1470,7 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
     _endByDay = <String, TimeOfDay?>{
       for (final day in _days) day: null,
     };
+    _breakDays = Set<String>.of(_days);
     _loadAreas(keepInitialArea: true);
   }
 
@@ -1530,7 +1532,6 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
   }
 
   Future<void> _pickTime(String day, {required bool isStart}) async {
-    final wasWorking = _startByDay[day] != null && _endByDay[day] != null;
     final current = isStart ? _startByDay[day] : _endByDay[day];
     final initial = current ?? (isStart ? const TimeOfDay(hour: 9, minute: 0) : const TimeOfDay(hour: 18, minute: 0));
     final picked = await showCommonTimePicker(
@@ -1553,10 +1554,6 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
       } else {
         _endByDay = Map<String, TimeOfDay?>.of(_endByDay)..[day] = picked;
       }
-      final working = _startByDay[day] != null && _endByDay[day] != null;
-      if (!wasWorking && working) {
-        _breakDays = <String>{..._breakDays, day};
-      }
     });
   }
 
@@ -1565,13 +1562,10 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
       _errorText = null;
       _startByDay = Map<String, TimeOfDay?>.of(_startByDay)..[day] = null;
       _endByDay = Map<String, TimeOfDay?>.of(_endByDay)..[day] = null;
-      _breakDays = <String>{..._breakDays}..remove(day);
     });
   }
 
   void _toggleBreak(String day, bool value) {
-    final working = _startByDay[day] != null && _endByDay[day] != null;
-    if (!working) return;
     setState(() {
       _errorText = null;
       _breakDays = <String>{..._breakDays};
@@ -1744,7 +1738,7 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
                             return Text(
                               working
                                   ? '${_formatTime(_startByDay[day])} ~ ${_formatTime(_endByDay[day])} · ${_breakDays.contains(day) ? '휴게 있음' : '휴게 없음'}'
-                                  : '휴무',
+                                  : '휴무 · ${_breakDays.contains(day) ? '휴게 있음' : '휴게 없음'}',
                               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                     color: tokens.textSecondary,
                                     fontWeight: FontWeight.w600,
@@ -1780,32 +1774,31 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
                     ),
                   ],
                 ),
-                AnimatedSize(
-                  duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
-                  child: _startByDay[day] != null && _endByDay[day] != null
-                      ? Padding(
-                          padding: const EdgeInsets.only(top: 7),
-                          child: Row(
-                            children: [
-                              Icon(Icons.free_breakfast_rounded, size: 18, color: tokens.iconSecondary),
-                              const SizedBox(width: 7),
-                              Expanded(
-                                child: Text(
-                                  '휴게 적용',
-                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                        color: tokens.textPrimary,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                ),
+                Padding(
+                  padding: const EdgeInsets.only(top: 7),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.free_breakfast_rounded,
+                        size: 18,
+                        color: tokens.iconSecondary,
+                      ),
+                      const SizedBox(width: 7),
+                      Expanded(
+                        child: Text(
+                          '휴게 적용',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: tokens.textPrimary,
+                                fontWeight: FontWeight.w700,
                               ),
-                              Switch.adaptive(
-                                value: _breakDays.contains(day),
-                                onChanged: (value) => _toggleBreak(day, value),
-                              ),
-                            ],
-                          ),
-                        )
-                      : const SizedBox.shrink(),
+                        ),
+                      ),
+                      Switch.adaptive(
+                        value: _breakDays.contains(day),
+                        onChanged: (value) => _toggleBreak(day, value),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),

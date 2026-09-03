@@ -8,6 +8,7 @@ class LauncherWorkAreaOption {
     required this.isHeadquarter,
     required this.supportedModes,
     this.requiresServerHeadquarterVerification = false,
+    this.requiresServerAreaResolution = false,
     this.verifiedAreaRecord,
     this.dataSource = 'sqlite',
   });
@@ -17,6 +18,7 @@ class LauncherWorkAreaOption {
   final bool isHeadquarter;
   final List<AppModeDefinition> supportedModes;
   final bool requiresServerHeadquarterVerification;
+  final bool requiresServerAreaResolution;
   final AreaRecord? verifiedAreaRecord;
   final String dataSource;
 

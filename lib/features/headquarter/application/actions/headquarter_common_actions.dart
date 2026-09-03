@@ -2,49 +2,29 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:provider/provider.dart';
 
 import '../../../../app/init/app_exit_service.dart';
 import '../../../../app/init/logout_helper.dart';
 import '../../../../app/utils/status_dialog.dart';
-import '../../../account/applications/user_state.dart';
-import '../../../dashboard/applications/common/break_record_result.dart';
-import '../../../dashboard/sheets/double/double_home_dash_board_controller.dart';
-import '../../../dashboard/sheets/minor/minor_home_dash_board_controller.dart';
-import '../../../dashboard/sheets/single/single_home_dash_board_controller.dart';
-import '../../../dashboard/sheets/triple/triple_home_dash_board_controller.dart';
+import '../../../attendance/application/attendance_diagnostics.dart';
+import '../../../attendance/application/common_attendance_service.dart';
 import '../../../dashboard/widgets/widgets/info/my_info_dialog.dart';
 import '../../../dev/debug/debug_action_recorder.dart';
-import '../../../mode_single/application/att_brk_repository.dart';
 import '../../../selector/application/dev_auth.dart';
-import '../headquarter_dashboard_context.dart';
 
 class HeadquarterCommonActions {
   HeadquarterCommonActions._();
 
-  static final SingleHomeDashBoardController _singleController =
-      SingleHomeDashBoardController();
-  static final DoubleHomeDashBoardController _doubleController =
-      DoubleHomeDashBoardController();
-  static final TripleHomeDashBoardController _tripleController =
-      TripleHomeDashBoardController();
-  static final MinorHomeDashBoardController _minorController =
-      MinorHomeDashBoardController();
   static final List<String> _debugLines = <String>[];
 
-  static List<String> get debugLines => List<String>.unmodifiable(_debugLines);
+  static List<String> get debugLines => List<String>.unmodifiable(
+        <String>[...AttendanceDiagnostics.lines, ..._debugLines],
+      );
 
-  static String get debugPrintCode => _debugLines
-      .map((line) => 'debugPrint(${jsonEncode(line)});')
-      .join('\n');
-
-  static String currentModeKey({String? fallback}) {
-    final published = HeadquarterDashboardContext.normalizeModeKey(
-      HeadquarterDashboardContext.currentModeKey.value,
-    );
-    if (published.isNotEmpty) return published;
-    return HeadquarterDashboardContext.normalizeModeKey(fallback ?? '');
-  }
+  static String get debugPrintCode => <String>[
+        ..._debugLines,
+        ...AttendanceDiagnostics.lines,
+      ].map((line) => 'debugPrint(${jsonEncode(line)});').join('\n');
 
   static void recordEvent({
     required String source,
@@ -117,7 +97,6 @@ class HeadquarterCommonActions {
     );
   }
 
-
   static Future<void> logout(
     BuildContext context, {
     required String source,
@@ -135,31 +114,21 @@ class HeadquarterCommonActions {
   static Future<void> recordBreak(
     BuildContext context, {
     required String source,
-    required String modeKey,
     Future<void> Function(DateTime recordedAt)? onRecorded,
   }) {
-    final resolvedMode = currentModeKey(fallback: modeKey);
     return run<void>(
       source: source,
       action: 'record_break',
-      meta: <String, Object?>{'mode': resolvedMode},
+      meta: const <String, Object?>{
+        'context': 'headquarter',
+        'modeIndependent': true,
+      },
       operation: () async {
-        late final BreakRecordResult result;
-        switch (resolvedMode) {
-          case 'double':
-            result = await _doubleController.recordBreakTime(context);
-            break;
-          case 'triple':
-            result = await _tripleController.recordBreakTime(context);
-            break;
-          case 'minor':
-            result = await _minorController.recordBreakTime(context);
-            break;
-          case 'single':
-          default:
-            result = await _singleController.recordBreakTime(context);
-            break;
-        }
+        final result = await CommonAttendanceService.recordBreak(
+          context,
+          source: 'headquarter:$source',
+          isHeadquarter: true,
+        );
         final recordedAt = result.recordedAt;
         if (!result.success || recordedAt == null) {
           recordEvent(
@@ -167,7 +136,7 @@ class HeadquarterCommonActions {
             action: 'record_break',
             phase: 'record_failed',
             meta: <String, Object?>{
-              'mode': resolvedMode,
+              'context': 'headquarter',
               'message': result.message,
             },
           );
@@ -178,7 +147,7 @@ class HeadquarterCommonActions {
           action: 'record_break',
           phase: 'recorded',
           meta: <String, Object?>{
-            'mode': resolvedMode,
+            'context': 'headquarter',
             'at': recordedAt.toIso8601String(),
             'message': result.message,
           },
@@ -191,61 +160,45 @@ class HeadquarterCommonActions {
   static Future<void> clockOut(
     BuildContext context, {
     required String source,
-    required String modeKey,
     Future<void> Function(DateTime recordedAt)? onRecorded,
   }) {
-    final resolvedMode = currentModeKey(fallback: modeKey);
     return run<void>(
       source: source,
       action: 'clock_out',
-      meta: <String, Object?>{'mode': resolvedMode},
+      meta: const <String, Object?>{
+        'context': 'headquarter',
+        'modeIndependent': true,
+      },
       operation: () async {
-        final userState = context.read<UserState>();
-        recordEvent(
-          source: source,
-          action: 'clock_out',
-          phase: 'work_status_before',
-          meta: <String, Object?>{
-            'mode': resolvedMode,
-            'isWorking': userState.isWorking,
-          },
+        final result = await CommonAttendanceService.clockOut(
+          context,
+          source: 'headquarter:$source',
+          isHeadquarter: true,
         );
-        await _handleWorkStatus(resolvedMode, userState, context);
-        if (!context.mounted) return;
-        recordEvent(
-          source: source,
-          action: 'clock_out',
-          phase: 'work_status_after',
-          meta: <String, Object?>{
-            'mode': resolvedMode,
-            'isWorking': userState.isWorking,
-          },
-        );
-        if (userState.isWorking) return;
-        final session = userState.session;
-        if (session != null) {
-          final now = DateTime.now();
-          await AttBrkRepository.instance.insertEventAndUpload(
-            dateTime: now,
-            type: AttBrkModeType.workOut,
-            userId: session.id,
-            userName: session.displayName,
-            area: userState.currentArea,
-            division: userState.division,
-          );
+        final recordedAt = result.recordedAt;
+        if (!result.success || recordedAt == null) {
           recordEvent(
             source: source,
             action: 'clock_out',
-            phase: 'workout_event_recorded',
+            phase: 'record_failed',
             meta: <String, Object?>{
-              'mode': resolvedMode,
-              'area': userState.currentArea,
-              'division': userState.division,
-              'at': now.toIso8601String(),
+              'context': 'headquarter',
+              'message': result.message,
             },
           );
-          await onRecorded?.call(now);
+          throw StateError(result.message);
         }
+        recordEvent(
+          source: source,
+          action: 'clock_out',
+          phase: 'recorded',
+          meta: <String, Object?>{
+            'context': 'headquarter',
+            'at': recordedAt.toIso8601String(),
+            'message': result.message,
+          },
+        );
+        await onRecorded?.call(recordedAt);
         try {
           if (DebugActionRecorder.instance.isRecording) {
             await DebugActionRecorder.instance.stopAndSave(
@@ -276,7 +229,11 @@ class HeadquarterCommonActions {
     final developerMode = await DevAuth.isDevModeEnabled();
     if (!developerMode || !context.mounted) return;
     HapticFeedback.mediumImpact();
-    final lines = <String>[...additionalLines, ..._debugLines];
+    final lines = <String>[
+      ...additionalLines,
+      ...AttendanceDiagnostics.lines,
+      ..._debugLines,
+    ];
     final code = lines.isEmpty
         ? 'debugPrint(${jsonEncode('[HQ_COMMON_ACTION] 기록된 로그가 없습니다.')});'
         : lines
@@ -292,27 +249,5 @@ class HeadquarterCommonActions {
       useCommonUi: true,
       awaitManualClose: true,
     );
-  }
-
-  static Future<void> _handleWorkStatus(
-    String modeKey,
-    UserState userState,
-    BuildContext context,
-  ) async {
-    switch (modeKey) {
-      case 'double':
-        await _doubleController.handleWorkStatus(userState, context);
-        return;
-      case 'triple':
-        await _tripleController.handleWorkStatus(userState, context);
-        return;
-      case 'minor':
-        await _minorController.handleWorkStatus(userState, context);
-        return;
-      case 'single':
-      default:
-        await _singleController.handleWorkStatus(userState, context);
-        return;
-    }
   }
 }

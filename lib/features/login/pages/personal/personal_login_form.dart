@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../app/di/routes.dart';
+import '../../../../app/init/logout_completion_exit_dialog.dart';
+import '../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../dev/debug/debug_action_recorder.dart';
@@ -133,13 +135,60 @@ class _PersonalLoginFormState extends State<PersonalLoginForm> {
       return;
     }
 
+    final trace = await DeveloperOperationTrace.start(
+      context: context,
+      title: '개인형 로그인 화면 로그아웃 상태',
+      initialMessage: '개인형 로그인 화면의 로그아웃을 시작합니다.',
+      useCommonUi: true,
+      developerModeMessage:
+          '개발자 모드 ON: 개인형 로그인 화면 로그아웃 단계를 Status Dialog에 표시합니다.',
+      standardModeMessage:
+          '개발자 모드 OFF: 개인형 로그인 화면 로그아웃 단계를 debugPrint로 기록합니다.',
+      showDialogImmediately: false,
+    );
+
+    trace.log(
+      '개인형 로그인 컨트롤러 로그아웃을 실행합니다. accountId=${_controller.loggedInAccountId ?? '-'}',
+      progress: 0.2,
+    );
     final result = await _controller.logout(setState);
     if (!mounted) return;
     setState(() {});
-    showCommonLoginSnack(
+
+    if (!result.success) {
+      await trace.fail(result.message);
+      if (!mounted) return;
+      await trace.showSnapshotStatusDialog(
+        context,
+        title: '개인형 로그인 화면 로그아웃 상태',
+        description: result.message,
+        failure: true,
+      );
+      if (!mounted) return;
+      showCommonLoginSnack(
+        context,
+        message: result.message,
+        success: false,
+      );
+      return;
+    }
+
+    trace.log('개인형 로그인 세션 정리가 완료되었습니다.', progress: 0.88);
+    trace.log(
+      '개인형 로그아웃이 성공적으로 완료되었습니다. 앱 종료 Dialog를 표시합니다.',
+      progress: 0.98,
+    );
+    await trace.succeed(result.message);
+    if (!mounted) return;
+    await trace.showSnapshotStatusDialog(
       context,
-      message: result.message,
-      success: result.success,
+      title: '개인형 로그인 화면 로그아웃 상태',
+      description: result.message,
+    );
+    if (!mounted) return;
+    await LogoutCompletionExitDialog.show(
+      context,
+      useCommonUi: true,
     );
   }
 
