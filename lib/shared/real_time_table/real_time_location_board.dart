@@ -435,7 +435,11 @@ class _RealTimeLocationBoardState extends State<RealTimeLocationBoard>
         'childRegionMotion': 'fade_scale_220ms_highlight_170ms',
         'childDialogParkingDots': 'owned_child_slot_area_ids_only',
         'towerDetail': 'logical_status_grid_1_to_capacity',
+        'towerParentParkingCompletedIndicator':
+            'parked_only_semantic_badge_fade_scale',
         'towerParentDepartureIndicator': 'semantic_badge_count_outer_halo',
+        'towerPhysicalOccupancyRule':
+            'parked+departureRequest+departureInProgress;parkingRequest_excluded',
         'towerVehicleTap': 'collapse_then_status_side_dock',
         'towerPlateLast4Motion': 'static_during_pulse',
         'childDialogEffectiveRegionMotion': 'modal_progress_fade_scale',
@@ -2620,21 +2624,31 @@ class _ParentOverviewDotMapState extends State<_ParentOverviewDotMap> {
         .toList(growable: false);
     if (towers.isEmpty) return;
     final parts = <String>[];
-    var totalRequests = 0;
+    var totalParkingCompleted = 0;
+    var totalDepartureRequests = 0;
+    var totalDepartureInProgress = 0;
     var totalParkingRequestsExcluded = 0;
-    var totalOccupied = 0;
+    var totalPhysicalOccupied = 0;
     var totalCapacity = 0;
     for (final zone in towers) {
-      final requests = _towerDepartureRequestCount(zone, widget.statusForRow);
+      final parkingCompleted =
+          _towerParkingCompletedCount(zone, widget.statusForRow);
+      final departureRequests =
+          _towerDepartureRequestCount(zone, widget.statusForRow);
+      final departureInProgress =
+          _towerDepartureInProgressCount(zone, widget.statusForRow);
       final parkingRequestsExcluded =
           _towerParkingRequestCount(zone, widget.statusForRow);
-      final occupied = _towerOccupiedVehicleCount(zone, widget.statusForRow);
-      totalRequests += requests;
+      final physicalOccupied =
+          _towerOccupiedVehicleCount(zone, widget.statusForRow);
+      totalParkingCompleted += parkingCompleted;
+      totalDepartureRequests += departureRequests;
+      totalDepartureInProgress += departureInProgress;
       totalParkingRequestsExcluded += parkingRequestsExcluded;
-      totalOccupied += occupied;
+      totalPhysicalOccupied += physicalOccupied;
       totalCapacity += zone.capacity;
       parts.add(
-        '${zone.fullName}:$requests:$parkingRequestsExcluded:$occupied:${zone.capacity}',
+        '${zone.fullName}:$parkingCompleted:$departureRequests:$departureInProgress:$parkingRequestsExcluded:$physicalOccupied:${zone.capacity}',
       );
     }
     final signature = '${parts.join('|')}|${widget.reduceMotion}';
@@ -2647,17 +2661,21 @@ class _ParentOverviewDotMapState extends State<_ParentOverviewDotMap> {
         <String, Object?>{
           'parent': widget.group.group,
           'towerCount': towers.length,
-          'occupied': totalOccupied,
-          'empty': math.max(0, totalCapacity - totalOccupied),
-          'capacity': totalCapacity,
-          'departureRequest': totalRequests,
+          'parkingCompleted': totalParkingCompleted,
+          'departureRequest': totalDepartureRequests,
+          'departureInProgress': totalDepartureInProgress,
           'parkingRequestExcluded': totalParkingRequestsExcluded,
+          'physicalOccupied': totalPhysicalOccupied,
+          'remaining': math.max(0, totalCapacity - totalPhysicalOccupied),
+          'capacity': totalCapacity,
           'towerStates': parts.join(','),
-          'occupancyRule':
+          'parkingCompletedIndicator':
+              'parked_only_always_visible_car_count',
+          'parkingCompletedMotion':
+              widget.reduceMotion ? 'disabled' : '170ms_fade_scale',
+          'departureIndicator': 'departure_request_only_semantic_badge_outer_halo',
+          'physicalOccupancyRule':
               'parked+departureRequest+departureInProgress;parkingRequest_excluded',
-          'occupancyIndicator': 'always_visible_car_count',
-          'occupancyMotion': widget.reduceMotion ? 'disabled' : '170ms_fade_scale',
-          'departureIndicator': 'semantic_badge_count_outer_halo',
           'indicatorPulse': widget.reduceMotion ? 'disabled' : '940ms_reverse',
           'indicatorPulseController': 'shared_board_controller',
           'towerTap': 'source_rect_expand_to_logical_status_grid',
@@ -2733,12 +2751,12 @@ class _ParentOverviewDotMapState extends State<_ParentOverviewDotMap> {
                 ),
               for (final entry in zones)
                 if (entry.zone.source.isTowerChild)
-                  _TowerOccupancyIndicator(
+                  _TowerParkingCompletedIndicator(
                     key: ValueKey<String>(
-                      'tower-occupancy:${entry.zone.fullName}',
+                      'tower-parking-completed:${entry.zone.fullName}',
                     ),
                     entry: entry,
-                    current: _towerOccupiedVehicleCount(
+                    completedCount: _towerParkingCompletedCount(
                       entry.zone,
                       widget.statusForRow,
                     ),
@@ -3333,17 +3351,17 @@ class _ChildZoneRegionPainter extends CustomPainter {
 }
 
 
-class _TowerOccupancyIndicator extends StatelessWidget {
-  const _TowerOccupancyIndicator({
+class _TowerParkingCompletedIndicator extends StatelessWidget {
+  const _TowerParkingCompletedIndicator({
     super.key,
     required this.entry,
-    required this.current,
+    required this.completedCount,
     required this.capacity,
     required this.reduceMotion,
   });
 
   final _ResolvedChildZone entry;
-  final int current;
+  final int completedCount;
   final int capacity;
   final bool reduceMotion;
 
@@ -3351,11 +3369,11 @@ class _TowerOccupancyIndicator extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = CommonUiTheme.of(context);
     final text = Theme.of(context).textTheme;
-    final normalizedCurrent = math.max(0, current);
-    final occupied = normalizedCurrent > 0;
-    final width = normalizedCurrent >= 100
+    final normalizedCount = math.max(0, completedCount);
+    final hasCompleted = normalizedCount > 0;
+    final width = normalizedCount >= 100
         ? 44.0
-        : normalizedCurrent >= 10
+        : normalizedCount >= 10
             ? 38.0
             : 34.0;
     final height = 22.0;
@@ -3364,22 +3382,18 @@ class _TowerOccupancyIndicator extends StatelessWidget {
     final duration = reduceMotion
         ? Duration.zero
         : const Duration(milliseconds: 170);
-    final background = occupied
+    final background = hasCompleted
         ? tokens.statusParkingCompletedContainer
         : tokens.surfaceRaised;
-    final border = occupied
+    final border = hasCompleted
         ? tokens.statusParkingCompleted
         : tokens.borderStrong;
-    final foreground = occupied
+    final foreground = hasCompleted
         ? tokens.onStatusParkingCompletedContainer
         : tokens.textSecondary;
     final label = capacity > 0
-        ? occupied
-            ? '${entry.zone.displayName}, 차량 $normalizedCurrent대, 총 $capacity대'
-            : '${entry.zone.displayName}, 차량 없음, 0대, 총 $capacity대'
-        : occupied
-            ? '${entry.zone.displayName}, 차량 $normalizedCurrent대'
-            : '${entry.zone.displayName}, 차량 없음, 0대';
+        ? '${entry.zone.displayName}, 입차 완료 $normalizedCount대, 총 $capacity대'
+        : '${entry.zone.displayName}, 입차 완료 $normalizedCount대';
     return Positioned(
       left: left,
       top: top,
@@ -3398,8 +3412,8 @@ class _TowerOccupancyIndicator extends StatelessWidget {
               color: background,
               borderRadius: BorderRadius.circular(999),
               border: Border.all(
-                color: border.withOpacity(occupied ? .88 : .58),
-                width: occupied ? 1.2 : 1,
+                color: border.withOpacity(hasCompleted ? .88 : .58),
+                width: hasCompleted ? 1.2 : 1,
               ),
             ),
             child: AnimatedSwitcher(
@@ -3417,22 +3431,28 @@ class _TowerOccupancyIndicator extends StatelessWidget {
               },
               child: Row(
                 key: ValueKey<String>(
-                  'tower-occupancy-value:$normalizedCurrent:$capacity',
+                  'tower-parking-completed-value:$normalizedCount:$capacity',
                 ),
                 mainAxisAlignment: MainAxisAlignment.center,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    occupied
-                        ? Icons.directions_car_filled_rounded
-                        : Icons.directions_car_rounded,
-                    size: 11,
-                    color: foreground,
+                  AnimatedSwitcher(
+                    duration: duration,
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    child: Icon(
+                      hasCompleted
+                          ? Icons.directions_car_filled_rounded
+                          : Icons.directions_car_rounded,
+                      key: ValueKey<bool>(hasCompleted),
+                      size: 11,
+                      color: foreground,
+                    ),
                   ),
                   const SizedBox(width: 2),
                   Flexible(
                     child: Text(
-                      '$normalizedCurrent',
+                      '$normalizedCount',
                       maxLines: 1,
                       overflow: TextOverflow.clip,
                       style: text.labelSmall?.copyWith(
@@ -4023,6 +4043,21 @@ class _OccupiedSlotOverlayState extends State<_OccupiedSlotOverlay> {
 }
 
 
+
+int _towerParkingCompletedCount(
+  ZoneVM zone,
+  ParkingSlotStatus Function(RealTimeRowVM row) statusForRow,
+) {
+  if (!zone.source.isTowerChild) return 0;
+  var count = 0;
+  for (final row in zone.rows) {
+    if (statusForRow(row) == ParkingSlotStatus.parked) {
+      count++;
+    }
+  }
+  return count;
+}
+
 int _towerDepartureRequestCount(
   ZoneVM zone,
   ParkingSlotStatus Function(RealTimeRowVM row) statusForRow,
@@ -4031,6 +4066,21 @@ int _towerDepartureRequestCount(
   var count = 0;
   for (final row in zone.rows) {
     if (statusForRow(row) == ParkingSlotStatus.departureRequest) {
+      count++;
+    }
+  }
+  return count;
+}
+
+
+int _towerDepartureInProgressCount(
+  ZoneVM zone,
+  ParkingSlotStatus Function(RealTimeRowVM row) statusForRow,
+) {
+  if (!zone.source.isTowerChild) return 0;
+  var count = 0;
+  for (final row in zone.rows) {
+    if (statusForRow(row) == ParkingSlotStatus.departureInProgress) {
       count++;
     }
   }

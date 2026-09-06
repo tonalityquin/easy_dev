@@ -2581,6 +2581,7 @@ class SprintModeStore extends ChangeNotifier {
     required DateTime start,
     required DateTime end,
     required bool allDay,
+    String? colorId,
   }) async {
     final normalizedTitle = title.trim();
     if (normalizedTitle.isEmpty) {
@@ -2604,8 +2605,9 @@ class SprintModeStore extends ChangeNotifier {
       ..updatedAt = DateTime.now();
     debugPrint(
       '[SprintCalendarEvent] create profile=${profile.id} calendar=${profile.calendarId} '
-      'accessRole=$accessRole allDay=$allDay start=${start.toIso8601String()} '
-      'end=${end.toIso8601String()} titleLength=${normalizedTitle.length}',
+      'accessRole=$accessRole allDay=$allDay colorId=${colorId ?? ''} '
+      'start=${start.toIso8601String()} end=${end.toIso8601String()} '
+      'titleLength=${normalizedTitle.length}',
     );
     try {
       final created = await _calendarService.createEvent(
@@ -2616,6 +2618,7 @@ class SprintModeStore extends ChangeNotifier {
         start: start,
         end: end,
         allDay: allDay,
+        colorId: colorId,
         privateProperties: <String, String>{
           'source': 'parkinworkin_calendar_event',
           'calendarProfileId': profile.id,
@@ -2657,6 +2660,7 @@ class SprintModeStore extends ChangeNotifier {
     required DateTime start,
     required DateTime end,
     required bool allDay,
+    String? colorId,
   }) async {
     final current = externalEventById(eventId);
     if (current == null) throw StateError('calendar_event_not_found');
@@ -2683,8 +2687,8 @@ class SprintModeStore extends ChangeNotifier {
     debugPrint(
       '[SprintCalendarEvent] update profile=${profile.id} calendar=${profile.calendarId} '
       'event=${current.googleEventId} accessRole=$accessRole allDay=$allDay '
-      'start=${start.toIso8601String()} end=${end.toIso8601String()} '
-      'etag=${current.etag ?? ''}',
+      'colorId=${colorId ?? current.colorId ?? ''} start=${start.toIso8601String()} '
+      'end=${end.toIso8601String()} etag=${current.etag ?? ''}',
     );
     try {
       final updated = await _calendarService.updateEvent(
@@ -2696,6 +2700,7 @@ class SprintModeStore extends ChangeNotifier {
         start: start,
         end: end,
         allDay: allDay,
+        colorId: colorId,
         expectedEtag: current.etag,
       );
       final mapped = _mapGoogleEvent(updated, profile.id);

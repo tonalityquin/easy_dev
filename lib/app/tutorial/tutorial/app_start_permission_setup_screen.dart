@@ -12,6 +12,7 @@ import '../../../design_system/common_ui/common_ui_components.dart';
 import '../../../design_system/common_ui/common_ui_overlays.dart';
 import '../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../features/selector/application/dev_auth.dart';
+import 'app_start_setup_specs.dart';
 
 class AppStartPermissionSetupScreen extends StatefulWidget {
   const AppStartPermissionSetupScreen({super.key});
@@ -80,6 +81,23 @@ class _AppStartPermissionSetupScreenState
       _PermissionStepKind.overlay => 'overlay',
       _PermissionStepKind.microphone => 'microphone',
     };
+  }
+
+
+  int _stepNumber(_PermissionStepKind kind) {
+    return switch (kind) {
+      _PermissionStepKind.welcome => 1,
+      _PermissionStepKind.notifications => 2,
+      _PermissionStepKind.location => 3,
+      _PermissionStepKind.battery => 4,
+      _PermissionStepKind.camera => 5,
+      _PermissionStepKind.overlay => 6,
+      _PermissionStepKind.microphone => 7,
+    };
+  }
+
+  AppStartPermissionSpec _stepSpec(_PermissionStepKind kind) {
+    return appStartPermissionSpecForStep(_stepNumber(kind));
   }
 
   Map<String, Object?> _debugMeta(
@@ -805,6 +823,7 @@ class _AppStartPermissionSetupScreenState
   }
 
   Widget _buildStep(BuildContext context, _PermissionStepKind kind) {
+    final spec = _stepSpec(kind);
     switch (kind) {
       case _PermissionStepKind.welcome:
         return _buildScrollableStep(
@@ -814,9 +833,9 @@ class _AppStartPermissionSetupScreenState
             children: [
               _buildPageHeader(
                 context,
-                Icons.verified_user_outlined,
-                '권한 설정',
-                '서비스 이용에 필요한 권한을 순서대로 확인합니다.',
+                spec.icon,
+                spec.title,
+                spec.description,
               ),
               const SizedBox(height: 22),
               const _PermissionWelcomePanel(),
@@ -826,9 +845,9 @@ class _AppStartPermissionSetupScreenState
       case _PermissionStepKind.notifications:
         return _buildPermissionStep(
           context,
-          icon: Icons.notifications_active_outlined,
-          title: '알림 권한',
-          description: '리마인더와 상태 알림을 위해 필요합니다.',
+          icon: spec.icon,
+          title: spec.title,
+          description: spec.description,
           label: '알림',
           status: _statusLabelForPermission(_notifStatus),
           tone: _toneForPermission(_notifStatus),
@@ -837,9 +856,9 @@ class _AppStartPermissionSetupScreenState
       case _PermissionStepKind.location:
         return _buildPermissionStep(
           context,
-          icon: Icons.my_location_outlined,
-          title: '위치 권한',
-          description: '근무와 이동 관련 기능을 위해 필요할 수 있습니다.',
+          icon: spec.icon,
+          title: spec.title,
+          description: spec.description,
           label: '위치',
           status: _statusLabelForPermission(_locationStatus),
           tone: _toneForPermission(_locationStatus),
@@ -848,9 +867,9 @@ class _AppStartPermissionSetupScreenState
       case _PermissionStepKind.battery:
         return _buildPermissionStep(
           context,
-          icon: Icons.battery_saver_outlined,
-          title: '배터리 최적화 제외',
-          description: '포그라운드 서비스 안정성을 위해 필요합니다.',
+          icon: spec.icon,
+          title: spec.title,
+          description: spec.description,
           label: '배터리 최적화 제외',
           status: _statusLabelForPermission(_batteryStatus),
           tone: _toneForPermission(_batteryStatus),
@@ -859,9 +878,9 @@ class _AppStartPermissionSetupScreenState
       case _PermissionStepKind.camera:
         return _buildPermissionStep(
           context,
-          icon: Icons.photo_camera_outlined,
-          title: '카메라 권한',
-          description: '업무 사진 촬영 기능을 위해 필요합니다.',
+          icon: spec.icon,
+          title: spec.title,
+          description: spec.description,
           label: '카메라',
           status: _statusLabelForPermission(_cameraStatus),
           tone: _toneForPermission(_cameraStatus),
@@ -870,9 +889,9 @@ class _AppStartPermissionSetupScreenState
       case _PermissionStepKind.overlay:
         return _buildPermissionStep(
           context,
-          icon: Icons.picture_in_picture_alt_outlined,
-          title: '다른 앱 위 사용 허용',
-          description: '오버레이 표시 기능을 위해 필요합니다.',
+          icon: spec.icon,
+          title: spec.title,
+          description: spec.description,
           label: '다른 앱 위에 표시',
           status: _overlayStatusLabel(),
           tone: _overlayStatusTone(),
@@ -882,9 +901,9 @@ class _AppStartPermissionSetupScreenState
       case _PermissionStepKind.microphone:
         return _buildPermissionStep(
           context,
-          icon: Icons.mic_none_outlined,
-          title: '마이크 권한',
-          description: '음성 기능과 무전기 송신 기능을 위해 필요합니다.',
+          icon: spec.icon,
+          title: spec.title,
+          description: spec.description,
           label: '오디오 · 마이크',
           status: _statusLabelForPermission(_microphoneStatus),
           tone: _toneForPermission(_microphoneStatus),

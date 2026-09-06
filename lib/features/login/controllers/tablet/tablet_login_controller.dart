@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../app/di/routes.dart';
 import '../../../../app/utils/dev_firebase_debug_dialog.dart';
+import '../../../../features/account/applications/tablet_account_diagnostics.dart';
 import '../../../../features/account/applications/user_state.dart';
 import '../../../../features/account/domain/models/tablet/tablet_model.dart';
 import '../../../../features/account/domain/repositories/user_repository.dart';
@@ -145,29 +146,36 @@ class TabletLoginController {
 
     try {
       final repo = context.read<UserRepository>();
-      final tablet = await repo.getTabletByPhone(phone);
+      final candidates = await repo.searchTabletsByPhone(phone);
+      final matches = candidates
+          .where(
+            (tablet) =>
+                tablet.name == name && tablet.password == password,
+          )
+          .toList(growable: false);
+
+      TabletAccountDiagnostics.record(
+        'manual_login_candidates_resolved',
+        meta: <String, Object?>{
+          'phone': TabletPhone.mask(phone),
+          'candidateCount': candidates.length,
+          'credentialMatchCount': matches.length,
+          'documentIds': candidates
+              .map((tablet) => TabletPhone.maskDocumentId(tablet.id))
+              .join(','),
+        },
+      );
 
       if (context.mounted) {
         debugPrint(
-          '[LOGIN-TABLET][${_ts()}] input name="$name" phone=${TabletPhone.mask(phone)} pwLen=${password.length}',
+          '[LOGIN-TABLET][${_ts()}] input nameLength=${name.length} phone=${TabletPhone.mask(phone)} pwLen=${password.length} candidates=${candidates.length} matches=${matches.length}',
         );
-        if (tablet != null) {
-          debugPrint(
-            '[LOGIN-TABLET][${_ts()}] DB tablet: name=${tablet.name}, phone=${TabletPhone.mask(tablet.phone)} id=${tablet.id}',
-          );
-        } else {
-          debugPrint(
-            '[LOGIN-TABLET][${_ts()}] DB no tablet for phone=${TabletPhone.mask(phone)}',
-          );
-        }
       }
 
-      if (tablet == null ||
-          tablet.name != name ||
-          tablet.password != password) {
+      if (matches.isEmpty) {
         if (context.mounted) {
           debugPrint(
-            '[LOGIN-TABLET][${_ts()}] auth failed (name/password mismatch or no tablet)',
+            '[LOGIN-TABLET][${_ts()}] auth failed (credential match missing)',
           );
         }
         return const TabletCredentialAuthenticationResult(
@@ -176,6 +184,24 @@ class TabletLoginController {
         );
       }
 
+      if (matches.length > 1) {
+        TabletAccountDiagnostics.record(
+          'manual_login_ambiguous',
+          meta: <String, Object?>{
+            'phone': TabletPhone.mask(phone),
+            'matchCount': matches.length,
+            'documentIds': matches
+                .map((tablet) => TabletPhone.maskDocumentId(tablet.id))
+                .join(','),
+          },
+        );
+        return const TabletCredentialAuthenticationResult(
+          success: false,
+          message: '같은 로그인 정보의 태블릿 계정이 여러 업무 지역에 존재합니다.',
+        );
+      }
+
+      final tablet = matches.single;
       final areaName = (tablet.selectedArea ??
               tablet.currentArea ??
               (tablet.areas.isNotEmpty ? tablet.areas.first : ''))
@@ -232,11 +258,26 @@ class TabletLoginController {
       if (areaName.isEmpty) return false;
 
       final englishAreaName = tablet.englishSelectedAreaName ?? areaName;
+      final canonicalId = TabletPhone.documentId(
+        phone: phone,
+        area: areaName,
+      );
+      final sourceId = tablet.id;
       final sessionTablet = tablet.copyWith(
+        id: canonicalId.isEmpty ? sourceId : canonicalId,
         currentArea: areaName,
         selectedArea: areaName,
         englishSelectedAreaName: englishAreaName,
         isSaved: persistSession ? true : tablet.isSaved,
+      );
+      TabletAccountDiagnostics.record(
+        'authenticated_document_id_resolved',
+        meta: <String, Object?>{
+          'sourceId': TabletPhone.maskDocumentId(sourceId),
+          'documentId': TabletPhone.maskDocumentId(sessionTablet.id),
+          'migrationRequired': sourceId != sessionTablet.id,
+          'persistSession': persistSession,
+        },
       );
       final divisionToSet = sessionTablet.divisions.firstOrNull ?? '';
       await AreaLoginSessionRefresher.refresh(
@@ -261,7 +302,10 @@ class TabletLoginController {
       );
 
       if (persistSession) {
-        await userState.updateLoginTablet(sessionTablet);
+        await userState.updateLoginTablet(
+          sessionTablet,
+          previousId: sourceId == sessionTablet.id ? null : sourceId,
+        );
       } else {
         userState.applyEphemeralLoginTablet(sessionTablet);
       }

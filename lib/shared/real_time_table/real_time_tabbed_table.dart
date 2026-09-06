@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'dart:ui' show FontFeature;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart'
+    show PointerCancelEvent, PointerDownEvent, PointerMoveEvent, PointerUpEvent;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart' show CustomSemanticsAction;
 import 'package:flutter/services.dart';
@@ -73,11 +75,15 @@ class RealTimeTabbedTable extends StatefulWidget {
   State<RealTimeTabbedTable> createState() => _RealTimeTabbedTableState();
 }
 
+enum _ContentGestureAxis { undecided, horizontal, vertical, blocked }
+
 class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     with TickerProviderStateMixin {
   static const double _modeReelTravel = 44;
   static const double _modeReelDistanceThreshold = 22;
   static const double _modeReelVelocityThreshold = 320;
+  static const double _contentModeAxisLockDistance = 8;
+  static const double _contentModeAxisDominance = 1.15;
   static const double _tableSwipeVisualActivationDistance = 14;
   static const double _tableSwipeCommitDistanceThreshold = 42;
   static const double _tableSwipeVelocityThreshold = 320;
@@ -121,6 +127,14 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
   int _modeReelPhysicalDirection = 0;
   int _modeReelDebugBucket = -1;
   TypeViewMode? _modeReelFromMode;
+  String? _modeVerticalGestureSource;
+  int? _contentGesturePointer;
+  Offset _contentGestureAccumulatedDelta = Offset.zero;
+  Duration? _contentGestureLastTimeStamp;
+  double _contentGestureVelocityX = 0;
+  double _contentGestureVelocityY = 0;
+  double _contentGestureViewportWidth = 1;
+  _ContentGestureAxis _contentGestureAxis = _ContentGestureAxis.undecided;
   bool _modeReelSelectorPressActive = false;
   bool _parentSelectorOpen = false;
   RealTimeSourceRectModalCollapseInfo? _lastParentSelectorCollapseInfo;
@@ -325,7 +339,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
         'statusEnabled': statusEnabled,
         'autoTransition': statusEnabled,
         'modeControl': statusEnabled
-            ? 'vertical_swipe_reel'
+            ? 'vertical_swipe_reel+content_vertical_swipe'
             : _parkingViewCapability == ParkingViewCapability.tableOnly
                 ? 'static_table_indicator'
                 : _parkingViewCapability == ParkingViewCapability.empty
@@ -446,6 +460,8 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
       _modeReelDebugBucket = -1;
       _modeReelDetentTriggered = false;
       _modeReelFromMode = null;
+      _modeVerticalGestureSource = null;
+      _resetContentGestureTracking();
       _modeReelController.stop();
       _modeReelController.value = 0;
       _endModeReelGuard();
@@ -988,11 +1004,18 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     return Duration(milliseconds: milliseconds.toInt());
   }
 
-  void _onTableHorizontalDragStart(
-    DragStartDetails _,
-    double viewportWidth,
-  ) {
-    if (!_canSwipeTables()) return;
+  void _beginTableHorizontalSwipe(
+    double viewportWidth, {
+    required String inputSource,
+  }) {
+    if (!_canSwipeTables()) {
+      _debugLog('table_swipe_ignored', <String, Object?>{
+        'inputSource': inputSource,
+        'reason': 'table_swipe_unavailable',
+        'viewMode': _viewMode?.mode.name ?? 'unknown',
+      });
+      return;
+    }
     _tableSwipeController.stop();
     _tableSwipeController.value = 0;
     _horizontalSwipeViewportWidth = viewportWidth <= 0 ? 1 : viewportWidth;
@@ -1008,7 +1031,10 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
       'screen': widget.screen,
       'table': widget.tabs[_currentTableIndex].id,
       'tableCount': _enabledTableIndices().length,
+      'inputSource': inputSource,
       'viewportWidth': _horizontalSwipeViewportWidth.toStringAsFixed(1),
+      'axisLockDistance': _contentModeAxisLockDistance,
+      'axisDominance': _contentModeAxisDominance,
       'visualActivationDistance': _tableSwipeVisualActivationDistance,
       'commitDistanceThreshold': _tableSwipeCommitDistanceThreshold,
       'velocityThreshold': _tableSwipeVelocityThreshold,
@@ -1019,9 +1045,9 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     });
   }
 
-  void _onTableHorizontalDragUpdate(DragUpdateDetails details) {
+  void _updateTableHorizontalSwipe(double deltaX) {
     if (!_horizontalDragActive) return;
-    _horizontalDragDistance += details.delta.dx;
+    _horizontalDragDistance += deltaX;
     final visualDistance =
         _tableSwipeVisualDistance(_horizontalDragDistance);
     if (visualDistance == 0) {
@@ -1064,14 +1090,14 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
         _swipeProgressForVisualDistance(visualDistance);
   }
 
-  void _onTableHorizontalDragCancel() {
+  void _cancelTableHorizontalSwipe({required String reason}) {
     if (!_horizontalDragActive) return;
     final distance = _horizontalDragDistance;
     final physicalDirection = _swipePhysicalDirection;
     _horizontalDragActive = false;
     unawaited(
       _cancelInteractiveTableSwipe(
-        reason: 'gesture_cancelled',
+        reason: reason,
         distance: distance,
         velocity: 0,
         physicalDirection: physicalDirection,
@@ -1079,10 +1105,12 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     );
   }
 
-  void _onTableHorizontalDragEnd(DragEndDetails details) {
+  void _endTableHorizontalSwipe(
+    double velocity, {
+    required String source,
+  }) {
     if (!_horizontalDragActive) return;
     final distance = _horizontalDragDistance;
-    final velocity = details.primaryVelocity ?? 0;
     _horizontalDragActive = false;
 
     final distanceAccepted =
@@ -1109,8 +1137,33 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
         physicalDirection: physicalDirection,
         distance: distance,
         velocity: velocity,
-        source: 'gesture',
+        source: source,
       ),
+    );
+  }
+
+  void _onTableHorizontalDragStart(
+    DragStartDetails _,
+    double viewportWidth,
+  ) {
+    _beginTableHorizontalSwipe(
+      viewportWidth,
+      inputSource: 'gesture_detector',
+    );
+  }
+
+  void _onTableHorizontalDragUpdate(DragUpdateDetails details) {
+    _updateTableHorizontalSwipe(details.delta.dx);
+  }
+
+  void _onTableHorizontalDragCancel() {
+    _cancelTableHorizontalSwipe(reason: 'gesture_cancelled');
+  }
+
+  void _onTableHorizontalDragEnd(DragEndDetails details) {
+    _endTableHorizontalSwipe(
+      details.primaryVelocity ?? 0,
+      source: 'gesture',
     );
   }
 
@@ -1266,7 +1319,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     _tableSwipeHintSettlingCommit = true;
     _tableSwipeHintSettleStartIntensity = math.max(
       _tableSwipeHintIntentProgress(distance),
-      source == 'gesture' ? .72 : .88,
+      (source == 'gesture' || source == 'content_axis_lock') ? .72 : .88,
     ).toDouble();
     _tableSwipeHintSettleStartControllerValue = progress;
 
@@ -1295,6 +1348,15 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
       'rowMountReveal': 'disabled',
       'verticalRowReplay': false,
       'horizontalOnly': true,
+      'axisPolicy': source == 'content_axis_lock'
+          ? 'pointer_axis_lock_single_owner'
+          : 'gesture_detector_horizontal',
+      'axisLockDistance': source == 'content_axis_lock'
+          ? _contentModeAxisLockDistance
+          : 'not_applicable',
+      'axisDominance': source == 'content_axis_lock'
+          ? _contentModeAxisDominance
+          : 'not_applicable',
       'statusVisual': 'rail+ambient_wash+responsive_context_bar',
       'fromStatusColor': _statusVisualRole(fromSpec),
       'toStatusColor': _statusVisualRole(toSpec),
@@ -1377,6 +1439,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
             'visualActivated=$visualActivatedAtCommit tapJitterProtection=dead_zone',
             'pageStructure=stable_stack currentPageState=preserved destinationState=promoted_by_spec_key',
             'rowMountReveal=disabled verticalRowReplay=false horizontalOnly=true',
+            'axisPolicy=${source == 'content_axis_lock' ? 'pointer_axis_lock_single_owner' : 'gesture_detector_horizontal'} axisLockDistance=${source == 'content_axis_lock' ? _contentModeAxisLockDistance : 'not_applicable'} axisDominance=${source == 'content_axis_lock' ? _contentModeAxisDominance : 'not_applicable'}',
             'hudActive=${toSpec.id}',
             'hudOpacity=active:1.00 inactive:0.76',
             'hudCounts=${_hudCountSummary(area)}',
@@ -1470,6 +1533,19 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     };
   }
 
+  Map<CustomSemanticsAction, VoidCallback>? _contentSemanticsActions() {
+    final actions = <CustomSemanticsAction, VoidCallback>{};
+    final tableActions = _tableSemanticsActions();
+    if (tableActions != null) {
+      actions.addAll(tableActions);
+    }
+    final modeActions = _modeReelSemanticsActions();
+    if (modeActions != null) {
+      actions.addAll(modeActions);
+    }
+    return actions.isEmpty ? null : actions;
+  }
+
   Future<void> _showControlStatus({
     required String title,
     required List<String> lines,
@@ -1489,7 +1565,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     }
     trace.log('parkingViewCapability=${_parkingViewCapability.name}');
     trace.log('statusEnabled=${_viewMode?.statusEnabled ?? false}');
-    trace.log('modeControl=${_parkingViewCapability == ParkingViewCapability.tableAndStatus ? 'vertical_swipe_reel' : _parkingViewCapability == ParkingViewCapability.tableOnly ? 'static_table_indicator' : _parkingViewCapability == ParkingViewCapability.empty ? 'download_surface' : 'loading_surface'}');
+    trace.log('modeControl=${_parkingViewCapability == ParkingViewCapability.tableAndStatus ? 'vertical_swipe_reel+content_vertical_swipe' : _parkingViewCapability == ParkingViewCapability.tableOnly ? 'static_table_indicator' : _parkingViewCapability == ParkingViewCapability.empty ? 'download_surface' : 'loading_surface'}');
     await trace.succeed('TypePage 상태 확인을 완료했습니다.');
     if (trace.developerMode && mounted) {
       await trace.showStatusDialog(context);
@@ -1606,14 +1682,14 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     if (_modeReelGuardBlocked) return;
     final guard = _autoGuard;
     if (guard == null) return;
-    guard.beginBlock('보기 모드 릴 조작');
+    guard.beginBlock('보기 모드 세로 전환');
     _modeReelGuardBlocked = true;
   }
 
   void _endModeReelGuard() {
     if (!_modeReelGuardBlocked) return;
     _modeReelGuardBlocked = false;
-    _autoGuard?.endBlock('보기 모드 릴 조작');
+    _autoGuard?.endBlock('보기 모드 세로 전환');
   }
 
   double _modeReelProgressForDistance(double distance) {
@@ -1654,7 +1730,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     if (_modeReelDetentTriggered) return;
     _modeReelDetentTriggered = true;
     HapticFeedback.selectionClick();
-    _debugLog('mode_reel_detent', <String, Object?>{
+    _debugLog('mode_vertical_detent', <String, Object?>{
       'source': source,
       'physicalDirection': _modeReelPhysicalDirection == 0
           ? 'none'
@@ -1664,20 +1740,33 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     });
   }
 
-  void _onModeReelDragStart(DragStartDetails _) {
+  String _modeVerticalBlockedReason() {
+    if (!_statusViewSupported) return 'status_not_supported';
+    if (_viewMode == null) return 'view_mode_unavailable';
+    if (_transitionMaskOn) return 'transition_mask_active';
+    if (_modeReelDragActive) return 'vertical_mode_drag_active';
+    if (_modeReelTransitioning) return 'vertical_mode_transitioning';
+    if (_modeReelSelectorPressActive) return 'parent_selector_press_active';
+    if (_parentSelectorOpen) return 'parent_selector_open';
+    if (_horizontalDragActive) return 'horizontal_table_swipe_active';
+    if (_tableTransitioning) return 'table_transitioning';
+    if (_tableSwipeController.value > 0) return 'table_swipe_progress_active';
+    return 'other_transition_active';
+  }
+
+  bool _beginModeVerticalGesture({required String source}) {
     if (!_canUseModeReel()) {
-      _debugLog('mode_reel_ignored', <String, Object?>{
-        'source': 'gesture',
-        'reason': _modeReelTransitioning
-            ? 'reel_transitioning'
-            : 'other_transition_active',
+      _debugLog('mode_vertical_ignored', <String, Object?>{
+        'source': source,
+        'reason': _modeVerticalBlockedReason(),
         'mode': _viewMode?.mode.name,
+        'capability': _parkingViewCapability.name,
         'tableSwipeProgress': _tableSwipeController.value.toStringAsFixed(3),
       });
-      return;
+      return false;
     }
     final vm = _viewMode;
-    if (vm == null) return;
+    if (vm == null) return false;
     _onUserActivity();
     _beginModeReelGuard();
     _modeReelController.stop();
@@ -1689,20 +1778,33 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
       _modeReelDebugBucket = -1;
       _modeReelDetentTriggered = false;
       _modeReelFromMode = vm.mode;
+      _modeVerticalGestureSource = source;
     });
-    _debugLog('mode_reel_drag_start', <String, Object?>{
+    _debugLog('mode_vertical_drag_start', <String, Object?>{
+      'source': source,
       'from': vm.mode.name,
       'to': _oppositeViewMode(vm.mode).name,
-      'control': 'frameless_bidirectional_icon_reel',
+      'control': source == 'content_vertical'
+          ? 'content_vertical_surface+linked_reel'
+          : 'frameless_bidirectional_icon_reel',
       'visualText': 'none',
       'distanceThreshold': _modeReelDistanceThreshold,
       'velocityThreshold': _modeReelVelocityThreshold,
+      'axisPolicy': 'pointer_axis_lock_single_owner',
     });
+    return true;
   }
 
-  void _onModeReelDragUpdate(DragUpdateDetails details) {
-    if (!_modeReelDragActive || _modeReelTransitioning) return;
-    _modeReelDragDistance += details.delta.dy;
+  void _updateModeVerticalGesture({
+    required String source,
+    required double deltaDy,
+  }) {
+    if (!_modeReelDragActive ||
+        _modeReelTransitioning ||
+        _modeVerticalGestureSource != source) {
+      return;
+    }
+    _modeReelDragDistance += deltaDy;
     final physicalDirection = _modeReelDragDistance < 0
         ? -1
         : _modeReelDragDistance > 0
@@ -1713,16 +1815,16 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     }
     final progress = _modeReelProgressForDistance(_modeReelDragDistance);
     _modeReelController.value = progress;
-    if (progress >=
-        _modeReelDistanceThreshold / _modeReelTravel) {
-      _triggerModeReelDetent(source: 'gesture');
+    if (progress >= _modeReelDistanceThreshold / _modeReelTravel) {
+      _triggerModeReelDetent(source: source);
     } else if (progress < .38) {
       _modeReelDetentTriggered = false;
     }
     final bucket = (progress * 4).floor().clamp(0, 3).toInt();
     if (bucket != _modeReelDebugBucket && bucket > 0) {
       _modeReelDebugBucket = bucket;
-      _debugLog('mode_reel_drag_update', <String, Object?>{
+      _debugLog('mode_vertical_drag_update', <String, Object?>{
+        'source': source,
         'physicalDirection': physicalDirection == 0
             ? 'none'
             : _modeReelDirectionLabel(physicalDirection),
@@ -1733,10 +1835,16 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     }
   }
 
-  void _onModeReelDragEnd(DragEndDetails details) {
-    if (!_modeReelDragActive || _modeReelTransitioning) return;
+  void _endModeVerticalGesture({
+    required String source,
+    required double velocity,
+  }) {
+    if (!_modeReelDragActive ||
+        _modeReelTransitioning ||
+        _modeVerticalGestureSource != source) {
+      return;
+    }
     final distance = _modeReelDragDistance;
-    final velocity = details.primaryVelocity ?? 0;
     final distanceAccepted = distance.abs() >= _modeReelDistanceThreshold;
     final velocityAccepted = velocity.abs() >= _modeReelVelocityThreshold;
     if (!distanceAccepted && !velocityAccepted) {
@@ -1746,6 +1854,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
           reason: 'below_threshold',
           distance: distance,
           velocity: velocity,
+          source: source,
         ),
       );
       return;
@@ -1759,28 +1868,252 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
         physicalDirection: physicalDirection,
         distance: distance,
         velocity: velocity,
-        source: 'gesture',
+        source: source,
       ),
     );
   }
 
-  void _onModeReelDragCancel() {
-    if (!_modeReelDragActive || _modeReelTransitioning) return;
+  void _cancelModeVerticalGesture({
+    required String source,
+    required String reason,
+  }) {
+    if (!_modeReelDragActive ||
+        _modeReelTransitioning ||
+        _modeVerticalGestureSource != source) {
+      return;
+    }
     final distance = _modeReelDragDistance;
     _modeReelDragActive = false;
     unawaited(
       _cancelModeReelTransition(
-        reason: 'gesture_cancelled',
+        reason: reason,
         distance: distance,
         velocity: 0,
+        source: source,
       ),
     );
+  }
+
+  void _onModeReelDragStart(DragStartDetails _) {
+    _beginModeVerticalGesture(source: 'reel');
+  }
+
+  void _onModeReelDragUpdate(DragUpdateDetails details) {
+    _updateModeVerticalGesture(
+      source: 'reel',
+      deltaDy: details.delta.dy,
+    );
+  }
+
+  void _onModeReelDragEnd(DragEndDetails details) {
+    _endModeVerticalGesture(
+      source: 'reel',
+      velocity: details.primaryVelocity ?? 0,
+    );
+  }
+
+  void _onModeReelDragCancel() {
+    _cancelModeVerticalGesture(
+      source: 'reel',
+      reason: 'gesture_cancelled',
+    );
+  }
+
+  void _resetContentGestureTracking() {
+    _contentGesturePointer = null;
+    _contentGestureAccumulatedDelta = Offset.zero;
+    _contentGestureLastTimeStamp = null;
+    _contentGestureVelocityX = 0;
+    _contentGestureVelocityY = 0;
+    _contentGestureViewportWidth = 1;
+    _contentGestureAxis = _ContentGestureAxis.undecided;
+  }
+
+  void _onContentGesturePointerDown(
+    PointerDownEvent event,
+    double viewportWidth,
+  ) {
+    if (_contentGesturePointer != null) return;
+    _contentGesturePointer = event.pointer;
+    _contentGestureAccumulatedDelta = Offset.zero;
+    _contentGestureLastTimeStamp = event.timeStamp;
+    _contentGestureVelocityX = 0;
+    _contentGestureVelocityY = 0;
+    _contentGestureViewportWidth = viewportWidth <= 0 ? 1 : viewportWidth;
+    _contentGestureAxis = _ContentGestureAxis.undecided;
+  }
+
+  void _updateContentGestureVelocity(PointerMoveEvent event) {
+    final previousTimeStamp = _contentGestureLastTimeStamp;
+    _contentGestureLastTimeStamp = event.timeStamp;
+    if (previousTimeStamp == null) return;
+    final elapsed = event.timeStamp - previousTimeStamp;
+    final micros = elapsed.inMicroseconds;
+    if (micros <= 0) return;
+    final instantaneousX = event.delta.dx * 1000000 / micros;
+    final instantaneousY = event.delta.dy * 1000000 / micros;
+    _contentGestureVelocityX = _contentGestureVelocityX == 0
+        ? instantaneousX
+        : (_contentGestureVelocityX * .65) + (instantaneousX * .35);
+    _contentGestureVelocityY = _contentGestureVelocityY == 0
+        ? instantaneousY
+        : (_contentGestureVelocityY * .65) + (instantaneousY * .35);
+  }
+
+  void _onContentGesturePointerMove(PointerMoveEvent event) {
+    if (_contentGesturePointer != event.pointer) return;
+    _contentGestureAccumulatedDelta += event.delta;
+    _updateContentGestureVelocity(event);
+
+    if (_contentGestureAxis == _ContentGestureAxis.blocked) return;
+
+    if (_contentGestureAxis == _ContentGestureAxis.undecided) {
+      if (_tableTransitioning ||
+          _modeReelTransitioning ||
+          _transitionMaskOn ||
+          _modeReelSelectorPressActive ||
+          _parentSelectorOpen ||
+          _tableSwipeController.value > 0) {
+        _contentGestureAxis = _ContentGestureAxis.blocked;
+        _debugLog('content_axis_ignored', <String, Object?>{
+          'reason': _tableTransitioning
+              ? 'table_transitioning'
+              : _modeReelTransitioning
+                  ? 'vertical_mode_transitioning'
+                  : _transitionMaskOn
+                      ? 'transition_mask_active'
+                      : _modeReelSelectorPressActive
+                          ? 'parent_selector_press_active'
+                          : _parentSelectorOpen
+                              ? 'parent_selector_open'
+                              : 'table_swipe_progress_active',
+        });
+        return;
+      }
+
+      final dx = _contentGestureAccumulatedDelta.dx.abs();
+      final dy = _contentGestureAccumulatedDelta.dy.abs();
+      if (math.max(dx, dy) < _contentModeAxisLockDistance) return;
+
+      if (dx > dy * _contentModeAxisDominance) {
+        _contentGestureAxis = _ContentGestureAxis.horizontal;
+        final tableSwipeAvailable = _canSwipeTables();
+        _debugLog('content_axis_locked', <String, Object?>{
+          'axis': 'horizontal',
+          'dx': dx.toStringAsFixed(1),
+          'dy': dy.toStringAsFixed(1),
+          'lockDistance': _contentModeAxisLockDistance,
+          'dominance': _contentModeAxisDominance,
+          'tableSwipeAvailable': tableSwipeAvailable,
+          'ownership': tableSwipeAvailable
+              ? 'table_horizontal_swipe'
+              : 'child_horizontal_or_noop',
+        });
+        if (tableSwipeAvailable) {
+          _beginTableHorizontalSwipe(
+            _contentGestureViewportWidth,
+            inputSource: 'content_axis_lock',
+          );
+          if (_horizontalDragActive) {
+            _updateTableHorizontalSwipe(
+              _contentGestureAccumulatedDelta.dx,
+            );
+          }
+        }
+        return;
+      }
+
+      if (dy > dx * _contentModeAxisDominance) {
+        _contentGestureAxis = _ContentGestureAxis.vertical;
+        final started = _beginModeVerticalGesture(
+          source: 'content_vertical',
+        );
+        _debugLog('content_axis_locked', <String, Object?>{
+          'axis': 'vertical',
+          'dx': dx.toStringAsFixed(1),
+          'dy': dy.toStringAsFixed(1),
+          'lockDistance': _contentModeAxisLockDistance,
+          'dominance': _contentModeAxisDominance,
+          'modeSwitchStarted': started,
+          'ownership': started ? 'mode_vertical_switch' : 'vertical_noop',
+        });
+        if (started) {
+          _updateModeVerticalGesture(
+            source: 'content_vertical',
+            deltaDy: _contentGestureAccumulatedDelta.dy,
+          );
+        }
+        return;
+      }
+
+      return;
+    }
+
+    if (_contentGestureAxis == _ContentGestureAxis.horizontal) {
+      _updateTableHorizontalSwipe(event.delta.dx);
+      return;
+    }
+
+    if (_contentGestureAxis == _ContentGestureAxis.vertical) {
+      _updateModeVerticalGesture(
+        source: 'content_vertical',
+        deltaDy: event.delta.dy,
+      );
+    }
+  }
+
+  void _onContentGesturePointerUp(PointerUpEvent event) {
+    if (_contentGesturePointer != event.pointer) return;
+    final axis = _contentGestureAxis;
+    final velocityX = _contentGestureVelocityX;
+    final velocityY = _contentGestureVelocityY;
+    if (axis == _ContentGestureAxis.horizontal) {
+      _endTableHorizontalSwipe(
+        velocityX,
+        source: 'content_axis_lock',
+      );
+    } else if (axis == _ContentGestureAxis.vertical) {
+      _endModeVerticalGesture(
+        source: 'content_vertical',
+        velocity: velocityY,
+      );
+    }
+    if (axis != _ContentGestureAxis.undecided &&
+        axis != _ContentGestureAxis.blocked) {
+      _debugLog('content_axis_session_end', <String, Object?>{
+        'axis': axis.name,
+        'velocityX': velocityX.toStringAsFixed(1),
+        'velocityY': velocityY.toStringAsFixed(1),
+      });
+    }
+    _resetContentGestureTracking();
+  }
+
+  void _onContentGesturePointerCancel(PointerCancelEvent event) {
+    if (_contentGesturePointer != event.pointer) return;
+    final axis = _contentGestureAxis;
+    if (axis == _ContentGestureAxis.horizontal) {
+      _cancelTableHorizontalSwipe(reason: 'pointer_cancelled');
+    } else if (axis == _ContentGestureAxis.vertical) {
+      _cancelModeVerticalGesture(
+        source: 'content_vertical',
+        reason: 'pointer_cancelled',
+      );
+    }
+    if (axis != _ContentGestureAxis.undecided &&
+        axis != _ContentGestureAxis.blocked) {
+      _debugLog('content_axis_session_cancel', <String, Object?>{
+        'axis': axis.name,
+      });
+    }
+    _resetContentGestureTracking();
   }
 
   Future<void> _cancelModeReelTransition({
     required String reason,
     required double distance,
     required double velocity,
+    required String source,
   }) async {
     final progress = _modeReelController.value.clamp(0.0, 1.0).toDouble();
     final duration = _modeReelSettleDuration(
@@ -1792,7 +2125,8 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
         ? 'none'
         : _modeReelDirectionLabel(_modeReelPhysicalDirection);
     _modeReelTransitioning = true;
-    _debugLog('mode_reel_cancel', <String, Object?>{
+    _debugLog('mode_vertical_cancel', <String, Object?>{
+      'source': source,
       'reason': reason,
       'physicalDirection': direction,
       'distance': distance.toStringAsFixed(1),
@@ -1818,6 +2152,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
       _modeReelDebugBucket = -1;
       _modeReelDetentTriggered = false;
       _modeReelFromMode = null;
+      _modeVerticalGestureSource = null;
       _modeReelTransitioning = false;
       _endModeReelGuard();
       if (mounted) {
@@ -1854,7 +2189,10 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
       velocity: velocity,
     );
     final direction = _modeReelDirectionLabel(physicalDirection);
-    _debugLog('mode_reel_commit', <String, Object?>{
+    final control = source == 'content_vertical'
+        ? 'content_vertical_surface+linked_reel'
+        : 'frameless_bidirectional_icon_reel';
+    _debugLog('mode_vertical_commit', <String, Object?>{
       'source': source,
       'from': from.name,
       'to': to.name,
@@ -1866,7 +2204,9 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
       'velocityThreshold': _modeReelVelocityThreshold,
       'animationDurationMs': initialDuration.inMilliseconds,
       'motion': 'translateY+rotationX+opacity+scale',
+      'control': control,
       'visualText': 'none',
+      'axisPolicy': 'pointer_axis_lock_single_owner',
       'reduceMotion': reduceMotion,
     });
     try {
@@ -1909,23 +2249,28 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
         );
       }
       if (!mounted) return;
-      _debugLog('mode_reel_settle_complete', <String, Object?>{
+      _debugLog('mode_vertical_settle_complete', <String, Object?>{
         'source': source,
         'from': from.name,
         'to': to.name,
         'physicalDirection': direction,
         'detent': true,
-        'control': 'frameless_bidirectional_icon_reel',
+        'control': control,
       });
       unawaited(
         _showControlStatus(
-          title: 'TypePage 보기 모드 릴 전환',
+          title: source == 'content_vertical'
+              ? 'TypePage 콘텐츠 보기 모드 전환'
+              : 'TypePage 보기 모드 릴 전환',
           lines: <String>[
-            'control=frameless_bidirectional_icon_reel',
+            'control=$control',
             'viewMode=${from.name}->${to.name}',
             'screen=${widget.screen}',
             'table=${widget.tabs[_currentTableIndex].id}',
             'source=$source physicalDirection=$direction',
+            'input=vertical_both_directions axisPolicy=pointer_axis_lock_single_owner',
+            'capabilityGate=_canUseModeReel tableOnlyModeSwitchBlocked=true',
+            'contentAxisLockDistance=$_contentModeAxisLockDistance contentAxisDominance=$_contentModeAxisDominance horizontalRecognizer=content_removed axisOwner=raw_pointer_single_owner',
             'distance=${distance.toStringAsFixed(1)} velocity=${velocity.toStringAsFixed(1)}',
             'distanceThreshold=$_modeReelDistanceThreshold velocityThreshold=$_modeReelVelocityThreshold',
             'detent=true haptic=selectionClick',
@@ -1936,7 +2281,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
             'hudOpacity=active:1.00 inactive:0.76->1.00->0.76',
             'statusVisual=rail+ambient_wash tableOnly=true',
             'statusColor=${_statusVisualRole(widget.tabs[_currentTableIndex])}',
-            'guard=blocked_until_reel_settle',
+            'guard=blocked_until_vertical_mode_settle',
             'reduceMotion=$reduceMotion',
           ],
         ),
@@ -1948,6 +2293,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
       _modeReelDebugBucket = -1;
       _modeReelDetentTriggered = false;
       _modeReelFromMode = null;
+      _modeVerticalGestureSource = null;
       _modeReelTransitioning = false;
       _endModeReelGuard();
       if (mounted) {
@@ -2425,7 +2771,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
       'interaction': interaction,
       'action': 'parent_selector',
       'haptic': haptic,
-      'modeSwitch': 'vertical_reel_only',
+      'modeSwitch': 'vertical_reel_or_content',
     });
     String? selectedParent;
     var parents = const <_ParentSelectorItem>[];
@@ -2470,7 +2816,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
             lines: <String>[
               'control=frameless_bidirectional_icon_reel interaction=${interaction}_cancelled',
               'dialog=parent_selector closeSource=$_lastParentSelectorCloseSource',
-              'tapBehavior=parent_selector modeSwitchInput=vertical_reel_only',
+              'tapBehavior=parent_selector modeSwitchInput=vertical_reel_or_content',
               'selectorEntryHaptic=$haptic',
               'closePolicy=exactly_once navigatorPopCount=$_lastParentSelectorNavigatorPopCount duplicateCloseCount=$_lastParentSelectorDuplicateCloseCount',
               'scrimReverseInput=absorbed systemBackDuringReverse=blocked',
@@ -2532,7 +2878,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
           lines: <String>[
             'control=frameless_bidirectional_icon_reel interaction=$interaction',
             'dialog=parent_selector dialogSource=mode_reel_rect',
-            'tapBehavior=parent_selector modeSwitchInput=vertical_reel_only',
+            'tapBehavior=parent_selector modeSwitchInput=vertical_reel_or_content',
             'selectorEntryHaptic=$haptic',
             'closePolicy=exactly_once navigatorPopCount=$_lastParentSelectorNavigatorPopCount duplicateCloseCount=$_lastParentSelectorDuplicateCloseCount',
             'scrimReverseInput=absorbed systemBackDuringReverse=blocked',
@@ -3620,21 +3966,26 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
                 ? screenWidth
                 : 1.0;
         final canSwipe = _canSwipeTables();
+        final canTrackContentGesture = _statusViewSupported || canSwipe;
         return Semantics(
-          customSemanticsActions: _tableSemanticsActions(),
-          child: GestureDetector(
+          customSemanticsActions: _contentSemanticsActions(),
+          child: Listener(
             behavior: HitTestBehavior.translucent,
-            onHorizontalDragStart: canSwipe
-                ? (details) => _onTableHorizontalDragStart(
-                      details,
+            onPointerDown: canTrackContentGesture
+                ? (event) => _onContentGesturePointerDown(
+                      event,
                       viewportWidth,
                     )
                 : null,
-            onHorizontalDragUpdate:
-                canSwipe ? _onTableHorizontalDragUpdate : null,
-            onHorizontalDragEnd: canSwipe ? _onTableHorizontalDragEnd : null,
-            onHorizontalDragCancel:
-                canSwipe ? _onTableHorizontalDragCancel : null,
+            onPointerMove: canTrackContentGesture
+                ? _onContentGesturePointerMove
+                : null,
+            onPointerUp: canTrackContentGesture
+                ? _onContentGesturePointerUp
+                : null,
+            onPointerCancel: canTrackContentGesture
+                ? _onContentGesturePointerCancel
+                : null,
             child: _buildInteractiveSwipePages(viewportWidth),
           ),
         );

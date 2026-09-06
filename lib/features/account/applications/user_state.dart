@@ -12,6 +12,7 @@ import '../../commute/domain/repositories/commute_log_repository.dart';
 import '../../mode_single/application/att_brk_repository.dart';
 import '../../dashboard/applications/common/firebase_google_auth_bridge.dart';
 import '../../dev/application/area_state.dart';
+import 'tablet_account_diagnostics.dart';
 import '../domain/models/session_account.dart';
 import '../domain/models/tablet/tablet_model.dart';
 import '../domain/models/user/user_model.dart';
@@ -684,7 +685,10 @@ class UserState extends ChangeNotifier {
     }
   }
 
-  Future<void> updateLoginTablet(TabletModel updatedTablet) async {
+  Future<void> updateLoginTablet(
+    TabletModel updatedTablet, {
+    String? previousId,
+  }) async {
     _guardSessionSwitchOrThrow(updatedTablet.id, expectTablet: true);
 
     _isTablet = true;
@@ -698,7 +702,19 @@ class UserState extends ChangeNotifier {
     debugPrint(
         '[USER-STATE][${DateTime.now().toIso8601String()}] updateLoginTablet firebaseOk=$firebaseOk currentUser=${FirebaseGoogleAuthBridge.instance.currentUser?.email} anonymous=${FirebaseGoogleAuthBridge.instance.currentUser?.isAnonymous}');
 
-    await _repository.updateTablet(updatedTablet);
+    TabletAccountDiagnostics.record(
+      'session_document_update_start',
+      meta: <String, Object?>{
+        'previousId': (previousId ?? '').trim().isEmpty
+            ? '-'
+            : TabletPhone.maskDocumentId(previousId!),
+        'documentId': TabletPhone.maskDocumentId(updatedTablet.id),
+      },
+    );
+    await _repository.updateTablet(
+      updatedTablet,
+      previousId: previousId,
+    );
 
     final area = _areaState.currentArea.trim();
     _tabletList = _replaceTabletItem(_tabletList, updatedTablet);
@@ -1262,7 +1278,7 @@ class UserState extends ChangeNotifier {
       final englishSelectedAreaName =
           prefs.getString('englishSelectedAreaName')?.trim();
 
-      if (selectedArea == null) return;
+      if (selectedArea == null || selectedArea.isEmpty) return;
 
       final firebaseOk = await FirebaseGoogleAuthBridge.instance
           .ensureSignedInFromGoogleSession(interactive: false);
@@ -1272,7 +1288,21 @@ class UserState extends ChangeNotifier {
 
       TabletModel? tablet;
       if (tabletPhone.isNotEmpty) {
-        tablet = await _repository.getTabletByPhone(tabletPhone);
+        TabletAccountDiagnostics.record(
+          'auto_login_phone_area_lookup_start',
+          meta: <String, Object?>{
+            'documentId': TabletPhone.maskDocumentId(
+              TabletPhone.documentId(
+                phone: tabletPhone,
+                area: selectedArea,
+              ),
+            ),
+          },
+        );
+        tablet = await _repository.getTabletByPhoneAndAreaName(
+          tabletPhone,
+          selectedArea,
+        );
       }
       if (tablet == null && legacyHandle != null && legacyHandle.isNotEmpty) {
         tablet = await _repository.getTabletByHandleAndAreaName(
@@ -1280,9 +1310,25 @@ class UserState extends ChangeNotifier {
           selectedArea,
         );
       }
-      if (tablet == null) return;
+      if (tablet == null) {
+        TabletAccountDiagnostics.record(
+          'auto_login_lookup_miss',
+          meta: <String, Object?>{
+            'phone': TabletPhone.mask(tabletPhone),
+            'area': selectedArea,
+          },
+        );
+        return;
+      }
 
+      final canonicalId = TabletPhone.documentId(
+        phone: tablet.phone,
+        area: selectedArea,
+      );
+      final sourceId = tablet.id;
+      final effectiveId = canonicalId.isEmpty ? sourceId : canonicalId;
       final tabletData = tablet.copyWith(
+        id: effectiveId,
         currentArea: selectedArea,
         selectedArea: selectedArea,
         role: role ?? tablet.role,
@@ -1293,6 +1339,29 @@ class UserState extends ChangeNotifier {
             : tablet.englishSelectedAreaName,
         isSaved: true,
       );
+
+      if (canonicalId.isNotEmpty && sourceId != canonicalId) {
+        TabletAccountDiagnostics.record(
+          'legacy_document_migration_start',
+          meta: <String, Object?>{
+            'sourceId': TabletPhone.maskDocumentId(sourceId),
+            'documentId': TabletPhone.maskDocumentId(canonicalId),
+            'source': 'auto_login',
+          },
+        );
+        await _repository.updateTablet(
+          tabletData,
+          previousId: sourceId,
+        );
+        TabletAccountDiagnostics.record(
+          'legacy_document_migration_complete',
+          meta: <String, Object?>{
+            'sourceId': TabletPhone.maskDocumentId(sourceId),
+            'documentId': TabletPhone.maskDocumentId(canonicalId),
+            'source': 'auto_login',
+          },
+        );
+      }
 
       final loginDivision = tabletData.divisions.firstOrNull ?? '';
       await _areaState.refreshAreaForLogin(

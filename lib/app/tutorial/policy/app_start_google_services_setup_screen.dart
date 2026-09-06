@@ -11,6 +11,7 @@ import '../../di/routes.dart';
 import '../../init/app_start_debug_trace.dart';
 import '../../init/app_start_flow_prefs.dart';
 import '../../init/app_start_user_purpose.dart';
+import '../tutorial/app_start_setup_specs.dart';
 
 class AppStartGoogleServicesSetupScreen extends StatefulWidget {
   const AppStartGoogleServicesSetupScreen({super.key});
@@ -34,26 +35,8 @@ class _AppStartGoogleServicesSetupScreenState
   bool get _reduceMotion =>
       MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
-  static const List<_GoogleServiceSpec> _services = <_GoogleServiceSpec>[
-    _GoogleServiceSpec(
-      title: 'Google Calendar',
-      description: '업무 일정 조회, 등록, 수정 및 삭제에 사용합니다.',
-      detail: 'Calendar · Calendar Events',
-      icon: Icons.calendar_month_rounded,
-    ),
-    _GoogleServiceSpec(
-      title: 'Gmail',
-      description: '업무 시작·종료 보고와 첨부파일 메일 전송에 사용합니다.',
-      detail: 'Gmail Send',
-      icon: Icons.mail_rounded,
-    ),
-    _GoogleServiceSpec(
-      title: 'Google Cloud Storage',
-      description: '업무 파일과 이미지의 저장 및 조회에 사용합니다.',
-      detail: 'Cloud Storage Full Control',
-      icon: Icons.cloud_rounded,
-    ),
-  ];
+  static const List<AppStartGoogleServiceSpec> _services =
+      appStartGoogleServiceSpecs;
 
   @override
   void initState() {
@@ -314,7 +297,7 @@ class _AppStartGoogleServicesSetupScreenState
 
   Widget _buildServiceCard(
     BuildContext context,
-    _GoogleServiceSpec spec,
+    AppStartGoogleServiceSpec spec,
     int index,
   ) {
     final tokens = CommonUiTheme.of(context);
@@ -804,19 +787,6 @@ class _AppStartGoogleServicesSetupScreenState
   }
 }
 
-class _GoogleServiceSpec {
-  const _GoogleServiceSpec({
-    required this.title,
-    required this.description,
-    required this.detail,
-    required this.icon,
-  });
-
-  final String title;
-  final String description;
-  final String detail;
-  final IconData icon;
-}
 
 class _GoogleSetupEntrance extends StatelessWidget {
   const _GoogleSetupEntrance({

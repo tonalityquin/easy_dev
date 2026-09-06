@@ -1,4 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../../../shared/auth/tablet_phone.dart';
+import '../../applications/tablet_account_diagnostics.dart';
 import '../../domain/models/tablet/tablet_model.dart';
 import '../../domain/models/user/user_model.dart';
 
@@ -48,6 +50,35 @@ class UserWriteService {
     return _firestore.collection('tablet_accounts');
   }
 
+
+  String _tabletAreaOf(TabletModel tablet) {
+    final selected = (tablet.selectedArea ?? '').trim();
+    if (selected.isNotEmpty) return selected;
+    final current = (tablet.currentArea ?? '').trim();
+    if (current.isNotEmpty) return current;
+    if (tablet.areas.isNotEmpty) {
+      final first = tablet.areas.first.trim();
+      if (first.isNotEmpty) return first;
+    }
+    return '';
+  }
+
+  String _canonicalTabletDocumentId(TabletModel tablet) {
+    return TabletPhone.documentId(
+      phone: tablet.phone,
+      area: _tabletAreaOf(tablet),
+    );
+  }
+
+  void _assertCanonicalTabletDocumentId(TabletModel tablet) {
+    final expected = _canonicalTabletDocumentId(tablet);
+    if (expected.isEmpty) {
+      throw StateError('태블릿 문서 ID를 만들 전화번호 또는 업무 지역 정보가 없습니다.');
+    }
+    if (tablet.id.trim() != expected) {
+      throw StateError('태블릿 문서 ID가 전화번호-업무지역명 규칙과 일치하지 않습니다.');
+    }
+  }
   String _inferAreaFromHyphenId(String id) {
     final idx = id.lastIndexOf('-');
     if (idx <= 0 || idx >= id.length - 1) return 'unknown';
@@ -308,18 +339,47 @@ class UserWriteService {
   }
 
   Future<void> addTabletCard(TabletModel tablet) async {
-    final docRef = _getTabletCollectionRef().doc(tablet.id);
+    _assertCanonicalTabletDocumentId(tablet);
+    final documentId = _canonicalTabletDocumentId(tablet);
+    final docRef = _getTabletCollectionRef().doc(documentId);
+    TabletAccountDiagnostics.record(
+      'document_create_start',
+      meta: <String, Object?>{
+        'documentId': TabletPhone.maskDocumentId(documentId),
+        'policy': 'phone-area',
+      },
+    );
     try {
       await _firestore.runTransaction((tx) async {
         final existing = await tx.get(docRef);
         if (existing.exists) {
-          throw StateError('이미 등록된 태블릿 전화번호입니다.');
+          throw StateError('해당 전화번호와 업무 지역으로 등록된 태블릿이 이미 있습니다.');
         }
         tx.set(docRef, tablet.toMap());
       });
-    } on FirebaseException {
+      TabletAccountDiagnostics.record(
+        'document_create_complete',
+        meta: <String, Object?>{
+          'documentId': TabletPhone.maskDocumentId(documentId),
+        },
+      );
+    } on FirebaseException catch (e) {
+      TabletAccountDiagnostics.record(
+        'document_create_failed',
+        meta: <String, Object?>{
+          'documentId': TabletPhone.maskDocumentId(documentId),
+          'error': e.code,
+        },
+      );
       rethrow;
-    } catch (_) {
+    } catch (e) {
+      TabletAccountDiagnostics.record(
+        'document_create_failed',
+        meta: <String, Object?>{
+          'documentId': TabletPhone.maskDocumentId(documentId),
+          'error': e.runtimeType,
+        },
+      );
       rethrow;
     }
   }
@@ -479,14 +539,27 @@ class UserWriteService {
     TabletModel tablet, {
     String? previousId,
   }) async {
-    final nextRef = _getTabletCollectionRef().doc(tablet.id);
+    _assertCanonicalTabletDocumentId(tablet);
+    final documentId = _canonicalTabletDocumentId(tablet);
+    final nextRef = _getTabletCollectionRef().doc(documentId);
     final previous = (previousId ?? '').trim();
+    final moving = previous.isNotEmpty && previous != documentId;
+    TabletAccountDiagnostics.record(
+      moving ? 'document_move_start' : 'document_update_start',
+      meta: <String, Object?>{
+        'previousId': previous.isEmpty
+            ? '-'
+            : TabletPhone.maskDocumentId(previous),
+        'documentId': TabletPhone.maskDocumentId(documentId),
+        'policy': 'phone-area',
+      },
+    );
     try {
       await _firestore.runTransaction((tx) async {
-        if (previous.isNotEmpty && previous != tablet.id) {
+        if (moving) {
           final existing = await tx.get(nextRef);
           if (existing.exists) {
-            throw StateError('이미 등록된 태블릿 전화번호입니다.');
+            throw StateError('해당 전화번호와 업무 지역으로 등록된 태블릿이 이미 있습니다.');
           }
           tx.set(nextRef, tablet.toMap());
           tx.delete(_getTabletCollectionRef().doc(previous));
@@ -494,9 +567,32 @@ class UserWriteService {
         }
         tx.set(nextRef, tablet.toMap());
       });
-    } on FirebaseException {
+      TabletAccountDiagnostics.record(
+        moving ? 'document_move_complete' : 'document_update_complete',
+        meta: <String, Object?>{
+          'previousId': previous.isEmpty
+              ? '-'
+              : TabletPhone.maskDocumentId(previous),
+          'documentId': TabletPhone.maskDocumentId(documentId),
+        },
+      );
+    } on FirebaseException catch (e) {
+      TabletAccountDiagnostics.record(
+        moving ? 'document_move_failed' : 'document_update_failed',
+        meta: <String, Object?>{
+          'documentId': TabletPhone.maskDocumentId(documentId),
+          'error': e.code,
+        },
+      );
       rethrow;
-    } catch (_) {
+    } catch (e) {
+      TabletAccountDiagnostics.record(
+        moving ? 'document_move_failed' : 'document_update_failed',
+        meta: <String, Object?>{
+          'documentId': TabletPhone.maskDocumentId(documentId),
+          'error': e.runtimeType,
+        },
+      );
       rethrow;
     }
   }

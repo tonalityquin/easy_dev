@@ -28,6 +28,14 @@ class FirestoreUserRepository implements UserRepository {
   Future<TabletModel?> getTabletByPhone(String phone) => _readService.getTabletByPhone(phone);
 
   @override
+  Future<List<TabletModel>> searchTabletsByPhone(String phone) =>
+      _readService.searchTabletsByPhone(phone);
+
+  @override
+  Future<TabletModel?> getTabletByPhoneAndAreaName(String phone, String areaName) =>
+      _readService.getTabletByPhoneAndAreaName(phone, areaName);
+
+  @override
   Future<TabletModel?> getTabletByHandleAndAreaName(String handle, String areaName) =>
       _readService.getTabletByHandleAndAreaName(handle, areaName);
 

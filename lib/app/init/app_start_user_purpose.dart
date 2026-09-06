@@ -27,6 +27,16 @@ extension AppStartUserPurposeValues on AppStartUserPurpose {
     };
   }
 
+  String get confirmationLabel {
+    return switch (this) {
+      AppStartUserPurpose.branchEmployee => '업무 - 지사',
+      AppStartUserPurpose.headOfficeEmployee => '업무 - 본사',
+      AppStartUserPurpose.tabletInstallation => '태블릿',
+      AppStartUserPurpose.commuteRecorder => '업무 - 출퇴근 기록형',
+      AppStartUserPurpose.personal => '개인',
+    };
+  }
+
   String get description {
     return switch (this) {
       AppStartUserPurpose.branchEmployee => '현장 업무와 주차 관리',

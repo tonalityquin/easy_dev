@@ -12,7 +12,10 @@ import '../../../features/dev/presentation/debug_caution_surface.dart';
 import '../../command/application/app_command_registry.dart';
 import '../../command/application/terminal_line.dart';
 import '../../command/application/terminal_session_controller.dart';
+import '../../init/app_start_setup_flow_resolver.dart';
+import '../../init/overlay_lifecycle_gate.dart';
 import '../../init/startup_tasks.dart';
+import '../../tutorial/tutorial/app_start_setup_specs.dart';
 import '../application/parkinworkin_terminal_diagnostics.dart';
 import '../application/terminal_output_playback_controller.dart';
 
@@ -131,10 +134,21 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
   bool get _canModes =>
       _isLauncher && _launcherController!.canReturnToModes;
 
+  bool get _startupSetupActive =>
+      _isLauncher && _launcherController!.startupSetupActive;
+
+  bool get _startupSetupBusy =>
+      _isLauncher && _launcherController!.startupSetupBusy;
+
+  bool get _startupSetupAwaitingExternalSettings =>
+      _isLauncher &&
+      _launcherController!.startupSetupAwaitingExternalSettings;
+
   @override
   void initState() {
     super.initState();
     if (_isLauncher) {
+      OverlayLifecycleGate.lock(reason: 'launcher_runtime_not_ready');
       _launcherController = ModeLauncherController(
         startupReport: widget.startupReport,
       );
@@ -195,19 +209,8 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
       _syncPlayback();
       await (_openFuture ?? Future<void>.value());
       if (!mounted || _interactionLocked) return;
-      final pendingRoute = _launcherController!.consumePendingTargetRoute();
-      if (pendingRoute != null) {
-        await _playbackController.waitUntilIdle();
-        if (!mounted || _interactionLocked) return;
-        await _closeLauncherAndNavigate(pendingRoute);
-        return;
-      }
-      final pendingAutoSubmit =
-          _launcherController!.consumePendingAutoSubmitText();
-      if (pendingAutoSubmit != null) {
-        await _runLauncherAutoSubmit(pendingAutoSubmit);
-        if (!mounted || _interactionLocked) return;
-      }
+      final handledPending = await _consumeLauncherPendingFlow();
+      if (handledPending || !mounted || _interactionLocked) return;
     } else {
       await (_openFuture ?? Future<void>.value());
       ParkinWorkinTerminalDiagnostics.record(
@@ -221,8 +224,94 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
           : Duration(milliseconds: 75 + (_contextLabel.hashCode.abs() % 55)),
     );
     if (!mounted || _interactionLocked) return;
-    _promptFocusNode.requestFocus();
+    if (!_startupSetupActive) {
+      _promptFocusNode.requestFocus();
+    }
     _scheduleBottomLock(delay: const Duration(milliseconds: 220));
+  }
+
+  Future<bool> _consumeLauncherPendingFlow() async {
+    if (!_isLauncher || !mounted || _interactionLocked) return false;
+    final pendingRoute = _launcherController!.consumePendingTargetRoute();
+    if (pendingRoute != null) {
+      await _playbackController.waitUntilIdle();
+      if (!mounted || _interactionLocked) return true;
+      await _closeLauncherAndNavigate(pendingRoute);
+      return true;
+    }
+    final pendingAutoSubmit =
+        _launcherController!.consumePendingAutoSubmitText();
+    if (pendingAutoSubmit != null) {
+      await _runLauncherAutoSubmit(pendingAutoSubmit);
+      return true;
+    }
+    return false;
+  }
+
+  Future<void> _runStartupSetupPrimaryAction() async {
+    if (!_isLauncher ||
+        _interactionLocked ||
+        _startupSetupBusy ||
+        _startupSetupAwaitingExternalSettings) {
+      return;
+    }
+    _promptFocusNode.unfocus();
+    await HapticFeedback.selectionClick();
+    await _launcherController!.runStartupSetupPrimaryAction(
+      context,
+      reduceMotion: _reduceMotion,
+    );
+    if (!mounted || _interactionLocked) return;
+    _syncPlayback();
+    final handledPending = await _consumeLauncherPendingFlow();
+    if (handledPending || !mounted || _interactionLocked) return;
+    if (!_startupSetupActive) {
+      _promptFocusNode.requestFocus();
+    }
+    _scheduleBottomLock(delay: const Duration(milliseconds: 140));
+  }
+
+  Future<void> _handleStartupGoogleTitleTap() async {
+    if (!_isLauncher || _interactionLocked || _startupSetupBusy) return;
+    await HapticFeedback.selectionClick();
+    final skipped = await _launcherController!.registerStartupGoogleTitleTap(
+      context,
+      reduceMotion: _reduceMotion,
+    );
+    if (!mounted || !skipped) return;
+    _syncPlayback();
+    final handledPending = await _consumeLauncherPendingFlow();
+    if (handledPending || !mounted || _interactionLocked) return;
+    if (!_startupSetupActive) {
+      _promptFocusNode.requestFocus();
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed ||
+        !_isLauncher ||
+        !_initialized ||
+        !_startupSetupActive) {
+      return;
+    }
+    unawaited(_refreshStartupSetupAfterResume());
+  }
+
+  Future<void> _refreshStartupSetupAfterResume() async {
+    if (!_isLauncher || _interactionLocked) return;
+    if (_startupSetupBusy && !_startupSetupAwaitingExternalSettings) return;
+    await _launcherController!.refreshStartupSetupAfterResume(
+      context,
+      reduceMotion: _reduceMotion,
+    );
+    if (!mounted || _interactionLocked) return;
+    _syncPlayback();
+    final handledPending = await _consumeLauncherPendingFlow();
+    if (handledPending || !mounted || _interactionLocked) return;
+    if (!_startupSetupActive) {
+      _promptFocusNode.requestFocus();
+    }
   }
 
   void _handleSourceChanged() {
@@ -495,7 +584,12 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
   }
 
   Future<void> _submitHeaderCommand(String command) async {
-    if (_busy || _interactionLocked || _launcherAutoSubmitInFlight) return;
+    if (_busy ||
+        _interactionLocked ||
+        _launcherAutoSubmitInFlight ||
+        (_isLauncher && _startupSetupActive)) {
+      return;
+    }
     if (command == 'setting' && _promptPath == '~/setting') {
       if (!_promptFocusNode.hasFocus) _promptFocusNode.requestFocus();
       return;
@@ -706,7 +800,9 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
           ? Duration.zero
           : Duration(milliseconds: 75 + (_contextLabel.hashCode.abs() % 45)),
     );
-    if (mounted && !_busy && !_interactionLocked) _promptFocusNode.requestFocus();
+    if (mounted && !_busy && !_interactionLocked && !_startupSetupActive) {
+      _promptFocusNode.requestFocus();
+    }
   }
 
   Future<void> _closeLauncherAndNavigate(String route) async {
@@ -726,10 +822,21 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
       await _openController.reverse(from: 1);
     }
     if (!mounted) return;
+    if (_isLauncher && _launcherController!.runtimeContextReady) {
+      OverlayLifecycleGate.markRuntimeReady(
+        reason: 'runtime_activated',
+        targetRoute: route,
+      );
+    }
     ParkinWorkinTerminalDiagnostics.record(
       'terminal_close_complete',
       context: _contextLabel,
-      meta: <String, Object?>{'targetRoute': route},
+      meta: <String, Object?>{
+        'targetRoute': route,
+        'runtimeContextReady':
+            _isLauncher ? _launcherController!.runtimeContextReady : false,
+        ...OverlayLifecycleGate.debugMeta(),
+      },
     );
     Navigator.of(context).pushReplacementNamed(route);
   }
@@ -787,6 +894,15 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
     final interactionDescription = <String>[
       'App exiting: $_exitInProgress',
       'Interaction locked: $_interactionLocked',
+      if (_isLauncher)
+        'Auth name label: ${ModeLauncherController.nameDisplayLabel}',
+      if (_isLauncher)
+        'Auth phone label: ${ModeLauncherController.phoneDisplayLabel}',
+      if (_isLauncher)
+        'Auth password label: ${ModeLauncherController.passwordDisplayLabel}',
+      if (_isLauncher) 'Auth label width: 120',
+      if (_isLauncher) 'Auth summary resize ms: ${_reduceMotion ? 0 : 190}',
+      if (_isLauncher) 'Auth value switch ms: ${_reduceMotion ? 0 : 160}',
     ].join('\n');
     final description =
         '$baseDescription\n$interactionDescription\n$promptLayoutDescription\n${gmailStatus.developerDescription}';
@@ -899,7 +1015,8 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
       child: Column(
         children: [
           _TerminalHeader(
-            busy: _busy || _interactionLocked,
+            busy: _busy || _startupSetupBusy || _interactionLocked,
+            navigationLocked: _startupSetupActive,
             reduceMotion: _reduceMotion,
             onCloseTerminal: () => _submitHeaderCommand('out'),
             onAbout: _isLauncher ? null : () => _submitHeaderCommand('about'),
@@ -916,55 +1033,66 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
               reduceMotion: _reduceMotion,
             ),
           ),
-          if (_isLauncher)
-            AnimatedSize(
-              duration: _reduceMotion
-                  ? Duration.zero
-                  : const Duration(milliseconds: 180),
-              curve: Curves.easeOutCubic,
-              child: _launcherController!.showAuthSummary
-                  ? _TerminalAuthSummary(
-                      key: const ValueKey<String>('auth-session'),
-                      accountKind: _launcherController!.selectedAccountKindLabel,
-                      modeName:
-                          _launcherController!.selectedMode?.koreanName ?? '',
-                      modeId: _launcherController!.selectedMode?.englishName ?? '',
-                      name: _launcherController!.enteredName,
-                      phone: _launcherController!.enteredPhone,
-                      password: _launcherController!.maskedPassword,
-                      reduceMotion: _reduceMotion,
-                    )
-                  : const SizedBox.shrink(),
+          if (_startupSetupActive) ...[
+            const Divider(height: 1, thickness: 1, color: _terminalBorder),
+            _TerminalStartupSetupPanel(
+              controller: _launcherController!,
+              reduceMotion: _reduceMotion,
+              onPrimaryAction: _runStartupSetupPrimaryAction,
+              onGoogleTitleTap: _handleStartupGoogleTitleTap,
             ),
-          const Divider(height: 1, thickness: 1, color: _terminalBorder),
-          _TerminalPrompt(
-            controller: _promptController,
-            promptPath: _promptPath,
-            focusNode: _promptFocusNode,
-            busy: _busy || _interactionLocked,
-            runningCommand: _exitInProgress
-                ? 'EXITING'
-                : _closing
-                    ? 'CLOSING'
-                    : _runningCommand,
-            reduceMotion: _reduceMotion,
-            keyboardType: _keyboardType,
-            inputAction: _inputAction,
-            obscureText: _obscureText,
-            readOnly: _launcherAutoSubmitInFlight,
-            inputVisible: _launcherAutoInputVisible,
-            emailEditMode: _emailEditMode,
-            canBack: _canBack,
-            canCancel: _canCancel,
-            canModes: _canModes,
-            modesLabel: _isLauncher ? _launcherController!.returnSelectionLabel : 'MODES',
-            onBack: () => _submitControlCommand('back'),
-            onCancel: () => _submitControlCommand('cancel'),
-            onModes: () => _submitControlCommand('modes'),
-            onFocusRequested: _requestPromptFocusFromRow,
-            onLayoutChanged: _handlePromptLayoutChanged,
-            onSubmitted: _submit,
-          ),
+          ] else ...[
+            if (_isLauncher)
+              AnimatedSize(
+                duration: _reduceMotion
+                    ? Duration.zero
+                    : const Duration(milliseconds: 180),
+                curve: Curves.easeOutCubic,
+                child: _launcherController!.showAuthSummary
+                    ? _TerminalAuthSummary(
+                        key: const ValueKey<String>('auth-session'),
+                        accountKind:
+                            _launcherController!.selectedAccountKindLabel,
+                        modeName:
+                            _launcherController!.selectedMode?.koreanName ?? '',
+                        name: _launcherController!.enteredName,
+                        phone: _launcherController!.enteredPhone,
+                        password: _launcherController!.maskedPassword,
+                        reduceMotion: _reduceMotion,
+                      )
+                    : const SizedBox.shrink(),
+              ),
+            const Divider(height: 1, thickness: 1, color: _terminalBorder),
+            _TerminalPrompt(
+              controller: _promptController,
+              promptPath: _promptPath,
+              focusNode: _promptFocusNode,
+              busy: _busy || _interactionLocked,
+              runningCommand: _exitInProgress
+                  ? 'EXITING'
+                  : _closing
+                      ? 'CLOSING'
+                      : _runningCommand,
+              reduceMotion: _reduceMotion,
+              keyboardType: _keyboardType,
+              inputAction: _inputAction,
+              obscureText: _obscureText,
+              readOnly: _launcherAutoSubmitInFlight,
+              inputVisible: _launcherAutoInputVisible,
+              emailEditMode: _emailEditMode,
+              canBack: _canBack,
+              canCancel: _canCancel,
+              canModes: _canModes,
+              modesLabel:
+                  _isLauncher ? _launcherController!.returnSelectionLabel : 'MODES',
+              onBack: () => _submitControlCommand('back'),
+              onCancel: () => _submitControlCommand('cancel'),
+              onModes: () => _submitControlCommand('modes'),
+              onFocusRequested: _requestPromptFocusFromRow,
+              onLayoutChanged: _handlePromptLayoutChanged,
+              onSubmitted: _submit,
+            ),
+          ],
         ],
       ),
     );
@@ -1044,6 +1172,7 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
 class _TerminalHeader extends StatelessWidget {
   const _TerminalHeader({
     required this.busy,
+    required this.navigationLocked,
     required this.reduceMotion,
     required this.onCloseTerminal,
     required this.onAbout,
@@ -1054,6 +1183,7 @@ class _TerminalHeader extends StatelessWidget {
   });
 
   final bool busy;
+  final bool navigationLocked;
   final bool reduceMotion;
   final VoidCallback onCloseTerminal;
   final VoidCallback? onAbout;
@@ -1095,7 +1225,7 @@ class _TerminalHeader extends StatelessWidget {
           ),
           _TerminalHeaderAction(
             semanticLabel: onAppExit != null ? '시작 화면으로 돌아가기' : '터미널 닫기',
-            onPressed: busy ? null : onCloseTerminal,
+            onPressed: busy || navigationLocked ? null : onCloseTerminal,
             reduceMotion: reduceMotion,
             child: const Text(
               'X',
@@ -1126,7 +1256,7 @@ class _TerminalHeader extends StatelessWidget {
                 ? _TerminalHeaderAction(
                     key: const ValueKey<String>('app_exit'),
                     semanticLabel: '앱 종료',
-                    onPressed: busy ? null : onAppExit,
+                    onPressed: busy || navigationLocked ? null : onAppExit,
                     reduceMotion: reduceMotion,
                     processing: appExiting,
                     child: AnimatedSwitcher(
@@ -1156,7 +1286,7 @@ class _TerminalHeader extends StatelessWidget {
                 : _TerminalHeaderAction(
                     key: const ValueKey<String>('about'),
                     semanticLabel: '앱 소개',
-                    onPressed: busy ? null : onAbout,
+                    onPressed: busy || navigationLocked ? null : onAbout,
                     reduceMotion: reduceMotion,
                     child: const Text(
                       '?',
@@ -1172,7 +1302,7 @@ class _TerminalHeader extends StatelessWidget {
           const SizedBox(width: 2),
           _TerminalHeaderAction(
             semanticLabel: '설정',
-            onPressed: busy ? null : onSetting,
+            onPressed: busy || navigationLocked ? null : onSetting,
             reduceMotion: reduceMotion,
             child: const Icon(
               Icons.settings_outlined,
@@ -1372,7 +1502,6 @@ class _TerminalHeaderActionState extends State<_TerminalHeaderAction> {
                 onPressed: widget.onPressed,
                 padding: EdgeInsets.zero,
                 splashRadius: 16,
-                tooltip: widget.semanticLabel,
                 icon: widget.child,
               ),
             ),
@@ -1383,12 +1512,701 @@ class _TerminalHeaderActionState extends State<_TerminalHeaderAction> {
   }
 }
 
+class _TerminalStartupSetupPanel extends StatelessWidget {
+  const _TerminalStartupSetupPanel({
+    required this.controller,
+    required this.reduceMotion,
+    required this.onPrimaryAction,
+    required this.onGoogleTitleTap,
+  });
+
+  final ModeLauncherController controller;
+  final bool reduceMotion;
+  final Future<void> Function() onPrimaryAction;
+  final Future<void> Function() onGoogleTitleTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final setup = controller.startupSetup;
+    final key = ValueKey<String>(
+      '${setup.phase.name}-${setup.currentPermissionStep ?? 0}-${setup.currentPolicySpec?.kind.name ?? 'none'}',
+    );
+    final child = switch (setup.phase) {
+      AppStartSetupPhase.permission => _TerminalPermissionSetupView(
+          key: key,
+          controller: controller,
+          reduceMotion: reduceMotion,
+          onPrimaryAction: onPrimaryAction,
+        ),
+      AppStartSetupPhase.terms ||
+      AppStartSetupPhase.privacy ||
+      AppStartSetupPhase.accountDeletion =>
+        _TerminalPolicySetupView(
+          key: key,
+          controller: controller,
+          reduceMotion: reduceMotion,
+          onPrimaryAction: onPrimaryAction,
+        ),
+      AppStartSetupPhase.googleServices => _TerminalGoogleSetupView(
+          key: key,
+          controller: controller,
+          reduceMotion: reduceMotion,
+          onPrimaryAction: onPrimaryAction,
+          onTitleTap: onGoogleTitleTap,
+        ),
+      _ => const SizedBox.shrink(),
+    };
+    return AnimatedSwitcher(
+      duration: reduceMotion ? Duration.zero : const Duration(milliseconds: 190),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      transitionBuilder: (child, animation) {
+        if (reduceMotion) return child;
+        return FadeTransition(
+          opacity: animation,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, .035),
+              end: Offset.zero,
+            ).animate(animation),
+            child: child,
+          ),
+        );
+      },
+      child: child,
+    );
+  }
+}
+
+class _TerminalPermissionSetupView extends StatelessWidget {
+  const _TerminalPermissionSetupView({
+    super.key,
+    required this.controller,
+    required this.reduceMotion,
+    required this.onPrimaryAction,
+  });
+
+  final ModeLauncherController controller;
+  final bool reduceMotion;
+  final Future<void> Function() onPrimaryAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final setup = controller.startupSetup;
+    final spec = setup.currentPermissionSpec;
+    if (spec == null) return const SizedBox.shrink();
+    final statusColor = setup.currentPermissionGranted
+        ? _terminalSuccess
+        : setup.busy || setup.awaitingExternalSettings
+            ? _terminalWarning
+            : _terminalText;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'SETUP / PERMISSIONS',
+                  style: _terminalSectionLabelStyle,
+                ),
+              ),
+              Text(
+                '${setup.permissionIndex + 1} / ${setup.permissionSteps.length}',
+                style: _terminalSectionMetaStyle,
+              ),
+            ],
+          ),
+          const SizedBox(height: 9),
+          Text(
+            spec.title,
+            style: _terminalSectionTitleStyle,
+          ),
+          const SizedBox(height: 5),
+          Text(
+            spec.description,
+            style: _terminalSectionBodyStyle,
+          ),
+          const SizedBox(height: 10),
+          const Divider(height: 1, thickness: 1, color: _terminalBorder),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const SizedBox(
+                width: 88,
+                child: Text('STATUS', style: _terminalSectionLabelStyle),
+              ),
+              Expanded(
+                child: AnimatedSwitcher(
+                  duration: reduceMotion
+                      ? Duration.zero
+                      : const Duration(milliseconds: 170),
+                  child: Text(
+                    setup.currentPermissionStatus.toUpperCase(),
+                    key: ValueKey<String>(setup.currentPermissionStatus),
+                    style: _terminalSectionBodyStyle.copyWith(
+                      color: statusColor,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _TerminalSetupActionButton(
+            label: setup.primaryActionLabel,
+            enabled: setup.primaryActionEnabled,
+            busy: setup.busy,
+            reduceMotion: reduceMotion,
+            onPressed: onPrimaryAction,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TerminalPolicySetupView extends StatefulWidget {
+  const _TerminalPolicySetupView({
+    super.key,
+    required this.controller,
+    required this.reduceMotion,
+    required this.onPrimaryAction,
+  });
+
+  final ModeLauncherController controller;
+  final bool reduceMotion;
+  final Future<void> Function() onPrimaryAction;
+
+  @override
+  State<_TerminalPolicySetupView> createState() =>
+      _TerminalPolicySetupViewState();
+}
+
+class _TerminalPolicySetupViewState extends State<_TerminalPolicySetupView> {
+  final ScrollController _controller = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_handleScroll);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _reportProgress());
+  }
+
+  void _handleScroll() {
+    _reportProgress();
+  }
+
+  void _reportProgress() {
+    if (!mounted || !_controller.hasClients) return;
+    final position = _controller.position;
+    final max = position.maxScrollExtent;
+    final progress = max <= 0 ? 1.0 : (position.pixels / max).clamp(0.0, 1.0);
+    final readToEnd = max <= 0 || position.pixels >= max - 8;
+    widget.controller.updateStartupPolicyProgress(
+      progress.toDouble(),
+      readToEnd,
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.removeListener(_handleScroll);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final setup = widget.controller.startupSetup;
+    final spec = setup.currentPolicySpec;
+    if (spec == null) return const SizedBox.shrink();
+    final bodyHeight = (MediaQuery.sizeOf(context).height * .24)
+        .clamp(112.0, 250.0)
+        .toDouble();
+    final progressText = setup.policyReadToEnd
+        ? 'READ COMPLETE'
+        : '${(setup.policyScrollProgress * 100).round()}%';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text('SETUP / POLICY', style: _terminalSectionLabelStyle),
+              ),
+              Text(
+                '${spec.step} / ${spec.totalSteps}',
+                style: _terminalSectionMetaStyle,
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(spec.title, style: _terminalSectionTitleStyle),
+          const SizedBox(height: 4),
+          Text(spec.subtitle, style: _terminalSectionBodyStyle),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Text('READ', style: _terminalSectionLabelStyle),
+              const SizedBox(width: 10),
+              Expanded(
+                child: TweenAnimationBuilder<double>(
+                  duration: widget.reduceMotion
+                      ? Duration.zero
+                      : const Duration(milliseconds: 180),
+                  curve: Curves.easeOutCubic,
+                  tween: Tween<double>(
+                    begin: 0,
+                    end: setup.policyScrollProgress,
+                  ),
+                  builder: (context, value, child) {
+                    return LinearProgressIndicator(
+                      minHeight: 2,
+                      value: value,
+                      backgroundColor: _terminalBorder,
+                      valueColor:
+                          const AlwaysStoppedAnimation<Color>(_terminalPrompt),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(width: 10),
+              AnimatedSwitcher(
+                duration: widget.reduceMotion
+                    ? Duration.zero
+                    : const Duration(milliseconds: 160),
+                child: Text(
+                  progressText,
+                  key: ValueKey<String>(progressText),
+                  style: _terminalSectionMetaStyle.copyWith(
+                    color: setup.policyReadToEnd
+                        ? _terminalSuccess
+                        : _terminalMuted,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 7),
+          const Divider(height: 1, thickness: 1, color: _terminalBorder),
+          SizedBox(
+            height: bodyHeight,
+            child: Scrollbar(
+              controller: _controller,
+              thumbVisibility: true,
+              child: SingleChildScrollView(
+                controller: _controller,
+                padding: const EdgeInsets.fromLTRB(0, 10, 10, 10),
+                child: Text(
+                  spec.body,
+                  style: _terminalSectionBodyStyle.copyWith(height: 1.55),
+                ),
+              ),
+            ),
+          ),
+          const Divider(height: 1, thickness: 1, color: _terminalBorder),
+          const SizedBox(height: 7),
+          _TerminalPolicyAgreementRow(
+            label: spec.agreeLabel,
+            enabled: setup.policyReadToEnd && !setup.busy,
+            checked: setup.policyAgreed,
+            reduceMotion: widget.reduceMotion,
+            onChanged: widget.controller.setStartupPolicyAgreed,
+          ),
+          const SizedBox(height: 9),
+          _TerminalSetupActionButton(
+            label: setup.primaryActionLabel,
+            enabled: setup.primaryActionEnabled,
+            busy: setup.busy,
+            reduceMotion: widget.reduceMotion,
+            onPressed: widget.onPrimaryAction,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TerminalGoogleSetupView extends StatelessWidget {
+  const _TerminalGoogleSetupView({
+    super.key,
+    required this.controller,
+    required this.reduceMotion,
+    required this.onPrimaryAction,
+    required this.onTitleTap,
+  });
+
+  final ModeLauncherController controller;
+  final bool reduceMotion;
+  final Future<void> Function() onPrimaryAction;
+  final Future<void> Function() onTitleTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final setup = controller.startupSetup;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('SETUP / SERVICES', style: _terminalSectionLabelStyle),
+          const SizedBox(height: 8),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onTitleTap,
+            child: const Padding(
+              padding: EdgeInsets.symmetric(vertical: 2),
+              child: Text(
+                'Google 서비스 연결',
+                style: _terminalSectionTitleStyle,
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            '업무에 필요한 Google 서비스를 한 번의 승인 과정으로 연결합니다.',
+            style: _terminalSectionBodyStyle,
+          ),
+          const SizedBox(height: 9),
+          const Divider(height: 1, thickness: 1, color: _terminalBorder),
+          for (var index = 0;
+              index < appStartGoogleServiceSpecs.length;
+              index++) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 118,
+                    child: Text(
+                      appStartGoogleServiceSpecs[index].title,
+                      style: _terminalSectionBodyStyle.copyWith(
+                        color: _terminalText,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      appStartGoogleServiceSpecs[index].detail,
+                      style: _terminalSectionMetaStyle,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (index < appStartGoogleServiceSpecs.length - 1)
+              const Divider(height: 1, thickness: 1, color: _terminalBorder),
+          ],
+          const Divider(height: 1, thickness: 1, color: _terminalBorder),
+          const SizedBox(height: 7),
+          Row(
+            children: [
+              const SizedBox(
+                width: 88,
+                child: Text('STATUS', style: _terminalSectionLabelStyle),
+              ),
+              Expanded(
+                child: AnimatedSwitcher(
+                  duration:
+                      reduceMotion ? Duration.zero : const Duration(milliseconds: 170),
+                  child: Text(
+                    setup.googleConnected ? 'CONNECTED' : 'NOT CONNECTED',
+                    key: ValueKey<bool>(setup.googleConnected),
+                    style: _terminalSectionBodyStyle.copyWith(
+                      color: setup.googleConnected
+                          ? _terminalSuccess
+                          : _terminalText,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (setup.googleAccountEmail != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              setup.googleAccountEmail!,
+              style: _terminalSectionMetaStyle,
+            ),
+          ],
+          if (setup.googleErrorText != null) ...[
+            const SizedBox(height: 5),
+            Text(
+              setup.googleErrorText!,
+              style: _terminalSectionBodyStyle.copyWith(color: _terminalError),
+            ),
+          ],
+          const SizedBox(height: 9),
+          _TerminalSetupActionButton(
+            label: setup.primaryActionLabel,
+            enabled: setup.primaryActionEnabled,
+            busy: setup.busy,
+            reduceMotion: reduceMotion,
+            onPressed: onPrimaryAction,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TerminalPolicyAgreementRow extends StatelessWidget {
+  const _TerminalPolicyAgreementRow({
+    required this.label,
+    required this.enabled,
+    required this.checked,
+    required this.reduceMotion,
+    required this.onChanged,
+  });
+
+  final String label;
+  final bool enabled;
+  final bool checked;
+  final bool reduceMotion;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      checked: checked,
+      enabled: enabled,
+      label: label,
+      child: InkWell(
+        onTap: enabled ? () => onChanged(!checked) : null,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(
+            children: [
+              AnimatedContainer(
+                width: 18,
+                height: 18,
+                duration:
+                    reduceMotion ? Duration.zero : const Duration(milliseconds: 150),
+                decoration: BoxDecoration(
+                  color: checked ? _terminalPrompt : Colors.transparent,
+                  border: Border.all(
+                    color: enabled ? _terminalPrompt : _terminalBorder,
+                  ),
+                ),
+                child: AnimatedSwitcher(
+                  duration:
+                      reduceMotion ? Duration.zero : const Duration(milliseconds: 140),
+                  child: checked
+                      ? const Icon(
+                          Icons.check_rounded,
+                          key: ValueKey<String>('checked'),
+                          size: 14,
+                          color: _terminalBackground,
+                        )
+                      : const SizedBox.shrink(
+                          key: ValueKey<String>('unchecked'),
+                        ),
+                ),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Text(
+                  label,
+                  style: _terminalSectionBodyStyle.copyWith(
+                    color: enabled ? _terminalText : _terminalMuted,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TerminalSetupActionButton extends StatefulWidget {
+  const _TerminalSetupActionButton({
+    required this.label,
+    required this.enabled,
+    required this.busy,
+    required this.reduceMotion,
+    required this.onPressed,
+  });
+
+  final String label;
+  final bool enabled;
+  final bool busy;
+  final bool reduceMotion;
+  final Future<void> Function() onPressed;
+
+  @override
+  State<_TerminalSetupActionButton> createState() =>
+      _TerminalSetupActionButtonState();
+}
+
+class _TerminalSetupActionButtonState extends State<_TerminalSetupActionButton> {
+  bool _pressed = false;
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = widget.enabled && (_pressed || _hovered);
+    final borderColor = widget.enabled ? _terminalPrompt : _terminalBorder;
+    final foreground = widget.enabled ? _terminalPrompt : _terminalMuted;
+    return Semantics(
+      button: true,
+      enabled: widget.enabled,
+      label: widget.label,
+      child: MouseRegion(
+        onEnter: (_) {
+          if (widget.enabled) setState(() => _hovered = true);
+        },
+        onExit: (_) {
+          if (_hovered) setState(() => _hovered = false);
+        },
+        child: AnimatedScale(
+          scale: _pressed ? .985 : 1,
+          duration:
+              widget.reduceMotion ? Duration.zero : const Duration(milliseconds: 110),
+          curve: Curves.easeOutCubic,
+          child: AnimatedContainer(
+            width: double.infinity,
+            duration:
+                widget.reduceMotion ? Duration.zero : const Duration(milliseconds: 160),
+            curve: Curves.easeOutCubic,
+            decoration: BoxDecoration(
+              color: active ? const Color(0x2236FF74) : Colors.transparent,
+              border: Border.all(color: borderColor),
+            ),
+            child: InkWell(
+              onTap: widget.enabled && !widget.busy ? widget.onPressed : null,
+              onHighlightChanged: (value) {
+                if (_pressed == value) return;
+                setState(() => _pressed = value);
+              },
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 42),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      AnimatedSwitcher(
+                        duration: widget.reduceMotion
+                            ? Duration.zero
+                            : const Duration(milliseconds: 150),
+                        child: widget.busy
+                            ? const SizedBox(
+                                key: ValueKey<String>('busy'),
+                                width: 15,
+                                height: 15,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 1.5,
+                                  color: _terminalWarning,
+                                ),
+                              )
+                            : const Icon(
+                                Icons.chevron_right_rounded,
+                                key: ValueKey<String>('ready'),
+                                size: 17,
+                                color: _terminalPrompt,
+                              ),
+                      ),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: AnimatedSwitcher(
+                          duration: widget.reduceMotion
+                              ? Duration.zero
+                              : const Duration(milliseconds: 170),
+                          transitionBuilder: (child, animation) {
+                            final slide = Tween<Offset>(
+                              begin: const Offset(.04, 0),
+                              end: Offset.zero,
+                            ).animate(
+                              CurvedAnimation(
+                                parent: animation,
+                                curve: Curves.easeOutCubic,
+                              ),
+                            );
+                            return FadeTransition(
+                              opacity: animation,
+                              child: SlideTransition(
+                                position: slide,
+                                child: child,
+                              ),
+                            );
+                          },
+                          child: Text(
+                            widget.label.toUpperCase(),
+                            key: ValueKey<String>(widget.label),
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: foreground,
+                              fontFamily: 'monospace',
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+const TextStyle _terminalSectionLabelStyle = TextStyle(
+  color: _terminalWarning,
+  fontFamily: 'monospace',
+  fontSize: 9.5,
+  fontWeight: FontWeight.w800,
+  letterSpacing: .2,
+);
+
+const TextStyle _terminalSectionMetaStyle = TextStyle(
+  color: _terminalMuted,
+  fontFamily: 'monospace',
+  fontSize: 10.5,
+  height: 1.35,
+  fontWeight: FontWeight.w600,
+);
+
+const TextStyle _terminalSectionTitleStyle = TextStyle(
+  color: _terminalText,
+  fontFamily: 'monospace',
+  fontSize: 14.5,
+  height: 1.35,
+  fontWeight: FontWeight.w800,
+);
+
+const TextStyle _terminalSectionBodyStyle = TextStyle(
+  color: _terminalMuted,
+  fontFamily: 'monospace',
+  fontSize: 11.2,
+  height: 1.42,
+  fontWeight: FontWeight.w500,
+);
+
 class _TerminalAuthSummary extends StatelessWidget {
   const _TerminalAuthSummary({
     super.key,
     required this.accountKind,
     required this.modeName,
-    required this.modeId,
     required this.name,
     required this.phone,
     required this.password,
@@ -1397,7 +2215,6 @@ class _TerminalAuthSummary extends StatelessWidget {
 
   final String accountKind;
   final String modeName;
-  final String modeId;
   final String name;
   final String phone;
   final String password;
@@ -1406,82 +2223,120 @@ class _TerminalAuthSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final rows = <MapEntry<String, String>>[
-      if (accountKind.isNotEmpty) MapEntry<String, String>('ACCOUNT', accountKind),
-      if (name.isNotEmpty) MapEntry<String, String>('NAME', name),
-      if (phone.isNotEmpty) MapEntry<String, String>('PHONE', phone),
-      if (password.isNotEmpty) MapEntry<String, String>('PASSWORD', password),
-      if (modeName.isNotEmpty && modeId.isNotEmpty)
-        MapEntry<String, String>('MODE', '$modeName / $modeId'),
+      if (accountKind.isNotEmpty)
+        MapEntry<String, String>('ACCOUNT', accountKind),
+      if (name.isNotEmpty)
+        MapEntry<String, String>(
+          ModeLauncherController.nameDisplayLabel,
+          name,
+        ),
+      if (phone.isNotEmpty)
+        MapEntry<String, String>(
+          ModeLauncherController.phoneDisplayLabel,
+          phone,
+        ),
+      if (password.isNotEmpty)
+        MapEntry<String, String>(
+          ModeLauncherController.passwordDisplayLabel,
+          password,
+        ),
+      if (modeName.isNotEmpty) MapEntry<String, String>('MODE', modeName),
     ];
 
-    return Container(
-      width: double.infinity,
-      color: const Color(0xFF2A0C22),
-      padding: const EdgeInsets.fromLTRB(16, 9, 16, 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'AUTH SESSION',
-            style: TextStyle(
-              color: _terminalWarning,
-              fontFamily: 'monospace',
-              fontSize: 9.5,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 5),
-          for (var index = 0; index < rows.length; index++)
-            TweenAnimationBuilder<double>(
-              key: ValueKey<String>('${rows[index].key}-${rows[index].value}'),
-              duration: reduceMotion
-                  ? Duration.zero
-                  : Duration(milliseconds: 130 + index * 35),
-              curve: Curves.easeOutCubic,
-              tween: Tween<double>(begin: 0, end: 1),
-              builder: (context, value, child) {
-                return Opacity(
-                  opacity: value,
-                  child: Transform.translate(
-                    offset: Offset(0, (1 - value) * 4),
-                    child: child,
-                  ),
-                );
-              },
-              child: Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SizedBox(
-                      width: 72,
-                      child: Text(
-                        rows[index].key,
-                        style: const TextStyle(
-                          color: _terminalMuted,
-                          fontFamily: 'monospace',
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      child: Text(
-                        rows[index].value,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: _terminalText,
-                          fontFamily: 'monospace',
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+    return AnimatedSize(
+      duration: reduceMotion ? Duration.zero : const Duration(milliseconds: 190),
+      curve: Curves.easeOutCubic,
+      alignment: Alignment.topCenter,
+      child: Container(
+        width: double.infinity,
+        color: const Color(0xFF2A0C22),
+        padding: const EdgeInsets.fromLTRB(16, 9, 16, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'AUTH SESSION',
+              style: TextStyle(
+                color: _terminalWarning,
+                fontFamily: 'monospace',
+                fontSize: 9.5,
+                fontWeight: FontWeight.w800,
               ),
             ),
-        ],
+            const SizedBox(height: 5),
+            for (var index = 0; index < rows.length; index++)
+              TweenAnimationBuilder<double>(
+                key: ValueKey<String>(rows[index].key),
+                duration: reduceMotion
+                    ? Duration.zero
+                    : Duration(milliseconds: 130 + index * 35),
+                curve: Curves.easeOutCubic,
+                tween: Tween<double>(begin: 0, end: 1),
+                builder: (context, value, child) {
+                  return Opacity(
+                    opacity: value,
+                    child: Transform.translate(
+                      offset: Offset(0, (1 - value) * 4),
+                      child: child,
+                    ),
+                  );
+                },
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        width: 120,
+                        child: Text(
+                          rows[index].key,
+                          style: const TextStyle(
+                            color: _terminalMuted,
+                            fontFamily: 'monospace',
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: AnimatedSwitcher(
+                          duration: reduceMotion
+                              ? Duration.zero
+                              : const Duration(milliseconds: 160),
+                          switchInCurve: Curves.easeOutCubic,
+                          switchOutCurve: Curves.easeInCubic,
+                          transitionBuilder: (child, animation) {
+                            final slide = Tween<Offset>(
+                              begin: const Offset(0, .12),
+                              end: Offset.zero,
+                            ).animate(animation);
+                            return FadeTransition(
+                              opacity: animation,
+                              child: SlideTransition(
+                                position: slide,
+                                child: child,
+                              ),
+                            );
+                          },
+                          child: Text(
+                            rows[index].value,
+                            key: ValueKey<String>(rows[index].value),
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: _terminalText,
+                              fontFamily: 'monospace',
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

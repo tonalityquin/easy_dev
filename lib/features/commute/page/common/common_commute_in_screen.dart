@@ -3,9 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../../app/di/routes.dart';
 import '../../../../app/init/app_exit_service.dart';
 import '../../../../app/init/logout_helper.dart';
 import '../../../../app/init/missing_weekday_end_time_dialog.dart';
@@ -48,6 +46,8 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
   late final AnimationController _revealController;
   _CommutePowerGateStage _stage = _CommutePowerGateStage.checking;
   String _stateMessage = '';
+  static const Duration _menuMotionDuration = Duration(milliseconds: 180);
+
   bool _routeTransitioning = false;
   bool _showClockInIssueResolution = false;
   bool _resolvingClockInIssue = false;
@@ -73,6 +73,16 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
       'commute_power_gate_init',
       scope: 'commute_power',
       meta: <String, Object?>{'mode': widget.spec.diagnosticKey},
+    );
+    LauncherDiagnostics.record(
+      'commute_menu_config',
+      scope: 'commute_power',
+      meta: <String, Object?>{
+        'mode': widget.spec.diagnosticKey,
+        'modeLauncherAction': 'removed',
+        'developerStatus': 'developer_only',
+        'menuMotionMs': _menuMotionDuration.inMilliseconds,
+      },
     );
     unawaited(DevAuth.isDevModeEnabled());
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -181,28 +191,6 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
       meta: <String, Object?>{'mode': widget.spec.diagnosticKey},
     );
     await AppExitService.exitApp(context, useCommonUi: true);
-  }
-
-  Future<void> _goToModeLauncher() async {
-    if (_stage == _CommutePowerGateStage.processing ||
-        _stage == _CommutePowerGateStage.success) {
-      return;
-    }
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(prefsKeyMode);
-    LauncherDiagnostics.record(
-      'commute_mode_launcher_requested',
-      scope: 'commute_power',
-      meta: <String, Object?>{
-        'mode': widget.spec.diagnosticKey,
-        'savedModeCleared': true,
-      },
-    );
-    if (!mounted) return;
-    Navigator.of(context).pushNamedAndRemoveUntil(
-      AppRoutes.modeLauncher,
-      (route) => false,
-    );
   }
 
   Future<void> _resolveClockInIssue() async {
@@ -355,6 +343,9 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
         'Issue failure reason: $_clockInIssueFailureReason',
         'Issue failure detail: $_clockInIssueFailureDetail',
         'State message: $_stateMessage',
+        'Mode launcher action: removed',
+        'Developer status: developer_only',
+        'Menu motion ms: ${_menuMotionDuration.inMilliseconds}',
       ].join('\n'),
       scope: 'commute_power',
     );
@@ -676,79 +667,99 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
     final disabled = _routeTransitioning ||
         _stage == _CommutePowerGateStage.processing ||
         _stage == _CommutePowerGateStage.success;
-    return PopupMenuButton<String>(
-      enabled: !disabled,
-      tooltip: '메뉴',
-      color: tokens.surfaceRaised,
-      elevation: 0,
-      offset: const Offset(0, -8),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(CommonUiShapes.card),
-        side: BorderSide(color: tokens.borderSubtle),
-      ),
-      onSelected: (value) {
-        switch (value) {
-          case 'mode_launcher':
-            unawaited(_goToModeLauncher());
-            break;
-          case 'status':
-            unawaited(_showDeveloperStatus());
-            break;
-          case 'logout':
-            unawaited(_handleLogout());
-            break;
-          case 'exit_app':
-            unawaited(_handleAppExit());
-            break;
-        }
+    final duration = _reduceMotion ? Duration.zero : _menuMotionDuration;
+    final menuKey = ValueKey<String>(
+      'commute_menu_${developerMode ? 'developer' : 'standard'}_${disabled ? 'disabled' : 'enabled'}',
+    );
+
+    return AnimatedSwitcher(
+      duration: duration,
+      reverseDuration: duration,
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      transitionBuilder: (child, animation) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+        return FadeTransition(
+          opacity: curved,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.96, end: 1).animate(curved),
+            child: child,
+          ),
+        );
       },
-      itemBuilder: (context) => [
-        _menuItem(
-          tokens: tokens,
-          value: 'mode_launcher',
-          icon: Icons.terminal_rounded,
-          label: '모드 선택으로 되돌아가기',
+      child: PopupMenuButton<String>(
+        key: menuKey,
+        enabled: !disabled,
+        color: tokens.surfaceRaised,
+        elevation: 0,
+        offset: const Offset(0, -8),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(CommonUiShapes.card),
+          side: BorderSide(color: tokens.borderSubtle),
         ),
-        if (developerMode) ...[
-          const PopupMenuDivider(height: 1),
+        onSelected: (value) {
+          switch (value) {
+            case 'status':
+              unawaited(_showDeveloperStatus());
+              break;
+            case 'logout':
+              unawaited(_handleLogout());
+              break;
+            case 'exit_app':
+              unawaited(_handleAppExit());
+              break;
+          }
+        },
+        itemBuilder: (context) => [
+          if (developerMode) ...[
+            _menuItem(
+              tokens: tokens,
+              value: 'status',
+              icon: Icons.monitor_heart_outlined,
+              label: 'STATUS',
+            ),
+            const PopupMenuDivider(height: 1),
+          ],
           _menuItem(
             tokens: tokens,
-            value: 'status',
-            icon: Icons.monitor_heart_outlined,
-            label: 'STATUS',
+            value: 'logout',
+            icon: Icons.logout_rounded,
+            label: '로그아웃',
+            destructive: true,
+          ),
+          _menuItem(
+            tokens: tokens,
+            value: 'exit_app',
+            icon: Icons.power_settings_new_rounded,
+            label: '앱 종료',
+            destructive: true,
           ),
         ],
-        const PopupMenuDivider(height: 1),
-        _menuItem(
-          tokens: tokens,
-          value: 'logout',
-          icon: Icons.logout_rounded,
-          label: '로그아웃',
-          destructive: true,
-        ),
-        _menuItem(
-          tokens: tokens,
-          value: 'exit_app',
-          icon: Icons.power_settings_new_rounded,
-          label: '앱 종료',
-          destructive: true,
-        ),
-      ],
-      child: Semantics(
-        button: true,
-        enabled: !disabled,
-        label: '더 보기',
-        child: AnimatedOpacity(
-          opacity: disabled ? 0.35 : 1,
-          duration:
-              _reduceMotion ? Duration.zero : const Duration(milliseconds: 180),
-          child: SizedBox(
-            width: 48,
-            height: 48,
-            child: Icon(
-              Icons.more_horiz_rounded,
-              color: tokens.iconSecondary,
-              size: 26,
+        child: Semantics(
+          button: true,
+          enabled: !disabled,
+          label: '더 보기',
+          child: AnimatedScale(
+            scale: disabled ? 0.96 : 1,
+            duration: duration,
+            curve: Curves.easeOutCubic,
+            child: AnimatedOpacity(
+              opacity: disabled ? 0.35 : 1,
+              duration: duration,
+              curve: Curves.easeOutCubic,
+              child: SizedBox(
+                width: 48,
+                height: 48,
+                child: Icon(
+                  Icons.more_horiz_rounded,
+                  color: tokens.iconSecondary,
+                  size: 26,
+                ),
+              ),
             ),
           ),
         ),

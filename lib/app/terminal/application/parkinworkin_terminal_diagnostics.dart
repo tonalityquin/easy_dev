@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../../features/account/applications/tablet_account_diagnostics.dart';
 import '../../../features/launcher/application/launcher_diagnostics.dart';
 import '../../auth/gmail_sender_diagnostics.dart';
 import '../../../features/selector/application/dev_auth.dart';
@@ -45,6 +46,7 @@ class ParkinWorkinTerminalDiagnostics {
       ...StartupTasks.debugLines,
       ...AppStartDebugTrace.lines,
       ...LauncherDiagnostics.lines,
+      ...TabletAccountDiagnostics.lines,
       ...AppCommandDiagnostics.lines,
       ...GmailSenderDiagnostics.lines,
       ..._lines,
@@ -70,6 +72,7 @@ class ParkinWorkinTerminalDiagnostics {
       meta: <String, Object?>{
         'terminalLines': _lines.length,
         'launcherLines': LauncherDiagnostics.lines.length,
+        'tabletAccountLines': TabletAccountDiagnostics.lines.length,
         'commandLines': AppCommandDiagnostics.lines.length,
         'gmailSenderLines': GmailSenderDiagnostics.lines.length,
         'startupLines': StartupTasks.debugLines.length,

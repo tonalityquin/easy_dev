@@ -15,6 +15,7 @@ import '../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../app/utils/ops_delayed_refresh_gate.dart';
 import '../../../../app/utils/snackbar_helper.dart';
 import '../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../design_system/common_ui/common_ui_side_dock.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../account/applications/user_state.dart';
 import '../actions/headquarter_common_actions.dart';
@@ -23,6 +24,7 @@ import '../navigation/headquarter_context_navigation_coordinator.dart';
 import '../../widgets/headquarter_quick_work_context.dart';
 import '../../application/area/area_master_cache.dart';
 import '../../page/sheets/head_memo.dart';
+import '../../../community/page/faq_side_dock.dart';
 import '../../../selector/application/dev_auth.dart';
 import '../../../launcher/application/launcher_diagnostics.dart';
 import '../../widgets/hr/attendance_calendar.dart' as hr_att;
@@ -997,10 +999,21 @@ class _HubBubbleState extends State<_HubBubble> {
         foreground: tokens.textPrimary,
         onTap: () async {
           await closeMenu();
-          await HeadHubActions.closeAnySheet();
-          await HeadHubActions.navigatorKey.currentState?.pushNamed(
-            AppRoutes.faq,
+          final navigationContext =
+              HeadHubActions._bestContext() ?? actionContext;
+          if (!navigationContext.mounted) {
+            _recordDebug('faq_handoff_aborted reason=context_unmounted');
+            return;
+          }
+          _recordDebug(
+            'faq_handoff_open side=left source=headquarter_quick_button',
           );
+          await showFaqSideDock<void>(
+            context: navigationContext,
+            side: CommonSideDockSide.left,
+            source: 'headquarter_quick_button',
+          );
+          _recordDebug('faq_session_closed side=left');
         },
       ),
       _DockAction(

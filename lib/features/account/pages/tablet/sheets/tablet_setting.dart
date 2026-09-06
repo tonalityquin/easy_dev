@@ -15,6 +15,7 @@ import '../../../../../shared/auth/tablet_phone.dart';
 import '../../../../../shared/secondary/application/secondary_tablet_workspace_state.dart';
 import '../../../../../shared/secondary/widgets/ops_console_widgets.dart';
 import '../../../../dev/application/area_state.dart';
+import '../../../applications/tablet_account_diagnostics.dart';
 import '../../../applications/user_state.dart';
 import '../../../domain/models/tablet/tablet_model.dart';
 import '../../../domain/repositories/user_repository.dart';
@@ -437,9 +438,34 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
       );
 
       final phone = TabletPhone.normalize(_phoneController.text);
+      final documentId = TabletPhone.documentId(phone: phone, area: area);
+      if (documentId.isEmpty) {
+        throw StateError('태블릿 문서 ID를 만들 수 없습니다.');
+      }
+      trace.log(
+        '문서 ID 구성 완료: policy=phone-area, documentId=${TabletPhone.maskDocumentId(documentId)}',
+        progress: .46,
+      );
+      TabletAccountDiagnostics.record(
+        'settings_document_id_prepared',
+        meta: <String, Object?>{
+          'mode': isEditMode ? 'edit' : 'create',
+          'documentId': TabletPhone.maskDocumentId(documentId),
+          'previousId': initialTablet == null
+              ? '-'
+              : TabletPhone.maskDocumentId(initialTablet.id),
+          'policy': 'phone-area',
+        },
+      );
+      if (initialTablet != null && initialTablet.id != documentId) {
+        trace.log(
+          '문서 ID 이동 준비: ${TabletPhone.maskDocumentId(initialTablet.id)} → ${TabletPhone.maskDocumentId(documentId)}',
+          progress: .5,
+        );
+      }
       final nextTablet = initialTablet == null
           ? TabletModel(
-              id: phone,
+              id: documentId,
               name: _nameController.text.trim(),
               phone: phone,
               role: _selectedRole.name,
@@ -455,7 +481,7 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
               fixedHolidays: const <String>[],
             )
           : initialTablet.copyWith(
-              id: phone,
+              id: documentId,
               name: _nameController.text.trim(),
               phone: phone,
               handle: '',
@@ -469,7 +495,7 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
               englishSelectedAreaName: englishName ?? area,
             );
 
-      trace.log('태블릿 모델 구성 완료: Firestore 저장을 요청합니다.', progress: .56);
+      trace.log('태블릿 모델 구성 완료: Firestore 저장을 요청합니다.', progress: .58);
       String? saveError;
       bool saved = true;
       if (isEditMode) {
@@ -511,7 +537,7 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
         return;
       }
 
-      trace.log('Firestore 및 태블릿 캐시 반영 완료', progress: .92);
+      trace.log('Firestore 및 태블릿 캐시 반영 완료: documentId=${TabletPhone.maskDocumentId(documentId)}', progress: .92);
       await trace.succeed('$operationTitle이 완료되었습니다.');
       if (!mounted) return;
       workspace?.setSettingsDirty(false, source: 'submit_success');
@@ -753,11 +779,27 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
 
     return Row(
       children: [
-        Text(
-          label,
-          style: textTheme.labelSmall?.copyWith(
-            color: tokens.textSecondary,
-            fontWeight: FontWeight.w700,
+        AnimatedSwitcher(
+          duration: _reduceMotion ? Duration.zero : CommonUiMotion.selection,
+          switchInCurve: CommonUiMotion.enter,
+          switchOutCurve: CommonUiMotion.exit,
+          transitionBuilder: (child, animation) => FadeTransition(
+            opacity: animation,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(-.03, 0),
+                end: Offset.zero,
+              ).animate(animation),
+              child: child,
+            ),
+          ),
+          child: Text(
+            label,
+            key: ValueKey<String>('tablet_settings_status_$label'),
+            style: textTheme.labelSmall?.copyWith(
+              color: tokens.textSecondary,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
         const Spacer(),

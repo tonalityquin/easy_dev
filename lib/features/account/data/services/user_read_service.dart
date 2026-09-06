@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../app/utils/dev_firebase_debug_dialog.dart';
+import '../../applications/tablet_account_diagnostics.dart';
 import '../../../../shared/auth/tablet_phone.dart';
 import '../../domain/models/tablet/tablet_model.dart';
 import '../../domain/models/user/user_model.dart';
@@ -172,6 +173,229 @@ class UserReadService {
     return null;
   }
 
+  bool _tabletMatchesArea(TabletModel tablet, String areaName) {
+    final target = areaName.trim();
+    if (target.isEmpty) return false;
+    final areas = <String>{
+      if ((tablet.selectedArea ?? '').trim().isNotEmpty)
+        tablet.selectedArea!.trim(),
+      if ((tablet.currentArea ?? '').trim().isNotEmpty)
+        tablet.currentArea!.trim(),
+      ...tablet.areas.map((value) => value.trim()).where((value) => value.isNotEmpty),
+    };
+    return areas.contains(target);
+  }
+
+  Future<List<TabletModel>> searchTabletsByPhone(String phone) async {
+    final digits = TabletPhone.normalize(phone);
+    if (digits.isEmpty) return <TabletModel>[];
+
+    final candidates = <String>{
+      digits,
+      TabletPhone.format(digits),
+    };
+    final found = <String, TabletModel>{};
+
+    TabletAccountDiagnostics.record(
+      'phone_candidates_lookup_start',
+      meta: <String, Object?>{
+        'phone': TabletPhone.mask(digits),
+      },
+    );
+
+    try {
+      final legacyDirect = await _getTabletCollectionRef().doc(digits).get();
+      if (legacyDirect.exists && legacyDirect.data() != null) {
+        final tablet = TabletModel.fromMap(legacyDirect.id, legacyDirect.data()!);
+        found[tablet.id] = tablet;
+      }
+
+      for (final candidate in candidates) {
+        final byPhone = await _getTabletCollectionRef()
+            .where('phone', isEqualTo: candidate)
+            .limit(50)
+            .get();
+        for (final doc in byPhone.docs) {
+          final tablet = TabletModel.fromMap(doc.id, doc.data());
+          found[tablet.id] = tablet;
+        }
+      }
+
+      final byLegacyHandle = await _getTabletCollectionRef()
+          .where('handle', isEqualTo: digits)
+          .limit(50)
+          .get();
+      for (final doc in byLegacyHandle.docs) {
+        final tablet = TabletModel.fromMap(doc.id, doc.data());
+        found[tablet.id] = tablet;
+      }
+
+      final result = found.values.toList(growable: false);
+      TabletAccountDiagnostics.record(
+        'phone_candidates_lookup_complete',
+        meta: <String, Object?>{
+          'phone': TabletPhone.mask(digits),
+          'count': result.length,
+          'documentIds': result
+              .map((tablet) => TabletPhone.maskDocumentId(tablet.id))
+              .join(','),
+        },
+      );
+      return result;
+    } on FirebaseException catch (e, st) {
+      TabletAccountDiagnostics.record(
+        'phone_candidates_lookup_failed',
+        meta: <String, Object?>{
+          'phone': TabletPhone.mask(digits),
+          'error': e.code,
+        },
+      );
+      await DevFirebaseDebugDialog.show(
+        operation: 'tablet_accounts.searchTabletsByPhone',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': 'tablet_accounts',
+          'phone': TabletPhone.mask(digits),
+          'query': 'legacy-doc-plus-phone-and-handle-candidates',
+        },
+      );
+      return <TabletModel>[];
+    } catch (e, st) {
+      debugPrint('DB 조회 중 예외 발생: $e');
+      TabletAccountDiagnostics.record(
+        'phone_candidates_parse_failed',
+        meta: <String, Object?>{
+          'phone': TabletPhone.mask(digits),
+          'error': e.runtimeType,
+        },
+      );
+      await DevFirebaseDebugDialog.show(
+        operation: 'tablet_accounts.searchTabletsByPhone.parse',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': 'tablet_accounts',
+          'phone': TabletPhone.mask(digits),
+        },
+      );
+      return <TabletModel>[];
+    }
+  }
+
+  Future<TabletModel?> getTabletByPhoneAndAreaName(
+    String phone,
+    String areaName,
+  ) async {
+    final digits = TabletPhone.normalize(phone);
+    final area = areaName.trim();
+    final documentId = TabletPhone.documentId(phone: digits, area: area);
+    if (documentId.isEmpty) return null;
+
+    TabletAccountDiagnostics.record(
+      'phone_area_lookup_start',
+      meta: <String, Object?>{
+        'documentId': TabletPhone.maskDocumentId(documentId),
+        'policy': 'phone-area',
+      },
+    );
+
+    try {
+      final direct = await _getTabletCollectionRef().doc(documentId).get();
+      if (direct.exists && direct.data() != null) {
+        TabletAccountDiagnostics.record(
+          'phone_area_lookup_direct_hit',
+          meta: <String, Object?>{
+            'documentId': TabletPhone.maskDocumentId(documentId),
+          },
+        );
+        return TabletModel.fromMap(direct.id, direct.data()!);
+      }
+
+      final legacyDirect = await _getTabletCollectionRef().doc(digits).get();
+      if (legacyDirect.exists && legacyDirect.data() != null) {
+        final tablet = TabletModel.fromMap(legacyDirect.id, legacyDirect.data()!);
+        if (_tabletMatchesArea(tablet, area)) {
+          TabletAccountDiagnostics.record(
+            'phone_area_lookup_legacy_hit',
+            meta: <String, Object?>{
+              'legacyId': TabletPhone.maskDocumentId(tablet.id),
+              'targetDocumentId': TabletPhone.maskDocumentId(documentId),
+            },
+          );
+          return tablet;
+        }
+      }
+
+      final matches = (await searchTabletsByPhone(digits))
+          .where((tablet) => _tabletMatchesArea(tablet, area))
+          .toList(growable: false);
+      if (matches.length == 1) {
+        TabletAccountDiagnostics.record(
+          'phone_area_lookup_candidate_hit',
+          meta: <String, Object?>{
+            'sourceId': TabletPhone.maskDocumentId(matches.single.id),
+            'targetDocumentId': TabletPhone.maskDocumentId(documentId),
+          },
+        );
+        return matches.single;
+      }
+      if (matches.length > 1) {
+        TabletAccountDiagnostics.record(
+          'phone_area_lookup_ambiguous',
+          meta: <String, Object?>{
+            'targetDocumentId': TabletPhone.maskDocumentId(documentId),
+            'count': matches.length,
+          },
+        );
+      } else {
+        TabletAccountDiagnostics.record(
+          'phone_area_lookup_miss',
+          meta: <String, Object?>{
+            'targetDocumentId': TabletPhone.maskDocumentId(documentId),
+          },
+        );
+      }
+    } on FirebaseException catch (e, st) {
+      TabletAccountDiagnostics.record(
+        'phone_area_lookup_failed',
+        meta: <String, Object?>{
+          'documentId': TabletPhone.maskDocumentId(documentId),
+          'error': e.code,
+        },
+      );
+      await DevFirebaseDebugDialog.show(
+        operation: 'tablet_accounts.getTabletByPhoneAndAreaName',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': 'tablet_accounts',
+          'documentId': TabletPhone.maskDocumentId(documentId),
+          'policy': 'phone-area-with-legacy-fallback',
+        },
+      );
+    } catch (e, st) {
+      debugPrint('DB 조회 중 예외 발생: $e');
+      TabletAccountDiagnostics.record(
+        'phone_area_lookup_parse_failed',
+        meta: <String, Object?>{
+          'documentId': TabletPhone.maskDocumentId(documentId),
+          'error': e.runtimeType,
+        },
+      );
+      await DevFirebaseDebugDialog.show(
+        operation: 'tablet_accounts.getTabletByPhoneAndAreaName.parse',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': 'tablet_accounts',
+          'documentId': TabletPhone.maskDocumentId(documentId),
+        },
+      );
+    }
+    return null;
+  }
+
   Future<TabletModel?> getTabletByPhone(String phone) async {
     final digits = TabletPhone.normalize(phone);
     debugPrint(
@@ -179,57 +403,14 @@ class UserReadService {
     );
     if (digits.isEmpty) return null;
 
-    final candidates = <String>{
-      digits,
-      TabletPhone.format(digits),
-    };
-
-    try {
-      final direct = await _getTabletCollectionRef().doc(digits).get();
-      if (direct.exists && direct.data() != null) {
-        return TabletModel.fromMap(direct.id, direct.data()!);
-      }
-
-      for (final candidate in candidates) {
-        final byPhone = await _getTabletCollectionRef()
-            .where('phone', isEqualTo: candidate)
-            .limit(1)
-            .get();
-        if (byPhone.docs.isNotEmpty) {
-          final doc = byPhone.docs.first;
-          return TabletModel.fromMap(doc.id, doc.data());
-        }
-      }
-
-      final byLegacyHandle = await _getTabletCollectionRef()
-          .where('handle', isEqualTo: digits)
-          .limit(1)
-          .get();
-      if (byLegacyHandle.docs.isNotEmpty) {
-        final doc = byLegacyHandle.docs.first;
-        return TabletModel.fromMap(doc.id, doc.data());
-      }
-    } on FirebaseException catch (e, st) {
-      await DevFirebaseDebugDialog.show(
-        operation: 'tablet_accounts.getTabletByPhone',
-        error: e,
-        stackTrace: st,
-        details: <String, Object?>{
-          'collection': 'tablet_accounts',
+    final matches = await searchTabletsByPhone(digits);
+    if (matches.length == 1) return matches.single;
+    if (matches.length > 1) {
+      TabletAccountDiagnostics.record(
+        'phone_only_lookup_ambiguous',
+        meta: <String, Object?>{
           'phone': TabletPhone.mask(digits),
-          'query': 'doc-phone-first-with-legacy-fallback',
-        },
-      );
-      return null;
-    } catch (e, st) {
-      debugPrint('DB 조회 중 예외 발생: $e');
-      await DevFirebaseDebugDialog.show(
-        operation: 'tablet_accounts.getTabletByPhone.parse',
-        error: e,
-        stackTrace: st,
-        details: <String, Object?>{
-          'collection': 'tablet_accounts',
-          'phone': TabletPhone.mask(digits),
+          'count': matches.length,
         },
       );
     }

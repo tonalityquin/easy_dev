@@ -14,8 +14,8 @@ import '../../../shared/secondary/widgets/ops_console_widgets.dart';
 import '../../selector/application/dev_auth.dart';
 import '../../sprint/application/sprint_mode_store.dart';
 import '../../sprint/domain/sprint_models.dart';
-import '../../sprint/pages/sprint_external_event_editor_sheet.dart';
 import 'headquarter_calendar_account_side_dock.dart';
+import 'headquarter_calendar_event_editor_side_dock.dart';
 import '../../sprint/pages/sprint_task_detail_sheet.dart';
 import 'headquarter_calendar_side_dock.dart';
 
@@ -315,7 +315,7 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard>
       );
       return;
     }
-    await showSprintExternalEventEditorSheet(
+    await showHeadquarterCalendarEventEditorSideDock(
       context: context,
       store: _store,
       initialDate: _selectedDay,
@@ -360,7 +360,7 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard>
               Navigator.of(context).pop();
               final event = _store.externalEventById(item.externalEventId);
               if (event == null || !mounted) return;
-              await showSprintExternalEventEditorSheet(
+              await showHeadquarterCalendarEventEditorSideDock(
                 context: context,
                 store: _store,
                 event: event,

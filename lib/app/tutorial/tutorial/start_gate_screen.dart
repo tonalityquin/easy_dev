@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../app/di/routes.dart';
 import '../../../app/init/app_start_debug_trace.dart';
-import '../../../app/init/app_start_flow_prefs.dart';
-import '../../../app/init/app_start_user_purpose.dart';
+import '../../../app/init/app_start_setup_flow_resolver.dart';
 import '../../../app/init/startup_tasks.dart';
 import '../../../features/launcher/application/launcher_debug_account_override_store.dart';
 import '../../../features/launcher/application/launcher_diagnostics.dart';
@@ -26,20 +25,6 @@ class _StartGateScreenState extends State<StartGateScreen> {
     _decide();
   }
 
-  Future<String?> _resolvePendingPolicyRoute() async {
-    final terms = await AppStartFlowPrefs.getTermsOfServiceAgreed();
-    if (!terms) return AppRoutes.termsConsent;
-
-    final privacy = await AppStartFlowPrefs.getPrivacyPolicyAgreed();
-    if (!privacy) return AppRoutes.privacyPolicyConsent;
-
-    final accountDeletion =
-        await AppStartFlowPrefs.getAccountDeletionPolicyAgreed();
-    if (!accountDeletion) return AppRoutes.accountDeletionPolicyConsent;
-
-    return null;
-  }
-
   Future<void> _decide() async {
     final debugSnapshotRestored =
         await LauncherDebugAccountOverrideStore.restoreIfNeeded(
@@ -51,122 +36,32 @@ class _StartGateScreenState extends State<StartGateScreen> {
         'debug_account_override_snapshot_restored',
       );
     }
-    await AppStartFlowPrefs.migrateFromLegacyIfNeeded();
 
-    final permDone = await AppStartFlowPrefs.getPermissionTutorialDone();
-    final purpose = await AppStartFlowPrefs.getUserPurpose();
-    final noticeDone = await AppStartFlowPrefs.getPermissionNoticeDone();
+    final setupSnapshot = await AppStartSetupFlowResolver.resolve();
     AppStartDebugTrace.log(
       'start_gate',
-      'onboarding_state_resolved',
-      meta: <String, Object?>{
-        'permissionDone': permDone,
-        'purpose': purpose?.storageValue ?? 'none',
-        'noticeDone': noticeDone,
-      },
+      'setup_state_resolved',
+      meta: setupSnapshot.toDebugMeta(),
     );
     if (!mounted || _navigated) return;
 
-    if (!permDone && purpose == null) {
-      _navigated = true;
-      AppStartDebugTrace.log('start_gate', 'navigate_user_purpose');
-      Navigator.of(context).pushReplacementNamed(
-        AppRoutes.appStartUserPurpose,
-      );
-      return;
-    }
-
-    if (!permDone && !noticeDone) {
+    if (!setupSnapshot.complete) {
       _navigated = true;
       AppStartDebugTrace.log(
         'start_gate',
-        'navigate_permission_notice',
+        'navigate_power_boot_for_startup_setup',
         meta: <String, Object?>{
-          'purpose': purpose?.storageValue ?? 'none',
+          'route': AppRoutes.powerBoot,
+          ...setupSnapshot.toDebugMeta(),
         },
       );
-      Navigator.of(context).pushReplacementNamed(
-        AppRoutes.appStartPermissionNotice,
+      LauncherDiagnostics.record(
+        'startup_power_boot_required_for_setup',
+        scope: 'startup',
+        meta: setupSnapshot.toDebugMeta(),
       );
+      Navigator.of(context).pushReplacementNamed(AppRoutes.powerBoot);
       return;
-    }
-
-    if (!permDone) {
-      _navigated = true;
-      AppStartDebugTrace.log(
-        'start_gate',
-        'navigate_permission_setup',
-        meta: <String, Object?>{
-          'purpose': purpose?.storageValue ?? 'none',
-        },
-      );
-      Navigator.of(context).pushReplacementNamed(
-        AppRoutes.appStartPermissionSetup,
-      );
-      return;
-    }
-
-    final skipPolicyAndPostSetup = purpose?.skipsPolicyAndPostSetup ?? false;
-    if (skipPolicyAndPostSetup) {
-      AppStartDebugTrace.log(
-        'start_gate',
-        'skip_policy_and_post_setup',
-        meta: <String, Object?>{
-          'purpose': purpose?.storageValue ?? 'none',
-        },
-      );
-    } else {
-      final pendingPolicyRoute = await _resolvePendingPolicyRoute();
-      if (!mounted || _navigated) return;
-
-      if (pendingPolicyRoute != null) {
-        _navigated = true;
-        AppStartDebugTrace.log(
-          'start_gate',
-          'navigate_policy',
-          meta: <String, Object?>{
-            'route': pendingPolicyRoute,
-            'purpose': purpose?.storageValue ?? 'legacy_unknown',
-          },
-        );
-        Navigator.of(context).pushReplacementNamed(pendingPolicyRoute);
-        return;
-      }
-
-      final requiresGoogleServicesSetup =
-          purpose?.requiresGoogleServicesSetup ?? false;
-      if (requiresGoogleServicesSetup) {
-        final googleServicesDone =
-            await AppStartFlowPrefs.getGoogleServicesSetupDone();
-        final googleServicesSkipped =
-            await AppStartFlowPrefs.getGoogleServicesSetupSkipped();
-        if (!mounted || _navigated) return;
-        if (!googleServicesDone && !googleServicesSkipped) {
-          _navigated = true;
-          AppStartDebugTrace.log(
-            'start_gate',
-            'navigate_google_services_setup',
-            meta: <String, Object?>{
-              'purpose': purpose?.storageValue ?? 'none',
-            },
-          );
-          Navigator.of(context).pushReplacementNamed(
-            AppRoutes.appStartGoogleServicesSetup,
-          );
-          return;
-        }
-        AppStartDebugTrace.log(
-          'start_gate',
-          googleServicesDone
-              ? 'google_services_setup_already_done'
-              : 'google_services_setup_skipped',
-          meta: <String, Object?>{
-            'purpose': purpose?.storageValue ?? 'none',
-            'done': googleServicesDone,
-            'skipped': googleServicesSkipped,
-          },
-        );
-      }
     }
 
     final report = await StartupTasks.runAfterPermissions();

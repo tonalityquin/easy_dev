@@ -11,12 +11,14 @@ import '../../../../app/init/logout_helper.dart';
 import '../../../../app/utils/operational_data_sync_workflow.dart';
 import '../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../app/utils/status_dialog.dart';
+import '../../../../design_system/common_ui/common_ui_side_dock.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../shared/sheet_tool/document_box_action.dart';
 import '../../../../shared/sheet_tool/document_box_action_executor.dart';
 import '../../../account/applications/user_state.dart';
 import '../../../camera/photo_transfer_mail_page.dart';
 import '../../../community/application/discord/discord_config.dart';
+import '../../../community/page/faq_side_dock.dart';
 import '../../../community/page/sheets/discord/discord_bottom_sheet.dart';
 import '../../../dev/application/area_state.dart';
 import '../../../headquarter/application/fab/hub_quick_actions.dart';
@@ -344,10 +346,15 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
 
   Future<void> _openFaq(BuildContext context) async {
     await _closeCurrentDockAndRun(context, (rootContext) async {
-      await Navigator.of(
-        rootContext,
-        rootNavigator: true,
-      ).pushNamed(AppRoutes.faq);
+      debugPrint(
+        '[OpsDashboardSideDock] faq_handoff_open side=right source=dashboard',
+      );
+      await showFaqSideDock<void>(
+        context: rootContext,
+        side: CommonSideDockSide.right,
+        source: 'dashboard',
+      );
+      debugPrint('[OpsDashboardSideDock] faq_session_closed side=right');
     });
   }
 

@@ -17,6 +17,7 @@ import 'app/init/checkout_nudge_guard.dart';
 import 'app/init/app_navigator.dart';
 import 'app/init/quick_overlay_main.dart';
 import 'app/init/overlay_access_guard.dart';
+import 'app/init/overlay_lifecycle_gate.dart';
 import 'app/theme/theme_prefs_controller.dart';
 import 'features/community/application/game/game_quick_actions.dart';
 import 'features/chat/presentation/work_chat_alert_host.dart';
@@ -331,6 +332,9 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   String? _lifecycleOverlayWire;
+  bool _lifecycleOverlayStartInFlight = false;
+  AppLifecycleState _lifecycleState =
+      WidgetsBinding.instance.lifecycleState ?? AppLifecycleState.resumed;
 
   @override
   void initState() {
@@ -347,6 +351,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
+    _lifecycleState = state;
     debugPrint('[LIFECYCLE][${_ts()}] $state');
 
     if (AppExitFlag.isExiting) {
@@ -425,7 +430,44 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     await FlutterOverlayWindow.shareData('__collapse__');
   }
 
+  bool get _lifecycleAllowsOverlayStart {
+    return _lifecycleState == AppLifecycleState.inactive ||
+        _lifecycleState == AppLifecycleState.paused ||
+        _lifecycleState == AppLifecycleState.hidden;
+  }
+
+  bool _canContinueLifecycleOverlayStart(String stage) {
+    if (!OverlayLifecycleGate.canAutoStart) {
+      OverlayLifecycleGate.recordAutoStartSkipped(
+        reason: 'runtime_not_ready',
+        lifecycle: _lifecycleState.name,
+        stage: stage,
+      );
+      return false;
+    }
+    if (!_lifecycleAllowsOverlayStart) {
+      OverlayLifecycleGate.recordAutoStartSkipped(
+        reason: 'lifecycle_not_background',
+        lifecycle: _lifecycleState.name,
+        stage: stage,
+      );
+      return false;
+    }
+    return true;
+  }
+
   Future<void> _startOverlayFromLifecycle() async {
+    if (_lifecycleOverlayStartInFlight) {
+      OverlayLifecycleGate.recordAutoStartSkipped(
+        reason: 'start_in_flight',
+        lifecycle: _lifecycleState.name,
+        stage: 'entry',
+      );
+      return;
+    }
+    if (!_canContinueLifecycleOverlayStart('entry')) return;
+
+    _lifecycleOverlayStartInFlight = true;
     try {
       if (await OverlayAccessGuard.closeIfBlocked()) {
         _lifecycleOverlayWire = null;
@@ -444,6 +486,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       final request = await _resolveLifecycleOverlayRequest();
       final wire = request.wire;
 
+      if (!_canContinueLifecycleOverlayStart('request_resolved')) return;
+
       if (await OverlayAccessGuard.closeIfBlocked()) {
         _lifecycleOverlayWire = null;
         debugPrint(
@@ -451,7 +495,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         return;
       }
 
+      if (!_canContinueLifecycleOverlayStart('before_active_check')) return;
+
       if (await FlutterOverlayWindow.isActive()) {
+        if (!_canContinueLifecycleOverlayStart('overlay_active')) return;
         if (_lifecycleOverlayWire == wire) {
           await _applyLifecycleOverlayMode(request);
           return;
@@ -462,7 +509,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         await Future<void>.delayed(const Duration(milliseconds: 120));
       }
 
+      if (!_canContinueLifecycleOverlayStart('before_config')) return;
       final config = await _buildOverlayWindowConfig(request.mode);
+      if (!_canContinueLifecycleOverlayStart('before_show')) return;
 
       await FlutterOverlayWindow.showOverlay(
         enableDrag: config.enableDrag,
@@ -476,6 +525,12 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         startPosition: config.startPosition,
       );
 
+      if (!_canContinueLifecycleOverlayStart('after_show')) {
+        await FlutterOverlayWindow.closeOverlay();
+        _lifecycleOverlayWire = null;
+        return;
+      }
+
       _lifecycleOverlayWire = wire;
       await _applyLifecycleOverlayMode(request);
 
@@ -484,6 +539,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     } catch (e, st) {
       debugPrint('[OVERLAY][${_ts()}] auto start error: $e');
       debugPrint(st.toString());
+    } finally {
+      _lifecycleOverlayStartInFlight = false;
     }
   }
 

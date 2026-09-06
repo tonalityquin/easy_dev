@@ -4,6 +4,7 @@ import '../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../calendar/presentation/headquarter_calendar_card.dart';
 import '../../../headquarter/application/headquarter_dashboard_context.dart';
+import '../../../headquarter/widgets/headquarter_quick_button_header_toggle.dart';
 
 class CommonHqDashBoardPage extends StatelessWidget {
   const CommonHqDashBoardPage({
@@ -24,7 +25,7 @@ class CommonHqDashBoardPage extends StatelessWidget {
         : normalizedMode;
 
     debugPrint(
-      '[HQ_DASHBOARD][${DateTime.now().toIso8601String()}] screen=$screenName mode=$effectiveMode layout=fixed calendar=list_surface connection=operations_left_side_dock verticalScroll=false modeTrigger=removed contextPublisher=${effectiveMode.isEmpty ? 'none' : 'scope'} additionalFirebaseRead=0 additionalFirebaseWrite=0',
+      '[HQ_DASHBOARD][${DateTime.now().toIso8601String()}] screen=$screenName mode=$effectiveMode layout=fixed calendar=list_surface connection=operations_left_side_dock verticalScroll=false modeTrigger=removed contextPublisher=${effectiveMode.isEmpty ? 'none' : 'scope'} quickButtonHeader=enabled additionalFirebaseRead=0 additionalFirebaseWrite=0',
     );
 
     final content = ColoredBox(
@@ -40,6 +41,7 @@ class CommonHqDashBoardPage extends StatelessWidget {
                 useCommonUi: true,
                 showAccountEntry: true,
                 fillViewport: true,
+                headerTrailing: const HeadquarterQuickButtonHeaderToggle(),
               ),
             ),
           ),

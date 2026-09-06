@@ -11,8 +11,10 @@ import '../../../app/command/application/terminal_command_path.dart';
 import '../../../app/command/application/terminal_line.dart';
 import '../../../app/di/routes.dart';
 import '../../../app/init/app_start_flow_prefs.dart';
+import '../../../app/init/app_start_setup_flow_resolver.dart';
 import '../../../app/init/app_start_user_purpose.dart';
 import '../../../app/init/db_connection_status_section.dart';
+import '../../../app/init/overlay_lifecycle_gate.dart';
 import '../../../app/init/startup_tasks.dart';
 import '../../dev/application/debug_session_controller.dart';
 import '../../dev/domain/repositories/area_repo_package/area_repository.dart';
@@ -28,6 +30,7 @@ import 'app_mode_registry.dart';
 import 'launcher_actions.dart';
 import 'launcher_debug_account_override_store.dart';
 import 'launcher_diagnostics.dart';
+import 'launcher_startup_setup_coordinator.dart';
 import 'terminal_auth_coordinator.dart';
 
 enum TerminalLoginStage {
@@ -63,12 +66,27 @@ class ModeLauncherSubmitResult {
 }
 
 class ModeLauncherController extends ChangeNotifier {
+  static const String nameDisplayLabel = 'NAME or Unique';
+  static const String phoneDisplayLabel = 'TEL or Code';
+  static const String passwordDisplayLabel = 'PW or Serial';
+  static const String _namePrompt = '이름 혹은 유니크 명을 입력하세요.';
+  static const String _nameReprompt = '이름 혹은 유니크 명을 다시 입력하세요.';
+  static const String _phonePrompt = '전화번호 혹은 코드 번호를 입력하세요.';
+  static const String _phoneReprompt = '전화번호 혹은 코드 번호를 다시 입력하세요.';
+  static const String _passwordPrompt = '비밀번호 혹은 시리얼 넘버를 입력하세요.';
+  static const String _passwordReprompt = '비밀번호 혹은 시리얼 넘버를 다시 입력하세요.';
+  static const String _phoneError = '[ERROR] 전화번호 혹은 코드 번호를 다시 확인하세요.';
+  static const String _passwordError = '[ERROR] 비밀번호 혹은 시리얼 넘버를 다시 확인하세요.';
+
+  static String _authOutputLine(String label, String value) =>
+      '${label.padRight(16)}$value';
+
   ModeLauncherController({StartupReport? startupReport})
       : _startupReport = startupReport ?? StartupTasks.lastReport {
     DevAuth.devModeEnabled.addListener(_handleDevModeChanged);
   }
 
-  final StartupReport? _startupReport;
+  StartupReport? _startupReport;
   final List<TerminalLine> _lines = <TerminalLine>[];
   final List<String> _history = <String>[];
   int _sequence = 0;
@@ -77,6 +95,10 @@ class ModeLauncherController extends ChangeNotifier {
   bool _busy = false;
   bool _disposed = false;
   bool _initialized = false;
+  bool _authenticationBootstrapped = false;
+  bool _authenticationBootstrapInFlight = false;
+  bool _startupSetupResolved = false;
+  bool _runtimeContextReady = false;
   bool _devAuthorized = false;
   bool _devModeEnabled = false;
   AppStartUserPurpose? _startupPurpose;
@@ -103,8 +125,21 @@ class ModeLauncherController extends ChangeNotifier {
   String _enteredPhone = '';
   String _enteredPassword = '';
   TerminalCommandPath _commandPath = TerminalCommandPath.root;
+  late final LauncherStartupSetupCoordinator _startupSetupCoordinator =
+      LauncherStartupSetupCoordinator()..addListener(_handleStartupSetupChanged);
 
   List<TerminalLine> get lines => List<TerminalLine>.unmodifiable(_lines);
+  LauncherStartupSetupCoordinator get startupSetup => _startupSetupCoordinator;
+  bool get startupSetupActive =>
+      !_startupSetupResolved ||
+      !_startupSetupCoordinator.complete ||
+      !_authenticationBootstrapped;
+  bool get startupSetupBusy => _startupSetupCoordinator.busy;
+  bool get startupSetupAwaitingExternalSettings =>
+      _startupSetupCoordinator.awaitingExternalSettings;
+  bool get startupSetupExternalSettingsRefreshInProgress =>
+      _startupSetupCoordinator.externalSettingsRefreshInProgress;
+  bool get runtimeContextReady => _runtimeContextReady;
   bool get busy => _busy;
   bool get initialized => _initialized;
   bool get devAuthorized => _devAuthorized;
@@ -136,12 +171,16 @@ class ModeLauncherController extends ChangeNotifier {
       _enteredPhone.isNotEmpty ||
       _enteredPassword.isNotEmpty;
   bool get obscurePrompt =>
-      _commandPath.isRoot && _loginStage == TerminalLoginStage.password;
+      !startupSetupActive &&
+      _commandPath.isRoot &&
+      _loginStage == TerminalLoginStage.password;
   bool get commandHistoryEnabled {
+    if (startupSetupActive) return false;
     if (_commandPath.isEmailEdit) return false;
     return _commandPath.isSetting || _loginStage == TerminalLoginStage.command;
   }
   bool get canNavigateBack {
+    if (startupSetupActive) return false;
     if (!_commandPath.isRoot || _busy) return false;
     if (_loginStage == TerminalLoginStage.name && _accountKindAutoSelected) {
       return false;
@@ -154,11 +193,13 @@ class ModeLauncherController extends ChangeNotifier {
       TerminalLoginStage.modeSelection,
     }.contains(_loginStage);
   }
-  bool get canCancelAuthentication => _commandPath.isRoot && !_busy &&
+  bool get canCancelAuthentication => !startupSetupActive &&
+      _commandPath.isRoot && !_busy &&
       _loginStage != TerminalLoginStage.command &&
       _loginStage != TerminalLoginStage.authenticating &&
       _loginStage != TerminalLoginStage.activatingMode;
-  bool get canReturnToModes => _commandPath.isRoot && !_busy &&
+  bool get canReturnToModes => !startupSetupActive &&
+      _commandPath.isRoot && !_busy &&
       _authenticatedAccount != null &&
       ((_authenticatedAccount!.kind == TerminalAccountKind.user &&
               _availableWorkAreas.isNotEmpty) ||
@@ -174,7 +215,9 @@ class ModeLauncherController extends ChangeNotifier {
     final normalized = AppModeRegistry.normalizeToken(raw.trim());
     return !_isAuthenticationControlCommand(normalized);
   }
-  TextInputAction get promptInputAction => _commandPath.isSetting
+  TextInputAction get promptInputAction => startupSetupActive
+      ? TextInputAction.done
+      : _commandPath.isSetting
       ? TextInputAction.done
       : switch (_loginStage) {
         TerminalLoginStage.accountType ||
@@ -184,6 +227,7 @@ class ModeLauncherController extends ChangeNotifier {
         _ => TextInputAction.done,
         };
   TextInputType get promptKeyboardType {
+    if (startupSetupActive) return TextInputType.text;
     if (_commandPath.isEmailEdit) return TextInputType.emailAddress;
     if (_commandPath.isSetting) return TextInputType.text;
     return switch (_loginStage) {
@@ -214,6 +258,215 @@ class ModeLauncherController extends ChangeNotifier {
   }
 
   int _nextId() => ++_sequence;
+
+  void _handleStartupSetupChanged() {
+    if (_disposed) return;
+    notifyListeners();
+  }
+
+  Future<void> runStartupSetupPrimaryAction(
+    BuildContext context, {
+    required bool reduceMotion,
+  }) async {
+    if (_disposed ||
+        !startupSetupActive ||
+        _startupSetupCoordinator.busy ||
+        _startupSetupCoordinator.awaitingExternalSettings) {
+      return;
+    }
+    final before = _startupSetupCoordinator.debugMeta();
+    final beforePhase = _startupSetupCoordinator.phase;
+    final beforePermissionStep =
+        _startupSetupCoordinator.currentPermissionStep;
+    final permissionSpec = _startupSetupCoordinator.currentPermissionSpec;
+    final policySpec = _startupSetupCoordinator.currentPolicySpec;
+    final label = switch (beforePhase) {
+      AppStartSetupPhase.permission => permissionSpec?.title ?? 'Permission',
+      AppStartSetupPhase.terms ||
+      AppStartSetupPhase.privacy ||
+      AppStartSetupPhase.accountDeletion => policySpec?.title ?? 'Policy',
+      AppStartSetupPhase.googleServices => 'Google services',
+      _ => beforePhase.name,
+    };
+    _runningCommand = 'SETUP';
+    _append(TerminalLineType.running, 'Processing startup setup: $label');
+    LauncherDiagnostics.record(
+      'startup_setup_action_start',
+      meta: before,
+    );
+    notifyListeners();
+    try {
+      await _startupSetupCoordinator.runPrimaryAction(
+        reduceMotion: reduceMotion,
+      );
+      if (_disposed || !context.mounted) return;
+      final afterPhase = _startupSetupCoordinator.phase;
+      final phaseChanged = beforePhase != afterPhase;
+      final permissionCompleted = beforePhase == AppStartSetupPhase.permission &&
+          (phaseChanged ||
+              beforePermissionStep !=
+                  _startupSetupCoordinator.currentPermissionStep ||
+              _startupSetupCoordinator.currentPermissionGranted);
+      if (phaseChanged || permissionCompleted) {
+        _append(TerminalLineType.success, '[ OK ] $label');
+      } else {
+        _append(
+          TerminalLineType.system,
+          'Pending: ${_startupSetupCoordinator.primaryActionLabel}',
+        );
+      }
+      LauncherDiagnostics.record(
+        'startup_setup_action_complete',
+        meta: _startupSetupCoordinator.debugMeta(),
+      );
+      if (_startupSetupCoordinator.complete) {
+        await _bootstrapAuthenticationAfterStartupSetup(
+          context,
+          reduceMotion: reduceMotion,
+        );
+      } else if (phaseChanged) {
+        _append(
+          TerminalLineType.system,
+          'Next startup task: ${_startupSetupCoordinator.phase.name}',
+        );
+      }
+    } finally {
+      _runningCommand = '';
+      if (!_disposed) notifyListeners();
+    }
+  }
+
+  Future<void> refreshStartupSetupAfterResume(
+    BuildContext context, {
+    required bool reduceMotion,
+  }) async {
+    if (_disposed || !startupSetupActive) return;
+    if (_startupSetupCoordinator.busy &&
+        !_startupSetupCoordinator.awaitingExternalSettings) {
+      return;
+    }
+    final beforePhase = _startupSetupCoordinator.phase;
+    final beforeStep = _startupSetupCoordinator.currentPermissionStep;
+    final beforeAwaiting =
+        _startupSetupCoordinator.awaitingExternalSettings;
+    await _startupSetupCoordinator.refreshAfterResume(
+      reduceMotion: reduceMotion,
+    );
+    if (_disposed || !context.mounted) return;
+    LauncherDiagnostics.record(
+      'startup_setup_resume_refresh',
+      meta: _startupSetupCoordinator.debugMeta(),
+    );
+    final permissionAdvanced = beforeStep != null &&
+        (beforePhase != _startupSetupCoordinator.phase ||
+            beforeStep != _startupSetupCoordinator.currentPermissionStep);
+    if (permissionAdvanced) {
+      _append(
+        TerminalLineType.success,
+        '[ OK ] Permission step completed after system settings',
+      );
+    } else if (beforeAwaiting &&
+        !_startupSetupCoordinator.awaitingExternalSettings &&
+        beforeStep == _startupSetupCoordinator.currentPermissionStep &&
+        !_startupSetupCoordinator.currentPermissionGranted) {
+      _append(
+        TerminalLineType.system,
+        'Permission is still not granted. System settings can be opened again.',
+      );
+    }
+    if (_startupSetupCoordinator.complete) {
+      await _bootstrapAuthenticationAfterStartupSetup(
+        context,
+        reduceMotion: reduceMotion,
+      );
+    }
+  }
+
+  void updateStartupPolicyProgress(double progress, bool readToEnd) {
+    _startupSetupCoordinator.updatePolicyProgress(progress, readToEnd);
+  }
+
+  void setStartupPolicyAgreed(bool value) {
+    _startupSetupCoordinator.setPolicyAgreed(value);
+  }
+
+  Future<bool> registerStartupGoogleTitleTap(
+    BuildContext context, {
+    required bool reduceMotion,
+  }) async {
+    if (_disposed || !startupSetupActive) return false;
+    final skipped = await _startupSetupCoordinator.registerGoogleTitleTap();
+    if (!skipped || _disposed || !context.mounted) return skipped;
+    _append(TerminalLineType.system, '[ SKIP ] Google services setup');
+    LauncherDiagnostics.record(
+      'startup_google_setup_skipped',
+      meta: _startupSetupCoordinator.debugMeta(),
+    );
+    await LauncherDiagnostics.showStatus(
+      context,
+      title: 'Launcher Startup Status',
+      description: developerStatusDescription(),
+      scope: 'launcher_startup_setup',
+    );
+    if (_disposed || !context.mounted) return true;
+    if (_startupSetupCoordinator.complete) {
+      await _bootstrapAuthenticationAfterStartupSetup(
+        context,
+        reduceMotion: reduceMotion,
+      );
+    }
+    return true;
+  }
+
+  Future<void> _bootstrapAuthenticationAfterStartupSetup(
+    BuildContext context, {
+    required bool reduceMotion,
+  }) async {
+    if (_authenticationBootstrapped ||
+        _authenticationBootstrapInFlight ||
+        _disposed ||
+        !context.mounted) {
+      return;
+    }
+    _authenticationBootstrapInFlight = true;
+    notifyListeners();
+    try {
+      _append(TerminalLineType.success, '[ OK ] Startup setup complete');
+      LauncherDiagnostics.record(
+        'startup_setup_complete',
+        meta: _startupSetupCoordinator.debugMeta(),
+      );
+      final report = await StartupTasks.runAfterPermissions();
+      _startupReport = report;
+      await _refreshLiveStatus();
+      if (_disposed || !context.mounted) return;
+      _append(
+        report.allReady ? TerminalLineType.success : TerminalLineType.system,
+        '${report.allReady ? '[ OK ]' : '[WARN]'} Startup services ${report.readyCount}/4',
+      );
+      LauncherDiagnostics.record(
+        'authentication_bootstrap_after_startup_setup',
+        meta: <String, Object?>{
+          'startupReady': report.readyCount,
+          'startupAllReady': report.allReady,
+          ..._startupSetupCoordinator.debugMeta(),
+        },
+      );
+      await _bootstrapAuthentication(
+        context,
+        reduceMotion: reduceMotion,
+      );
+      if (_disposed) return;
+      _authenticationBootstrapped = true;
+      _authenticationBootstrapInFlight = false;
+      notifyListeners();
+    } finally {
+      if (!_authenticationBootstrapped) {
+        _authenticationBootstrapInFlight = false;
+        if (!_disposed) notifyListeners();
+      }
+    }
+  }
 
   void _append(
     TerminalLineType type,
@@ -265,6 +518,22 @@ class ModeLauncherController extends ChangeNotifier {
     if (_initialized || _disposed) return;
     _initialized = true;
     LauncherDiagnostics.record('terminal_initialize_start');
+    LauncherDiagnostics.record(
+      'auth_presentation_config',
+      scope: 'auth_presentation',
+      meta: <String, Object?>{
+        'nameLabel': nameDisplayLabel,
+        'phoneLabel': phoneDisplayLabel,
+        'passwordLabel': passwordDisplayLabel,
+        'namePrompt': _namePrompt,
+        'phonePrompt': _phonePrompt,
+        'passwordPrompt': _passwordPrompt,
+        'historyColumnWidth': 16,
+        'summaryLabelWidth': 120,
+        'summaryResizeMs': reduceMotion ? 0 : 190,
+        'valueSwitchMs': reduceMotion ? 0 : 160,
+      },
+    );
 
     final debugSnapshotRestored =
         await LauncherDebugAccountOverrideStore.restoreIfNeeded(
@@ -324,7 +593,7 @@ class ModeLauncherController extends ChangeNotifier {
     if (_assignedMode != null) {
       await _appendPaced(
         TerminalLineType.system,
-        'Assigned mode: ${_assignedMode!.koreanName} / ${_assignedMode!.englishName}',
+        'Assigned mode: ${_assignedMode!.koreanName}',
         reduceMotion
     );
     } else if (_unknownSavedMode) {
@@ -335,7 +604,44 @@ class ModeLauncherController extends ChangeNotifier {
     );
     }
 
-    await _bootstrapAuthentication(context, reduceMotion: reduceMotion);
+    _startupPurpose ??= await AppStartFlowPrefs.getUserPurpose();
+    if (_startupPurpose == null) {
+      _append(
+        TerminalLineType.error,
+        '[BLOCKED] Startup purpose is not selected',
+      );
+      _pendingTargetRoute = AppRoutes.powerBoot;
+      LauncherDiagnostics.record(
+        'startup_setup_missing_purpose',
+        meta: const <String, Object?>{'targetRoute': AppRoutes.powerBoot},
+      );
+      LauncherDiagnostics.record('terminal_initialize_complete');
+      return;
+    }
+
+    await _startupSetupCoordinator.initialize();
+    if (_disposed) return;
+    _startupSetupResolved = true;
+    notifyListeners();
+    if (_startupSetupCoordinator.complete) {
+      await _bootstrapAuthenticationAfterStartupSetup(
+        context,
+        reduceMotion: reduceMotion,
+      );
+    } else {
+      _append(
+        TerminalLineType.system,
+        'Startup setup: ${_startupSetupCoordinator.phase.name}',
+      );
+      _append(
+        TerminalLineType.output,
+        'Profile: ${_startupPurpose!.label}',
+      );
+      LauncherDiagnostics.record(
+        'startup_setup_waiting_for_action',
+        meta: _startupSetupCoordinator.debugMeta(),
+      );
+    }
     LauncherDiagnostics.record('terminal_initialize_complete');
   }
 
@@ -432,26 +738,41 @@ class ModeLauncherController extends ChangeNotifier {
       final mode = _supportedModes[index];
       _append(
         TerminalLineType.output,
-        '${index + 1}  ${mode.koreanName.padRight(10)} ${mode.englishName}',
+        '${index + 1}  ${mode.koreanName}',
       );
     }
     _append(TerminalLineType.system, '────────────────────────────────────────');
+    LauncherDiagnostics.record(
+      'auth_supported_mode_list_rendered',
+      meta: <String, Object?>{
+        'display': 'name_only',
+        'modeCount': _supportedModes.length,
+        'modeNames': _supportedModes.map((mode) => mode.koreanName).join(','),
+        'paced': false,
+      },
+    );
   }
-
 
   void _appendWorkAreaList() {
     _append(TerminalLineType.system, 'WORK AREAS');
     _append(TerminalLineType.system, '────────────────────────────────────────');
     for (var index = 0; index < _availableWorkAreas.length; index++) {
       final area = _availableWorkAreas[index];
-      final marker = area.isHeadquarter ? 'HEADQUARTER' : area.areaName;
-      final modes = area.supportedModes.map((mode) => mode.englishName).join(',');
       _append(
         TerminalLineType.output,
-        '${index + 1}  ${area.displayLabel.padRight(10)} ${marker.padRight(12)} $modes',
+        '${index + 1}  ${area.areaName}',
       );
     }
     _append(TerminalLineType.system, '────────────────────────────────────────');
+    LauncherDiagnostics.record(
+      'auth_work_area_list_rendered',
+      meta: <String, Object?>{
+        'display': 'name_only',
+        'areaCount': _availableWorkAreas.length,
+        'areaNames': _availableWorkAreas.map((area) => area.areaName).join(','),
+        'paced': false,
+      },
+    );
   }
 
   Future<void> _appendWorkAreaListPaced(bool reduceMotion) async {
@@ -467,15 +788,23 @@ class ModeLauncherController extends ChangeNotifier {
     );
     for (var index = 0; index < _availableWorkAreas.length; index++) {
       final area = _availableWorkAreas[index];
-      final marker = area.isHeadquarter ? 'HEADQUARTER' : area.areaName;
-      final modes = area.supportedModes.map((mode) => mode.englishName).join(',');
       await _appendPaced(
         TerminalLineType.output,
-        '${index + 1}  ${area.displayLabel.padRight(10)} ${marker.padRight(12)} $modes',
+        '${index + 1}  ${area.areaName}',
         reduceMotion,
       );
     }
     _append(TerminalLineType.system, '────────────────────────────────────────');
+    LauncherDiagnostics.record(
+      'auth_work_area_list_rendered',
+      meta: <String, Object?>{
+        'display': 'name_only',
+        'areaCount': _availableWorkAreas.length,
+        'areaNames': _availableWorkAreas.map((area) => area.areaName).join(','),
+        'paced': true,
+        'reduceMotion': reduceMotion,
+      },
+    );
   }
 
   Future<void> _appendCommandList(bool reduceMotion) async {
@@ -533,11 +862,21 @@ class ModeLauncherController extends ChangeNotifier {
       final mode = _supportedModes[index];
       await _appendPaced(
         TerminalLineType.output,
-        '${index + 1}  ${mode.koreanName.padRight(10)} ${mode.englishName}',
+        '${index + 1}  ${mode.koreanName}',
         reduceMotion
     );
     }
     _append(TerminalLineType.system, '────────────────────────────────────────');
+    LauncherDiagnostics.record(
+      'auth_supported_mode_list_rendered',
+      meta: <String, Object?>{
+        'display': 'name_only',
+        'modeCount': _supportedModes.length,
+        'modeNames': _supportedModes.map((mode) => mode.koreanName).join(','),
+        'paced': true,
+        'reduceMotion': reduceMotion,
+      },
+    );
   }
 
 
@@ -572,7 +911,7 @@ class ModeLauncherController extends ChangeNotifier {
     );
     _append(
       TerminalLineType.output,
-      'Assigned mode       ${_assignedMode == null ? '-' : '${_assignedMode!.koreanName} / ${_assignedMode!.englishName}'}',
+      'Assigned mode       ${_assignedMode?.koreanName ?? '-'}',
     );
     _append(
       TerminalLineType.output,
@@ -616,6 +955,30 @@ class ModeLauncherController extends ChangeNotifier {
     );
     _append(
       TerminalLineType.output,
+      'Startup setup       ${_startupSetupCoordinator.phase.name}',
+    );
+    _append(
+      TerminalLineType.output,
+      'Setup busy          ${_startupSetupCoordinator.busy ? 'YES' : 'NO'}',
+    );
+    _append(
+      TerminalLineType.output,
+      'External settings   ${_startupSetupCoordinator.awaitingExternalSettings ? 'WAITING' : 'IDLE'}',
+    );
+    _append(
+      TerminalLineType.output,
+      'Runtime context      ${_runtimeContextReady ? 'READY' : 'NOT READY'}',
+    );
+    _append(
+      TerminalLineType.output,
+      'Overlay lifecycle    ${OverlayLifecycleGate.stateLabel}',
+    );
+    _append(
+      TerminalLineType.output,
+      'Overlay gate reason  ${OverlayLifecycleGate.reason}',
+    );
+    _append(
+      TerminalLineType.output,
       'Auth stage          ${_loginStage.name}',
     );
     _append(
@@ -640,6 +1003,14 @@ class ModeLauncherController extends ChangeNotifier {
       'Selected area: ${_selectedWorkArea?.areaName ?? '-'}',
       'Available work areas: ${_availableWorkAreas.isEmpty ? '-' : _availableWorkAreas.map((area) => area.areaName).join(',')}',
       'Selected mode: ${_selectedMode?.id ?? '-'}',
+      'Work area display: name_only',
+      'Mode display: name_only',
+      'Name display: $nameDisplayLabel',
+      'Phone display: $phoneDisplayLabel',
+      'Password display: $passwordDisplayLabel',
+      'Name prompt: $_namePrompt',
+      'Phone prompt: $_phonePrompt',
+      'Password prompt: $_passwordPrompt',
       'Account kind: ${_selectedAccountKind == null ? '-' : TerminalAuthCoordinator.accountKindId(_selectedAccountKind!)}',
       'Startup purpose: ${_startupPurpose?.storageValue ?? '-'}',
       'Default account kind: ${_defaultAccountKind == null ? '-' : TerminalAuthCoordinator.accountKindId(_defaultAccountKind!)}',
@@ -648,6 +1019,20 @@ class ModeLauncherController extends ChangeNotifier {
       'Session persistence: ${TerminalAuthCoordinator.sessionPersistenceId(_sessionPersistence)}',
       'Debug override snapshot: $_debugOverrideSnapshotActive',
       'Supported modes: ${_supportedModes.map((mode) => mode.id).join(',')}',
+      'Startup setup phase: ${_startupSetupCoordinator.phase.name}',
+      'Startup setup resolved: $_startupSetupResolved',
+      'Startup setup busy: ${_startupSetupCoordinator.busy}',
+      'External settings waiting: ${_startupSetupCoordinator.awaitingExternalSettings}',
+      'External settings refresh: ${_startupSetupCoordinator.externalSettingsRefreshInProgress}',
+      'External settings step: ${_startupSetupCoordinator.externalSettingsStep ?? '-'}',
+      'Startup setup permission: ${_startupSetupCoordinator.currentPermissionSpec?.keyName ?? '-'}',
+      'Startup setup policy: ${_startupSetupCoordinator.currentPolicySpec?.kind.name ?? '-'}',
+      'Startup setup policy progress: ${_startupSetupCoordinator.policyScrollProgress.toStringAsFixed(3)}',
+      'Startup setup Google connected: ${_startupSetupCoordinator.googleConnected}',
+      'Runtime context ready: $_runtimeContextReady',
+      'Overlay lifecycle: ${OverlayLifecycleGate.stateLabel}',
+      'Overlay gate reason: ${OverlayLifecycleGate.reason}',
+      'Overlay gate generation: ${OverlayLifecycleGate.generation}',
       'Auth stage: ${_loginStage.name}',
       'Terminal path: ${_commandPath.promptPath}',
       'Email edit mode: ${_commandPath.isEmailEdit}',
@@ -689,7 +1074,9 @@ class ModeLauncherController extends ChangeNotifier {
     String raw, {
     required bool reduceMotion,
   }) async {
-    if (_busy || _disposed) return const ModeLauncherSubmitResult();
+    if (_busy || _disposed || startupSetupActive) {
+      return const ModeLauncherSubmitResult();
+    }
     final input = raw.trim();
     if (input.isEmpty) {
       rejectEmptyInput();
@@ -999,7 +1386,7 @@ class ModeLauncherController extends ChangeNotifier {
         _supportedModes = <AppModeDefinition>[];
         _selectedMode = null;
         _loginStage = TerminalLoginStage.name;
-        _append(TerminalLineType.system, '이름을 다시 입력하세요.');
+        _append(TerminalLineType.system, _nameReprompt);
         LauncherDiagnostics.record(
           'auth_navigation_back',
           meta: <String, Object?>{'from': 'phone', 'to': 'name'},
@@ -1017,7 +1404,7 @@ class ModeLauncherController extends ChangeNotifier {
         _supportedModes = <AppModeDefinition>[];
         _selectedMode = null;
         _loginStage = TerminalLoginStage.phone;
-        _append(TerminalLineType.system, '전화번호를 다시 입력하세요.');
+        _append(TerminalLineType.system, _phoneReprompt);
         LauncherDiagnostics.record(
           'auth_navigation_back',
           meta: <String, Object?>{'from': 'password', 'to': 'phone'},
@@ -1051,7 +1438,7 @@ class ModeLauncherController extends ChangeNotifier {
         _selectedMode = null;
         _enteredPassword = '';
         _loginStage = TerminalLoginStage.password;
-        _append(TerminalLineType.system, '비밀번호를 다시 입력하세요.');
+        _append(TerminalLineType.system, _passwordReprompt);
         LauncherDiagnostics.record(
           'auth_navigation_back',
           meta: <String, Object?>{'from': 'areaSelection', 'to': 'password'},
@@ -1097,7 +1484,7 @@ class ModeLauncherController extends ChangeNotifier {
         _selectedMode = null;
         _enteredPassword = '';
         _loginStage = TerminalLoginStage.password;
-        _append(TerminalLineType.system, '비밀번호를 다시 입력하세요.');
+        _append(TerminalLineType.system, _passwordReprompt);
         LauncherDiagnostics.record(
           'auth_navigation_back',
           meta: <String, Object?>{'from': 'modeSelection', 'to': 'password'},
@@ -1157,7 +1544,7 @@ class ModeLauncherController extends ChangeNotifier {
       _enteredPassword = '';
       _loginStage = TerminalLoginStage.name;
       _append(TerminalLineType.success, '[ OK ] 로그인 입력을 초기화했습니다.');
-      _append(TerminalLineType.system, '이름을 입력하세요.');
+      _append(TerminalLineType.system, _namePrompt);
       LauncherDiagnostics.record(
         'auth_navigation_cancel',
         meta: <String, Object?>{
@@ -1696,7 +2083,7 @@ class ModeLauncherController extends ChangeNotifier {
     required bool reduceMotion,
   }) async {
     final prefs = await SharedPreferences.getInstance();
-    _startupPurpose = await AppStartFlowPrefs.getUserPurpose();
+    _startupPurpose ??= await AppStartFlowPrefs.getUserPurpose();
     _defaultAccountKind =
         TerminalAuthCoordinator.accountKindForPurpose(_startupPurpose);
     LauncherDiagnostics.record(
@@ -1838,7 +2225,7 @@ class ModeLauncherController extends ChangeNotifier {
           _runningCommand = 'MODE';
           _append(
             TerminalLineType.success,
-            '[ OK ] ${savedMode.koreanName} / ${savedMode.englishName}',
+            '[ OK ] ${savedMode.koreanName}',
           );
           await _appendPaced(
             TerminalLineType.running,
@@ -1884,10 +2271,19 @@ class ModeLauncherController extends ChangeNotifier {
             return;
           }
           _authenticatedAccount = account.copyWith(activated: true);
+          _runtimeContextReady = true;
           _savedModeRaw = AppModeRegistry.persistedValue(savedMode.id);
           _assignedMode = savedMode;
           _append(TerminalLineType.success, '[ OK ] ${activated.message}');
           _pendingTargetRoute = savedMode.postLoginRoute;
+          LauncherDiagnostics.record(
+            'auth_runtime_context_ready',
+            meta: <String, Object?>{
+              'source': 'saved_mode_restore',
+              'mode': savedMode.id,
+              'targetRoute': savedMode.postLoginRoute,
+            },
+          );
           LauncherDiagnostics.record(
             'auth_saved_mode_resume_success',
             meta: <String, Object?>{
@@ -2103,7 +2499,7 @@ class ModeLauncherController extends ChangeNotifier {
       },
     );
     _loginStage = TerminalLoginStage.name;
-    _append(TerminalLineType.system, '이름을 입력하세요.');
+    _append(TerminalLineType.system, _namePrompt);
     notifyListeners();
     return ModeLauncherSubmitResult(
       promptText: _enteredName.isEmpty ? null : _enteredName,
@@ -2337,7 +2733,7 @@ class ModeLauncherController extends ChangeNotifier {
     _runningCommand = 'HEADQUARTER';
     _append(
       TerminalLineType.running,
-      'Preparing 본사 / ${workArea.areaName}',
+      'Preparing ${workArea.areaName}',
     );
     LauncherDiagnostics.record(
       'auth_headquarter_selected',
@@ -2380,11 +2776,20 @@ class ModeLauncherController extends ChangeNotifier {
       return const ModeLauncherSubmitResult();
     }
     _authenticatedAccount = account.copyWith(activated: true);
+    _runtimeContextReady = true;
     _assignedMode = null;
     _selectedMode = null;
     _append(TerminalLineType.success, '[ OK ] ${activated.message}');
     _busy = false;
     _runningCommand = '';
+    LauncherDiagnostics.record(
+      'auth_runtime_context_ready',
+      meta: <String, Object?>{
+        'source': 'headquarter_activation',
+        'area': workArea.areaName,
+        'targetRoute': AppRoutes.headquarterCommute,
+      },
+    );
     LauncherDiagnostics.record(
       'auth_headquarter_activation_success',
       meta: <String, Object?>{
@@ -2417,7 +2822,7 @@ class ModeLauncherController extends ChangeNotifier {
     _runningCommand = 'MODE';
     _append(
       TerminalLineType.running,
-      'Preparing ${mode.koreanName} / ${mode.englishName}',
+      'Preparing ${mode.koreanName}',
     );
     LauncherDiagnostics.record(
       'auth_mode_selected',
@@ -2461,12 +2866,22 @@ class ModeLauncherController extends ChangeNotifier {
       return const ModeLauncherSubmitResult();
     }
     _authenticatedAccount = account.copyWith(activated: true);
+    _runtimeContextReady = true;
     _savedModeRaw = AppModeRegistry.persistedValue(mode.id);
     _assignedMode = mode;
     _selectedMode = mode;
     _append(TerminalLineType.success, '[ OK ] ${activated.message}');
     _busy = false;
     _runningCommand = '';
+    LauncherDiagnostics.record(
+      'auth_runtime_context_ready',
+      meta: <String, Object?>{
+        'source': 'mode_activation',
+        'area': workArea?.areaName ?? '',
+        'mode': mode.id,
+        'targetRoute': mode.postLoginRoute,
+      },
+    );
     LauncherDiagnostics.record(
       'auth_mode_activation_routed',
       meta: <String, Object?>{
@@ -2546,7 +2961,10 @@ class ModeLauncherController extends ChangeNotifier {
           _supportedModes = <AppModeDefinition>[];
           _selectedMode = null;
         }
-        _append(TerminalLineType.output, 'NAME     $_enteredName');
+        _append(
+          TerminalLineType.output,
+          _authOutputLine(nameDisplayLabel, _enteredName),
+        );
         LauncherDiagnostics.record(
           'auth_name_completed',
           meta: <String, Object?>{
@@ -2554,10 +2972,12 @@ class ModeLauncherController extends ChangeNotifier {
                 ? ''
                 : TerminalAuthCoordinator.accountKindId(_selectedAccountKind!),
             'nameLength': _enteredName.length,
+            'displayLabel': nameDisplayLabel,
+            'nextPrompt': _phonePrompt,
           },
         );
         _loginStage = TerminalLoginStage.phone;
-        _append(TerminalLineType.system, '전화번호를 입력하세요.');
+        _append(TerminalLineType.system, _phonePrompt);
         notifyListeners();
         return ModeLauncherSubmitResult(
           promptText: _enteredPhone.isEmpty ? null : _enteredPhone,
@@ -2574,13 +2994,15 @@ class ModeLauncherController extends ChangeNotifier {
             ? RegExp(r'^\d{9,11}$')
             : RegExp(r'^\d{10,11}$');
         if (!phonePattern.hasMatch(digits)) {
-          _append(TerminalLineType.error, '[ERROR] 전화번호를 다시 확인하세요.');
+          _append(TerminalLineType.error, _phoneError);
           _errorSerial += 1;
           LauncherDiagnostics.record(
             'auth_phone_rejected',
             meta: <String, Object?>{
               'accountKind': TerminalAuthCoordinator.accountKindId(kind),
               'length': digits.length,
+              'displayLabel': phoneDisplayLabel,
+              'errorText': _phoneError,
             },
           );
           notifyListeners();
@@ -2596,16 +3018,21 @@ class ModeLauncherController extends ChangeNotifier {
           _supportedModes = <AppModeDefinition>[];
           _selectedMode = null;
         }
-        _append(TerminalLineType.output, 'PHONE    $_enteredPhone');
+        _append(
+          TerminalLineType.output,
+          _authOutputLine(phoneDisplayLabel, _enteredPhone),
+        );
         LauncherDiagnostics.record(
           'auth_phone_completed',
           meta: <String, Object?>{
             'accountKind': TerminalAuthCoordinator.accountKindId(kind),
             'phoneMasked': _maskPhone(_enteredPhone),
+            'displayLabel': phoneDisplayLabel,
+            'nextPrompt': _passwordPrompt,
           },
         );
         _loginStage = TerminalLoginStage.password;
-        _append(TerminalLineType.system, '비밀번호를 입력하세요.');
+        _append(TerminalLineType.system, _passwordPrompt);
         notifyListeners();
         return const ModeLauncherSubmitResult();
       case TerminalLoginStage.password:
@@ -2618,25 +3045,31 @@ class ModeLauncherController extends ChangeNotifier {
             ? RegExp(r'^\d{5}$').hasMatch(input)
             : input.length >= 5;
         if (!validPassword) {
-          _append(TerminalLineType.error, '[ERROR] 비밀번호를 다시 확인하세요.');
+          _append(TerminalLineType.error, _passwordError);
           _errorSerial += 1;
           LauncherDiagnostics.record(
             'auth_password_rejected',
             meta: <String, Object?>{
               'accountKind': TerminalAuthCoordinator.accountKindId(kind),
               'passwordLength': input.length,
+              'displayLabel': passwordDisplayLabel,
+              'errorText': _passwordError,
             },
           );
           notifyListeners();
           return const ModeLauncherSubmitResult();
         }
         _enteredPassword = input;
-        _append(TerminalLineType.output, 'PASSWORD $maskedPassword');
+        _append(
+          TerminalLineType.output,
+          _authOutputLine(passwordDisplayLabel, maskedPassword),
+        );
         LauncherDiagnostics.record(
           'auth_password_completed',
           meta: <String, Object?>{
             'accountKind': TerminalAuthCoordinator.accountKindId(kind),
             'passwordLength': _enteredPassword.length,
+            'displayLabel': passwordDisplayLabel,
           },
         );
         _loginStage = TerminalLoginStage.authenticating;
@@ -2988,6 +3421,8 @@ class ModeLauncherController extends ChangeNotifier {
     _disposed = true;
     _enteredPassword = '';
     DevAuth.devModeEnabled.removeListener(_handleDevModeChanged);
+    _startupSetupCoordinator.removeListener(_handleStartupSetupChanged);
+    _startupSetupCoordinator.dispose();
     super.dispose();
   }
 }

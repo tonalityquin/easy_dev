@@ -9,6 +9,8 @@ abstract class UserRepository {
   Future<UserModel?> getUserByHandle(String handle);
   Future<TabletModel?> getTabletByHandle(String handle);
   Future<TabletModel?> getTabletByPhone(String phone);
+  Future<List<TabletModel>> searchTabletsByPhone(String phone);
+  Future<TabletModel?> getTabletByPhoneAndAreaName(String phone, String areaName);
   Future<TabletModel?> getTabletByHandleAndAreaName(String handle, String areaName);
 
   Future<void> updateLoadCurrentArea(String phone, String area, String currentArea);

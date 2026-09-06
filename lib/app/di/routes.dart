@@ -23,17 +23,13 @@ import '../../shared/page/pages/double/double_type_page.dart';
 import '../../shared/page/pages/minor/minor_type_page.dart';
 import '../../shared/page/pages/triple/triple_type_page.dart';
 import '../space/practice_space_lab_screen.dart';
-import '../tutorial/policy/app_start_google_services_setup_screen.dart';
-import '../tutorial/policy/policy_consent_screen.dart';
-import '../tutorial/tutorial/app_start_permission_notice_screen.dart';
-import '../tutorial/tutorial/app_start_permission_setup_screen.dart';
-import '../tutorial/tutorial/app_start_user_purpose_screen.dart';
 import '../tutorial/tutorial/start_gate_screen.dart';
 import '../init/startup_tasks.dart';
 
 class AppRoutes {
   static const startGate = '/';
   static const appStartTutorial = '/app_start_tutorial';
+  static const appStartSetupWorkflow = '/app_start_setup_workflow';
   static const appStartUserPurpose = '/app_start_user_purpose';
   static const appStartPermissionNotice = '/app_start_permission_notice';
   static const appStartPermissionSetup = '/app_start_permission_setup';
@@ -119,27 +115,18 @@ Widget _buildSprintModeLoadingPage(BuildContext context) {
 
 final Map<String, WidgetBuilder> appRoutes = {
   AppRoutes.startGate: (context) => const StartGateScreen(),
-  AppRoutes.appStartTutorial: (context) => const AppStartUserPurposeScreen(),
-  AppRoutes.appStartUserPurpose: (context) =>
-      const AppStartUserPurposeScreen(),
-  AppRoutes.appStartPermissionNotice: (context) =>
-      const AppStartPermissionNoticeScreen(),
-  AppRoutes.appStartPermissionSetup: (context) =>
-      const AppStartPermissionSetupScreen(),
+  AppRoutes.appStartTutorial: (context) => const StartGateScreen(),
+  AppRoutes.appStartSetupWorkflow: (context) => const StartGateScreen(),
+  AppRoutes.appStartUserPurpose: (context) => const StartGateScreen(),
+  AppRoutes.appStartPermissionNotice: (context) => const StartGateScreen(),
+  AppRoutes.appStartPermissionSetup: (context) => const StartGateScreen(),
   AppRoutes.appStartNextTutorialFull: (context) => const StartGateScreen(),
   AppRoutes.appStartNextTutorialQuick: (context) => const StartGateScreen(),
   AppRoutes.appStartFinish: (context) => const StartGateScreen(),
-  AppRoutes.termsConsent: (context) => const PolicyConsentScreen(
-        kind: PolicyConsentKind.termsOfService,
-      ),
-  AppRoutes.privacyPolicyConsent: (context) => const PolicyConsentScreen(
-        kind: PolicyConsentKind.privacyPolicy,
-      ),
-  AppRoutes.accountDeletionPolicyConsent: (context) => const PolicyConsentScreen(
-        kind: PolicyConsentKind.accountDeletion,
-      ),
-  AppRoutes.appStartGoogleServicesSetup: (context) =>
-      const AppStartGoogleServicesSetupScreen(),
+  AppRoutes.termsConsent: (context) => const StartGateScreen(),
+  AppRoutes.privacyPolicyConsent: (context) => const StartGateScreen(),
+  AppRoutes.accountDeletionPolicyConsent: (context) => const StartGateScreen(),
+  AppRoutes.appStartGoogleServicesSetup: (context) => const StartGateScreen(),
   AppRoutes.powerBoot: _buildPowerBootPage,
   AppRoutes.modeLauncher: _buildModeLauncherPage,
   AppRoutes.descriptionIntro: (context) => const DescriptionPage(),
