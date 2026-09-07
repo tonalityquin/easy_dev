@@ -17,6 +17,7 @@ import '../../design_system/common_ui/common_ui_components.dart';
 import '../../design_system/common_ui/common_ui_theme.dart';
 import '../../features/account/applications/user_state.dart';
 import '../../features/location/applications/location_state.dart';
+import '../../features/location/applications/parking_parent_order_state.dart';
 import '../../features/location/domain/models/grid_rect.dart';
 import '../../features/location/domain/models/location_model.dart';
 import '../../features/location/domain/models/parking_grid_model.dart';
@@ -1572,6 +1573,33 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     }
   }
 
+  Future<void> _showParentOrderStatus({
+    required bool success,
+    required List<String> lines,
+  }) async {
+    if (!mounted) return;
+    final trace = await DeveloperOperationTrace.start(
+      context: context,
+      title: '부모 주차 구역 순서',
+      initialMessage: lines.isEmpty ? '부모 주차 구역 순서를 확인합니다.' : lines.first,
+      useCommonUi: true,
+      developerModeMessage: '개발자 모드 ON: debugPrint 코드를 복사할 수 있습니다.',
+      standardModeMessage: '개발자 모드 OFF',
+      showDialogImmediately: false,
+    );
+    for (final line in lines.skip(1)) {
+      trace.log(line);
+    }
+    if (success) {
+      await trace.succeed('부모 주차 구역 순서 저장을 완료했습니다.');
+    } else {
+      await trace.fail('부모 주차 구역 순서 저장에 실패했습니다.');
+    }
+    if (trace.developerMode && mounted) {
+      await trace.showStatusDialog(context);
+    }
+  }
+
   double _hudOpacity(double progress, {required double baseOpacity}) {
     if (baseOpacity >= 1) return 1;
     final p = progress.clamp(0.0, 1.0).toDouble();
@@ -2393,8 +2421,12 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
         locations = areaLocations;
       }
     }
-    final parentNames = extractParentsFromMeta(locations).toList()
-      ..sort(naturalLocationCompare);
+    final orderState = context.read<ParkingParentOrderState>();
+    final parentNames = orderState.resolveNames(
+      area,
+      extractParentsFromMeta(locations),
+      fallback: naturalLocationCompare,
+    );
     final parentByRef = <String, LocationModel>{};
     final childRectsByParent = <String, List<GridRect>>{};
     for (final location in locations) {
@@ -2442,6 +2474,10 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
       'firebaseAdditionalRead': 0,
       'source': 'location_state_or_cache',
       'preview': 'parking_grid_or_child_rect_thumbnail',
+      'orderSource': orderState.hasCustomOrder(area)
+          ? 'user_persisted'
+          : 'natural_fallback',
+      'order': parentNames.join('>'),
     });
     return items;
   }
@@ -2528,6 +2564,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
 
   Future<String?> _showParentSelectorDialog({
     required String interaction,
+    required String area,
     required Rect sourceRect,
     required List<_ParentSelectorItem> parents,
     required _ParentSelectorGridMetrics metrics,
@@ -2536,6 +2573,10 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final targetRect = _parentSelectorTargetRect(metrics);
+    final parentOrderState = context.read<ParkingParentOrderState>();
+    final parentOrderSource = parentOrderState.hasCustomOrder(area)
+        ? 'user_persisted'
+        : 'natural_fallback';
     final duration =
         reduceMotion ? Duration.zero : const Duration(milliseconds: 340);
     var closeSource = 'route';
@@ -2552,7 +2593,11 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
       'interaction': interaction,
       'sourceRect': realTimeSourceRectDebug(sourceRect),
       'targetRect': realTimeSourceRectDebug(targetRect),
+      'area': area,
       'parentCount': parents.length,
+      'parentOrderSource': parentOrderSource,
+      'parentOrder': parents.map((item) => item.parent).join('>'),
+      'orderPersistence': ParkingParentOrderState.prefsKey,
       'durationMs': duration.inMilliseconds,
       'dialogBorder': 'hidden',
       'dialogSurfaceOpacity': '0.92->0.96',
@@ -2680,6 +2725,67 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
               progress: progress,
               interactionEnabled: interactionEnabled,
               onClose: () => close(null, 'dialog_header'),
+              onOrderDebug: (event, details) {
+                _debugLog(event, <String, Object?>{
+                  'area': area,
+                  'entryInteraction': interaction,
+                  ...details,
+                });
+              },
+              onOrderSaved: (orderedItems) async {
+                final orderState = context.read<ParkingParentOrderState>();
+                final before = orderState.resolveNames(
+                  area,
+                  parents.map((item) => item.parent),
+                  fallback: naturalLocationCompare,
+                );
+                final after = orderedItems
+                    .map((item) => item.parent.trim())
+                    .where((name) => name.isNotEmpty)
+                    .toList(growable: false);
+                _debugLog('parent_order_save_started', <String, Object?>{
+                  'area': area,
+                  'before': before.join('>'),
+                  'after': after.join('>'),
+                  'count': after.length,
+                  'storage': ParkingParentOrderState.prefsKey,
+                });
+                final saved = await orderState.setOrder(area, after);
+                if (!mounted) return saved;
+                _debugLog(
+                  saved ? 'parent_order_saved' : 'parent_order_save_failed',
+                  <String, Object?>{
+                    'area': area,
+                    'before': before.join('>'),
+                    'after': after.join('>'),
+                    'count': after.length,
+                    'persisted': saved,
+                    'affectedConsumers':
+                        'mode_reel,parking_editor,status_parent_paging',
+                  },
+                );
+                unawaited(
+                  _showParentOrderStatus(
+                    success: saved,
+                    lines: <String>[
+                      'area=$area persisted=$saved storage=${ParkingParentOrderState.prefsKey}',
+                      'before=${before.join('>')}',
+                      'after=${after.join('>')}',
+                      'parentCount=${after.length}',
+                      'reelOrder=user_persisted_with_natural_fallback',
+                      'parkingEditorOrder=user_persisted_with_natural_fallback',
+                      'statusParentPagingOrder=user_persisted_with_natural_fallback',
+                      'newParentPolicy=append_after_saved_order_with_natural_sort',
+                      'deletedParentPolicy=ignore_when_unavailable',
+                      'appRestart=persisted_shared_preferences',
+                      'editMotion=fade_scale_reorder_settle',
+                      'reduceMotion=${MediaQuery.maybeOf(context)?.disableAnimations ?? false}',
+                      'debugPrint=clipboard_copy_supported',
+                    ],
+                  ),
+                );
+                return saved;
+              },
               onSelected: (item) {
                 HapticFeedback.selectionClick();
                 _debugLog('parent_selector_parent_tapped', <String, Object?>{
@@ -2773,6 +2879,11 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
       'haptic': haptic,
       'modeSwitch': 'vertical_reel_or_content',
     });
+    final selectorArea = _readCurrentArea();
+    final parentOrderState = context.read<ParkingParentOrderState>();
+    final parentOrderSource = parentOrderState.hasCustomOrder(selectorArea)
+        ? 'user_persisted'
+        : 'natural_fallback';
     String? selectedParent;
     var parents = const <_ParentSelectorItem>[];
     try {
@@ -2781,7 +2892,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
       if (parents.isEmpty) {
         _debugLog('parent_selector_open_rejected', <String, Object?>{
           'reason': 'no_parent_locations',
-          'area': _readCurrentArea(),
+          'area': selectorArea,
         });
         return;
       }
@@ -2792,6 +2903,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
       }
       selectedParent = await _showParentSelectorDialog(
         interaction: interaction,
+        area: selectorArea,
         sourceRect: sourceRect,
         parents: parents,
         metrics: metrics,
@@ -2829,6 +2941,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
               'earlyReverseCurve=${collapseInfo == null ? 'n/a' : (collapseInfo.earlyCollapse ? 'continuous_easeOutCubic' : 'easeInOutCubic')}',
               'dialogMotion=source_rect_crop_expand_reverse_collapse',
               'selectorLayout=compact_parent_preview_grid order=row_major_left_to_right',
+              'parentOrderSource=$parentOrderSource persistence=${ParkingParentOrderState.prefsKey}',
               'dialogSizing=fixed_per_viewport dialogHeight=${metrics.targetHeight.toStringAsFixed(1)}',
               'columns=${metrics.columns} rows=${metrics.rows}',
               'gridViewportHeight=${metrics.gridViewportHeight.toStringAsFixed(1)} gridContentHeight=${metrics.gridContentHeight.toStringAsFixed(1)}',
@@ -2892,6 +3005,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
             'fromMode=${from.name} toMode=${TypeViewMode.status.name}',
             'parentCount=${parents.length} firebaseAdditionalRead=0',
             'selectorLayout=compact_parent_preview_grid order=row_major_left_to_right',
+            'parentOrderSource=$parentOrderSource persistence=${ParkingParentOrderState.prefsKey}',
             'dialogSizing=fixed_per_viewport dialogHeight=${metrics.targetHeight.toStringAsFixed(1)}',
             'columns=${metrics.columns} rows=${metrics.rows}',
             'gridViewportHeight=${metrics.gridViewportHeight.toStringAsFixed(1)} gridContentHeight=${metrics.gridContentHeight.toStringAsFixed(1)}',
@@ -4667,7 +4781,7 @@ class _ParentSelectorGridMetrics {
   final Offset modalCenter;
 }
 
-class _ParentSelectorDialogSurface extends StatelessWidget {
+class _ParentSelectorDialogSurface extends StatefulWidget {
   const _ParentSelectorDialogSurface({
     required this.parents,
     required this.metrics,
@@ -4676,6 +4790,8 @@ class _ParentSelectorDialogSurface extends StatelessWidget {
     required this.interactionEnabled,
     required this.onClose,
     required this.onSelected,
+    required this.onOrderSaved,
+    required this.onOrderDebug,
   });
 
   final List<_ParentSelectorItem> parents;
@@ -4685,15 +4801,333 @@ class _ParentSelectorDialogSurface extends StatelessWidget {
   final bool interactionEnabled;
   final VoidCallback onClose;
   final ValueChanged<_ParentSelectorItem> onSelected;
+  final Future<bool> Function(List<_ParentSelectorItem>) onOrderSaved;
+  final void Function(String event, Map<String, Object?> details) onOrderDebug;
+
+  @override
+  State<_ParentSelectorDialogSurface> createState() =>
+      _ParentSelectorDialogSurfaceState();
+}
+
+class _ParentSelectorDialogSurfaceState
+    extends State<_ParentSelectorDialogSurface> {
+  late List<_ParentSelectorItem> _displayParents;
+  late List<_ParentSelectorItem> _draftParents;
+  bool _editing = false;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _displayParents = List<_ParentSelectorItem>.of(widget.parents);
+    _draftParents = List<_ParentSelectorItem>.of(widget.parents);
+  }
+
+  @override
+  void didUpdateWidget(covariant _ParentSelectorDialogSurface oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_editing && !_saving && !identical(oldWidget.parents, widget.parents)) {
+      _displayParents = List<_ParentSelectorItem>.of(widget.parents);
+      _draftParents = List<_ParentSelectorItem>.of(widget.parents);
+    }
+  }
+
+  void _enterEdit() {
+    if (!widget.interactionEnabled || _saving || _editing) return;
+    HapticFeedback.selectionClick();
+    setState(() {
+      _editing = true;
+      _draftParents = List<_ParentSelectorItem>.of(_displayParents);
+    });
+    widget.onOrderDebug('parent_order_edit_started', <String, Object?>{
+      'count': _draftParents.length,
+      'before': _draftParents.map((item) => item.parent).join('>'),
+      'layout': 'reorderable_list',
+      'selectionDuringEdit': 'disabled',
+      'motion': 'fade_scale_210ms',
+    });
+  }
+
+  void _cancelEdit() {
+    if (_saving || !_editing) return;
+    HapticFeedback.selectionClick();
+    widget.onOrderDebug('parent_order_edit_cancelled', <String, Object?>{
+      'count': _draftParents.length,
+      'draft': _draftParents.map((item) => item.parent).join('>'),
+      'persisted': false,
+    });
+    setState(() {
+      _editing = false;
+      _draftParents = List<_ParentSelectorItem>.of(_displayParents);
+    });
+  }
+
+  void _reorder(int oldIndex, int newIndex) {
+    if (_saving || !_editing) return;
+    var targetIndex = newIndex;
+    if (targetIndex > oldIndex) targetIndex -= 1;
+    if (targetIndex == oldIndex ||
+        oldIndex < 0 ||
+        oldIndex >= _draftParents.length ||
+        targetIndex < 0 ||
+        targetIndex >= _draftParents.length) {
+      return;
+    }
+    final moved = _draftParents[oldIndex];
+    setState(() {
+      final item = _draftParents.removeAt(oldIndex);
+      _draftParents.insert(targetIndex, item);
+    });
+    HapticFeedback.selectionClick();
+    widget.onOrderDebug('parent_order_reordered', <String, Object?>{
+      'parent': moved.parent,
+      'fromIndex': oldIndex,
+      'toIndex': targetIndex,
+      'count': _draftParents.length,
+      'draft': _draftParents.map((item) => item.parent).join('>'),
+      'haptic': 'selectionClick',
+      'motion': 'reorder_proxy_scale_1.025_settle',
+    });
+  }
+
+  Future<void> _saveEdit() async {
+    if (_saving || !_editing) return;
+    setState(() => _saving = true);
+    final ordered = List<_ParentSelectorItem>.unmodifiable(_draftParents);
+    widget.onOrderDebug('parent_order_edit_save_requested', <String, Object?>{
+      'count': ordered.length,
+      'after': ordered.map((item) => item.parent).join('>'),
+    });
+    final saved = await widget.onOrderSaved(ordered);
+    if (!mounted) return;
+    if (saved) {
+      HapticFeedback.selectionClick();
+      setState(() {
+        _displayParents = List<_ParentSelectorItem>.of(ordered);
+        _draftParents = List<_ParentSelectorItem>.of(ordered);
+        _editing = false;
+        _saving = false;
+      });
+      widget.onOrderDebug('parent_order_edit_saved', <String, Object?>{
+        'count': ordered.length,
+        'after': ordered.map((item) => item.parent).join('>'),
+        'persisted': true,
+        'haptic': 'selectionClick',
+      });
+      return;
+    }
+    setState(() => _saving = false);
+    widget.onOrderDebug('parent_order_edit_save_failed', <String, Object?>{
+      'count': ordered.length,
+      'after': ordered.map((item) => item.parent).join('>'),
+      'persisted': false,
+    });
+  }
+
+  void _handleHeaderBack() {
+    if (_editing) {
+      _cancelEdit();
+      return;
+    }
+    widget.onClose();
+  }
+
+  Widget _buildGrid(BuildContext context, double contentProgress) {
+    final parents = _displayParents;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        widget.metrics.horizontalPadding,
+        4,
+        widget.metrics.horizontalPadding,
+        10,
+      ),
+      child: GridView.builder(
+        padding: EdgeInsets.zero,
+        physics: widget.metrics.scrollNeeded
+            ? const BouncingScrollPhysics()
+            : const NeverScrollableScrollPhysics(),
+        itemCount: parents.length,
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: widget.metrics.columns,
+          crossAxisSpacing: widget.metrics.crossAxisSpacing,
+          mainAxisSpacing: widget.metrics.mainAxisSpacing,
+          mainAxisExtent: widget.metrics.tileExtent,
+        ),
+        itemBuilder: (context, index) {
+          final item = parents[index];
+          final stagger = ((contentProgress * 1.2) - index * .04)
+              .clamp(0.0, 1.0)
+              .toDouble();
+          return Opacity(
+            opacity: stagger,
+            child: Transform.translate(
+              offset: Offset(0, 6 * (1 - stagger)),
+              child: Transform.scale(
+                scale: .94 + .06 * stagger,
+                child: _ParentSelectorTile(
+                  item: item,
+                  previewHeight: widget.metrics.previewHeight,
+                  selected:
+                      item.parent.trim() == widget.currentParent.trim(),
+                  onTap: () => widget.onSelected(item),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildEditList(BuildContext context) {
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    return ReorderableListView.builder(
+      padding: EdgeInsets.fromLTRB(
+        widget.metrics.horizontalPadding,
+        6,
+        widget.metrics.horizontalPadding,
+        10,
+      ),
+      buildDefaultDragHandles: false,
+      physics: const BouncingScrollPhysics(),
+      itemCount: _draftParents.length,
+      onReorder: _reorder,
+      proxyDecorator: (child, index, animation) {
+        if (reduceMotion) return child;
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+        return AnimatedBuilder(
+          animation: curved,
+          builder: (context, _) {
+            final value = curved.value;
+            return Transform.scale(
+              scale: 1 + .025 * value,
+              child: Opacity(
+                opacity: 1 - .04 * value,
+                child: Material(
+                  color: Colors.transparent,
+                  elevation: 8 * value,
+                  borderRadius: BorderRadius.circular(12),
+                  child: child,
+                ),
+              ),
+            );
+          },
+        );
+      },
+      itemBuilder: (context, index) {
+        final item = _draftParents[index];
+        return _ParentOrderEditRow(
+          key: ValueKey<String>(
+            'parent-order-${ParkingParentOrderState.canonicalKey(item.parent)}',
+          ),
+          item: item,
+          index: index,
+          selected: item.parent.trim() == widget.currentParent.trim(),
+          enabled: !_saving,
+        );
+      },
+    );
+  }
+
+  Widget _buildBody(BuildContext context, double contentProgress) {
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final duration =
+        reduceMotion ? Duration.zero : const Duration(milliseconds: 210);
+    return AnimatedSwitcher(
+      duration: duration,
+      reverseDuration: duration,
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      transitionBuilder: (child, animation) {
+        final scale = Tween<double>(begin: .985, end: 1).animate(
+          CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+        );
+        return FadeTransition(
+          opacity: animation,
+          child: ScaleTransition(scale: scale, child: child),
+        );
+      },
+      child: _editing
+          ? KeyedSubtree(
+              key: const ValueKey<String>('parent-order-edit'),
+              child: _buildEditList(context),
+            )
+          : KeyedSubtree(
+              key: const ValueKey<String>('parent-order-grid'),
+              child: _buildGrid(context, contentProgress),
+            ),
+    );
+  }
+
+  Widget _buildHeaderAction(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    if (_editing) {
+      return Semantics(
+        button: true,
+        label: '부모 주차 구역 순서 저장',
+        child: IconButton(
+          onPressed: _saving ? null : () => unawaited(_saveEdit()),
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints.tightFor(width: 38, height: 38),
+          splashRadius: 18,
+          icon: AnimatedSwitcher(
+            duration: (MediaQuery.maybeOf(context)?.disableAnimations ?? false)
+                ? Duration.zero
+                : const Duration(milliseconds: 160),
+            child: _saving
+                ? SizedBox(
+                    key: const ValueKey<String>('saving'),
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: cs.primary,
+                    ),
+                  )
+                : Icon(
+                    Icons.check_rounded,
+                    key: const ValueKey<String>('save'),
+                    size: 20,
+                    color: cs.primary,
+                  ),
+          ),
+        ),
+      );
+    }
+    return Semantics(
+      button: true,
+      label: '부모 주차 구역 순서 편집',
+      child: IconButton(
+        onPressed: widget.interactionEnabled && _displayParents.length > 1
+            ? _enterEdit
+            : null,
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints.tightFor(width: 38, height: 38),
+        splashRadius: 18,
+        icon: Icon(
+          Icons.swap_vert_rounded,
+          size: 20,
+          color: cs.primary,
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final headerProgress =
-        ((progress - .52) / .48).clamp(0.0, 1.0).toDouble();
-    final surfaceOpacity = (.92 + .04 * progress).clamp(0.0, 1.0).toDouble();
+        ((widget.progress - .52) / .48).clamp(0.0, 1.0).toDouble();
+    final surfaceOpacity =
+        (.92 + .04 * widget.progress).clamp(0.0, 1.0).toDouble();
     final contentProgress =
-        ((progress - .34) / .66).clamp(0.0, 1.0).toDouble();
+        ((widget.progress - .34) / .66).clamp(0.0, 1.0).toDouble();
     return Material(
       color: cs.surface.withOpacity(surfaceOpacity),
       child: Stack(
@@ -4701,50 +5135,8 @@ class _ParentSelectorDialogSurface extends StatelessWidget {
           Positioned.fill(
             top: 41,
             child: IgnorePointer(
-              ignoring: !interactionEnabled,
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  metrics.horizontalPadding,
-                  4,
-                  metrics.horizontalPadding,
-                  10,
-                ),
-                child: GridView.builder(
-                  padding: EdgeInsets.zero,
-                  physics: metrics.scrollNeeded
-                      ? const BouncingScrollPhysics()
-                      : const NeverScrollableScrollPhysics(),
-                  itemCount: parents.length,
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: metrics.columns,
-                    crossAxisSpacing: metrics.crossAxisSpacing,
-                    mainAxisSpacing: metrics.mainAxisSpacing,
-                    mainAxisExtent: metrics.tileExtent,
-                  ),
-                  itemBuilder: (context, index) {
-                    final item = parents[index];
-                    final stagger = ((contentProgress * 1.2) - index * .04)
-                        .clamp(0.0, 1.0)
-                        .toDouble();
-                    return Opacity(
-                      opacity: stagger,
-                      child: Transform.translate(
-                        offset: Offset(0, 6 * (1 - stagger)),
-                        child: Transform.scale(
-                          scale: .94 + .06 * stagger,
-                          child: _ParentSelectorTile(
-                            item: item,
-                            previewHeight: metrics.previewHeight,
-                            selected:
-                                item.parent.trim() == currentParent.trim(),
-                            onTap: () => onSelected(item),
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
+              ignoring: !widget.interactionEnabled || _saving,
+              child: _buildBody(context, contentProgress),
             ),
           ),
           if (headerProgress > .01)
@@ -4765,9 +5157,11 @@ class _ParentSelectorDialogSurface extends StatelessWidget {
                         children: [
                           Semantics(
                             button: true,
-                            label: '부모 주차 구역 선택 닫기',
+                            label: _editing
+                                ? '부모 주차 구역 순서 편집 취소'
+                                : '부모 주차 구역 선택 닫기',
                             child: IconButton(
-                              onPressed: onClose,
+                              onPressed: _saving ? null : _handleHeaderBack,
                               padding: EdgeInsets.zero,
                               constraints: const BoxConstraints.tightFor(
                                 width: 38,
@@ -4781,15 +5175,38 @@ class _ParentSelectorDialogSurface extends StatelessWidget {
                             ),
                           ),
                           Expanded(
-                            child: Center(
-                              child: Icon(
-                                Icons.local_parking_rounded,
-                                size: 20,
-                                color: cs.primary,
-                              ),
+                            child: AnimatedSwitcher(
+                              duration: (MediaQuery.maybeOf(context)
+                                              ?.disableAnimations ??
+                                          false)
+                                  ? Duration.zero
+                                  : const Duration(milliseconds: 180),
+                              switchInCurve: Curves.easeOutCubic,
+                              switchOutCurve: Curves.easeInCubic,
+                              child: _editing
+                                  ? Text(
+                                      '순서 편집',
+                                      key: const ValueKey<String>('edit-title'),
+                                      textAlign: TextAlign.center,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelLarge
+                                          ?.copyWith(
+                                            color: cs.onSurface,
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                    )
+                                  : Icon(
+                                      Icons.local_parking_rounded,
+                                      key: const ValueKey<String>(
+                                        'parking-title',
+                                      ),
+                                      size: 20,
+                                      color: cs.primary,
+                                    ),
                             ),
                           ),
-                          const SizedBox(width: 38),
+                          _buildHeaderAction(context),
                         ],
                       ),
                     ),
@@ -4798,6 +5215,118 @@ class _ParentSelectorDialogSurface extends StatelessWidget {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _ParentOrderEditRow extends StatelessWidget {
+  const _ParentOrderEditRow({
+    super.key,
+    required this.item,
+    required this.index,
+    required this.selected,
+    required this.enabled,
+  });
+
+  final _ParentSelectorItem item;
+  final int index;
+  final bool selected;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: AnimatedContainer(
+        duration:
+            reduceMotion ? Duration.zero : const Duration(milliseconds: 160),
+        curve: Curves.easeOutCubic,
+        decoration: BoxDecoration(
+          color: selected ? cs.primaryContainer.withOpacity(.22) : cs.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: selected
+                ? cs.primary.withOpacity(.34)
+                : cs.outlineVariant.withOpacity(.42),
+          ),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 28,
+              child: Text(
+                '${index + 1}',
+                textAlign: TextAlign.center,
+                style: text.labelMedium?.copyWith(
+                  color: cs.onSurfaceVariant,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            SizedBox(
+              width: 58,
+              height: 38,
+              child: IgnorePointer(
+                child: ExcludeSemantics(
+                  child: RealTimeParentMapThumbnail(
+                    grid: item.grid,
+                    childRects: item.childRects,
+                    selected: selected,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                item.parent,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: text.labelLarge?.copyWith(
+                  color: cs.onSurface,
+                  fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
+                ),
+              ),
+            ),
+            if (selected)
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: Icon(
+                  Icons.check_circle_rounded,
+                  size: 17,
+                  color: cs.primary,
+                ),
+              ),
+            IgnorePointer(
+              ignoring: !enabled,
+              child: ReorderableDragStartListener(
+                index: index,
+                child: Semantics(
+                  button: true,
+                  label: '${item.parent} 순서 이동',
+                  child: SizedBox(
+                    width: 38,
+                    height: 38,
+                    child: Icon(
+                      Icons.drag_handle_rounded,
+                      size: 22,
+                      color: enabled
+                          ? cs.onSurfaceVariant
+                          : cs.onSurfaceVariant.withOpacity(.35),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

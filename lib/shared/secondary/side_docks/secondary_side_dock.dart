@@ -43,35 +43,54 @@ import '../widgets/secondary_debug_scope.dart';
 
 enum SecondaryDockRequest { open }
 
+enum SecondarySideDockEntryMode { operations, monthlyQuickAction }
+
 Future<T?> showSecondarySideDock<T>({
   required BuildContext context,
   String barrierLabel = '운영 관리',
   bool useRootNavigator = false,
   Section initialSection = Section.local,
-}) {
+  SecondarySideDockEntryMode entryMode = SecondarySideDockEntryMode.operations,
+}) async {
   final reduceMotion =
       MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+  final effectiveInitialSection =
+      entryMode == SecondarySideDockEntryMode.monthlyQuickAction
+          ? Section.monthly
+          : initialSection;
+  final railScope = entryMode == SecondarySideDockEntryMode.monthlyQuickAction
+      ? 'monthly_only'
+      : 'full';
   debugPrint(
-    '[SecondarySideDock] route_push label=$barrierLabel initial=${initialSection.name} reduceMotion=$reduceMotion motion=common_operations',
+    '[SecondarySideDock] route_push label=$barrierLabel requestedInitial=${initialSection.name} initial=${effectiveInitialSection.name} entryMode=${entryMode.name} railScope=$railScope reduceMotion=$reduceMotion motion=common_operations',
   );
-  return showOperationsRightSideDock<T>(
+  final result = await showOperationsRightSideDock<T>(
     context: context,
     useRootNavigator: useRootNavigator,
     barrierLabel: barrierLabel,
     maxWidth: 360,
     widthFactor: .92,
     barrierDismissible: true,
-    builder: (_) => SecondarySideDock(initialSection: initialSection),
+    builder: (_) => SecondarySideDock(
+      initialSection: effectiveInitialSection,
+      entryMode: entryMode,
+    ),
   );
+  debugPrint(
+    '[SecondarySideDock] route_pop label=$barrierLabel initial=${effectiveInitialSection.name} entryMode=${entryMode.name} railScope=$railScope reduceMotion=$reduceMotion motion=common_operations',
+  );
+  return result;
 }
 
 class SecondarySideDock extends StatefulWidget {
   const SecondarySideDock({
     super.key,
     this.initialSection = Section.local,
+    this.entryMode = SecondarySideDockEntryMode.operations,
   });
 
   final Section initialSection;
+  final SecondarySideDockEntryMode entryMode;
 
   @override
   State<SecondarySideDock> createState() => _SecondarySideDockState();
@@ -146,7 +165,13 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
   late Section _selectedSection;
   bool _devModeEnabled = false;
   bool _fallbackScheduled = false;
+  bool _monthlyScopeBlockedLogged = false;
   String? _lastArea;
+
+  bool get _monthlyQuickActionMode =>
+      widget.entryMode == SecondarySideDockEntryMode.monthlyQuickAction;
+
+  String get _railScope => _monthlyQuickActionMode ? 'monthly_only' : 'full';
 
   @override
   void initState() {
@@ -159,7 +184,9 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
     _monthlyWorkspace = SecondaryMonthlyWorkspaceState(onDebug: _debugLog.log);
     _sectorWorkspace = SecondarySectorWorkspaceState(onDebug: _debugLog.log);
     _locationWorkspace = SecondaryLocationWorkspaceState(onDebug: _debugLog.log);
-    _debugLog.log('mounted selected=${_selectedSection.name} initial=${widget.initialSection.name}');
+    _debugLog.log(
+      'mounted selected=${_selectedSection.name} initial=${widget.initialSection.name} entryMode=${widget.entryMode.name} railScope=$_railScope',
+    );
     DevAuth.devModeEnabled.addListener(_handleDevModeNotifier);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
@@ -178,7 +205,9 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
   @override
   void dispose() {
     DevAuth.devModeEnabled.removeListener(_handleDevModeNotifier);
-    _debugLog.log('disposed selected=${_selectedSection.name}');
+    _debugLog.log(
+      'disposed selected=${_selectedSection.name} entryMode=${widget.entryMode.name} railScope=$_railScope',
+    );
     _accountWorkspace.dispose();
     _tabletWorkspace.dispose();
     _billWorkspace.dispose();
@@ -197,7 +226,12 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
     _logAccessSnapshot(context.read<SecondaryState>());
   }
 
+  bool _isSectionInScope(Section section) {
+    return !_monthlyQuickActionMode || section == Section.monthly;
+  }
+
   bool _isSectionVisible(Section section) {
+    if (!_isSectionInScope(section)) return false;
     return !_debugVisibleSections.contains(section) || _devModeEnabled;
   }
 
@@ -220,11 +254,37 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
       );
     }
     _debugLog.log(
-      'access_snapshot role=${state.role.name} devMode=$_devModeEnabled devLoggedIn=${state.devLoggedIn} ${access.join('|')}',
+      'access_snapshot role=${state.role.name} devMode=$_devModeEnabled devLoggedIn=${state.devLoggedIn} entryMode=${widget.entryMode.name} railScope=$_railScope ${access.join('|')}',
     );
   }
 
   Section? _effectiveSection(SecondaryState state) {
+    if (_monthlyQuickActionMode) {
+      final monthlyAllowed =
+          _isSectionVisible(Section.monthly) && state.canAccess(Section.monthly);
+      if (monthlyAllowed) {
+        if (_monthlyScopeBlockedLogged) {
+          _monthlyScopeBlockedLogged = false;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            _debugLog.log(
+              'monthly_scope_access_restored section=${Section.monthly.name} entryMode=${widget.entryMode.name} railScope=$_railScope',
+            );
+          });
+        }
+        return Section.monthly;
+      }
+      if (!_monthlyScopeBlockedLogged) {
+        _monthlyScopeBlockedLogged = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          _debugLog.log(
+            'monthly_scope_access_blocked section=${Section.monthly.name} entryMode=${widget.entryMode.name} railScope=$_railScope reason=${state.accessDebugReason(Section.monthly)} fallback=disabled',
+          );
+        });
+      }
+      return null;
+    }
     if (_isSectionVisible(_selectedSection) &&
         state.canAccess(_selectedSection)) {
       return _selectedSection;
@@ -256,6 +316,12 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
   }
 
   Future<void> _selectSection(SecondaryState state, Section section) async {
+    if (!_isSectionInScope(section)) {
+      _debugLog.log(
+        'rail_scope_blocked requested=${section.name} allowed=${Section.monthly.name} entryMode=${widget.entryMode.name} railScope=$_railScope',
+      );
+      return;
+    }
     if (!_isSectionVisible(section)) {
       _debugLog.log(
         'rail_hidden_blocked section=${section.name} devMode=$_devModeEnabled',
@@ -661,6 +727,9 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
 
   Future<void> _showDeveloperStatus() async {
     if (!_devModeEnabled) return;
+    _debugLog.log(
+      'entry_scope_snapshot entryMode=${widget.entryMode.name} railScope=$_railScope selected=${_selectedSection.name} monthlyWorkspace=${_monthlyWorkspace.view.name}',
+    );
     _logAccessSnapshot(context.read<SecondaryState>());
     if (_accountWorkspace.isSettingsView) {
       final sectionStates = UserSettingsSection.values
@@ -1408,6 +1477,8 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
               selected == Section.bill && billWorkspace.isSettingsView;
           final monthlySettingsFocus =
               selected == Section.monthly && !monthlyWorkspace.isManagementView;
+          final monthlyQuickManagementRail =
+              _monthlyQuickActionMode && !monthlySettingsFocus;
           final sectorSettingsFocus =
               selected == Section.sector && sectorWorkspace.isSettingsView;
           final settingsFocus = accountSettingsFocus ||
@@ -1719,9 +1790,27 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
                                                           ? 'secondary-location-parent-settings-rail'
                                                           : locationChildSettingsFocus
                                                           ? 'secondary-location-child-settings-rail'
-                                                          : 'secondary-global-rail',
+                                                          : monthlyQuickManagementRail
+                                                              ? 'secondary-monthly-quick-rail'
+                                                              : 'secondary-global-rail',
                                 ),
-                                child: _SecondaryQuickActionRail(
+                                child: monthlyQuickManagementRail
+                                    ? _MonthlyQuickActionRail(
+                                        metrics: railMetrics,
+                                        enabled: state.canAccess(Section.monthly),
+                                        disabledReason:
+                                            state.disabledReason(Section.monthly),
+                                        onTap: () {
+                                          unawaited(
+                                            _selectSection(
+                                              state,
+                                              Section.monthly,
+                                            ),
+                                          );
+                                        },
+                                        onDebug: _debugLog.log,
+                                      )
+                                    : _SecondaryQuickActionRail(
                                   primaryItems: visiblePrimaryItems,
                                   bottomItems: visibleBottomItems,
                                   selectedSection: selected ?? _selectedSection,
@@ -2094,6 +2183,95 @@ class _SecondaryDockHeader extends StatelessWidget {
           haptic: CommonHaptic.light,
         ),
       ],
+    );
+  }
+}
+
+class _MonthlyQuickActionRail extends StatefulWidget {
+  const _MonthlyQuickActionRail({
+    required this.metrics,
+    required this.enabled,
+    required this.disabledReason,
+    required this.onTap,
+    required this.onDebug,
+  });
+
+  final CommonSideRailMetrics metrics;
+  final bool enabled;
+  final String disabledReason;
+  final VoidCallback onTap;
+  final ValueChanged<String> onDebug;
+
+  @override
+  State<_MonthlyQuickActionRail> createState() =>
+      _MonthlyQuickActionRailState();
+}
+
+class _MonthlyQuickActionRailState extends State<_MonthlyQuickActionRail> {
+  static const _SecondaryRailItem _monthlyItem = _SecondaryRailItem(
+    section: Section.monthly,
+    label: '정기',
+    icon: Icons.local_parking_rounded,
+  );
+
+  String? _lastLayoutSignature;
+
+  @override
+  Widget build(BuildContext context) {
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final metrics = widget.metrics;
+    return CommonSideRailSurface(
+      title: '정기 주차',
+      semanticsLabel: '정기 주차 전용 탐색',
+      metrics: metrics,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final availableHeight = constraints.maxHeight.isFinite
+              ? constraints.maxHeight
+              : 420.0;
+          final buttonExtent = math.min(
+            metrics.minimumButtonExtent,
+            math.max(0.0, availableHeight - metrics.actionInsetVertical * 2),
+          );
+          final signature = <Object>[
+            metrics.variantName,
+            availableHeight.toStringAsFixed(1),
+            buttonExtent.toStringAsFixed(1),
+            widget.enabled,
+            reduceMotion,
+          ].join('|');
+          if (_lastLayoutSignature != signature) {
+            _lastLayoutSignature = signature;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
+              widget.onDebug(
+                'secondary_rail_layout railDesign=common_operations mode=monthly_quick railScope=monthly_only navigation_actions=1 enabled=${widget.enabled ? 1 : 0} distribution=fixed_top button_extent=${buttonExtent.toStringAsFixed(1)} variant=${metrics.variantName} reduceMotion=$reduceMotion',
+              );
+            });
+          }
+          return AnimatedAlign(
+            duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+            curve: CommonUiMotion.enter,
+            alignment: Alignment.topCenter,
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: metrics.actionInsetHorizontal,
+                vertical: metrics.actionInsetVertical,
+              ),
+              child: _SecondaryRailButton(
+                item: _monthlyItem,
+                selected: true,
+                enabled: widget.enabled,
+                disabledReason: widget.disabledReason,
+                compact: metrics.compact,
+                extent: buttonExtent,
+                onTap: widget.onTap,
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 }

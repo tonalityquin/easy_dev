@@ -19,7 +19,7 @@ import '../../../account/applications/user_state.dart';
 import '../../../camera/photo_transfer_mail_page.dart';
 import '../../../community/application/discord/discord_config.dart';
 import '../../../community/page/faq_side_dock.dart';
-import '../../../community/page/sheets/discord/discord_bottom_sheet.dart';
+import '../../../community/page/side_docks/discord_side_dock.dart';
 import '../../../dev/application/area_state.dart';
 import '../../../headquarter/application/fab/hub_quick_actions.dart';
 import '../../../selector/application/dev_auth.dart';
@@ -217,15 +217,12 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
       return;
     }
     await _closeCurrentDockAndRun(context, (rootContext) async {
-      debugPrint('[OpsDashboardSideDock] third_party_support_open');
-      await showModalBottomSheet<bool>(
+      debugPrint('[OpsDashboardSideDock] third_party_support_open presentation=right_side_dock layout=list_surface source=dashboard_support');
+      await showDiscordConnectionSupportSideDock(
         context: rootContext,
-        isScrollControlled: true,
-        useSafeArea: true,
-        backgroundColor: Colors.transparent,
-        builder: (_) => DiscordBottomSheet(rootContext: rootContext),
+        source: 'dashboard_support',
       );
-      debugPrint('[OpsDashboardSideDock] third_party_support_closed');
+      debugPrint('[OpsDashboardSideDock] third_party_support_closed presentation=right_side_dock source=dashboard_support');
     });
   }
 
@@ -267,13 +264,12 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
           await trace.showStatusDialog(rootContext);
         }
         if (rootContext.mounted) {
-          await showModalBottomSheet<bool>(
+          debugPrint('[OpsDashboardSideDock] third_party_support_fallback_open presentation=right_side_dock layout=list_surface source=missing_channel_fallback');
+          await showDiscordConnectionSupportSideDock(
             context: rootContext,
-            isScrollControlled: true,
-            useSafeArea: true,
-            backgroundColor: Colors.transparent,
-            builder: (_) => DiscordBottomSheet(rootContext: rootContext),
+            source: 'missing_channel_fallback',
           );
+          debugPrint('[OpsDashboardSideDock] third_party_support_fallback_closed presentation=right_side_dock source=missing_channel_fallback');
         }
         return;
       }
@@ -606,7 +602,7 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
         category: _DashboardActionCategory.settings,
         label: '서드파티 연결 지원',
         description: canUseThirdParty
-            ? 'Discord 설치, 서버 초대, 업무 채널 링크를 설정합니다.'
+            ? 'Discord 앱, 서버 초대, 업무 채널 연결 상태를 확인하고 엽니다.'
             : '현재 지역의 서드파티 연결 capability가 비활성화되어 있습니다.',
         icon: Icons.extension_rounded,
         color: canUseThirdParty

@@ -9,6 +9,7 @@ import '../../features/dev/application/area_state.dart';
 import '../../features/dev/application/field_calendar_state.dart';
 import '../../features/dev/domain/repositories/area_repo_package/area_repository.dart';
 import '../../features/location/applications/location_state.dart';
+import '../../features/location/applications/parking_parent_order_state.dart';
 import '../../features/location/domain/repositories/location_repository.dart';
 import '../../features/payment/applications/bill_state.dart';
 import '../../features/payment/domain/repositories/bill_repository.dart';
@@ -110,6 +111,7 @@ final List<SingleChildWidget> stateProviders = [
       context.read<AreaState>(),
     ),
   ),
+  ChangeNotifierProvider(create: (_) => ParkingParentOrderState()),
   ChangeNotifierProvider(
     create: (context) => BillState(
       context.read<BillRepository>(),

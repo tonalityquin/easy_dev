@@ -139,6 +139,8 @@ class _MinorDepartureCompletedStatusDockState
         context,
         'billing_state=${parkingCompletedBillingStateDebugName(_billingState)} '
         'billingType=${_billingApplicable ? (_plate.billingType ?? '').trim() : "none"} '
+        'billingPlanType=${(_plate.billingPlanType ?? '').trim().isEmpty ? "none" : (_plate.billingPlanType ?? '').trim()} '
+        'monthlyExcluded=${(_plate.billingPlanType ?? '').trim() == "정기"} '
         'bypass=${_billingState == ParkingCompletedBillingState.notApplicable}',
       );
     });
@@ -149,6 +151,7 @@ class _MinorDepartureCompletedStatusDockState
   ParkingCompletedBillingState get _billingState =>
       resolveParkingCompletedBillingState(
         billingType: _plate.billingType,
+        billingPlanType: _plate.billingPlanType,
         isLocked: _isLocked,
       );
 

@@ -268,6 +268,7 @@ class _ParkingStatusVehicleLocationCardState
     if (mounted) {
       final billingState = resolveParkingCompletedBillingState(
         billingType: widget.plate.billingType,
+        billingPlanType: widget.plate.billingPlanType,
         isLocked: widget.plate.isLockedFee == true,
       );
       parkingStatusTraceLog(
@@ -315,6 +316,7 @@ class _ParkingStatusVehicleLocationCardState
                   expandToFill: widget.expandToFill,
                   showBillingDetail: resolveParkingCompletedBillingState(
                         billingType: widget.plate.billingType,
+                        billingPlanType: widget.plate.billingPlanType,
                         isLocked: widget.plate.isLockedFee == true,
                       ) ==
                       ParkingCompletedBillingState.settled,
@@ -539,6 +541,7 @@ class _ParkingStatusLocationContent extends StatelessWidget {
     final displayLocation = _parkingStatusDisplayLocation(plate.location);
     final billingState = resolveParkingCompletedBillingState(
       billingType: plate.billingType,
+      billingPlanType: plate.billingPlanType,
       isLocked: plate.isLockedFee == true,
     );
     final billingType = billingState == ParkingCompletedBillingState.notApplicable
@@ -2144,6 +2147,7 @@ class _ParkingStatusAdaptiveRequestBodyState
     ).toDouble();
     final billingState = resolveParkingCompletedBillingState(
       billingType: widget.plate.billingType,
+      billingPlanType: widget.plate.billingPlanType,
       isLocked: widget.plate.isLockedFee == true,
     );
     final billingType = billingState == ParkingCompletedBillingState.notApplicable
@@ -4222,8 +4226,12 @@ enum ParkingCompletedBillingState {
 
 ParkingCompletedBillingState resolveParkingCompletedBillingState({
   required String? billingType,
+  String? billingPlanType,
   required bool isLocked,
 }) {
+  if ((billingPlanType ?? '').trim() == '정기') {
+    return ParkingCompletedBillingState.notApplicable;
+  }
   if ((billingType ?? '').trim().isEmpty) {
     return ParkingCompletedBillingState.notApplicable;
   }

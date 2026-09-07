@@ -24,7 +24,9 @@ import '../navigation/headquarter_context_navigation_coordinator.dart';
 import '../../widgets/headquarter_quick_work_context.dart';
 import '../../application/area/area_master_cache.dart';
 import '../../page/sheets/head_memo.dart';
+import '../../../community/application/discord/discord_config.dart';
 import '../../../community/page/faq_side_dock.dart';
+import '../../../community/page/side_docks/discord_side_dock.dart';
 import '../../../selector/application/dev_auth.dart';
 import '../../../launcher/application/launcher_diagnostics.dart';
 import '../../widgets/hr/attendance_calendar.dart' as hr_att;
@@ -514,7 +516,7 @@ class _HubBubbleState extends State<_HubBubble> {
       _handleHeadquarterModeChanged,
     );
     _recordDebug(
-      'initialized navigation=popup_route workContext=dashboard_style modeSource=HeadquarterDashboardContext actionCarousel=excluded',
+      'initialized navigation=popup_route workContext=dashboard_style workHeader=hidden searchPresentation=dashboard_style searchSticky=false searchKeepsWorkContext=true modeSource=HeadquarterDashboardContext actionCarousel=excluded',
     );
     _refreshDeveloperMode();
   }
@@ -532,6 +534,184 @@ class _HubBubbleState extends State<_HubBubble> {
       _debugLines.removeRange(0, _debugLines.length - 120);
     }
     debugPrint(line);
+  }
+
+  Future<bool> _launchThirdPartyExternal(String value) async {
+    final uri = Uri.tryParse(value.trim());
+    if (uri == null) {
+      _recordDebug('third_party_launch_invalid_uri value=$value');
+      return false;
+    }
+    try {
+      return await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (error, stackTrace) {
+      _recordDebug('third_party_launch_failure uri=$value error=$error');
+      debugPrintStack(
+        label: '[HeadQuickActions] third_party_launch_failure',
+        stackTrace: stackTrace,
+      );
+      return false;
+    }
+  }
+
+  Future<void> _showThirdPartyOperationTrace({
+    required BuildContext statusContext,
+    required String title,
+    required List<String> lines,
+    required bool success,
+    required String successMessage,
+    required String failureMessage,
+  }) async {
+    if (!statusContext.mounted) return;
+    final trace = await DeveloperOperationTrace.start(
+      context: statusContext,
+      title: title,
+      initialMessage: '본사 서드파티 연결 상태를 기록합니다.',
+      useCommonUi: true,
+      developerModeMessage: '개발자 모드 ON: debugPrint 코드를 복사할 수 있습니다.',
+      standardModeMessage: '개발자 모드 OFF',
+      showDialogImmediately: false,
+    );
+    final recentDebug = _debugLines.length > 24
+        ? _debugLines.sublist(_debugLines.length - 24)
+        : List<String>.of(_debugLines);
+    final traceLines = <String>[
+      'source=headquarter_quick_button presentation=quick_action thirdPartyHeader=true supportSide=left accessPolicy=headquarter',
+      ...lines,
+      'reduceMotion=${MediaQuery.maybeOf(statusContext)?.disableAnimations ?? false}',
+      ...recentDebug.map((line) => 'debug=$line'),
+    ];
+    for (var i = 0; i < traceLines.length; i++) {
+      final progress = .14 + ((i + 1) / traceLines.length) * .72;
+      trace.log(traceLines[i], progress: progress.clamp(.14, .86).toDouble());
+    }
+    if (success) {
+      await trace.succeed(successMessage);
+    } else {
+      await trace.fail(failureMessage);
+    }
+    if (trace.developerMode && statusContext.mounted) {
+      await trace.showStatusDialog(statusContext);
+    }
+  }
+
+  Future<void> _openHeadquarterThirdPartySupport(
+    BuildContext actionContext, {
+    required String source,
+  }) async {
+    await _closeMenu(source: 'action');
+    final navigationContext = HeadHubActions._bestContext() ?? actionContext;
+    if (!navigationContext.mounted) {
+      _recordDebug(
+        'third_party_support_handoff_aborted source=$source reason=context_unmounted',
+      );
+      return;
+    }
+    _recordDebug(
+      'third_party_support_handoff_open source=$source side=left presentation=list_surface accessPolicy=headquarter motion=negative_x_to_zero_240ms',
+    );
+    await showDiscordConnectionSupportSideDock(
+      context: navigationContext,
+      source: source,
+      side: CommonSideDockSide.left,
+      accessPolicy: DiscordConnectionSupportAccessPolicy.headquarter,
+    );
+    _recordDebug(
+      'third_party_support_session_closed source=$source side=left',
+    );
+  }
+
+  Future<void> _openHeadquarterThirdPartyChannel(
+    BuildContext actionContext,
+  ) async {
+    await _closeMenu(source: 'action');
+    final navigationContext = HeadHubActions._bestContext() ?? actionContext;
+    if (!navigationContext.mounted) {
+      _recordDebug('third_party_channel_aborted reason=context_unmounted');
+      return;
+    }
+    _recordDebug(
+      'third_party_channel_start source=headquarter_quick_button configSource=sqlite_snapshot launchPolicy=discord_scheme_then_https_fallback',
+    );
+    String channel = '';
+    try {
+      channel = (await loadDiscordChannelUrl()).trim();
+    } catch (error, stackTrace) {
+      _recordDebug('third_party_channel_load_failure error=$error');
+      debugPrintStack(
+        label: '[HeadQuickActions] third_party_channel_load_failure',
+        stackTrace: stackTrace,
+      );
+    }
+    final channelPresent = channel.isNotEmpty;
+    final channelValid = isDiscordChannelUrl(channel);
+    _recordDebug(
+      'third_party_channel_config channelPresent=$channelPresent channelValid=$channelValid configSource=sqlite_snapshot',
+    );
+    if (!channelValid) {
+      if (!_developerMode && navigationContext.mounted) {
+        showFailedSnackbar(
+          navigationContext,
+          'Discord 업무 채널 링크가 설정되어 있지 않습니다.',
+          useCommonUi: true,
+        );
+      }
+      await _showThirdPartyOperationTrace(
+        statusContext: navigationContext,
+        title: '본사 Discord 업무 채널 연결',
+        lines: <String>[
+          'channelPresent=$channelPresent channelValid=$channelValid configSource=sqlite_snapshot',
+          'result=missing_or_invalid_channel fallback=left_support_side_dock',
+        ],
+        success: false,
+        successMessage: 'Discord 업무 채널을 열었습니다.',
+        failureMessage: 'Discord 업무 채널 연결 정보가 필요합니다.',
+      );
+      if (!navigationContext.mounted) return;
+      _recordDebug(
+        'third_party_channel_fallback_open side=left source=headquarter_quick_button_channel_fallback',
+      );
+      await showDiscordConnectionSupportSideDock(
+        context: navigationContext,
+        source: 'headquarter_quick_button_channel_fallback',
+        side: CommonSideDockSide.left,
+        accessPolicy: DiscordConnectionSupportAccessPolicy.headquarter,
+      );
+      _recordDebug('third_party_channel_fallback_closed side=left');
+      return;
+    }
+
+    final deepLink = discordChannelDeepLink(channel);
+    var opened = false;
+    var destination = 'https_channel';
+    if (deepLink != null) {
+      opened = await _launchThirdPartyExternal(deepLink);
+      if (opened) destination = 'discord_app_channel';
+    }
+    if (!opened) {
+      opened = await _launchThirdPartyExternal(channel);
+    }
+    _recordDebug(
+      'third_party_channel_result opened=$opened destination=$destination channelValid=$channelValid',
+    );
+    if (!opened && !_developerMode && navigationContext.mounted) {
+      showFailedSnackbar(
+        navigationContext,
+        'Discord 업무 채널을 열 수 없습니다.',
+        useCommonUi: true,
+      );
+    }
+    await _showThirdPartyOperationTrace(
+      statusContext: navigationContext,
+      title: '본사 Discord 업무 채널 연결',
+      lines: <String>[
+        'channelPresent=$channelPresent channelValid=$channelValid configSource=sqlite_snapshot',
+        'opened=$opened destination=$destination launchPolicy=discord_scheme_then_https_fallback',
+      ],
+      success: opened,
+      successMessage: 'Discord 업무 채널 연결 요청이 완료되었습니다.',
+      failureMessage: 'Discord 업무 채널 연결 요청에 실패했습니다.',
+    );
   }
 
   Future<void> _showDeveloperStatus() async {
@@ -559,7 +739,7 @@ class _HubBubbleState extends State<_HubBubble> {
       'developer_status_actions count=${configuredActions.length} ids=$configuredActionIds',
     );
     _recordDebug(
-      'developer_status_sections layout=work_context_sticky_search_palette sections=$sectionSummary',
+      'developer_status_sections layout=work_context_dashboard_search_palette workHeader=hidden searchSticky=false searchKeepsWorkContext=true sections=$sectionSummary',
     );
     final panelRoute = _panelRoute;
     _recordDebug(
@@ -590,11 +770,15 @@ class _HubBubbleState extends State<_HubBubble> {
       progress: 0.5,
     );
     trace.log(
-      'layout=work_context_sticky_search_palette sections=$sectionSummary',
+      'layout=work_context_dashboard_search_palette workHeader=hidden searchSticky=false searchKeepsWorkContext=true searchTitle=빠른_실행_검색 sections=$sectionSummary',
       progress: 0.52,
     );
     trace.log(
-      'workContext=schedule,punch work=quick_button,memo,refresh_area_master operations=headquarter_navigation,field,attendance,break,statistics settings=logout support=faq,terms,privacy,contact',
+      'workPresentation=dashboard_style, workHeader=hidden, workReveal=stagger22_motion190_y6, punchOuterMotion=none, searchPresentation=dashboard_style, searchSticky=false, searchKeepsWorkContext=true, searchResultMotion=fade_slide_y_0.025_190ms, groupedResults=true',
+      progress: 0.55,
+    );
+    trace.log(
+      'thirdParty=third_party_connect workContext=schedule,punch work=quick_button,memo,refresh_area_master operations=headquarter_navigation,field,attendance,break,statistics settings=third_party_support,logout support=faq,terms,privacy,contact',
       progress: 0.58,
     );
     trace.log(
@@ -721,7 +905,7 @@ class _HubBubbleState extends State<_HubBubble> {
     _panelRoute = route;
     setState(() {});
     _recordDebug(
-      'quick_route_push source=$source reduceMotion=$reduceMotion actions=${actions.length}',
+      'quick_route_push source=$source reduceMotion=$reduceMotion actions=${actions.length} workHeader=hidden searchPresentation=dashboard_style searchSticky=false searchKeepsWorkContext=true groupedResults=true searchResultMotion=fade_slide_y_0.025_190ms',
     );
     unawaited(
       navigator.push<void>(route).catchError((Object error, StackTrace stackTrace) {
@@ -803,6 +987,16 @@ class _HubBubbleState extends State<_HubBubble> {
     }
 
     return <_DockAction>[
+      _DockAction(
+        id: 'third_party_connect',
+        category: _QuickActionCategory.thirdParty,
+        icon: Icons.forum_rounded,
+        label: '서드 파티 연결',
+        description: '저장된 Discord 업무 채널을 바로 엽니다.',
+        color: tokens.accentContainer,
+        foreground: tokens.onAccentContainer,
+        onTap: () => _openHeadquarterThirdPartyChannel(actionContext),
+      ),
       _DockAction(
         id: 'headquarter_navigation',
         category: _QuickActionCategory.work,
@@ -972,6 +1166,19 @@ class _HubBubbleState extends State<_HubBubble> {
           );
           _recordDebug('statistics_session_closed');
         },
+      ),
+      _DockAction(
+        id: 'third_party_support',
+        category: _QuickActionCategory.settings,
+        icon: Icons.extension_rounded,
+        label: '서드파티 연결 지원',
+        description: 'Discord 앱, 서버 초대, 업무 채널 연결 상태를 확인하고 엽니다.',
+        color: tokens.surfaceSelected,
+        foreground: tokens.textPrimary,
+        onTap: () => _openHeadquarterThirdPartySupport(
+          actionContext,
+          source: 'headquarter_quick_button',
+        ),
       ),
       _DockAction(
         id: 'logout',
@@ -1346,14 +1553,24 @@ class _HeadQuickActionsRoutePanelState
 
   late Offset _pos;
 
+  String _lastSearchValue = '';
+
   @override
   void initState() {
     super.initState();
     _pos = widget.initialPos;
+    _lastSearchValue = widget.controller.text.trim();
     widget.controller.addListener(_handleSearchChanged);
   }
 
   void _handleSearchChanged() {
+    final next = widget.controller.text.trim();
+    if (next != _lastSearchValue) {
+      _lastSearchValue = next;
+      widget.onDebug(
+        'search_query_changed active=${next.isNotEmpty} length=${next.length} presentation=dashboard_style workContextVisible=true groupedResults=true',
+      );
+    }
     if (mounted) setState(() {});
   }
 
@@ -1513,6 +1730,7 @@ class _HeadQuickActionsRoutePanelState
 }
 
 enum _QuickActionCategory {
+  thirdParty,
   work,
   operations,
   settings,
@@ -1522,6 +1740,7 @@ enum _QuickActionCategory {
 
 extension _QuickActionCategoryUi on _QuickActionCategory {
   static const List<_QuickActionCategory> mainCategories = <_QuickActionCategory>[
+    _QuickActionCategory.thirdParty,
     _QuickActionCategory.work,
     _QuickActionCategory.operations,
     _QuickActionCategory.settings,
@@ -1530,6 +1749,8 @@ extension _QuickActionCategoryUi on _QuickActionCategory {
 
   String get label {
     switch (this) {
+      case _QuickActionCategory.thirdParty:
+        return '서드 파티';
       case _QuickActionCategory.work:
         return '업무';
       case _QuickActionCategory.operations:
@@ -1565,7 +1786,6 @@ class _CommandPaletteDock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final queryRaw = controller.text.trim();
     final query = _normalize(queryRaw);
     final searching = query.isNotEmpty;
@@ -1580,55 +1800,51 @@ class _CommandPaletteDock extends StatelessWidget {
         : actions
             .where((action) => !action.hiddenUntilExactQuery)
             .toList(growable: false);
-    final titleText = searching ? '검색 결과' : '빠른 실행';
 
-    return CustomScrollView(
+    return SingleChildScrollView(
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       physics: const ClampingScrollPhysics(),
-      slivers: [
-        SliverToBoxAdapter(
-          child: AnimatedSize(
-            duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
-            curve: CommonUiMotion.standard,
-            alignment: Alignment.topCenter,
-            child: searching
-                ? const SizedBox(height: 10)
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const SizedBox(height: 14),
-                      const _PaletteSectionHeader(label: '나의 근무'),
-                      const SizedBox(height: 8),
-                      HeadquarterQuickWorkContext(
-                        developerMode: developerMode,
-                        onDeveloperStatus: onDeveloperStatus,
-                        onDebug: onDebug,
-                      ),
-                      const SizedBox(height: 8),
-                    ],
-                  ),
+      padding: EdgeInsets.zero,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          HeadquarterQuickWorkContext(
+            developerMode: developerMode,
+            onDeveloperStatus: onDeveloperStatus,
+            onDebug: onDebug,
           ),
-        ),
-        SliverPersistentHeader(
-          pinned: true,
-          delegate: _QuickSearchHeaderDelegate(
-            titleText: titleText,
-            controller: controller,
-            focusNode: focusNode,
-            onSubmit: () async {
-              if (filtered.isNotEmpty) {
+          const SizedBox(height: 14),
+          _StaggeredReveal(
+            key: const ValueKey<String>('action_search'),
+            order: 3,
+            offsetY: 6,
+            child: _SearchField(
+              controller: controller,
+              focusNode: focusNode,
+              onDebug: onDebug,
+              onSubmit: () async {
+                if (filtered.isEmpty) {
+                  onDebug(
+                    'search_submit result=empty presentation=dashboard_style',
+                  );
+                  return;
+                }
+                onDebug(
+                  'search_submit result=action id=${filtered.first.id} presentation=dashboard_style',
+                );
                 await onSelect(filtered.first);
-              }
-            },
+              },
+            ),
           ),
-        ),
-        _PaletteSliver(
-          query: query,
-          items: filtered,
-          onSelect: onSelect,
-        ),
-        const SliverToBoxAdapter(child: SizedBox(height: 8)),
-      ],
+          const SizedBox(height: 14),
+          _PaletteArea(
+            query: query,
+            items: filtered,
+            onSelect: onSelect,
+          ),
+          const SizedBox(height: 4),
+        ],
+      ),
     );
   }
 
@@ -1636,129 +1852,82 @@ class _CommandPaletteDock extends StatelessWidget {
       s.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
 }
 
-class _QuickSearchHeaderDelegate extends SliverPersistentHeaderDelegate {
-  const _QuickSearchHeaderDelegate({
-    required this.titleText,
-    required this.controller,
-    required this.focusNode,
-    required this.onSubmit,
-  });
-
-  final String titleText;
-  final TextEditingController controller;
-  final FocusNode focusNode;
-  final Future<void> Function() onSubmit;
-
-  @override
-  double get minExtent => 104;
-
-  @override
-  double get maxExtent => 104;
-
-  @override
-  Widget build(
-    BuildContext context,
-    double shrinkOffset,
-    bool overlapsContent,
-  ) {
-    final tokens = CommonUiTheme.of(context);
-    final text = Theme.of(context).textTheme;
-    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: tokens.surface.withOpacity(tokens.isDark ? .94 : .97),
-        border: Border(
-          bottom: BorderSide(
-            color: overlapsContent ? tokens.borderStrong : tokens.borderSubtle,
-          ),
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.only(top: 8, bottom: 10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            AnimatedSwitcher(
-              duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
-              child: Text(
-                titleText,
-                key: ValueKey<String>(titleText),
-                style: text.titleSmall?.copyWith(
-                  color: tokens.textPrimary,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: .2,
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            _SearchField(
-              controller: controller,
-              focusNode: focusNode,
-              onSubmit: onSubmit,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  @override
-  bool shouldRebuild(covariant _QuickSearchHeaderDelegate oldDelegate) {
-    return true;
-  }
-}
-
 class _SearchField extends StatelessWidget {
   final TextEditingController controller;
   final FocusNode focusNode;
+  final ValueChanged<String> onDebug;
   final Future<void> Function() onSubmit;
 
   const _SearchField({
     required this.controller,
     required this.focusNode,
+    required this.onDebug,
     required this.onSubmit,
   });
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final border = cs.outlineVariant.withOpacity(0.85);
-    final fill = cs.surface.withOpacity(0.55);
+    final tokens = CommonUiTheme.of(context);
+    final text = Theme.of(context).textTheme;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: fill,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: border, width: 1),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      child: Row(
+    return Material(
+      color: tokens.transparent,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Icon(Icons.search_rounded, color: cs.onSurfaceVariant),
-          const SizedBox(width: 8),
-          Expanded(
-            child: TextField(
-              controller: controller,
-              focusNode: focusNode,
-              textInputAction: TextInputAction.search,
-              onSubmitted: (_) => onSubmit(),
-              decoration: const InputDecoration(
-                isDense: true,
-                border: InputBorder.none,
-              ),
+          Text(
+            '빠른 실행 검색',
+            style: text.labelLarge?.copyWith(
+              color: tokens.textSecondary,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.2,
             ),
           ),
-          ValueListenableBuilder<TextEditingValue>(
-            valueListenable: controller,
-            builder: (context, value, _) {
-              final hasText = value.text.trim().isNotEmpty;
-              if (!hasText) return const SizedBox.shrink();
-              return IconButton(
-                onPressed: () => controller.clear(),
-                icon: Icon(Icons.close_rounded, color: cs.onSurfaceVariant),
-                tooltip: '지우기',
-              );
-            },
+          const SizedBox(height: 8),
+          Semantics(
+            textField: true,
+            label: '빠른 실행 검색',
+            child: Container(
+              decoration: BoxDecoration(
+                color: tokens.surface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: tokens.borderSubtle),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Row(
+                children: [
+                  Icon(Icons.search_rounded, color: tokens.iconSecondary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      controller: controller,
+                      focusNode: focusNode,
+                      textInputAction: TextInputAction.search,
+                      decoration: const InputDecoration(
+                        isDense: true,
+                        border: InputBorder.none,
+                      ),
+                      onSubmitted: (_) => onSubmit(),
+                    ),
+                  ),
+                  if (controller.text.trim().isNotEmpty)
+                    IconButton(
+                      onPressed: () {
+                        HapticFeedback.selectionClick();
+                        onDebug(
+                          'search_clear source=button presentation=dashboard_style',
+                        );
+                        controller.clear();
+                      },
+                      icon: Icon(
+                        Icons.close_rounded,
+                        color: tokens.iconSecondary,
+                      ),
+                      tooltip: '검색어 지우기',
+                    ),
+                ],
+              ),
+            ),
           ),
         ],
       ),
@@ -1766,12 +1935,12 @@ class _SearchField extends StatelessWidget {
   }
 }
 
-class _PaletteSliver extends StatelessWidget {
+class _PaletteArea extends StatelessWidget {
   final String query;
   final List<_DockAction> items;
   final Future<void> Function(_DockAction action) onSelect;
 
-  const _PaletteSliver({
+  const _PaletteArea({
     required this.query,
     required this.items,
     required this.onSelect,
@@ -1780,88 +1949,126 @@ class _PaletteSliver extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = CommonUiTheme.of(context);
-    final text = Theme.of(context).textTheme;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final resultKey = query.isEmpty
+        ? 'all_${items.length}'
+        : 'search_${query.hashCode}_${items.map((action) => action.id).join('_')}';
 
+    Widget child;
     if (query.isNotEmpty && items.isEmpty) {
-      return SliverToBoxAdapter(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 38),
-          child: Center(
-            child: Text(
-              '검색 결과가 없습니다.',
-              style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
-            ),
-          ),
+      child = Container(
+        key: ValueKey<String>(resultKey),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 22),
+        decoration: BoxDecoration(
+          color: tokens.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: tokens.borderSubtle),
         ),
+        child: Column(
+          children: [
+            Icon(
+              Icons.search_off_rounded,
+              size: 26,
+              color: tokens.iconSecondary,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '검색 결과가 없습니다.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: tokens.textPrimary,
+                    fontWeight: FontWeight.w800,
+                  ),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              '다른 검색어를 입력해 주세요.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: tokens.textSecondary,
+                  ),
+            ),
+          ],
+        ),
+      );
+    } else {
+      child = Column(
+        key: ValueKey<String>(resultKey),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: _buildSections(query.isEmpty ? 4 : 0),
       );
     }
 
+    return AnimatedSwitcher(
+      duration:
+          reduceMotion ? Duration.zero : const Duration(milliseconds: 190),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      transitionBuilder: (item, animation) {
+        if (reduceMotion) return item;
+        return FadeTransition(
+          opacity: animation,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 0.025),
+              end: Offset.zero,
+            ).animate(animation),
+            child: item,
+          ),
+        );
+      },
+      child: child,
+    );
+  }
+
+  List<Widget> _buildSections(int startingOrder) {
     final children = <Widget>[];
-    var revealOrder = 0;
+    var revealOrder = startingOrder;
+    final categories = query.isEmpty
+        ? _QuickActionCategoryUi.mainCategories
+        : _QuickActionCategory.values;
 
-    if (query.isNotEmpty) {
-      for (var index = 0; index < items.length; index++) {
-        if (index > 0) children.add(const SizedBox(height: 10));
-        children.add(
-          _StaggeredReveal(
-            key: ValueKey<String>('search_${items[index].id}'),
-            order: revealOrder++,
-            child: _PaletteTile(
-              action: items[index],
-              onSelect: onSelect,
-            ),
-          ),
-        );
+    for (final category in categories) {
+      final sectionItems = items
+          .where((action) => action.category == category)
+          .toList(growable: false);
+      if (sectionItems.isEmpty) continue;
+
+      if (children.isNotEmpty) {
+        children.add(const SizedBox(height: 14));
       }
-    } else {
-      for (final category in _QuickActionCategoryUi.mainCategories) {
-        final sectionItems = items
-            .where((action) => action.category == category)
-            .toList(growable: false);
-        if (sectionItems.isEmpty) continue;
 
-        if (children.isNotEmpty) {
-          children.add(const SizedBox(height: 14));
-        }
+      children.add(
+        _StaggeredReveal(
+          key: ValueKey<String>('header_${category.name}'),
+          order: revealOrder++,
+          offsetY: 6,
+          child: _PaletteSectionHeader(label: category.label),
+        ),
+      );
+      children.add(const SizedBox(height: 8));
 
+      for (var index = 0; index < sectionItems.length; index++) {
+        final action = sectionItems[index];
         children.add(
-          _StaggeredReveal(
-            key: ValueKey<String>('header_${category.name}'),
-            order: revealOrder++,
-            offsetY: 6,
-            child: _PaletteSectionHeader(label: category.label),
-          ),
-        );
-        children.add(const SizedBox(height: 8));
-
-        for (var index = 0; index < sectionItems.length; index++) {
-          final action = sectionItems[index];
-          children.add(
-            Padding(
-              padding: const EdgeInsets.only(left: 10),
-              child: _StaggeredReveal(
-                key: ValueKey<String>('section_${category.name}_${action.id}'),
-                order: revealOrder++,
-                child: _PaletteTile(
-                  action: action,
-                  onSelect: onSelect,
-                ),
+          Padding(
+            padding: const EdgeInsets.only(left: 10),
+            child: _StaggeredReveal(
+              key: ValueKey<String>('section_${category.name}_${action.id}'),
+              order: revealOrder++,
+              child: _PaletteTile(
+                action: action,
+                onSelect: onSelect,
               ),
             ),
-          );
-          if (index != sectionItems.length - 1) {
-            children.add(const SizedBox(height: 10));
-          }
+          ),
+        );
+        if (index != sectionItems.length - 1) {
+          children.add(const SizedBox(height: 10));
         }
       }
     }
 
-    return SliverPadding(
-      padding: const EdgeInsets.only(bottom: 4),
-      sliver: SliverList(
-        delegate: SliverChildListDelegate(children),
-      ),
-    );
+    return children;
   }
 }
 

@@ -21,6 +21,19 @@ enum DepartureCompletedDockSection {
   history,
 }
 
+String _departureCompletedSlotDisplay(String location) {
+  final raw = location.trim();
+  if (raw.isEmpty || raw == '미지정') return '—';
+  final parts = raw
+      .split(' - ')
+      .map((value) => value.trim())
+      .where((value) => value.isNotEmpty)
+      .toList();
+  if (parts.length < 3) return '—';
+  final slot = parts.sublist(2).join(' - ').trim();
+  return slot.isEmpty ? '—' : slot;
+}
+
 typedef DepartureCompletedStatusOpener = Future<PlateModel?> Function(
   BuildContext context,
   PlateModel plate,
@@ -90,6 +103,9 @@ class _DepartureCompletedOperationsDockState
       if (!mounted) return;
       _log(
         'mounted mode=${widget.modeLabel} area=${widget.area} section=${_section.name} presentation=operations_right_side_dock rail=left',
+      );
+      _log(
+        'policy unsettled=billing_resolver monthlyExcluded=true noBillingExcluded=true locationDisplay=slot_only historyAutoLoad=false historySearchRequires=range+tail4',
       );
     });
   }
@@ -162,6 +178,11 @@ class _DepartureCompletedOperationsDockState
         'todayResults=${_todayResults.length}',
         'selectedUnsettled=${selectedUnsettled?.plateNumber ?? "none"}',
         'selectedToday=${selectedToday?.plateNumber ?? "none"}',
+        'unsettledPolicy=billing_resolver',
+        'monthlyExcluded=true',
+        'locationDisplay=slot_only',
+        'historyAutoLoad=false',
+        'historySearchRequires=range+tail4',
         'motion=operations_side_dock+rail_selection+result_fade+row_selection+footer_slide',
       ].join('\n'),
       copyText: _debugPrintCode,
@@ -643,7 +664,7 @@ class _DepartureCompletedOperationsDockState
                       ? <(String, String)>[
                           (
                             '위치',
-                            plate.location.trim().isEmpty ? '—' : plate.location,
+                            _departureCompletedSlotDisplay(plate.location),
                           ),
                           ('요청', _formatDateTime(plate.requestTime)),
                           (
@@ -728,7 +749,7 @@ class _DepartureCompletedOperationsDockState
                     ? <(String, String)>[
                         (
                           '위치',
-                          plate.location.trim().isEmpty ? '—' : plate.location,
+                          _departureCompletedSlotDisplay(plate.location),
                         ),
                         ('요청', _formatDateTime(plate.requestTime)),
                         ('확정 요금', _formatWon(plate.lockedFeeAmount)),
@@ -995,7 +1016,7 @@ class _DeparturePlateRow extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    plate.location.trim().isEmpty ? plate.area : plate.location,
+                    _departureCompletedSlotDisplay(plate.location),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: textTheme.labelSmall?.copyWith(

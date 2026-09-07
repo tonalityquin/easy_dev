@@ -201,6 +201,7 @@ List<ZoneGroupVM> buildZoneGroups({
   required List<LocationModel> meta,
   required String selected,
   required String search,
+  Comparator<String>? parentComparator,
 }) {
   final childKeyRows = <String, List<RealTimeRowVM>>{};
 
@@ -267,7 +268,8 @@ List<ZoneGroupVM> buildZoneGroups({
 
   final out = <ZoneGroupVM>[];
 
-  final parentList = parents.toList()..sort(naturalLocationCompare);
+  final compareParent = parentComparator ?? naturalLocationCompare;
+  final parentList = parents.toList()..sort(compareParent);
   for (final p in parentList) {
     if (selectedTrimmed != kRealTimeLocationAll &&
         !selectedIsChildKey &&
@@ -348,6 +350,6 @@ List<ZoneGroupVM> buildZoneGroups({
     );
   }
 
-  out.sort((a, b) => naturalLocationCompare(a.group, b.group));
+  out.sort((a, b) => compareParent(a.group, b.group));
   return out;
 }

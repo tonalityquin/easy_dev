@@ -10,6 +10,7 @@ import '../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../features/dev/application/area_state.dart';
 import '../../../../features/location/applications/location_state.dart';
+import '../../../../features/location/applications/parking_parent_order_state.dart';
 import '../../../../features/location/domain/models/grid_rect.dart';
 import '../../../../features/location/domain/models/location_model.dart';
 import '../../../../features/location/domain/models/parking_grid_model.dart';
@@ -151,6 +152,7 @@ class _PlateParkingWorkspaceState extends State<PlateParkingWorkspace>
   final List<String> _debugLines = <String>[];
   String _lastParkingDisplayDebugSignature = '';
   String _lastAreaConfigurationSignature = '';
+  String _lastParentOrderSignature = '';
   bool _invalidAreaConfigurationHandling = false;
 
   @override
@@ -191,6 +193,7 @@ class _PlateParkingWorkspaceState extends State<PlateParkingWorkspace>
     _occupancyLoading = false;
     _occupancyError = null;
     _lastAreaConfigurationSignature = '';
+    _lastParentOrderSignature = '';
     _invalidAreaConfigurationHandling = false;
     if (area.isNotEmpty) {
       unawaited(_reloadOccupancy());
@@ -1117,13 +1120,29 @@ class _PlateParkingWorkspaceState extends State<PlateParkingWorkspace>
     List<LocationModel> locations,
     List<LocationModel> diagramParents,
   ) {
+    final parentOrderState = context.watch<ParkingParentOrderState>();
+    final parentComparator = parentOrderState.comparatorForArea(
+      _loadedArea,
+      fallback: _naturalCompare,
+    );
     final topLevels = diagramParents
         .where((parent) {
           final grid = parent.parkingGrid;
           return grid != null && grid.rows > 0 && grid.cols > 0;
         })
         .toList(growable: false)
-      ..sort((a, b) => _naturalCompare(a.locationName, b.locationName));
+      ..sort((a, b) => parentComparator(a.locationName, b.locationName));
+    final parentOrderSignature =
+        '$_loadedArea|${topLevels.map((parent) => parent.locationName).join('>')}|${parentOrderState.hasCustomOrder(_loadedArea)}';
+    if (_lastParentOrderSignature != parentOrderSignature) {
+      _lastParentOrderSignature = parentOrderSignature;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _lastParentOrderSignature != parentOrderSignature) return;
+        _debug(
+          'parking_parent_order=resolved area=$_loadedArea source=${parentOrderState.hasCustomOrder(_loadedArea) ? 'user_persisted' : 'natural_fallback'} order=${topLevels.map((parent) => parent.locationName).join('>')}',
+        );
+      });
+    }
     if (topLevels.isEmpty) {
       return _SpatialMessage(
         icon: Icons.map_outlined,

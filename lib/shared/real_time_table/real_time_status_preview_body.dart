@@ -7,6 +7,7 @@ import '../operational_cache/domain/repositories/operational_local_repository.da
 
 import '../../app/utils/developer_operation_status_dialog.dart';
 import '../../features/location/applications/location_state.dart';
+import '../../features/location/applications/parking_parent_order_state.dart';
 import '../../features/location/domain/models/location_model.dart';
 import '../page/application/common/type_auto_transition_guard.dart';
 import '../plate/application/common/view_doc_rows_store.dart';
@@ -15,6 +16,7 @@ import '../plate/domain/repositories/plate_repository.dart';
 import '../preview_package/parking_grid_3d_preview.dart';
 import '../preview_package/parking_status_preview_card_area.dart';
 import 'real_time_location_board.dart';
+import 'real_time_parking_request_shelf.dart';
 import 'real_time_tab_controller.dart';
 import 'real_time_table_components.dart';
 import 'real_time_table_row_vm.dart';
@@ -57,6 +59,7 @@ class RealTimeStatusPreviewBody extends StatefulWidget {
   final String screen;
   final List<ParkingStatusOverlaySpec> overlay;
   final List<RealTimeTabSpec> specs;
+  final bool showParkingRequestShelf;
 
   const RealTimeStatusPreviewBody({
     super.key,
@@ -65,6 +68,7 @@ class RealTimeStatusPreviewBody extends StatefulWidget {
     required this.screen,
     required this.overlay,
     required this.specs,
+    this.showParkingRequestShelf = false,
   });
 
   @override
@@ -76,6 +80,7 @@ class _RealTimeStatusPreviewBodyState extends State<RealTimeStatusPreviewBody>
     with AutomaticKeepAliveClientMixin {
   static const String _boardPauseReason = '현황 DOT MAP 다이얼로그';
   static const String _dockPauseReason = '현황 상태 처리 사이드 도크';
+  static const String _requestTrayPauseReason = '현황 입차 요청 더보기';
 
   Future<List<LocationModel>>? _localFuture;
   String _localArea = '';
@@ -84,6 +89,8 @@ class _RealTimeStatusPreviewBodyState extends State<RealTimeStatusPreviewBody>
       <String, Future<PlateModel?>>{};
   bool _openingDetail = false;
   String _lastRenderSignature = '';
+  String _lastParkingRequestSignature = '';
+  final List<String> _parkingRequestDebugLines = <String>[];
   RealTimeParentFocusRequest? _parentFocusRequest;
 
   @override
@@ -110,6 +117,8 @@ class _RealTimeStatusPreviewBodyState extends State<RealTimeStatusPreviewBody>
       _localArea = '';
       _plateDetailCache.clear();
       _plateDetailInflight.clear();
+      _lastParkingRequestSignature = '';
+      _parkingRequestDebugLines.clear();
     }
   }
 
@@ -154,6 +163,14 @@ class _RealTimeStatusPreviewBodyState extends State<RealTimeStatusPreviewBody>
 
   void _endDockAutoPause() {
     _autoGuard?.endBlock(_dockPauseReason);
+  }
+
+  void _beginRequestTrayAutoPause() {
+    _autoGuard?.beginBlock(_requestTrayPauseReason);
+  }
+
+  void _endRequestTrayAutoPause() {
+    _autoGuard?.endBlock(_requestTrayPauseReason);
   }
 
   Future<void> _refreshFromUser() async {
@@ -220,6 +237,92 @@ class _RealTimeStatusPreviewBodyState extends State<RealTimeStatusPreviewBody>
 
   String _rowKey(RealTimeRowVM row) {
     return '${row.plateId.trim()}\u0001${row.plateNumber.trim()}\u0001${row.location.trim()}';
+  }
+
+  void _recordParkingRequestDebugLine(String line) {
+    final normalized = line.trim();
+    if (normalized.isEmpty) return;
+    _parkingRequestDebugLines.add(normalized);
+    if (_parkingRequestDebugLines.length > 120) {
+      _parkingRequestDebugLines.removeRange(
+        0,
+        _parkingRequestDebugLines.length - 120,
+      );
+    }
+  }
+
+  DateTime? _requestCreatedAt(RealTimeRowVM row) => row.createdAt;
+
+  int _compareParkingRequestRows(RealTimeRowVM a, RealTimeRowVM b) {
+    final at = _requestCreatedAt(a);
+    final bt = _requestCreatedAt(b);
+    if (at != null && bt != null) {
+      final timeCompare = bt.compareTo(at);
+      if (timeCompare != 0) return timeCompare;
+    } else if (at != null) {
+      return -1;
+    } else if (bt != null) {
+      return 1;
+    }
+    final updatedA = a.updatedAt;
+    final updatedB = b.updatedAt;
+    if (updatedA != null && updatedB != null) {
+      final updatedCompare = updatedB.compareTo(updatedA);
+      if (updatedCompare != 0) return updatedCompare;
+    } else if (updatedA != null) {
+      return -1;
+    } else if (updatedB != null) {
+      return 1;
+    }
+    final plateCompare = a.plateNumber.compareTo(b.plateNumber);
+    if (plateCompare != 0) return plateCompare;
+    return a.plateId.compareTo(b.plateId);
+  }
+
+  List<RealTimeRowVM> _buildParkingRequestRows(
+    ViewDocRowsStore store,
+    String area,
+  ) {
+    if (!widget.showParkingRequestShelf) return const <RealTimeRowVM>[];
+    const collection = 'parking_requests_view';
+    final spec = _specForCollection(collection);
+    if (spec == null) {
+      final line =
+          '[RealTimeStatusDotMap] event=parking_request_shelf_blocked reason=spec_missing screen=${widget.screen} collection=$collection area=$area';
+      debugPrint(line);
+      _recordParkingRequestDebugLine(line);
+      return const <RealTimeRowVM>[];
+    }
+    final rows = store
+        .rows(collection: collection, area: area)
+        .map(
+          (source) => RealTimeRowVM(
+            plateId: source.plateId,
+            plateNumber: source.plateNumber,
+            location: source.location,
+            primaryAt: source.primaryAt,
+            updatedAt: source.updatedAt,
+            createdAt: source.createdAt,
+            isSelected: source.isSelected,
+            selectedBy: source.selectedBy,
+          ),
+        )
+        .toList(growable: false)
+      ..sort(_compareParkingRequestRows);
+    final signature = rows
+        .map(
+          (row) =>
+              '${row.plateId}:${row.createdAt?.microsecondsSinceEpoch ?? 0}:${row.updatedAt?.microsecondsSinceEpoch ?? 0}',
+        )
+        .join('>');
+    if (_lastParkingRequestSignature != signature) {
+      _lastParkingRequestSignature = signature;
+      final line =
+          '[RealTimeStatusDotMap] event=parking_request_shelf_rows screen=${widget.screen} area=$area count=${rows.length} collection=$collection sort=createdAt_desc shelfSortLabel=최신→ traySortLabel=최신↓ updatedAtFallback=true source=view_doc_rows_store plateLabel=last4 presentation=list_surface morePresentation=anchored_list_surface relativeTime=tray action=direct_status_side_dock firebaseAdditionalRead=0';
+      debugPrint(line);
+      _recordParkingRequestDebugLine(line);
+    }
+    return List<RealTimeRowVM>.unmodifiable(rows);
   }
 
   _StatusBoardData _buildBoardData(ViewDocRowsStore store, String area) {
@@ -316,7 +419,6 @@ class _RealTimeStatusPreviewBodyState extends State<RealTimeStatusPreviewBody>
     RealTimeRowVM row,
     _StatusBoardData data,
   ) async {
-    if (_openingDetail) return;
     final rowKey = _rowKey(row);
     final spec = data.specByRowKey[rowKey];
     if (spec == null) {
@@ -325,9 +427,63 @@ class _RealTimeStatusPreviewBodyState extends State<RealTimeStatusPreviewBody>
       );
       return;
     }
+    await _openStatusDockWithSpec(
+      row: row,
+      spec: spec,
+      collection: data.collectionByRowKey[rowKey] ?? spec.collection,
+      status: data.statusByRowKey[rowKey],
+      source: 'status_child_dialog_slot',
+      childDialogClosedBeforeDock: true,
+    );
+  }
 
+  Future<void> _openParkingRequestDock(
+    RealTimeRowVM row,
+    String source,
+  ) async {
+    const collection = 'parking_requests_view';
+    final spec = _specForCollection(collection);
+    if (spec == null) {
+      final line =
+          '[RealTimeStatusDotMap] event=status_dock_blocked source=$source reason=parking_request_spec_missing plateId=${row.plateId} plateNumber=${row.plateNumber}';
+      debugPrint(line);
+      _recordParkingRequestDebugLine(line);
+      return;
+    }
+    final status = row.isSelected
+        ? ParkingSlotStatus.departureInProgress
+        : ParkingSlotStatus.parkingRequest;
+    await _openStatusDockWithSpec(
+      row: row,
+      spec: spec,
+      collection: collection,
+      status: status,
+      source: source,
+      childDialogClosedBeforeDock: false,
+    );
+  }
+
+  Future<void> _openStatusDockWithSpec({
+    required RealTimeRowVM row,
+    required RealTimeTabSpec spec,
+    required String collection,
+    required ParkingSlotStatus? status,
+    required String source,
+    required bool childDialogClosedBeforeDock,
+  }) async {
+    if (_openingDetail) {
+      debugPrint(
+        '[RealTimeStatusDotMap] event=status_dock_blocked reason=already_open source=$source plateId=${row.plateId} plateNumber=${row.plateNumber}',
+      );
+      return;
+    }
     final plateId = row.plateId.trim();
-    if (plateId.isEmpty) return;
+    if (plateId.isEmpty) {
+      debugPrint(
+        '[RealTimeStatusDotMap] event=status_dock_blocked reason=plate_id_empty source=$source plateNumber=${row.plateNumber}',
+      );
+      return;
+    }
 
     _openingDetail = true;
     _markUserActivity();
@@ -341,23 +497,38 @@ class _RealTimeStatusPreviewBodyState extends State<RealTimeStatusPreviewBody>
       trace = await DeveloperOperationTrace.start(
         context: context,
         title: '현황 상태 빠른 실행',
-        initialMessage: '현황 DOT MAP 상태 처리 빠른 실행을 준비했습니다.',
+        initialMessage: source.startsWith('status_parking_request_')
+            ? '현황 입차 요청 Shelf에서 상태 처리 Side Dock 실행을 준비했습니다.'
+            : '현황 DOT MAP 상태 처리 빠른 실행을 준비했습니다.',
         useCommonUi: true,
         developerModeMessage:
-            '개발자 모드 ON: 완료 후 현황 DOT MAP debugPrint 코드를 복사할 수 있습니다.',
+            '개발자 모드 ON: 완료 후 현황 상태 처리 debugPrint 코드를 복사할 수 있습니다.',
         standardModeMessage: '개발자 모드 OFF',
         showDialogImmediately: false,
       );
 
+      if (source.startsWith('status_parking_request_') &&
+          _parkingRequestDebugLines.isNotEmpty) {
+        final snapshot = _parkingRequestDebugLines.length <= 24
+            ? List<String>.of(_parkingRequestDebugLines)
+            : _parkingRequestDebugLines
+                .sublist(_parkingRequestDebugLines.length - 24);
+        trace.log(
+          'requestShelfDebugSnapshot=${snapshot.length} sort=createdAt_desc shelfSortLabel=최신→ traySortLabel=최신↓ plateLabel=last4 shelf=list_surface tray=anchored_list_surface trayRow=plate_last4_relative_time dotMapModified=false firebaseAdditionalRead=0',
+          progress: .12,
+        );
+        for (final line in snapshot) {
+          trace.log('requestShelfTrace=$line');
+        }
+      }
+
       final cachedPlate = _plateDetailCache[plateId];
-      final collection = data.collectionByRowKey[rowKey] ?? spec.collection;
-      final status = data.statusByRowKey[rowKey];
       trace.log(
-        'source=status_child_dialog_slot screen=${widget.screen} collection=$collection status=${status?.name ?? '-'} tab=${spec.id} area=${widget.area.trim()} plateId=$plateId plateNumber=${row.plateNumber} location=${row.location} cached=${cachedPlate != null} childDialogClosedBeforeDock=true autoTransitionPaused=true',
+        'source=$source screen=${widget.screen} collection=$collection status=${status?.name ?? '-'} tab=${spec.id} area=${widget.area.trim()} plateId=$plateId plateNumber=${row.plateNumber} location=${row.location} cached=${cachedPlate != null} childDialogClosedBeforeDock=$childDialogClosedBeforeDock requestTrayClosedBeforeDock=${source == 'status_parking_request_tray'} autoTransitionPaused=true',
         progress: .28,
       );
       debugPrint(
-        '[RealTimeStatusDotMap] event=status_dock_open source=status_child_dialog_slot screen=${widget.screen} collection=$collection status=${status?.name ?? '-'} tab=${spec.id} area=${widget.area.trim()} plateId=$plateId plateNumber=${row.plateNumber} location=${row.location} cached=${cachedPlate != null} childDialogClosedBeforeDock=true',
+        '[RealTimeStatusDotMap] event=status_dock_open source=$source screen=${widget.screen} collection=$collection status=${status?.name ?? '-'} tab=${spec.id} area=${widget.area.trim()} plateId=$plateId plateNumber=${row.plateNumber} location=${row.location} cached=${cachedPlate != null} childDialogClosedBeforeDock=$childDialogClosedBeforeDock requestTrayClosedBeforeDock=${source == 'status_parking_request_tray'}',
       );
 
       if (!mounted || !dockContext.mounted) return;
@@ -374,7 +545,7 @@ class _RealTimeStatusPreviewBodyState extends State<RealTimeStatusPreviewBody>
         ),
       );
       trace.log(
-        'statusDock=closed source=status_child_dialog_slot childDialogClosedBeforeDock=true returnStage=parent_overview',
+        'statusDock=closed source=$source childDialogClosedBeforeDock=$childDialogClosedBeforeDock returnStage=parent_overview',
         progress: .9,
       );
       await trace.succeed('현황 상태 처리 빠른 실행이 종료되었습니다.');
@@ -408,26 +579,84 @@ class _RealTimeStatusPreviewBodyState extends State<RealTimeStatusPreviewBody>
     );
   }
 
+  Widget _withParkingRequestShelf({
+    required BuildContext context,
+    required String area,
+    required List<RealTimeRowVM> requestRows,
+    required Widget board,
+  }) {
+    if (!widget.showParkingRequestShelf) return board;
+    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    return Column(
+      children: [
+        AnimatedSize(
+          alignment: Alignment.topCenter,
+          duration: reduceMotion
+              ? Duration.zero
+              : const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic,
+          child: requestRows.isEmpty
+              ? const SizedBox.shrink(
+                  key: ValueKey<String>('parking_request_shelf_empty'),
+                )
+              : RealTimeParkingRequestShelf(
+                  key: ValueKey<String>('parking_request_shelf:$area'),
+                  rows: requestRows,
+                  onDebugLine: _recordParkingRequestDebugLine,
+                  onUserActivity: _markUserActivity,
+                  onTrayOpen: _beginRequestTrayAutoPause,
+                  onTrayClose: _endRequestTrayAutoPause,
+                  onRequestTap: (row, source) async {
+                    await _openParkingRequestDock(row, source);
+                  },
+                ),
+        ),
+        Expanded(child: board),
+      ],
+    );
+  }
+
   Widget _buildBoard(
     BuildContext context,
     List<LocationModel> locations,
     ViewDocRowsStore store,
     String area,
   ) {
+    final requestRows = _buildParkingRequestRows(store, area);
     if (locations.isEmpty) {
-      return const RealTimeExpandedEmpty(message: '주차 구역 데이터가 없습니다.');
+      return _withParkingRequestShelf(
+        context: context,
+        area: area,
+        requestRows: requestRows,
+        board: const RealTimeExpandedEmpty(
+          message: '주차 구역 데이터가 없습니다.',
+        ),
+      );
     }
 
     final data = _buildBoardData(store, area);
+    final parentOrderState = context.watch<ParkingParentOrderState>();
+    final parentComparator = parentOrderState.comparatorForArea(
+      area,
+      fallback: naturalLocationCompare,
+    );
     final groups = buildZoneGroups(
       rows: data.rows,
       meta: locations,
       selected: kRealTimeLocationAll,
       search: '',
+      parentComparator: parentComparator,
     );
 
     if (groups.isEmpty) {
-      return const RealTimeExpandedEmpty(message: '표시할 주차 구역이 없습니다.');
+      return _withParkingRequestShelf(
+        context: context,
+        area: area,
+        requestRows: requestRows,
+        board: const RealTimeExpandedEmpty(
+          message: '표시할 주차 구역이 없습니다.',
+        ),
+      );
     }
 
     if (widget.controller.activeParent.trim().isEmpty) {
@@ -447,16 +676,17 @@ class _RealTimeStatusPreviewBodyState extends State<RealTimeStatusPreviewBody>
     final departureInProgress = data.statusByRowKey.values
         .where((status) => status == ParkingSlotStatus.departureInProgress)
         .length;
+    final parentOrderSignature = groups.map((group) => group.group).join('>');
     final signature =
-        '$area|${groups.length}|$parentGridReady|$occupied|${data.rows.length}|$departureRequested|$departureInProgress';
+        '$area|${groups.length}|$parentGridReady|$occupied|${data.rows.length}|$departureRequested|$departureInProgress|${requestRows.length}|$parentOrderSignature';
     if (_lastRenderSignature != signature) {
       _lastRenderSignature = signature;
       debugPrint(
-        '[RealTimeStatusDotMap] event=render screen=${widget.screen} area=$area mode=status_spatial parents=${groups.length} parentGridReady=$parentGridReady occupied=$occupied canonicalRows=${data.rows.length} departureRequested=$departureRequested departureInProgress=$departureInProgress source=view_doc_rows_store locationSource=${context.read<LocationState>().locations.isNotEmpty ? 'location_state' : 'sqlite'} interaction=parent_child_dialog_slot parentTap=child_zone parentSlotTap=disabled childPresentation=center_dialog childTransition=source_rect_expand_reverse_collapse childViewport=crop_fit childSlotTap=collapse_then_status_dock childDialogAutoPause=true systemBack=dialog_reverse_to_parent scrim=blur_dim occupiedLabel=plate_last4 departureVisual=statusDepartureRequested departurePulse=outer_halo_940ms_reverse plateTextMotion=static slotHitPolicy=collision_safe_partition statusPriority=departure_in_progress>departure_request>parking_request>parked firebaseAdditionalRead=0',
+        '[RealTimeStatusDotMap] event=render screen=${widget.screen} area=$area mode=status_spatial parents=${groups.length} parentGridReady=$parentGridReady occupied=$occupied canonicalRows=${data.rows.length} departureRequested=$departureRequested departureInProgress=$departureInProgress parkingRequestShelf=${widget.showParkingRequestShelf} parkingRequestCount=${requestRows.length} parkingRequestSort=createdAt_desc parkingRequestShelfSortLabel=최신→ parkingRequestTraySortLabel=최신↓ parkingRequestPlateLabel=last4 parkingRequestPresentation=list_surface parkingRequestMore=anchored_list_surface parkingRequestTrayRow=plate_last4_relative_time parkingRequestTap=direct_status_side_dock dotMapModified=false parentOrderSource=${parentOrderState.hasCustomOrder(area) ? 'user_persisted' : 'natural_fallback'} parentOrder=$parentOrderSignature source=view_doc_rows_store locationSource=${context.read<LocationState>().locations.isNotEmpty ? 'location_state' : 'sqlite'} interaction=parent_child_dialog_slot parentTap=child_zone parentSlotTap=disabled childPresentation=center_dialog childTransition=source_rect_expand_reverse_collapse childViewport=crop_fit childSlotTap=collapse_then_status_dock childDialogAutoPause=true systemBack=dialog_reverse_to_parent scrim=blur_dim occupiedLabel=plate_last4 departureVisual=statusDepartureRequested departurePulse=outer_halo_940ms_reverse plateTextMotion=static slotHitPolicy=collision_safe_partition statusPriority=departure_in_progress>departure_request>parking_request>parked firebaseAdditionalRead=0',
       );
     }
 
-    return KeyedSubtree(
+    final board = KeyedSubtree(
       key: ValueKey<String>('status_dot_map:$area'),
       child: RealTimeLocationBoard(
         groups: groups,
@@ -481,6 +711,13 @@ class _RealTimeStatusPreviewBodyState extends State<RealTimeStatusPreviewBody>
           );
         },
       ),
+    );
+
+    return _withParkingRequestShelf(
+      context: context,
+      area: area,
+      requestRows: requestRows,
+      board: board,
     );
   }
 

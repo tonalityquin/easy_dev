@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../shared/plate/application/minor/minor_plate_state.dart';
 import '../../shared/plate/domain/enums/plate_type.dart';
 import '../../shared/plate/widgets/departure_completed_operations_dock.dart';
+import '../../shared/plate/widgets/parking_completed_status_widgets.dart';
 import '../account/applications/user_state.dart';
 import '../dev/application/area_state.dart';
 import '../dev/application/field_calendar_state.dart';
@@ -85,7 +86,14 @@ class _MinorDepartureCompletedBottomSheetState
           selectedDate: selectedDate,
         )
         .where(
-          (plate) => !plate.isLockedFee && _areaEquals(plate.area, area),
+          (plate) =>
+              _areaEquals(plate.area, area) &&
+              resolveParkingCompletedBillingState(
+                    billingType: plate.billingType,
+                    billingPlanType: plate.billingPlanType,
+                    isLocked: plate.isLockedFee,
+                  ) ==
+                  ParkingCompletedBillingState.unsettled,
         )
         .toList()
       ..sort((a, b) => b.requestTime.compareTo(a.requestTime));

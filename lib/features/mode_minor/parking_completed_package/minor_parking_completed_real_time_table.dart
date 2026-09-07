@@ -135,6 +135,7 @@ class MinorParkingCompletedRealTimeTable extends StatelessWidget {
                 area: area,
                 screen: 'minor_parking_completed_status_dot_map',
                 specs: tabs,
+                showParkingRequestShelf: true,
                 overlay: const <ParkingStatusOverlaySpec>[
                   ParkingStatusOverlaySpec(
                     collection: 'parking_requests_view',

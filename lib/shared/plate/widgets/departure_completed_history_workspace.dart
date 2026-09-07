@@ -36,21 +36,24 @@ class _DepartureCompletedHistoryWorkspaceState
     extends State<DepartureCompletedHistoryWorkspace> {
   final TextEditingController _queryController = TextEditingController();
 
-  DateTime _start = DateTime.now().subtract(const Duration(days: 6));
-  DateTime _end = DateTime.now();
+  DateTimeRange? _selectedRange;
+  DateTimeRange? _executedRange;
   List<_HistoryRecord> _records = const <_HistoryRecord>[];
   String _query = '';
+  String? _executedQuery;
   String? _selectedId;
   String? _error;
   bool _loading = false;
-  bool _loaded = false;
+  bool _searched = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      _load();
+      _log(
+        'initialized autoLoad=false networkRead=0 rangeSelected=false queryReady=false',
+      );
     });
   }
 
@@ -61,16 +64,19 @@ class _DepartureCompletedHistoryWorkspaceState
         oldWidget.area.trim() != widget.area.trim()) {
       _queryController.clear();
       setState(() {
+        _selectedRange = null;
+        _executedRange = null;
         _records = const <_HistoryRecord>[];
         _query = '';
+        _executedQuery = null;
         _selectedId = null;
         _error = null;
-        _loaded = false;
+        _loading = false;
+        _searched = false;
       });
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _load();
-      });
+      _log(
+        'context_changed division=${widget.division.trim()} area=${widget.area.trim()} reset=true autoLoad=false networkRead=0',
+      );
     }
   }
 
@@ -293,38 +299,88 @@ class _DepartureCompletedHistoryWorkspaceState
     ].join('|');
   }
 
-  Future<void> _load() async {
+  bool _isValidQuery(String value) =>
+      RegExp(r'^\d{4}$').hasMatch(value.trim());
+
+  bool get _queryValid => _isValidQuery(_query);
+
+  bool get _canSearch =>
+      !_loading && _selectedRange != null && _queryValid;
+
+  Future<void> _searchHistory() async {
     if (_loading) return;
+    final range = _selectedRange;
+    final query = _query.trim();
+    if (range == null) {
+      _log('search_blocked reason=range_missing networkRead=0');
+      return;
+    }
+    if (!_isValidQuery(query)) {
+      _log('search_blocked reason=query_invalid networkRead=0 query=$query');
+      return;
+    }
     final division = widget.division.trim();
     final area = widget.area.trim();
     if (division.isEmpty || area.isEmpty) {
       setState(() {
         _records = const <_HistoryRecord>[];
-        _loaded = true;
+        _executedRange = DateTimeRange(
+          start: range.start,
+          end: range.end,
+        );
+        _executedQuery = query;
+        _searched = true;
         _error = '지역 정보를 확인할 수 없습니다';
       });
+      _log('search_blocked reason=area_missing networkRead=0');
       return;
     }
+    final startDay = DateTime(
+      range.start.year,
+      range.start.month,
+      range.start.day,
+    );
+    final endDay = DateTime(
+      range.end.year,
+      range.end.month,
+      range.end.day,
+    );
+    final start = startDay.isAfter(endDay) ? endDay : startDay;
+    final end = startDay.isAfter(endDay) ? startDay : endDay;
     setState(() {
       _loading = true;
-      _error = null;
+      _records = const <_HistoryRecord>[];
       _selectedId = null;
+      _error = null;
+      _searched = false;
+      _executedRange = null;
+      _executedQuery = null;
     });
-    _log('load_start division=$division area=$area start=${_ymd(_start)} end=${_ymd(_end)}');
+    _log(
+      'search_start division=$division area=$area query=$query start=${_ymd(start)} end=${_ymd(end)} autoLoad=false',
+    );
+    var listRequests = 0;
+    var csvRequests = 0;
     try {
-      final startDay = DateTime(_start.year, _start.month, _start.day);
-      final endDay = DateTime(_end.year, _end.month, _end.day);
-      final start = startDay.isAfter(endDay) ? endDay : startDay;
-      final end = startDay.isAfter(endDay) ? startDay : endDay;
       final names = <String>[];
-      for (final month in _monthKeys(start, end)) {
+      final monthKeys = _monthKeys(start, end);
+      for (final month in monthKeys) {
+        listRequests++;
         names.addAll(await _listObjects('$division/$area/logs/$month/'));
       }
       if (names.isEmpty) {
+        listRequests++;
         names.addAll(await _listObjects('$division/$area/logs/'));
       }
+      _log(
+        'gcs_list_complete requests=$listRequests months=${monthKeys.length} objects=${names.length}',
+      );
       final suffixes = <String>{};
-      for (var day = start; !day.isAfter(end); day = day.add(const Duration(days: 1))) {
+      for (
+        var day = start;
+        !day.isAfter(end);
+        day = day.add(const Duration(days: 1))
+      ) {
         suffixes.add('_ToDoLogs_${_ymd(day)}.csv');
       }
       final objectNames = names
@@ -337,6 +393,7 @@ class _DepartureCompletedHistoryWorkspaceState
         final match = RegExp(r'_ToDoLogs_(\d{4}-\d{2}-\d{2})\.csv$')
             .firstMatch(objectName);
         final date = match?.group(1) ?? '';
+        csvRequests++;
         for (final row in await _loadCsv(objectName)) {
           final meta = _meta(row);
           final docId = _stringValue(row['docId']) ??
@@ -354,29 +411,47 @@ class _DepartureCompletedHistoryWorkspaceState
           }
         }
       }
-      final records = map.values.map((item) => item.freeze(this)).toList()
+      _log(
+        'gcs_csv_complete requests=$csvRequests candidateFiles=${objectNames.length}',
+      );
+      final records = map.values
+          .map((item) => item.freeze(this))
+          .where((item) => item.tail4 == query)
+          .toList()
         ..sort((a, b) {
-          final byTime = (b.lastLogAt ?? DateTime.fromMillisecondsSinceEpoch(0))
-              .compareTo(a.lastLogAt ?? DateTime.fromMillisecondsSinceEpoch(0));
+          final byTime = (
+            b.lastLogAt ?? DateTime.fromMillisecondsSinceEpoch(0)
+          ).compareTo(
+            a.lastLogAt ?? DateTime.fromMillisecondsSinceEpoch(0),
+          );
           if (byTime != 0) return byTime;
           return b.date.compareTo(a.date);
         });
       if (!mounted) return;
       setState(() {
         _records = records;
-        _loaded = true;
+        _executedRange = DateTimeRange(start: start, end: end);
+        _executedQuery = query;
+        _searched = true;
         _loading = false;
         _error = null;
       });
-      _log('load_complete files=${objectNames.length} records=${records.length}');
+      _log(
+        'search_complete query=$query files=${objectNames.length} records=${records.length} networkRequests=${listRequests + csvRequests}',
+      );
     } catch (error, stackTrace) {
       if (!mounted) return;
       setState(() {
+        _records = const <_HistoryRecord>[];
+        _executedRange = DateTimeRange(start: start, end: end);
+        _executedQuery = query;
         _loading = false;
-        _loaded = true;
+        _searched = true;
         _error = '이력 데이터를 불러오지 못했습니다';
       });
-      _log('load_failed error=$error stack=$stackTrace');
+      _log(
+        'search_failed query=$query networkRequests=${listRequests + csvRequests} error=$error stack=$stackTrace',
+      );
       await StatusDialog.showFailure(
         context,
         title: StatusDialog.pastEntryLogLoadFailed,
@@ -389,39 +464,66 @@ class _DepartureCompletedHistoryWorkspaceState
     if (_query == next) return;
     setState(() {
       _query = next;
+      _records = const <_HistoryRecord>[];
+      _executedRange = null;
+      _executedQuery = null;
       _selectedId = null;
+      _error = null;
+      _searched = false;
     });
-    _log('query_changed value=$next');
+    _log(
+      'query_changed value=$next valid=${_isValidQuery(next)} networkRead=0 searchRequired=true',
+    );
   }
 
   void _clearQuery() {
     _queryController.clear();
     _setQuery('');
+    _log('query_cleared networkRead=0');
   }
 
   Future<void> _pickRange() async {
+    final now = DateTime.now();
+    final fallback = DateTimeRange(
+      start: DateTime(now.year, now.month, now.day).subtract(
+        const Duration(days: 6),
+      ),
+      end: DateTime(now.year, now.month, now.day),
+    );
     final picked = await showDateRangePicker(
       context: context,
-      initialDateRange: DateTimeRange(start: _start, end: _end),
+      initialDateRange: _selectedRange ?? fallback,
       firstDate: DateTime(2023, 1, 1),
       lastDate: DateTime.now().add(const Duration(days: 1)),
     );
     if (picked == null || !mounted) return;
+    final range = DateTimeRange(
+      start: DateTime(
+        picked.start.year,
+        picked.start.month,
+        picked.start.day,
+      ),
+      end: DateTime(
+        picked.end.year,
+        picked.end.month,
+        picked.end.day,
+      ),
+    );
     setState(() {
-      _start = DateTime(picked.start.year, picked.start.month, picked.start.day);
-      _end = DateTime(picked.end.year, picked.end.month, picked.end.day);
+      _selectedRange = range;
+      _executedRange = null;
+      _executedQuery = null;
+      _records = const <_HistoryRecord>[];
       _selectedId = null;
+      _error = null;
+      _searched = false;
     });
-    _log('range_changed start=${_ymd(_start)} end=${_ymd(_end)}');
-    await _load();
+    _log(
+      'range_changed start=${_ymd(range.start)} end=${_ymd(range.end)} networkRead=0 searchRequired=true',
+    );
   }
 
-  List<_HistoryRecord> get _visibleRecords {
-    final query = _query.trim();
-    if (query.isEmpty) return _records;
-    if (!RegExp(r'^\d{4}$').hasMatch(query)) return const <_HistoryRecord>[];
-    return _records.where((record) => record.tail4 == query).toList();
-  }
+  List<_HistoryRecord> get _visibleRecords => _records;
 
   _HistoryRecord? get _selectedRecord {
     final id = _selectedId;
@@ -482,23 +584,61 @@ class _DepartureCompletedHistoryWorkspaceState
     );
   }
 
+  String get _statusText {
+    final range = _selectedRange;
+    if (range == null) return '기간 미선택 · 조회 전';
+    final rangeText = '${_ymd(range.start)} ~ ${_ymd(range.end)}';
+    if (!_queryValid) return '$rangeText · 번호판 4자리 필요';
+    if (_loading) return '$rangeText · ${_query.trim()} · 조회 중';
+    if (!_searched) return '$rangeText · ${_query.trim()} · 조회 전';
+    final executedRange = _executedRange ?? range;
+    final executedQuery = _executedQuery ?? _query.trim();
+    final executedRangeText =
+        '${_ymd(executedRange.start)} ~ ${_ymd(executedRange.end)}';
+    if (_error != null) return '$executedRangeText · $executedQuery · 조회 실패';
+    return '$executedRangeText · $executedQuery · ${_records.length}건';
+  }
+
   Widget _body(BuildContext context) {
+    if (_selectedRange == null) {
+      return const KeyedSubtree(
+        key: ValueKey<String>('history-range-required'),
+        child: SizedBox.shrink(),
+      );
+    }
+    if (!_queryValid) {
+      return KeyedSubtree(
+        key: const ValueKey<String>('history-query-required'),
+        child: _emptyState(context, '번호판 4자리를 입력해 주세요'),
+      );
+    }
     if (_error != null) {
       return KeyedSubtree(
         key: const ValueKey<String>('history-error'),
-        child: _emptyState(context, _error!, onAction: _load),
+        child: _emptyState(
+          context,
+          _error!,
+          onAction: _searchHistory,
+          actionLabel: '다시 검색',
+        ),
       );
     }
-    if (!_loaded || _records.isEmpty) {
+    if (!_searched) {
       return KeyedSubtree(
-        key: const ValueKey<String>('history-empty'),
-        child: _emptyState(context, '표시할 이력이 없습니다', onAction: _load),
+        key: const ValueKey<String>('history-search-required'),
+        child: _emptyState(
+          context,
+          '검색을 실행해 주세요',
+          onAction: _canSearch ? _searchHistory : null,
+          actionLabel: '검색',
+        ),
       );
     }
-    final records = _visibleRecords;
-    if (records.isEmpty) {
+    if (_records.isEmpty) {
       return KeyedSubtree(
-        key: ValueKey<String>('history-no-result-${_query.trim()}'),
+        key: ValueKey<String>(
+          'history-no-result-${_executedQuery ?? _query.trim()}',
+        ),
         child: _emptyState(
           context,
           '검색 결과가 없습니다',
@@ -509,18 +649,20 @@ class _DepartureCompletedHistoryWorkspaceState
     }
     final tokens = CommonUiTheme.of(context);
     return KeyedSubtree(
-      key: ValueKey<String>('history-list-${records.length}-${_query.trim()}'),
+      key: ValueKey<String>(
+        'history-list-${_records.length}-${_executedQuery ?? _query.trim()}',
+      ),
       child: OpsDockListSurface(
         child: ListView.separated(
           padding: EdgeInsets.zero,
-          itemCount: records.length,
+          itemCount: _records.length,
           separatorBuilder: (_, __) => Divider(
             height: 1,
             thickness: 1,
             color: tokens.borderSubtle,
           ),
           itemBuilder: (context, index) {
-            final record = records[index];
+            final record = _records[index];
             final selected = record.id == _selectedId;
             return OpsDockSelectableRowSurface(
               selected: selected,
@@ -529,7 +671,9 @@ class _DepartureCompletedHistoryWorkspaceState
               onTap: () {
                 HapticFeedback.selectionClick();
                 setState(() => _selectedId = selected ? null : record.id);
-                _log('row_${selected ? "deselected" : "selected"} plate=${record.plateNumber}');
+                _log(
+                  'row_${selected ? "deselected" : "selected"} plate=${record.plateNumber}',
+                );
               },
               child: _HistoryRow(
                 record: record,
@@ -544,26 +688,64 @@ class _DepartureCompletedHistoryWorkspaceState
     );
   }
 
+  Widget _rangeRequiredBody(BuildContext context) {
+    return _emptyState(
+      context,
+      '기간을 먼저 선택해 주세요',
+      onAction: _loading ? null : _pickRange,
+      actionLabel: '기간 선택',
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final selected = _selectedRecord;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final body = _selectedRange == null
+        ? KeyedSubtree(
+            key: const ValueKey<String>('history-range-required'),
+            child: _rangeRequiredBody(context),
+          )
+        : _body(context);
     return Column(
       children: [
         Row(
           children: [
             Expanded(
-              child: OpsDockSearchField(
-                controller: _queryController,
-                query: _query,
-                semanticLabel: '과거 로그 번호판 4자리 검색',
-                onChanged: _setQuery,
-                onClear: _clearQuery,
-                keyboardType: TextInputType.number,
-                inputFormatters: <TextInputFormatter>[
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(4),
-                ],
-                maxLength: 4,
+              child: AnimatedOpacity(
+                duration: reduceMotion
+                    ? Duration.zero
+                    : CommonUiMotion.selection,
+                opacity: _selectedRange == null ? .52 : 1,
+                child: ExcludeFocus(
+                  excluding: _selectedRange == null,
+                  child: IgnorePointer(
+                    ignoring: _selectedRange == null,
+                    child: OpsDockSearchField(
+                      controller: _queryController,
+                      query: _query,
+                      semanticLabel: '과거 로그 번호판 4자리 검색',
+                      onChanged: _setQuery,
+                      onClear: _clearQuery,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: <TextInputFormatter>[
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(4),
+                      ],
+                      maxLength: 4,
+                      onSubmitted: (_) {
+                        if (_canSearch) {
+                          _searchHistory();
+                        } else {
+                          _log(
+                            'search_submit_blocked rangeSelected=${_selectedRange != null} queryValid=$_queryValid networkRead=0',
+                          );
+                        }
+                      },
+                    ),
+                  ),
+                ),
               ),
             ),
             const SizedBox(width: 6),
@@ -577,9 +759,9 @@ class _DepartureCompletedHistoryWorkspaceState
             ),
             const SizedBox(width: 4),
             CommonIconButton(
-              icon: Icons.refresh_rounded,
-              tooltip: '이력 새로고침',
-              onPressed: _loading ? null : _load,
+              icon: Icons.search_rounded,
+              tooltip: '이력 검색',
+              onPressed: _canSearch ? _searchHistory : null,
               loading: _loading,
               size: 40,
               iconSize: 19,
@@ -590,12 +772,30 @@ class _DepartureCompletedHistoryWorkspaceState
         const SizedBox(height: 8),
         Align(
           alignment: Alignment.centerLeft,
-          child: Text(
-            '${_ymd(_start)} ~ ${_ymd(_end)} · ${_visibleRecords.length}건',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: CommonUiTheme.of(context).textSecondary,
-                  fontWeight: FontWeight.w700,
-                ),
+          child: AnimatedSwitcher(
+            duration: reduceMotion
+                ? Duration.zero
+                : CommonUiMotion.selection,
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (child, animation) => FadeTransition(
+              opacity: animation,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, .08),
+                  end: Offset.zero,
+                ).animate(animation),
+                child: child,
+              ),
+            ),
+            child: Text(
+              _statusText,
+              key: ValueKey<String>(_statusText),
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: CommonUiTheme.of(context).textSecondary,
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
           ),
         ),
         const SizedBox(height: 8),
@@ -603,7 +803,7 @@ class _DepartureCompletedHistoryWorkspaceState
           child: Stack(
             children: [
               Positioned.fill(
-                child: OpsDockResultSwitcher(child: _body(context)),
+                child: OpsDockResultSwitcher(child: body),
               ),
               OpsDockLoadingOverlay(loading: _loading),
             ],
@@ -611,7 +811,9 @@ class _DepartureCompletedHistoryWorkspaceState
         ),
         OpsDockContextFooterTransition(
           child: selected == null
-              ? const SizedBox.shrink(key: ValueKey<String>('history-footer-empty'))
+              ? const SizedBox.shrink(
+                  key: ValueKey<String>('history-footer-empty'),
+                )
               : OpsDockContextFooter(
                   key: ValueKey<String>('history-footer-${selected.id}'),
                   children: [

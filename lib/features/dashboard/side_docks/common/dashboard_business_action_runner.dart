@@ -66,12 +66,19 @@ class DashboardBusinessActionRunner {
           );
           await trace.fail('정기 주차 표시 조건을 충족하지 않아 실행하지 않았습니다.');
         } else {
-          trace.log('monthly_operations_open section=${Section.monthly.name}', progress: 0.38);
+          trace.log(
+            'monthly_operations_open section=${Section.monthly.name} entryMode=${SecondarySideDockEntryMode.monthlyQuickAction.name} railScope=monthly_only',
+            progress: 0.38,
+          );
           await showSecondarySideDock<void>(
             context: context,
             initialSection: Section.monthly,
+            entryMode: SecondarySideDockEntryMode.monthlyQuickAction,
           );
-          trace.log('monthly_operations_closed section=${Section.monthly.name}', progress: 0.9);
+          trace.log(
+            'monthly_operations_closed section=${Section.monthly.name} entryMode=${SecondarySideDockEntryMode.monthlyQuickAction.name} railScope=monthly_only',
+            progress: 0.9,
+          );
           await trace.succeed('정기 주차 업무를 종료했습니다.');
         }
       } else {

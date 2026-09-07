@@ -6,7 +6,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../app/init/app_exit_service.dart';
 import '../../../app/init/work_schedule_prefs.dart';
-import '../../../design_system/common_ui/common_ui_theme.dart';
 import '../../attendance/application/common_attendance_service.dart';
 import '../../attendance/widgets/common_attendance_punch_feedback.dart';
 import '../../commute/widgets/common_punch_recorder_surface.dart';
@@ -56,6 +55,9 @@ class _HeadquarterQuickWorkContextState
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _debug(
+      'presentation=dashboard_style workHeader=hidden reveal=stagger22_motion190_y6 punchOuterMotion=none',
+    );
     _load(reason: 'init');
   }
 
@@ -403,50 +405,20 @@ class _HeadquarterQuickWorkContextState
           const SizedBox(height: 14),
           _WorkSurfaceReveal(
             order: 1,
-            child: _WorkInteractionMotion(
-              active: _loading || _submitting != null,
-              child: CommonPunchRecorderSurface(
-                dateLabel: dateLabel,
-                onDateTap: _pickDate,
-                loading: _loading,
-                onDeveloperStatus:
-                    widget.developerMode ? _requestDeveloperStatus : null,
-                slots: <CommonPunchSlotData>[
-                  _workInSlot(),
-                  _breakSlot(),
-                  _workOutSlot(),
-                ],
-              ),
+            child: CommonPunchRecorderSurface(
+              dateLabel: dateLabel,
+              onDateTap: _pickDate,
+              loading: _loading,
+              onDeveloperStatus:
+                  widget.developerMode ? _requestDeveloperStatus : null,
+              slots: <CommonPunchSlotData>[
+                _workInSlot(),
+                _breakSlot(),
+                _workOutSlot(),
+              ],
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _WorkInteractionMotion extends StatelessWidget {
-  const _WorkInteractionMotion({
-    required this.active,
-    required this.child,
-  });
-
-  final bool active;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    final duration = reduceMotion ? Duration.zero : CommonUiMotion.selection;
-    return AnimatedScale(
-      scale: active ? 0.992 : 1,
-      duration: duration,
-      curve: CommonUiMotion.standard,
-      child: AnimatedOpacity(
-        opacity: active ? 0.965 : 1,
-        duration: duration,
-        curve: CommonUiMotion.standard,
-        child: child,
       ),
     );
   }
@@ -481,7 +453,7 @@ class _WorkSurfaceReveal extends StatelessWidget {
         return Opacity(
           opacity: motion,
           child: Transform.translate(
-            offset: Offset(0, 9 * (1 - motion)),
+            offset: Offset(0, 6 * (1 - motion)),
             child: animatedChild,
           ),
         );
