@@ -13,12 +13,14 @@ class AttBrkModeDb {
   static const String dbName = 'single_mode_attendance.db';
   static const String workAttendanceTable = 'single_work_attendance';
   static const String breakAttendanceTable = 'single_break_attendance';
+  static const String ruleTodoPromptHistoryTable =
+      'single_rule_todo_prompt_history';
 
   static const String _legacyDbName = 'simple_mode_attendance.db';
   static const String _legacyAttendanceTable = 'simple_mode_attendance';
   static const String _legacyWorkAttendanceTable = 'simple_work_attendance';
   static const String _legacyBreakAttendanceTable = 'simple_break_attendance';
-  static const int _dbVersion = 5;
+  static const int _dbVersion = 6;
 
   Database? _db;
 
@@ -111,6 +113,9 @@ class AttBrkModeDb {
     if (oldVersion < 5) {
       await _migrateV5SingleNaming(db);
     }
+    if (oldVersion < 6) {
+      await _migrateV6AddRuleTodoPromptHistory(db);
+    }
 
     _record('single_mode_db_upgrade_complete', <String, Object?>{
       'from': oldVersion,
@@ -192,6 +197,13 @@ class AttBrkModeDb {
     });
   }
 
+  Future<void> _migrateV6AddRuleTodoPromptHistory(Database db) async {
+    await _createRuleTodoPromptHistoryTable(db);
+    _record('single_mode_db_schema_migrated', const <String, Object?>{
+      'version': 6,
+    });
+  }
+
   Future<void> _migrateLegacyTablesIfPresent(Database db) async {
     final hasLegacy = await _tableExists(db, _legacyAttendanceTable) ||
         await _tableExists(db, _legacyWorkAttendanceTable) ||
@@ -256,6 +268,7 @@ class AttBrkModeDb {
   Future<void> _createSingleTables(DatabaseExecutor db) async {
     await _createWorkAttendanceTable(db);
     await _createBreakAttendanceTable(db);
+    await _createRuleTodoPromptHistoryTable(db);
   }
 
   Future<void> _createWorkAttendanceTable(DatabaseExecutor db) async {
@@ -278,6 +291,24 @@ class AttBrkModeDb {
         time TEXT NOT NULL,
         created_at TEXT NOT NULL,
         PRIMARY KEY (date, type)
+      );
+    ''');
+  }
+
+  Future<void> _createRuleTodoPromptHistoryTable(
+    DatabaseExecutor db,
+  ) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS $ruleTodoPromptHistoryTable (
+        user_id TEXT NOT NULL,
+        division TEXT NOT NULL,
+        area TEXT NOT NULL,
+        todo_fingerprint TEXT NOT NULL,
+        last_prompted_at TEXT,
+        clock_ins_since_prompt INTEGER NOT NULL DEFAULT 0,
+        prompt_count INTEGER NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (user_id, division, area)
       );
     ''');
   }

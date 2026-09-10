@@ -1488,6 +1488,7 @@ class _SpatialParentMapState extends State<_SpatialParentMap>
   String? _pressedChildKey;
   String? _peekChildKey;
   bool _peekVisible = false;
+  String _lastParentRenderDiagnosticSignature = '';
 
   @override
   void initState() {
@@ -1500,6 +1501,9 @@ class _SpatialParentMapState extends State<_SpatialParentMap>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final disabled = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+      widget.onDebug(
+        'parking_map_design=guidance stage=parent parent=${widget.parent.locationName} boundary=solid parkingBay=rect vehicleVisual=car recommendationVisual=bay_outline reduceMotion=$disabled',
+      );
       if (disabled) {
         _revealController.value = 1;
         widget.onDebug(
@@ -1645,7 +1649,7 @@ class _SpatialParentMapState extends State<_SpatialParentMap>
     );
   }
 
-  List<_ResolvedSpatialSlot> _parentSlotDots(
+  List<_ResolvedSpatialSlot> _parentSlotIndicators(
     ParkingStatusDotMapLayout layout,
   ) {
     final current = _PlateParkingWorkspaceState._selectionData(
@@ -1654,7 +1658,7 @@ class _SpatialParentMapState extends State<_SpatialParentMap>
     final result = <_ResolvedSpatialSlot>[];
     for (final child in widget.children) {
       for (final slot in child.childSlots) {
-        final rect = layout
+        final rawRect = layout
             .rectFor(
               GridRect(
                 r0: slot.r0,
@@ -1664,7 +1668,9 @@ class _SpatialParentMapState extends State<_SpatialParentMap>
               ),
             )
             .intersect(layout.mapRect);
-        if (rect.isEmpty) continue;
+        if (rawRect.isEmpty || rawRect.width <= 0 || rawRect.height <= 0) {
+          continue;
+        }
         final key = _slotKey(child.locationName, slot.no);
         final currentSlot = current != null &&
             _nameKey(current.parent) == _nameKey(widget.parent.locationName) &&
@@ -1687,14 +1693,95 @@ class _SpatialParentMapState extends State<_SpatialParentMap>
         result.add(
           _ResolvedSpatialSlot(
             slot: slot,
-            visualRect: rect,
-            hitRect: rect,
+            visualRect: _minimumSlotVisualRect(
+              rawRect,
+              bounds: layout.mapRect,
+            ),
+            hitRect: rawRect,
             state: state,
           ),
         );
       }
     }
     return result;
+  }
+
+  Rect _minimumSlotVisualRect(
+    Rect rect, {
+    required Rect bounds,
+  }) {
+    const minimumExtent = 3.2;
+    final width = math.max(rect.width, minimumExtent).toDouble();
+    final height = math.max(rect.height, minimumExtent).toDouble();
+    var left = rect.center.dx - width / 2;
+    var top = rect.center.dy - height / 2;
+
+    if (width <= bounds.width) {
+      left = left.clamp(bounds.left, bounds.right - width).toDouble();
+    } else {
+      left = bounds.left;
+    }
+    if (height <= bounds.height) {
+      top = top.clamp(bounds.top, bounds.bottom - height).toDouble();
+    } else {
+      top = bounds.top;
+    }
+
+    return Rect.fromLTWH(
+      left,
+      top,
+      math.min(width, bounds.width).toDouble(),
+      math.min(height, bounds.height).toDouble(),
+    );
+  }
+
+  void _reportParentRenderDiagnostics({
+    required ParkingStatusDotMapLayout layout,
+    required ParkingGridModel grid,
+    required List<_ResolvedChildRegion> entries,
+    required List<_ResolvedSpatialSlot> slots,
+  }) {
+    var visibleParkingAreas = 0;
+    var compactParkingAreas = 0;
+    for (final area in grid.parkingAreas) {
+      final rect = layout
+          .rectFor(
+            GridRect(
+              r0: area.r0,
+              c0: area.c0,
+              r1: area.r1,
+              c1: area.c1,
+            ),
+          )
+          .intersect(layout.mapRect);
+      if (rect.isEmpty || rect.width <= 0 || rect.height <= 0) continue;
+      visibleParkingAreas++;
+      if (rect.width < 2.4 || rect.height < 2.4) {
+        compactParkingAreas++;
+      }
+    }
+    final emptySlots =
+        slots.where((slot) => slot.state == _SpatialSlotState.empty).length;
+    final signature = [
+      widget.parent.locationName,
+      layout.scale.toStringAsFixed(3),
+      grid.parkingAreas.length,
+      visibleParkingAreas,
+      compactParkingAreas,
+      entries.length,
+      slots.length,
+      emptySlots,
+    ].join('|');
+    if (_lastParentRenderDiagnosticSignature == signature) return;
+    _lastParentRenderDiagnosticSignature = signature;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _lastParentRenderDiagnosticSignature != signature) {
+        return;
+      }
+      widget.onDebug(
+        'parking_parent=render_diagnostics parent=${widget.parent.locationName} scale=${layout.scale.toStringAsFixed(3)} parkingAreas=${grid.parkingAreas.length} visibleParkingAreas=$visibleParkingAreas compactParkingAreas=$compactParkingAreas children=${entries.length} childSlots=${slots.length} emptySlotsVisible=$emptySlots guidanceMinimumBayExtent=2.4 slotMinimumExtent=3.2',
+      );
+    });
   }
 
   @override
@@ -1729,7 +1816,13 @@ class _SpatialParentMapState extends State<_SpatialParentMap>
             );
             if (layout == null) return const SizedBox.shrink();
             final entries = _resolveChildren(layout, grid);
-            final slotDots = _parentSlotDots(layout);
+            final slotIndicators = _parentSlotIndicators(layout);
+            _reportParentRenderDiagnostics(
+              layout: layout,
+              grid: grid,
+              entries: entries,
+              slots: slotIndicators,
+            );
             return GestureDetector(
               key: _mapKey,
               behavior: HitTestBehavior.opaque,
@@ -1780,9 +1873,9 @@ class _SpatialParentMapState extends State<_SpatialParentMap>
               child: Stack(
                 children: [
                   Positioned.fill(
-                    child: ParkingStatusDotMapSurface(
+                    child: ParkingGuidanceMapSurface(
                       grid: grid,
-                      framed: false,
+                      framed: true,
                       padding: 10,
                     ),
                   ),
@@ -1801,8 +1894,8 @@ class _SpatialParentMapState extends State<_SpatialParentMap>
                       ),
                     ),
                   ),
-                  for (final slot in slotDots)
-                    _ParentSlotDot(entry: slot),
+                  for (final slot in slotIndicators)
+                    _ParentSlotIndicator(entry: slot),
                   for (final entry in entries)
                     Positioned.fromRect(
                       rect: entry.nominalRect,
@@ -1894,23 +1987,23 @@ class _ChildRegionPainter extends CustomPainter {
     for (final entry in entries) {
       final pressed = _nameKey(entry.child.locationName) == pressedChildKey;
       final fill = entry.selected
-          ? primary.withOpacity(.19)
+          ? primary.withOpacity(.06)
           : entry.current
-              ? tertiary.withOpacity(.14)
+              ? tertiary.withOpacity(.045)
               : entry.recommended
-                  ? secondary.withOpacity(.13)
+                  ? secondary.withOpacity(.04)
                   : entry.enabled
-                      ? neutral.withOpacity(pressed ? .18 : .10)
-                      : disabled.withOpacity(.08);
+                      ? neutral.withOpacity(pressed ? .035 : .018)
+                      : disabled.withOpacity(.012);
       final stroke = entry.selected
-          ? primary.withOpacity(.95)
+          ? primary.withOpacity(.98)
           : entry.current
-              ? tertiary.withOpacity(.88)
+              ? tertiary.withOpacity(.94)
               : entry.recommended
-                  ? secondary.withOpacity(.9)
+                  ? secondary.withOpacity(.94)
                   : entry.enabled
-                      ? neutral.withOpacity(pressed ? .86 : .56)
-                      : disabled.withOpacity(.38);
+                      ? neutral.withOpacity(pressed ? .94 : .78)
+                      : disabled.withOpacity(.48);
       canvas.drawPath(
         entry.effectivePath,
         Paint()
@@ -1921,7 +2014,9 @@ class _ChildRegionPainter extends CustomPainter {
         entry.effectivePath,
         Paint()
           ..style = PaintingStyle.stroke
-          ..strokeWidth = pressed || entry.selected ? 2 : 1.2
+          ..strokeWidth = pressed || entry.selected ? 2.3 : 1.8
+          ..strokeJoin = StrokeJoin.round
+          ..strokeCap = StrokeCap.round
           ..color = stroke,
       );
     }
@@ -2115,32 +2210,103 @@ class _ChildPeekBubble extends StatelessWidget {
   }
 }
 
-class _ParentSlotDot extends StatelessWidget {
-  const _ParentSlotDot({required this.entry});
+class _ParentSlotIndicator extends StatelessWidget {
+  const _ParentSlotIndicator({required this.entry});
 
   final _ResolvedSpatialSlot entry;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final color = switch (entry.state) {
+    if (entry.state == _SpatialSlotState.empty) {
+      return Positioned.fromRect(
+        rect: entry.visualRect,
+        child: IgnorePointer(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: cs.surface.withOpacity(.035),
+              borderRadius: BorderRadius.circular(3),
+              border: Border.all(
+                color: cs.outlineVariant.withOpacity(.72),
+                width: 1,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final tone = switch (entry.state) {
       _SpatialSlotState.selected => cs.primary,
       _SpatialSlotState.current => cs.tertiary,
       _SpatialSlotState.departureRequest => cs.error,
       _SpatialSlotState.occupied => cs.onSurfaceVariant,
-      _SpatialSlotState.recommended => cs.primary.withOpacity(.68),
-      _SpatialSlotState.empty => cs.outlineVariant.withOpacity(.46),
+      _SpatialSlotState.recommended => cs.secondary,
+      _SpatialSlotState.empty => cs.outlineVariant,
+    };
+    final vehicle = entry.state == _SpatialSlotState.occupied ||
+        entry.state == _SpatialSlotState.departureRequest;
+    final icon = switch (entry.state) {
+      _SpatialSlotState.selected => Icons.check_rounded,
+      _SpatialSlotState.current => Icons.my_location_rounded,
+      _SpatialSlotState.departureRequest => Icons.directions_car_filled_rounded,
+      _SpatialSlotState.occupied => Icons.directions_car_filled_rounded,
+      _SpatialSlotState.recommended => Icons.auto_awesome_rounded,
+      _SpatialSlotState.empty => Icons.circle_outlined,
     };
     final rect = entry.visualRect.deflate(
-      math.min(entry.visualRect.shortestSide * .18, 1.5),
+      math.min(entry.visualRect.shortestSide * .08, .8),
     );
     return Positioned.fromRect(
       rect: rect,
       child: IgnorePointer(
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: color.withOpacity(entry.state == _SpatialSlotState.empty ? .35 : .72),
-            borderRadius: BorderRadius.circular(2.5),
+        child: TweenAnimationBuilder<double>(
+          tween: Tween<double>(begin: .9, end: 1),
+          duration: reduceMotion
+              ? Duration.zero
+              : const Duration(milliseconds: 180),
+          curve: Curves.easeOutBack,
+          builder: (context, value, child) => Opacity(
+            opacity: value.clamp(0.0, 1.0).toDouble(),
+            child: Transform.scale(scale: value, child: child),
+          ),
+          child: AnimatedContainer(
+            duration: reduceMotion
+                ? Duration.zero
+                : const Duration(milliseconds: 170),
+            curve: Curves.easeOutCubic,
+            decoration: BoxDecoration(
+              color: tone.withOpacity(vehicle ? .035 : .07),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(
+                color: tone.withOpacity(vehicle ? .86 : .94),
+                width: entry.state == _SpatialSlotState.departureRequest ||
+                        entry.state == _SpatialSlotState.selected
+                    ? 2
+                    : 1.45,
+              ),
+              boxShadow: [
+                if (entry.state == _SpatialSlotState.departureRequest ||
+                    entry.state == _SpatialSlotState.recommended)
+                  BoxShadow(
+                    color: tone.withOpacity(.14),
+                    blurRadius: 6,
+                    spreadRadius: .4,
+                  ),
+              ],
+            ),
+            child: Center(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final iconSize = math
+                      .min(constraints.maxWidth, constraints.maxHeight)
+                      .clamp(8.0, 18.0)
+                      .toDouble();
+                  return Icon(icon, size: iconSize, color: tone);
+                },
+              ),
+            ),
           ),
         ),
       ),
@@ -2184,6 +2350,7 @@ class _SpatialChildFocus extends StatefulWidget {
 class _SpatialChildFocusState extends State<_SpatialChildFocus> {
   int? _pressedSlotNo;
   String _lastHitRectDiagnosticSignature = '';
+  bool _guidanceDesignLogged = false;
 
   static String _nameKey(String raw) =>
       raw.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
@@ -2320,6 +2487,15 @@ class _SpatialChildFocusState extends State<_SpatialChildFocus> {
         message: 'childRect 또는 childSlots 위치 정보를 확인하세요.',
       );
     }
+    if (!_guidanceDesignLogged) {
+      _guidanceDesignLogged = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        widget.onDebug(
+          'parking_map_design=guidance stage=child parent=${widget.parent.locationName} child=${widget.child.locationName} boundary=effective_path_solid slotVisual=parking_bay_vehicle reduceMotion=${MediaQuery.maybeOf(context)?.disableAnimations ?? false}',
+        );
+      });
+    }
     return LayoutBuilder(
       builder: (context, constraints) {
         final grid = widget.parent.parkingGrid!;
@@ -2375,7 +2551,7 @@ class _SpatialChildFocusState extends State<_SpatialChildFocus> {
           child: Stack(
             children: [
               Positioned.fill(
-                child: ParkingStatusDotMapSurface(
+                child: ParkingGuidanceMapSurface(
                   grid: grid,
                   viewport: childRect,
                   visibleParkingAreaIds: effectiveAreaIds,
@@ -2388,14 +2564,8 @@ class _SpatialChildFocusState extends State<_SpatialChildFocus> {
                   child: CustomPaint(
                     painter: _ChildFocusPathPainter(
                       path: effectivePath,
-                      fill: Theme.of(context)
-                          .colorScheme
-                          .primary
-                          .withOpacity(.045),
-                      stroke: Theme.of(context)
-                          .colorScheme
-                          .onSurfaceVariant
-                          .withOpacity(.38),
+                      fill: CommonUiTheme.of(context).accent.withOpacity(.018),
+                      stroke: CommonUiTheme.of(context).borderStrong,
                     ),
                   ),
                 ),
@@ -2546,7 +2716,9 @@ class _ChildFocusPathPainter extends CustomPainter {
       path,
       Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5
+        ..strokeWidth = 2
+        ..strokeJoin = StrokeJoin.round
+        ..strokeCap = StrokeCap.round
         ..color = stroke,
     );
   }
@@ -2573,38 +2745,44 @@ class _SpatialSlotMarker extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    final fill = switch (entry.state) {
-      _SpatialSlotState.selected => cs.primaryContainer,
-      _SpatialSlotState.current => cs.tertiaryContainer,
-      _SpatialSlotState.departureRequest => cs.errorContainer,
-      _SpatialSlotState.occupied => cs.surfaceContainerHighest,
-      _SpatialSlotState.recommended => cs.secondaryContainer,
-      _SpatialSlotState.empty => cs.surface.withOpacity(.92),
-    };
-    final stroke = switch (entry.state) {
+    final tone = switch (entry.state) {
       _SpatialSlotState.selected => cs.primary,
       _SpatialSlotState.current => cs.tertiary,
       _SpatialSlotState.departureRequest => cs.error,
-      _SpatialSlotState.occupied => cs.outline,
-      _SpatialSlotState.recommended => cs.secondary,
-      _SpatialSlotState.empty => cs.outlineVariant,
-    };
-    final foreground = switch (entry.state) {
-      _SpatialSlotState.selected => cs.onPrimaryContainer,
-      _SpatialSlotState.current => cs.onTertiaryContainer,
-      _SpatialSlotState.departureRequest => cs.onErrorContainer,
       _SpatialSlotState.occupied => cs.onSurfaceVariant,
-      _SpatialSlotState.recommended => cs.onSecondaryContainer,
-      _SpatialSlotState.empty => cs.onSurface,
+      _SpatialSlotState.recommended => cs.secondary,
+      _SpatialSlotState.empty => cs.onSurfaceVariant,
     };
-    final duration = reduceMotion ? Duration.zero : const Duration(milliseconds: 170);
-    final pressDuration = reduceMotion ? Duration.zero : const Duration(milliseconds: 90);
+    final fill = switch (entry.state) {
+      _SpatialSlotState.selected => cs.primary.withOpacity(.13),
+      _SpatialSlotState.current => cs.tertiary.withOpacity(.11),
+      _SpatialSlotState.departureRequest => cs.error.withOpacity(.09),
+      _SpatialSlotState.occupied => cs.onSurfaceVariant.withOpacity(.045),
+      _SpatialSlotState.recommended => cs.secondary.withOpacity(.10),
+      _SpatialSlotState.empty => Colors.transparent,
+    };
+    final vehicle = entry.state == _SpatialSlotState.occupied ||
+        entry.state == _SpatialSlotState.departureRequest;
+    final icon = switch (entry.state) {
+      _SpatialSlotState.selected => Icons.check_rounded,
+      _SpatialSlotState.current => Icons.my_location_rounded,
+      _SpatialSlotState.departureRequest => Icons.directions_car_filled_rounded,
+      _SpatialSlotState.occupied => Icons.directions_car_filled_rounded,
+      _SpatialSlotState.recommended => Icons.auto_awesome_rounded,
+      _SpatialSlotState.empty => null,
+    };
+    final duration =
+        reduceMotion ? Duration.zero : const Duration(milliseconds: 170);
+    final pressDuration =
+        reduceMotion ? Duration.zero : const Duration(milliseconds: 90);
     return Positioned.fromRect(
       rect: entry.visualRect,
       child: IgnorePointer(
         child: TweenAnimationBuilder<double>(
           tween: Tween<double>(begin: .88, end: 1),
-          duration: reduceMotion ? Duration.zero : const Duration(milliseconds: 180),
+          duration: reduceMotion
+              ? Duration.zero
+              : const Duration(milliseconds: 180),
           curve: Curves.easeOutBack,
           builder: (context, value, child) => Opacity(
             opacity: value.clamp(0.0, 1.0).toDouble(),
@@ -2621,14 +2799,27 @@ class _SpatialSlotMarker extends StatelessWidget {
                 color: fill,
                 borderRadius: BorderRadius.circular(5),
                 border: Border.all(
-                  color: stroke.withOpacity(pressed ? 1 : .82),
-                  width: entry.state == _SpatialSlotState.selected ? 2 : 1,
+                  color: tone.withOpacity(
+                    pressed
+                        ? 1
+                        : entry.state == _SpatialSlotState.empty
+                            ? .32
+                            : .88,
+                  ),
+                  width: entry.state == _SpatialSlotState.selected ||
+                          entry.state == _SpatialSlotState.departureRequest
+                      ? 2
+                      : 1.25,
                 ),
                 boxShadow: [
-                  if (entry.state == _SpatialSlotState.selected || pressed)
+                  if (entry.state == _SpatialSlotState.selected ||
+                      entry.state == _SpatialSlotState.recommended ||
+                      entry.state == _SpatialSlotState.departureRequest ||
+                      pressed)
                     BoxShadow(
-                      color: cs.shadow.withOpacity(.13),
-                      blurRadius: 7,
+                      color: tone.withOpacity(pressed ? .18 : .12),
+                      blurRadius: pressed ? 8 : 6,
+                      spreadRadius: pressed ? .5 : .2,
                       offset: const Offset(0, 1),
                     ),
                 ],
@@ -2641,21 +2832,18 @@ class _SpatialSlotMarker extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      if (entry.state == _SpatialSlotState.selected)
-                        Icon(Icons.check_rounded, size: 11, color: foreground)
-                      else if (entry.state == _SpatialSlotState.current)
-                        Icon(Icons.my_location_rounded, size: 10, color: foreground)
-                      else if (entry.state == _SpatialSlotState.departureRequest)
-                        Icon(Icons.exit_to_app_rounded, size: 10, color: foreground)
-                      else if (entry.state == _SpatialSlotState.occupied)
-                        Icon(Icons.lock_outline_rounded, size: 10, color: foreground)
-                      else if (entry.state == _SpatialSlotState.recommended)
-                        Icon(Icons.auto_awesome_rounded, size: 10, color: foreground),
-                      const SizedBox(width: 2),
+                      if (icon != null) ...[
+                        Icon(
+                          icon,
+                          size: vehicle ? 12 : 10.5,
+                          color: tone,
+                        ),
+                        const SizedBox(width: 2),
+                      ],
                       Text(
                         '${entry.slot.no}',
                         style: TextStyle(
-                          color: foreground,
+                          color: tone,
                           fontSize: 10.5,
                           fontWeight: FontWeight.w900,
                         ),

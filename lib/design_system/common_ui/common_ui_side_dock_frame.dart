@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'common_ui_components.dart';
 import 'common_ui_side_rail.dart';
@@ -13,6 +14,7 @@ class CommonSideDockFrame extends StatelessWidget {
     required this.child,
     required this.onClose,
     this.closeEnabled = true,
+    this.showCloseTooltip = true,
     this.onLongPress,
     this.onHeaderTap,
     this.headerAction,
@@ -29,6 +31,7 @@ class CommonSideDockFrame extends StatelessWidget {
   final Widget child;
   final VoidCallback onClose;
   final bool closeEnabled;
+  final bool showCloseTooltip;
   final VoidCallback? onLongPress;
   final VoidCallback? onHeaderTap;
   final Widget? headerAction;
@@ -140,6 +143,7 @@ class CommonSideDockFrame extends StatelessWidget {
                 icon: icon,
                 metrics: railMetrics,
                 closeEnabled: closeEnabled,
+                showCloseTooltip: showCloseTooltip,
                 onClose: onClose,
                 onLongPress: onLongPress,
                 onTap: onHeaderTap,
@@ -163,6 +167,7 @@ class CommonSideDockHeader extends StatelessWidget {
     required this.icon,
     required this.metrics,
     required this.closeEnabled,
+    required this.showCloseTooltip,
     required this.onClose,
     this.onLongPress,
     this.onTap,
@@ -174,6 +179,7 @@ class CommonSideDockHeader extends StatelessWidget {
   final IconData icon;
   final CommonSideRailMetrics metrics;
   final bool closeEnabled;
+  final bool showCloseTooltip;
   final VoidCallback onClose;
   final VoidCallback? onLongPress;
   final VoidCallback? onTap;
@@ -338,15 +344,133 @@ class CommonSideDockHeader extends StatelessWidget {
                 headerAction!,
               ],
               const SizedBox(width: 8),
-              CommonIconButton(
-                icon: Icons.close_rounded,
-                tooltip: '닫기',
-                onPressed: closeEnabled ? onClose : null,
-                haptic: CommonHaptic.selection,
-                size: 42,
-                iconSize: 21,
-              ),
+              if (showCloseTooltip)
+                CommonIconButton(
+                  icon: Icons.close_rounded,
+                  tooltip: '닫기',
+                  onPressed: closeEnabled ? onClose : null,
+                  haptic: CommonHaptic.selection,
+                  size: 42,
+                  iconSize: 21,
+                )
+              else
+                _CommonSideDockCloseButton(
+                  onPressed: closeEnabled ? onClose : null,
+                  size: 42,
+                  iconSize: 21,
+                ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CommonSideDockCloseButton extends StatefulWidget {
+  const _CommonSideDockCloseButton({
+    required this.onPressed,
+    required this.size,
+    required this.iconSize,
+  });
+
+  final VoidCallback? onPressed;
+  final double size;
+  final double iconSize;
+
+  @override
+  State<_CommonSideDockCloseButton> createState() =>
+      _CommonSideDockCloseButtonState();
+}
+
+class _CommonSideDockCloseButtonState
+    extends State<_CommonSideDockCloseButton> {
+  bool _pressed = false;
+  bool _hovered = false;
+  bool _focused = false;
+
+  bool get _enabled => widget.onPressed != null;
+
+  Future<void> _activate() async {
+    if (!_enabled) return;
+    await HapticFeedback.selectionClick();
+    if (!mounted) return;
+    widget.onPressed?.call();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final background = !_enabled
+        ? tokens.transparent
+        : _pressed || _hovered
+            ? tokens.surfaceSelected
+            : tokens.surface;
+    final foreground = !_enabled
+        ? tokens.iconDisabled
+        : _pressed
+            ? tokens.accentPressed
+            : tokens.iconPrimary;
+    final border = background == tokens.transparent
+        ? tokens.transparent
+        : tokens.borderSubtle;
+
+    return Semantics(
+      button: true,
+      enabled: _enabled,
+      label: '닫기',
+      child: AnimatedContainer(
+        duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+        width: widget.size,
+        height: widget.size,
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(CommonUiShapes.control),
+          border: Border.all(color: border, width: 1),
+          boxShadow: [
+            if (_focused)
+              BoxShadow(
+                color: tokens.focusRing,
+                blurRadius: 0,
+                spreadRadius: 2,
+              ),
+          ],
+        ),
+        child: Material(
+          color: tokens.transparent,
+          borderRadius: BorderRadius.circular(CommonUiShapes.control),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: _enabled ? _activate : null,
+            onHighlightChanged: (value) {
+              if (_pressed == value) return;
+              setState(() => _pressed = value);
+            },
+            onHover: (value) {
+              if (_hovered == value) return;
+              setState(() => _hovered = value);
+            },
+            onFocusChange: (value) {
+              if (_focused == value) return;
+              setState(() => _focused = value);
+            },
+            mouseCursor:
+                _enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+            borderRadius: BorderRadius.circular(CommonUiShapes.control),
+            child: Center(
+              child: AnimatedScale(
+                scale: _pressed && _enabled ? 0.92 : 1,
+                duration: reduceMotion ? Duration.zero : CommonUiMotion.press,
+                curve: CommonUiMotion.enter,
+                child: Icon(
+                  Icons.close_rounded,
+                  size: widget.iconSize,
+                  color: foreground,
+                ),
+              ),
+            ),
           ),
         ),
       ),

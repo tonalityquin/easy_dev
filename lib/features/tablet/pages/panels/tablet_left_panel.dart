@@ -64,64 +64,15 @@ class LeftPaneDeparturePlates extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = CommonUiTheme.of(context);
-    final text = Theme.of(context).textTheme;
     final currentArea =
         context.select<AreaState, String?>((state) => state.currentArea) ?? '';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        CommonAnimatedReveal(
-          child: Row(
-            children: <Widget>[
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: tokens.accentContainer,
-                  borderRadius: BorderRadius.circular(CommonUiShapes.control),
-                  border: Border.all(color: tokens.accent),
-                ),
-                child: Icon(
-                  Icons.directions_car_rounded,
-                  color: tokens.onAccentContainer,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      '태블릿 출차 현황',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: text.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: tokens.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      currentArea.isEmpty ? '지역 -' : '지역 $currentArea',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: text.bodySmall?.copyWith(
-                        color: tokens.textSecondary,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
         Expanded(
           flex: 3,
           child: CommonAnimatedReveal(
-            delay: const Duration(milliseconds: 50),
+            delay: Duration.zero,
             child: _PanelSection(
               title: '출차 요청',
               icon: Icons.logout_rounded,
@@ -141,9 +92,9 @@ class LeftPaneDeparturePlates extends StatelessWidget {
         Expanded(
           flex: 2,
           child: CommonAnimatedReveal(
-            delay: const Duration(milliseconds: 100),
+            delay: const Duration(milliseconds: 60),
             child: _PanelSection(
-              title: '업무 중 출차 완료',
+              title: '출차 완료',
               icon: Icons.check_circle_outline_rounded,
               tone: tokens.statusSynchronized,
               child: _CompletedDepartureGrid(

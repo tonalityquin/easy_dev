@@ -12,6 +12,7 @@ import '../../../../features/dashboard/side_docks/common/dashboard_dock_request.
 import '../../../../features/dev/application/area_state.dart';
 import '../../../../features/dev/debug/debug_action_recorder.dart';
 import '../../../../app/utils/developer_operation_status_dialog.dart';
+import '../../../secondary/application/secondary_info.dart';
 import '../../../secondary/side_docks/secondary_side_dock.dart';
 import '../../../plate/application/common/driving_recovery_gate.dart';
 import '../../../plate/domain/enums/plate_type.dart';
@@ -316,6 +317,7 @@ class _TypePageShellState<PState, PgState extends ChangeNotifier>
         await showSecondarySideDock<void>(
           context: context,
           barrierLabel: '운영 관리',
+          initialSection: Section.user,
         );
         debugPrint('[TypePageDashboardSideDock] secondary_closed screen=$screen');
         return;

@@ -19,6 +19,7 @@ class SingleInsidePunchRecorderSection extends StatefulWidget {
     required this.area,
     required this.division,
     required this.scheduleRevision,
+    this.onDeveloperStatus,
   });
 
   final String userId;
@@ -26,6 +27,7 @@ class SingleInsidePunchRecorderSection extends StatefulWidget {
   final String area;
   final String division;
   final int scheduleRevision;
+  final Future<void> Function()? onDeveloperStatus;
 
   @override
   State<SingleInsidePunchRecorderSection> createState() => _SingleInsidePunchRecorderSectionState();
@@ -371,7 +373,7 @@ class _SingleInsidePunchRecorderSectionState extends State<SingleInsidePunchReco
       dateLabel: dateLabel,
       onDateTap: _pickDate,
       loading: _loading,
-      onDeveloperStatus: _showDeveloperStatus,
+      onDeveloperStatus: widget.onDeveloperStatus ?? _showDeveloperStatus,
       slots: <CommonPunchSlotData>[
         _workInSlot(),
         _breakSlot(),

@@ -8,14 +8,18 @@ import '../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../shared/plate/domain/enums/plate_type.dart';
 import '../../../shared/tts/application/plate_tts_event_hub.dart';
 import '../../dev/application/area_state.dart';
+import '../applications/tablet_debug_trace.dart';
+import '../applications/tablet_grid_render_mode_state.dart';
 import '../applications/tablet_pad_mode_state.dart';
+import '../applications/tablet_parking_completed_view_toggle_state.dart';
+import '../applications/tablet_plate_tail4_size_state.dart';
 import '../applications/tablet_work_session_state.dart';
 import 'panels/tablet_left_panel.dart';
 import 'panels/tablet_right_panel.dart';
 import 'sheets/widgets/tablet_grid_mode_page.dart';
 import 'sheets/widgets/tablet_grid_pad_mode_page.dart';
-import 'sheets/widgets/tablet_top_navigation.dart';
 import 'widgets/tablet_common_components.dart';
+import 'widgets/tablet_mode_rail.dart';
 
 class TabletPage extends StatefulWidget {
   const TabletPage({super.key});
@@ -45,6 +49,15 @@ class _TabletPageState extends State<TabletPage> {
       tail4: tail4,
       completedAt: completedAt,
     );
+    TabletDebugTrace.record(
+      'TabletPage',
+      'departure_completed_notice',
+      <String, Object?>{
+        'docId': docId,
+        'tail4': tail4,
+        'completedAt': completedAt.toIso8601String(),
+      },
+    );
     setState(() {
       _completedNotices.removeWhere((item) => item.docId == docId);
       _completedNotices.insert(0, notice);
@@ -64,6 +77,20 @@ class _TabletPageState extends State<TabletPage> {
   @override
   void initState() {
     super.initState();
+    TabletDebugTrace.clear();
+    TabletDebugTrace.record('TabletPage', 'initialized');
+    context.read<TabletParkingCompletedViewToggleState>().reset();
+    context.read<TabletPlateTail4SizeState>().reset();
+    context.read<TabletGridRenderModeState>().reset();
+    TabletDebugTrace.record(
+      'TabletPage',
+      'session_defaults_applied',
+      <String, Object?>{
+        'parkingCompletedSubscription': false,
+        'plateTail4Size': 32,
+        'gridRenderMode': 'twoD',
+      },
+    );
     PlateTtsEventHub.ensureStarted();
     _ttsEventSub = PlateTtsEventHub.stream.listen((event) {
       final currentArea = context.read<AreaState>().currentArea.trim();
@@ -78,6 +105,7 @@ class _TabletPageState extends State<TabletPage> {
   void dispose() {
     _ttsEventSub?.cancel();
     _ttsEventSub = null;
+    TabletDebugTrace.record('TabletPage', 'disposed');
     super.dispose();
   }
 
@@ -103,12 +131,10 @@ class _TabletPageState extends State<TabletPage> {
           key: ValueKey<String>('show-pane-$area'),
           color: tokens.canvas,
           child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: TabletCommonPanel(
-              child: LeftPaneDeparturePlates(
-                key: ValueKey<String>('left-pane-$area-show'),
-                completedNotices: _completedNotices,
-              ),
+            padding: const EdgeInsets.all(20),
+            child: LeftPaneDeparturePlates(
+              key: ValueKey<String>('left-pane-$area-show'),
+              completedNotices: _completedNotices,
             ),
           ),
         );
@@ -131,12 +157,10 @@ class _TabletPageState extends State<TabletPage> {
               child: ColoredBox(
                 color: tokens.canvas,
                 child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: TabletCommonPanel(
-                    child: LeftPaneDeparturePlates(
-                      key: ValueKey<String>('left-pane-$area'),
-                      completedNotices: _completedNotices,
-                    ),
+                  padding: const EdgeInsets.all(20),
+                  child: LeftPaneDeparturePlates(
+                    key: ValueKey<String>('left-pane-$area'),
+                    completedNotices: _completedNotices,
                   ),
                 ),
               ),
@@ -149,14 +173,9 @@ class _TabletPageState extends State<TabletPage> {
             Expanded(
               child: ColoredBox(
                 color: tokens.surface,
-                child: ClipRRect(
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(CommonUiShapes.control),
-                  ),
-                  child: RightPaneSearchPanel(
-                    key: ValueKey<String>('right-pane-$area'),
-                    area: area,
-                  ),
+                child: RightPaneSearchPanel(
+                  key: ValueKey<String>('right-pane-$area'),
+                  area: area,
                 ),
               ),
             ),
@@ -182,7 +201,16 @@ class _TabletPageState extends State<TabletPage> {
           final canRenderWorkingContent = workStateReady && workActive;
 
           if (_areaCache != area) {
+            final previous = _areaCache;
             _areaCache = area;
+            TabletDebugTrace.record(
+              'TabletPage',
+              'area_changed',
+              <String, Object?>{
+                'from': previous ?? '',
+                'to': area,
+              },
+            );
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (mounted) _clearCompletedNoticesForAreaChange();
             });
@@ -197,23 +225,27 @@ class _TabletPageState extends State<TabletPage> {
               : const SizedBox.expand(
                   key: ValueKey<String>('inactive-content'),
                 );
+
           final scaffold = Scaffold(
             backgroundColor: tokens.surface,
-            appBar: PreferredSize(
-              preferredSize: const Size.fromHeight(kToolbarHeight),
-              child: SafeArea(
-                bottom: false,
-                child: TabletTopNavigation(
-                  isAreaSelectable: canRenderWorkingContent,
-                ),
+            body: SafeArea(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  const TabletModeRail(),
+                  VerticalDivider(
+                    width: 1,
+                    thickness: 1,
+                    color: tokens.borderSubtle,
+                  ),
+                  Expanded(
+                    child: TabletCommonAnimatedSwap(child: content),
+                  ),
+                ],
               ),
             ),
-            body: SafeArea(
-              top: false,
-              bottom: true,
-              child: TabletCommonAnimatedSwap(child: content),
-            ),
           );
+
           return PopScope(
             canPop: false,
             onPopInvoked: (didPop) {},
@@ -256,17 +288,16 @@ class _TabletWorkSessionLoadingOverlay extends StatelessWidget {
     return Stack(
       children: <Widget>[
         ModalBarrier(dismissible: false, color: tokens.scrim),
-        Center(
+        const Center(
           child: CommonAnimatedReveal(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 320),
-              child: TabletCommonPanel(
-                padding: const EdgeInsets.symmetric(
+            child: Material(
+              type: MaterialType.transparency,
+              child: Padding(
+                padding: EdgeInsets.symmetric(
                   horizontal: 24,
                   vertical: 26,
                 ),
-                radius: CommonUiShapes.dialog,
-                child: const TabletCommonLoadingState(
+                child: TabletCommonLoadingState(
                   label: '업무 상태 확인 중',
                 ),
               ),
@@ -292,31 +323,21 @@ class _TabletWorkSessionInactiveOverlay extends StatelessWidget {
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 420),
             child: CommonAnimatedReveal(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: TabletCommonPanel(
+              child: Material(
+                color: tokens.surfaceRaised,
+                borderRadius: BorderRadius.circular(CommonUiShapes.dialog),
+                child: Padding(
                   padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
-                  radius: CommonUiShapes.dialog,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: <Widget>[
                       Row(
                         children: <Widget>[
-                          Container(
-                            width: 46,
-                            height: 46,
-                            decoration: BoxDecoration(
-                              color: tokens.statusOfflineContainer,
-                              borderRadius:
-                                  BorderRadius.circular(CommonUiShapes.card),
-                              border: Border.all(color: tokens.statusOffline),
-                            ),
-                            child: Icon(
-                              Icons.pause_circle_outline_rounded,
-                              color: tokens.statusOffline,
-                              size: 26,
-                            ),
+                          Icon(
+                            Icons.pause_circle_outline_rounded,
+                            color: tokens.statusOffline,
+                            size: 30,
                           ),
                           const SizedBox(width: 12),
                           Expanded(
@@ -336,6 +357,10 @@ class _TabletWorkSessionInactiveOverlay extends StatelessWidget {
                         icon: Icons.play_arrow_rounded,
                         expand: true,
                         onPressed: () async {
+                          TabletDebugTrace.record(
+                            'TabletPage',
+                            'work_start_requested',
+                          );
                           await context
                               .read<TabletWorkSessionState>()
                               .startWork();

@@ -18,6 +18,8 @@ import '../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../design_system/common_ui/common_ui_side_dock.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../account/applications/user_state.dart';
+import '../../../dev/application/area_state.dart';
+import '../../../../shared/area_remote_settings/application/local_area_capability_refresh.dart';
 import '../actions/headquarter_common_actions.dart';
 import '../headquarter_dashboard_context.dart';
 import '../navigation/headquarter_context_navigation_coordinator.dart';
@@ -234,6 +236,7 @@ class HeadHubActions {
     if (ctx == null) return;
 
     final userState = ctx.read<UserState>();
+    final areaState = ctx.read<AreaState>();
     final division = userState.division.trim();
     final currentArea = userState.currentArea.trim();
     final trace = await DeveloperOperationTrace.start(
@@ -292,7 +295,7 @@ class HeadHubActions {
       );
       trace.log(
         '운영 데이터 저장을 확인했습니다: areas=${snapshot.items.length}, downloadedAt=${snapshot.refreshedAtIso}',
-        progress: 0.8,
+        progress: 0.78,
       );
 
       AreaMasterItem? currentItem;
@@ -307,9 +310,23 @@ class HeadHubActions {
           '내려받은 데이터에서 현재 지역을 찾을 수 없습니다: $currentArea',
         );
       }
+      final capabilityRefresh = await LocalAreaCapabilityRefresh.refresh(
+        areaState: areaState,
+        division: division,
+        area: currentArea,
+        source: 'headquarter_quick_download',
+        onLog: trace.log,
+        progressStart: 0.8,
+        progressEnd: 0.9,
+        requireSnapshot: true,
+      );
+      trace.log(
+        '현재 지역 capability 반영을 확인했습니다: snapshot=${capabilityRefresh.snapshotKeys} areaState=${capabilityRefresh.afterKeys} changed=${capabilityRefresh.changed} remoteRead=0 remoteWrite=0',
+        progress: 0.91,
+      );
       trace.log(
         '현재 지역 연결 정보를 확인했습니다: emailPresent=${currentItem.email.trim().isNotEmpty}, invitePresent=${currentItem.invite.trim().isNotEmpty}, communicationPresent=${currentItem.communication.trim().isNotEmpty}',
-        progress: 0.9,
+        progress: 0.94,
       );
       trace.log(
         '기존 데이터를 정리하고 최신 데이터 저장을 완료했습니다.',
@@ -1923,7 +1940,6 @@ class _SearchField extends StatelessWidget {
                         Icons.close_rounded,
                         color: tokens.iconSecondary,
                       ),
-                      tooltip: '검색어 지우기',
                     ),
                 ],
               ),

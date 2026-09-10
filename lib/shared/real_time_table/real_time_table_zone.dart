@@ -1,4 +1,5 @@
 import '../../features/location/domain/models/location_model.dart';
+import '../parking_spatial/parking_spatial_hierarchy.dart';
 import 'real_time_table_row_vm.dart';
 
 const String kRealTimeLocationAll = '전체';
@@ -124,10 +125,8 @@ Set<String> extractParentsFromMeta(List<LocationModel> meta) {
   return out;
 }
 
-int capacityForChild(LocationModel childLoc) {
-  if (childLoc.childSlots.isNotEmpty) return childLoc.childSlots.length;
-  return childLoc.capacity;
-}
+int capacityForChild(LocationModel childLoc) =>
+    parkingSpatialCapacityForChild(childLoc);
 
 int compositeChildTotalCapacity(List<LocationModel> meta) {
   var sum = 0;
@@ -140,61 +139,8 @@ int compositeChildTotalCapacity(List<LocationModel> meta) {
   return sum;
 }
 
-int _naturalCompareToken(String a, String b) {
-  final ai = int.tryParse(a);
-  final bi = int.tryParse(b);
-
-  if (ai != null && bi != null) {
-    final c = ai.compareTo(bi);
-    if (c != 0) return c;
-    return a.length.compareTo(b.length);
-  }
-
-  final al = a.toLowerCase();
-  final bl = b.toLowerCase();
-  final ci = al.compareTo(bl);
-  if (ci != 0) return ci;
-  return a.compareTo(b);
-}
-
-List<String> _naturalTokens(String value) {
-  final out = <String>[];
-  final buffer = StringBuffer();
-  bool? numeric;
-
-  for (var i = 0; i < value.length; i++) {
-    final ch = value[i];
-    final isDigit = RegExp(r'\d').hasMatch(ch);
-
-    if (numeric == null || numeric == isDigit) {
-      buffer.write(ch);
-      numeric = isDigit;
-      continue;
-    }
-
-    out.add(buffer.toString());
-    buffer
-      ..clear()
-      ..write(ch);
-    numeric = isDigit;
-  }
-
-  if (buffer.isNotEmpty) out.add(buffer.toString());
-  return out;
-}
-
-int naturalLocationCompare(String a, String b) {
-  final at = _naturalTokens(a.trim());
-  final bt = _naturalTokens(b.trim());
-  final n = at.length < bt.length ? at.length : bt.length;
-
-  for (var i = 0; i < n; i++) {
-    final c = _naturalCompareToken(at[i], bt[i]);
-    if (c != 0) return c;
-  }
-
-  return at.length.compareTo(bt.length);
-}
+int naturalLocationCompare(String a, String b) =>
+    parkingSpatialNaturalCompare(a, b);
 
 List<ZoneGroupVM> buildZoneGroups({
   required List<RealTimeRowVM> rows,
@@ -211,32 +157,10 @@ List<ZoneGroupVM> buildZoneGroups({
     childKeyRows.putIfAbsent(ck, () => <RealTimeRowVM>[]).add(r);
   }
 
-  final childrenByParent = <String, List<LocationModel>>{};
-  final parentByRef = <String, LocationModel>{};
-  final parents = extractParentsFromMeta(meta);
-
-  for (final loc in meta) {
-    final t = (loc.type ?? 'single').trim();
-    if (t == 'composite_parent') {
-      final parentName = loc.locationName.trim();
-      final parentId = loc.id.trim();
-      if (parentName.isNotEmpty) {
-        parentByRef[parentName] = loc;
-      }
-      if (parentId.isNotEmpty) {
-        parentByRef[parentId] = loc;
-      }
-      continue;
-    }
-    if (t != 'composite_child' && t != 'composite') continue;
-
-    final parent = (loc.parent ?? '').trim();
-    final child = loc.locationName.trim();
-    if (parent.isEmpty || child.isEmpty) continue;
-
-    parents.add(parent);
-    childrenByParent.putIfAbsent(parent, () => <LocationModel>[]).add(loc);
-  }
+  final hierarchy = resolveParkingSpatialHierarchy(
+    meta,
+    parentComparator: parentComparator,
+  );
 
   final selectedTrimmed = selected.trim();
   final searchTrimmed = search.trim().toLowerCase();
@@ -269,8 +193,8 @@ List<ZoneGroupVM> buildZoneGroups({
   final out = <ZoneGroupVM>[];
 
   final compareParent = parentComparator ?? naturalLocationCompare;
-  final parentList = parents.toList()..sort(compareParent);
-  for (final p in parentList) {
+  for (final spatialGroup in hierarchy) {
+    final p = spatialGroup.parentName;
     if (selectedTrimmed != kRealTimeLocationAll &&
         !selectedIsChildKey &&
         selectedParent.isNotEmpty &&
@@ -281,8 +205,7 @@ List<ZoneGroupVM> buildZoneGroups({
       continue;
     }
 
-    final children = List<LocationModel>.of(childrenByParent[p] ?? const <LocationModel>[])
-      ..sort((a, b) => naturalLocationCompare(a.locationName, b.locationName));
+    final children = spatialGroup.children;
     if (children.isEmpty) continue;
 
     final zoneVms = <ZoneVM>[];
@@ -341,7 +264,7 @@ List<ZoneGroupVM> buildZoneGroups({
     out.add(
       ZoneGroupVM(
         group: p,
-        parentSource: parentByRef[p],
+        parentSource: spatialGroup.parentSource,
         zones: zoneVms,
         totalCapacity: totalCap,
         totalCurrent: totalCur,

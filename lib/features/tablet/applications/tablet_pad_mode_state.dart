@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import 'tablet_debug_trace.dart';
+
 enum PadMode { big, small, show, mobile, gridPad, grid }
 
 class TabletPadModeState extends ChangeNotifier {
@@ -16,7 +18,16 @@ class TabletPadModeState extends ChangeNotifier {
 
   void setMode(PadMode next) {
     if (_mode == next) return;
+    final previous = _mode;
     _mode = next;
+    TabletDebugTrace.record(
+      'TabletPadMode',
+      'changed',
+      <String, Object?>{
+        'from': previous.name,
+        'to': next.name,
+      },
+    );
     notifyListeners();
   }
 }

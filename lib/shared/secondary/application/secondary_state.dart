@@ -141,6 +141,8 @@ class SecondaryState with ChangeNotifier {
         return '섹터 관리';
       case Section.location:
         return '구역 관리';
+      case Section.rule:
+        return '업무 규칙 관리';
       case Section.tablet:
         return '태블릿 관리';
       case Section.monthly:

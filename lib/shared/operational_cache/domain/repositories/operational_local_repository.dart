@@ -2,6 +2,7 @@ import '../../../../features/location/domain/models/location_model.dart';
 import '../../../../features/payment/domain/models/bill_model.dart';
 import '../../../../features/payment/domain/models/regular_bill_model.dart';
 import '../../../../features/sector/domain/models/sector_model.dart';
+import '../../../../features/rule/domain/models/rule_model.dart';
 import '../models/bill_local_snapshot.dart';
 import '../models/operational_area_meta.dart';
 
@@ -49,13 +50,34 @@ abstract interface class OperationalLocalRepository {
 
   Future<int> countSectors(String area);
 
+  Future<RuleModel?> readRule({
+    required String division,
+    required String area,
+  });
+
+  Future<void> replaceRule({
+    required String division,
+    required String area,
+    required RuleModel? rule,
+  });
+
+  Future<void> clearRule({
+    required String division,
+    required String area,
+  });
+
+  Future<int> countRules({
+    required String division,
+    required String area,
+  });
+
   Future<OperationalAreaMeta?> readAreaMeta(String area);
 
   Future<void> clearOperationalMetadata(String area);
 
   Future<void> saveOperationalMetadata({
     required String area,
-    required bool hasMonthlyParking,
+    required bool? hasMonthlyParking,
     required String syncedAtIso,
   });
 

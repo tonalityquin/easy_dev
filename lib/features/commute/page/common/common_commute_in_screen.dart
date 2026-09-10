@@ -16,8 +16,10 @@ import '../../../dev/debug/debug_action_recorder.dart';
 import '../../../launcher/application/launcher_diagnostics.dart';
 import '../../../launcher/widgets/app_power_action_control.dart';
 import '../../../selector/application/dev_auth.dart';
+import '../../application/commute_pre_clock_in_gate.dart';
 import '../../controllers/common_commute_in_controller.dart';
 import '../../utils/commute_mode_spec.dart';
+import '../widgets/commute_pre_clock_in_checklist.dart';
 
 enum _CommutePowerGateStage {
   checking,
@@ -27,13 +29,20 @@ enum _CommutePowerGateStage {
   failure,
 }
 
+enum _CommuteGateView {
+  power,
+  checklist,
+}
+
 class CommonCommuteInScreen extends StatefulWidget {
   const CommonCommuteInScreen({
     super.key,
     required this.spec,
+    this.preClockInGate,
   });
 
   final CommuteModeSpec spec;
+  final CommutePreClockInGate? preClockInGate;
 
   @override
   State<CommonCommuteInScreen> createState() => _CommonCommuteInScreenState();
@@ -53,6 +62,13 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
   bool _resolvingClockInIssue = false;
   String _clockInIssueFailureReason = '';
   String _clockInIssueFailureDetail = '';
+  _CommuteGateView _gateView = _CommuteGateView.power;
+  CommutePreClockInDecision? _preClockInDecision;
+  final Set<String> _checkedPreClockInItemIds = <String>{};
+  bool _preClockInConfirmed = false;
+  bool _preClockInConfirming = false;
+  int _moreOpenCount = 0;
+  bool _forcePreClockInGateForAttempt = false;
 
   bool get _reduceMotion =>
       MediaQuery.maybeOf(context)?.disableAnimations ?? false;
@@ -72,7 +88,10 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
     LauncherDiagnostics.record(
       'commute_power_gate_init',
       scope: 'commute_power',
-      meta: <String, Object?>{'mode': widget.spec.diagnosticKey},
+      meta: <String, Object?>{
+        'mode': widget.spec.diagnosticKey,
+        'preClockInGate': widget.preClockInGate?.runtimeType.toString() ?? 'none',
+      },
     );
     LauncherDiagnostics.record(
       'commute_menu_config',
@@ -346,6 +365,20 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
         'Mode launcher action: removed',
         'Developer status: developer_only',
         'Menu motion ms: ${_menuMotionDuration.inMilliseconds}',
+        'Pre-clock-in gate: ${widget.preClockInGate == null ? 'disabled' : 'enabled'}',
+        'Pre-clock-in gate type: ${widget.preClockInGate?.runtimeType.toString() ?? 'none'}',
+        'Pre-clock-in view: ${_gateView.name}',
+        'Pre-clock-in confirming: $_preClockInConfirming',
+        'Pre-clock-in confirmed: $_preClockInConfirmed',
+        'Pre-clock-in checked: ${_checkedPreClockInItemIds.length}/${_preClockInDecision?.items.length ?? 0}',
+        'Pre-clock-in decision: ${_preClockInDecision?.reason ?? 'none'}',
+        'Pre-clock-in context: ${_preClockInDecision?.contextLabel ?? ''}',
+        'Pre-clock-in action surface: report_approval',
+        'Pre-clock-in report layout: full_height_content_scroll',
+        'Pre-clock-in report menu: top_right',
+        'Pre-clock-in force armed: $_forcePreClockInGateForAttempt',
+        'More open count: $_moreOpenCount',
+        'Pre-clock-in diagnostics: ${_preClockInDecision?.diagnosticsSummary ?? ''}',
       ].join('\n'),
       scope: 'commute_power',
     );
@@ -385,15 +418,20 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
   }
 
   Future<void> _startClockIn() async {
-    if (_stage != _CommutePowerGateStage.ready &&
-        _stage != _CommutePowerGateStage.failure) {
+    if ((_stage != _CommutePowerGateStage.ready &&
+            _stage != _CommutePowerGateStage.failure) ||
+        _preClockInConfirming) {
       return;
     }
 
     final issueWasVisible = _showClockInIssueResolution;
+    final hasPendingGate =
+        widget.preClockInGate != null && !_preClockInConfirmed;
     setState(() {
       _stage = _CommutePowerGateStage.processing;
-      _stateMessage = '출근 정보를 확인하고 있습니다.';
+      _stateMessage = hasPendingGate
+          ? '업무 확인 항목을 확인하고 있습니다.'
+          : '출근 정보를 확인하고 있습니다.';
       _showClockInIssueResolution = false;
       _clockInIssueFailureReason = '';
       _clockInIssueFailureDetail = '';
@@ -411,7 +449,12 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
     LauncherDiagnostics.record(
       'commute_power_pressed',
       scope: 'commute_power',
-      meta: <String, Object?>{'mode': widget.spec.diagnosticKey},
+      meta: <String, Object?>{
+        'mode': widget.spec.diagnosticKey,
+        'preClockInGate': widget.preClockInGate != null,
+        'preClockInGateType':
+            widget.preClockInGate?.runtimeType.toString() ?? 'none',
+      },
     );
     _trace(
       '출근 파워 버튼',
@@ -421,6 +464,190 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
         'isWorkingBefore': context.read<UserState>().isWorking,
       },
     );
+
+    final gate = widget.preClockInGate;
+    if (gate != null && !_preClockInConfirmed) {
+      var decision = _preClockInDecision;
+      if (decision == null) {
+        final forcePrompt = _forcePreClockInGateForAttempt;
+        _forcePreClockInGateForAttempt = false;
+        _moreOpenCount = 0;
+        try {
+          decision = await gate.evaluate(
+            context,
+            force: forcePrompt,
+          );
+        } catch (error, stackTrace) {
+          LauncherDiagnostics.record(
+            'commute_pre_clock_in_gate_exception',
+            scope: 'commute_todo',
+            meta: <String, Object?>{
+              'mode': widget.spec.diagnosticKey,
+              'error': error,
+              'stack': stackTrace,
+              'decision': 'skip',
+            },
+          );
+          decision = CommutePreClockInDecision.skip(
+            reason: 'gate_exception',
+            diagnosticsSummary: 'reason=gate_exception',
+          );
+        }
+        _preClockInDecision = decision;
+      }
+      if (!mounted) return;
+
+      LauncherDiagnostics.record(
+        'commute_pre_clock_in_gate_decision',
+        scope: 'commute_todo',
+        meta: <String, Object?>{
+          'mode': widget.spec.diagnosticKey,
+          'eligible': decision.eligible,
+          'shouldShow': decision.shouldShow,
+          'reason': decision.reason,
+          'itemCount': decision.items.length,
+        },
+      );
+
+      if (decision.shouldShow && decision.items.isNotEmpty) {
+        setState(() {
+          _stage = _CommutePowerGateStage.ready;
+          _stateMessage = '';
+          _gateView = _CommuteGateView.checklist;
+          _checkedPreClockInItemIds.clear();
+        });
+        LauncherDiagnostics.record(
+          'commute_pre_clock_in_report_presented',
+          scope: 'commute_todo',
+          meta: <String, Object?>{
+            'mode': widget.spec.diagnosticKey,
+            'context': decision.contextLabel,
+            'itemCount': decision.items.length,
+            'reason': decision.reason,
+            'layout': 'full_height_content_scroll',
+            'menuPlacement': 'top_right',
+            'firebaseRead': 0,
+            'firebaseWrite': 0,
+          },
+        );
+        await HapticFeedback.selectionClick();
+        return;
+      }
+    }
+
+    await _performClockIn();
+  }
+
+  void _togglePreClockInItem(String id) {
+    if (_preClockInConfirming) return;
+    final normalizedId = id.trim();
+    if (normalizedId.isEmpty) return;
+    setState(() {
+      if (_checkedPreClockInItemIds.contains(normalizedId)) {
+        _checkedPreClockInItemIds.remove(normalizedId);
+      } else {
+        _checkedPreClockInItemIds.add(normalizedId);
+      }
+    });
+    unawaited(HapticFeedback.selectionClick());
+    LauncherDiagnostics.record(
+      'commute_pre_clock_in_item_toggled',
+      scope: 'commute_todo',
+      meta: <String, Object?>{
+        'mode': widget.spec.diagnosticKey,
+        'checkedCount': _checkedPreClockInItemIds.length,
+        'itemCount': _preClockInDecision?.items.length ?? 0,
+      },
+    );
+  }
+
+  void _checkAllPreClockInItems() {
+    if (_preClockInConfirming) return;
+    final decision = _preClockInDecision;
+    if (decision == null || decision.items.isEmpty) return;
+    setState(() {
+      _checkedPreClockInItemIds
+        ..clear()
+        ..addAll(decision.items.map((item) => item.id));
+    });
+    unawaited(HapticFeedback.selectionClick());
+    LauncherDiagnostics.record(
+      'commute_pre_clock_in_check_all',
+      scope: 'commute_todo',
+      meta: <String, Object?>{
+        'mode': widget.spec.diagnosticKey,
+        'itemCount': decision.items.length,
+        'interaction': 'report_checkbox',
+      },
+    );
+  }
+
+  Future<void> _confirmPreClockInChecklist() async {
+    if (_preClockInConfirming) return;
+    final decision = _preClockInDecision;
+    final gate = widget.preClockInGate;
+    if (decision == null || gate == null || decision.items.isEmpty) return;
+    final allChecked = decision.items.every(
+      (item) => _checkedPreClockInItemIds.contains(item.id),
+    );
+    if (!allChecked) return;
+
+    unawaited(HapticFeedback.lightImpact());
+    setState(() => _preClockInConfirming = true);
+    LauncherDiagnostics.record(
+      'commute_pre_clock_in_confirm_start',
+      scope: 'commute_todo',
+      meta: <String, Object?>{
+        'mode': widget.spec.diagnosticKey,
+        'itemCount': decision.items.length,
+        'reason': decision.reason,
+        'interaction': 'report_confirmation',
+      },
+    );
+
+    try {
+      await gate.confirm(context, decision);
+    } catch (error, stackTrace) {
+      LauncherDiagnostics.record(
+        'commute_pre_clock_in_confirm_exception',
+        scope: 'commute_todo',
+        meta: <String, Object?>{
+          'mode': widget.spec.diagnosticKey,
+          'error': error,
+          'stack': stackTrace,
+          'continueClockIn': true,
+        },
+      );
+    }
+    if (!mounted) return;
+
+    setState(() {
+      _preClockInConfirming = false;
+      _preClockInConfirmed = true;
+      _gateView = _CommuteGateView.power;
+      _stage = _CommutePowerGateStage.processing;
+      _stateMessage = '출근 정보를 확인하고 있습니다.';
+    });
+    LauncherDiagnostics.record(
+      'commute_pre_clock_in_confirm_complete',
+      scope: 'commute_todo',
+      meta: <String, Object?>{
+        'mode': widget.spec.diagnosticKey,
+        'itemCount': decision.items.length,
+      },
+    );
+    await _performClockIn();
+  }
+
+  Future<void> _performClockIn() async {
+    if (!mounted) return;
+    setState(() {
+      _stage = _CommutePowerGateStage.processing;
+      _stateMessage = '출근 정보를 확인하고 있습니다.';
+      _showClockInIssueResolution = false;
+      _clockInIssueFailureReason = '';
+      _clockInIssueFailureDetail = '';
+    });
 
     try {
       final result = await controller.handleWorkStatusAndDecide(
@@ -495,6 +722,25 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
           await _showDeveloperStatus();
         }
         return;
+      }
+
+      final gate = widget.preClockInGate;
+      final decision = _preClockInDecision;
+      if (gate != null && decision != null) {
+        try {
+          await gate.onClockInSucceeded(context, decision);
+        } catch (error, stackTrace) {
+          LauncherDiagnostics.record(
+            'commute_pre_clock_in_success_history_exception',
+            scope: 'commute_todo',
+            meta: <String, Object?>{
+              'mode': widget.spec.diagnosticKey,
+              'error': error,
+              'stack': stackTrace,
+            },
+          );
+        }
+        if (!mounted) return;
       }
 
       setState(() {
@@ -630,6 +876,47 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
     );
   }
 
+  void _handleMoreOpened() {
+    if (widget.preClockInGate == null ||
+        _preClockInConfirmed ||
+        _preClockInConfirming ||
+        _forcePreClockInGateForAttempt ||
+        _gateView != _CommuteGateView.power ||
+        _routeTransitioning ||
+        (_stage != _CommutePowerGateStage.ready &&
+            _stage != _CommutePowerGateStage.failure)) {
+      return;
+    }
+
+    _moreOpenCount += 1;
+    LauncherDiagnostics.record(
+      'commute_more_opened',
+      scope: 'commute_todo',
+      meta: <String, Object?>{
+        'mode': widget.spec.diagnosticKey,
+        'pressCount': _moreOpenCount,
+        'forceEligible': true,
+      },
+    );
+
+    if (_moreOpenCount < 2) return;
+
+    _moreOpenCount = 0;
+    _forcePreClockInGateForAttempt = true;
+    _preClockInDecision = null;
+    _checkedPreClockInItemIds.clear();
+    unawaited(HapticFeedback.selectionClick());
+    LauncherDiagnostics.record(
+      'commute_pre_clock_in_force_armed',
+      scope: 'commute_todo',
+      meta: <String, Object?>{
+        'mode': widget.spec.diagnosticKey,
+        'source': 'more_opened_twice',
+        'forcePrompt': true,
+      },
+    );
+  }
+
   PopupMenuItem<String> _menuItem({
     required CommonUiTokens tokens,
     required String value,
@@ -663,10 +950,15 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
     );
   }
 
-  Widget _buildMenu(CommonUiTokens tokens, bool developerMode) {
+  Widget _buildMenu(
+    CommonUiTokens tokens,
+    bool developerMode, {
+    bool reportPlacement = false,
+  }) {
     final disabled = _routeTransitioning ||
         _stage == _CommutePowerGateStage.processing ||
-        _stage == _CommutePowerGateStage.success;
+        _stage == _CommutePowerGateStage.success ||
+        _preClockInConfirming;
     final duration = _reduceMotion ? Duration.zero : _menuMotionDuration;
     final menuKey = ValueKey<String>(
       'commute_menu_${developerMode ? 'developer' : 'standard'}_${disabled ? 'disabled' : 'enabled'}',
@@ -696,11 +988,14 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
         enabled: !disabled,
         color: tokens.surfaceRaised,
         elevation: 0,
-        offset: const Offset(0, -8),
+        offset: reportPlacement
+            ? const Offset(0, 8)
+            : const Offset(0, -8),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(CommonUiShapes.card),
           side: BorderSide(color: tokens.borderSubtle),
         ),
+        onOpened: _handleMoreOpened,
         onSelected: (value) {
           switch (value) {
             case 'status':
@@ -874,7 +1169,8 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
   ) {
     final disabled = _stage == _CommutePowerGateStage.processing ||
         _stage == _CommutePowerGateStage.success ||
-        _resolvingClockInIssue;
+        _resolvingClockInIssue ||
+        _preClockInConfirming;
     final duration = _reduceMotion ? Duration.zero : CommonUiMotion.component;
 
     return Padding(
@@ -1005,14 +1301,94 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
                                       )
                                     : Center(
                                         key: const ValueKey<String>('ready'),
-                                        child: _buildPowerGate(
-                                          context,
-                                          tokens,
-                                          userState,
+                                        child: AnimatedSwitcher(
+                                          duration: _reduceMotion
+                                              ? Duration.zero
+                                              : const Duration(
+                                                  milliseconds: 220,
+                                                ),
+                                          reverseDuration: _reduceMotion
+                                              ? Duration.zero
+                                              : const Duration(
+                                                  milliseconds: 190,
+                                                ),
+                                          switchInCurve: Curves.easeOutCubic,
+                                          switchOutCurve: Curves.easeInCubic,
+                                          transitionBuilder: (
+                                            child,
+                                            animation,
+                                          ) {
+                                            final curved = CurvedAnimation(
+                                              parent: animation,
+                                              curve: Curves.easeOutCubic,
+                                              reverseCurve: Curves.easeInCubic,
+                                            );
+                                            return FadeTransition(
+                                              opacity: curved,
+                                              child: SlideTransition(
+                                                position: Tween<Offset>(
+                                                  begin: const Offset(0, 0.018),
+                                                  end: Offset.zero,
+                                                ).animate(curved),
+                                                child: child,
+                                              ),
+                                            );
+                                          },
+                                          child: _gateView ==
+                                                      _CommuteGateView.checklist &&
+                                                  _preClockInDecision != null
+                                              ? CommutePreClockInChecklist(
+                                                  key: const ValueKey<String>(
+                                                    'pre_clock_in_checklist',
+                                                  ),
+                                                  contextLabel:
+                                                      _preClockInDecision!
+                                                          .contextLabel,
+                                                  items:
+                                                      _preClockInDecision!.items,
+                                                  checkedIds:
+                                                      _checkedPreClockInItemIds,
+                                                  onToggle:
+                                                      _togglePreClockInItem,
+                                                  onCheckAll:
+                                                      _checkAllPreClockInItems,
+                                                  onConfirm:
+                                                      _confirmPreClockInChecklist,
+                                                  confirming:
+                                                      _preClockInConfirming,
+                                                )
+                                              : KeyedSubtree(
+                                                  key: const ValueKey<String>(
+                                                    'power_gate',
+                                                  ),
+                                                  child: _buildPowerGate(
+                                                    context,
+                                                    tokens,
+                                                    userState,
+                                                  ),
+                                                ),
                                         ),
                                       ),
                               ),
-                              if (_stage != _CommutePowerGateStage.checking)
+                              if (_stage != _CommutePowerGateStage.checking &&
+                                  _gateView == _CommuteGateView.checklist &&
+                                  _preClockInDecision != null)
+                                Align(
+                                  alignment: Alignment.topRight,
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(
+                                      top: 4,
+                                      right: 4,
+                                    ),
+                                    child: _buildMenu(
+                                      tokens,
+                                      developerMode,
+                                      reportPlacement: true,
+                                    ),
+                                  ),
+                                )
+                              else if (_stage !=
+                                  _CommutePowerGateStage.checking)
                                 Align(
                                   alignment: Alignment.bottomCenter,
                                   child: _buildBottomActions(

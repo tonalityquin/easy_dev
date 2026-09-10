@@ -13,6 +13,8 @@ import '../../features/location/applications/parking_parent_order_state.dart';
 import '../../features/location/domain/repositories/location_repository.dart';
 import '../../features/payment/applications/bill_state.dart';
 import '../../features/payment/domain/repositories/bill_repository.dart';
+import '../../features/rule/applications/rule_state.dart';
+import '../../features/rule/domain/repositories/rule_repository.dart';
 import '../../features/sector/applications/sector_state.dart';
 import '../../features/sector/domain/repositories/sector_repository.dart';
 import '../../features/tablet/applications/tablet_grid_render_mode_state.dart';
@@ -32,6 +34,7 @@ import '../../shared/plate/application/triple/triple_filter_plate.dart';
 import '../../shared/plate/application/triple/triple_plate_state.dart';
 import '../../shared/plate/domain/repositories/plate_repository.dart';
 import '../../shared/plate/domain/services/plate_write_service.dart';
+import '../../shared/operational_cache/application/operational_snapshot_revision_state.dart';
 import '../../shared/operational_cache/domain/repositories/operational_local_repository.dart';
 import '../../shared/secondary/application/secondary_info.dart';
 import '../../shared/secondary/application/secondary_state.dart';
@@ -111,6 +114,9 @@ final List<SingleChildWidget> stateProviders = [
       context.read<AreaState>(),
     ),
   ),
+  ChangeNotifierProvider(
+    create: (_) => OperationalSnapshotRevisionState(),
+  ),
   ChangeNotifierProvider(create: (_) => ParkingParentOrderState()),
   ChangeNotifierProvider(
     create: (context) => BillState(
@@ -122,6 +128,13 @@ final List<SingleChildWidget> stateProviders = [
   ChangeNotifierProvider(
     create: (context) => SectorState(
       context.read<SectorRepository>(),
+      context.read<OperationalLocalRepository>(),
+      context.read<AreaState>(),
+    ),
+  ),
+  ChangeNotifierProvider(
+    create: (context) => RuleState(
+      context.read<RuleRepository>(),
       context.read<OperationalLocalRepository>(),
       context.read<AreaState>(),
     ),

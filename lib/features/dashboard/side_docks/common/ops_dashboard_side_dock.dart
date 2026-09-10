@@ -12,9 +12,12 @@ import '../../../../app/utils/operational_data_sync_workflow.dart';
 import '../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../app/utils/status_dialog.dart';
 import '../../../../design_system/common_ui/common_ui_side_dock.dart';
+import '../../../../design_system/common_ui/common_ui_side_dock_action_tile.dart';
+import '../../../../design_system/common_ui/common_ui_side_dock_frame.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../shared/sheet_tool/document_box_action.dart';
 import '../../../../shared/sheet_tool/document_box_action_executor.dart';
+import '../../../../shared/utils/side_dock_action_catalog.dart';
 import '../../../account/applications/user_state.dart';
 import '../../../camera/photo_transfer_mail_page.dart';
 import '../../../community/application/discord/discord_config.dart';
@@ -441,9 +444,9 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
         _DashboardAction(
           id: 'work_start_report',
           category: _DashboardActionCategory.report,
-          label: '업무 시작 보고',
-          description: '업무 시작 보고서를 작성합니다.',
-          icon: Icons.play_circle_outline_rounded,
+          label: SideDockActionCatalog.workStartReportLabel,
+          description: SideDockActionCatalog.workStartReportDescription,
+          icon: SideDockActionCatalog.workStartReportIcon,
           color: tokens.infoContainer,
           foreground: tokens.onInfoContainer,
           onPressed: () => _runDocumentAction(
@@ -454,9 +457,9 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
         _DashboardAction(
           id: 'work_end_report',
           category: _DashboardActionCategory.report,
-          label: '업무 종료 보고',
-          description: '업무 종료 보고서를 작성합니다.',
-          icon: Icons.task_alt_rounded,
+          label: SideDockActionCatalog.workEndReportLabel,
+          description: SideDockActionCatalog.workEndReportDescription,
+          icon: SideDockActionCatalog.workEndReportIcon,
           color: tokens.successContainer,
           foreground: tokens.onSuccessContainer,
           onPressed: () => _runDocumentAction(
@@ -471,9 +474,9 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
       _DashboardAction(
         id: 'commute_submit',
         category: _DashboardActionCategory.submit,
-        label: '출퇴근 기록 제출',
-        description: '단말기의 출퇴근 기록을 서버에 제출합니다.',
-        icon: Icons.sync_alt_rounded,
+        label: SideDockActionCatalog.commuteSubmitLabel,
+        description: SideDockActionCatalog.commuteSubmitDescription,
+        icon: SideDockActionCatalog.commuteSubmitIcon,
         color: tokens.infoContainer,
         foreground: tokens.onInfoContainer,
         onPressed: () => _runDocumentAction(
@@ -486,9 +489,9 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
       _DashboardAction(
         id: 'rest_time_submit',
         category: _DashboardActionCategory.submit,
-        label: '휴게시간 기록 제출',
-        description: '단말기의 휴게시간 기록을 서버에 제출합니다.',
-        icon: Icons.free_breakfast_rounded,
+        label: SideDockActionCatalog.restTimeSubmitLabel,
+        description: SideDockActionCatalog.restTimeSubmitDescription,
+        icon: SideDockActionCatalog.restTimeSubmitIcon,
         color: tokens.successContainer,
         foreground: tokens.onSuccessContainer,
         onPressed: () => _runDocumentAction(
@@ -511,9 +514,9 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
       _DashboardAction(
         id: 'statement_form',
         category: _DashboardActionCategory.form,
-        label: '경위서 양식',
-        description: '경위서 작성 화면으로 이동합니다.',
-        icon: Icons.description_rounded,
+        label: SideDockActionCatalog.statementFormLabel,
+        description: SideDockActionCatalog.statementFormDescription,
+        icon: SideDockActionCatalog.statementFormIcon,
         color: tokens.warningContainer,
         foreground: tokens.onWarningContainer,
         onPressed: () => _runDocumentAction(
@@ -524,9 +527,9 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
       _DashboardAction(
         id: 'leave_application',
         category: _DashboardActionCategory.form,
-        label: '연차 지원 신청서',
-        description: '연차·결근 지원 신청서를 작성합니다.',
-        icon: Icons.event_available_rounded,
+        label: SideDockActionCatalog.leaveApplicationLabel,
+        description: SideDockActionCatalog.leaveApplicationDescription,
+        icon: SideDockActionCatalog.leaveApplicationIcon,
         color: tokens.successContainer,
         foreground: tokens.onSuccessContainer,
         onPressed: () => _runDocumentAction(
@@ -586,9 +589,9 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
         _DashboardAction(
           id: 'secondary',
           category: _DashboardActionCategory.settings,
-          label: '운영 페이지 열기',
-          description: '운영 관리 Side Dock을 엽니다.',
-          icon: Icons.open_in_new_rounded,
+          label: SideDockActionCatalog.operationsLabel,
+          description: SideDockActionCatalog.operationsDescription,
+          icon: SideDockActionCatalog.operationsIcon,
           color: tokens.successContainer,
           foreground: tokens.onSuccessContainer,
           onPressed: () => _openSecondary(context),
@@ -618,9 +621,9 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
       _DashboardAction(
         id: 'operational_sync',
         category: _DashboardActionCategory.settings,
-        label: '지금 내려받기',
-        description: '현재 지역의 운영 데이터를 최신 상태로 내려받습니다.',
-        icon: Icons.download_rounded,
+        label: SideDockActionCatalog.operationalSyncLabel,
+        description: SideDockActionCatalog.operationalSyncDescription,
+        icon: SideDockActionCatalog.operationalSyncIcon,
         color: tokens.infoContainer,
         foreground: tokens.onInfoContainer,
         onPressed: () => _runOperationalSync(context),
@@ -628,9 +631,9 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
       _DashboardAction(
         id: 'logout',
         category: _DashboardActionCategory.settings,
-        label: '로그아웃',
-        description: '현재 계정에서 안전하게 로그아웃합니다.',
-        icon: Icons.logout_rounded,
+        label: SideDockActionCatalog.logoutLabel,
+        description: SideDockActionCatalog.logoutDescription,
+        icon: SideDockActionCatalog.logoutIcon,
         color: tokens.dangerContainer,
         foreground: tokens.onDangerContainer,
         onPressed: () => _logout(context),
@@ -680,10 +683,10 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
     trace.log('presentation=right_side_dock', progress: 0.045);
     trace.log('container=right_side_dock', progress: 0.06);
     trace.log('direction=right_to_left', progress: 0.12);
-    trace.log('uiParity=quick_actions', progress: 0.18);
+    trace.log('uiParity=common_side_dock_components', progress: 0.18);
     trace.log('layout=single_scroll', progress: 0.24);
     trace.log(
-      'topContent=work_schedule,punch_recorder,business,search',
+      'topContent=work_section,business,search',
       progress: 0.3,
     );
     trace.log('scheduleEditor=inline_weekday_editor', progress: 0.36);
@@ -716,7 +719,7 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
     trace.log('fieldCommon=$isFieldCommon', progress: 0.75);
     trace.log('monthlyCapability=$hasMonthlyCapability', progress: 0.76);
     trace.log('monthlyVisible=$monthlyVisible', progress: 0.765);
-    trace.log('businessUi=dashboard_action_tile', progress: 0.768);
+    trace.log('businessUi=common_side_dock_action_tile', progress: 0.768);
     trace.log('businessTileCount=${monthlyVisible ? 2 : 1}', progress: 0.769);
     trace.log('developerMode=$developerMode', progress: 0.77);
     trace.log('developerModeResolved=$_developerModeResolved', progress: 0.79);
@@ -755,41 +758,6 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
           );
         },
         child: widget.punchRecorderBuilder(context, userState, areaState),
-      ),
-    );
-  }
-
-  Widget _sectionHeader(BuildContext context, String label) {
-    final tokens = CommonUiTheme.of(context);
-    final text = Theme.of(context).textTheme;
-
-    return Semantics(
-      header: true,
-      label: label,
-      child: Padding(
-        padding: const EdgeInsets.only(left: 2, right: 4),
-        child: Row(
-          children: [
-            Container(
-              width: 3,
-              height: 16,
-              decoration: BoxDecoration(
-                color: tokens.accent,
-                borderRadius: BorderRadius.circular(999),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: text.labelLarge?.copyWith(
-                color: tokens.textSecondary,
-                fontSize: 12.5,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 0.35,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -878,53 +846,47 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (var index = 0; index < actions.length; index++) ...[
-          Padding(
-            padding: const EdgeInsets.only(left: 10),
-            child: _DashboardActionTile(action: actions[index]),
-          ),
+          _DashboardActionTile(action: actions[index]),
           if (index != actions.length - 1) const SizedBox(height: 10),
         ],
       ],
     );
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _sectionHeader(context, '업무'),
-        const SizedBox(height: 8),
-        AnimatedSize(
-          duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
-          curve: CommonUiMotion.standard,
-          alignment: Alignment.topCenter,
-          child: AnimatedSwitcher(
-            duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
-            switchInCurve: CommonUiMotion.enter,
-            switchOutCurve: CommonUiMotion.exit,
-            transitionBuilder: (child, animation) {
-              if (reduceMotion) return child;
-              final curved = CurvedAnimation(
-                parent: animation,
-                curve: CommonUiMotion.enter,
-                reverseCurve: CommonUiMotion.exit,
-              );
-              return FadeTransition(
-                opacity: curved,
-                child: SlideTransition(
-                  position: Tween<Offset>(
-                    begin: const Offset(0, 0.04),
-                    end: Offset.zero,
-                  ).animate(curved),
-                  child: ScaleTransition(
-                    scale: Tween<double>(begin: 0.985, end: 1).animate(curved),
-                    child: child,
-                  ),
+    return CommonSideDockSection(
+      title: '업무',
+      order: 3,
+      child: AnimatedSize(
+        duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
+        curve: CommonUiMotion.standard,
+        alignment: Alignment.topCenter,
+        child: AnimatedSwitcher(
+          duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+          switchInCurve: CommonUiMotion.enter,
+          switchOutCurve: CommonUiMotion.exit,
+          transitionBuilder: (child, animation) {
+            if (reduceMotion) return child;
+            final curved = CurvedAnimation(
+              parent: animation,
+              curve: CommonUiMotion.enter,
+              reverseCurve: CommonUiMotion.exit,
+            );
+            return FadeTransition(
+              opacity: curved,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, 0.04),
+                  end: Offset.zero,
+                ).animate(curved),
+                child: ScaleTransition(
+                  scale: Tween<double>(begin: 0.985, end: 1).animate(curved),
+                  child: child,
                 ),
-              );
-            },
-            child: tiles,
-          ),
+              ),
+            );
+          },
+          child: tiles,
         ),
-      ],
+      ),
     );
   }
 
@@ -1015,7 +977,6 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
                         Icons.close_rounded,
                         color: tokens.iconSecondary,
                       ),
-                      tooltip: '검색어 지우기',
                     ),
                 ],
               ),
@@ -1081,7 +1042,7 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
         children: _buildActionSections(
           context,
           filtered,
-          query.isEmpty ? 4 : 0,
+          query.isEmpty ? 5 : 0,
         ),
       );
     }
@@ -1126,32 +1087,30 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
         children.add(const SizedBox(height: 14));
       }
 
+      final sectionOrder = revealOrder++;
       children.add(
-        _DashboardStaggeredReveal(
-          key: ValueKey<String>('header_${category.name}'),
-          order: revealOrder++,
-          offsetY: 6,
-          child: _sectionHeader(context, category.label),
+        CommonSideDockSection(
+          key: ValueKey<String>('section_${category.name}'),
+          title: category.label,
+          order: sectionOrder,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (var index = 0; index < sectionActions.length; index++) ...[
+                _DashboardStaggeredReveal(
+                  key: ValueKey<String>(
+                    'section_${category.name}_${sectionActions[index].id}',
+                  ),
+                  order: revealOrder++,
+                  child: _DashboardActionTile(action: sectionActions[index]),
+                ),
+                if (index != sectionActions.length - 1)
+                  const SizedBox(height: 10),
+              ],
+            ],
+          ),
         ),
       );
-      children.add(const SizedBox(height: 8));
-
-      for (var index = 0; index < sectionActions.length; index++) {
-        final action = sectionActions[index];
-        children.add(
-          Padding(
-            padding: const EdgeInsets.only(left: 10),
-            child: _DashboardStaggeredReveal(
-              key: ValueKey<String>('section_${category.name}_${action.id}'),
-              order: revealOrder++,
-              child: _DashboardActionTile(action: action),
-            ),
-          ),
-        );
-        if (index != sectionActions.length - 1) {
-          children.add(const SizedBox(height: 10));
-        }
-      }
     }
 
     return children;
@@ -1168,38 +1127,38 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
           developerMode: _developerMode,
         );
         final children = <Widget>[
-          const _DashboardStaggeredReveal(
-            key: ValueKey<String>('work_schedule'),
+          CommonSideDockSection(
+            key: const ValueKey<String>('work'),
+            title: '근무',
             order: 0,
-            offsetY: 6,
-            child: DashboardWorkScheduleSurface(),
-          ),
-          const SizedBox(height: 14),
-          _DashboardStaggeredReveal(
-            key: const ValueKey<String>('punch_recorder'),
-            order: 1,
-            offsetY: 6,
-            child: _buildPunchRecorder(
-              context,
-              userState: userState,
-              areaState: areaState,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const DashboardWorkScheduleSurface(),
+                const SizedBox(height: 10),
+                _DashboardStaggeredReveal(
+                  key: const ValueKey<String>('punch_recorder'),
+                  order: 1,
+                  offsetY: 6,
+                  child: _buildPunchRecorder(
+                    context,
+                    userState: userState,
+                    areaState: areaState,
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 14),
-          _DashboardStaggeredReveal(
-            key: const ValueKey<String>('business_actions'),
-            order: 2,
-            offsetY: 6,
-            child: _buildBusinessSection(
-              context,
-              userState: userState,
-              areaState: areaState,
-            ),
+          _buildBusinessSection(
+            context,
+            userState: userState,
+            areaState: areaState,
           ),
           const SizedBox(height: 14),
           _DashboardStaggeredReveal(
             key: const ValueKey<String>('action_search'),
-            order: 3,
+            order: 4,
             offsetY: 6,
             child: _buildSearchField(context),
           ),
@@ -1241,15 +1200,15 @@ extension _DashboardActionCategoryUi on _DashboardActionCategory {
       case _DashboardActionCategory.thirdParty:
         return '서드 파티';
       case _DashboardActionCategory.report:
-        return '보고';
+        return SideDockActionCatalog.sectionReport;
       case _DashboardActionCategory.submit:
-        return '제출';
+        return SideDockActionCatalog.sectionSubmit;
       case _DashboardActionCategory.form:
-        return '양식';
+        return SideDockActionCatalog.sectionForm;
       case _DashboardActionCategory.support:
         return '지원';
       case _DashboardActionCategory.settings:
-        return '설정';
+        return SideDockActionCatalog.sectionSettings;
     }
   }
 }
@@ -1334,111 +1293,37 @@ class _DashboardActionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = CommonUiTheme.of(context);
-    final text = Theme.of(context).textTheme;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
-    return Semantics(
-      button: true,
-      label: action.label,
-      enabled: action.enabled,
-      child: Material(
-        color: tokens.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: action.enabled
-              ? () async {
-                  HapticFeedback.selectionClick();
+    return AnimatedOpacity(
+      opacity: action.enabled ? 1 : .52,
+      duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+      child: CommonSideDockActionTile(
+        icon: action.icon,
+        title: action.label,
+        description: action.description,
+        accentColor: action.color,
+        foregroundColor: action.foreground,
+        onTap: action.enabled
+            ? () async {
+                HapticFeedback.selectionClick();
+                debugPrint(
+                  '[OpsDashboardSideDock] action_start id=${action.id} category=${action.category.name}',
+                );
+                try {
+                  await action.onPressed();
                   debugPrint(
-                    '[OpsDashboardSideDock] action_start id=${action.id} category=${action.category.name}',
+                    '[OpsDashboardSideDock] action_complete id=${action.id}',
                   );
-                  try {
-                    await action.onPressed();
-                    debugPrint(
-                      '[OpsDashboardSideDock] action_complete id=${action.id}',
-                    );
-                  } catch (error, stackTrace) {
-                    debugPrint(
-                      '[OpsDashboardSideDock] action_failure id=${action.id} error=$error\nStackTrace:\n$stackTrace',
-                    );
-                    rethrow;
-                  }
+                } catch (error, stackTrace) {
+                  debugPrint(
+                    '[OpsDashboardSideDock] action_failure id=${action.id} error=$error\nStackTrace:\n$stackTrace',
+                  );
+                  rethrow;
                 }
-              : null,
-          child: AnimatedOpacity(
-            opacity: action.enabled ? 1 : .52,
-            duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false
-                ? Duration.zero
-                : CommonUiMotion.selection,
-            child: Ink(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              decoration: BoxDecoration(
-                color: tokens.surface,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: tokens.borderSubtle, width: 1),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
-                      color: action.color,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: tokens.shadow,
-                          blurRadius: 8,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                    alignment: Alignment.center,
-                    child: Icon(
-                      action.icon,
-                      color: action.foreground,
-                      size: 22,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          action.label,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: text.titleSmall?.copyWith(
-                            color: tokens.textPrimary,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.2,
-                          ),
-                        ),
-                        if (action.description.trim().isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            action.description,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: text.bodySmall?.copyWith(
-                              color: tokens.textSecondary,
-                              height: 1.15,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Icon(
-                    Icons.chevron_right_rounded,
-                    color: tokens.iconSecondary,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
+              }
+            : null,
       ),
     );
   }

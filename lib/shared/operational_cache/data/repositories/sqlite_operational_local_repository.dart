@@ -7,6 +7,7 @@ import '../../../../features/location/domain/models/location_model.dart';
 import '../../../../features/payment/domain/models/bill_model.dart';
 import '../../../../features/payment/domain/models/regular_bill_model.dart';
 import '../../../../features/sector/domain/models/sector_model.dart';
+import '../../../../features/rule/domain/models/rule_model.dart';
 import '../../domain/models/bill_local_snapshot.dart';
 import '../../domain/models/operational_area_meta.dart';
 import '../../domain/repositories/operational_local_repository.dart';
@@ -448,6 +449,151 @@ class SqliteOperationalLocalRepository implements OperationalLocalRepository {
     return _count(db, 'operational_sectors', normalizedArea);
   }
 
+  String _requireDivision(String division) {
+    final normalized = division.trim();
+    if (normalized.isEmpty) {
+      throw StateError('현재 회사 정보가 없습니다.');
+    }
+    return normalized;
+  }
+
+  @override
+  Future<RuleModel?> readRule({
+    required String division,
+    required String area,
+  }) async {
+    final normalizedDivision = _requireDivision(division);
+    final normalizedArea = _requireArea(area);
+    final db = await _database.database;
+    final rows = await db.query(
+      'operational_rules',
+      columns: <String>['payload_json'],
+      where: 'division = ? AND area = ?',
+      whereArgs: <Object?>[normalizedDivision, normalizedArea],
+      limit: 1,
+    );
+    if (rows.isEmpty) {
+      debugPrint('[OperationalSQLite] readRule division=$normalizedDivision area=$normalizedArea found=false');
+      return null;
+    }
+    final result = RuleModel.fromCacheMap(
+      _decodePayload(rows.first['payload_json'], '업무 규칙'),
+    );
+    debugPrint('[OperationalSQLite] readRule division=$normalizedDivision area=$normalizedArea found=true todos=${result.todoItems.length}');
+    return result;
+  }
+
+  @override
+  Future<void> replaceRule({
+    required String division,
+    required String area,
+    required RuleModel? rule,
+  }) async {
+    final normalizedDivision = _requireDivision(division);
+    final normalizedArea = _requireArea(area);
+    if (rule != null &&
+        (rule.division.trim() != normalizedDivision ||
+            rule.area.trim() != normalizedArea)) {
+      throw StateError('업무 규칙의 지역 값이 현재 지역과 다릅니다: ${rule.id}');
+    }
+    final db = await _database.database;
+    await db.transaction((txn) async {
+      await txn.delete(
+        'operational_rules',
+        where: 'division = ? AND area = ?',
+        whereArgs: <Object?>[normalizedDivision, normalizedArea],
+      );
+      if (rule != null) {
+        await txn.insert(
+          'operational_rules',
+          <String, Object?>{
+            'division': normalizedDivision,
+            'area': normalizedArea,
+            'payload_json': jsonEncode(rule.toCacheMap()),
+          },
+        );
+      }
+      final rows = await txn.rawQuery(
+        'SELECT COUNT(*) AS count FROM operational_rules WHERE division = ? AND area = ?',
+        <Object?>[normalizedDivision, normalizedArea],
+      );
+      final stored = Sqflite.firstIntValue(rows) ?? 0;
+      final expected = rule == null ? 0 : 1;
+      if (stored != expected) {
+        throw StateError('업무 규칙 SQLite 저장 개수가 일치하지 않습니다: expected=$expected actual=$stored');
+      }
+      if (rule != null) {
+        final savedRows = await txn.query(
+          'operational_rules',
+          columns: <String>['payload_json'],
+          where: 'division = ? AND area = ?',
+          whereArgs: <Object?>[normalizedDivision, normalizedArea],
+          limit: 1,
+        );
+        final saved = RuleModel.fromCacheMap(
+          _decodePayload(savedRows.first['payload_json'], '업무 규칙'),
+        );
+        if (saved.id != rule.id ||
+            saved.division != rule.division ||
+            saved.area != rule.area ||
+            saved.content != rule.content ||
+            saved.todoItems.length != rule.todoItems.length) {
+          throw StateError('업무 규칙 SQLite 저장 검증에 실패했습니다.');
+        }
+        for (var index = 0; index < rule.todoItems.length; index += 1) {
+          final expectedTodo = rule.todoItems[index];
+          final storedTodo = saved.todoItems[index];
+          if (storedTodo.id != expectedTodo.id ||
+              storedTodo.text != expectedTodo.text ||
+              storedTodo.order != expectedTodo.order) {
+            throw StateError('업무 규칙 SQLite Todo 저장 검증에 실패했습니다.');
+          }
+        }
+      }
+    });
+    debugPrint('[OperationalSQLite] replaceRule division=$normalizedDivision area=$normalizedArea found=${rule != null} todos=${rule?.todoItems.length ?? 0}');
+  }
+
+  @override
+  Future<void> clearRule({
+    required String division,
+    required String area,
+  }) async {
+    final normalizedDivision = _requireDivision(division);
+    final normalizedArea = _requireArea(area);
+    final db = await _database.database;
+    await db.transaction((txn) async {
+      await txn.delete(
+        'operational_rules',
+        where: 'division = ? AND area = ?',
+        whereArgs: <Object?>[normalizedDivision, normalizedArea],
+      );
+      final rows = await txn.rawQuery(
+        'SELECT COUNT(*) AS count FROM operational_rules WHERE division = ? AND area = ?',
+        <Object?>[normalizedDivision, normalizedArea],
+      );
+      if ((Sqflite.firstIntValue(rows) ?? 0) != 0) {
+        throw StateError('기존 업무 규칙 SQLite 데이터 삭제 검증 실패');
+      }
+    });
+    debugPrint('[OperationalSQLite] clearRule division=$normalizedDivision area=$normalizedArea');
+  }
+
+  @override
+  Future<int> countRules({
+    required String division,
+    required String area,
+  }) async {
+    final normalizedDivision = _requireDivision(division);
+    final normalizedArea = _requireArea(area);
+    final db = await _database.database;
+    final rows = await db.rawQuery(
+      'SELECT COUNT(*) AS count FROM operational_rules WHERE division = ? AND area = ?',
+      <Object?>[normalizedDivision, normalizedArea],
+    );
+    return Sqflite.firstIntValue(rows) ?? 0;
+  }
+
   @override
   Future<OperationalAreaMeta?> readAreaMeta(String area) async {
     final normalizedArea = _requireArea(area);
@@ -502,7 +648,7 @@ class SqliteOperationalLocalRepository implements OperationalLocalRepository {
   @override
   Future<void> saveOperationalMetadata({
     required String area,
-    required bool hasMonthlyParking,
+    required bool? hasMonthlyParking,
     required String syncedAtIso,
   }) async {
     final normalizedArea = _requireArea(area);
@@ -516,7 +662,11 @@ class SqliteOperationalLocalRepository implements OperationalLocalRepository {
       await txn.update(
         'operational_area_meta',
         <String, Object?>{
-          'has_monthly_parking': hasMonthlyParking ? 1 : 0,
+          'has_monthly_parking': hasMonthlyParking == null
+              ? null
+              : hasMonthlyParking
+                  ? 1
+                  : 0,
           'synced_at_iso': normalizedSyncedAt,
         },
         where: 'area = ?',

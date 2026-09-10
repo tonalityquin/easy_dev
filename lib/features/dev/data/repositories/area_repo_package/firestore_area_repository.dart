@@ -24,6 +24,14 @@ class FirestoreAreaRepository implements AreaRepository {
     final rawCommunication = data['communication'];
     final communication =
         rawCommunication is String ? rawCommunication.trim() : '';
+    final rawWorkRules = data['workRules'];
+    final workRules = rawWorkRules is List
+        ? rawWorkRules
+            .whereType<String>()
+            .map((value) => value.trim())
+            .where((value) => value.isNotEmpty)
+            .toList(growable: false)
+        : const <String>[];
     final capabilities = Cap.fromDynamic(data['capabilities']);
     final rawModes = data['modes'];
     final modes = rawModes is List
@@ -41,6 +49,7 @@ class FirestoreAreaRepository implements AreaRepository {
       email: email,
       invite: invite,
       communication: communication,
+      workRules: workRules,
       capabilities: capabilities,
       modes: modes,
       isHeadquarter: data['isHeadquarter'] == true,

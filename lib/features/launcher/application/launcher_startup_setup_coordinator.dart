@@ -38,6 +38,8 @@ class LauncherStartupSetupCoordinator extends ChangeNotifier {
   String? _googleAccountEmail;
   String? _googleErrorText;
   int _googleSkipTapCount = 0;
+  int _permissionSkipTapCount = 0;
+  int? _permissionSkipTapStep;
   bool _disposed = false;
 
   AppStartSetupSnapshot? get snapshot => _snapshot;
@@ -107,6 +109,8 @@ class LauncherStartupSetupCoordinator extends ChangeNotifier {
   String? get googleAccountEmail => _googleAccountEmail;
   String? get googleErrorText => _googleErrorText;
   int get googleSkipTapCount => _googleSkipTapCount;
+  int get permissionSkipTapCount => _permissionSkipTapCount;
+  int? get permissionSkipTapStep => _permissionSkipTapStep;
 
   bool get primaryActionEnabled {
     if (busy || _awaitingExternalSettings) return false;
@@ -221,6 +225,8 @@ class LauncherStartupSetupCoordinator extends ChangeNotifier {
         .toList(growable: false);
     _permissionSteps = steps;
     _permissionIndex = 0;
+    _permissionSkipTapCount = 0;
+    _permissionSkipTapStep = null;
     notifyListeners();
     AppStartDebugTrace.log(
       'launcher_startup_setup',
@@ -442,6 +448,8 @@ class LauncherStartupSetupCoordinator extends ChangeNotifier {
       await _permissionCoordinator.refreshStep(step);
       if (!_permissionCoordinator.isGranted(step)) {
         _permissionIndex = index;
+        _permissionSkipTapCount = 0;
+        _permissionSkipTapStep = null;
         notifyListeners();
         AppStartDebugTrace.log(
           'launcher_startup_setup',
@@ -451,6 +459,8 @@ class LauncherStartupSetupCoordinator extends ChangeNotifier {
         return;
       }
     }
+    _permissionSkipTapCount = 0;
+    _permissionSkipTapStep = null;
     await AppStartFlowPrefs.setPermissionTutorialDone(true);
     AppStartDebugTrace.log(
       'launcher_startup_setup',
@@ -648,6 +658,64 @@ class LauncherStartupSetupCoordinator extends ChangeNotifier {
     }
   }
 
+  Future<bool> registerPermissionTitleTap() async {
+    if (_phase != AppStartSetupPhase.permission || busy || _disposed) {
+      return false;
+    }
+    final step = currentPermissionStep;
+    final spec = currentPermissionSpec;
+    if (step == null || spec == null) return false;
+
+    if (_permissionSkipTapStep != step) {
+      _permissionSkipTapStep = step;
+      _permissionSkipTapCount = 0;
+    }
+
+    _permissionSkipTapCount =
+        (_permissionSkipTapCount + 1).clamp(0, 5).toInt();
+    notifyListeners();
+    AppStartDebugTrace.log(
+      'launcher_startup_setup',
+      'permission_skip_tap',
+      meta: <String, Object?>{
+        'step': step,
+        'permissionKey': spec.keyName,
+        'count': _permissionSkipTapCount,
+        'required': 5,
+        'actualGranted': _permissionCoordinator.isGranted(step),
+        'awaitingExternalSettings': _awaitingExternalSettings,
+      },
+    );
+    if (_permissionSkipTapCount < 5) return false;
+
+    final actualGranted = _permissionCoordinator.isGranted(step);
+    _busy = true;
+    _awaitingExternalSettings = false;
+    _externalSettingsStep = null;
+    _externalSettingsRefreshInProgress = false;
+    _permissionSkipTapCount = 0;
+    _permissionSkipTapStep = null;
+    notifyListeners();
+
+    try {
+      AppStartDebugTrace.log(
+        'launcher_startup_setup',
+        'permission_step_skipped_by_title_tap',
+        meta: <String, Object?>{
+          'step': step,
+          'permissionKey': spec.keyName,
+          'actualGranted': actualGranted,
+          'skipByFiveTap': true,
+        },
+      );
+      await _advancePermissionStep();
+      return true;
+    } finally {
+      _busy = false;
+      if (!_disposed) notifyListeners();
+    }
+  }
+
   Future<bool> registerGoogleTitleTap() async {
     if (_phase != AppStartSetupPhase.googleServices || busy || _disposed) {
       return false;
@@ -701,6 +769,8 @@ class LauncherStartupSetupCoordinator extends ChangeNotifier {
       'permissionIndex': _permissionSteps.isEmpty ? 0 : _permissionIndex + 1,
       'permissionCount': _permissionSteps.length,
       'permissionStatus': currentPermissionStatus,
+      'permissionSkipTapCount': _permissionSkipTapCount,
+      'permissionSkipTapStep': _permissionSkipTapStep ?? 0,
       'policyKind': policySpec?.kind.name ?? 'none',
       'policyProgress': _policyScrollProgress.toStringAsFixed(3),
       'policyReadToEnd': _policyReadToEnd,

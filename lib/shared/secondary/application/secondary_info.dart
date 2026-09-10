@@ -7,6 +7,7 @@ import '../../../features/location/pages/location_management.dart';
 import '../../../features/monthly/page/monthly_parking_management.dart';
 import '../../../features/payment/pages/bill_management.dart';
 import '../../../features/sector/pages/sector_management.dart';
+import '../../../features/rule/pages/rule_management.dart';
 import '../pages/sheets/area_management.dart';
 import '../pages/sheets/back_end_controller.dart';
 import '../pages/sheets/dash_board_setting.dart';
@@ -25,12 +26,13 @@ class SecondaryInfo {
   });
 }
 
-enum Section { user, sector, tablet, monthly, location, bill, area, local, backend }
+enum Section { user, sector, location, rule, tablet, monthly, bill, area, local, backend }
 
 final Map<Section, CapSet> kSectionRequires = {
   Section.user: const <Capability>{},
   Section.sector: const {Capability.sector},
   Section.location: const {Capability.location},
+  Section.rule: const {Capability.rule},
   Section.tablet: const {Capability.tablet},
   Section.monthly: const {Capability.monthly},
   Section.bill: const {Capability.bill},
@@ -69,6 +71,13 @@ const SecondaryInfo tabLocation = SecondaryInfo(
   LocationManagement(),
   Icon(Icons.location_on),
   requires: {Capability.location},
+);
+
+const SecondaryInfo tabRule = SecondaryInfo(
+  '업무 규칙 관리',
+  RuleManagement(),
+  Icon(Icons.rule_rounded),
+  requires: {Capability.rule},
 );
 
 const SecondaryInfo tabTablet = SecondaryInfo(
@@ -179,6 +188,7 @@ final Map<RoleType, Set<Section>> kRolePolicy = {
     Section.user,
     Section.sector,
     Section.location,
+    Section.rule,
     Section.tablet,
     Section.monthly,
     Section.bill,
@@ -189,6 +199,7 @@ final Map<RoleType, Set<Section>> kRolePolicy = {
     Section.user,
     Section.sector,
     Section.location,
+    Section.rule,
     Section.monthly,
     Section.bill,
   },
@@ -198,6 +209,7 @@ final Map<RoleType, Set<Section>> kRolePolicy = {
     Section.user,
     Section.sector,
     Section.location,
+    Section.rule,
     Section.tablet,
     Section.monthly,
     Section.bill,
@@ -208,6 +220,7 @@ final Map<RoleType, Set<Section>> kRolePolicy = {
     Section.user,
     Section.sector,
     Section.location,
+    Section.rule,
     Section.bill,
   },
   RoleType.adminBillTablet: {
@@ -216,6 +229,7 @@ final Map<RoleType, Set<Section>> kRolePolicy = {
     Section.user,
     Section.sector,
     Section.location,
+    Section.rule,
     Section.tablet,
     Section.bill,
   },
@@ -225,6 +239,7 @@ final Map<RoleType, Set<Section>> kRolePolicy = {
     Section.user,
     Section.sector,
     Section.location,
+    Section.rule,
   },
   RoleType.adminCommonTablet: {
     Section.local,
@@ -232,6 +247,7 @@ final Map<RoleType, Set<Section>> kRolePolicy = {
     Section.user,
     Section.sector,
     Section.location,
+    Section.rule,
     Section.tablet,
   },
   RoleType.userLocationMonthly: {
@@ -261,6 +277,7 @@ final Map<Section, SecondaryInfo> kSectionTab = {
   Section.user: tabUser,
   Section.sector: tabSector,
   Section.location: tabLocation,
+  Section.rule: tabRule,
   Section.tablet: tabTablet,
   Section.monthly: tabMonthly,
   Section.bill: tabBill,

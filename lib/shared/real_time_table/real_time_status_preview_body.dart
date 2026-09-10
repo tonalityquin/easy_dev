@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../operational_cache/application/operational_snapshot_revision_state.dart';
 import '../operational_cache/domain/repositories/operational_local_repository.dart';
 
 import '../../app/utils/developer_operation_status_dialog.dart';
@@ -77,16 +78,15 @@ class RealTimeStatusPreviewBody extends StatefulWidget {
 }
 
 class _RealTimeStatusPreviewBodyState extends State<RealTimeStatusPreviewBody>
-    with AutomaticKeepAliveClientMixin {
-  static const String _boardPauseReason = '현황 DOT MAP 다이얼로그';
+    with SingleTickerProviderStateMixin, AutomaticKeepAliveClientMixin {
+  static const String _boardPauseReason = '현황 주차 지도 다이얼로그';
   static const String _dockPauseReason = '현황 상태 처리 사이드 도크';
   static const String _requestTrayPauseReason = '현황 입차 요청 더보기';
 
   Future<List<LocationModel>>? _localFuture;
   String _localArea = '';
-  final Map<String, PlateModel> _plateDetailCache = <String, PlateModel>{};
-  final Map<String, Future<PlateModel?>> _plateDetailInflight =
-      <String, Future<PlateModel?>>{};
+  int _lastOperationalRevision = -1;
+  late final AnimationController _snapshotRefreshController;
   bool _openingDetail = false;
   String _lastRenderSignature = '';
   String _lastParkingRequestSignature = '';
@@ -99,6 +99,11 @@ class _RealTimeStatusPreviewBodyState extends State<RealTimeStatusPreviewBody>
   @override
   void initState() {
     super.initState();
+    _snapshotRefreshController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 240),
+      value: 1,
+    );
     widget.controller.bind(this, _refreshFromUser);
     widget.controller.bindParentFocus(this, _onParentFocusRequest);
   }
@@ -115,8 +120,7 @@ class _RealTimeStatusPreviewBodyState extends State<RealTimeStatusPreviewBody>
     if (oldWidget.area.trim() != widget.area.trim()) {
       _localFuture = null;
       _localArea = '';
-      _plateDetailCache.clear();
-      _plateDetailInflight.clear();
+      _lastOperationalRevision = -1;
       _lastParkingRequestSignature = '';
       _parkingRequestDebugLines.clear();
     }
@@ -126,6 +130,7 @@ class _RealTimeStatusPreviewBodyState extends State<RealTimeStatusPreviewBody>
   void dispose() {
     widget.controller.unbind(this);
     widget.controller.unbindParentFocus(this);
+    _snapshotRefreshController.dispose();
     super.dispose();
   }
 
@@ -185,6 +190,38 @@ class _RealTimeStatusPreviewBodyState extends State<RealTimeStatusPreviewBody>
     final normalizedArea = area.trim();
     if (normalizedArea.isEmpty) return const <LocationModel>[];
     return context.read<OperationalLocalRepository>().readLocations(normalizedArea);
+  }
+
+  void _playSnapshotRefreshAnimation() {
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (reduceMotion) {
+      _snapshotRefreshController.value = 1;
+      return;
+    }
+    _snapshotRefreshController.forward(from: 0);
+  }
+
+  Widget _withSnapshotRefreshAnimation(Widget child) {
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (reduceMotion) return child;
+    return AnimatedBuilder(
+      animation: _snapshotRefreshController,
+      child: child,
+      builder: (context, animatedChild) {
+        final value = Curves.easeOutCubic.transform(
+          _snapshotRefreshController.value,
+        );
+        return Opacity(
+          opacity: 0.94 + (0.06 * value),
+          child: Transform.translate(
+            offset: Offset(0, 6 * (1 - value)),
+            child: animatedChild,
+          ),
+        );
+      },
+    );
   }
 
   RealTimeTabSpec? _specForCollection(String collection) {
@@ -391,28 +428,21 @@ class _RealTimeStatusPreviewBodyState extends State<RealTimeStatusPreviewBody>
   Future<PlateModel?> _fetchPlateDetail(String plateId) async {
     final id = plateId.trim();
     if (id.isEmpty) return null;
-
-    final cached = _plateDetailCache[id];
-    if (cached != null) return cached;
-
-    final inflight = _plateDetailInflight[id];
-    if (inflight != null) return inflight;
-
     final repo = context.read<PlateRepository>();
-    final future = () async {
-      try {
-        final plate = await repo.getPlate(id);
-        if (plate != null) {
-          _plateDetailCache[id] = plate;
-        }
-        return plate;
-      } finally {
-        _plateDetailInflight.remove(id);
-      }
-    }();
+    return repo.getPlate(id);
+  }
 
-    _plateDetailInflight[id] = future;
-    return future;
+  String _expectedPlateTypeNameForCollection(String collection) {
+    switch (collection.trim()) {
+      case 'parking_requests_view':
+        return 'parkingRequests';
+      case 'parking_completed_view':
+        return 'parkingCompleted';
+      case 'departure_requests_view':
+        return 'departureRequests';
+      default:
+        return '-';
+    }
   }
 
   Future<void> _openStatusDock(
@@ -499,7 +529,7 @@ class _RealTimeStatusPreviewBodyState extends State<RealTimeStatusPreviewBody>
         title: '현황 상태 빠른 실행',
         initialMessage: source.startsWith('status_parking_request_')
             ? '현황 입차 요청 Shelf에서 상태 처리 Side Dock 실행을 준비했습니다.'
-            : '현황 DOT MAP 상태 처리 빠른 실행을 준비했습니다.',
+            : '현황 주차 지도 상태 처리 빠른 실행을 준비했습니다.',
         useCommonUi: true,
         developerModeMessage:
             '개발자 모드 ON: 완료 후 현황 상태 처리 debugPrint 코드를 복사할 수 있습니다.',
@@ -522,13 +552,14 @@ class _RealTimeStatusPreviewBodyState extends State<RealTimeStatusPreviewBody>
         }
       }
 
-      final cachedPlate = _plateDetailCache[plateId];
+      final expectedPlateType =
+          _expectedPlateTypeNameForCollection(collection);
       trace.log(
-        'source=$source screen=${widget.screen} collection=$collection status=${status?.name ?? '-'} tab=${spec.id} area=${widget.area.trim()} plateId=$plateId plateNumber=${row.plateNumber} location=${row.location} cached=${cachedPlate != null} childDialogClosedBeforeDock=$childDialogClosedBeforeDock requestTrayClosedBeforeDock=${source == 'status_parking_request_tray'} autoTransitionPaused=true',
+        'source=$source screen=${widget.screen} collection=$collection status=${status?.name ?? '-'} tab=${spec.id} area=${widget.area.trim()} plateId=$plateId plateNumber=${row.plateNumber} location=${row.location} detailCache=disabled expectedPlateType=$expectedPlateType childDialogClosedBeforeDock=$childDialogClosedBeforeDock requestTrayClosedBeforeDock=${source == 'status_parking_request_tray'} autoTransitionPaused=true',
         progress: .28,
       );
       debugPrint(
-        '[RealTimeStatusDotMap] event=status_dock_open source=$source screen=${widget.screen} collection=$collection status=${status?.name ?? '-'} tab=${spec.id} area=${widget.area.trim()} plateId=$plateId plateNumber=${row.plateNumber} location=${row.location} cached=${cachedPlate != null} childDialogClosedBeforeDock=$childDialogClosedBeforeDock requestTrayClosedBeforeDock=${source == 'status_parking_request_tray'}',
+        '[RealTimeStatusDotMap] event=status_dock_open source=$source screen=${widget.screen} collection=$collection status=${status?.name ?? '-'} tab=${spec.id} area=${widget.area.trim()} plateId=$plateId plateNumber=${row.plateNumber} location=${row.location} detailCache=disabled expectedPlateType=$expectedPlateType childDialogClosedBeforeDock=$childDialogClosedBeforeDock requestTrayClosedBeforeDock=${source == 'status_parking_request_tray'}',
       );
 
       if (!mounted || !dockContext.mounted) return;
@@ -540,8 +571,45 @@ class _RealTimeStatusPreviewBodyState extends State<RealTimeStatusPreviewBody>
           area: widget.area.trim(),
           location: row.location,
           statusTitle: '${spec.label} 상태 처리',
-          cachedPlate: cachedPlate,
-          loadPlate: () => _fetchPlateDetail(plateId),
+          cachedPlate: null,
+          loadPlate: () async {
+            final startedAt = DateTime.now();
+            trace!.log(
+              'plateDetailLoad=start source=$source plateId=$plateId collection=$collection expectedPlateType=$expectedPlateType cache=disabled repository=PlateRepository.getPlate',
+              progress: .42,
+            );
+            debugPrint(
+              '[RealTimeStatusDotMap] event=plate_detail_load_start source=$source plateId=$plateId collection=$collection expectedPlateType=$expectedPlateType cache=disabled repository=PlateRepository.getPlate',
+            );
+            try {
+              final plate = await _fetchPlateDetail(plateId);
+              final elapsedMs =
+                  DateTime.now().difference(startedAt).inMilliseconds;
+              final actualPlateType = plate?.typeEnum?.name ?? '-';
+              final mismatch = plate != null &&
+                  expectedPlateType != '-' &&
+                  actualPlateType != expectedPlateType;
+              trace.log(
+                'plateDetailLoad=success source=$source plateId=$plateId found=${plate != null} expectedPlateType=$expectedPlateType actualPlateType=$actualPlateType viewPlateTypeMismatch=$mismatch elapsedMs=$elapsedMs cache=disabled',
+                progress: .62,
+              );
+              debugPrint(
+                '[RealTimeStatusDotMap] event=plate_detail_load_success source=$source plateId=$plateId found=${plate != null} collection=$collection expectedPlateType=$expectedPlateType actualPlateType=$actualPlateType viewPlateTypeMismatch=$mismatch elapsedMs=$elapsedMs cache=disabled',
+              );
+              return plate;
+            } catch (error, stackTrace) {
+              final elapsedMs =
+                  DateTime.now().difference(startedAt).inMilliseconds;
+              trace.log(
+                'plateDetailLoad=failure source=$source plateId=$plateId expectedPlateType=$expectedPlateType elapsedMs=$elapsedMs cache=disabled error=$error',
+                progress: .62,
+              );
+              debugPrint(
+                '[RealTimeStatusDotMap] event=plate_detail_load_failure source=$source plateId=$plateId collection=$collection expectedPlateType=$expectedPlateType elapsedMs=$elapsedMs cache=disabled error=$error stackTrace=$stackTrace',
+              );
+              rethrow;
+            }
+          },
         ),
       );
       trace.log(
@@ -728,14 +796,37 @@ class _RealTimeStatusPreviewBodyState extends State<RealTimeStatusPreviewBody>
     final area = widget.area.trim();
     final store = context.watch<ViewDocRowsStore>();
     final liveLocations = context.watch<LocationState>().locations;
+    final operationalRevision = context
+        .watch<OperationalSnapshotRevisionState>()
+        .revisionOf(area);
+
+    if (_lastOperationalRevision < 0) {
+      _lastOperationalRevision = operationalRevision;
+    } else if (_lastOperationalRevision != operationalRevision) {
+      _lastOperationalRevision = operationalRevision;
+      _localFuture = null;
+      _localArea = '';
+      context.read<OperationalSnapshotRevisionState>().reportConsumerRefresh(
+            area: area,
+            revision: operationalRevision,
+            consumer: 'RealTimeStatusPreviewBody:${widget.screen}',
+            action: 'sqlite_future_invalidate',
+          );
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _playSnapshotRefreshAnimation();
+      });
+    }
 
     if (liveLocations.isNotEmpty) {
-      return SizedBox.expand(
-        child: _buildBoard(
-          context,
-          List<LocationModel>.of(liveLocations),
-          store,
-          area,
+      return _withSnapshotRefreshAnimation(
+        SizedBox.expand(
+          child: _buildBoard(
+            context,
+            List<LocationModel>.of(liveLocations),
+            store,
+            area,
+          ),
         ),
       );
     }
@@ -745,16 +836,18 @@ class _RealTimeStatusPreviewBodyState extends State<RealTimeStatusPreviewBody>
       _localFuture = _loadLocationsFromLocal(area);
     }
 
-    return SizedBox.expand(
-      child: FutureBuilder<List<LocationModel>>(
-        future: _localFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const RealTimeExpandedLoading();
-          }
-          final locations = snapshot.data ?? const <LocationModel>[];
-          return _buildBoard(context, locations, store, area);
-        },
+    return _withSnapshotRefreshAnimation(
+      SizedBox.expand(
+        child: FutureBuilder<List<LocationModel>>(
+          future: _localFuture,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const RealTimeExpandedLoading();
+            }
+            final locations = snapshot.data ?? const <LocationModel>[];
+            return _buildBoard(context, locations, store, area);
+          },
+        ),
       ),
     );
   }

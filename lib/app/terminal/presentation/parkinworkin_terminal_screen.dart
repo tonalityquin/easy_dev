@@ -271,6 +271,23 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
     _scheduleBottomLock(delay: const Duration(milliseconds: 140));
   }
 
+  Future<void> _handleStartupPermissionTitleTap() async {
+    if (!_isLauncher || _interactionLocked || _startupSetupBusy) return;
+    await HapticFeedback.selectionClick();
+    final skipped =
+        await _launcherController!.registerStartupPermissionTitleTap(
+      context,
+      reduceMotion: _reduceMotion,
+    );
+    if (!mounted || !skipped) return;
+    _syncPlayback();
+    final handledPending = await _consumeLauncherPendingFlow();
+    if (handledPending || !mounted || _interactionLocked) return;
+    if (!_startupSetupActive) {
+      _promptFocusNode.requestFocus();
+    }
+  }
+
   Future<void> _handleStartupGoogleTitleTap() async {
     if (!_isLauncher || _interactionLocked || _startupSetupBusy) return;
     await HapticFeedback.selectionClick();
@@ -1039,6 +1056,7 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
               controller: _launcherController!,
               reduceMotion: _reduceMotion,
               onPrimaryAction: _runStartupSetupPrimaryAction,
+              onPermissionTitleTap: _handleStartupPermissionTitleTap,
               onGoogleTitleTap: _handleStartupGoogleTitleTap,
             ),
           ] else ...[
@@ -1517,12 +1535,14 @@ class _TerminalStartupSetupPanel extends StatelessWidget {
     required this.controller,
     required this.reduceMotion,
     required this.onPrimaryAction,
+    required this.onPermissionTitleTap,
     required this.onGoogleTitleTap,
   });
 
   final ModeLauncherController controller;
   final bool reduceMotion;
   final Future<void> Function() onPrimaryAction;
+  final Future<void> Function() onPermissionTitleTap;
   final Future<void> Function() onGoogleTitleTap;
 
   @override
@@ -1537,6 +1557,7 @@ class _TerminalStartupSetupPanel extends StatelessWidget {
           controller: controller,
           reduceMotion: reduceMotion,
           onPrimaryAction: onPrimaryAction,
+          onTitleTap: onPermissionTitleTap,
         ),
       AppStartSetupPhase.terms ||
       AppStartSetupPhase.privacy ||
@@ -1584,11 +1605,13 @@ class _TerminalPermissionSetupView extends StatelessWidget {
     required this.controller,
     required this.reduceMotion,
     required this.onPrimaryAction,
+    required this.onTitleTap,
   });
 
   final ModeLauncherController controller;
   final bool reduceMotion;
   final Future<void> Function() onPrimaryAction;
+  final Future<void> Function() onTitleTap;
 
   @override
   Widget build(BuildContext context) {
@@ -1621,9 +1644,33 @@ class _TerminalPermissionSetupView extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 9),
-          Text(
-            spec.title,
-            style: _terminalSectionTitleStyle,
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onTitleTap,
+            child: TweenAnimationBuilder<double>(
+              key: ValueKey<String>(
+                'permission-title-${spec.step}-${setup.permissionSkipTapCount}',
+              ),
+              tween: Tween<double>(begin: .985, end: 1),
+              duration: reduceMotion
+                  ? Duration.zero
+                  : const Duration(milliseconds: 130),
+              curve: Curves.easeOutCubic,
+              builder: (context, scale, child) {
+                return Transform.scale(
+                  scale: scale,
+                  alignment: Alignment.centerLeft,
+                  child: child,
+                );
+              },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Text(
+                  spec.title,
+                  style: _terminalSectionTitleStyle,
+                ),
+              ),
+            ),
           ),
           const SizedBox(height: 5),
           Text(

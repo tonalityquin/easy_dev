@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../shared/operational_cache/application/operational_snapshot_revision_state.dart';
 import '../../../shared/operational_cache/domain/repositories/operational_local_repository.dart';
 
 import '../../dev/application/area_state.dart';
@@ -156,7 +157,8 @@ class DoubleParkingStatusPage extends StatefulWidget {
   State<DoubleParkingStatusPage> createState() => _DoubleParkingStatusPageState();
 }
 
-class _DoubleParkingStatusPageState extends State<DoubleParkingStatusPage> {
+class _DoubleParkingStatusPageState extends State<DoubleParkingStatusPage>
+    with SingleTickerProviderStateMixin {
   StreamSubscription<List<ViewRowData>>? _pcSub;
   Timer? _pcDebounce;
   int _pcListenSeq = 0;
@@ -178,10 +180,17 @@ class _DoubleParkingStatusPageState extends State<DoubleParkingStatusPage> {
   int _countReqSeq = 0;
 
   bool _syncScheduled = false;
+  int _lastOperationalRevision = -1;
+  late final AnimationController _snapshotRefreshController;
 
   @override
   void initState() {
     super.initState();
+    _snapshotRefreshController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 240),
+      value: 1,
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _syncForCurrentArea(refreshLocationsSource: false);
@@ -192,6 +201,7 @@ class _DoubleParkingStatusPageState extends State<DoubleParkingStatusPage> {
   void dispose() {
     _pcDebounce?.cancel();
     _pcSub?.cancel();
+    _snapshotRefreshController.dispose();
     super.dispose();
   }
 
@@ -200,18 +210,42 @@ class _DoubleParkingStatusPageState extends State<DoubleParkingStatusPage> {
     super.didChangeDependencies();
 
     final currentArea = context.read<AreaState>().currentArea.trim();
+    final operationalRevision = context
+        .watch<OperationalSnapshotRevisionState>()
+        .revisionOf(currentArea);
+    final revisionChanged = _lastOperationalRevision >= 0 &&
+        _lastOperationalRevision != operationalRevision;
+    _lastOperationalRevision = operationalRevision;
+
     final bool areaChanged =
         (_lastLocationsArea != null && _lastLocationsArea != currentArea) ||
             (_lastArea != null && _lastArea != currentArea);
 
-    if (!areaChanged) return;
-    if (_syncScheduled) return;
+    if (areaChanged) {
+      if (_syncScheduled) return;
+      _syncScheduled = true;
+      Future.microtask(() {
+        _syncScheduled = false;
+        if (!mounted) return;
+        _syncForCurrentArea(refreshLocationsSource: false);
+      });
+      return;
+    }
 
-    _syncScheduled = true;
+    if (!revisionChanged || _syncScheduled) return;
+    context.read<OperationalSnapshotRevisionState>().reportConsumerRefresh(
+          area: currentArea,
+          revision: operationalRevision,
+          consumer: 'DoubleParkingStatusPage',
+          action: 'sqlite_locations_reload',
+        );
     Future.microtask(() {
-      _syncScheduled = false;
       if (!mounted) return;
-      _syncForCurrentArea(refreshLocationsSource: false);
+      _runLoadLocationsFromLocal(
+        forceRefresh: false,
+        showLoading: false,
+        animateOnSuccess: true,
+      );
     });
   }
 
@@ -228,7 +262,11 @@ class _DoubleParkingStatusPageState extends State<DoubleParkingStatusPage> {
     ]);
   }
 
-  Future<void> _runLoadLocationsFromLocal({required bool forceRefresh}) async {
+  Future<void> _runLoadLocationsFromLocal({
+    required bool forceRefresh,
+    bool showLoading = true,
+    bool animateOnSuccess = false,
+  }) async {
     if (!mounted) return;
 
     final int seq = ++_locationsReqSeq;
@@ -239,10 +277,12 @@ class _DoubleParkingStatusPageState extends State<DoubleParkingStatusPage> {
     final requestedArea = area;
     _lastLocationsArea = requestedArea;
 
-    setState(() {
-      _isLocationsLoading = true;
-      _hadLocationsError = false;
-    });
+    if (showLoading) {
+      setState(() {
+        _isLocationsLoading = true;
+        _hadLocationsError = false;
+      });
+    }
 
     if (forceRefresh) {
       try {
@@ -283,6 +323,12 @@ class _DoubleParkingStatusPageState extends State<DoubleParkingStatusPage> {
         _isLocationsLoading = false;
         _hadLocationsError = false;
       });
+      debugPrint(
+        '[DoubleParkingStatusPage] event=sqlite_locations_loaded area=$requestedArea count=${next.length} forceRefresh=$forceRefresh animateOnSuccess=$animateOnSuccess firebaseAdditionalRead=${forceRefresh ? 'possible' : '0'}',
+      );
+      if (animateOnSuccess) {
+        _playSnapshotRefreshAnimation();
+      }
     } catch (e) {
       await _logApiError(
         tag: 'DoubleParkingStatusPage._runLoadLocationsFromLocal',
@@ -304,6 +350,38 @@ class _DoubleParkingStatusPageState extends State<DoubleParkingStatusPage> {
         _hadLocationsError = true;
       });
     }
+  }
+
+  void _playSnapshotRefreshAnimation() {
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (reduceMotion) {
+      _snapshotRefreshController.value = 1;
+      return;
+    }
+    _snapshotRefreshController.forward(from: 0);
+  }
+
+  Widget _withSnapshotRefreshAnimation(Widget child) {
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (reduceMotion) return child;
+    return AnimatedBuilder(
+      animation: _snapshotRefreshController,
+      child: child,
+      builder: (context, animatedChild) {
+        final value = Curves.easeOutCubic.transform(
+          _snapshotRefreshController.value,
+        );
+        return Opacity(
+          opacity: 0.94 + (0.06 * value),
+          child: Transform.translate(
+            offset: Offset(0, 6 * (1 - value)),
+            child: animatedChild,
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _runAggregateCount({required bool forceRefresh}) async {
@@ -509,42 +587,54 @@ class _DoubleParkingStatusPageState extends State<DoubleParkingStatusPage> {
       );
     }
 
-    return Scaffold(
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          Text(
-            '📊 현재 총 주차 현황',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: cs.onSurface),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 12),
-          Text(
-            '총 $totalCapacity대 중 $occupiedCount대 주차됨',
-            style: TextStyle(fontSize: 16, color: cs.onSurface),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 8),
-          LinearProgressIndicator(
-            value: usageRatio,
-            backgroundColor: cs.outlineVariant.withOpacity(0.6),
-            valueColor: AlwaysStoppedAnimation<Color>(usageRatio >= 0.8 ? cs.error : cs.primary),
-            minHeight: 8,
-          ),
-          const SizedBox(height: 12),
-          Text(
-            '$usagePercent% 사용 중',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: cs.onSurface),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 18),
-          ParkingGrid3DPreviewCard(
-            locations: _cachedLocations,
-            overlay: _gridOverlay,
-            textMetricsByLocation: textMetricsByLocation,
-          ),
-          const SizedBox(height: 12),
-        ],
+    return _withSnapshotRefreshAnimation(
+      Scaffold(
+        body: ListView(
+          padding: const EdgeInsets.all(20),
+          children: [
+            Text(
+              '📊 현재 총 주차 현황',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: cs.onSurface,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '총 $totalCapacity대 중 $occupiedCount대 주차됨',
+              style: TextStyle(fontSize: 16, color: cs.onSurface),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            LinearProgressIndicator(
+              value: usageRatio,
+              backgroundColor: cs.outlineVariant.withOpacity(0.6),
+              valueColor: AlwaysStoppedAnimation<Color>(
+                usageRatio >= 0.8 ? cs.error : cs.primary,
+              ),
+              minHeight: 8,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '$usagePercent% 사용 중',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: cs.onSurface,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 18),
+            ParkingGrid3DPreviewCard(
+              locations: _cachedLocations,
+              overlay: _gridOverlay,
+              textMetricsByLocation: textMetricsByLocation,
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
       ),
     );
   }

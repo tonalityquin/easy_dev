@@ -23,6 +23,9 @@ import '../../../features/monthly/page/sheets/monthly_plate_setting.dart';
 import '../../../features/sector/applications/sector_state.dart';
 import '../../../features/sector/domain/models/sector_model.dart';
 import '../../../features/sector/pages/sheets/sector_setting.dart';
+import '../../../features/rule/applications/rule_state.dart';
+import '../../../features/rule/domain/models/rule_model.dart';
+import '../../../features/rule/pages/sheets/rule_setting.dart';
 import '../../../features/location/applications/location_state.dart';
 import '../../../features/location/domain/models/location_model.dart';
 import '../../../features/location/pages/location_management.dart';
@@ -36,6 +39,7 @@ import '../application/secondary_info.dart';
 import '../application/secondary_location_workspace_state.dart';
 import '../application/secondary_monthly_workspace_state.dart';
 import '../application/secondary_sector_workspace_state.dart';
+import '../application/secondary_rule_workspace_state.dart';
 import '../application/secondary_tablet_workspace_state.dart';
 import '../application/secondary_state.dart';
 import '../widgets/ops_console_widgets.dart';
@@ -119,6 +123,11 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
       icon: Icons.location_on_rounded,
     ),
     _SecondaryRailItem(
+      section: Section.rule,
+      label: '규칙',
+      icon: Icons.rule_rounded,
+    ),
+    _SecondaryRailItem(
       section: Section.tablet,
       label: '태블릿',
       icon: Icons.tablet_mac_rounded,
@@ -161,6 +170,7 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
   late final SecondaryBillWorkspaceState _billWorkspace;
   late final SecondaryMonthlyWorkspaceState _monthlyWorkspace;
   late final SecondarySectorWorkspaceState _sectorWorkspace;
+  late final SecondaryRuleWorkspaceState _ruleWorkspace;
   late final SecondaryLocationWorkspaceState _locationWorkspace;
   late Section _selectedSection;
   bool _devModeEnabled = false;
@@ -183,6 +193,7 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
     _billWorkspace = SecondaryBillWorkspaceState(onDebug: _debugLog.log);
     _monthlyWorkspace = SecondaryMonthlyWorkspaceState(onDebug: _debugLog.log);
     _sectorWorkspace = SecondarySectorWorkspaceState(onDebug: _debugLog.log);
+    _ruleWorkspace = SecondaryRuleWorkspaceState(onDebug: _debugLog.log);
     _locationWorkspace = SecondaryLocationWorkspaceState(onDebug: _debugLog.log);
     _debugLog.log(
       'mounted selected=${_selectedSection.name} initial=${widget.initialSection.name} entryMode=${widget.entryMode.name} railScope=$_railScope',
@@ -213,6 +224,7 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
     _billWorkspace.dispose();
     _monthlyWorkspace.dispose();
     _sectorWorkspace.dispose();
+    _ruleWorkspace.dispose();
     _locationWorkspace.dispose();
     super.dispose();
   }
@@ -302,6 +314,7 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
             _billWorkspace.reset(source: 'selection_fallback');
             _monthlyWorkspace.reset(source: 'selection_fallback');
             _sectorWorkspace.reset(source: 'selection_fallback');
+            _ruleWorkspace.reset(source: 'selection_fallback');
             _locationWorkspace.reset(source: 'selection_fallback');
             setState(() => _selectedSection = item.section);
             _debugLog.log(
@@ -401,6 +414,11 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
     }
     if (_selectedSection == Section.sector || section == Section.sector) {
       _sectorWorkspace.reset(
+        source: 'section_change_${_selectedSection.name}_to_${section.name}',
+      );
+    }
+    if (_selectedSection == Section.rule || section == Section.rule) {
+      _ruleWorkspace.reset(
         source: 'section_change_${_selectedSection.name}_to_${section.name}',
       );
     }
@@ -522,6 +540,23 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
     );
   }
 
+  Future<void> _selectRuleSettingsSection(
+    RuleSettingsSection section,
+  ) async {
+    if (!_ruleWorkspace.isSettingsView || _ruleWorkspace.settingsSaving) {
+      _debugLog.log(
+        'rule_settings_section_rail_blocked section=${section.name} saving=${_ruleWorkspace.settingsSaving}',
+      );
+      return;
+    }
+    await HapticFeedback.selectionClick();
+    if (!mounted) return;
+    _ruleWorkspace.requestSettingsSection(
+      section,
+      source: 'secondary_rule_settings_rail',
+    );
+  }
+
   Future<void> _selectLocationPlainSettingsSection(
     LocationPlainSettingsSection section,
   ) async {
@@ -621,6 +656,15 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
     _sectorWorkspace.returnToManagement(source: source);
   }
 
+  void _backRuleSettingsWorkspace({String source = 'header_back'}) {
+    if (!_ruleWorkspace.isSettingsView || _ruleWorkspace.settingsSaving) {
+      return;
+    }
+    _debugLog.log('rule_settings_back source=$source');
+    HapticFeedback.selectionClick();
+    _ruleWorkspace.returnToManagement(source: source);
+  }
+
   void _backLocationPlainSettingsWorkspace({String source = 'header_back'}) {
     if (!_locationWorkspace.isPlainSettingsView ||
         _locationWorkspace.settingsSaving) {
@@ -679,6 +723,11 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
       if (sector.id == id) return sector;
     }
     return null;
+  }
+
+  RuleModel? _editingRule(RuleState state) {
+    if (!_ruleWorkspace.isEditingSettings) return null;
+    return state.rule;
   }
 
   LocationModel? _editingLocationPlain(LocationState state) {
@@ -786,6 +835,17 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
         'sector_settings_snapshot mode=${_sectorWorkspace.settingsMode.name} active=${_sectorWorkspace.activeSettingsSection.name} dirty=${_sectorWorkspace.settingsDirty} saving=${_sectorWorkspace.settingsSaving} sectorId=${_sectorWorkspace.editingSectorId ?? '-'} states=$sectionStates',
       );
     }
+    if (_ruleWorkspace.isSettingsView) {
+      final sectionStates = RuleSettingsSection.values
+          .map(
+            (section) =>
+                '${section.name}:${_ruleWorkspace.stateFor(section).name}',
+          )
+          .join('|');
+      _debugLog.log(
+        'rule_settings_snapshot mode=${_ruleWorkspace.settingsMode.name} active=${_ruleWorkspace.activeSettingsSection.name} dirty=${_ruleWorkspace.settingsDirty} saving=${_ruleWorkspace.settingsSaving} states=$sectionStates',
+      );
+    }
 
     if (_locationWorkspace.isPlainSettingsView) {
       final sectionStates = LocationPlainSettingsSection.values
@@ -870,6 +930,15 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
       }
       HapticFeedback.lightImpact();
       _sectorWorkspace.returnToManagement(source: 'header_minimize');
+      return;
+    }
+    if (_selectedSection == Section.rule && _ruleWorkspace.isSettingsView) {
+      if (_ruleWorkspace.settingsSaving) {
+        _debugLog.log('rule_settings_minimize_blocked saving=true');
+        return;
+      }
+      HapticFeedback.lightImpact();
+      _ruleWorkspace.returnToManagement(source: 'header_minimize');
       return;
     }
 
@@ -987,6 +1056,8 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
         return '섹터 관리';
       case Section.location:
         return '구역 관리';
+      case Section.rule:
+        return '업무 규칙 관리';
       case Section.tablet:
         return '태블릿 관리';
       case Section.bill:
@@ -1006,6 +1077,7 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
     SecondaryTabletWorkspaceState tabletWorkspace,
     SecondaryBillWorkspaceState billWorkspace,
     SecondarySectorWorkspaceState sectorWorkspace,
+    SecondaryRuleWorkspaceState ruleWorkspace,
   ) {
     if (section == Section.user) {
       if (accountWorkspace.isSettingsView) {
@@ -1133,6 +1205,53 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
       final info = kSectionTab[section];
       return OpsConsolePresentationScope(
         key: const ValueKey<String>('secondary-sector-management'),
+        embedded: true,
+        child: _SecondaryOperationsWorkspaceMotion(
+          child: info?.page ?? const SizedBox.shrink(),
+        ),
+      );
+    }
+
+    if (section == Section.rule) {
+      if (ruleWorkspace.isSettingsView) {
+        final ruleState = context.watch<RuleState>();
+        final initialRule = ruleWorkspace.isEditingSettings
+            ? _editingRule(ruleState)
+            : null;
+        if (ruleWorkspace.isEditingSettings &&
+            initialRule == null &&
+            !ruleWorkspace.settingsSaving) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted ||
+                !ruleWorkspace.isSettingsView ||
+                ruleWorkspace.settingsSaving) {
+              return;
+            }
+            _debugLog.log('rule_settings_edit_target_missing');
+            ruleWorkspace.returnToManagement(
+              source: 'edit_target_missing',
+            );
+          });
+        }
+        return OpsConsolePresentationScope(
+          key: const ValueKey<String>('secondary-rule-settings'),
+          embedded: true,
+          child: _SecondaryOperationsWorkspaceMotion(
+            child: initialRule == null &&
+                    ruleWorkspace.isEditingSettings &&
+                    !ruleWorkspace.settingsSaving
+                ? const OpsEmptyState(
+                    icon: Icons.rule_rounded,
+                    title: '수정할 업무 규칙을 찾을 수 없습니다',
+                    message: '업무 규칙 관리로 돌아가 다시 선택해 주세요.',
+                  )
+                : RuleSettingWorkspace(initialRule: initialRule),
+          ),
+        );
+      }
+      final info = kSectionTab[section];
+      return OpsConsolePresentationScope(
+        key: const ValueKey<String>('secondary-rule-management'),
         embedded: true,
         child: _SecondaryOperationsWorkspaceMotion(
           child: info?.page ?? const SizedBox.shrink(),
@@ -1409,6 +1528,14 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
           );
         });
       }
+      if (_ruleWorkspace.isSettingsView) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || !_ruleWorkspace.isSettingsView) return;
+          _ruleWorkspace.reset(
+            source: 'area_changed_${previousArea}_to_$area',
+          );
+        });
+      }
       if (!_monthlyWorkspace.isManagementView) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted || _monthlyWorkspace.isManagementView) return;
@@ -1438,6 +1565,9 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
           ChangeNotifierProvider<SecondarySectorWorkspaceState>.value(
             value: _sectorWorkspace,
           ),
+          ChangeNotifierProvider<SecondaryRuleWorkspaceState>.value(
+            value: _ruleWorkspace,
+          ),
           ChangeNotifierProvider<SecondaryLocationWorkspaceState>.value(
             value: _locationWorkspace,
           ),
@@ -1452,6 +1582,7 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
             builder: (context, state, accountWorkspace, tabletWorkspace,
                 billWorkspace, _) {
           final sectorWorkspace = context.watch<SecondarySectorWorkspaceState>();
+          final ruleWorkspace = context.watch<SecondaryRuleWorkspaceState>();
           final monthlyWorkspace = context.watch<SecondaryMonthlyWorkspaceState>();
           final visiblePrimaryItems = _visibleRailItems(_primaryItems);
           final visibleBottomItems = _visibleRailItems(_bottomItems);
@@ -1481,11 +1612,14 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
               _monthlyQuickActionMode && !monthlySettingsFocus;
           final sectorSettingsFocus =
               selected == Section.sector && sectorWorkspace.isSettingsView;
+          final ruleSettingsFocus =
+              selected == Section.rule && ruleWorkspace.isSettingsView;
           final settingsFocus = accountSettingsFocus ||
               tabletSettingsFocus ||
               billSettingsFocus ||
               monthlySettingsFocus ||
               sectorSettingsFocus ||
+              ruleSettingsFocus ||
               locationPlainSettingsFocus ||
               locationParentSettingsFocus ||
               locationChildSettingsFocus;
@@ -1495,6 +1629,7 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
               (billSettingsFocus && billWorkspace.settingsSaving) ||
               (monthlySettingsFocus && monthlyWorkspace.saving) ||
               (sectorSettingsFocus && sectorWorkspace.settingsSaving) ||
+              (ruleSettingsFocus && ruleWorkspace.settingsSaving) ||
               ((locationPlainSettingsFocus ||
                       locationParentSettingsFocus ||
                       locationChildSettingsFocus) &&
@@ -1519,6 +1654,9 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
           final sectorSettingsTitle = sectorWorkspace.isEditingSettings
               ? '섹터 수정'
               : '신규 섹터';
+          final ruleSettingsTitle = ruleWorkspace.isEditingSettings
+              ? '업무 규칙 수정'
+              : '신규 업무 규칙';
           final locationPlainSettingsTitle =
               _locationWorkspace.isEditingPlainSettings
                   ? '텍스트형 구역 수정'
@@ -1542,8 +1680,10 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
                           : monthlySettingsFocus
                               ? monthlySettingsTitle
                               : sectorSettingsFocus
-                              ? sectorSettingsTitle
-                              : locationPlainSettingsFocus
+                                  ? sectorSettingsTitle
+                                  : ruleSettingsFocus
+                                      ? ruleSettingsTitle
+                                      : locationPlainSettingsFocus
                                   ? locationPlainSettingsTitle
                                   : locationParentSettingsFocus
                                       ? locationParentSettingsTitle
@@ -1590,6 +1730,10 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
                 _backSectorSettingsWorkspace(source: 'settings_system_back');
                 return;
               }
+              if (ruleSettingsFocus) {
+                _backRuleSettingsWorkspace(source: 'settings_system_back');
+                return;
+              }
               if (locationPlainSettingsFocus) {
                 _backLocationPlainSettingsWorkspace(
                   source: 'settings_system_back',
@@ -1634,6 +1778,7 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
                         billWorkspace.settingsSaving ||
                         monthlyWorkspace.saving ||
                         sectorWorkspace.settingsSaving ||
+                        ruleWorkspace.settingsSaving ||
                         _locationWorkspace.settingsSaving,
                     showBack: locationFocus ||
                         locationAnySettingsFocus ||
@@ -1641,7 +1786,8 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
                         tabletSettingsFocus ||
                         billSettingsFocus ||
                         monthlySettingsFocus ||
-                        sectorSettingsFocus,
+                        sectorSettingsFocus ||
+                        ruleSettingsFocus,
                     onBack: accountSettingsFocus && accountWorkspace.settingsSaving
                         ? null
                         : tabletSettingsFocus && tabletWorkspace.settingsSaving
@@ -1651,8 +1797,10 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
                                 : monthlySettingsFocus && monthlyWorkspace.saving
                                     ? null
                                     : sectorSettingsFocus && sectorWorkspace.settingsSaving
-                                    ? null
-                                    : locationAnySettingsFocus &&
+                                        ? null
+                                        : ruleSettingsFocus && ruleWorkspace.settingsSaving
+                                            ? null
+                                            : locationAnySettingsFocus &&
                                             _locationWorkspace.settingsSaving
                                         ? null
                                         : accountSettingsFocus
@@ -1664,15 +1812,17 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
                                                     : monthlySettingsFocus
                                                         ? () => _backMonthlySettingsWorkspace(source: 'header_back')
                                                         : sectorSettingsFocus
-                                                        ? () => _backSectorSettingsWorkspace(source: 'header_back')
-                                                        : locationPlainSettingsFocus
+                                                            ? () => _backSectorSettingsWorkspace(source: 'header_back')
+                                                            : ruleSettingsFocus
+                                                                ? () => _backRuleSettingsWorkspace(source: 'header_back')
+                                                                : locationPlainSettingsFocus
                                                             ? () => _backLocationPlainSettingsWorkspace(source: 'header_back')
                                                             : locationParentSettingsFocus
                                                                 ? () => _backLocationParentSettingsWorkspace(source: 'header_back')
                                                                 : locationChildSettingsFocus
                                                                 ? () => _backLocationChildSettingsWorkspace(source: 'header_back')
                                                                 : _backLocationWorkspace,
-                    backTooltip: accountSettingsFocus
+                    backSemanticsLabel: accountSettingsFocus
                         ? '계정 목록으로'
                         : tabletSettingsFocus
                             ? '태블릿 목록으로'
@@ -1681,8 +1831,10 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
                                 : monthlySettingsFocus
                                     ? '정기 주차 관리로'
                                     : sectorSettingsFocus
-                                    ? '섹터 목록으로'
-                                    : locationAnySettingsFocus
+                                        ? '섹터 목록으로'
+                                        : ruleSettingsFocus
+                                            ? '업무 규칙 관리로'
+                                            : locationAnySettingsFocus
                                         ? '구역 관리로'
                                         : '구역 목록으로',
                     showDeveloperStatus: _devModeEnabled,
@@ -1692,10 +1844,11 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
                             billSettingsFocus ||
                             monthlySettingsFocus ||
                             sectorSettingsFocus ||
+                            ruleSettingsFocus ||
                             locationAnySettingsFocus
                         ? Icons.keyboard_arrow_down_rounded
                         : Icons.close_rounded,
-                    closeTooltip: accountSettingsFocus
+                    closeSemanticsLabel: accountSettingsFocus
                         ? '계정 목록으로 최소화'
                         : tabletSettingsFocus
                             ? '태블릿 목록으로 최소화'
@@ -1704,8 +1857,10 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
                                 : monthlySettingsFocus
                                     ? '정기 주차 관리로 최소화'
                                     : sectorSettingsFocus
-                                    ? '섹터 목록으로 최소화'
-                                    : locationAnySettingsFocus
+                                        ? '섹터 목록으로 최소화'
+                                        : ruleSettingsFocus
+                                            ? '업무 규칙 관리로 최소화'
+                                            : locationAnySettingsFocus
                                         ? '구역 관리로 최소화'
                                         : '닫기',
                     onClose: accountSettingsFocus && accountWorkspace.settingsSaving
@@ -1717,8 +1872,10 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
                                 : monthlySettingsFocus && monthlyWorkspace.saving
                                     ? null
                                     : sectorSettingsFocus && sectorWorkspace.settingsSaving
-                                    ? null
-                                    : locationAnySettingsFocus &&
+                                        ? null
+                                        : ruleSettingsFocus && ruleWorkspace.settingsSaving
+                                            ? null
+                                            : locationAnySettingsFocus &&
                                             _locationWorkspace.settingsSaving
                                         ? null
                                         : _close,
@@ -1754,6 +1911,8 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
                                     child.key ==
                                         const ValueKey<String>('secondary-sector-settings-rail') ||
                                     child.key ==
+                                        const ValueKey<String>('secondary-rule-settings-rail') ||
+                                    child.key ==
                                         const ValueKey<String>('secondary-location-plain-settings-rail') ||
                                     child.key ==
                                         const ValueKey<String>('secondary-location-parent-settings-rail') ||
@@ -1783,8 +1942,10 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
                                               : monthlySettingsFocus
                                                   ? 'secondary-monthly-settings-rail'
                                                   : sectorSettingsFocus
-                                                  ? 'secondary-sector-settings-rail'
-                                                  : locationPlainSettingsFocus
+                                                      ? 'secondary-sector-settings-rail'
+                                                      : ruleSettingsFocus
+                                                          ? 'secondary-rule-settings-rail'
+                                                          : locationPlainSettingsFocus
                                                       ? 'secondary-location-plain-settings-rail'
                                                       : locationParentSettingsFocus
                                                           ? 'secondary-location-parent-settings-rail'
@@ -1820,6 +1981,7 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
                                       !billSettingsFocus &&
                                       !monthlySettingsFocus &&
                                       !sectorSettingsFocus &&
+                                      !ruleSettingsFocus &&
                                       (selected == Section.user ||
                                           selected == Section.tablet),
                                   locationChildMode: locationFocus,
@@ -1828,6 +1990,7 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
                                   billSettingsMode: billSettingsFocus,
                                   monthlySettingsMode: monthlySettingsFocus,
                                   sectorSettingsMode: sectorSettingsFocus,
+                                  ruleSettingsMode: ruleSettingsFocus,
                                   locationPlainSettingsMode:
                                       locationPlainSettingsFocus,
                                   locationParentSettingsMode:
@@ -1863,6 +2026,12 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
                                       sectorWorkspace.sectionStates,
                                   sectorSettingsSaving:
                                       sectorWorkspace.settingsSaving,
+                                  ruleSettingsSection:
+                                      ruleWorkspace.activeSettingsSection,
+                                  ruleSettingsSectionStates:
+                                      ruleWorkspace.sectionStates,
+                                  ruleSettingsSaving:
+                                      ruleWorkspace.settingsSaving,
                                   locationPlainSettingsSection:
                                       _locationWorkspace.activePlainSettingsSection,
                                   locationPlainSettingsSectionStates:
@@ -1915,6 +2084,9 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
                                   },
                                   onSelectSectorSettingsSection: (section) {
                                     unawaited(_selectSectorSettingsSection(section));
+                                  },
+                                  onSelectRuleSettingsSection: (section) {
+                                    unawaited(_selectRuleSettingsSection(section));
                                   },
                                   onSelectLocationPlainSettingsSection: (section) {
                                     unawaited(
@@ -1977,6 +2149,8 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
                                           child.key == const ValueKey<String>('secondary-bill-settings') ||
                                           child.key == const ValueKey<String>('secondary-sector-management') ||
                                           child.key == const ValueKey<String>('secondary-sector-settings') ||
+                                          child.key == const ValueKey<String>('secondary-rule-management') ||
+                                          child.key == const ValueKey<String>('secondary-rule-settings') ||
                                           child.key == const ValueKey<String>('secondary-location-management') ||
                                           child.key == const ValueKey<String>('secondary-location-parent-settings') ||
                                           child.key == const ValueKey<String>('secondary-location-child-settings');
@@ -2009,6 +2183,7 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
                                             tabletWorkspace,
                                             billWorkspace,
                                             sectorWorkspace,
+                                            ruleWorkspace,
                                           ),
                                   ),
                                   Positioned.fill(
@@ -2078,11 +2253,11 @@ class _SecondaryDockHeader extends StatelessWidget {
     required this.loading,
     required this.showBack,
     required this.onBack,
-    required this.backTooltip,
+    required this.backSemanticsLabel,
     required this.showDeveloperStatus,
     required this.onDeveloperStatus,
     required this.closeIcon,
-    required this.closeTooltip,
+    required this.closeSemanticsLabel,
     required this.onClose,
   });
 
@@ -2090,11 +2265,11 @@ class _SecondaryDockHeader extends StatelessWidget {
   final bool loading;
   final bool showBack;
   final VoidCallback? onBack;
-  final String backTooltip;
+  final String backSemanticsLabel;
   final bool showDeveloperStatus;
   final VoidCallback onDeveloperStatus;
   final IconData closeIcon;
-  final String closeTooltip;
+  final String closeSemanticsLabel;
   final VoidCallback? onClose;
 
   @override
@@ -2104,13 +2279,11 @@ class _SecondaryDockHeader extends StatelessWidget {
     return Row(
       children: [
         if (showBack)
-          CommonIconButton(
+          _SecondaryHeaderIconAction(
             icon: Icons.arrow_back_rounded,
-            tooltip: backTooltip,
+            semanticsLabel: backSemanticsLabel,
             onPressed: onBack,
             haptic: CommonHaptic.selection,
-            size: 40,
-            iconSize: 21,
           )
         else
           Container(
@@ -2168,21 +2341,141 @@ class _SecondaryDockHeader extends StatelessWidget {
         ],
         if (showDeveloperStatus) ...[
           const SizedBox(width: 6),
-          CommonIconButton(
+          _SecondaryHeaderIconAction(
             icon: Icons.bug_report_rounded,
-            tooltip: '상태',
+            semanticsLabel: '개발자 상태',
             onPressed: onDeveloperStatus,
             haptic: CommonHaptic.selection,
           ),
         ],
         const SizedBox(width: 4),
-        CommonIconButton(
+        _SecondaryHeaderIconAction(
           icon: closeIcon,
-          tooltip: closeTooltip,
+          semanticsLabel: closeSemanticsLabel,
           onPressed: onClose,
           haptic: CommonHaptic.light,
         ),
       ],
+    );
+  }
+}
+
+
+class _SecondaryHeaderIconAction extends StatefulWidget {
+  const _SecondaryHeaderIconAction({
+    required this.icon,
+    required this.semanticsLabel,
+    required this.onPressed,
+    required this.haptic,
+  });
+
+  final IconData icon;
+  final String semanticsLabel;
+  final VoidCallback? onPressed;
+  final CommonHaptic haptic;
+
+  @override
+  State<_SecondaryHeaderIconAction> createState() =>
+      _SecondaryHeaderIconActionState();
+}
+
+class _SecondaryHeaderIconActionState
+    extends State<_SecondaryHeaderIconAction> {
+  bool _pressed = false;
+
+  Future<void> _performHaptic() async {
+    switch (widget.haptic) {
+      case CommonHaptic.none:
+        return;
+      case CommonHaptic.selection:
+        await HapticFeedback.selectionClick();
+        return;
+      case CommonHaptic.light:
+        await HapticFeedback.lightImpact();
+        return;
+      case CommonHaptic.medium:
+        await HapticFeedback.mediumImpact();
+        return;
+      case CommonHaptic.heavy:
+        await HapticFeedback.heavyImpact();
+        return;
+    }
+  }
+
+  Future<void> _invoke() async {
+    final action = widget.onPressed;
+    if (action == null) return;
+    await _performHaptic();
+    action();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final enabled = widget.onPressed != null;
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      label: widget.semanticsLabel,
+      child: AnimatedScale(
+        scale: _pressed ? .95 : 1,
+        duration: reduceMotion
+            ? Duration.zero
+            : const Duration(milliseconds: 120),
+        curve: Curves.easeOutCubic,
+        child: AnimatedContainer(
+          duration: reduceMotion
+              ? Duration.zero
+              : const Duration(milliseconds: 160),
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: enabled ? tokens.surface : tokens.transparent,
+            borderRadius: BorderRadius.circular(CommonUiShapes.control),
+            border: Border.all(
+              color: enabled ? tokens.borderSubtle : tokens.transparent,
+            ),
+          ),
+          child: Material(
+            color: tokens.transparent,
+            borderRadius: BorderRadius.circular(CommonUiShapes.control),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(CommonUiShapes.control),
+              onTap: enabled ? _invoke : null,
+              onTapDown: enabled
+                  ? (_) {
+                      setState(() {
+                        _pressed = true;
+                      });
+                    }
+                  : null,
+              onTapUp: enabled
+                  ? (_) {
+                      setState(() {
+                        _pressed = false;
+                      });
+                    }
+                  : null,
+              onTapCancel: enabled
+                  ? () {
+                      setState(() {
+                        _pressed = false;
+                      });
+                    }
+                  : null,
+              child: Center(
+                child: Icon(
+                  widget.icon,
+                  size: 21,
+                  color: enabled ? tokens.iconPrimary : tokens.iconDisabled,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -2289,6 +2582,7 @@ class _SecondaryQuickActionRail extends StatefulWidget {
     required this.billSettingsMode,
     required this.monthlySettingsMode,
     required this.sectorSettingsMode,
+    required this.ruleSettingsMode,
     required this.locationPlainSettingsMode,
     required this.locationParentSettingsMode,
     required this.locationChildSettingsMode,
@@ -2308,6 +2602,9 @@ class _SecondaryQuickActionRail extends StatefulWidget {
     required this.sectorSettingsSection,
     required this.sectorSettingsSectionStates,
     required this.sectorSettingsSaving,
+    required this.ruleSettingsSection,
+    required this.ruleSettingsSectionStates,
+    required this.ruleSettingsSaving,
     required this.locationPlainSettingsSection,
     required this.locationPlainSettingsSectionStates,
     required this.locationPlainSettingsSaving,
@@ -2335,6 +2632,7 @@ class _SecondaryQuickActionRail extends StatefulWidget {
     required this.onSelectBillSettingsSection,
     required this.onSelectMonthlySettingsSection,
     required this.onSelectSectorSettingsSection,
+    required this.onSelectRuleSettingsSection,
     required this.onSelectLocationPlainSettingsSection,
     required this.onSelectLocationParentSettingsSection,
     required this.onSelectLocationChildSettingsSection,
@@ -2351,6 +2649,7 @@ class _SecondaryQuickActionRail extends StatefulWidget {
   final bool billSettingsMode;
   final bool monthlySettingsMode;
   final bool sectorSettingsMode;
+  final bool ruleSettingsMode;
   final bool locationPlainSettingsMode;
   final bool locationParentSettingsMode;
   final bool locationChildSettingsMode;
@@ -2374,6 +2673,9 @@ class _SecondaryQuickActionRail extends StatefulWidget {
   final Map<SectorSettingsSection, SectorSettingsSectionState>
       sectorSettingsSectionStates;
   final bool sectorSettingsSaving;
+  final RuleSettingsSection ruleSettingsSection;
+  final Map<RuleSettingsSection, RuleSettingsSectionState> ruleSettingsSectionStates;
+  final bool ruleSettingsSaving;
   final LocationPlainSettingsSection locationPlainSettingsSection;
   final Map<LocationPlainSettingsSection, LocationPlainSettingsSectionState>
       locationPlainSettingsSectionStates;
@@ -2404,6 +2706,7 @@ class _SecondaryQuickActionRail extends StatefulWidget {
   final ValueChanged<BillSettingsSection> onSelectBillSettingsSection;
   final ValueChanged<MonthlyWorkspaceSection> onSelectMonthlySettingsSection;
   final ValueChanged<SectorSettingsSection> onSelectSectorSettingsSection;
+  final ValueChanged<RuleSettingsSection> onSelectRuleSettingsSection;
   final ValueChanged<LocationPlainSettingsSection>
       onSelectLocationPlainSettingsSection;
   final ValueChanged<LocationParentSettingsSection>
@@ -2480,6 +2783,15 @@ class _SecondaryQuickActionRailState extends State<_SecondaryQuickActionRail> {
         sectionStates: widget.sectorSettingsSectionStates,
         saving: widget.sectorSettingsSaving,
         onSelect: widget.onSelectSectorSettingsSection,
+      );
+    }
+    if (widget.ruleSettingsMode) {
+      return _RuleSettingsTableOfContentsRail(
+        metrics: metrics,
+        selectedSection: widget.ruleSettingsSection,
+        sectionStates: widget.ruleSettingsSectionStates,
+        saving: widget.ruleSettingsSaving,
+        onSelect: widget.onSelectRuleSettingsSection,
       );
     }
     if (widget.locationPlainSettingsMode) {
@@ -3097,7 +3409,6 @@ class _UserSettingsTocButton extends StatelessWidget {
       disabledReason: enabled ? '' : '저장 중에는 목차를 이동할 수 없습니다.',
       compact: compact,
       extent: extent,
-      tooltip: '${item.label} · $stateLabel',
       onTap: onTap,
       iconChild: SizedBox(
         width: compact ? 21 : 23,
@@ -3304,7 +3615,6 @@ class _TabletSettingsTocButton extends StatelessWidget {
       disabledReason: enabled ? '' : '저장 중에는 목차를 이동할 수 없습니다.',
       compact: compact,
       extent: extent,
-      tooltip: '${item.label} · $stateLabel',
       onTap: onTap,
       iconChild: SizedBox(
         width: compact ? 21 : 23,
@@ -3541,7 +3851,6 @@ class _MonthlySettingsTocButton extends StatelessWidget {
       disabledReason: enabled ? '' : '저장 중에는 목차를 이동할 수 없습니다.',
       compact: compact,
       extent: extent,
-      tooltip: '${item.label} · $stateLabel',
       onTap: onTap,
       iconChild: SizedBox(
         width: compact ? 21 : 23,
@@ -3736,7 +4045,6 @@ class _BillSettingsTocButton extends StatelessWidget {
       disabledReason: enabled ? '' : '저장 중에는 목차를 이동할 수 없습니다.',
       compact: compact,
       extent: extent,
-      tooltip: '${item.label} · $stateLabel',
       onTap: onTap,
       iconChild: SizedBox(
         width: compact ? 21 : 23,
@@ -3889,7 +4197,6 @@ class _SectorSettingsTocButton extends StatelessWidget {
       disabledReason: enabled ? '' : '저장 중에는 목차를 이동할 수 없습니다.',
       compact: compact,
       extent: extent,
-      tooltip: '기본 · $stateLabel',
       onTap: onTap,
       iconChild: SizedBox(
         width: compact ? 21 : 23,
@@ -3927,6 +4234,165 @@ class _SectorSettingsTocButton extends StatelessWidget {
                   child: Icon(
                     statusIcon,
                     key: ValueKey<SectorSettingsSectionState>(state),
+                    size: 8.5,
+                    color: statusColor,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RuleSettingsTableOfContentsRail extends StatelessWidget {
+  const _RuleSettingsTableOfContentsRail({
+    required this.metrics,
+    required this.selectedSection,
+    required this.sectionStates,
+    required this.saving,
+    required this.onSelect,
+  });
+
+  final CommonSideRailMetrics metrics;
+  final RuleSettingsSection selectedSection;
+  final Map<RuleSettingsSection, RuleSettingsSectionState> sectionStates;
+  final bool saving;
+  final ValueChanged<RuleSettingsSection> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return CommonSideRailSurface(
+      title: '규칙 설정',
+      semanticsLabel: '업무 규칙 설정 입력 목차',
+      metrics: metrics,
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: metrics.actionInsetHorizontal,
+          vertical: metrics.actionInsetVertical,
+        ),
+        child: Column(
+          children: [
+            _RuleSettingsTocButton(
+              label: 'Todo',
+              icon: Icons.checklist_rounded,
+              state: sectionStates[RuleSettingsSection.checklist] ??
+                  RuleSettingsSectionState.unused,
+              selected: selectedSection == RuleSettingsSection.checklist,
+              enabled: !saving,
+              compact: metrics.compact,
+              extent: metrics.minimumButtonExtent,
+              onTap: () => onSelect(RuleSettingsSection.checklist),
+            ),
+            const SizedBox(height: 6),
+            _RuleSettingsTocButton(
+              label: '본문',
+              icon: Icons.article_rounded,
+              state: sectionStates[RuleSettingsSection.content] ??
+                  RuleSettingsSectionState.unused,
+              selected: selectedSection == RuleSettingsSection.content,
+              enabled: !saving,
+              compact: metrics.compact,
+              extent: metrics.minimumButtonExtent,
+              onTap: () => onSelect(RuleSettingsSection.content),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RuleSettingsTocButton extends StatelessWidget {
+  const _RuleSettingsTocButton({
+    required this.label,
+    required this.icon,
+    required this.state,
+    required this.selected,
+    required this.enabled,
+    required this.compact,
+    required this.extent,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final RuleSettingsSectionState state;
+  final bool selected;
+  final bool enabled;
+  final bool compact;
+  final double extent;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final statusColor = switch (state) {
+      RuleSettingsSectionState.complete => tokens.success,
+      RuleSettingsSectionState.unused => tokens.textSecondary,
+      RuleSettingsSectionState.incomplete => tokens.warning,
+      RuleSettingsSectionState.error => tokens.danger,
+    };
+    final statusIcon = switch (state) {
+      RuleSettingsSectionState.complete => Icons.check_rounded,
+      RuleSettingsSectionState.unused => Icons.remove_rounded,
+      RuleSettingsSectionState.incomplete => Icons.priority_high_rounded,
+      RuleSettingsSectionState.error => Icons.error_outline_rounded,
+    };
+    final stateLabel = switch (state) {
+      RuleSettingsSectionState.complete => '입력 완료',
+      RuleSettingsSectionState.unused => '미사용',
+      RuleSettingsSectionState.incomplete => '입력 필요',
+      RuleSettingsSectionState.error => '입력 오류',
+    };
+
+    return CommonSideRailActionButton(
+      semanticLabel: '$label, $stateLabel',
+      visualLabel: label,
+      selected: selected,
+      enabled: enabled,
+      disabledReason: enabled ? '' : '저장 중에는 목차를 이동할 수 없습니다.',
+      compact: compact,
+      extent: extent,
+      onTap: onTap,
+      iconChild: SizedBox(
+        width: compact ? 21 : 23,
+        height: compact ? 21 : 23,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Align(
+              alignment: Alignment.center,
+              child: Icon(
+                icon,
+                size: compact ? 18 : 19,
+                color: selected ? tokens.accent : tokens.iconPrimary,
+              ),
+            ),
+            Positioned(
+              right: -4,
+              bottom: -4,
+              child: AnimatedContainer(
+                duration:
+                    reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                width: 14,
+                height: 14,
+                decoration: BoxDecoration(
+                  color: tokens.surfaceRaised,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: statusColor, width: 1.4),
+                ),
+                alignment: Alignment.center,
+                child: AnimatedSwitcher(
+                  duration:
+                      reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                  child: Icon(
+                    statusIcon,
+                    key: ValueKey<RuleSettingsSectionState>(state),
                     size: 8.5,
                     color: statusColor,
                   ),
@@ -4064,7 +4530,6 @@ class _LocationPlainSettingsTocButton extends StatelessWidget {
       disabledReason: enabled ? '' : '저장 중에는 목차를 이동할 수 없습니다.',
       compact: compact,
       extent: extent,
-      tooltip: '${item.label} · $stateLabel',
       onTap: onTap,
       iconChild: SizedBox(
         width: compact ? 21 : 23,
@@ -4245,7 +4710,6 @@ class _LocationParentSettingsTocButton extends StatelessWidget {
       disabledReason: enabled ? '' : '저장 중에는 목차를 이동할 수 없습니다.',
       compact: compact,
       extent: extent,
-      tooltip: '${item.label} · $stateLabel',
       onTap: onTap,
       iconChild: SizedBox(
         width: compact ? 21 : 23,
@@ -4430,7 +4894,6 @@ class _LocationChildSettingsTocButton extends StatelessWidget {
       disabledReason: enabled ? '' : '저장 중에는 목차를 이동할 수 없습니다.',
       compact: compact,
       extent: extent,
-      tooltip: '${item.label} · $stateLabel',
       onTap: onTap,
       iconChild: SizedBox(
         width: compact ? 21 : 23,
@@ -4726,21 +5189,18 @@ class _SecondaryLocationChildRailButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
-      message: child.locationName,
-      child: _SecondaryRailActionButton(
-        semanticLabel: '${child.locationName} 자식 주차 구역',
-        visualLabel: child.locationName,
-        icon: child.isTowerChild
-            ? Icons.apartment_rounded
-            : Icons.local_parking_rounded,
-        selected: selected,
-        enabled: true,
-        disabledReason: '',
-        compact: compact,
-        extent: extent,
-        onTap: onTap,
-      ),
+    return _SecondaryRailActionButton(
+      semanticLabel: '${child.locationName} 자식 주차 구역',
+      visualLabel: child.locationName,
+      icon: child.isTowerChild
+          ? Icons.apartment_rounded
+          : Icons.local_parking_rounded,
+      selected: selected,
+      enabled: true,
+      disabledReason: '',
+      compact: compact,
+      extent: extent,
+      onTap: onTap,
     );
   }
 }

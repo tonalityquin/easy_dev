@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../application/rule_todo_pre_clock_in_gate.dart';
 import '../../utils/commute_mode_spec.dart';
 import '../common/common_commute_in_screen.dart';
 
@@ -10,6 +11,7 @@ class TripleCommuteInScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return const CommonCommuteInScreen(
       spec: CommuteModeSpec.tripleMode,
+      preClockInGate: RuleTodoPreClockInGate(),
     );
   }
 }

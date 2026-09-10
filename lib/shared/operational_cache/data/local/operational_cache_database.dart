@@ -7,7 +7,7 @@ class OperationalCacheDatabase {
   static final OperationalCacheDatabase instance = OperationalCacheDatabase._();
 
   static const String databaseName = 'operational_cache.db';
-  static const int databaseVersion = 1;
+  static const int databaseVersion = 2;
 
   Database? _database;
 
@@ -79,6 +79,18 @@ CREATE TABLE IF NOT EXISTS operational_sectors (
     await db.execute('''
 CREATE INDEX IF NOT EXISTS idx_operational_sectors_area
 ON operational_sectors(area)
+''');
+    await db.execute('''
+CREATE TABLE IF NOT EXISTS operational_rules (
+  division TEXT NOT NULL,
+  area TEXT NOT NULL,
+  payload_json TEXT NOT NULL,
+  PRIMARY KEY (division, area)
+)
+''');
+    await db.execute('''
+CREATE INDEX IF NOT EXISTS idx_operational_rules_area
+ON operational_rules(division, area)
 ''');
     await db.execute('''
 CREATE TABLE IF NOT EXISTS operational_area_meta (

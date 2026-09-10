@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 
@@ -11,7 +13,7 @@ class HeadquarterSnapshotDatabase {
       HeadquarterSnapshotDatabase._();
 
   static const String databaseName = 'headquarter_snapshot.db';
-  static const int databaseVersion = 2;
+  static const int databaseVersion = 3;
 
   Database? _database;
 
@@ -30,6 +32,9 @@ class HeadquarterSnapshotDatabase {
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
           await _migrateToVersion2(db);
+        }
+        if (oldVersion < 3) {
+          await _migrateToVersion3(db);
         }
         await _ensureSchema(db);
       },
@@ -68,12 +73,39 @@ FROM snapshot_meta
     await db.execute('ALTER TABLE snapshot_meta_v2 RENAME TO snapshot_meta');
   }
 
+  Future<void> _migrateToVersion3(Database db) async {
+    final areasExists = await _tableExists(db, 'areas');
+    if (areasExists && !await _columnExists(db, 'areas', 'work_rules_json')) {
+      await db.execute(
+        "ALTER TABLE areas ADD COLUMN work_rules_json TEXT NOT NULL DEFAULT '[]'",
+      );
+    }
+    final metaExists = await _tableExists(db, 'snapshot_meta');
+    if (metaExists) {
+      await db.update(
+        'snapshot_meta',
+        <String, Object?>{'schema_version': 3},
+      );
+    }
+  }
+
   Future<bool> _tableExists(DatabaseExecutor db, String tableName) async {
     final rows = await db.rawQuery(
       "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1",
       <Object?>[tableName],
     );
     return rows.isNotEmpty;
+  }
+
+  Future<bool> _columnExists(
+    DatabaseExecutor db,
+    String tableName,
+    String columnName,
+  ) async {
+    final rows = await db.rawQuery('PRAGMA table_info($tableName)');
+    return rows.any(
+      (row) => (row['name'] ?? '').toString().trim() == columnName,
+    );
   }
 
   Future<void> _ensureSchema(Database db) async {
@@ -92,6 +124,7 @@ CREATE TABLE IF NOT EXISTS areas (
   email TEXT NOT NULL DEFAULT '',
   invite TEXT NOT NULL DEFAULT '',
   communication TEXT NOT NULL DEFAULT '',
+  work_rules_json TEXT NOT NULL DEFAULT '[]',
   is_headquarter INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (division, area_name)
 )
@@ -138,6 +171,7 @@ CREATE TABLE IF NOT EXISTS area_capabilities (
     final areaNames = <String>{};
     var expectedModeCount = 0;
     var expectedCapabilityCount = 0;
+    var expectedWorkRuleCount = 0;
     for (final area in snapshot.areas) {
       final areaName = area.name.trim();
       if (areaName.isEmpty) {
@@ -152,6 +186,10 @@ CREATE TABLE IF NOT EXISTS area_capabilities (
           .toSet()
           .length;
       expectedCapabilityCount += area.capabilities.length;
+      expectedWorkRuleCount += area.workRules
+          .map((value) => value.trim())
+          .where((value) => value.isNotEmpty)
+          .length;
     }
 
     final expectedAreaCount = snapshot.areas.length;
@@ -228,6 +266,12 @@ CREATE TABLE IF NOT EXISTS area_capabilities (
             'email': area.email.trim(),
             'invite': area.invite.trim(),
             'communication': area.communication.trim(),
+            'work_rules_json': jsonEncode(
+              area.workRules
+                  .map((value) => value.trim())
+                  .where((value) => value.isNotEmpty)
+                  .toList(growable: false),
+            ),
             'is_headquarter': area.isHeadquarter ? 1 : 0,
           },
           conflictAlgorithm: ConflictAlgorithm.abort,
@@ -298,6 +342,16 @@ CREATE TABLE IF NOT EXISTS area_capabilities (
             ),
           ) ??
           0;
+      final storedWorkRuleRows = await txn.query(
+        'areas',
+        columns: const <String>['work_rules_json'],
+        where: 'division = ?',
+        whereArgs: <Object?>[division],
+      );
+      final storedWorkRuleCount = storedWorkRuleRows.fold<int>(
+        0,
+        (sum, row) => sum + _decodeWorkRules(row['work_rules_json']).length,
+      );
       final metaRows = await txn.query(
         'snapshot_meta',
         where: 'division = ?',
@@ -318,6 +372,11 @@ CREATE TABLE IF NOT EXISTS area_capabilities (
       if (storedCapabilityCount != expectedCapabilityCount) {
         throw StateError(
           'SQLite Snapshot capability verification failed: expected=$expectedCapabilityCount actual=$storedCapabilityCount',
+        );
+      }
+      if (storedWorkRuleCount != expectedWorkRuleCount) {
+        throw StateError(
+          'SQLite Snapshot work rule verification failed: expected=$expectedWorkRuleCount actual=$storedWorkRuleCount',
         );
       }
       if (metaRows.length != 1) {
@@ -397,6 +456,9 @@ CREATE TABLE IF NOT EXISTS area_capabilities (
         email: (row['email'] ?? '').toString().trim(),
         invite: (row['invite'] ?? '').toString().trim(),
         communication: (row['communication'] ?? '').toString().trim(),
+        workRules: List<String>.unmodifiable(
+          _decodeWorkRules(row['work_rules_json']),
+        ),
         modes: Set<String>.unmodifiable(
           modesByArea[areaName] ?? const <String>{},
         ),
@@ -522,6 +584,22 @@ CREATE TABLE IF NOT EXISTS area_capabilities (
       minorCount: snapshot.supportCount('minor'),
       tabletCount: snapshot.capabilityCount(Capability.tablet),
     );
+  }
+
+  List<String> _decodeWorkRules(Object? raw) {
+    final encoded = (raw ?? '').toString().trim();
+    if (encoded.isEmpty) return const <String>[];
+    try {
+      final decoded = jsonDecode(encoded);
+      if (decoded is! List) return const <String>[];
+      return decoded
+          .whereType<String>()
+          .map((value) => value.trim())
+          .where((value) => value.isNotEmpty)
+          .toList(growable: false);
+    } catch (_) {
+      return const <String>[];
+    }
   }
 
   int _intValue(Object? value) {

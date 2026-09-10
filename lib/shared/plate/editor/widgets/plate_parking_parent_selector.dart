@@ -396,7 +396,7 @@ class _PlateParkingParentPreview extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        ParkingStatusDotMapSurface(
+        ParkingGuidanceMapSurface(
           grid: resolvedGrid,
           framed: false,
           padding: 2,
@@ -441,11 +441,12 @@ class _PlateParkingParentRectOverlayPainter extends CustomPainter {
     canvas.clipRect(layout.mapRect);
     final fill = Paint()
       ..style = PaintingStyle.fill
-      ..color = color.withOpacity(selected ? .055 : .025);
+      ..color = color.withOpacity(selected ? .035 : .012);
     final stroke = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = selected ? 1.15 : .8
-      ..color = color.withOpacity(selected ? .58 : .30);
+      ..strokeWidth = selected ? 1.6 : 1.15
+      ..strokeJoin = StrokeJoin.round
+      ..color = color.withOpacity(selected ? .82 : .52);
     for (final raw in rects) {
       final screen = layout.rectFor(raw.normalized());
       final radius = math

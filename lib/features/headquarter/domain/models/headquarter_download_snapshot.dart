@@ -7,6 +7,7 @@ class HeadquarterSnapshotArea {
     required this.email,
     required this.invite,
     required this.communication,
+    this.workRules = const <String>[],
     required this.modes,
     required this.capabilities,
     required this.isHeadquarter,
@@ -17,6 +18,7 @@ class HeadquarterSnapshotArea {
   final String email;
   final String invite;
   final String communication;
+  final List<String> workRules;
   final Set<String> modes;
   final CapSet capabilities;
   final bool isHeadquarter;

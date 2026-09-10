@@ -559,6 +559,62 @@ class AreaState with ChangeNotifier {
     }
   }
 
+  bool applyLocalAreaCapabilities({
+    required String division,
+    required String area,
+    required CapSet capabilities,
+    String source = 'local_capability_refresh',
+  }) {
+    final normalizedArea = area.trim();
+    final normalizedDivision = _normalizeDivision(division);
+    if (normalizedArea.isEmpty || division.trim().isEmpty) {
+      debugPrint(
+        '[AreaState] local capability 적용 중단: source=$source division=$normalizedDivision area=$normalizedArea reason=identity_empty remoteRead=0 remoteWrite=0',
+      );
+      return false;
+    }
+
+    final currentArea = _currentArea.trim();
+    final currentDivision = _normalizeDivision(_currentDivision);
+    if (currentArea != normalizedArea ||
+        currentDivision != normalizedDivision) {
+      debugPrint(
+        '[AreaState] local capability 적용 중단: source=$source requested=$normalizedDivision/$normalizedArea current=$currentDivision/$currentArea reason=current_area_mismatch remoteRead=0 remoteWrite=0',
+      );
+      return false;
+    }
+
+    final before = Set<Capability>.from(capabilitiesOfCurrentArea);
+    final next = Set<Capability>.unmodifiable(capabilities);
+    _areaCaps[normalizedArea] = next;
+
+    final record = _currentRecord;
+    if (record != null &&
+        record.name.trim() == normalizedArea &&
+        _normalizeDivision(record.division) == normalizedDivision) {
+      _currentRecord = AreaRecord(
+        name: record.name,
+        division: record.division,
+        email: record.email,
+        invite: record.invite,
+        communication: record.communication,
+        workRules: record.workRules,
+        capabilities: next,
+        modes: record.modes,
+        isHeadquarter: record.isHeadquarter,
+      );
+    }
+
+    final changed = before.length != next.length || !before.containsAll(next);
+    final beforeKeys = before.map((value) => value.key).toList()..sort();
+    final afterKeys = next.map((value) => value.key).toList()..sort();
+    notifyListeners();
+    debugPrint(
+      '[AreaState] local capability 적용 완료: source=$source division=$normalizedDivision area=$normalizedArea before=${beforeKeys.isEmpty ? 'none' : beforeKeys.join(',')} after=${afterKeys.isEmpty ? 'none' : afterKeys.join(',')} changed=$changed remoteRead=0 remoteWrite=0',
+    );
+    return true;
+  }
+
   void applyLocalAreaRecord(
     AreaRecord record, {
     String source = 'local',

@@ -51,6 +51,11 @@ class HeadquarterSnapshotDownloadService {
             email: record.email.trim(),
             invite: record.invite.trim(),
             communication: record.communication.trim(),
+            workRules: List<String>.unmodifiable(
+              record.workRules
+                  .map((rule) => rule.trim())
+                  .where((rule) => rule.isNotEmpty),
+            ),
             modes: Set<String>.unmodifiable(
               record.modes
                   .map((mode) => mode.trim().toLowerCase())
@@ -80,7 +85,12 @@ class HeadquarterSnapshotDownloadService {
         '다운로드한 지역 정보에서 현재 지역을 찾을 수 없습니다: $normalizedRequiredArea',
       );
     }
-    log('지역 데이터 구조와 연결 필드 검증을 완료했습니다.', 0.66);
+    final workRuleCount = areas.fold<int>(
+      0,
+      (sum, area) => sum + area.workRules.length,
+    );
+    log('지역 데이터 구조와 연결 필드 검증을 완료했습니다.', 0.64);
+    log('업무 규칙 $workRuleCount개를 Snapshot에 포함했습니다.', 0.66);
 
     final snapshot = HeadquarterDownloadSnapshot(
       division: normalizedDivision,

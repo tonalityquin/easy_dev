@@ -13,6 +13,7 @@ import 'package:provider/provider.dart';
 import '../../app/utils/status_dialog.dart';
 import '../../app/utils/developer_operation_status_dialog.dart';
 import '../../app/utils/operational_data_sync_workflow.dart';
+import '../../design_system/common_ui/common_quick_action_surface.dart';
 import '../../design_system/common_ui/common_ui_components.dart';
 import '../../design_system/common_ui/common_ui_theme.dart';
 import '../../features/account/applications/user_state.dart';
@@ -4115,7 +4116,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     return Row(
       children: [
         Expanded(
-          child: _TypePageQuickActionControl(
+          child: CommonQuickActionControl(
             semanticsLabel: '입차',
             icon: Icons.add_circle_outline_rounded,
             foreground: cs.primary,
@@ -4125,7 +4126,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
           ),
         ),
         Expanded(
-          child: _TypePageQuickActionControl(
+          child: CommonQuickActionControl(
             semanticsLabel: '검색',
             icon: Icons.manage_search_rounded,
             foreground: cs.onSurfaceVariant,
@@ -4136,7 +4137,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
           ),
         ),
         Expanded(
-          child: _TypePageQuickActionControl(
+          child: CommonQuickActionControl(
             semanticsLabel: '대시보드',
             icon: Icons.dashboard_rounded,
             foreground: cs.onSurfaceVariant,
@@ -4153,15 +4154,9 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
   Widget _buildLayerSurface(ColorScheme cs) {
     final actions = TypePageQuickActionScope.maybeOf(context);
     if (actions == null) return const SizedBox.shrink();
-    return Container(
-      height: 48,
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      decoration: BoxDecoration(
-        color: widget.tabBarStyle.containerColor(cs),
-        border: Border(
-          top: BorderSide(color: widget.tabBarStyle.borderColor(cs)),
-        ),
-      ),
+    return CommonQuickActionSurface(
+      backgroundColor: widget.tabBarStyle.containerColor(cs),
+      borderColor: widget.tabBarStyle.borderColor(cs),
       child: _buildQuickActions(context, actions, cs),
     );
   }
@@ -5518,137 +5513,3 @@ class _StatusDotMapGlyphPainter extends CustomPainter {
     return oldDelegate.color != color;
   }
 }
-
-class _TypePageQuickActionControl extends StatefulWidget {
-  const _TypePageQuickActionControl({
-    required this.semanticsLabel,
-    required this.icon,
-    required this.foreground,
-    required this.onPressed,
-    this.showProgressWhileRunning = true,
-  });
-
-  final String semanticsLabel;
-  final IconData icon;
-  final Color foreground;
-  final Future<void> Function(Rect sourceRect) onPressed;
-  final bool showProgressWhileRunning;
-
-  @override
-  State<_TypePageQuickActionControl> createState() =>
-      _TypePageQuickActionControlState();
-}
-
-class _TypePageQuickActionControlState
-    extends State<_TypePageQuickActionControl> {
-  bool _pressed = false;
-  bool _running = false;
-
-  Future<void> _invoke() async {
-    if (_running) return;
-    setState(() {
-      _running = true;
-    });
-    HapticFeedback.selectionClick();
-    final renderObject = context.findRenderObject();
-    final sourceRect = renderObject is RenderBox && renderObject.hasSize
-        ? (() {
-            final origin = renderObject.localToGlobal(Offset.zero);
-            final extent = math.min(44.0, renderObject.size.shortestSide);
-            final center = origin + renderObject.size.center(Offset.zero);
-            return Rect.fromCenter(
-              center: center,
-              width: extent,
-              height: extent,
-            );
-          })()
-        : Rect.fromCenter(
-            center: MediaQuery.sizeOf(context).center(Offset.zero),
-            width: 44,
-            height: 44,
-          );
-    try {
-      await widget.onPressed(sourceRect);
-    } finally {
-      if (!mounted) return;
-      setState(() {
-        _running = false;
-        _pressed = false;
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final reduceMotion =
-        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    return Semantics(
-      button: true,
-      label: widget.semanticsLabel,
-      enabled: !_running,
-      child: AnimatedScale(
-        scale: _pressed ? .95 : 1,
-        duration: reduceMotion
-            ? Duration.zero
-            : const Duration(milliseconds: 120),
-        curve: Curves.easeOutCubic,
-        child: Material(
-          color: Colors.transparent,
-          child: InkResponse(
-            radius: 24,
-            containedInkWell: true,
-            highlightShape: BoxShape.circle,
-            onTap: _running ? null : () => unawaited(_invoke()),
-            onTapDown: _running
-                ? null
-                : (_) {
-                    setState(() {
-                      _pressed = true;
-                    });
-                  },
-            onTapUp: _running
-                ? null
-                : (_) {
-                    setState(() {
-                      _pressed = false;
-                    });
-                  },
-            onTapCancel: _running
-                ? null
-                : () {
-                    setState(() {
-                      _pressed = false;
-                    });
-                  },
-            child: SizedBox.expand(
-              child: Center(
-                child: AnimatedSwitcher(
-                  duration: reduceMotion
-                      ? Duration.zero
-                      : const Duration(milliseconds: 160),
-                  child: _running && widget.showProgressWhileRunning
-                      ? SizedBox(
-                          key: const ValueKey<String>('running'),
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.2,
-                            color: widget.foreground,
-                          ),
-                        )
-                      : Icon(
-                          widget.icon,
-                          key: const ValueKey<String>('icon'),
-                          size: 24,
-                          color: widget.foreground,
-                        ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-

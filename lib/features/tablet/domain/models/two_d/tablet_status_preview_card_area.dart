@@ -1,18 +1,23 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../../shared/operational_cache/domain/repositories/operational_local_repository.dart';
-
-import '../../../../../design_system/common_ui/common_ui_components.dart';
-import '../../../pages/widgets/tablet_common_components.dart';
 import '../../../../../app/utils/dev_firebase_debug_dialog.dart';
+import '../../../../../design_system/common_ui/common_ui_components.dart';
+import '../../../../../design_system/common_ui/common_ui_theme.dart';
+import '../../../../../shared/operational_cache/domain/repositories/operational_local_repository.dart';
+import '../../../../../shared/parking_spatial/parking_spatial_geometry.dart';
 import '../../../../../shared/plate/application/common/view_doc_rows_store.dart';
 import '../../../../../shared/plate/domain/repositories/plate_repository.dart';
 import '../../../../location/applications/location_state.dart';
+import '../../../../location/domain/models/grid_rect.dart';
 import '../../../../location/domain/models/location_model.dart';
+import '../../../applications/tablet_debug_trace.dart';
+import '../../../pages/widgets/tablet_common_components.dart';
 import 'tablet_grid_2d_preview.dart';
+import 'tablet_parking_guidance_map_surface.dart';
 
 @immutable
 class ParkingStatusOverlaySpec {
@@ -28,14 +33,27 @@ class ParkingStatusOverlaySpec {
 @immutable
 class _LiveViewRow {
   final String location;
+  final bool isSelected;
 
   const _LiveViewRow({
     required this.location,
+    required this.isSelected,
   });
 }
 
-int _statusPriority(ParkingSlotStatus s) {
-  switch (s) {
+@immutable
+class _GuidanceMarkerCandidate {
+  final TabletParkingGuidanceMarker marker;
+  final int priority;
+
+  const _GuidanceMarkerCandidate({
+    required this.marker,
+    required this.priority,
+  });
+}
+
+int _statusPriority(ParkingSlotStatus status) {
+  switch (status) {
     case ParkingSlotStatus.departureRequest:
       return 3;
     case ParkingSlotStatus.parkingRequest:
@@ -45,10 +63,6 @@ int _statusPriority(ParkingSlotStatus s) {
     case ParkingSlotStatus.empty:
       return 0;
   }
-}
-
-ParkingSlotStatus _mergeStatus(ParkingSlotStatus a, ParkingSlotStatus b) {
-  return _statusPriority(b) > _statusPriority(a) ? b : a;
 }
 
 String _normalizeText(String raw) => raw.trim().replaceAll(RegExp(r'\s+'), ' ');
@@ -87,6 +101,38 @@ String _primaryAtFieldForCollection(String collection) {
   }
 }
 
+bool _isCompositeParent(String? type) {
+  final value = (type ?? '').trim().toLowerCase();
+  return value == 'composite_parent' ||
+      value.replaceAll(RegExp(r'[_\-\s]'), '') == 'compositeparent';
+}
+
+bool _isCompositeChild(String? type) {
+  final value = (type ?? '').trim().toLowerCase();
+  if (value == 'composite_child' || value == 'composite') return true;
+  final packed = value.replaceAll(RegExp(r'[_\-\s]'), '');
+  return packed == 'compositechild' || packed == 'composite';
+}
+
+bool _matchesArea(String expected, String actual) {
+  final a = expected.trim();
+  final b = actual.trim();
+  if (a.isEmpty || b.isEmpty) return true;
+  return a == b;
+}
+
+Set<String> _parentAliases(LocationModel parent) {
+  final aliases = <String>{};
+  void add(String value) {
+    final key = _nameKey(value);
+    if (key.isNotEmpty) aliases.add(key);
+  }
+
+  add(parent.id);
+  add(parent.locationName);
+  return aliases;
+}
+
 class ParkingStatusPreviewCardArea extends StatefulWidget {
   final String area;
   final List<ParkingStatusOverlaySpec> overlay;
@@ -105,40 +151,63 @@ class ParkingStatusPreviewCardArea extends StatefulWidget {
 }
 
 class _ParkingStatusPreviewCardAreaState
-    extends State<ParkingStatusPreviewCardArea> {
+    extends State<ParkingStatusPreviewCardArea>
+    with SingleTickerProviderStateMixin {
   final Map<String, StreamSubscription<List<ViewRowData>>> _subscriptions =
       <String, StreamSubscription<List<ViewRowData>>>{};
-
   final Map<String, List<_LiveViewRow>> _rowsByCollection =
       <String, List<_LiveViewRow>>{};
 
   Future<List<LocationModel>>? _localFuture;
   String _localArea = '';
-
   String _boundArea = '';
   String _boundOverlaySignature = '';
+  int _parentIndex = 0;
+  int _navigationDirection = 1;
+  bool? _reduceMotion;
+  late final AnimationController _pulseController;
 
   @override
   void initState() {
     super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 940),
+      value: 1,
+    );
     _bindSubscriptionsIfNeeded();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (_reduceMotion == reduceMotion) return;
+    _reduceMotion = reduceMotion;
+    if (reduceMotion) {
+      _pulseController.stop();
+      _pulseController.value = 1;
+    } else {
+      _pulseController.repeat(reverse: true);
+    }
   }
 
   @override
   void didUpdateWidget(covariant ParkingStatusPreviewCardArea oldWidget) {
     super.didUpdateWidget(oldWidget);
-
     if (oldWidget.area.trim() != widget.area.trim()) {
       _localFuture = null;
       _localArea = '';
+      _parentIndex = 0;
     }
-
     _bindSubscriptionsIfNeeded();
   }
 
   @override
   void dispose() {
     _cancelAllSubscriptions();
+    _pulseController.dispose();
     super.dispose();
   }
 
@@ -149,8 +218,8 @@ class _ParkingStatusPreviewCardAreaState
   }
 
   void _cancelAllSubscriptions() {
-    for (final sub in _subscriptions.values) {
-      sub.cancel();
+    for (final subscription in _subscriptions.values) {
+      subscription.cancel();
     }
     _subscriptions.clear();
   }
@@ -158,47 +227,52 @@ class _ParkingStatusPreviewCardAreaState
   List<_LiveViewRow> _rowsFromViewRows(List<ViewRowData> rows) {
     final out = <_LiveViewRow>[];
     final seen = <String>{};
-
     for (final row in rows) {
       final location = _normalizeLocationValue(row.location);
       if (location.isEmpty) continue;
-      if (!seen.add(location)) continue;
-      out.add(_LiveViewRow(location: location));
+      final identity = '${row.plateId}|$location';
+      if (!seen.add(identity)) continue;
+      out.add(
+        _LiveViewRow(
+          location: location,
+          isSelected: row.isSelected,
+        ),
+      );
     }
-
     return out;
   }
 
   void _bindSubscriptionsIfNeeded() {
     final area = widget.area.trim();
     final signature = _overlaySignature();
-
     final sameBinding = _boundArea == area &&
         _boundOverlaySignature == signature &&
         _subscriptions.isNotEmpty;
-
     if (sameBinding) return;
 
     _cancelAllSubscriptions();
     _rowsByCollection.clear();
-
     _boundArea = area;
     _boundOverlaySignature = signature;
+    TabletDebugTrace.record(
+      'TabletParkingGuide',
+      'subscription_binding_changed',
+      <String, Object?>{
+        'area': area,
+        'overlay': signature,
+      },
+    );
 
     if (area.isEmpty) {
-      if (mounted) {
-        setState(() {});
-      }
+      if (mounted) setState(() {});
       return;
     }
 
-    final repo = context.read<PlateRepository>();
-
+    final repository = context.read<PlateRepository>();
     for (final spec in widget.overlay) {
       final collection = spec.collection.trim();
       if (collection.isEmpty) continue;
-
-      _subscriptions[collection] = repo
+      _subscriptions[collection] = repository
           .watchViewRows(
             collection: collection,
             area: area,
@@ -207,18 +281,35 @@ class _ParkingStatusPreviewCardAreaState
           .listen(
         (rows) {
           if (!mounted) return;
+          final resolved = _rowsFromViewRows(rows);
+          TabletDebugTrace.record(
+            'TabletParkingGuide',
+            'view_rows_received',
+            <String, Object?>{
+              'collection': collection,
+              'area': area,
+              'rows': resolved.length,
+              'status': spec.status.name,
+            },
+          );
           setState(() {
-            _rowsByCollection[collection] = _rowsFromViewRows(rows);
+            _rowsByCollection[collection] = resolved;
           });
         },
         onError: (error, stackTrace) {
-          debugPrint(
-            'ParkingStatusPreviewCardArea subscribe error [$collection/$area]: $error',
+          TabletDebugTrace.record(
+            'TabletParkingGuide',
+            'view_rows_failed',
+            <String, Object?>{
+              'collection': collection,
+              'area': area,
+              'error': error,
+            },
           );
           unawaited(
             DevFirebaseDebugDialog.show(
               context: context,
-              operation: 'tablet.grid.two_d.watchViewRows',
+              operation: 'tablet.parking_guide.watchViewRows',
               error: error,
               stackTrace: stackTrace,
               details: <String, Object?>{
@@ -227,6 +318,7 @@ class _ParkingStatusPreviewCardAreaState
                 'primaryAtField': _primaryAtFieldForCollection(collection),
                 'overlayStatus': spec.status.name,
                 'widget': 'ParkingStatusPreviewCardArea',
+                'plateNumberVisible': false,
               },
               useCommonUi: true,
             ),
@@ -239,140 +331,307 @@ class _ParkingStatusPreviewCardAreaState
       );
     }
 
-    if (mounted) {
-      setState(() {});
-    }
+    if (mounted) setState(() {});
   }
 
   Future<List<LocationModel>> _loadLocationsFromLocal(String area) async {
     final resolvedArea = area.trim();
     if (resolvedArea.isEmpty) return const <LocationModel>[];
-    return context.read<OperationalLocalRepository>().readLocations(resolvedArea);
+    final locations = await context
+        .read<OperationalLocalRepository>()
+        .readLocations(resolvedArea);
+    TabletDebugTrace.record(
+      'TabletParkingGuide',
+      'sqlite_locations_loaded',
+      <String, Object?>{
+        'area': resolvedArea,
+        'count': locations.length,
+      },
+    );
+    return locations;
   }
 
   List<_LiveViewRow> _rowsForCollection(String collection) {
     return _rowsByCollection[collection.trim()] ?? const <_LiveViewRow>[];
   }
 
-  ParkingGridOverlay _buildOverlay() {
-    final slotStatusByKey = <String, ParkingSlotStatus>{};
-    final groupStatusByKey = <String, ParkingSlotStatus>{};
+  List<LocationModel> _parents(List<LocationModel> locations) {
+    final area = widget.area.trim();
+    final parents = locations
+        .where(
+          (location) =>
+              _matchesArea(area, location.area) &&
+              _isCompositeParent(location.type) &&
+              location.parkingGrid != null,
+        )
+        .toList(growable: false);
+    parents.sort((a, b) => a.locationName.compareTo(b.locationName));
+    return parents;
+  }
 
-    void applyRows(List<_LiveViewRow> rows, ParkingSlotStatus status) {
-      for (final row in rows) {
+  List<LocationModel> _childrenForParent(
+    LocationModel parent,
+    List<LocationModel> locations,
+  ) {
+    final aliases = _parentAliases(parent);
+    final area = widget.area.trim();
+    final children = locations.where((location) {
+      if (!_matchesArea(area, location.area)) return false;
+      if (!_isCompositeChild(location.type)) return false;
+      final refs = <String>{
+        _nameKey(location.parent ?? ''),
+        _nameKey(location.parentId ?? ''),
+      }..removeWhere((value) => value.isEmpty);
+      return refs.any(aliases.contains);
+    }).toList(growable: false);
+    children.sort((a, b) => a.locationName.compareTo(b.locationName));
+    return children;
+  }
+
+  List<TabletParkingGuidanceMarker> _markersForParent(
+    LocationModel parent,
+    List<LocationModel> children,
+  ) {
+    final grid = parent.parkingGrid;
+    if (grid == null) return const <TabletParkingGuidanceMarker>[];
+    final aliases = _parentAliases(parent);
+    final byRect = <String, _GuidanceMarkerCandidate>{};
+
+    for (final spec in widget.overlay) {
+      final collection = spec.collection.trim();
+      if (collection.isEmpty) continue;
+      for (final row in _rowsForCollection(collection)) {
         final segments = _splitLocationSegments(row.location);
         if (segments.length < 2) continue;
-
-        final parentKey = _nameKey(segments[0]);
+        if (!aliases.contains(_nameKey(segments.first))) continue;
         final childKey = parkingOverlayCanonicalChildKey(segments[1]);
+        if (childKey.isEmpty) continue;
 
-        if (parentKey.isEmpty || childKey.isEmpty) continue;
-
-        final baseKey = '$parentKey|$childKey';
-
-        int? slotNo;
-        if (segments.length >= 3) {
-          slotNo = _parseFirstInt(segments[2]);
+        LocationModel? child;
+        for (final candidate in children) {
+          final candidateKey =
+              parkingOverlayCanonicalChildKey(candidate.locationName);
+          if (candidateKey == childKey) {
+            child = candidate;
+            break;
+          }
+          if (candidate.isTowerChild &&
+              childKey == kParkingOverlayTowerChildKey) {
+            child = candidate;
+            break;
+          }
         }
+        if (child == null) continue;
 
+        final slotNo = segments.length >= 3
+            ? _parseFirstInt(segments.sublist(2).join(' - '))
+            : null;
+        GridRect? rect;
+        var exact = false;
         if (slotNo != null) {
-          final slotKey = '$baseKey|$slotNo';
-          final prev = slotStatusByKey[slotKey] ?? ParkingSlotStatus.empty;
-          slotStatusByKey[slotKey] = _mergeStatus(prev, status);
-        } else {
-          final prev = groupStatusByKey[baseKey] ?? ParkingSlotStatus.empty;
-          groupStatusByKey[baseKey] = _mergeStatus(prev, status);
+          for (final slot in child.childSlots) {
+            if (slot.no != slotNo) continue;
+            rect = GridRect(
+              r0: slot.r0,
+              c0: slot.c0,
+              r1: slot.r1,
+              c1: slot.c1,
+            ).normalized();
+            exact = true;
+            break;
+          }
+        }
+        rect ??= resolveParkingSpatialChildRect(child, grid);
+        if (rect == null) continue;
+
+        final marker = TabletParkingGuidanceMarker(
+          rect: rect,
+          exact: exact,
+          attention: spec.status == ParkingSlotStatus.departureRequest,
+          selected: row.isSelected,
+        );
+        final priority = _statusPriority(spec.status);
+        final key = rect.toKey();
+        final previous = byRect[key];
+        if (previous == null ||
+            priority > previous.priority ||
+            (marker.selected && !previous.marker.selected)) {
+          byRect[key] = _GuidanceMarkerCandidate(
+            marker: marker,
+            priority: priority,
+          );
         }
       }
     }
 
-    for (final spec in widget.overlay) {
-      final collection = spec.collection.trim();
-      if (collection.isEmpty) continue;
-      applyRows(_rowsForCollection(collection), spec.status);
-    }
+    return byRect.values
+        .map((candidate) => candidate.marker)
+        .toList(growable: false);
+  }
 
-    return ParkingGridOverlay(
-      slotStatusByKey: slotStatusByKey,
-      groupStatusByKey: groupStatusByKey,
+  void _moveParent(int delta, int count) {
+    if (count <= 1) return;
+    final next = (_parentIndex + delta) % count;
+    final resolved = next < 0 ? next + count : next;
+    if (resolved == _parentIndex) return;
+    setState(() {
+      _navigationDirection = delta >= 0 ? 1 : -1;
+      _parentIndex = resolved;
+    });
+    TabletDebugTrace.record(
+      'TabletParkingGuide',
+      'parent_changed',
+      <String, Object?>{
+        'index': resolved,
+        'count': count,
+      },
     );
   }
 
-  Map<String, TextParkingPreviewMetrics> _buildTextMetrics(
-    List<LocationModel> locations,
-  ) {
-    final parkingCompletedLocations = <String>[];
-    final departureRequestLocations = <String>[];
-
-    for (final spec in widget.overlay) {
-      final collection = spec.collection.trim();
-      if (collection.isEmpty) continue;
-
-      final rows = _rowsForCollection(collection);
-
-      switch (spec.status) {
-        case ParkingSlotStatus.parked:
-          parkingCompletedLocations.addAll(rows.map((e) => e.location));
-          break;
-        case ParkingSlotStatus.departureRequest:
-          departureRequestLocations.addAll(rows.map((e) => e.location));
-          break;
-        case ParkingSlotStatus.empty:
-        case ParkingSlotStatus.parkingRequest:
-          break;
-      }
-    }
-
-    return buildTextParkingPreviewMetricsByLocations(
-      locations: locations,
-      parkingCompletedLocations: parkingCompletedLocations,
-      departureRequestLocations: departureRequestLocations,
-    );
-  }
-
-  Widget _buildPreview(
-    List<LocationModel> locations,
-    ParkingGridOverlay overlay,
-    Map<String, TextParkingPreviewMetrics> textMetricsByLocation,
-  ) {
-    if (locations.isEmpty) {
+  Widget _buildParkingGuidanceMap(List<LocationModel> locations) {
+    final parents = _parents(locations);
+    if (parents.isEmpty) {
       return const TabletCommonEmptyState(
-        title: '주차 구역 정보가 없습니다',
-        message: '설정에서 주차 구역 데이터를 새로고침한 뒤 다시 시도하세요.',
+        title: '주차장 지도를 표시할 수 없습니다',
+        message: '현재 지역에 구조형 주차 구역이 없습니다.',
         icon: Icons.local_parking_rounded,
       );
     }
 
-    final preview = TabletGrid2dPreview(
-      locations: locations,
-      overlay: overlay,
-      textMetricsByLocation: textMetricsByLocation,
-      cleanPresentation: widget.cleanPresentation,
+    if (_parentIndex >= parents.length) {
+      _parentIndex = math.max(0, parents.length - 1);
+    }
+    final parent = parents[_parentIndex];
+    final grid = parent.parkingGrid!;
+    final children = _childrenForParent(parent, locations);
+    final markers = _markersForParent(parent, children);
+    final tokens = CommonUiTheme.of(context);
+
+    TabletDebugTrace.record(
+      'TabletParkingGuide',
+      'guidance_map_resolved',
+      <String, Object?>{
+        'area': widget.area.trim(),
+        'parent': parent.locationName,
+        'parkingAreas': grid.parkingAreas.length,
+        'occupiedMarkers': markers.length,
+        'plateNumberVisible': false,
+        'parentBoundarySolid': true,
+      },
     );
-    return CommonAnimatedReveal(
-      child: widget.cleanPresentation
-          ? preview
-          : Padding(
-              padding: const EdgeInsets.all(12),
-              child: preview,
+
+    return Column(
+      children: <Widget>[
+        SizedBox(
+          height: 52,
+          child: Row(
+            children: <Widget>[
+              IconButton(
+                onPressed: parents.length > 1
+                    ? () => _moveParent(-1, parents.length)
+                    : null,
+                icon: const Icon(Icons.chevron_left_rounded),
+              ),
+              Expanded(
+                child: AnimatedSwitcher(
+                  duration: tabletCommonDuration(
+                    context,
+                    CommonUiMotion.selection,
+                  ),
+                  child: Text(
+                    parent.locationName,
+                    key: ValueKey<String>(parent.id),
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          color: tokens.textPrimary,
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
+                ),
+              ),
+              IconButton(
+                onPressed: parents.length > 1
+                    ? () => _moveParent(1, parents.length)
+                    : null,
+                icon: const Icon(Icons.chevron_right_rounded),
+              ),
+            ],
+          ),
+        ),
+        Divider(height: 1, thickness: 1, color: tokens.borderSubtle),
+        Expanded(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onHorizontalDragEnd: parents.length <= 1
+                ? null
+                : (details) {
+                    final velocity = details.primaryVelocity ?? 0;
+                    if (velocity.abs() < 220) return;
+                    _moveParent(velocity < 0 ? 1 : -1, parents.length);
+                  },
+            child: AnimatedSwitcher(
+              duration: tabletCommonDuration(
+                context,
+                CommonUiMotion.layout,
+              ),
+              switchInCurve: CommonUiMotion.enter,
+              switchOutCurve: CommonUiMotion.exit,
+              transitionBuilder: (child, animation) {
+                final curved = CurvedAnimation(
+                  parent: animation,
+                  curve: CommonUiMotion.enter,
+                  reverseCurve: CommonUiMotion.exit,
+                );
+                return FadeTransition(
+                  opacity: curved,
+                  child: SlideTransition(
+                    position: Tween<Offset>(
+                      begin: Offset(0.06 * _navigationDirection, 0),
+                      end: Offset.zero,
+                    ).animate(curved),
+                    child: child,
+                  ),
+                );
+              },
+              child: TabletParkingGuidanceMapSurface(
+                key: ValueKey<String>('parking-guide-${parent.id}'),
+                grid: grid,
+                markers: markers,
+                pulseAnimation: _pulseController,
+                framed: true,
+                padding: 14,
+              ),
             ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPreview(List<LocationModel> locations) {
+    if (locations.isEmpty) {
+      return const TabletCommonEmptyState(
+        title: '주차 구역 정보가 없습니다',
+        message: '현재 지역의 주차 구역 데이터를 확인할 수 없습니다.',
+        icon: Icons.local_parking_rounded,
+      );
+    }
+    return CommonAnimatedReveal(
+      child: _buildParkingGuidanceMap(locations),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final resolvedArea = widget.area.trim();
-    final overlay = _buildOverlay();
-
     final liveLocations = List<LocationModel>.of(
       context.watch<LocationState>().locations,
     );
 
     if (liveLocations.isNotEmpty) {
-      final textMetricsByLocation = _buildTextMetrics(liveLocations);
-      return SizedBox.expand(
-        child: _buildPreview(liveLocations, overlay, textMetricsByLocation),
-      );
+      return SizedBox.expand(child: _buildPreview(liveLocations));
     }
 
     if (_localFuture == null || _localArea != resolvedArea) {
@@ -389,15 +648,8 @@ class _ParkingStatusPreviewCardAreaState
               label: '주차 구역 불러오는 중',
             );
           }
-
           final locations = snapshot.data ?? const <LocationModel>[];
-          final textMetricsByLocation = _buildTextMetrics(locations);
-
-          return _buildPreview(
-            locations,
-            overlay,
-            textMetricsByLocation,
-          );
+          return _buildPreview(locations);
         },
       ),
     );

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../operational_cache/application/operational_snapshot_revision_state.dart';
 import '../operational_cache/domain/repositories/operational_local_repository.dart';
 
 import '../../features/location/applications/location_state.dart';
@@ -74,9 +75,22 @@ class ParkingStatusPreviewCardArea extends StatefulWidget {
   State<ParkingStatusPreviewCardArea> createState() => _ParkingStatusPreviewCardAreaState();
 }
 
-class _ParkingStatusPreviewCardAreaState extends State<ParkingStatusPreviewCardArea> {
+class _ParkingStatusPreviewCardAreaState extends State<ParkingStatusPreviewCardArea>
+    with SingleTickerProviderStateMixin {
   Future<List<LocationModel>>? _localFuture;
   String _localArea = '';
+  int _lastOperationalRevision = -1;
+  late final AnimationController _snapshotRefreshController;
+
+  @override
+  void initState() {
+    super.initState();
+    _snapshotRefreshController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 240),
+      value: 1,
+    );
+  }
 
   @override
   void didUpdateWidget(covariant ParkingStatusPreviewCardArea oldWidget) {
@@ -84,13 +98,52 @@ class _ParkingStatusPreviewCardAreaState extends State<ParkingStatusPreviewCardA
     if (oldWidget.area.trim() != widget.area.trim()) {
       _localFuture = null;
       _localArea = '';
+      _lastOperationalRevision = -1;
     }
+  }
+
+  @override
+  void dispose() {
+    _snapshotRefreshController.dispose();
+    super.dispose();
   }
 
   Future<List<LocationModel>> _loadLocationsFromLocal(String area) async {
     final a = area.trim();
     if (a.isEmpty) return const <LocationModel>[];
     return context.read<OperationalLocalRepository>().readLocations(a);
+  }
+
+  void _playSnapshotRefreshAnimation() {
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (reduceMotion) {
+      _snapshotRefreshController.value = 1;
+      return;
+    }
+    _snapshotRefreshController.forward(from: 0);
+  }
+
+  Widget _withSnapshotRefreshAnimation(Widget child) {
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (reduceMotion) return child;
+    return AnimatedBuilder(
+      animation: _snapshotRefreshController,
+      child: child,
+      builder: (context, animatedChild) {
+        final value = Curves.easeOutCubic.transform(
+          _snapshotRefreshController.value,
+        );
+        return Opacity(
+          opacity: 0.94 + (0.06 * value),
+          child: Transform.translate(
+            offset: Offset(0, 6 * (1 - value)),
+            child: animatedChild,
+          ),
+        );
+      },
+    );
   }
 
   ParkingGridOverlay _buildOverlay(ViewDocRowsStore store, String area) {
@@ -222,14 +275,37 @@ class _ParkingStatusPreviewCardAreaState extends State<ParkingStatusPreviewCardA
     final a = widget.area.trim();
     final store = context.watch<ViewDocRowsStore>();
     final overlay = _buildOverlay(store, a);
+    final operationalRevision = context
+        .watch<OperationalSnapshotRevisionState>()
+        .revisionOf(a);
+
+    if (_lastOperationalRevision < 0) {
+      _lastOperationalRevision = operationalRevision;
+    } else if (_lastOperationalRevision != operationalRevision) {
+      _lastOperationalRevision = operationalRevision;
+      _localFuture = null;
+      _localArea = '';
+      context.read<OperationalSnapshotRevisionState>().reportConsumerRefresh(
+            area: a,
+            revision: operationalRevision,
+            consumer: 'ParkingStatusPreviewCardArea',
+            action: 'sqlite_future_invalidate',
+          );
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _playSnapshotRefreshAnimation();
+      });
+    }
 
     final liveLocations = context.watch<LocationState>().locations;
     final live = List<LocationModel>.of(liveLocations);
 
     if (live.isNotEmpty) {
       final textMetricsByLocation = _buildTextMetrics(live, store, a);
-      return SizedBox.expand(
-        child: _buildContent(live, overlay, textMetricsByLocation),
+      return _withSnapshotRefreshAnimation(
+        SizedBox.expand(
+          child: _buildContent(live, overlay, textMetricsByLocation),
+        ),
       );
     }
 
@@ -238,28 +314,30 @@ class _ParkingStatusPreviewCardAreaState extends State<ParkingStatusPreviewCardA
       _localFuture = _loadLocationsFromLocal(a);
     }
 
-    return SizedBox.expand(
-      child: FutureBuilder<List<LocationModel>>(
-        future: _localFuture,
-        builder: (context, snap) {
-          if (snap.connectionState == ConnectionState.waiting) {
-            final cs = Theme.of(context).colorScheme;
-            return Center(
-              child: SizedBox(
-                width: 28,
-                height: 28,
-                child: CircularProgressIndicator(
-                  strokeWidth: 3,
-                  valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
+    return _withSnapshotRefreshAnimation(
+      SizedBox.expand(
+        child: FutureBuilder<List<LocationModel>>(
+          future: _localFuture,
+          builder: (context, snap) {
+            if (snap.connectionState == ConnectionState.waiting) {
+              final cs = Theme.of(context).colorScheme;
+              return Center(
+                child: SizedBox(
+                  width: 28,
+                  height: 28,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 3,
+                    valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
+                  ),
                 ),
-              ),
-            );
-          }
+              );
+            }
 
-          final locs = snap.data ?? const <LocationModel>[];
-          final textMetricsByLocation = _buildTextMetrics(locs, store, a);
-          return _buildContent(locs, overlay, textMetricsByLocation);
-        },
+            final locs = snap.data ?? const <LocationModel>[];
+            final textMetricsByLocation = _buildTextMetrics(locs, store, a);
+            return _buildContent(locs, overlay, textMetricsByLocation);
+          },
+        ),
       ),
     );
   }

@@ -58,7 +58,7 @@ Future<DeveloperOperationTrace> traceParkingStatusSectorSummary({
     progress: .14,
   );
   trace.log(
-    'status_information_architecture=deduplicated summary=plate_status_sector management=left_rail railDesign=common_operations railMetricsSource=CommonSideRailMetrics management_distribution=visible_actions_equal_fill location=dot_map_and_path billing=compact_single_row memo=conditional footer=status_change_only',
+    'status_information_architecture=deduplicated summary=plate_status_sector management=left_rail railDesign=common_operations railMetricsSource=CommonSideRailMetrics management_distribution=visible_actions_equal_fill location=parking_guidance_map_and_path billing=compact_single_row memo=conditional footer=status_change_only',
     progress: .16,
   );
   return trace;
@@ -273,7 +273,7 @@ class _ParkingStatusVehicleLocationCardState
       );
       parkingStatusTraceLog(
         context,
-        'vehicle_location_map=render style=dot parent=${resolution.parentName.isEmpty ? "none" : resolution.parentName} '
+        'vehicle_location_map=render style=parking_guidance parent=${resolution.parentName.isEmpty ? "none" : resolution.parentName} '
         'child=${resolution.childName.isEmpty ? "none" : resolution.childName} '
         'precision=${resolution.debugPrecision} slot=${resolution.slotNo ?? 0} reason=${resolution.reason} '
         'sector=${(widget.plate.sectorName ?? '').trim().isEmpty ? "none" : (widget.plate.sectorName ?? '').trim()} '
@@ -286,7 +286,7 @@ class _ParkingStatusVehicleLocationCardState
         'location_row=${resolution.grid == null ? "embedded" : "visible"} '
         'billing_summary=single_row billing_detail=${billingState == ParkingCompletedBillingState.settled ? "visible" : "hidden"} '
         'memo=${(widget.plate.customStatus ?? '').trim().isEmpty ? "hidden" : "visible"} '
-        'dot_map=${resolution.grid == null ? "unavailable" : "preserved"}',
+        'parking_guidance_map=${resolution.grid == null ? "unavailable" : "active"}',
       );
       if (resolution.targetRect != null) {
         _markerController.forward(from: 0);
@@ -524,7 +524,7 @@ class _ParkingStatusLocationContent extends StatelessWidget {
     return AnimatedBuilder(
       animation: markerAnimation,
       builder: (context, _) {
-        return ParkingStatusDotMapSurface(
+        return ParkingGuidanceMapSurface(
           grid: grid,
           targetRect: resolution.targetRect,
           exact: resolution.precision ==

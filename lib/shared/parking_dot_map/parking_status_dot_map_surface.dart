@@ -87,6 +87,69 @@ class ParkingStatusDotMapLayout {
   }
 }
 
+@immutable
+class ParkingGuidanceMarker {
+  const ParkingGuidanceMarker({
+    required this.rect,
+    required this.exact,
+    required this.attention,
+    required this.selected,
+  });
+
+  final GridRect rect;
+  final bool exact;
+  final bool attention;
+  final bool selected;
+}
+
+class ParkingGuidanceMapSurface extends StatelessWidget {
+  const ParkingGuidanceMapSurface({
+    super.key,
+    required this.grid,
+    this.markers = const <ParkingGuidanceMarker>[],
+    this.targetRect,
+    this.viewport,
+    this.visibleParkingAreaIds,
+    this.exact = false,
+    this.pulse = 1,
+    this.framed = true,
+    this.padding = 9,
+  });
+
+  final ParkingGridModel grid;
+  final List<ParkingGuidanceMarker> markers;
+  final GridRect? targetRect;
+  final GridRect? viewport;
+  final Set<String>? visibleParkingAreaIds;
+  final bool exact;
+  final double pulse;
+  final bool framed;
+  final double padding;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    return ColoredBox(
+      color: tokens.canvas,
+      child: CustomPaint(
+        painter: ParkingGuidanceMapPainter(
+          grid: grid,
+          markers: markers,
+          targetRect: targetRect,
+          viewport: viewport,
+          visibleParkingAreaIds: visibleParkingAreaIds,
+          exact: exact,
+          pulse: pulse,
+          framed: framed,
+          padding: padding,
+          tokens: tokens,
+        ),
+        child: const SizedBox.expand(),
+      ),
+    );
+  }
+}
+
 class ParkingStatusDotMapSurface extends StatelessWidget {
   const ParkingStatusDotMapSurface({
     super.key,
@@ -111,39 +174,23 @@ class ParkingStatusDotMapSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = CommonUiTheme.of(context);
-    final content = CustomPaint(
-      painter: ParkingStatusDotMapPainter(
-        grid: grid,
-        targetRect: targetRect,
-        viewport: viewport,
-        visibleParkingAreaIds: visibleParkingAreaIds,
-        exact: exact,
-        pulse: pulse,
-        framed: framed,
-        padding: padding,
-        tokens: tokens,
-      ),
-      child: const SizedBox.expand(),
-    );
-    if (!framed) return content;
-    return Container(
-      decoration: BoxDecoration(
-        color: tokens.surfaceOverlay.withOpacity(.38),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: tokens.borderSubtle),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(11),
-        child: content,
-      ),
+    return ParkingGuidanceMapSurface(
+      grid: grid,
+      targetRect: targetRect,
+      viewport: viewport,
+      visibleParkingAreaIds: visibleParkingAreaIds,
+      exact: exact,
+      pulse: pulse,
+      framed: framed,
+      padding: padding,
     );
   }
 }
 
-class ParkingStatusDotMapPainter extends CustomPainter {
-  const ParkingStatusDotMapPainter({
+class ParkingGuidanceMapPainter extends CustomPainter {
+  const ParkingGuidanceMapPainter({
     required this.grid,
+    required this.markers,
     required this.targetRect,
     required this.viewport,
     required this.visibleParkingAreaIds,
@@ -155,6 +202,7 @@ class ParkingStatusDotMapPainter extends CustomPainter {
   });
 
   final ParkingGridModel grid;
+  final List<ParkingGuidanceMarker> markers;
   final GridRect? targetRect;
   final GridRect? viewport;
   final Set<String>? visibleParkingAreaIds;
@@ -173,294 +221,424 @@ class ParkingStatusDotMapPainter extends CustomPainter {
       padding: padding,
     );
     if (layout == null) return;
-    final scale = layout.scale;
-    final origin = layout.origin;
-    final mapRect = layout.mapRect;
 
+    final mapRect = layout.mapRect;
+    final boundary = RRect.fromRectAndRadius(
+      mapRect,
+      Radius.circular(framed ? 12 : 8),
+    );
     canvas.save();
     if (framed) {
-      final framePaint = Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1
-        ..color = tokens.borderSubtle.withOpacity(.75);
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(mapRect, const Radius.circular(8)),
-        framePaint,
-      );
-      canvas.clipRRect(
-        RRect.fromRectAndRadius(mapRect, const Radius.circular(8)),
-      );
+      canvas.clipRRect(boundary);
     } else {
       canvas.clipRect(mapRect);
     }
+    _drawRoads(canvas, layout);
+    _drawParkingBays(canvas, layout);
+    _drawStructures(canvas, layout);
+    _drawMarkers(canvas, layout);
+    _drawTarget(canvas, layout);
+    canvas.restore();
 
-    final totalCells = grid.rows * grid.cols;
-    final visibleCells = layout.viewport.area;
-    final drawCellDetails = visibleCells <= 12000 && scale >= .45;
-    if (drawCellDetails) {
-      final roadPaint = Paint()
-        ..style = PaintingStyle.fill
-        ..color = tokens.textSecondary.withOpacity(.08);
-      final road2Paint = Paint()
-        ..style = PaintingStyle.fill
-        ..color = tokens.info.withOpacity(.11);
-      final pillarPaint = Paint()
-        ..style = PaintingStyle.fill
-        ..color = tokens.textSecondary.withOpacity(.34);
-      final wallPaint = Paint()
-        ..style = PaintingStyle.fill
-        ..color = tokens.textPrimary.withOpacity(.52);
-      final road2Cells = grid.road2Cells.toSet();
-      final view = layout.viewport;
-      for (var row = view.top; row <= view.bottom; row++) {
-        for (var col = view.left; col <= view.right; col++) {
-          final index = row * grid.cols + col;
-          if (index < 0 || index >= grid.cells.length || index >= totalCells) {
-            continue;
-          }
-          final type = grid.cells[index];
-          if (type == ParkingGridCellType.empty) continue;
-          final rect = Rect.fromLTWH(
-            origin.dx + col * scale,
-            origin.dy + row * scale,
-            scale,
-            scale,
-          );
-          if (type == ParkingGridCellType.road) {
-            canvas.drawRect(
-              rect,
-              road2Cells.contains(index) ? road2Paint : roadPaint,
+    if (framed) {
+      final boundaryPaint = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2
+        ..strokeJoin = StrokeJoin.round
+        ..color = tokens.borderStrong;
+      canvas.drawRRect(boundary, boundaryPaint);
+    }
+  }
+
+  void _drawRoads(Canvas canvas, ParkingStatusDotMapLayout layout) {
+    final road = Paint()
+      ..style = PaintingStyle.fill
+      ..color = tokens.textSecondary.withOpacity(.13);
+    final roadSecondary = Paint()
+      ..style = PaintingStyle.fill
+      ..color = tokens.info.withOpacity(.16);
+    final pillar = Paint()
+      ..style = PaintingStyle.fill
+      ..color = tokens.textSecondary.withOpacity(.42);
+    final wall = Paint()
+      ..style = PaintingStyle.fill
+      ..color = tokens.textPrimary.withOpacity(.58);
+    final road2 = grid.road2Cells.toSet();
+    final view = layout.viewport;
+    final scale = layout.scale;
+    final origin = layout.origin;
+
+    for (var row = view.top; row <= view.bottom; row++) {
+      for (var col = view.left; col <= view.right; col++) {
+        final index = row * grid.cols + col;
+        if (index < 0 || index >= grid.cells.length) continue;
+        final cell = grid.cells[index];
+        if (cell == ParkingGridCellType.empty) continue;
+        final rect = Rect.fromLTWH(
+          origin.dx + col * scale,
+          origin.dy + row * scale,
+          scale,
+          scale,
+        );
+        switch (cell) {
+          case ParkingGridCellType.empty:
+            break;
+          case ParkingGridCellType.road:
+            canvas.drawRect(rect, road2.contains(index) ? roadSecondary : road);
+            break;
+          case ParkingGridCellType.pillar:
+            canvas.drawRRect(
+              RRect.fromRectAndRadius(
+                rect.deflate(math.min(scale * .16, 1.8)),
+                const Radius.circular(2),
+              ),
+              pillar,
             );
-          } else if (type == ParkingGridCellType.pillar) {
-            final inset = math.min(scale * .22, 1.6);
-            canvas.drawRect(rect.deflate(inset), pillarPaint);
-          } else if (type == ParkingGridCellType.wall) {
-            final inset = math.min(scale * .08, .8);
-            canvas.drawRect(rect.deflate(inset), wallPaint);
-          }
+            break;
+          case ParkingGridCellType.wall:
+            canvas.drawRect(rect.deflate(math.min(scale * .05, .7)), wall);
+            break;
         }
       }
     }
+  }
 
-    final dotRadius = (scale * .2).clamp(1.0, 2.7).toDouble();
-    final parkingPaint = Paint()
+  void _drawParkingBays(Canvas canvas, ParkingStatusDotMapLayout layout) {
+    final fill = Paint()
       ..style = PaintingStyle.fill
-      ..color = tokens.textSecondary.withOpacity(.46);
+      ..color = tokens.surfaceRaised.withOpacity(.72);
+    final stroke = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.25
+      ..color = tokens.borderStrong.withOpacity(.72);
+    final guide = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1
+      ..strokeCap = StrokeCap.round
+      ..color = tokens.textSecondary.withOpacity(.28);
+    final visibleIds = visibleParkingAreaIds;
+
     for (final area in grid.parkingAreas) {
-      final visibleIds = visibleParkingAreaIds;
       if (visibleIds != null) {
         final id = area.id.trim();
         if (id.isEmpty || !visibleIds.contains(id)) continue;
       }
-      final center = _logicalCenter(
-        origin: origin,
-        scale: scale,
-        r0: area.r0,
-        c0: area.c0,
-        r1: area.r1,
-        c1: area.c1,
-      );
-      canvas.drawCircle(center, dotRadius, parkingPaint);
-    }
-
-    _drawStructureRects(
-      canvas: canvas,
-      rects: grid.towerRects,
-      origin: origin,
-      scale: scale,
-      color: tokens.textSecondary.withOpacity(.38),
-      fillOpacity: .06,
-    );
-    _drawStructureRects(
-      canvas: canvas,
-      rects: grid.entranceRects,
-      origin: origin,
-      scale: scale,
-      color: tokens.success.withOpacity(.8),
-      fillOpacity: .08,
-    );
-    _drawStructureRects(
-      canvas: canvas,
-      rects: grid.exitRects,
-      origin: origin,
-      scale: scale,
-      color: tokens.danger.withOpacity(.72),
-      fillOpacity: .06,
-    );
-
-    if (size.width >= 220 && scale >= .75) {
-      _drawRectLabel(
-        canvas: canvas,
-        rects: grid.entranceRects,
-        origin: origin,
-        scale: scale,
-        text: 'IN',
-        color: tokens.success,
-      );
-      _drawRectLabel(
-        canvas: canvas,
-        rects: grid.exitRects,
-        origin: origin,
-        scale: scale,
-        text: 'OUT',
-        color: tokens.danger,
-      );
-    }
-
-    final target = targetRect?.normalized();
-    if (target == null) {
-      canvas.restore();
-      return;
-    }
-    final targetScreenRect = Rect.fromLTRB(
-      origin.dx + target.left * scale,
-      origin.dy + target.top * scale,
-      origin.dx + (target.right + 1) * scale,
-      origin.dy + (target.bottom + 1) * scale,
-    );
-    final targetCenter = targetScreenRect.center;
-
-    if (!exact) {
-      final regionPaint = Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.6
-        ..color = tokens.accent.withOpacity(.88);
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          targetScreenRect.inflate(math.max(1.5, scale * .12)),
-          const Radius.circular(5),
+      final rawRect = layout
+          .rectFor(
+            GridRect(
+              r0: area.r0,
+              c0: area.c0,
+              r1: area.r1,
+              c1: area.c1,
+            ),
+          )
+          .intersect(layout.mapRect);
+      if (rawRect.isEmpty || rawRect.width <= 0 || rawRect.height <= 0) {
+        continue;
+      }
+      final inset = math.min(layout.scale * .07, 1.2);
+      final insetRect = rawRect.deflate(
+        math.min(
+          inset,
+          math.max(
+            0.0,
+            math.min(rawRect.width, rawRect.height) / 2 - .05,
+          ),
         ),
-        regionPaint,
       );
+      final rect = _minimumVisualRect(
+        insetRect.isEmpty ? rawRect : insetRect,
+        bounds: layout.mapRect,
+        minimumExtent: 2.4,
+      );
+      final radius = Radius.circular(
+        math.min(4.0, math.min(rect.width, rect.height) * .12),
+      );
+      final rrect = RRect.fromRectAndRadius(rect, radius);
+      canvas.drawRRect(rrect, fill);
+      canvas.drawRRect(rrect, stroke);
+
+      if (math.min(rect.width, rect.height) >= 8) {
+        if (rect.width >= rect.height) {
+          final x = rect.left + rect.width * .18;
+          canvas.drawLine(
+            Offset(x, rect.top + rect.height * .22),
+            Offset(x, rect.bottom - rect.height * .22),
+            guide,
+          );
+        } else {
+          final y = rect.top + rect.height * .18;
+          canvas.drawLine(
+            Offset(rect.left + rect.width * .22, y),
+            Offset(rect.right - rect.width * .22, y),
+            guide,
+          );
+        }
+      }
     }
+  }
 
-    final markerRadius = (size.width * .018).clamp(5.5, 7.5).toDouble();
-    final pulseValue = pulse.clamp(0.0, 1.0).toDouble();
-    final ringPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5
-      ..color = tokens.accent.withOpacity(.48 * (1 - pulseValue));
-    canvas.drawCircle(
-      targetCenter,
-      markerRadius + 3 + pulseValue * 7,
-      ringPaint,
-    );
+  Rect _minimumVisualRect(
+    Rect rect, {
+    required Rect bounds,
+    required double minimumExtent,
+  }) {
+    final width = math.max(rect.width, minimumExtent).toDouble();
+    final height = math.max(rect.height, minimumExtent).toDouble();
+    var left = rect.center.dx - width / 2;
+    var top = rect.center.dy - height / 2;
 
-    if (exact) {
-      final markerPaint = Paint()
-        ..style = PaintingStyle.fill
-        ..color = tokens.accent;
-      canvas.drawCircle(targetCenter, markerRadius, markerPaint);
-      final corePaint = Paint()
-        ..style = PaintingStyle.fill
-        ..color = tokens.onAccentContainer;
-      canvas.drawCircle(
-        targetCenter,
-        math.max(1.7, markerRadius * .34),
-        corePaint,
-      );
+    if (width <= bounds.width) {
+      left = left.clamp(bounds.left, bounds.right - width).toDouble();
     } else {
-      final markerPaint = Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.8
-        ..color = tokens.accent;
-      canvas.drawCircle(targetCenter, markerRadius * .72, markerPaint);
+      left = bounds.left;
     }
-    canvas.restore();
-  }
+    if (height <= bounds.height) {
+      top = top.clamp(bounds.top, bounds.bottom - height).toDouble();
+    } else {
+      top = bounds.top;
+    }
 
-  Offset _logicalCenter({
-    required Offset origin,
-    required double scale,
-    required int r0,
-    required int c0,
-    required int r1,
-    required int c1,
-  }) {
-    return Offset(
-      origin.dx + ((c0 + c1 + 1) / 2) * scale,
-      origin.dy + ((r0 + r1 + 1) / 2) * scale,
+    return Rect.fromLTWH(
+      left,
+      top,
+      math.min(width, bounds.width).toDouble(),
+      math.min(height, bounds.height).toDouble(),
     );
   }
 
-  void _drawStructureRects({
-    required Canvas canvas,
-    required List<GridRect> rects,
-    required Offset origin,
-    required double scale,
-    required Color color,
-    required double fillOpacity,
-  }) {
+  void _drawStructures(Canvas canvas, ParkingStatusDotMapLayout layout) {
+    _drawStructureRects(
+      canvas,
+      layout,
+      grid.towerRects,
+      tokens.textSecondary.withOpacity(.48),
+      .09,
+    );
+    _drawStructureRects(
+      canvas,
+      layout,
+      grid.entranceRects,
+      tokens.success,
+      .12,
+    );
+    _drawStructureRects(
+      canvas,
+      layout,
+      grid.exitRects,
+      tokens.danger,
+      .10,
+    );
+
+    if (layout.scale >= .7 && layout.mapRect.width >= 220) {
+      _drawStructureLabel(canvas, layout, grid.entranceRects, '입구', tokens.success);
+      _drawStructureLabel(canvas, layout, grid.exitRects, '출구', tokens.danger);
+    }
+  }
+
+  void _drawStructureRects(
+    Canvas canvas,
+    ParkingStatusDotMapLayout layout,
+    List<GridRect> rects,
+    Color color,
+    double fillOpacity,
+  ) {
     final fill = Paint()
       ..style = PaintingStyle.fill
       ..color = color.withOpacity(fillOpacity);
     final stroke = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1
-      ..color = color;
-    for (final raw in rects) {
-      final rect = raw.normalized();
-      final screen = Rect.fromLTRB(
-        origin.dx + rect.left * scale,
-        origin.dy + rect.top * scale,
-        origin.dx + (rect.right + 1) * scale,
-        origin.dy + (rect.bottom + 1) * scale,
-      );
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(screen, const Radius.circular(3)),
-        fill,
-      );
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(screen, const Radius.circular(3)),
-        stroke,
-      );
+      ..strokeWidth = 1.2
+      ..color = color.withOpacity(.82);
+    for (final rect in rects) {
+      final screen = layout.rectFor(rect);
+      if (!screen.overlaps(layout.mapRect)) continue;
+      final rrect = RRect.fromRectAndRadius(screen, const Radius.circular(4));
+      canvas.drawRRect(rrect, fill);
+      canvas.drawRRect(rrect, stroke);
     }
   }
 
-  void _drawRectLabel({
-    required Canvas canvas,
-    required List<GridRect> rects,
-    required Offset origin,
-    required double scale,
-    required String text,
-    required Color color,
-  }) {
+  void _drawStructureLabel(
+    Canvas canvas,
+    ParkingStatusDotMapLayout layout,
+    List<GridRect> rects,
+    String text,
+    Color color,
+  ) {
     if (rects.isEmpty) return;
-    final rect = rects.first.normalized();
-    final center = _logicalCenter(
-      origin: origin,
-      scale: scale,
-      r0: rect.top,
-      c0: rect.left,
-      r1: rect.bottom,
-      c1: rect.right,
-    );
+    final rect = layout.rectFor(rects.first);
+    if (!rect.overlaps(layout.mapRect)) return;
     final painter = TextPainter(
+      textDirection: TextDirection.ltr,
+      textAlign: TextAlign.center,
+      maxLines: 1,
       text: TextSpan(
         text: text,
         style: TextStyle(
           color: color,
-          fontSize: 7,
+          fontSize: 12,
           fontWeight: FontWeight.w900,
+          height: 1,
         ),
       ),
-      textDirection: TextDirection.ltr,
     )..layout();
     painter.paint(
       canvas,
-      Offset(center.dx - painter.width / 2, center.dy - painter.height / 2),
+      Offset(
+        rect.center.dx - painter.width / 2,
+        rect.center.dy - painter.height / 2,
+      ),
     );
   }
 
+  void _drawMarkers(Canvas canvas, ParkingStatusDotMapLayout layout) {
+    for (final marker in markers) {
+      final rect = layout.rectFor(marker.rect);
+      if (!rect.overlaps(layout.mapRect)) continue;
+      if (!marker.exact) {
+        final region = Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = marker.attention || marker.selected ? 2.2 : 1.4
+          ..color = (marker.attention || marker.selected
+                  ? tokens.accent
+                  : tokens.borderStrong)
+              .withOpacity(.78);
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            rect.deflate(math.min(1.4, layout.scale * .06)),
+            const Radius.circular(6),
+          ),
+          region,
+        );
+        continue;
+      }
+
+      _drawCar(
+        canvas,
+        rect,
+        color: marker.attention || marker.selected
+            ? tokens.accent
+            : tokens.textSecondary.withOpacity(.7),
+        strong: marker.attention || marker.selected,
+      );
+
+      if (marker.attention || marker.selected) {
+        _drawPulseBay(
+          canvas,
+          rect,
+          color: tokens.accent,
+          pulseValue: marker.attention ? pulse : .35,
+        );
+      }
+    }
+  }
+
+  void _drawTarget(Canvas canvas, ParkingStatusDotMapLayout layout) {
+    final target = targetRect;
+    if (target == null) return;
+    final rect = layout.rectFor(target);
+    if (!rect.overlaps(layout.mapRect)) return;
+    final accentFill = Paint()
+      ..style = PaintingStyle.fill
+      ..color = tokens.accentContainer.withOpacity(.34);
+    final accentStroke = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.4
+      ..color = tokens.accent;
+    final rrect = RRect.fromRectAndRadius(
+      rect.deflate(math.min(1.0, layout.scale * .04)),
+      const Radius.circular(6),
+    );
+    canvas.drawRRect(rrect, accentFill);
+    canvas.drawRRect(rrect, accentStroke);
+    _drawPulseBay(canvas, rect, color: tokens.accent, pulseValue: pulse);
+    if (exact) {
+      _drawCar(canvas, rect, color: tokens.accent, strong: true);
+    }
+  }
+
+  void _drawPulseBay(
+    Canvas canvas,
+    Rect rect, {
+    required Color color,
+    required double pulseValue,
+  }) {
+    final value = pulseValue.clamp(0.0, 1.0).toDouble();
+    final inflate = 3 + value * 8;
+    final halo = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..color = color.withOpacity(.5 * (1 - value));
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        rect.inflate(inflate),
+        Radius.circular(7 + value * 4),
+      ),
+      halo,
+    );
+  }
+
+  void _drawCar(
+    Canvas canvas,
+    Rect bay, {
+    required Color color,
+    required bool strong,
+  }) {
+    final horizontal = bay.width >= bay.height;
+    final insetX = horizontal ? bay.width * .14 : bay.width * .22;
+    final insetY = horizontal ? bay.height * .22 : bay.height * .14;
+    final body = Rect.fromLTRB(
+      bay.left + insetX,
+      bay.top + insetY,
+      bay.right - insetX,
+      bay.bottom - insetY,
+    );
+    if (body.width <= 2 || body.height <= 2) return;
+    final bodyPaint = Paint()
+      ..style = PaintingStyle.fill
+      ..color = color.withOpacity(strong ? .9 : .52);
+    final outline = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strong ? 1.6 : 1
+      ..color = color;
+    final glass = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1
+      ..strokeCap = StrokeCap.round
+      ..color = tokens.canvas.withOpacity(.72);
+    final rrect = RRect.fromRectAndRadius(
+      body,
+      Radius.circular(math.min(5.0, math.min(body.width, body.height) * .28)),
+    );
+    canvas.drawRRect(rrect, bodyPaint);
+    canvas.drawRRect(rrect, outline);
+
+    if (math.min(body.width, body.height) < 8) return;
+    if (horizontal) {
+      final x = body.left + body.width * .34;
+      canvas.drawLine(
+        Offset(x, body.top + body.height * .22),
+        Offset(x, body.bottom - body.height * .22),
+        glass,
+      );
+    } else {
+      final y = body.top + body.height * .34;
+      canvas.drawLine(
+        Offset(body.left + body.width * .22, y),
+        Offset(body.right - body.width * .22, y),
+        glass,
+      );
+    }
+  }
+
   @override
-  bool shouldRepaint(covariant ParkingStatusDotMapPainter oldDelegate) {
+  bool shouldRepaint(covariant ParkingGuidanceMapPainter oldDelegate) {
     return oldDelegate.grid != grid ||
+        oldDelegate.markers != markers ||
         oldDelegate.targetRect != targetRect ||
         oldDelegate.viewport != viewport ||
-        !setEquals(
-          oldDelegate.visibleParkingAreaIds,
-          visibleParkingAreaIds,
-        ) ||
+        !setEquals(oldDelegate.visibleParkingAreaIds, visibleParkingAreaIds) ||
         oldDelegate.exact != exact ||
         oldDelegate.pulse != pulse ||
         oldDelegate.framed != framed ||

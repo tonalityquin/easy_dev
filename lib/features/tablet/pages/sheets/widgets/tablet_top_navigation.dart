@@ -445,13 +445,12 @@ class _TabletTopNavigationState extends State<TabletTopNavigation> {
         'area': area,
       },
     );
-    await state.setMode(next);
+    state.setMode(next);
     if (!mounted || !dialogContext.mounted) return;
     _settingsDebugLog(
       'grid_render_mode_changed',
       <String, Object?>{
         'mode': next.name,
-        'persistKey': TabletGridRenderModeState.prefsKey,
         'area': area,
       },
     );
@@ -481,14 +480,13 @@ class _TabletTopNavigationState extends State<TabletTopNavigation> {
         'area': area,
       },
     );
-    await state.setSize(next);
+    state.setSize(next);
     if (!mounted || !dialogContext.mounted) return;
     _settingsDebugLog(
       'plate_tail4_size_changed',
       <String, Object?>{
         'size': next.name,
         'fontSize': next.fontSize,
-        'persistKey': TabletPlateTail4SizeState.prefsKey,
         'area': area,
       },
     );
@@ -1154,9 +1152,9 @@ class _TabletTopNavigationState extends State<TabletTopNavigation> {
                                     const SizedBox(width: 12),
                                     Switch.adaptive(
                                       value: includeParkingCompletedView,
-                                      onChanged: (next) async {
+                                      onChanged: (next) {
                                         HapticFeedback.selectionClick();
-                                        await parkingCompletedToggle
+                                        parkingCompletedToggle
                                             .setIncludeParkingCompletedView(
                                           next,
                                         );

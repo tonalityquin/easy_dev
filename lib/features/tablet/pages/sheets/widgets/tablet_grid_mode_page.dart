@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../../design_system/common_ui/common_ui_theme.dart';
+import '../../../applications/tablet_debug_trace.dart';
 import '../../../applications/tablet_grid_render_mode_state.dart';
 import '../../../applications/tablet_parking_completed_view_toggle_state.dart';
 import '../../../domain/models/three_d_lite/tablet_status_preview_card_area.dart'
@@ -60,16 +61,6 @@ class TabletGridModePage extends StatelessWidget {
       (state) => state.includeParkingCompletedView,
     );
     final renderState = context.watch<TabletGridRenderModeState>();
-
-    if (!renderState.isReady) {
-      return ColoredBox(
-        color: tokens.canvas,
-        child: const Center(
-          child: TabletCommonLoadingState(label: '주차장 보기 설정 불러오는 중'),
-        ),
-      );
-    }
-
     final overlay2d = _overlaySpecs2d(
       includeParkingCompletedView: includeParkingCompletedView,
     );
@@ -104,7 +95,7 @@ class TabletGridModePage extends StatelessWidget {
             ? const TabletCommonEmptyState(
                 key: ValueKey<String>('grid-empty'),
                 title: '선택된 지역이 없습니다',
-                message: '상단 메뉴에서 운영 지역을 선택하세요.',
+                message: '현재 지역 정보를 확인할 수 없습니다.',
                 icon: Icons.map_outlined,
               )
             : ColoredBox(
@@ -116,6 +107,13 @@ class TabletGridModePage extends StatelessWidget {
                     ? grid3d.ParkingStatusPreviewCardArea(
                         area: resolvedArea,
                         overlay: overlay3d,
+                        onDebugLog: (message) {
+                          TabletDebugTrace.record(
+                            'TabletGrid3D',
+                            'preview',
+                            <String, Object?>{'message': message},
+                          );
+                        },
                       )
                     : status2d.ParkingStatusPreviewCardArea(
                         area: resolvedArea,

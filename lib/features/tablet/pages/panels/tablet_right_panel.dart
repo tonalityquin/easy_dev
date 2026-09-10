@@ -13,19 +13,17 @@ import '../../../../shared/plate/application/common/movement_plate.dart';
 import '../../../../shared/plate/data/repositories/firestore_plate_repository.dart';
 import '../../../../shared/plate/domain/enums/plate_type.dart';
 import '../../../../shared/plate/domain/models/plate_model.dart';
+import '../../../../shared/parking_spatial/parking_spatial_geometry.dart';
 import '../../../location/applications/location_state.dart';
+import '../../../location/domain/models/grid_rect.dart';
 import '../../../location/domain/models/location_model.dart';
+import '../../../location/domain/models/parking_grid_model.dart';
 import '../../../selector/application/dev_auth.dart';
+import '../../applications/tablet_debug_trace.dart';
 import '../../applications/tablet_pad_mode_state.dart';
-import '../../domain/models/two_d/tablet_grid_2d_preview.dart'
-    show
-        ParkingGridOverlay,
-        ParkingSlotStatus,
-        TabletGrid2dPreview,
-        parkingOverlayCanonicalChildKey;
+import '../../domain/models/two_d/tablet_parking_guidance_map_surface.dart';
 import '../sheets/widgets/keypad/tablet_animated_keypad.dart';
 import '../widgets/tablet_plate_number_display_section.dart';
-import '../widgets/tablet_plate_search_header_section.dart';
 import '../widgets/tablet_plate_search_result_section.dart';
 import '../widgets/tablet_common_components.dart';
 
@@ -157,7 +155,7 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
     if (_debugLines.length > 100) {
       _debugLines.removeRange(0, _debugLines.length - 100);
     }
-    debugPrint(line);
+    TabletDebugTrace.record('TabletPlateSearch', event, details);
   }
 
   String get _debugPrintCode {
@@ -182,8 +180,9 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
         description: _debugLines.join('\n'),
         copyText: code,
         copyButtonLabel: 'debugPrint 코드 복사',
-        visibleDuration: const Duration(seconds: 45),
+        visibleDuration: Duration.zero,
         useCommonUi: true,
+        awaitManualClose: true,
       );
     } finally {
       _debugDialogShowing = false;
@@ -286,7 +285,6 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
     _debugLog('search_started', <String, Object?>{
       'collection': 'plates',
       'area': widget.area,
-      'plateFourDigit': input,
       'type': parkingCompletedType,
     });
 
@@ -337,7 +335,6 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
         details: <String, Object?>{
           'collection': 'plates',
           'area': widget.area,
-          'plateFourDigit': input,
           'type': parkingCompletedType,
           'widget': 'RightPaneSearchPanel',
         },
@@ -357,7 +354,7 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
     final closeReason = await showCommonOverlayDialog<_UnifiedDialogCloseReason>(
       context: context,
       useRootNavigator: true,
-      barrierDismissible: true,
+      barrierDismissible: false,
       builder: (dialogCtx) {
         final cs = Theme.of(dialogCtx).colorScheme;
         final text = Theme.of(dialogCtx).textTheme;
@@ -397,7 +394,6 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
           if (plate.type != PlateType.parkingCompleted.firestoreValue) {
             _debugLog('departure_request_blocked', <String, Object?>{
               'plateId': plate.id,
-              'plateFourDigit': plate.plateFourDigit,
               'actualType': plate.type,
               'requiredType': PlateType.parkingCompleted.firestoreValue,
             });
@@ -406,7 +402,6 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
 
           _debugLog('departure_request_started', <String, Object?>{
             'plateId': plate.id,
-            'plateFourDigit': plate.plateFourDigit,
             'type': plate.type,
             'area': plate.area,
           });
@@ -423,7 +418,6 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
 
             _debugLog('departure_request_completed', <String, Object?>{
               'plateId': plate.id,
-              'plateFourDigit': plate.plateFourDigit,
             });
             if (!dialogCtx.mounted) return;
             await _showDepartureRequestedSuccessDialog(dialogCtx, plate);
@@ -434,7 +428,6 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
             if (!dialogCtx.mounted) return;
             _debugLog('departure_request_failed', <String, Object?>{
               'plateId': plate.id,
-              'plateFourDigit': plate.plateFourDigit,
               'error': e,
             });
             await DevFirebaseDebugDialog.show(
@@ -447,7 +440,6 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
                 'area': plate.area,
                 'location': plate.location,
                 'plateId': plate.id,
-                'plateFourDigit': plate.plateFourDigit,
                 'type': plate.type,
                 'forceViewSync': true,
                 'widget': 'RightPaneSearchPanel.confirmDepartureRequested',
@@ -472,72 +464,42 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
             );
           }
 
-          return Container(
-            decoration: BoxDecoration(
-              color: cs.surface,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: cs.outline.withOpacity(.14)),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(18),
-              child: TabletPlateSearchResultSection(
-                results: render,
-                compact: isPhone,
-                onSelect: (p) {
-                  if (busy) return;
-                  _debugLog('result_selected', <String, Object?>{
-                    'plateId': p.id,
-                    'plateFourDigit': p.plateFourDigit,
-                    'type': p.type,
-                    'area': p.area,
-                  });
-                  setStateSB(() {
-                    selected = p;
-                    selectedId = p.id;
-
-                    if (isPhone) {
-                      screen = _UnifiedDialogScreen.confirm;
-                    }
-                  });
-                },
-              ),
-            ),
+          return TabletPlateSearchResultSection(
+            results: render,
+            compact: isPhone,
+            onSelect: (p) {
+              if (busy) return;
+              _debugLog('result_selected', <String, Object?>{
+                'plateId': p.id,
+                'type': p.type,
+                'area': p.area,
+              });
+              setStateSB(() {
+                selected = p;
+                selectedId = p.id;
+                if (isPhone) {
+                  screen = _UnifiedDialogScreen.confirm;
+                }
+              });
+            },
           );
         }
 
         Widget buildConfirmPanel(StateSetter setStateSB) {
           if (selected == null) {
-            return Container(
-              decoration: BoxDecoration(
-                color: _tintOnSurface(
-                  cs,
-                  opacity: cs.brightness == Brightness.dark ? 0.10 : 0.05,
-                ),
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: cs.outline.withOpacity(.14)),
-              ),
-              padding: const EdgeInsets.all(22),
-              child: Center(
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(22),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.touch_app_outlined, size: 54, color: cs.primary),
+                    Icon(Icons.touch_app_outlined, size: 46, color: cs.primary),
                     const SizedBox(height: 12),
                     Text(
-                      '왼쪽에서 번호판을 선택하세요',
+                      '번호판을 선택하세요',
                       style: (text.titleLarge ?? const TextStyle()).copyWith(
                         fontWeight: FontWeight.w900,
                         color: cs.onSurface,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      '선택 후, 같은 창에서 바로 “출차 요청”으로 전환할 수 있습니다.',
-                      style: (text.bodyLarge ?? const TextStyle()).copyWith(
-                        color: cs.onSurfaceVariant,
-                        fontWeight: FontWeight.w700,
-                        height: 1.25,
                       ),
                       textAlign: TextAlign.center,
                     ),
@@ -548,86 +510,71 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
           }
 
           final plate = selected!;
-
           final typeLabel = plate.typeEnum?.label ?? plate.type;
-
           final metaLine =
               '${_formatDateTime(plate.requestTime)} · ${plate.location.isEmpty ? '위치 미지정' : plate.location}';
           final areaLine = plate.area.isEmpty ? '-' : plate.area;
-
-          final plateBoxBg = _tintOnSurface(
-            cs,
-            opacity: cs.brightness == Brightness.dark ? 0.14 : 0.08,
-          );
-          final plateBorder = cs.primary.withOpacity(
-            cs.brightness == Brightness.dark ? 0.30 : 0.22,
-          );
-
           final double plateFontSize = isPhone ? 36 : 44;
           final double buttonHeight = isPhone ? 52 : 56;
 
-          Widget content = Column(
+          Widget infoRow(String label, String value) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 72,
+                    child: Text(
+                      label,
+                      style: (text.bodyMedium ?? const TextStyle()).copyWith(
+                        color: cs.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      value,
+                      style: (text.bodyLarge ?? const TextStyle()).copyWith(
+                        color: cs.onSurface,
+                        fontWeight: FontWeight.w800,
+                        height: 1.25,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          final content = Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Center(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 14,
+                child: Text(
+                  plate.plateNumber,
+                  style: (text.displaySmall ?? const TextStyle()).copyWith(
+                    fontSize: plateFontSize,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.4,
+                    height: 1,
+                    color: cs.onSurface,
                   ),
-                  decoration: BoxDecoration(
-                    color: plateBoxBg,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: plateBorder),
-                  ),
-                  child: Text(
-                    plate.plateNumber,
-                    style: (text.displaySmall ?? const TextStyle()).copyWith(
-                      fontSize: plateFontSize,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.4,
-                      height: 1.0,
-                      color: cs.onSurface,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 14),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 12,
-                ),
-                decoration: BoxDecoration(
-                  color: _tintOnSurface(
-                    cs,
-                    opacity: cs.brightness == Brightness.dark ? 0.10 : 0.05,
-                  ),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: cs.outline.withOpacity(.14)),
-                ),
-                child: DefaultTextStyle(
-                  style: (text.bodyLarge ?? const TextStyle()).copyWith(
-                    color: cs.onSurfaceVariant,
-                    fontWeight: FontWeight.w800,
-                    height: 1.25,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('현재 상태: $typeLabel'),
-                      const SizedBox(height: 6),
-                      Text('구역: $areaLine'),
-                      const SizedBox(height: 6),
-                      Text(metaLine),
-                    ],
-                  ),
+                  textAlign: TextAlign.center,
                 ),
               ),
               const SizedBox(height: 18),
+              Divider(height: 1, color: cs.outlineVariant.withOpacity(.55)),
+              infoRow('상태', typeLabel),
+              Divider(height: 1, color: cs.outlineVariant.withOpacity(.35)),
+              infoRow('구역', areaLine),
+              Divider(height: 1, color: cs.outlineVariant.withOpacity(.35)),
+              infoRow('정보', metaLine),
+              Divider(height: 1, color: cs.outlineVariant.withOpacity(.55)),
+              const SizedBox(height: 20),
               Text(
-                '선택한 차량을 “출차 요청”으로 변경하시겠습니까?',
+                '선택한 차량을 출차 요청으로 변경하시겠습니까?',
                 style: (text.titleMedium ?? const TextStyle()).copyWith(
                   fontWeight: FontWeight.w900,
                   color: cs.onSurface,
@@ -647,9 +594,7 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
                         minimumSize: Size(double.infinity, buttonHeight),
                         foregroundColor: cs.onSurface,
                         side: BorderSide(color: cs.outline.withOpacity(.35)),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
+                        shape: const RoundedRectangleBorder(),
                         textStyle:
                             (text.titleMedium ?? const TextStyle()).copyWith(
                           fontWeight: FontWeight.w900,
@@ -672,7 +617,7 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
                               ),
                             )
                           : const Icon(Icons.exit_to_app),
-                      label: Text(busy ? '처리 중...' : '네, 출차 요청'),
+                      label: Text(busy ? '처리 중' : '출차 요청'),
                       onPressed: busy
                           ? null
                           : () => confirmDepartureRequested(setStateSB),
@@ -680,9 +625,7 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
                         minimumSize: Size(double.infinity, buttonHeight),
                         backgroundColor: cs.primary,
                         foregroundColor: cs.onPrimary,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
+                        shape: const RoundedRectangleBorder(),
                         elevation: 0,
                         textStyle:
                             (text.titleMedium ?? const TextStyle()).copyWith(
@@ -696,26 +639,9 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
             ],
           );
 
-          if (isPhone) {
-            return Container(
-              decoration: BoxDecoration(
-                color: cs.surface,
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: cs.outline.withOpacity(.14)),
-              ),
-              padding: const EdgeInsets.all(18),
-              child: SingleChildScrollView(child: content),
-            );
-          }
-
-          return Container(
-            decoration: BoxDecoration(
-              color: cs.surface,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: cs.outline.withOpacity(.14)),
-            ),
-            padding: const EdgeInsets.all(22),
-            child: SingleChildScrollView(child: content),
+          return SingleChildScrollView(
+            padding: EdgeInsets.all(isPhone ? 18 : 22),
+            child: content,
           );
         }
 
@@ -755,27 +681,10 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
                                             ),
                                   )
                                 else
-                                  Container(
-                                    width: 40,
-                                    height: 40,
-                                    decoration: BoxDecoration(
-                                      color: _tintOnSurface(
-                                        cs,
-                                        opacity:
-                                            cs.brightness == Brightness.dark
-                                                ? 0.18
-                                                : 0.10,
-                                      ),
-                                      borderRadius: BorderRadius.circular(14),
-                                      border: Border.all(
-                                        color: cs.outline.withOpacity(.10),
-                                      ),
-                                    ),
-                                    child: Icon(
-                                      Icons.search,
-                                      color: cs.primary,
-                                      size: 22,
-                                    ),
+                                  Icon(
+                                    Icons.search,
+                                    color: cs.primary,
+                                    size: 24,
                                   ),
                                 const SizedBox(width: 10),
                                 Expanded(
@@ -803,32 +712,14 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
                           if (screen == _UnifiedDialogScreen.list)
                             Padding(
                               padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                  vertical: 12,
+                              child: Text(
+                                inputLine,
+                                style: (text.bodyLarge ?? const TextStyle())
+                                    .copyWith(
+                                  color: cs.onSurfaceVariant,
+                                  fontWeight: FontWeight.w800,
                                 ),
-                                decoration: BoxDecoration(
-                                  color: _tintOnSurface(
-                                    cs,
-                                    opacity: cs.brightness == Brightness.dark
-                                        ? 0.12
-                                        : 0.06,
-                                  ),
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(
-                                    color: cs.outline.withOpacity(.14),
-                                  ),
-                                ),
-                                child: Text(
-                                  inputLine,
-                                  style: (text.bodyLarge ?? const TextStyle())
-                                      .copyWith(
-                                    color: cs.onSurfaceVariant,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                           Expanded(
@@ -864,26 +755,10 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
                     children: [
                       Row(
                         children: [
-                          Container(
-                            width: 42,
-                            height: 42,
-                            decoration: BoxDecoration(
-                              color: _tintOnSurface(
-                                cs,
-                                opacity: cs.brightness == Brightness.dark
-                                    ? 0.18
-                                    : 0.10,
-                              ),
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                color: cs.outline.withOpacity(.10),
-                              ),
-                            ),
-                            child: Icon(
-                              Icons.search,
-                              color: cs.primary,
-                              size: 22,
-                            ),
+                          Icon(
+                            Icons.search,
+                            color: cs.primary,
+                            size: 25,
                           ),
                           const SizedBox(width: 12),
                           Expanded(
@@ -905,22 +780,8 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
                         ],
                       ),
                       const SizedBox(height: 10),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 12,
-                        ),
-                        decoration: BoxDecoration(
-                          color: _tintOnSurface(
-                            cs,
-                            opacity:
-                                cs.brightness == Brightness.dark ? 0.12 : 0.06,
-                          ),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: cs.outline.withOpacity(.14),
-                          ),
-                        ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
                         child: Text(
                           inputLine,
                           style: (text.bodyLarge ?? const TextStyle()).copyWith(
@@ -1005,26 +866,26 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
     }
   }
 
-  Widget _panelCard({required Widget child}) {
-    return TabletCommonPanel(child: child);
+  Widget _panelSurface({required Widget child}) {
+    return child;
   }
 
-  Widget _buildHeaderCard({required EdgeInsets padding}) {
+  Widget _buildSearchDisplaySurface({required EdgeInsets padding}) {
     final cs = Theme.of(context).colorScheme;
 
     return Padding(
       padding: padding,
-      child: _panelCard(
+      child: _panelSurface(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const TabletPlateSearchHeaderSection(),
-            const SizedBox(height: 16),
-            TabletPlateNumberDisplaySection(
-              controller: _controller,
-              isValidPlate: _isValidPlate,
+            CommonAnimatedReveal(
+              child: TabletPlateNumberDisplaySection(
+                controller: _controller,
+                isValidPlate: _isValidPlate,
+              ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             _buildSearchProgressBar(cs),
           ],
         ),
@@ -1079,27 +940,26 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
     return 7;
   }
 
-  Widget _buildTabletSearchCard({
+  Widget _buildTabletSearchSurface({
     required ColorScheme cs,
     required BoxConstraints constraints,
   }) {
     final edgePadding = constraints.maxHeight < 760 ? 18.0 : 24.0;
-    final titleGap = constraints.maxHeight < 260 ? 12.0 : 16.0;
     final bottomGap = constraints.maxHeight < 260 ? 10.0 : 14.0;
 
     return Padding(
       padding: EdgeInsets.all(edgePadding),
-      child: _panelCard(
+      child: _panelSurface(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const TabletPlateSearchHeaderSection(),
-            SizedBox(height: titleGap),
             Expanded(
-              child: SizedBox.expand(
-                child: TabletPlateNumberDisplaySection(
-                  controller: _controller,
-                  isValidPlate: _isValidPlate,
+              child: CommonAnimatedReveal(
+                child: SizedBox.expand(
+                  child: TabletPlateNumberDisplaySection(
+                    controller: _controller,
+                    isValidPlate: _isValidPlate,
+                  ),
                 ),
               ),
             ),
@@ -1157,7 +1017,7 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
           top: false,
           child: Column(
             children: [
-              _buildHeaderCard(
+              _buildSearchDisplaySurface(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
               ),
               Expanded(
@@ -1227,7 +1087,7 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
               children: [
                 Expanded(
                   flex: topFlex,
-                  child: _buildTabletSearchCard(
+                  child: _buildTabletSearchSurface(
                     cs: cs,
                     constraints: constraints,
                   ),
@@ -1376,19 +1236,9 @@ class _AutoCloseDepartureRequestDialogState
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Expanded(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: cs.surfaceContainerLowest,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: cs.outline.withOpacity(.12)),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(18),
-                    child: _DepartureRequestFocusedGrid(
-                      area: widget.plate.area,
-                      details: widget.details,
-                    ),
-                  ),
+                child: _DepartureRequestFocusedParkingMap(
+                  area: widget.plate.area,
+                  details: widget.details,
                 ),
               ),
               const SizedBox(height: 16),
@@ -1525,125 +1375,200 @@ class _ParkingLocationDetails {
   String get fullDisplay => full.trim().isEmpty ? '미지정' : full.trim();
 }
 
-class _DepartureRequestFocusedGrid extends StatelessWidget {
+class _DepartureRequestFocusedParkingMap extends StatefulWidget {
   final String area;
   final _ParkingLocationDetails details;
 
-  const _DepartureRequestFocusedGrid({
+  const _DepartureRequestFocusedParkingMap({
     required this.area,
     required this.details,
   });
 
   @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+  State<_DepartureRequestFocusedParkingMap> createState() =>
+      _DepartureRequestFocusedParkingMapState();
+}
 
-    if (details.parent.trim().isEmpty) {
+class _DepartureRequestFocusedParkingMapState
+    extends State<_DepartureRequestFocusedParkingMap>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulseController;
+  bool? _reduceMotion;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 940),
+      value: 1,
+    );
+    TabletDebugTrace.record(
+      'TabletDepartureSuccess',
+      'parking_guidance_initialized',
+      <String, Object?>{
+        'area': widget.area,
+        'location': widget.details.fullDisplay,
+        'plateNumberVisible': false,
+        'parentBoundarySolid': true,
+      },
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (_reduceMotion == reduceMotion) return;
+    _reduceMotion = reduceMotion;
+    if (reduceMotion) {
+      _pulseController.stop();
+      _pulseController.value = 1;
+    } else {
+      _pulseController.repeat(reverse: true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    if (widget.details.parent.trim().isEmpty) {
       return Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Text(
-            '위치 정보가 없어 2D 그리드를 표시할 수 없습니다.',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: cs.onSurfaceVariant,
-                  fontWeight: FontWeight.w800,
-                ),
-          ),
+        child: Text(
+          '위치 정보가 없습니다.',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: tokens.textSecondary,
+                fontWeight: FontWeight.w800,
+              ),
         ),
       );
     }
 
-    final liveLocations = List<LocationModel>.of(
+    final locations = List<LocationModel>.of(
       context.watch<LocationState>().locations,
     );
-
-    final focusedLocations = _resolveFocusedLocations(liveLocations);
-    if (focusedLocations.isEmpty) {
+    final resolution = _resolve(locations);
+    if (resolution == null) {
       return Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Text(
-            '주차 구역 2D 그리드를 불러오지 못했습니다.\n잠시 후 다시 시도해 주세요.',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: cs.onSurfaceVariant,
-                  fontWeight: FontWeight.w800,
-                  height: 1.4,
-                ),
-          ),
+        child: Text(
+          '주차 구역을 표시할 수 없습니다.',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: tokens.textSecondary,
+                fontWeight: FontWeight.w800,
+              ),
         ),
       );
     }
 
     return ColoredBox(
-      color: cs.surfaceContainerLowest,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: TabletGrid2dPreview(
-          locations: focusedLocations,
-          overlay: _buildOverlay(),
-        ),
+      color: tokens.canvas,
+      child: TabletParkingGuidanceMapSurface(
+        grid: resolution.grid,
+        targetRect: resolution.targetRect,
+        exactTarget: resolution.exact,
+        pulseAnimation: _pulseController,
+        framed: true,
+        padding: 14,
       ),
     );
   }
 
-  List<LocationModel> _resolveFocusedLocations(List<LocationModel> all) {
-    final resolvedArea = area.trim();
-    final parentKey = _dialogNameKey(details.parent);
-    if (parentKey.isEmpty) return const <LocationModel>[];
+  _FocusedParkingMapResolution? _resolve(List<LocationModel> all) {
+    final resolvedArea = widget.area.trim();
+    final parentKey = _dialogNameKey(widget.details.parent);
+    if (parentKey.isEmpty) return null;
 
-    LocationModel? parentLocation;
+    LocationModel? parent;
     for (final location in all) {
       if (!_matchesAreaLooseForDialog(resolvedArea, location.area)) continue;
       if (!_isCompositeParentTypeForDialog(location.type)) continue;
       if (_dialogNameKey(location.locationName) != parentKey) continue;
-      parentLocation = location;
+      if (location.parkingGrid == null) continue;
+      parent = location;
       break;
     }
+    if (parent == null || parent.parkingGrid == null) return null;
 
-    if (parentLocation == null) return const <LocationModel>[];
-
-    final aliases = _parentAliasesForDialog(parentLocation);
-    final children = <LocationModel>[];
-
+    final grid = parent.parkingGrid!;
+    final aliases = _parentAliasesForDialog(parent);
+    final childKey = _dialogNameKey(widget.details.child);
+    LocationModel? child;
     for (final location in all) {
       if (!_matchesAreaLooseForDialog(resolvedArea, location.area)) continue;
       if (!_isCompositeChildTypeForDialog(location.type)) continue;
       final parentRefKey = _dialogNameKey(location.parent ?? '');
-      if (parentRefKey.isEmpty || !aliases.contains(parentRefKey)) continue;
-      children.add(location);
+      final parentIdKey = _dialogNameKey(location.parentId ?? '');
+      if (!aliases.contains(parentRefKey) && !aliases.contains(parentIdKey)) {
+        continue;
+      }
+      if (childKey.isNotEmpty &&
+          _dialogNameKey(location.locationName) != childKey) {
+        continue;
+      }
+      child = location;
+      break;
     }
 
-    children.sort((a, b) => a.locationName.compareTo(b.locationName));
-
-    return <LocationModel>[parentLocation, ...children];
-  }
-
-  ParkingGridOverlay _buildOverlay() {
-    final parentKey = _dialogNameKey(details.parent);
-    final childKey = parkingOverlayCanonicalChildKey(details.child);
-    if (parentKey.isEmpty || childKey.isEmpty) {
-      return const ParkingGridOverlay.empty();
+    GridRect? targetRect;
+    var exact = false;
+    final slotNo = _dialogParseFirstInt(widget.details.slot);
+    if (child != null && slotNo != null) {
+      for (final slot in child.childSlots) {
+        if (slot.no != slotNo) continue;
+        targetRect = GridRect(
+          r0: slot.r0,
+          c0: slot.c0,
+          r1: slot.r1,
+          c1: slot.c1,
+        ).normalized();
+        exact = true;
+        break;
+      }
+    }
+    if (child != null) {
+      targetRect ??= resolveParkingSpatialChildRect(child, grid);
     }
 
-    final slotNo = _dialogParseFirstInt(details.slot);
-    if (slotNo != null) {
-      return ParkingGridOverlay(
-        slotStatusByKey: <String, ParkingSlotStatus>{
-          '$parentKey|$childKey|$slotNo': ParkingSlotStatus.departureRequest,
-        },
-        groupStatusByKey: const <String, ParkingSlotStatus>{},
-      );
-    }
-
-    return ParkingGridOverlay(
-      slotStatusByKey: const <String, ParkingSlotStatus>{},
-      groupStatusByKey: <String, ParkingSlotStatus>{
-        '$parentKey|$childKey': ParkingSlotStatus.departureRequest,
+    TabletDebugTrace.record(
+      'TabletDepartureSuccess',
+      'parking_guidance_resolved',
+      <String, Object?>{
+        'parent': parent.locationName,
+        'child': child?.locationName ?? '',
+        'slot': slotNo,
+        'exact': exact,
+        'targetRect': targetRect?.toKey() ?? '',
+        'plateNumberVisible': false,
       },
     );
+
+    return _FocusedParkingMapResolution(
+      grid: grid,
+      targetRect: targetRect,
+      exact: exact,
+    );
   }
+}
+
+class _FocusedParkingMapResolution {
+  const _FocusedParkingMapResolution({
+    required this.grid,
+    required this.targetRect,
+    required this.exact,
+  });
+
+  final ParkingGridModel grid;
+  final GridRect? targetRect;
+  final bool exact;
 }
 
 String _dialogNormalizeName(String raw) =>

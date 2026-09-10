@@ -7,8 +7,11 @@ import '../../features/dev/application/area_state.dart';
 import '../../features/location/applications/location_state.dart';
 import '../../features/payment/applications/bill_state.dart';
 import '../../features/sector/applications/sector_state.dart';
+import '../../features/rule/applications/rule_state.dart';
 import '../../shared/plate/domain/repositories/plate_repository.dart';
+import '../../shared/operational_cache/application/operational_snapshot_revision_state.dart';
 import '../../shared/operational_cache/domain/repositories/operational_local_repository.dart';
+import '../../shared/area_remote_settings/application/local_area_capability_refresh.dart';
 import '../init/app_exit_service.dart';
 import 'developer_operation_status_dialog.dart';
 import 'ops_delayed_refresh_gate.dart';
@@ -30,7 +33,7 @@ class OperationalDataSyncWorkflow {
     return run(
       context: context,
       title: '운영 데이터 동기화',
-      message: '현재 지역의 주차 구역, 섹터, 정산 데이터를 로컬에 내려받기 전 요청을 준비하고 있습니다.',
+      message: '현재 지역의 주차 구역, 섹터, 정산, 업무 규칙 데이터를 로컬에 내려받기 전 요청을 준비하고 있습니다.',
       useCommonUi: useCommonUi,
     );
   }
@@ -51,12 +54,11 @@ class OperationalDataSyncWorkflow {
     try {
       final areaState = context.read<AreaState>();
       final area = areaState.currentArea.trim();
+      final division = areaState.currentDivision.trim();
       final locationState = context.read<LocationState>();
       final billState = context.read<BillState>();
       final sectorState = context.read<SectorState>();
-      final capabilities = areaState.capabilitiesOfCurrentArea;
-      final hasBillCapability = capabilities.contains(Capability.bill);
-      final hasSectorCapability = capabilities.contains(Capability.sector);
+      final ruleState = context.read<RuleState>();
       final plateRepository = context.read<PlateRepository>();
       final localRepository = context.read<OperationalLocalRepository>();
       final rootContext = Navigator.of(context, rootNavigator: true).context;
@@ -103,12 +105,38 @@ class OperationalDataSyncWorkflow {
           throw StateError('동기화 중 현재 지역이 변경되었습니다.');
         }
 
+        LocalAreaCapabilityRefreshResult? capabilityRefresh;
+        if (division.isNotEmpty) {
+          capabilityRefresh = await LocalAreaCapabilityRefresh.refresh(
+            areaState: areaState,
+            division: division,
+            area: area,
+            source: 'operational_data_sync',
+            onLog: trace.log,
+            progressStart: 0.13,
+            progressEnd: 0.17,
+          );
+        } else {
+          trace.log(
+            'local_capability_refresh_skipped source=operational_data_sync reason=division_empty area=$area remoteRead=0 remoteWrite=0',
+            progress: 0.17,
+          );
+        }
+        final capabilities = areaState.capabilitiesOfCurrentArea;
+        final hasBillCapability = capabilities.contains(Capability.bill);
+        final hasSectorCapability = capabilities.contains(Capability.sector);
+        final hasRuleCapability = capabilities.contains(Capability.rule);
+        trace.log(
+          '지역 capability 적용 상태를 확인했습니다: snapshotFound=${capabilityRefresh?.snapshotFound ?? false} applied=${capabilityRefresh?.applied ?? false} changed=${capabilityRefresh?.changed ?? false} capabilities=${LocalAreaCapabilityRefresh.keys(capabilities)} remoteRead=0 remoteWrite=0',
+          progress: 0.175,
+        );
+
         trace.log('SQLite에서 현재 지역 주차 구역을 삭제하고 있습니다: area=$area', progress: 0.18);
         await locationState.clearAreaCache(area);
         trace.log('주차 구역 삭제 검증 완료: area=$area remaining=${await localRepository.countLocations(area)}', progress: 0.20);
 
         trace.log(
-          '지역 capability를 확인했습니다: bill=$hasBillCapability sector=$hasSectorCapability',
+          '지역 capability를 확인했습니다: bill=$hasBillCapability sector=$hasSectorCapability rule=$hasRuleCapability',
           progress: 0.22,
         );
 
@@ -119,6 +147,14 @@ class OperationalDataSyncWorkflow {
         trace.log('SQLite에서 현재 지역 섹터 데이터를 삭제하고 있습니다: area=$area', progress: 0.34);
         await sectorState.clearAreaCache(area);
         trace.log('섹터 삭제 검증 완료: area=$area remaining=${await localRepository.countSectors(area)}', progress: 0.38);
+
+        if (division.isNotEmpty) {
+          trace.log('SQLite에서 현재 지역 업무 규칙을 삭제하고 있습니다: division=$division area=$area', progress: 0.40);
+          await ruleState.clearAreaCache(division: division, area: area);
+          trace.log('업무 규칙 삭제 검증 완료: division=$division area=$area remaining=${await localRepository.countRules(division: division, area: area)}', progress: 0.41);
+        } else {
+          trace.log('업무 규칙 SQLite 삭제를 건너뜁니다: reason=division_empty area=$area', progress: 0.41);
+        }
 
         trace.log('SQLite에서 현재 지역 운영 메타 정보를 초기화하고 있습니다: area=$area', progress: 0.42);
         await _clearOperationalMetadata(
@@ -166,6 +202,33 @@ class OperationalDataSyncWorkflow {
           );
         }
 
+        if (hasRuleCapability) {
+          if (division.isEmpty) {
+            throw StateError('업무 규칙을 내려받을 회사 정보가 없습니다.');
+          }
+          trace.log(
+            '최신 업무 규칙 데이터를 내려받아 로컬에 저장하고 있습니다.',
+            progress: 0.81,
+          );
+          final ruleFound = await ruleState.manualRuleRefreshStrictForArea(
+            division: division,
+            area: area,
+          );
+          final localRule = await localRepository.readRule(
+            division: division,
+            area: area,
+          );
+          trace.log(
+            '업무 규칙 SQLite 무결성 검증 완료: division=$division area=$area found=$ruleFound localCount=${await localRepository.countRules(division: division, area: area)} todos=${localRule?.todoItems.length ?? 0} contentLength=${localRule?.content.length ?? 0}',
+            progress: 0.83,
+          );
+        } else {
+          trace.log(
+            '현재 지역에 rule 기능이 없어 업무 규칙 로컬 다운로드를 건너뜁니다.',
+            progress: 0.83,
+          );
+        }
+
         if (areaState.currentArea.trim() != area) {
           throw StateError('동기화 중 현재 지역이 변경되었습니다.');
         }
@@ -189,8 +252,18 @@ class OperationalDataSyncWorkflow {
         );
         final finalMeta = await localRepository.readAreaMeta(area);
         trace.log('운영 메타 정보 저장 완료: $syncedAtIso', progress: 0.97);
-        trace.log('SQLite snapshot 검증 완료: area=$area locations=${finalMeta?.locationCount ?? 0} generalBills=${finalMeta?.generalBillCount ?? 0} regularBills=${finalMeta?.regularBillCount ?? 0} sectors=${finalMeta?.sectorCount ?? 0} monthly=${finalMeta?.hasMonthlyParking} syncedAt=${finalMeta?.syncedAt?.toIso8601String()}', progress: 0.99);
+        trace.log('SQLite snapshot 검증 완료: area=$area locations=${finalMeta?.locationCount ?? 0} generalBills=${finalMeta?.generalBillCount ?? 0} regularBills=${finalMeta?.regularBillCount ?? 0} sectors=${finalMeta?.sectorCount ?? 0} rules=${division.isEmpty ? 0 : await localRepository.countRules(division: division, area: area)} monthly=${finalMeta?.hasMonthlyParking} syncedAt=${finalMeta?.syncedAt?.toIso8601String()}', progress: 0.99);
         dataSaved = true;
+        final snapshotRevision = context
+            .read<OperationalSnapshotRevisionState>()
+            .markSynced(
+              area,
+              onLog: (message) => trace.log(message),
+            );
+        trace.log(
+          'operational_snapshot_revision_ready source=dashboard area=$area revision=$snapshotRevision firebaseAdditionalRead=0',
+          progress: 0.995,
+        );
 
         if (trace.developerMode) {
           await trace.succeed(
@@ -287,6 +360,15 @@ class OperationalDataSyncWorkflow {
             await sectorState.clearAreaCache(area);
           } catch (cleanupError) {
             trace.log('섹터 데이터 캐시 정리 실패: $cleanupError');
+          }
+
+          if (division.isNotEmpty) {
+            trace.log('실패 후 업무 규칙 캐시를 정리하고 있습니다.');
+            try {
+              await ruleState.clearAreaCache(division: division, area: area);
+            } catch (cleanupError) {
+              trace.log('업무 규칙 캐시 정리 실패: $cleanupError');
+            }
           }
 
           trace.log('실패 후 운영 메타 정보를 정리하고 있습니다.');

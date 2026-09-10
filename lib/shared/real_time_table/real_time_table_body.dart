@@ -102,10 +102,6 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
   UserState? _userState;
   RealTimeSortState? _sortState;
 
-  final Map<String, PlateModel> _plateDetailCache = <String, PlateModel>{};
-  final Map<String, Future<PlateModel?>> _plateDetailInflight =
-  <String, Future<PlateModel?>>{};
-
   bool _openingDetail = false;
   bool _sortOrderTraceBusy = false;
   bool _sortOldFirst = false;
@@ -407,29 +403,21 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
   Future<PlateModel?> _fetchPlateDetail(String plateId) async {
     final id = plateId.trim();
     if (id.isEmpty) return null;
-
-    final cached = _plateDetailCache[id];
-    if (cached != null) return cached;
-
-    final inflight = _plateDetailInflight[id];
-    if (inflight != null) return inflight;
-
     final repo = context.read<PlateRepository>();
+    return repo.getPlate(id);
+  }
 
-    final fut = () async {
-      try {
-        final plate = await repo.getPlate(id);
-        if (plate != null) {
-          _plateDetailCache[id] = plate;
-        }
-        return plate;
-      } finally {
-        _plateDetailInflight.remove(id);
-      }
-    }();
-
-    _plateDetailInflight[id] = fut;
-    return fut;
+  String _expectedPlateTypeNameForCollection(String collection) {
+    switch (collection.trim()) {
+      case 'parking_requests_view':
+        return 'parkingRequests';
+      case 'parking_completed_view':
+        return 'parkingCompleted';
+      case 'departure_requests_view':
+        return 'departureRequests';
+      default:
+        return '-';
+    }
   }
 
   Future<void> _openHybridDetailPopup(
@@ -461,9 +449,10 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
         showDialogImmediately: false,
       );
 
-      final cachedPlate = _plateDetailCache[plateId];
+      final expectedPlateType =
+          _expectedPlateTypeNameForCollection(widget.spec.collection);
       trace.log(
-        'source=$source, priority=${_sortState?.priorityMode.name ?? '-'}, tab=${widget.spec.id}, area=${_currentArea.trim()}, plateId=$plateId, plateNumber=${r.plateNumber}, location=${r.location}, cached=${cachedPlate != null}, autoTransitionPaused=true',
+        'source=$source, priority=${_sortState?.priorityMode.name ?? '-'}, tab=${widget.spec.id}, collection=${widget.spec.collection}, area=${_currentArea.trim()}, plateId=$plateId, plateNumber=${r.plateNumber}, location=${r.location}, detailCache=disabled, expectedPlateType=$expectedPlateType, autoTransitionPaused=true',
         progress: .28,
       );
 
@@ -474,12 +463,18 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
           'action': 'open_status_side_dock_immediately',
           'source': source,
           'tabId': widget.spec.id,
+          'collection': widget.spec.collection,
           'area': _currentArea,
           'plateId': plateId,
           'plateNumber': r.plateNumber,
           'location': r.location,
-          'plateDetailCached': cachedPlate != null,
+          'plateDetailCache': 'disabled',
+          'expectedPlateType': expectedPlateType,
         },
+      );
+
+      debugPrint(
+        '[RealTimeTable] event=status_dock_open source=$source screen=${widget.screen} tab=${widget.spec.id} collection=${widget.spec.collection} area=${_currentArea.trim()} plateId=$plateId plateNumber=${r.plateNumber} location=${r.location} detailCache=disabled expectedPlateType=$expectedPlateType',
       );
 
       if (!mounted || !dockContext.mounted) return;
@@ -492,8 +487,45 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
           area: _currentArea,
           location: r.location,
           statusTitle: '${widget.spec.label} 상태 처리',
-          cachedPlate: cachedPlate,
-          loadPlate: () => _fetchPlateDetail(plateId),
+          cachedPlate: null,
+          loadPlate: () async {
+            final startedAt = DateTime.now();
+            trace!.log(
+              'plateDetailLoad=start source=$source plateId=$plateId collection=${widget.spec.collection} expectedPlateType=$expectedPlateType cache=disabled repository=PlateRepository.getPlate',
+              progress: .42,
+            );
+            debugPrint(
+              '[RealTimeTable] event=plate_detail_load_start source=$source plateId=$plateId collection=${widget.spec.collection} expectedPlateType=$expectedPlateType cache=disabled repository=PlateRepository.getPlate',
+            );
+            try {
+              final plate = await _fetchPlateDetail(plateId);
+              final elapsedMs =
+                  DateTime.now().difference(startedAt).inMilliseconds;
+              final actualPlateType = plate?.typeEnum?.name ?? '-';
+              final mismatch = plate != null &&
+                  expectedPlateType != '-' &&
+                  actualPlateType != expectedPlateType;
+              trace.log(
+                'plateDetailLoad=success source=$source plateId=$plateId found=${plate != null} expectedPlateType=$expectedPlateType actualPlateType=$actualPlateType viewPlateTypeMismatch=$mismatch elapsedMs=$elapsedMs cache=disabled',
+                progress: .62,
+              );
+              debugPrint(
+                '[RealTimeTable] event=plate_detail_load_success source=$source plateId=$plateId found=${plate != null} collection=${widget.spec.collection} expectedPlateType=$expectedPlateType actualPlateType=$actualPlateType viewPlateTypeMismatch=$mismatch elapsedMs=$elapsedMs cache=disabled',
+              );
+              return plate;
+            } catch (error, stackTrace) {
+              final elapsedMs =
+                  DateTime.now().difference(startedAt).inMilliseconds;
+              trace.log(
+                'plateDetailLoad=failure source=$source plateId=$plateId expectedPlateType=$expectedPlateType elapsedMs=$elapsedMs cache=disabled error=$error',
+                progress: .62,
+              );
+              debugPrint(
+                '[RealTimeTable] event=plate_detail_load_failure source=$source plateId=$plateId collection=${widget.spec.collection} expectedPlateType=$expectedPlateType elapsedMs=$elapsedMs cache=disabled error=$error stackTrace=$stackTrace',
+              );
+              rethrow;
+            }
+          },
         ),
       );
       trace.log(

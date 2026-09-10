@@ -6,6 +6,7 @@ class AreaRecord {
   final String email;
   final String invite;
   final String communication;
+  final List<String> workRules;
   final CapSet capabilities;
   final List<String> modes;
   final bool isHeadquarter;
@@ -16,6 +17,7 @@ class AreaRecord {
     required this.email,
     this.invite = '',
     this.communication = '',
+    this.workRules = const <String>[],
     required this.capabilities,
     this.modes = const <String>[],
     this.isHeadquarter = false,

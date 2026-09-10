@@ -1,47 +1,33 @@
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import 'tablet_debug_trace.dart';
 
 class TabletParkingCompletedViewToggleState extends ChangeNotifier {
-  static const String prefsKey =
-      'tablet_include_parking_completed_view_subscription';
-
   bool _includeParkingCompletedView = false;
-  bool _isReady = false;
-
-  TabletParkingCompletedViewToggleState() {
-    _restore();
-  }
 
   bool get includeParkingCompletedView => _includeParkingCompletedView;
-  bool get isReady => _isReady;
+  bool get isReady => true;
 
-  Future<void> _restore() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      _includeParkingCompletedView = prefs.getBool(prefsKey) ?? false;
-    } catch (e) {
-      debugPrint('TabletParkingCompletedViewToggleState restore failed: $e');
-      _includeParkingCompletedView = false;
-    } finally {
-      _isReady = true;
-      notifyListeners();
-    }
-  }
-
-  Future<void> setIncludeParkingCompletedView(bool next) async {
-    if (_includeParkingCompletedView == next && _isReady) return;
+  void setIncludeParkingCompletedView(bool next) {
+    if (_includeParkingCompletedView == next) return;
+    final previous = _includeParkingCompletedView;
     _includeParkingCompletedView = next;
+    TabletDebugTrace.record(
+      'TabletParkingCompletedView',
+      'changed',
+      <String, Object?>{
+        'from': previous,
+        'to': next,
+      },
+    );
     notifyListeners();
-
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(prefsKey, next);
-    } catch (e) {
-      debugPrint('TabletParkingCompletedViewToggleState save failed: $e');
-    }
   }
 
-  Future<void> toggle() async {
-    await setIncludeParkingCompletedView(!_includeParkingCompletedView);
+  void toggle() {
+    setIncludeParkingCompletedView(!_includeParkingCompletedView);
+  }
+
+  void reset() {
+    setIncludeParkingCompletedView(false);
   }
 }

@@ -390,6 +390,46 @@ class ModeLauncherController extends ChangeNotifier {
     _startupSetupCoordinator.setPolicyAgreed(value);
   }
 
+  Future<bool> registerStartupPermissionTitleTap(
+    BuildContext context, {
+    required bool reduceMotion,
+  }) async {
+    if (_disposed || !startupSetupActive) return false;
+    final spec = _startupSetupCoordinator.currentPermissionSpec;
+    final step = _startupSetupCoordinator.currentPermissionStep;
+    if (spec == null || step == null) return false;
+    final actualGranted = _startupSetupCoordinator.currentPermissionGranted;
+    final skipped =
+        await _startupSetupCoordinator.registerPermissionTitleTap();
+    if (!skipped || _disposed || !context.mounted) return skipped;
+    _append(TerminalLineType.system, '[ SKIP ] ${spec.title}');
+    LauncherDiagnostics.record(
+      'startup_permission_step_skipped',
+      scope: 'launcher_startup_setup',
+      meta: <String, Object?>{
+        'skippedStep': step,
+        'skippedPermission': spec.keyName,
+        'actualGranted': actualGranted,
+        'skipByFiveTap': true,
+        ..._startupSetupCoordinator.debugMeta(),
+      },
+    );
+    await LauncherDiagnostics.showStatus(
+      context,
+      title: 'Launcher Startup Status',
+      description: developerStatusDescription(),
+      scope: 'launcher_startup_setup',
+    );
+    if (_disposed || !context.mounted) return true;
+    if (_startupSetupCoordinator.complete) {
+      await _bootstrapAuthenticationAfterStartupSetup(
+        context,
+        reduceMotion: reduceMotion,
+      );
+    }
+    return true;
+  }
+
   Future<bool> registerStartupGoogleTitleTap(
     BuildContext context, {
     required bool reduceMotion,
@@ -1026,6 +1066,8 @@ class ModeLauncherController extends ChangeNotifier {
       'External settings refresh: ${_startupSetupCoordinator.externalSettingsRefreshInProgress}',
       'External settings step: ${_startupSetupCoordinator.externalSettingsStep ?? '-'}',
       'Startup setup permission: ${_startupSetupCoordinator.currentPermissionSpec?.keyName ?? '-'}',
+      'Permission skip taps: ${_startupSetupCoordinator.permissionSkipTapCount}',
+      'Permission skip step: ${_startupSetupCoordinator.permissionSkipTapStep ?? '-'}',
       'Startup setup policy: ${_startupSetupCoordinator.currentPolicySpec?.kind.name ?? '-'}',
       'Startup setup policy progress: ${_startupSetupCoordinator.policyScrollProgress.toStringAsFixed(3)}',
       'Startup setup Google connected: ${_startupSetupCoordinator.googleConnected}',
