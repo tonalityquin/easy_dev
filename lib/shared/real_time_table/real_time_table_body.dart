@@ -11,6 +11,7 @@ import '../../features/location/applications/location_state.dart';
 import '../plate/application/common/view_doc_rows_store.dart';
 import '../plate/domain/models/plate_model.dart';
 import '../plate/domain/repositories/plate_repository.dart';
+import 'real_time_elapsed_time.dart';
 import 'real_time_sort_state.dart';
 import 'real_time_tab_controller.dart';
 import 'real_time_table_components.dart';
@@ -318,63 +319,22 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
 
   void _scheduleElapsedTicker() {
     _elapsedTicker?.cancel();
-    if (!mounted || _rows.isEmpty) {
-      return;
-    }
-
+    if (!mounted || _rows.isEmpty) return;
     _elapsedNow = DateTime.now();
-    final hasSecondPrecision = _rows.any((row) {
-      final createdAt = row.createdAt;
-      if (createdAt == null) return false;
-      final age = _elapsedNow.difference(createdAt);
-      return age.isNegative || age.inSeconds < 60;
-    });
-    final hasMinutePrecision = _rows.any((row) {
-      final createdAt = row.createdAt;
-      if (createdAt == null) return false;
-      final age = _elapsedNow.difference(createdAt);
-      return !age.isNegative && age.inHours < 24;
-    });
-
-    Duration delay;
-    if (hasSecondPrecision) {
-      delay = const Duration(seconds: 1);
-    } else if (hasMinutePrecision) {
-      final seconds = 60 - _elapsedNow.second;
-      delay = Duration(seconds: seconds == 0 ? 60 : seconds);
-    } else {
-      final minutes = 59 - _elapsedNow.minute;
-      final seconds = 60 - _elapsedNow.second;
-      delay = Duration(minutes: minutes, seconds: seconds);
-      if (delay <= Duration.zero) {
-        delay = const Duration(hours: 1);
-      }
-    }
-
+    final delay = nextRealTimeElapsedTick(
+      values: _rows.map((row) => row.createdAt),
+      now: _elapsedNow,
+    );
+    if (delay == null) return;
     _elapsedTicker = Timer(delay, () {
       if (!mounted) return;
-      setState(() {
-        _elapsedNow = DateTime.now();
-      });
+      setState(() => _elapsedNow = DateTime.now());
       _scheduleElapsedTicker();
     });
   }
 
   String _formatElapsed(DateTime? createdAt) {
-    if (createdAt == null) return '—';
-    final elapsed = _elapsedNow.difference(createdAt);
-    if (elapsed.isNegative || elapsed.inSeconds < 10) return '방금';
-    if (elapsed.inSeconds < 60) return '${elapsed.inSeconds}초';
-    if (elapsed.inMinutes < 60) return '${elapsed.inMinutes}분';
-    if (elapsed.inHours < 24) {
-      final minutes = elapsed.inMinutes.remainder(60);
-      if (minutes == 0) return '${elapsed.inHours}시간';
-      return '${elapsed.inHours}시간 ${minutes}분';
-    }
-    if (elapsed.inDays >= 100) return '99일+';
-    final hours = elapsed.inHours.remainder(24);
-    if (hours == 0) return '${elapsed.inDays}일';
-    return '${elapsed.inDays}일 ${hours}시간';
+    return formatRealTimeElapsed(createdAt, now: _elapsedNow);
   }
 
   String _tableLocationLabel(String rawLocation) {

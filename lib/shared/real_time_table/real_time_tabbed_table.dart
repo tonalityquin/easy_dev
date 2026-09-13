@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui' show FontFeature;
 
@@ -22,18 +23,24 @@ import '../../features/location/applications/parking_parent_order_state.dart';
 import '../../features/location/domain/models/grid_rect.dart';
 import '../../features/location/domain/models/location_model.dart';
 import '../../features/location/domain/models/parking_grid_model.dart';
+import '../../features/selector/application/dev_auth.dart';
 import '../../features/dev/application/area_state.dart';
 import '../page/application/common/type_auto_transition_guard.dart';
 import '../page/application/common/type_page_quick_action_scope.dart';
 import '../page/application/common/type_view_mode_state.dart';
 import '../plate/application/common/view_doc_rows_store.dart';
+import '../plate/domain/models/plate_model.dart';
+import '../plate/domain/repositories/plate_repository.dart';
 import 'real_time_tab_controller.dart';
 import 'real_time_table_body.dart';
 import 'real_time_table_components.dart';
+import 'real_time_table_row_vm.dart';
 import 'real_time_table_spec.dart';
 import 'real_time_sort_state.dart';
 import 'real_time_source_rect_modal.dart';
+import 'real_time_status_action_scope.dart';
 import 'real_time_parent_map_thumbnail.dart';
+import 'real_time_parking_request_shelf.dart';
 import 'real_time_table_zone.dart';
 
 class RealTimeViewModeAutoSpec {
@@ -42,6 +49,30 @@ class RealTimeViewModeAutoSpec {
   const RealTimeViewModeAutoSpec({
     this.idleToStatusAfter = const Duration(seconds: 5),
   });
+}
+
+class RealTimeTabbedTableBackController {
+  Object? _owner;
+  Future<bool> Function()? _handler;
+
+  bool get attached => _handler != null;
+
+  Future<bool> consumeBack() async {
+    final handler = _handler;
+    if (handler == null) return false;
+    return handler();
+  }
+
+  void _attach(Object owner, Future<bool> Function() handler) {
+    _owner = owner;
+    _handler = handler;
+  }
+
+  void _detach(Object owner) {
+    if (!identical(_owner, owner)) return;
+    _owner = null;
+    _handler = null;
+  }
 }
 
 class RealTimeTabbedTable extends StatefulWidget {
@@ -54,11 +85,12 @@ class RealTimeTabbedTable extends StatefulWidget {
       BuildContext context,
       RealTimeTabSpec spec,
       RealTimeTabController controller,
-      )? bodyBuilder;
+      ) statusBodyBuilder;
 
   final RealTimeViewModeAutoSpec? viewModeAuto;
   final bool useListContextSurface;
   final bool showColoredSwipeChevrons;
+  final RealTimeTabbedTableBackController? backController;
 
   const RealTimeTabbedTable({
     super.key,
@@ -67,10 +99,11 @@ class RealTimeTabbedTable extends StatefulWidget {
     required this.initialIndex,
     required this.screen,
     required this.description,
-    this.bodyBuilder,
+    required this.statusBodyBuilder,
     this.viewModeAuto,
     this.useListContextSurface = false,
     this.showColoredSwipeChevrons = false,
+    this.backController,
   }) : assert(tabs.length > 0);
 
   @override
@@ -96,14 +129,17 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
   static const double _tableSwipeHintMaxScale = 1.06;
   static const Duration _parentSelectorReopenCooldown =
       Duration(milliseconds: 180);
+  static const String _requestTrayPauseReason = '요청 HUD 상세 트레이';
+  static const String _requestDockPauseReason = '요청 HUD 상태 처리 사이드 도크';
+  static const bool _statusToTableVerticalSwipeLocked = true;
 
   late int _currentTableIndex;
   late final AnimationController _hudPulseController;
   late final AnimationController _tableSwipeController;
   late final AnimationController _statusVisualPulseController;
+  late final AnimationController _requestTrayVisibilityController;
   late final AnimationController _modeReelController;
-  late final AnimationController _modeReelHintController;
-  final GlobalKey _modeReelSourceKey = GlobalKey(debugLabel: 'mode-reel-source');
+  late final AnimationController _modeContentRevealController;
 
   late final List<RealTimeTabController> _controllers;
 
@@ -120,6 +156,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
   double _tableSwipeHintSettleStartIntensity = 0;
   double _tableSwipeHintSettleStartControllerValue = 0;
   String? _lastTableContextBarLayoutSignature;
+  String? _lastBottomLayoutSignature;
 
   double _modeReelDragDistance = 0;
   bool _modeReelDragActive = false;
@@ -137,13 +174,9 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
   double _contentGestureVelocityY = 0;
   double _contentGestureViewportWidth = 1;
   _ContentGestureAxis _contentGestureAxis = _ContentGestureAxis.undecided;
-  bool _modeReelSelectorPressActive = false;
   bool _parentSelectorOpen = false;
-  RealTimeSourceRectModalCollapseInfo? _lastParentSelectorCollapseInfo;
   String _lastParentSelectorCloseSource = 'route';
   DateTime? _parentSelectorReopenBlockedUntil;
-  int _lastParentSelectorDuplicateCloseCount = 0;
-  int _lastParentSelectorNavigatorPopCount = 0;
 
   bool _gatesLoaded = false;
   late List<bool> _enabled;
@@ -162,6 +195,26 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
   bool _parkingCapabilitySyncScheduled = false;
   ParkingViewCapability _parkingViewCapability =
       ParkingViewCapability.loading;
+  ParkingLocationProfile _parkingLocationProfile =
+      ParkingLocationProfile.loading;
+  RealTimeRequestQueueType? _activeRequestTray;
+  int _requestTraySwitchDirection = 0;
+  bool _requestTrayAutoPauseActive = false;
+  bool _requestTrayCleanupScheduled = false;
+  bool _requestTrayClosing = false;
+  bool _openingRequestDetail = false;
+  bool _requestHudDebugDialogShowing = false;
+  bool _bottomLayoutDebugDialogShowing = false;
+  final List<String> _requestHudDebugLines = <String>[];
+  final Map<RealTimeRequestQueueType, String> _lastRequestHudSignatures =
+      <RealTimeRequestQueueType, String>{};
+  String? _lastRenderSeparationSignature;
+  final Map<RealTimeRequestQueueType, RealTimeTraySortOrder> _requestTraySort =
+      <RealTimeRequestQueueType, RealTimeTraySortOrder>{
+    RealTimeRequestQueueType.parking: RealTimeTraySortOrder.newestFirst,
+    RealTimeRequestQueueType.completed: RealTimeTraySortOrder.newestFirst,
+    RealTimeRequestQueueType.departure: RealTimeTraySortOrder.newestFirst,
+  };
 
   @override
   void initState() {
@@ -194,19 +247,35 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
       value: 0,
     )..addStatusListener(_onStatusVisualPulseStatus);
 
+    _requestTrayVisibilityController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 230),
+      reverseDuration: const Duration(milliseconds: 190),
+      value: 0,
+    );
+
     _modeReelController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 220),
       value: 0,
     );
 
-    _modeReelHintController = AnimationController(
+    _modeContentRevealController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1800),
-      value: 0,
+      duration: const Duration(milliseconds: 220),
+      value: 1,
     );
 
     _loadGates();
+    widget.backController?._attach(this, _handleBackRequest);
+  }
+
+  @override
+  void didUpdateWidget(covariant RealTimeTabbedTable oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.backController == widget.backController) return;
+    oldWidget.backController?._detach(this);
+    widget.backController?._attach(this, _handleBackRequest);
   }
 
   @override
@@ -215,10 +284,6 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     _attachAutoGuardListener();
     _attachLocationStateListener();
     _syncSortContextAfterBuild();
-    if (widget.viewModeAuto == null) {
-      _detachViewModeListener();
-      return;
-    }
     TypeViewModeState? next;
     try {
       next = context.read<TypeViewModeState>();
@@ -229,6 +294,11 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
       _detachViewModeListener();
       _viewMode = next;
       _viewMode?.addListener(_onViewModeChanged);
+    }
+    if (widget.viewModeAuto == null) {
+      _idleTimer?.cancel();
+      _idleTimer = null;
+      return;
     }
     _scheduleIdleSyncAfterBuild();
   }
@@ -258,105 +328,467 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     _syncParkingCapabilityFromLocationState(rebuild: true);
   }
 
-  void _syncParkingCapabilityFromLocationState({required bool rebuild}) {
-    final nextCapability =
-        _locationState?.parkingViewCapability ??
-            ParkingViewCapability.tableAndStatus;
-    if (_parkingCapabilityInitialized &&
-        _parkingViewCapability == nextCapability) {
+  void _prepareLocationProfileReveal(
+    ParkingLocationProfile previousProfile,
+    ParkingLocationProfile nextProfile,
+  ) {
+    if (previousProfile == nextProfile ||
+        nextProfile == ParkingLocationProfile.loading ||
+        nextProfile == ParkingLocationProfile.empty) {
       return;
     }
-    final previous = _parkingViewCapability;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    _modeContentRevealController.stop();
+    _modeContentRevealController.value = reduceMotion ? 1 : 0;
+  }
+
+  void _syncParkingCapabilityFromLocationState({required bool rebuild}) {
+    final state = _locationState;
+    final nextCapability =
+        state?.parkingViewCapability ?? ParkingViewCapability.tableOnly;
+    final nextProfile =
+        state?.parkingLocationProfile ?? ParkingLocationProfile.textOnly;
+    if (_parkingCapabilityInitialized &&
+        _parkingViewCapability == nextCapability &&
+        _parkingLocationProfile == nextProfile) {
+      return;
+    }
+    final previousCapability = _parkingViewCapability;
+    final previousProfile = _parkingLocationProfile;
+    _prepareLocationProfileReveal(previousProfile, nextProfile);
     if (rebuild && mounted) {
       setState(() {
         _parkingViewCapability = nextCapability;
+        _parkingLocationProfile = nextProfile;
         _parkingCapabilityInitialized = true;
       });
     } else {
       _parkingViewCapability = nextCapability;
+      _parkingLocationProfile = nextProfile;
       _parkingCapabilityInitialized = true;
     }
     _scheduleParkingCapabilitySync(
-      previous: previous,
-      next: nextCapability,
+      previousCapability: previousCapability,
+      previousProfile: previousProfile,
     );
   }
 
-  Future<void> _runModeReelHintAnimation() async {
-    if (!mounted || !_statusViewSupported) return;
-    final reduceMotion =
-        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    if (reduceMotion) {
-      _modeReelHintController.value = 0;
-      return;
-    }
-    _modeReelHintController.stop();
-    for (var index = 0; index < 2; index++) {
-      if (!mounted || !_statusViewSupported) break;
-      await _modeReelHintController.forward(from: 0);
-      if (index == 0 && mounted && _statusViewSupported) {
-        await Future<void>.delayed(const Duration(milliseconds: 120));
-      }
-    }
-    if (mounted) {
-      _modeReelHintController.value = 0;
+  TypeViewMode? _targetModeForLocationProfile(
+    ParkingLocationProfile profile,
+  ) {
+    switch (profile) {
+      case ParkingLocationProfile.spatialOnly:
+        return TypeViewMode.status;
+      case ParkingLocationProfile.textOnly:
+      case ParkingLocationProfile.mixed:
+      case ParkingLocationProfile.invalid:
+        return TypeViewMode.table;
+      case ParkingLocationProfile.loading:
+      case ParkingLocationProfile.empty:
+        return null;
     }
   }
 
+  String _locationProfileResolutionReason(
+    ParkingLocationProfile profile,
+  ) {
+    return switch (profile) {
+      ParkingLocationProfile.loading => 'location_snapshot_loading',
+      ParkingLocationProfile.empty => 'location_snapshot_empty',
+      ParkingLocationProfile.textOnly => 'text_locations_table_only',
+      ParkingLocationProfile.spatialOnly => 'spatial_locations_status_only',
+      ParkingLocationProfile.mixed => 'mixed_location_types_table_fallback',
+      ParkingLocationProfile.invalid => 'invalid_location_types_table_fallback',
+    };
+  }
+
   void _scheduleParkingCapabilitySync({
-    required ParkingViewCapability previous,
-    required ParkingViewCapability next,
+    required ParkingViewCapability previousCapability,
+    required ParkingLocationProfile previousProfile,
   }) {
     if (_parkingCapabilitySyncScheduled) return;
     _parkingCapabilitySyncScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _parkingCapabilitySyncScheduled = false;
       if (!mounted) return;
-      final statusEnabled =
-          _parkingViewCapability == ParkingViewCapability.tableAndStatus;
-      _viewMode?.setStatusEnabled(statusEnabled);
-      final reduceMotion =
-          MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-      if (statusEnabled && !reduceMotion) {
-        unawaited(_runModeReelHintAnimation());
-      } else {
-        _modeReelHintController.stop();
-        _modeReelHintController.value = 0;
+      final profile = _parkingLocationProfile;
+      final statusEnabled = profile == ParkingLocationProfile.spatialOnly;
+      final targetMode = _targetModeForLocationProfile(profile);
+      final vm = _viewMode;
+      final beforeMode = vm?.mode;
+      vm?.setStatusEnabled(statusEnabled);
+      if (targetMode != null) {
+        vm?.setMode(targetMode);
       }
       var locationCount = 0;
       var hierarchicalCount = 0;
       var singleCount = 0;
+      var spatialCount = 0;
+      var textCount = 0;
+      var unknownCount = 0;
       try {
         final state = context.read<LocationState>();
         locationCount = state.locations.length;
         hierarchicalCount = state.hierarchicalLocationCount;
         singleCount = state.singleLocationCount;
+        spatialCount = state.spatialLocationCount;
+        textCount = state.textLocationCount;
+        unknownCount = state.unknownLocationCount;
       } catch (_) {}
-      _debugLog('parking_view_capability', <String, Object?>{
-        'previous': previous.name,
-        'next': _parkingViewCapability.name,
+      final resolvedMode = targetMode?.name ??
+          (profile == ParkingLocationProfile.empty ? 'empty' : 'pending');
+      final reason = _locationProfileResolutionReason(profile);
+      final details = <String, Object?>{
+        'area': _readCurrentArea(),
+        'previousCapability': previousCapability.name,
+        'capability': _parkingViewCapability.name,
+        'previousProfile': previousProfile.name,
+        'profile': profile.name,
         'locationCount': locationCount,
         'hierarchicalCount': hierarchicalCount,
         'singleCount': singleCount,
+        'spatialCount': spatialCount,
+        'textCount': textCount,
+        'unknownCount': unknownCount,
         'statusEnabled': statusEnabled,
-        'autoTransition': statusEnabled,
-        'modeControl': statusEnabled
-            ? 'vertical_swipe_reel+content_vertical_swipe'
-            : _parkingViewCapability == ParkingViewCapability.tableOnly
-                ? 'static_table_indicator'
-                : _parkingViewCapability == ParkingViewCapability.empty
-                    ? 'download_surface'
-                    : 'loading_surface',
+        'resolvedMode': resolvedMode,
+        'reason': reason,
+        'mixedFallback': profile == ParkingLocationProfile.mixed,
+        'invalidFallback': profile == ParkingLocationProfile.invalid,
+        'statusCoverageComplete': profile == ParkingLocationProfile.spatialOnly,
+        'decisionSource': 'location_state_snapshot',
         'firebaseAdditionalRead': 0,
-      });
+      };
+      _debugLog('location_presentation_resolved', details);
+      _emitRequestHudDebug('location_presentation_resolved', details);
+      if (targetMode != null && beforeMode == targetMode &&
+          previousProfile != profile) {
+        _triggerModeContentReveal();
+      }
       _syncIdleWithMode();
       if (mounted) setState(() {});
     });
   }
 
   bool get _statusViewSupported =>
-      _parkingViewCapability == ParkingViewCapability.tableAndStatus &&
+      _parkingLocationProfile == ParkingLocationProfile.spatialOnly &&
+      _parkingViewCapability == ParkingViewCapability.statusOnly &&
       (_viewMode?.statusEnabled ?? true);
+
+  bool get _statusModeActive =>
+      _statusViewSupported && _viewMode?.mode == TypeViewMode.status;
+
+  bool get _locationPresentationReady =>
+      _parkingLocationProfile != ParkingLocationProfile.loading &&
+      _parkingLocationProfile != ParkingLocationProfile.empty;
+
+  bool get _renderStatusContent =>
+      _locationPresentationReady &&
+      _parkingLocationProfile == ParkingLocationProfile.spatialOnly &&
+      _statusModeActive;
+
+  bool get _renderTableContent =>
+      _locationPresentationReady &&
+      _parkingLocationProfile != ParkingLocationProfile.spatialOnly &&
+      _viewMode?.mode == TypeViewMode.table;
+
+  String get _renderedContentMode {
+    if (_renderStatusContent) return 'status';
+    if (_renderTableContent) return 'table';
+    if (_parkingLocationProfile == ParkingLocationProfile.empty) return 'empty';
+    return 'pending';
+  }
+
+  Color _shellBackgroundColor(
+    ColorScheme cs,
+    CommonUiTokens tokens,
+  ) {
+    return _parkingLocationProfile == ParkingLocationProfile.spatialOnly
+        ? tokens.canvas
+        : cs.surface;
+  }
+
+  String get _shellBackgroundRole =>
+      _parkingLocationProfile == ParkingLocationProfile.spatialOnly
+          ? 'common_ui_canvas'
+          : 'theme_surface';
+
+  ({
+    int locationCount,
+    int spatialCount,
+    int textCount,
+    int unknownCount,
+  }) _locationPresentationCounts() {
+    final state = _locationState;
+    if (state == null) {
+      return (
+        locationCount: 0,
+        spatialCount: 0,
+        textCount: 0,
+        unknownCount: 0,
+      );
+    }
+    return (
+      locationCount: state.locations.length,
+      spatialCount: state.spatialLocationCount,
+      textCount: state.textLocationCount,
+      unknownCount: state.unknownLocationCount,
+    );
+  }
+
+  double _systemBottomSafeInset(BuildContext context) {
+    final media = MediaQuery.maybeOf(context);
+    if (media == null) return 8;
+    return math.max(
+      math.max(
+        math.max(media.viewPadding.bottom, media.padding.bottom),
+        media.systemGestureInsets.bottom,
+      ),
+      8.0,
+    );
+  }
+
+  double get _modeControlContentExtent {
+    return switch (_parkingViewCapability) {
+      ParkingViewCapability.loading => 79,
+      ParkingViewCapability.empty => 87,
+      ParkingViewCapability.tableOnly => 0,
+      ParkingViewCapability.statusOnly => 0,
+    };
+  }
+
+  _BottomLayoutMetrics _bottomLayoutMetrics(BuildContext context) {
+    final hasQuickActions = TypePageQuickActionScope.maybeOf(context) != null;
+    return _BottomLayoutMetrics(
+      systemBottomInset: _systemBottomSafeInset(context),
+      quickActionExtent:
+          hasQuickActions ? CommonQuickActionSurface.height : 0,
+      modeControlExtent: _modeControlContentExtent,
+    );
+  }
+
+  void _scheduleRenderSeparationTrace() {
+    final tableMounted = _renderTableContent;
+    final statusMounted = _renderStatusContent;
+    final contentOverlap = tableMounted && statusMounted;
+    final renderedMode = _renderedContentMode;
+    final signature = <Object?>[
+      _viewMode?.mode.name ?? 'unknown',
+      renderedMode,
+      tableMounted,
+      statusMounted,
+      contentOverlap,
+      _parkingViewCapability.name,
+      _parkingLocationProfile.name,
+    ].join('|');
+    if (_lastRenderSeparationSignature == signature) return;
+    _lastRenderSeparationSignature = signature;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final counts = _locationPresentationCounts();
+      final details = <String, Object?>{
+        'screen': widget.screen,
+        'viewMode': _viewMode?.mode.name ?? 'unknown',
+        'renderedMode': renderedMode,
+        'tableMounted': tableMounted,
+        'statusMounted': statusMounted,
+        'contentOverlap': contentOverlap,
+        'previousChildRetention': false,
+        'contentTransition': 'atomic_swap+incoming_reveal',
+        'statusBodyBuilderRegistered': true,
+        'capability': _parkingViewCapability.name,
+        'locationProfile': _parkingLocationProfile.name,
+        'profileDecisionReason':
+            _locationProfileResolutionReason(_parkingLocationProfile),
+        'locationCount': counts.locationCount,
+        'spatialCount': counts.spatialCount,
+        'textCount': counts.textCount,
+        'unknownCount': counts.unknownCount,
+      };
+      _debugLog('mode_content_render_resolved', details);
+      _emitRequestHudDebug('mode_content_render_resolved', details);
+    });
+  }
+
+  void _scheduleBottomLayoutTrace(_BottomLayoutMetrics metrics) {
+    final signature = [
+      _viewMode?.mode.name ?? 'unknown',
+      _parkingViewCapability.name,
+      _parkingLocationProfile.name,
+      metrics.systemBottomInset.toStringAsFixed(2),
+      metrics.quickActionExtent.toStringAsFixed(2),
+      metrics.modeControlExtent.toStringAsFixed(2),
+      metrics.bottomActionStackExtent.toStringAsFixed(2),
+    ].join('|');
+    if (_lastBottomLayoutSignature == signature) return;
+    _lastBottomLayoutSignature = signature;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final counts = _locationPresentationCounts();
+      final details = <String, Object?>{
+        'screen': widget.screen,
+        'mode': _viewMode?.mode.name ?? 'unknown',
+        'capability': _parkingViewCapability.name,
+        'locationProfile': _parkingLocationProfile.name,
+        'resolvedMode': _renderedContentMode,
+        'locationCount': counts.locationCount,
+        'spatialCount': counts.spatialCount,
+        'textCount': counts.textCount,
+        'unknownCount': counts.unknownCount,
+        'systemBottomInset': metrics.systemBottomInset.toStringAsFixed(2),
+        'quickActionHeight': metrics.quickActionExtent.toStringAsFixed(2),
+        'modeControlExtent': metrics.modeControlExtent.toStringAsFixed(2),
+        'bottomActionStackExtent':
+            metrics.bottomActionStackExtent.toStringAsFixed(2),
+        'hudBottom': metrics.hudBottom.toStringAsFixed(2),
+        'trayBottom': metrics.trayBottom.toStringAsFixed(2),
+        'reelSurfaceVisible': false,
+        'tableOnlySurfaceVisible': false,
+      };
+      _debugLog('bottom_layout_resolved', details);
+      _emitRequestHudDebug('bottom_layout_resolved', details);
+    });
+  }
+
+  String _bottomLayoutDebugPrintCode(_BottomLayoutMetrics metrics) {
+    final counts = _locationPresentationCounts();
+    final line = StringBuffer()
+      ..write('[RealTimeBottomLayout] ')
+      ..write(DateTime.now().toIso8601String())
+      ..write(' mode=')
+      ..write(_viewMode?.mode.name ?? 'unknown')
+      ..write(' capability=')
+      ..write(_parkingViewCapability.name)
+      ..write(' systemBottomInset=')
+      ..write(metrics.systemBottomInset.toStringAsFixed(2))
+      ..write(' quickActionHeight=')
+      ..write(metrics.quickActionExtent.toStringAsFixed(2))
+      ..write(' modeControlExtent=')
+      ..write(metrics.modeControlExtent.toStringAsFixed(2))
+      ..write(' bottomActionStackExtent=')
+      ..write(metrics.bottomActionStackExtent.toStringAsFixed(2))
+      ..write(' hudBottom=')
+      ..write(metrics.hudBottom.toStringAsFixed(2))
+      ..write(' trayBottom=')
+      ..write(metrics.trayBottom.toStringAsFixed(2))
+      ..write(' reelSurfaceVisible=false')
+      ..write(' tableOnlySurfaceVisible=false')
+      ..write(' locationProfile=')
+      ..write(_parkingLocationProfile.name)
+      ..write(' profileDecisionReason=')
+      ..write(_locationProfileResolutionReason(_parkingLocationProfile))
+      ..write(' locationCount=')
+      ..write(counts.locationCount)
+      ..write(' spatialCount=')
+      ..write(counts.spatialCount)
+      ..write(' textCount=')
+      ..write(counts.textCount)
+      ..write(' unknownCount=')
+      ..write(counts.unknownCount)
+      ..write(' renderedMode=')
+      ..write(_renderedContentMode)
+      ..write(' tableMounted=')
+      ..write(_renderTableContent)
+      ..write(' statusMounted=')
+      ..write(_renderStatusContent)
+      ..write(' contentOverlap=false')
+      ..write(' previousChildRetention=false')
+      ..write(' contentTransition=atomic_swap+incoming_reveal')
+      ..write(' requestTrayActive=')
+      ..write(_activeRequestTray?.sourceKey ?? 'none')
+      ..write(' requestTrayClosing=')
+      ..write(_requestTrayClosing)
+      ..write(' backControllerAttached=')
+      ..write(widget.backController?.attached ?? false)
+      ..write(' backPriority=request_tray_then_page');
+    return 'debugPrint(${jsonEncode(line.toString())});';
+  }
+
+  Future<void> _showBottomLayoutDebugDialog() async {
+    if (!mounted || _bottomLayoutDebugDialogShowing) return;
+    final developerMode = await DevAuth.isDevModeEnabled();
+    if (!developerMode || !mounted || _bottomLayoutDebugDialogShowing) return;
+    final metrics = _bottomLayoutMetrics(context);
+    final counts = _locationPresentationCounts();
+    final line = _bottomLayoutDebugPrintCode(metrics);
+    final description = <String>[
+      'mode=${_viewMode?.mode.name ?? 'unknown'}',
+      'capability=${_parkingViewCapability.name}',
+      'locationProfile=${_parkingLocationProfile.name}',
+      'profileDecisionReason=${_locationProfileResolutionReason(_parkingLocationProfile)}',
+      'locationCount=${counts.locationCount}',
+      'spatialCount=${counts.spatialCount}',
+      'textCount=${counts.textCount}',
+      'unknownCount=${counts.unknownCount}',
+      'resolvedMode=$_renderedContentMode',
+      'systemBottomInset=${metrics.systemBottomInset.toStringAsFixed(2)}',
+      'quickActionHeight=${metrics.quickActionExtent.toStringAsFixed(2)}',
+      'modeControlExtent=${metrics.modeControlExtent.toStringAsFixed(2)}',
+      'bottomActionStackExtent=${metrics.bottomActionStackExtent.toStringAsFixed(2)}',
+      'hudBottom=${metrics.hudBottom.toStringAsFixed(2)}',
+      'trayBottom=${metrics.trayBottom.toStringAsFixed(2)}',
+      'reelSurfaceVisible=false',
+      'tableOnlySurfaceVisible=false',
+      'renderedMode=$_renderedContentMode',
+      'tableMounted=$_renderTableContent',
+      'statusMounted=$_renderStatusContent',
+      'contentOverlap=false',
+      'previousChildRetention=false',
+      'contentTransition=atomic_swap+incoming_reveal',
+      'requestTrayActive=${_activeRequestTray?.sourceKey ?? 'none'}',
+      'requestTrayClosing=$_requestTrayClosing',
+      'backControllerAttached=${widget.backController?.attached ?? false}',
+      'backPriority=request_tray_then_page',
+    ].join('\n');
+    _emitRequestHudDebug(
+      'bottom_layout_status_dialog_opened',
+      <String, Object?>{
+        'screen': widget.screen,
+        'mode': _viewMode?.mode.name ?? 'unknown',
+        'locationProfile': _parkingLocationProfile.name,
+        'profileDecisionReason':
+            _locationProfileResolutionReason(_parkingLocationProfile),
+        'resolvedMode': _renderedContentMode,
+        'locationCount': counts.locationCount,
+        'spatialCount': counts.spatialCount,
+        'textCount': counts.textCount,
+        'unknownCount': counts.unknownCount,
+        'systemBottomInset': metrics.systemBottomInset.toStringAsFixed(2),
+        'bottomActionStackExtent':
+            metrics.bottomActionStackExtent.toStringAsFixed(2),
+        'hudBottom': metrics.hudBottom.toStringAsFixed(2),
+        'trayBottom': metrics.trayBottom.toStringAsFixed(2),
+        'reelSurfaceVisible': false,
+        'tableOnlySurfaceVisible': false,
+        'renderedMode': _renderedContentMode,
+        'tableMounted': _renderTableContent,
+        'statusMounted': _renderStatusContent,
+        'contentOverlap': false,
+        'previousChildRetention': false,
+        'contentTransition': 'atomic_swap+incoming_reveal',
+        'requestTrayActive': _activeRequestTray?.sourceKey ?? 'none',
+        'requestTrayClosing': _requestTrayClosing,
+        'backControllerAttached': widget.backController?.attached ?? false,
+        'backPriority': 'request_tray_then_page',
+      },
+    );
+    _bottomLayoutDebugDialogShowing = true;
+    try {
+      await StatusDialog.showSuccess(
+        context,
+        title: '하단 레이아웃 및 모드 렌더링 상태',
+        description: description,
+        copyText: line,
+        copyButtonLabel: 'debugPrint 코드 복사',
+        visibleDuration: Duration.zero,
+        useCommonUi: true,
+        awaitManualClose: true,
+      );
+    } finally {
+      _bottomLayoutDebugDialogShowing = false;
+    }
+  }
 
   void _scheduleIdleSyncAfterBuild() {
     if (_idleSyncScheduled) return;
@@ -438,6 +870,47 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     _viewMode = null;
   }
 
+  void _triggerModeContentReveal() {
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    _modeContentRevealController.stop();
+    if (reduceMotion) {
+      _modeContentRevealController.value = 1;
+      return;
+    }
+    _modeContentRevealController.value = 0;
+    unawaited(
+      _modeContentRevealController.animateTo(
+        1,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+      ),
+    );
+  }
+
+  Widget _buildModeContentReveal(Widget child) {
+    return AnimatedBuilder(
+      animation: _modeContentRevealController,
+      child: child,
+      builder: (context, child) {
+        final progress = Curves.easeOutCubic.transform(
+          _modeContentRevealController.value.clamp(0.0, 1.0).toDouble(),
+        );
+        return Opacity(
+          opacity: .16 + (.84 * progress),
+          child: Transform.translate(
+            offset: Offset(0, 8 * (1 - progress)),
+            child: Transform.scale(
+              scale: .992 + (.008 * progress),
+              alignment: Alignment.center,
+              child: child,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   void _onViewModeChanged() {
     if (!mounted) return;
     if (_viewMode?.mode != TypeViewMode.table &&
@@ -469,10 +942,46 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
       _endModeReelGuard();
     }
     setState(() {});
+    _triggerModeContentReveal();
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     _debugLog('view_mode_changed', <String, Object?>{
       'mode': _viewMode?.mode.name,
       'table': widget.tabs[_currentTableIndex].id,
+      'shellBackground': _shellBackgroundRole,
+      'statusContentBackground': 'common_ui_canvas',
+      'quickActionBackground': _shellBackgroundRole,
+      'backgroundUnified': _statusModeActive,
+      'backgroundMotion': reduceMotion ? 'disabled' : '230ms_easeOutCubic',
+      'locationProfile': _parkingLocationProfile.name,
+      'profileDecisionReason':
+          _locationProfileResolutionReason(_parkingLocationProfile),
+      'renderedMode': _renderedContentMode,
+      'tableMounted': _renderTableContent,
+      'statusMounted': _renderStatusContent,
+      'contentOverlap': false,
+      'previousChildRetention': false,
+      'contentTransition': reduceMotion
+          ? 'atomic_swap'
+          : 'atomic_swap+incoming_reveal_220ms',
     });
+    _emitRequestHudDebug(
+      'status_shell_background_changed',
+      <String, Object?>{
+        'screen': widget.screen,
+        'mode': _viewMode?.mode.name ?? 'unknown',
+        'locationProfile': _parkingLocationProfile.name,
+        'profileDecisionReason':
+            _locationProfileResolutionReason(_parkingLocationProfile),
+        'shellBackground': _shellBackgroundRole,
+        'statusContentBackground': 'common_ui_canvas',
+        'quickActionBackground': _shellBackgroundRole,
+        'hudBackground': _shellBackgroundRole,
+        'backgroundUnified': _statusModeActive,
+        'durationMs': reduceMotion ? 0 : 230,
+        'curve': 'easeOutCubic',
+      },
+    );
     _syncIdleWithMode();
   }
 
@@ -487,23 +996,9 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     }
 
     guard.setCountdownDuration(auto.idleToStatusAfter);
-
-    if (!_statusViewSupported) {
-      guard.setCountdownEnabled(false, reason: '현황 보기 미지원');
-      _idleTimer?.cancel();
-      _idleTimer = null;
-      return;
-    }
-
-    if (vm.mode != TypeViewMode.table) {
-      guard.setCountdownEnabled(false, reason: '현황 모드');
-      _idleTimer?.cancel();
-      _idleTimer = null;
-      return;
-    }
-
-    guard.setCountdownEnabled(true, reason: '테이블 모드');
-    _scheduleIdleFromGuard();
+    guard.setCountdownEnabled(false, reason: '지역 주차구역 유형 고정 모드');
+    _idleTimer?.cancel();
+    _idleTimer = null;
   }
 
   void _debugLog(
@@ -668,40 +1163,17 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     return reduceMotion ? Duration.zero : duration;
   }
 
-  Widget _sharedAxisYTransition(Widget child, Animation<double> animation) {
-    final curved = CurvedAnimation(
-      parent: animation,
-      curve: Curves.easeOutCubic,
-      reverseCurve: Curves.easeInCubic,
-    );
-    final offset = Tween<Offset>(
-      begin: const Offset(0, 0.035),
-      end: Offset.zero,
-    ).animate(curved);
-    final scale = Tween<double>(begin: 0.985, end: 1).animate(curved);
-    return FadeTransition(
-      opacity: curved,
-      child: SlideTransition(
-        position: offset,
-        child: ScaleTransition(
-          scale: scale,
-          alignment: Alignment.center,
-          child: child,
-        ),
-      ),
-    );
-  }
-
   Widget _transitionMaskSurface(
     BuildContext context, {
     required String message,
   }) {
     final cs = Theme.of(context).colorScheme;
+    final tokens = CommonUiTheme.of(context);
     final text = Theme.of(context).textTheme;
     return AbsorbPointer(
       absorbing: true,
       child: Container(
-        color: cs.surface,
+        color: _shellBackgroundColor(cs, tokens),
         alignment: Alignment.center,
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -767,13 +1239,23 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
 
   @override
   void dispose() {
+    widget.backController?._detach(this);
+    if (_requestTrayAutoPauseActive) {
+      _requestTrayAutoPauseActive = false;
+      _autoGuard?.endBlock(_requestTrayPauseReason);
+    }
+    if (_openingRequestDetail) {
+      _openingRequestDetail = false;
+      _autoGuard?.endBlock(_requestDockPauseReason);
+    }
     _endModeReelGuard();
     _endTableSwipeGuard();
     _detachViewModeListener();
     _detachAutoGuardListener();
     _detachLocationStateListener();
     _modeReelController.dispose();
-    _modeReelHintController.dispose();
+    _modeContentRevealController.dispose();
+    _requestTrayVisibilityController.dispose();
     _statusVisualPulseController.dispose();
     _tableSwipeController.dispose();
     _hudPulseController.dispose();
@@ -829,12 +1311,12 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
   }
 
   bool _canSwipeTables() {
+    if (!_renderTableContent) return false;
     if (_viewMode?.mode != TypeViewMode.table) return false;
     if (_transitionMaskOn ||
         _tableTransitioning ||
         _modeReelDragActive ||
         _modeReelTransitioning ||
-        _modeReelSelectorPressActive ||
         _parentSelectorOpen) {
       return false;
     }
@@ -1456,7 +1938,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
             'swipeHintIdleOpacity=$_tableSwipeHintIdleOpacity activeOpacity=$_tableSwipeHintActiveOpacity oppositeOpacity=$_tableSwipeHintOppositeOpacity',
             'swipeHintMaxTranslateDp=$_tableSwipeHintMaxTranslate maxScale=$_tableSwipeHintMaxScale',
             'statusVisualPointer=ignored statusVisualSemantics=excluded',
-            'hudPointer=ignored hudSemantics=excluded',
+            'hudPointer=request_counts_only hudSemantics=request_counts_only',
           ],
         ),
       );
@@ -1565,9 +2047,13 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     for (final line in lines.skip(1)) {
       trace.log(line);
     }
+    final profileCounts = _locationPresentationCounts();
     trace.log('parkingViewCapability=${_parkingViewCapability.name}');
+    trace.log('parkingLocationProfile=${_parkingLocationProfile.name}');
+    trace.log('profileDecisionReason=${_locationProfileResolutionReason(_parkingLocationProfile)}');
+    trace.log('spatialCount=${profileCounts.spatialCount} textCount=${profileCounts.textCount} unknownCount=${profileCounts.unknownCount}');
     trace.log('statusEnabled=${_viewMode?.statusEnabled ?? false}');
-    trace.log('modeControl=${_parkingViewCapability == ParkingViewCapability.tableAndStatus ? 'vertical_swipe_reel+content_vertical_swipe' : _parkingViewCapability == ParkingViewCapability.tableOnly ? 'static_table_indicator' : _parkingViewCapability == ParkingViewCapability.empty ? 'download_surface' : 'loading_surface'}');
+    trace.log('modeControl=${_parkingViewCapability == ParkingViewCapability.statusOnly ? 'reel_hidden+status_profile_locked' : _parkingViewCapability == ParkingViewCapability.tableOnly ? 'reel_hidden+table_profile_locked' : _parkingViewCapability == ParkingViewCapability.empty ? 'download_surface' : 'loading_surface'}');
     await trace.succeed('TypePage 상태 확인을 완료했습니다.');
     if (trace.developerMode && mounted) {
       await trace.showStatusDialog(context);
@@ -1680,7 +2166,6 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     if (_viewMode == null || _transitionMaskOn) return false;
     if (_modeReelDragActive ||
         _modeReelTransitioning ||
-        _modeReelSelectorPressActive ||
         _parentSelectorOpen) {
       return false;
     }
@@ -1775,7 +2260,6 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     if (_transitionMaskOn) return 'transition_mask_active';
     if (_modeReelDragActive) return 'vertical_mode_drag_active';
     if (_modeReelTransitioning) return 'vertical_mode_transitioning';
-    if (_modeReelSelectorPressActive) return 'parent_selector_press_active';
     if (_parentSelectorOpen) return 'parent_selector_open';
     if (_horizontalDragActive) return 'horizontal_table_swipe_active';
     if (_tableTransitioning) return 'table_transitioning';
@@ -1796,6 +2280,30 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     }
     final vm = _viewMode;
     if (vm == null) return false;
+    if (_locationPresentationReady) {
+      _debugLog('mode_vertical_ignored', <String, Object?>{
+        'source': source,
+        'reason': 'location_profile_mode_locked',
+        'profile': _parkingLocationProfile.name,
+        'resolvedMode': _targetModeForLocationProfile(
+          _parkingLocationProfile,
+        )?.name,
+        'transitionLogic': 'preserved',
+      });
+      return false;
+    }
+    if (_statusToTableVerticalSwipeLocked &&
+        source == 'content_vertical' &&
+        vm.mode == TypeViewMode.status) {
+      _debugLog('mode_vertical_ignored', <String, Object?>{
+        'source': source,
+        'reason': 'status_to_table_swipe_locked',
+        'from': vm.mode.name,
+        'to': TypeViewMode.table.name,
+        'transitionLogic': 'preserved',
+      });
+      return false;
+    }
     _onUserActivity();
     _beginModeReelGuard();
     _modeReelController.stop();
@@ -1923,31 +2431,6 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     );
   }
 
-  void _onModeReelDragStart(DragStartDetails _) {
-    _beginModeVerticalGesture(source: 'reel');
-  }
-
-  void _onModeReelDragUpdate(DragUpdateDetails details) {
-    _updateModeVerticalGesture(
-      source: 'reel',
-      deltaDy: details.delta.dy,
-    );
-  }
-
-  void _onModeReelDragEnd(DragEndDetails details) {
-    _endModeVerticalGesture(
-      source: 'reel',
-      velocity: details.primaryVelocity ?? 0,
-    );
-  }
-
-  void _onModeReelDragCancel() {
-    _cancelModeVerticalGesture(
-      source: 'reel',
-      reason: 'gesture_cancelled',
-    );
-  }
-
   void _resetContentGestureTracking() {
     _contentGesturePointer = null;
     _contentGestureAccumulatedDelta = Offset.zero;
@@ -2000,8 +2483,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
       if (_tableTransitioning ||
           _modeReelTransitioning ||
           _transitionMaskOn ||
-          _modeReelSelectorPressActive ||
-          _parentSelectorOpen ||
+            _parentSelectorOpen ||
           _tableSwipeController.value > 0) {
         _contentGestureAxis = _ContentGestureAxis.blocked;
         _debugLog('content_axis_ignored', <String, Object?>{
@@ -2011,9 +2493,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
                   ? 'vertical_mode_transitioning'
                   : _transitionMaskOn
                       ? 'transition_mask_active'
-                      : _modeReelSelectorPressActive
-                          ? 'parent_selector_press_active'
-                          : _parentSelectorOpen
+                      : _parentSelectorOpen
                               ? 'parent_selector_open'
                               : 'table_swipe_progress_active',
         });
@@ -2374,28 +2854,6 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     );
   }
 
-  void _onModeReelTap() {
-    unawaited(
-      _openModeReelParentSelector(
-        interaction: 'tap',
-      ),
-    );
-  }
-
-  Future<void> _onModeReelLongPress() {
-    return _openModeReelParentSelector(
-      interaction: 'long_press',
-    );
-  }
-
-  Rect? _modeReelSourceRect() {
-    final sourceContext = _modeReelSourceKey.currentContext;
-    final renderObject = sourceContext?.findRenderObject();
-    if (renderObject is! RenderBox || !renderObject.hasSize) return null;
-    final origin = renderObject.localToGlobal(Offset.zero);
-    return origin & renderObject.size;
-  }
-
   Future<List<_ParentSelectorItem>> _resolveModeReelParentItems() async {
     final area = _readCurrentArea();
     LocationState state;
@@ -2585,12 +3043,11 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     var duplicateCloseCount = 0;
     var navigatorPopCount = 0;
     final collapsedCompleter = Completer<void>();
-    _lastParentSelectorCollapseInfo = null;
     _lastParentSelectorCloseSource = closeSource;
-    _lastParentSelectorDuplicateCloseCount = 0;
-    _lastParentSelectorNavigatorPopCount = 0;
     _debugLog('parent_selector_expand_started', <String, Object?>{
-      'source': 'mode_reel',
+      'source': interaction == 'status_parent_header'
+          ? 'status_parent_header'
+          : 'mode_reel',
       'interaction': interaction,
       'sourceRect': realTimeSourceRectDebug(sourceRect),
       'targetRect': realTimeSourceRectDebug(targetRect),
@@ -2633,7 +3090,6 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
         void close([String? value, String source = 'dialog_header']) {
           if (closeRequested) {
             duplicateCloseCount += 1;
-            _lastParentSelectorDuplicateCloseCount = duplicateCloseCount;
             _debugLog('parent_selector_close_ignored', <String, Object?>{
               'source': source,
               'entryInteraction': interaction,
@@ -2650,7 +3106,6 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
           closeSource = source;
           _lastParentSelectorCloseSource = source;
           navigatorPopCount += 1;
-          _lastParentSelectorNavigatorPopCount = navigatorPopCount;
           _debugLog('parent_selector_close_requested', <String, Object?>{
             'source': source,
             'entryInteraction': interaction,
@@ -2675,8 +3130,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
             if (navigatorPopCount < 1) {
               navigatorPopCount = 1;
             }
-            _lastParentSelectorNavigatorPopCount = navigatorPopCount;
-            closeSource = 'system_back';
+              closeSource = 'system_back';
             _lastParentSelectorCloseSource = closeSource;
             _debugLog('parent_selector_system_back', <String, Object?>{
               'interaction': interaction,
@@ -2695,7 +3149,6 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
             });
           },
           onCollapseLifecycle: (info) {
-            _lastParentSelectorCollapseInfo = info;
             _debugLog('parent_selector_collapse_lifecycle', <String, Object?>{
               'source': closeSource,
               'interaction': interaction,
@@ -2762,7 +3215,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
                     'count': after.length,
                     'persisted': saved,
                     'affectedConsumers':
-                        'mode_reel,parking_editor,status_parent_paging',
+                        'status_parent_header,parking_editor,status_parent_paging',
                   },
                 );
                 unawaited(
@@ -2773,7 +3226,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
                       'before=${before.join('>')}',
                       'after=${after.join('>')}',
                       'parentCount=${after.length}',
-                      'reelOrder=user_persisted_with_natural_fallback',
+                      'statusHeaderOrder=user_persisted_with_natural_fallback',
                       'parkingEditorOrder=user_persisted_with_natural_fallback',
                       'statusParentPagingOrder=user_persisted_with_natural_fallback',
                       'newParentPolicy=append_after_saved_order_with_natural_sort',
@@ -2827,226 +3280,108 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     return result;
   }
 
-  Future<void> _openModeReelParentSelector({
-    required String interaction,
-  }) async {
-    if (!_canUseModeReel()) {
-      _debugLog('mode_reel_ignored', <String, Object?>{
-        'source': interaction,
-        'reason': 'other_transition_active',
+  Future<void> _openStatusHeaderParentSelector(
+    Rect sourceRect,
+    String currentParent,
+  ) async {
+    if (_parentSelectorOpen || _transitionMaskOn || _tableTransitioning) {
+      _debugLog('status_parent_selector_ignored', <String, Object?>{
+        'reason': _parentSelectorOpen
+            ? 'parent_selector_open'
+            : _transitionMaskOn
+                ? 'transition_mask_active'
+                : 'table_transitioning',
         'mode': _viewMode?.mode.name,
+        'currentParent': currentParent,
       });
       return;
     }
     if (!_canOpenModeReelParentSelector()) {
-      _debugLog('mode_reel_parent_selector_ignored', <String, Object?>{
-        'source': interaction,
+      _debugLog('status_parent_selector_ignored', <String, Object?>{
         'reason': 'reopen_cooldown',
-        'mode': _viewMode?.mode.name,
         'remainingMs': _parentSelectorReopenCooldownRemainingMs(),
         'cooldownMs': _parentSelectorReopenCooldown.inMilliseconds,
+        'currentParent': currentParent,
       });
       return;
     }
     final vm = _viewMode;
-    if (vm == null) return;
-    final sourceRect = _modeReelSourceRect();
-    if (sourceRect == null) {
-      _debugLog('parent_selector_open_rejected', <String, Object?>{
-        'reason': 'mode_reel_source_rect_unavailable',
+    if (vm == null || vm.mode != TypeViewMode.status || !_statusViewSupported) {
+      _debugLog('status_parent_selector_ignored', <String, Object?>{
+        'reason': 'status_mode_required',
+        'mode': vm?.mode.name,
+        'statusSupported': _statusViewSupported,
+        'currentParent': currentParent,
       });
       return;
     }
     _onUserActivity();
     _beginModeReelGuard();
-    setState(() {
-      _modeReelSelectorPressActive = true;
-      _parentSelectorOpen = true;
-    });
-    final haptic = interaction == 'long_press'
-        ? 'mediumImpact'
-        : 'selectionClick';
-    if (interaction == 'long_press') {
-      HapticFeedback.mediumImpact();
-    } else {
-      HapticFeedback.selectionClick();
-    }
-    _debugLog('mode_reel_parent_selector_started', <String, Object?>{
-      'fromMode': vm.mode.name,
-      'sourceRect': realTimeSourceRectDebug(sourceRect),
-      'control': 'frameless_bidirectional_icon_reel',
-      'interaction': interaction,
-      'action': 'parent_selector',
-      'haptic': haptic,
-      'modeSwitch': 'vertical_reel_or_content',
-    });
+    setState(() => _parentSelectorOpen = true);
+    HapticFeedback.selectionClick();
     final selectorArea = _readCurrentArea();
     final parentOrderState = context.read<ParkingParentOrderState>();
     final parentOrderSource = parentOrderState.hasCustomOrder(selectorArea)
         ? 'user_persisted'
         : 'natural_fallback';
-    String? selectedParent;
-    var parents = const <_ParentSelectorItem>[];
+    _debugLog('status_parent_selector_started', <String, Object?>{
+      'source': 'status_parent_header',
+      'sourceRect': realTimeSourceRectDebug(sourceRect),
+      'currentParent': currentParent,
+      'area': selectorArea,
+      'parentOrderSource': parentOrderSource,
+      'action': 'parent_selector_and_order_editor',
+      'reelVisible': false,
+      'firebaseAdditionalRead': 0,
+    });
     try {
-      parents = await _resolveModeReelParentItems();
+      final parents = await _resolveModeReelParentItems();
       if (!mounted) return;
       if (parents.isEmpty) {
-        _debugLog('parent_selector_open_rejected', <String, Object?>{
+        _debugLog('status_parent_selector_ignored', <String, Object?>{
           'reason': 'no_parent_locations',
           'area': selectorArea,
         });
         return;
       }
       final metrics = _parentSelectorGridMetrics(context, parents.length);
-      if (!(MediaQuery.maybeOf(context)?.disableAnimations ?? false)) {
-        await Future<void>.delayed(const Duration(milliseconds: 90));
-        if (!mounted) return;
-      }
-      selectedParent = await _showParentSelectorDialog(
-        interaction: interaction,
+      final selectedParent = await _showParentSelectorDialog(
+        interaction: 'status_parent_header',
         area: selectorArea,
         sourceRect: sourceRect,
         parents: parents,
         metrics: metrics,
-        currentParent: _controllers[_currentTableIndex].activeParent,
+        currentParent: currentParent,
       );
-      if (!mounted) return;
-      if (selectedParent == null || selectedParent.trim().isEmpty) {
-        final collapseInfo = _lastParentSelectorCollapseInfo;
-        _debugLog('parent_selector_cancelled', <String, Object?>{
-          'interaction': interaction,
-          'fromMode': vm.mode.name,
-          'parentCount': parents.length,
+      if (!mounted || selectedParent == null || selectedParent.trim().isEmpty) {
+        _debugLog('status_parent_selector_closed', <String, Object?>{
+          'source': 'status_parent_header',
+          'selectedParent': selectedParent ?? '-',
           'closeSource': _lastParentSelectorCloseSource,
-          'collapseCallbackObserved': collapseInfo != null,
-          'expandedBeforeCollapse': collapseInfo?.expandedBeforeCollapse,
-          'earlyCollapse': collapseInfo?.earlyCollapse,
-          'maxRawProgress': collapseInfo?.maxRawProgress.toStringAsFixed(3),
-        });
-        unawaited(
-          _showControlStatus(
-            title: 'Mode Reel 부모 선택 취소',
-            lines: <String>[
-              'control=frameless_bidirectional_icon_reel interaction=${interaction}_cancelled',
-              'dialog=parent_selector closeSource=$_lastParentSelectorCloseSource',
-              'tapBehavior=parent_selector modeSwitchInput=vertical_reel_or_content',
-              'selectorEntryHaptic=$haptic',
-              'closePolicy=exactly_once navigatorPopCount=$_lastParentSelectorNavigatorPopCount duplicateCloseCount=$_lastParentSelectorDuplicateCloseCount',
-              'scrimReverseInput=absorbed systemBackDuringReverse=blocked',
-              'selectorReopenCooldownMs=${_parentSelectorReopenCooldown.inMilliseconds}',
-              'collapseCallback=guaranteed_on_animation_dismissed',
-              'collapseCallbackObserved=${collapseInfo != null}',
-              'expandedBeforeCollapse=${collapseInfo?.expandedBeforeCollapse ?? false}',
-              'earlyCollapse=${collapseInfo?.earlyCollapse ?? false}',
-              'maxRawProgress=${collapseInfo?.maxRawProgress.toStringAsFixed(3) ?? 'n/a'}',
-              'earlyReverseCurve=${collapseInfo == null ? 'n/a' : (collapseInfo.earlyCollapse ? 'continuous_easeOutCubic' : 'easeInOutCubic')}',
-              'dialogMotion=source_rect_crop_expand_reverse_collapse',
-              'selectorLayout=compact_parent_preview_grid order=row_major_left_to_right',
-              'parentOrderSource=$parentOrderSource persistence=${ParkingParentOrderState.prefsKey}',
-              'dialogSizing=fixed_per_viewport dialogHeight=${metrics.targetHeight.toStringAsFixed(1)}',
-              'columns=${metrics.columns} rows=${metrics.rows}',
-              'gridViewportHeight=${metrics.gridViewportHeight.toStringAsFixed(1)} gridContentHeight=${metrics.gridContentHeight.toStringAsFixed(1)}',
-              'verticalScroll=${metrics.scrollNeeded} overflowPolicy=grid_vertical_scroll_only',
-              'preview=parking_grid_or_child_rect_thumbnail thumbnailFrame=none',
-              'parentLabel=bottom_center',
-              'debugPrint=clipboard_copy_supported',
-            ],
-          ),
-        );
-        return;
-      }
-      final selectedItem = parents.firstWhere(
-        (item) => item.parent == selectedParent,
-      );
-      if (!_statusViewSupported || !vm.statusEnabled) {
-        _debugLog('parent_selector_result_ignored', <String, Object?>{
-          'reason': 'status_view_disabled',
-          'capability': _parkingViewCapability.name,
-          'selectedParent': selectedItem.parent,
         });
         return;
       }
-      final from = vm.mode;
       final controller = _controllers[_currentTableIndex];
       final request = controller.requestParentFocus(
         selectedParent,
-        deferUntilNextBind: from != TypeViewMode.status,
+        deferUntilNextBind: false,
       );
-      if (vm.mode != TypeViewMode.status) {
-        vm.setMode(TypeViewMode.status);
-        _triggerHudPulse();
-      }
       await WidgetsBinding.instance.endOfFrame;
       if (!mounted) return;
-      _debugLog('parent_focus_requested', <String, Object?>{
+      _debugLog('status_parent_focus_requested', <String, Object?>{
         'serial': request.serial,
-        'interaction': interaction,
+        'source': 'status_parent_header',
         'parent': request.parent,
-        'fromMode': from.name,
-        'toMode': TypeViewMode.status.name,
+        'mode': vm.mode.name,
         'table': widget.tabs[_currentTableIndex].id,
+        'parentOrderSource': parentOrderSource,
       });
-      unawaited(
-        _showControlStatus(
-          title: 'Mode Reel 부모 주차 구역 선택',
-          lines: <String>[
-            'control=frameless_bidirectional_icon_reel interaction=$interaction',
-            'dialog=parent_selector dialogSource=mode_reel_rect',
-            'tapBehavior=parent_selector modeSwitchInput=vertical_reel_or_content',
-            'selectorEntryHaptic=$haptic',
-            'closePolicy=exactly_once navigatorPopCount=$_lastParentSelectorNavigatorPopCount duplicateCloseCount=$_lastParentSelectorDuplicateCloseCount',
-            'scrimReverseInput=absorbed systemBackDuringReverse=blocked',
-            'selectorReopenCooldownMs=${_parentSelectorReopenCooldown.inMilliseconds}',
-            'dialogMotion=source_rect_crop_expand_reverse_collapse',
-            'dialogBorder=hidden dialogSurface=opacity_0.92_to_0.96',
-            'dialogShape=rounded_surface dialogShadow=subtle',
-            'scrim=0.26 blurSigma=4.5 durationMs=340',
-            'sourceRect=${realTimeSourceRectDebug(sourceRect)}',
-            'selectedParent=${request.parent} requestSerial=${request.serial}',
-            'fromMode=${from.name} toMode=${TypeViewMode.status.name}',
-            'parentCount=${parents.length} firebaseAdditionalRead=0',
-            'selectorLayout=compact_parent_preview_grid order=row_major_left_to_right',
-            'parentOrderSource=$parentOrderSource persistence=${ParkingParentOrderState.prefsKey}',
-            'dialogSizing=fixed_per_viewport dialogHeight=${metrics.targetHeight.toStringAsFixed(1)}',
-            'columns=${metrics.columns} rows=${metrics.rows}',
-            'gridViewportHeight=${metrics.gridViewportHeight.toStringAsFixed(1)} gridContentHeight=${metrics.gridContentHeight.toStringAsFixed(1)}',
-            'verticalScroll=${metrics.scrollNeeded} overflowPolicy=grid_vertical_scroll_only',
-            'previewHeight=${metrics.previewHeight.toStringAsFixed(1)} tileExtent=${metrics.tileExtent.toStringAsFixed(1)}',
-            'preview=parking_grid_or_child_rect_thumbnail thumbnailFrame=none',
-            'parentLabel=bottom_center',
-            'selectedPreviewSource=${selectedItem.previewSource}',
-            'selectionMotion=scale_1.0_to_0.94_plus_check_90ms',
-            'gridReady=${parents.where((item) => item.grid != null).length}',
-            'childRectFallback=${parents.where((item) => item.grid == null && item.childRects.isNotEmpty).length}',
-            'iconFallback=${parents.where((item) => item.grid == null && item.childRects.isEmpty).length}',
-            'guard=blocked_until_parent_selector_closed_and_status_requested',
-            'collapseCallback=guaranteed_on_animation_dismissed',
-            'collapseCallbackObserved=${_lastParentSelectorCollapseInfo != null}',
-            'expandedBeforeCollapse=${_lastParentSelectorCollapseInfo?.expandedBeforeCollapse ?? false}',
-            'earlyCollapse=${_lastParentSelectorCollapseInfo?.earlyCollapse ?? false}',
-            'maxRawProgress=${_lastParentSelectorCollapseInfo?.maxRawProgress.toStringAsFixed(3) ?? 'n/a'}',
-            'earlyReverseCurve=${_lastParentSelectorCollapseInfo?.earlyCollapse == true ? 'continuous_easeOutCubic' : 'easeInOutCubic'}',
-            'debugPrint=clipboard_copy_supported',
-          ],
-        ),
-      );
     } finally {
       _parentSelectorReopenBlockedUntil =
           DateTime.now().add(_parentSelectorReopenCooldown);
-      _debugLog('mode_reel_parent_selector_rearm_started', <String, Object?>{
-        'cooldownMs': _parentSelectorReopenCooldown.inMilliseconds,
-        'closePolicy': 'exactly_once',
-        'navigatorPopCount': _lastParentSelectorNavigatorPopCount,
-        'duplicateCloseCount': _lastParentSelectorDuplicateCloseCount,
-        'motion': 'reel_press_release_120ms_then_rearm_cooldown',
-      });
       if (mounted) {
-        setState(() {
-          _modeReelSelectorPressActive = false;
-          _parentSelectorOpen = false;
-        });
+        setState(() => _parentSelectorOpen = false);
       } else {
-        _modeReelSelectorPressActive = false;
         _parentSelectorOpen = false;
       }
       _endModeReelGuard();
@@ -3055,9 +3390,13 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
   }
 
   Map<CustomSemanticsAction, VoidCallback>? _modeReelSemanticsActions() {
+    if (_locationPresentationReady) return null;
     if (!_canUseModeReel()) return null;
     final vm = _viewMode;
     if (vm == null) return null;
+    if (_statusToTableVerticalSwipeLocked && vm.mode == TypeViewMode.status) {
+      return null;
+    }
     final to = _oppositeViewMode(vm.mode);
     return <CustomSemanticsAction, VoidCallback>{
       CustomSemanticsAction(
@@ -3154,6 +3493,789 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
       return tokens.statusDepartureRequested;
     }
     return tokens.accent;
+  }
+
+  RealTimeRequestQueueType? _requestTypeForSpec(RealTimeTabSpec spec) {
+    final collection = spec.collection.trim();
+    if (collection == RealTimeRequestQueueType.parking.collection) {
+      return RealTimeRequestQueueType.parking;
+    }
+    if (collection == RealTimeRequestQueueType.completed.collection) {
+      return RealTimeRequestQueueType.completed;
+    }
+    if (collection == RealTimeRequestQueueType.departure.collection) {
+      return RealTimeRequestQueueType.departure;
+    }
+    return null;
+  }
+
+  RealTimeTabSpec? _requestSpecForType(RealTimeRequestQueueType type) {
+    for (final spec in widget.tabs) {
+      if (spec.collection.trim() == type.collection) return spec;
+    }
+    return null;
+  }
+
+  Color _interactiveStatusHudColor(
+    RealTimeTabSpec spec,
+    CommonUiTokens tokens,
+  ) {
+    final base = _statusHudColor(spec, tokens);
+    return Color.lerp(base, tokens.textPrimary, .14) ?? base;
+  }
+
+  void _recordRequestHudDebugLine(String line) {
+    final normalized = line.trim();
+    if (normalized.isEmpty) return;
+    _requestHudDebugLines.add(normalized);
+    if (_requestHudDebugLines.length > 180) {
+      _requestHudDebugLines.removeRange(
+        0,
+        _requestHudDebugLines.length - 180,
+      );
+    }
+  }
+
+  void _emitRequestHudDebug(
+    String event,
+    Map<String, Object?> details,
+  ) {
+    final buffer = StringBuffer()
+      ..write('[RealTimeRequestHud] ')
+      ..write(DateTime.now().toIso8601String())
+      ..write(' event=')
+      ..write(event);
+    for (final entry in details.entries) {
+      if (entry.value == null) continue;
+      buffer
+        ..write(' ')
+        ..write(entry.key)
+        ..write('=')
+        ..write(entry.value);
+    }
+    final line = buffer.toString();
+    debugPrint(line);
+    _recordRequestHudDebugLine(line);
+  }
+
+  void _scheduleRequestHudStateTrace({
+    required RealTimeRequestQueueType type,
+    required String area,
+    required int count,
+  }) {
+    final signature = '$area|$count';
+    if (_lastRequestHudSignatures[type] == signature) return;
+    _lastRequestHudSignatures[type] = signature;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _emitRequestHudDebug(
+        'hud_state_changed',
+        <String, Object?>{
+          'screen': widget.screen,
+          'type': type.sourceKey,
+          'collection': type.collection,
+          'area': area,
+          'count': count,
+          'interactive': count > 0,
+          'opacity': count > 0 ? '1.0' : 'table_context',
+          'color': count > 0 ? 'status_emphasized' : 'status_base',
+          'attention': count > 0 ? 'bang_breathing_11oclock' : 'none',
+          'tap': count > 0 ? 'enabled' : 'disabled',
+          'firebaseAdditionalRead': 0,
+        },
+      );
+    });
+  }
+
+  String _requestHudDebugPrintCode() {
+    if (_requestHudDebugLines.isEmpty) {
+      return 'debugPrint(${jsonEncode('[RealTimeRequestHud] 기록된 로그가 없습니다.')});';
+    }
+    return _requestHudDebugLines
+        .map((line) => 'debugPrint(${jsonEncode(line)});')
+        .join('\n');
+  }
+
+  Future<void> _showRequestHudDebugDialog({
+    required RealTimeRequestQueueType type,
+    required String area,
+    required int count,
+  }) async {
+    if (!mounted || _requestHudDebugDialogShowing) return;
+    final developerMode = await DevAuth.isDevModeEnabled();
+    if (!developerMode || !mounted || _requestHudDebugDialogShowing) return;
+    final store = context.read<ViewDocRowsStore>();
+    final rows = store.rows(collection: type.collection, area: area);
+    final selected = rows.where((row) => row.isSelected).length;
+    final bottomLayout = _bottomLayoutMetrics(context);
+    final profileCounts = _locationPresentationCounts();
+    _emitRequestHudDebug(
+      'status_dialog_opened',
+      <String, Object?>{
+        'screen': widget.screen,
+        'type': type.sourceKey,
+        'collection': type.collection,
+        'area': area,
+        'count': count,
+        'selected': selected,
+        'activeTray': _activeRequestTray?.sourceKey ?? 'none',
+        'requestTrayClosing': _requestTrayClosing,
+        'backControllerAttached': widget.backController?.attached ?? false,
+        'backPriority': 'request_tray_then_page',
+        'sortOrder': _requestSortOrder(type).name,
+        'interactive': count > 0,
+        'opacity': count > 0 ? '1.0' : 'table_context',
+        'color': count > 0 ? 'status_emphasized' : 'status_base',
+        'attention': count > 0 ? 'bang_breathing_11oclock' : 'none',
+        'trayOwner': 'real_time_tabbed_table',
+        'rootOverlayEntry': false,
+        'firebaseAdditionalRead': 0,
+        'locationProfile': _parkingLocationProfile.name,
+        'profileDecisionReason':
+            _locationProfileResolutionReason(_parkingLocationProfile),
+        'locationCount': profileCounts.locationCount,
+        'spatialCount': profileCounts.spatialCount,
+        'textCount': profileCounts.textCount,
+        'unknownCount': profileCounts.unknownCount,
+        'systemBottomInset':
+            bottomLayout.systemBottomInset.toStringAsFixed(2),
+        'bottomActionStackExtent':
+            bottomLayout.bottomActionStackExtent.toStringAsFixed(2),
+        'hudBottom': bottomLayout.hudBottom.toStringAsFixed(2),
+        'trayBottom': bottomLayout.trayBottom.toStringAsFixed(2),
+        'reelSurfaceVisible': false,
+        'tableOnlySurfaceVisible': false,
+        'renderedMode': _renderedContentMode,
+        'tableMounted': _renderTableContent,
+        'statusMounted': _renderStatusContent,
+        'contentOverlap': false,
+        'previousChildRetention': false,
+        'contentTransition': 'atomic_swap+incoming_reveal',
+      },
+    );
+    final lines = _requestHudDebugLines.length <= 80
+        ? List<String>.of(_requestHudDebugLines)
+        : _requestHudDebugLines.sublist(_requestHudDebugLines.length - 80);
+    _requestHudDebugDialogShowing = true;
+    try {
+      await StatusDialog.showSuccess(
+        context,
+        title: '상태 HUD 상태',
+        description: lines.join('\n'),
+        copyText: _requestHudDebugPrintCode(),
+        copyButtonLabel: 'debugPrint 코드 복사',
+        visibleDuration: Duration.zero,
+        useCommonUi: true,
+        awaitManualClose: true,
+      );
+    } finally {
+      _requestHudDebugDialogShowing = false;
+    }
+  }
+
+  DateTime? _requestRowAt(RealTimeRowVM row) {
+    return row.primaryAt ?? row.createdAt ?? row.updatedAt;
+  }
+
+  int _compareRequestRows(RealTimeRowVM a, RealTimeRowVM b) {
+    final at = _requestRowAt(a);
+    final bt = _requestRowAt(b);
+    if (at != null && bt != null) {
+      final timeCompare = bt.compareTo(at);
+      if (timeCompare != 0) return timeCompare;
+    } else if (at != null) {
+      return -1;
+    } else if (bt != null) {
+      return 1;
+    }
+    final plateCompare = a.plateNumber.compareTo(b.plateNumber);
+    if (plateCompare != 0) return plateCompare;
+    return a.plateId.compareTo(b.plateId);
+  }
+
+  List<RealTimeRowVM> _buildRequestRows(
+    ViewDocRowsStore store,
+    String area,
+    RealTimeRequestQueueType type,
+    RealTimeTraySortOrder sortOrder,
+  ) {
+    final rows = store
+        .rows(collection: type.collection, area: area)
+        .map(
+          (source) => RealTimeRowVM(
+            plateId: source.plateId,
+            plateNumber: source.plateNumber,
+            location: source.location,
+            primaryAt: source.primaryAt,
+            updatedAt: source.updatedAt,
+            createdAt: source.createdAt,
+            isSelected: source.isSelected,
+            selectedBy: source.selectedBy,
+          ),
+        )
+        .toList(growable: false)
+      ..sort(_compareRequestRows);
+    if (sortOrder == RealTimeTraySortOrder.oldestFirst) {
+      return List<RealTimeRowVM>.unmodifiable(rows.reversed);
+    }
+    return List<RealTimeRowVM>.unmodifiable(rows);
+  }
+
+  void _markRequestHudActivity() {
+    _autoGuard?.markActivity('request_hud');
+  }
+
+  void _beginRequestTrayAutoPause() {
+    if (_requestTrayAutoPauseActive) return;
+    _requestTrayAutoPauseActive = true;
+    _autoGuard?.beginBlock(_requestTrayPauseReason);
+  }
+
+  void _endRequestTrayAutoPause() {
+    if (!_requestTrayAutoPauseActive) return;
+    _requestTrayAutoPauseActive = false;
+    _autoGuard?.endBlock(_requestTrayPauseReason);
+  }
+
+  int _requestTrayTypeIndex(RealTimeRequestQueueType type) {
+    final spec = _requestSpecForType(type);
+    if (spec == null) return -1;
+    return widget.tabs.indexOf(spec);
+  }
+
+  RealTimeTraySortOrder _requestSortOrder(RealTimeRequestQueueType type) {
+    return _requestTraySort[type] ?? RealTimeTraySortOrder.newestFirst;
+  }
+
+  void _toggleRequestTraySort(RealTimeRequestQueueType type) {
+    final previous = _requestSortOrder(type);
+    final next = previous == RealTimeTraySortOrder.newestFirst
+        ? RealTimeTraySortOrder.oldestFirst
+        : RealTimeTraySortOrder.newestFirst;
+    HapticFeedback.selectionClick();
+    setState(() {
+      _requestTraySort[type] = next;
+      _requestTraySwitchDirection = 0;
+    });
+    _emitRequestHudDebug(
+      'request_tray_sort_changed',
+      <String, Object?>{
+        'screen': widget.screen,
+        'type': type.sourceKey,
+        'collection': type.collection,
+        'from': previous.name,
+        'to': next.name,
+        'timeBasis': 'primaryAt',
+      },
+    );
+  }
+
+  Future<void> _toggleRequestTray(
+    RealTimeRequestQueueType type, {
+    required String area,
+    required int count,
+  }) async {
+    if (count <= 0 || _requestTrayClosing) return;
+    _markRequestHudActivity();
+    final previous = _activeRequestTray;
+    if (previous == type) {
+      await _closeRequestTray(reason: 'hud_toggle_same_type');
+      return;
+    }
+    if (previous == null) {
+      _beginRequestTrayAutoPause();
+      _requestTraySwitchDirection = 0;
+      setState(() => _activeRequestTray = type);
+      final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+      if (reduceMotion) {
+        _requestTrayVisibilityController.value = 1;
+      } else {
+        await _requestTrayVisibilityController.forward(from: 0);
+      }
+    } else {
+      final previousIndex = _requestTrayTypeIndex(previous);
+      final nextIndex = _requestTrayTypeIndex(type);
+      _requestTraySwitchDirection = previousIndex < 0 || nextIndex < 0
+          ? 0
+          : nextIndex > previousIndex
+              ? 1
+              : nextIndex < previousIndex
+                  ? -1
+                  : 0;
+      setState(() => _activeRequestTray = type);
+      if (_requestTrayVisibilityController.value < 1) {
+        _requestTrayVisibilityController.value = 1;
+      }
+    }
+    _emitRequestHudDebug(
+      previous == null ? 'request_tray_opened' : 'request_tray_switched',
+      <String, Object?>{
+        'screen': widget.screen,
+        'area': area,
+        'previous': previous?.sourceKey ?? 'none',
+        'active': type.sourceKey,
+        'count': count,
+        'sortOrder': _requestSortOrder(type).name,
+        'owner': 'real_time_tabbed_table',
+        'source': 'status_count_hud',
+        'openMotion': 'fade_translateY_scale_230ms',
+        'closeMotion': 'fade_translateY_scale_190ms_reverse_before_null',
+        'rootOverlayEntry': false,
+        'firebaseAdditionalRead': 0,
+      },
+    );
+  }
+
+  Future<bool> _handleBackRequest() async {
+    if (_requestTrayClosing) {
+      _emitRequestHudDebug(
+        'request_tray_back_consumed_closing',
+        <String, Object?>{
+          'screen': widget.screen,
+          'mode': _viewMode?.mode.name ?? 'unknown',
+          'type': _activeRequestTray?.sourceKey ?? 'none',
+          'routePopBlocked': true,
+          'closing': true,
+          'closeMotion': 'fade_translateY_scale_190ms_reverse_before_null',
+        },
+      );
+      return true;
+    }
+    final active = _activeRequestTray;
+    if (active == null) return false;
+    _emitRequestHudDebug(
+      'request_tray_back_intercepted',
+      <String, Object?>{
+        'screen': widget.screen,
+        'mode': _viewMode?.mode.name ?? 'unknown',
+        'type': active.sourceKey,
+        'collection': active.collection,
+        'routePopBlocked': true,
+        'closeReason': 'system_back',
+        'closing': false,
+        'closeMotion': 'fade_translateY_scale_190ms_reverse_before_null',
+      },
+    );
+    try {
+      await _closeRequestTray(reason: 'system_back');
+    } catch (error, stackTrace) {
+      _emitRequestHudDebug(
+        'request_tray_back_close_failure',
+        <String, Object?>{
+          'screen': widget.screen,
+          'mode': _viewMode?.mode.name ?? 'unknown',
+          'type': active.sourceKey,
+          'error': error,
+          'routePopBlocked': true,
+        },
+      );
+      debugPrint(
+        '[RealTimeRequestHud] request_tray_back_close_failure error=$error\nStackTrace:\n$stackTrace',
+      );
+    }
+    return true;
+  }
+
+  Future<void> _closeRequestTray({required String reason}) async {
+    final active = _activeRequestTray;
+    if (active == null || _requestTrayClosing) return;
+    _requestTrayClosing = true;
+    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    try {
+      if (reduceMotion) {
+        _requestTrayVisibilityController.value = 0;
+      } else {
+        await _requestTrayVisibilityController.reverse();
+      }
+      if (mounted) {
+        setState(() {
+          _activeRequestTray = null;
+          _requestTraySwitchDirection = 0;
+        });
+      } else {
+        _activeRequestTray = null;
+        _requestTraySwitchDirection = 0;
+      }
+      _endRequestTrayAutoPause();
+      _emitRequestHudDebug(
+        'request_tray_closed',
+        <String, Object?>{
+          'screen': widget.screen,
+          'type': active.sourceKey,
+          'reason': reason,
+          'owner': 'real_time_tabbed_table',
+          'motion': 'reverse_complete_then_state_null',
+        },
+      );
+    } finally {
+      _requestTrayClosing = false;
+    }
+  }
+
+  void _scheduleInvalidRequestTrayClose(RealTimeRequestQueueType type) {
+    if (_requestTrayCleanupScheduled) return;
+    _requestTrayCleanupScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _requestTrayCleanupScheduled = false;
+      if (!mounted || _activeRequestTray != type) return;
+      unawaited(_closeRequestTray(reason: 'rows_empty'));
+    });
+  }
+
+  bool _isRequestRowSelectedNow(
+    RealTimeRowVM row,
+    RealTimeRequestQueueType type,
+    String area,
+  ) {
+    if (row.isSelected) return true;
+    final plateId = row.plateId.trim();
+    if (plateId.isEmpty) return false;
+    final currentRows = context.read<ViewDocRowsStore>().rows(
+          collection: type.collection,
+          area: area,
+        );
+    for (final current in currentRows) {
+      if (current.plateId.trim() == plateId) return current.isSelected;
+    }
+    return false;
+  }
+
+  String _expectedPlateTypeForRequest(RealTimeRequestQueueType type) {
+    return switch (type) {
+      RealTimeRequestQueueType.parking => 'parkingRequests',
+      RealTimeRequestQueueType.completed => 'parkingCompleted',
+      RealTimeRequestQueueType.departure => 'departureRequests',
+    };
+  }
+
+  Future<void> _openRequestStatusDock({
+    required RealTimeRowVM row,
+    required RealTimeRequestQueueType type,
+    required String area,
+  }) async {
+    final source = 'status_count_hud_${type.sourceKey}_request_tray';
+    if (_isRequestRowSelectedNow(row, type, area)) {
+      _emitRequestHudDebug(
+        'status_dock_blocked',
+        <String, Object?>{
+          'reason': 'driving',
+          'source': source,
+          'type': type.sourceKey,
+          'collection': type.collection,
+          'plateId': row.plateId,
+          'plateNumber': row.plateNumber,
+          'selectedBy': row.selectedBy ?? '-',
+          'action': 'keep_request_tray_open',
+        },
+      );
+      return;
+    }
+    if (_openingRequestDetail) {
+      _emitRequestHudDebug(
+        'status_dock_blocked',
+        <String, Object?>{
+          'reason': 'already_open',
+          'source': source,
+          'plateId': row.plateId,
+        },
+      );
+      return;
+    }
+    final spec = _requestSpecForType(type);
+    if (spec == null) {
+      _emitRequestHudDebug(
+        'status_dock_blocked',
+        <String, Object?>{
+          'reason': 'spec_missing',
+          'source': source,
+          'type': type.sourceKey,
+          'collection': type.collection,
+          'plateId': row.plateId,
+        },
+      );
+      return;
+    }
+    final plateId = row.plateId.trim();
+    if (plateId.isEmpty) {
+      _emitRequestHudDebug(
+        'status_dock_blocked',
+        <String, Object?>{
+          'reason': 'plate_id_empty',
+          'source': source,
+          'plateNumber': row.plateNumber,
+        },
+      );
+      return;
+    }
+
+    _openingRequestDetail = true;
+    _markRequestHudActivity();
+    _autoGuard?.beginBlock(_requestDockPauseReason);
+    final expectedPlateType = _expectedPlateTypeForRequest(type);
+    _emitRequestHudDebug(
+      'status_dock_open',
+      <String, Object?>{
+        'source': source,
+        'screen': widget.screen,
+        'type': type.sourceKey,
+        'collection': type.collection,
+        'area': area,
+        'plateId': plateId,
+        'plateNumber': row.plateNumber,
+        'location': row.location,
+        'expectedPlateType': expectedPlateType,
+        'trayOwner': 'real_time_tabbed_table',
+        'firebaseAdditionalRead': 0,
+      },
+    );
+    await _closeRequestTray(reason: 'plate_tap_confirmed');
+    try {
+      final dockContext = Navigator.of(context, rootNavigator: true).context;
+      if (!mounted || !dockContext.mounted) return;
+      await spec.openStatusDock(
+        dockContext,
+        RealTimePlateDetailRequest(
+          plateId: plateId,
+          plateNumber: row.plateNumber,
+          area: area,
+          location: row.location,
+          statusTitle: '${spec.label} 상태 처리',
+          cachedPlate: null,
+          loadPlate: () async {
+            final startedAt = DateTime.now();
+            _emitRequestHudDebug(
+              'plate_detail_load_start',
+              <String, Object?>{
+                'source': source,
+                'plateId': plateId,
+                'collection': type.collection,
+                'expectedPlateType': expectedPlateType,
+                'repository': 'PlateRepository.getPlate',
+              },
+            );
+            try {
+              if (!mounted) return null;
+              final plate = await context.read<PlateRepository>().getPlate(plateId);
+              _emitRequestHudDebug(
+                'plate_detail_load_success',
+                <String, Object?>{
+                  'source': source,
+                  'plateId': plateId,
+                  'found': plate != null,
+                  'expectedPlateType': expectedPlateType,
+                  'actualPlateType': plate?.typeEnum?.name ?? '-',
+                  'elapsedMs': DateTime.now().difference(startedAt).inMilliseconds,
+                },
+              );
+              return plate;
+            } catch (error, stackTrace) {
+              _emitRequestHudDebug(
+                'plate_detail_load_failure',
+                <String, Object?>{
+                  'source': source,
+                  'plateId': plateId,
+                  'expectedPlateType': expectedPlateType,
+                  'elapsedMs': DateTime.now().difference(startedAt).inMilliseconds,
+                  'error': error,
+                  'stackTrace': stackTrace,
+                },
+              );
+              rethrow;
+            }
+          },
+        ),
+      );
+      _emitRequestHudDebug(
+        'status_dock_closed',
+        <String, Object?>{
+          'source': source,
+          'type': type.sourceKey,
+          'plateId': plateId,
+        },
+      );
+    } catch (error, stackTrace) {
+      _emitRequestHudDebug(
+        'status_dock_failure',
+        <String, Object?>{
+          'source': source,
+          'type': type.sourceKey,
+          'plateId': plateId,
+          'error': error,
+          'stackTrace': stackTrace,
+        },
+      );
+      rethrow;
+    } finally {
+      _autoGuard?.endBlock(_requestDockPauseReason);
+      _markRequestHudActivity();
+      _openingRequestDetail = false;
+    }
+  }
+
+  Alignment _requestTrayAlignment(RealTimeRequestQueueType type) {
+    final spec = _requestSpecForType(type);
+    if (spec == null || widget.tabs.length <= 1) return Alignment.bottomCenter;
+    final index = widget.tabs.indexOf(spec);
+    if (index <= 0) return Alignment.bottomLeft;
+    if (index >= widget.tabs.length - 1) return Alignment.bottomRight;
+    final ratio = index / (widget.tabs.length - 1);
+    if (ratio < .34) return Alignment.bottomLeft;
+    if (ratio > .66) return Alignment.bottomRight;
+    return Alignment.bottomCenter;
+  }
+
+  Widget _buildRequestTrayOverlay({
+    required String area,
+    required double bottomActionStackExtent,
+  }) {
+    final active = _activeRequestTray;
+    if (active == null || area.trim().isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Positioned.fill(
+      child: Consumer<ViewDocRowsStore>(
+        builder: (context, store, _) {
+          final sortOrder = _requestSortOrder(active);
+          final rows = _buildRequestRows(store, area, active, sortOrder);
+          if (rows.isEmpty && !_requestTrayClosing) {
+            _scheduleInvalidRequestTrayClose(active);
+          }
+          final tokens = CommonUiTheme.of(context);
+          final reduceMotion =
+              MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+          final switchDuration =
+              reduceMotion ? Duration.zero : CommonUiMotion.component;
+          final bottomInset = bottomActionStackExtent + 56;
+          return AnimatedBuilder(
+            animation: _requestTrayVisibilityController,
+            builder: (context, child) {
+              final raw = reduceMotion
+                  ? (_activeRequestTray == null ? 0.0 : 1.0)
+                  : _requestTrayVisibilityController.value;
+              final progress = Curves.easeOutCubic.transform(
+                raw.clamp(0.0, 1.0).toDouble(),
+              );
+              final scale = .985 + (.015 * progress);
+              final translateY = 8 * (1 - progress);
+              return Stack(
+                children: [
+                  Positioned.fill(
+                    bottom: bottomInset - 18,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => unawaited(
+                        _closeRequestTray(reason: 'outside_tap'),
+                      ),
+                      child: ColoredBox(
+                        color: tokens.scrim.withOpacity(.045 * progress),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    top: 0,
+                    bottom: bottomInset,
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final trayWidth = (constraints.maxWidth - 24)
+                            .clamp(0.0, 480.0)
+                            .toDouble();
+                        final trayHeight = (constraints.maxHeight * .52)
+                            .clamp(170.0, 420.0)
+                            .toDouble();
+                        return AnimatedAlign(
+                          alignment: _requestTrayAlignment(active),
+                          duration: switchDuration,
+                          curve: CommonUiMotion.standard,
+                          child: Opacity(
+                            opacity: progress,
+                            child: Transform.translate(
+                              offset: Offset(0, translateY),
+                              child: Transform.scale(
+                                scale: scale,
+                                alignment: Alignment.bottomCenter,
+                                child: Padding(
+                                  padding:
+                                      const EdgeInsets.fromLTRB(12, 0, 12, 6),
+                                  child: ConstrainedBox(
+                                    constraints: BoxConstraints(
+                                      maxWidth: trayWidth,
+                                      maxHeight: trayHeight,
+                                    ),
+                                    child: AnimatedSwitcher(
+                                      duration: switchDuration,
+                                      switchInCurve: CommonUiMotion.enter,
+                                      switchOutCurve: CommonUiMotion.exit,
+                                      transitionBuilder: (child, animation) {
+                                        final direction =
+                                            _requestTraySwitchDirection == 0
+                                                ? 0.0
+                                                : _requestTraySwitchDirection > 0
+                                                    ? .035
+                                                    : -.035;
+                                        final curved = CurvedAnimation(
+                                          parent: animation,
+                                          curve: CommonUiMotion.enter,
+                                          reverseCurve: CommonUiMotion.exit,
+                                        );
+                                        return FadeTransition(
+                                          opacity: curved,
+                                          child: SlideTransition(
+                                            position: Tween<Offset>(
+                                              begin: Offset(direction, .025),
+                                              end: Offset.zero,
+                                            ).animate(curved),
+                                            child: ScaleTransition(
+                                              scale: Tween<double>(
+                                                begin: .985,
+                                                end: 1,
+                                              ).animate(curved),
+                                              child: child,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                      child: RealTimeRequestTray(
+                                        key: ValueKey<String>(
+                                          'request_hud_tray:${active.sourceKey}:${sortOrder.name}',
+                                        ),
+                                        type: active,
+                                        rows: rows,
+                                        sortOrder: sortOrder,
+                                        onSortToggle: () =>
+                                            _toggleRequestTraySort(active),
+                                        onDebugLine:
+                                            _recordRequestHudDebugLine,
+                                        onClose: () => unawaited(
+                                          _closeRequestTray(
+                                            reason: 'close_button',
+                                          ),
+                                        ),
+                                        onRequestTap: (row) =>
+                                            _openRequestStatusDock(
+                                          row: row,
+                                          type: active,
+                                          area: area,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      ),
+    );
   }
 
   String _statusVisualRole(RealTimeTabSpec spec) {
@@ -3576,8 +4698,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
   }
 
   Widget _buildTableContextBar(ColorScheme cs) {
-    final tableMode = (_viewMode?.mode ?? TypeViewMode.table) ==
-        TypeViewMode.table;
+    final tableMode = _renderTableContent;
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     return AnimatedSize(
@@ -3798,9 +4919,9 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     _statusVisualPulseController.forward(from: 0);
   }
 
-  Widget _buildStatusContextOverlay() {
+  Widget _buildTableCollectionAccentOverlay() {
     final tokens = CommonUiTheme.of(context);
-    final tableMode = _viewMode?.mode == TypeViewMode.table;
+    final tableMode = _renderTableContent;
     return Positioned.fill(
       child: ExcludeSemantics(
         child: IgnorePointer(
@@ -3879,26 +5000,37 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
       return const SizedBox.shrink();
     }
 
-    final color = _statusHudColor(spec, tokens);
+    final requestType = _requestTypeForSpec(spec);
     return Selector<ViewDocRowsStore, int>(
       selector: (_, store) =>
           store.rows(collection: collection, area: normalizedArea).length,
       builder: (context, count, _) {
-        return AnimatedBuilder(
-          animation: Listenable.merge(<Listenable>[
-            _hudPulseController,
-            _tableSwipeController,
-          ]),
-          builder: (context, child) {
-            final baseOpacity = _hudBaseOpacityForIndex(index);
-            return Opacity(
-              opacity: _hudOpacity(
-                _hudPulseController.value,
-                baseOpacity: baseOpacity,
-              ),
-              child: child,
-            );
-          },
+        final interactive = requestType != null && count > 0;
+        final activeTray = requestType != null && _activeRequestTray == requestType;
+        if (requestType != null) {
+          _scheduleRequestHudStateTrace(
+            type: requestType,
+            area: normalizedArea,
+            count: count,
+          );
+        }
+        final baseColor = _statusHudColor(spec, tokens);
+        final targetColor = interactive
+            ? _interactiveStatusHudColor(spec, tokens)
+            : baseColor;
+        final countVisual = AnimatedDefaultTextStyle(
+          duration: _motionDuration(CommonUiMotion.selection),
+          curve: CommonUiMotion.standard,
+          style: (Theme.of(context).textTheme.titleLarge ?? const TextStyle())
+              .copyWith(
+            fontSize: 22,
+            fontWeight: FontWeight.w900,
+            color: targetColor,
+            fontFeatures: const <FontFeature>[
+              FontFeature.tabularFigures(),
+            ],
+            height: 1,
+          ),
           child: AnimatedSwitcher(
             duration: _motionDuration(const Duration(milliseconds: 170)),
             switchInCurve: Curves.easeOutCubic,
@@ -3924,18 +5056,69 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
               '$count',
               key: ValueKey<String>('${spec.id}:$count'),
               textAlign: TextAlign.center,
-              style: (Theme.of(context).textTheme.titleLarge ??
-                      const TextStyle())
-                  .copyWith(
-                fontSize: 22,
-                fontWeight: FontWeight.w900,
-                color: color,
-                fontFeatures: const <FontFeature>[
-                  FontFeature.tabularFigures(),
-                ],
-                height: 1,
-              ),
             ),
+          ),
+        );
+
+        return AnimatedBuilder(
+          animation: Listenable.merge(<Listenable>[
+            _hudPulseController,
+            _tableSwipeController,
+          ]),
+          builder: (context, child) {
+            final baseOpacity = interactive ? 1.0 : _hudBaseOpacityForIndex(index);
+            final opacity = interactive
+                ? 1.0
+                : _hudOpacity(
+                    _hudPulseController.value,
+                    baseOpacity: baseOpacity,
+                  );
+            return Opacity(opacity: opacity, child: child);
+          },
+          child: _RequestHudCell(
+            enabled: interactive,
+            attentionVisible: interactive,
+            attentionSteady: false,
+            statusColor: targetColor,
+            semanticsLabel: requestType == null
+                ? '${spec.label} $count대'
+                : '${requestType.label} $count대',
+            onTap: interactive
+                ? () {
+                    HapticFeedback.selectionClick();
+                    _emitRequestHudDebug(
+                      'hud_tap',
+                      <String, Object?>{
+                        'screen': widget.screen,
+                        'type': requestType.sourceKey,
+                        'collection': requestType.collection,
+                        'area': normalizedArea,
+                        'count': count,
+                        'opacity': '1.0',
+                        'color': 'status_emphasized',
+                        'attention': 'bang_breathing_11oclock',
+                        'action': activeTray ? 'close_request_tray' : 'open_request_tray',
+                      },
+                    );
+                    unawaited(
+                      _toggleRequestTray(
+                        requestType,
+                        area: normalizedArea,
+                        count: count,
+                      ),
+                    );
+                  }
+                : null,
+            onLongPress: interactive
+                ? () => unawaited(
+                      _showRequestHudDebugDialog(
+                        type: requestType,
+                        area: normalizedArea,
+                        count: count,
+                      ),
+                    )
+                : null,
+            child: countVisual,
           ),
         );
       },
@@ -3947,46 +5130,36 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     final spec = widget.tabs[normalizedIndex];
     final Widget content;
 
-    if (_isTableEnabled(normalizedIndex)) {
-      final table = KeyedSubtree(
-        key: ValueKey<String>('table:${spec.id}'),
-        child: RealTimeTableBody(
-          controller: _controllers[normalizedIndex],
-          spec: spec,
-          description: widget.description,
-          screen: widget.screen,
-          onUserActivity: _onUserActivity,
-          onAutoPauseStart: _beginAutoPause,
-          onAutoPauseEnd: _endAutoPause,
-        ),
+    if (!_renderTableContent && !_renderStatusContent) {
+      content = const SizedBox.shrink(
+        key: ValueKey<String>('location-presentation:pending'),
       );
-      final custom = widget.bodyBuilder;
-      final activeChild = custom != null
-          ? KeyedSubtree(
-              key: ValueKey<String>('status:${spec.id}'),
-              child: custom(
-                context,
-                spec,
-                _controllers[normalizedIndex],
-              ),
-            )
-          : table;
-      content = AnimatedSwitcher(
-        duration: _motionDuration(const Duration(milliseconds: 320)),
-        switchInCurve: Curves.easeOutCubic,
-        switchOutCurve: Curves.easeInCubic,
-        transitionBuilder: _sharedAxisYTransition,
-        layoutBuilder: (currentChild, previousChildren) {
-          return Stack(
-            fit: StackFit.expand,
-            children: <Widget>[
-              ...previousChildren,
-              if (currentChild != null) currentChild,
-            ],
-          );
-        },
-        child: activeChild,
-      );
+    } else if (_isTableEnabled(normalizedIndex)) {
+      final Widget activeContent;
+      if (_renderStatusContent) {
+        activeContent = KeyedSubtree(
+          key: ValueKey<String>('status:${spec.id}'),
+          child: widget.statusBodyBuilder(
+            context,
+            spec,
+            _controllers[normalizedIndex],
+          ),
+        );
+      } else {
+        activeContent = KeyedSubtree(
+          key: ValueKey<String>('table:${spec.id}'),
+          child: RealTimeTableBody(
+            controller: _controllers[normalizedIndex],
+            spec: spec,
+            description: widget.description,
+            screen: widget.screen,
+            onUserActivity: _onUserActivity,
+            onAutoPauseStart: _beginAutoPause,
+            onAutoPauseEnd: _endAutoPause,
+          ),
+        );
+      }
+      content = _buildModeContentReveal(activeContent);
     } else {
       content = RealTimeLockedPanel(
         title: '${spec.label} 실시간 테이블이 비활성화되어 있습니다',
@@ -3995,7 +5168,9 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     }
 
     return KeyedSubtree(
-      key: ValueKey<String>('state-page:${spec.id}'),
+      key: ValueKey<String>(
+        'state-page:$_renderedContentMode:${spec.id}',
+      ),
       child: content,
     );
   }
@@ -4154,355 +5329,85 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
   Widget _buildLayerSurface(ColorScheme cs) {
     final actions = TypePageQuickActionScope.maybeOf(context);
     if (actions == null) return const SizedBox.shrink();
-    return CommonQuickActionSurface(
-      backgroundColor: widget.tabBarStyle.containerColor(cs),
-      borderColor: widget.tabBarStyle.borderColor(cs),
+    final tokens = CommonUiTheme.of(context);
+    final targetBackground = _shellBackgroundColor(cs, tokens);
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final surface = TweenAnimationBuilder<Color?>(
+      tween: ColorTween(end: targetBackground),
+      duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
+      curve: Curves.easeOutCubic,
+      builder: (context, background, child) {
+        return CommonQuickActionSurface(
+          backgroundColor: background ?? targetBackground,
+          borderColor: widget.tabBarStyle.borderColor(cs),
+          child: child!,
+        );
+      },
       child: _buildQuickActions(context, actions, cs),
+    );
+    return ValueListenableBuilder<bool>(
+      valueListenable: DevAuth.devModeEnabled,
+      child: surface,
+      builder: (context, developerMode, child) {
+        if (!developerMode) return child!;
+        return GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onLongPress: () => unawaited(_showBottomLayoutDebugDialog()),
+          child: child,
+        );
+      },
     );
   }
 
-  double _modeControlRowExtent(BuildContext context) {
-    final bottomInset = MediaQuery.paddingOf(context).bottom;
-    final bottomPadding = bottomInset > 8 ? bottomInset : 8.0;
-    final contentHeight = _parkingViewCapability == ParkingViewCapability.empty
-        ? 72.0
-        : 64.0;
-    return 7 + contentHeight + bottomPadding;
+  Widget _buildBottomSafeAreaSpacer(
+    ColorScheme cs,
+    _BottomLayoutMetrics metrics,
+  ) {
+    final tokens = CommonUiTheme.of(context);
+    final targetBackground = metrics.modeControlExtent > 0
+        ? widget.tabBarStyle.containerColor(cs)
+        : _shellBackgroundColor(cs, tokens);
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    return TweenAnimationBuilder<Color?>(
+      tween: ColorTween(end: targetBackground),
+      duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
+      curve: Curves.easeOutCubic,
+      builder: (context, background, _) {
+        return ColoredBox(
+          color: background ?? targetBackground,
+          child: SizedBox(height: metrics.systemBottomInset),
+        );
+      },
+    );
   }
 
   Widget _buildStatusCountOverlay({
     required String area,
-    required double modeReelExtent,
+    required double bottomActionStackExtent,
   }) {
     final tokens = CommonUiTheme.of(context);
     return Positioned(
       left: 0,
       right: 0,
-      bottom: modeReelExtent + 56,
-      height: 34,
-      child: ExcludeSemantics(
-        child: IgnorePointer(
-          ignoring: true,
-          child: Row(
-            children: List<Widget>.generate(widget.tabs.length, (index) {
-              final spec = widget.tabs[index];
-              return Expanded(
-                child: Align(
-                  alignment: Alignment.center,
-                  child: _buildStatusHudCount(
-                    spec: spec,
-                    index: index,
-                    area: area,
-                    tokens: tokens,
-                  ),
-                ),
-              );
-            }),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildModeReelGlyph(
-    TypeViewMode mode,
-    Color color, {
-    double size = 25,
-  }) {
-    if (mode == TypeViewMode.table) {
-      return Icon(
-        Icons.table_rows_rounded,
-        size: size,
-        color: color,
-      );
-    }
-    return SizedBox.square(
-      dimension: size,
-      child: CustomPaint(
-        painter: _StatusDotMapGlyphPainter(color: color),
-      ),
-    );
-  }
-
-  Widget _buildModeReelItem({
-    required TypeViewMode mode,
-    required Color color,
-    required double translateY,
-    required double rotationX,
-    required double opacity,
-    required double scale,
-  }) {
-    return Transform.translate(
-      offset: Offset(0, translateY),
-      child: Transform(
-        alignment: Alignment.center,
-        transform: Matrix4.identity()
-          ..setEntry(3, 2, .0018)
-          ..rotateX(rotationX),
-        child: Transform.scale(
-          scale: scale,
-          child: Opacity(
-            opacity: opacity.clamp(0.0, 1.0).toDouble(),
-            child: _buildModeReelGlyph(mode, color),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildModeReelGuide({
-    required ColorScheme cs,
-    required TypeViewMode nextMode,
-    required double opacity,
-    required double offsetY,
-  }) {
-    final guideColor = cs.primary.withOpacity(.64 * opacity);
-    final ghostColor = cs.primary.withOpacity(.30 * opacity);
-    return Transform.translate(
-      offset: Offset(0, offsetY),
-      child: Opacity(
-        opacity: opacity.clamp(0.0, 1.0).toDouble(),
-        child: Stack(
-          fit: StackFit.expand,
-          children: <Widget>[
-            Align(
-              alignment: const Alignment(0, -1),
-              child: Icon(
-                Icons.keyboard_arrow_up_rounded,
-                size: 15,
-                color: guideColor,
+      bottom: bottomActionStackExtent + 1,
+      height: 48,
+      child: Row(
+        children: List<Widget>.generate(widget.tabs.length, (index) {
+          final spec = widget.tabs[index];
+          return Expanded(
+            child: Align(
+              alignment: Alignment.center,
+              child: _buildStatusHudCount(
+                spec: spec,
+                index: index,
+                area: area,
+                tokens: tokens,
               ),
             ),
-            Align(
-              alignment: const Alignment(0, -.58),
-              child: _buildModeReelGlyph(
-                nextMode,
-                ghostColor,
-                size: 11,
-              ),
-            ),
-            Align(
-              alignment: const Alignment(0, .58),
-              child: _buildModeReelGlyph(
-                nextMode,
-                ghostColor,
-                size: 11,
-              ),
-            ),
-            Align(
-              alignment: const Alignment(0, 1),
-              child: Icon(
-                Icons.keyboard_arrow_down_rounded,
-                size: 15,
-                color: guideColor,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildModeReelVisual(ColorScheme cs) {
-    final reduceMotion =
-        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    return ExcludeSemantics(
-      child: SizedBox(
-        width: 112,
-        height: 64,
-        child: ClipRect(
-          child: AnimatedBuilder(
-            animation: Listenable.merge(<Listenable>[
-              _modeReelController,
-              _modeReelHintController,
-            ]),
-            builder: (context, _) {
-              final liveMode = _viewMode?.mode ?? TypeViewMode.table;
-              final from = (_modeReelDragActive || _modeReelTransitioning)
-                  ? (_modeReelFromMode ?? liveMode)
-                  : liveMode;
-              final to = _oppositeViewMode(from);
-              final progress = _modeReelController.value
-                  .clamp(0.0, 1.0)
-                  .toDouble();
-              final direction = _modeReelPhysicalDirection == 0
-                  ? -1
-                  : _modeReelPhysicalDirection;
-              final guideOpacity =
-                  (1 - progress * 2.2).clamp(0.0, 1.0).toDouble();
-              final hintWave = reduceMotion || progress > .01
-                  ? 0.0
-                  : math.sin(_modeReelHintController.value * math.pi * 2);
-              final hintOffset = hintWave * 2.4;
-              if (reduceMotion) {
-                final visibleMode = progress >= .5 ? to : from;
-                return Stack(
-                  fit: StackFit.expand,
-                  children: <Widget>[
-                    _buildModeReelGuide(
-                      cs: cs,
-                      nextMode: _oppositeViewMode(visibleMode),
-                      opacity: 1,
-                      offsetY: 0,
-                    ),
-                    Center(
-                      child: _buildModeReelGlyph(
-                        visibleMode,
-                        cs.primary,
-                        size: 27,
-                      ),
-                    ),
-                  ],
-                );
-              }
-              final travel = 36.0;
-              final maxAngle = math.pi * 55 / 180;
-              final currentY = direction * travel * progress;
-              final nextY = -direction * travel * (1 - progress);
-              final currentAngle = direction * maxAngle * progress;
-              final nextAngle = -direction * maxAngle * (1 - progress);
-              final currentOpacity = 1 - (.70 * progress);
-              final nextOpacity = progress <= .02
-                  ? 0.0
-                  : .30 + (.70 * progress);
-              final currentScale = 1 - (.12 * progress);
-              final nextScale = .88 + (.12 * progress);
-              return Stack(
-                fit: StackFit.expand,
-                children: <Widget>[
-                  _buildModeReelGuide(
-                    cs: cs,
-                    nextMode: to,
-                    opacity: guideOpacity,
-                    offsetY: hintOffset,
-                  ),
-                  Center(
-                    child: _buildModeReelItem(
-                      mode: to,
-                      color: cs.primary,
-                      translateY: nextY,
-                      rotationX: nextAngle,
-                      opacity: nextOpacity,
-                      scale: nextScale,
-                    ),
-                  ),
-                  Center(
-                    child: _buildModeReelItem(
-                      mode: from,
-                      color: cs.primary,
-                      translateY: currentY,
-                      rotationX: currentAngle,
-                      opacity: currentOpacity,
-                      scale: currentScale,
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildModeReelSurface(ColorScheme cs) {
-    final mode = _viewMode?.mode ?? TypeViewMode.table;
-    final nextMode = _oppositeViewMode(mode);
-    return Container(
-      key: const ValueKey<String>('parking-mode:table-and-status'),
-      color: widget.tabBarStyle.containerColor(cs),
-      child: SafeArea(
-        top: false,
-        minimum: const EdgeInsets.fromLTRB(12, 7, 12, 8),
-        child: Semantics(
-          button: true,
-          enabled: _canUseModeReel(),
-          label: '보기 모드 전환 및 부모 주차 구역 선택',
-          value:
-              '현재 ${mode == TypeViewMode.table ? '테이블' : '현황'} 보기. 위 또는 아래로 밀어 ${nextMode == TypeViewMode.table ? '테이블' : '현황'} 보기로 전환할 수 있습니다. 탭하면 부모 주차 구역을 선택합니다.',
-          onTap: _onModeReelTap,
-          onLongPress: () => unawaited(_onModeReelLongPress()),
-          customSemanticsActions: _modeReelSemanticsActions(),
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            excludeFromSemantics: true,
-            onTap: _onModeReelTap,
-            onLongPressStart: (_) => unawaited(_onModeReelLongPress()),
-            onVerticalDragStart: _onModeReelDragStart,
-            onVerticalDragUpdate: _onModeReelDragUpdate,
-            onVerticalDragEnd: _onModeReelDragEnd,
-            onVerticalDragCancel: _onModeReelDragCancel,
-            child: SizedBox(
-              height: 64,
-              width: double.infinity,
-              child: Center(
-                child: KeyedSubtree(
-                  key: _modeReelSourceKey,
-                  child: AnimatedScale(
-                    scale: _modeReelSelectorPressActive ? .94 : 1,
-                    duration: _motionDuration(
-                      const Duration(milliseconds: 120),
-                    ),
-                    curve: Curves.easeOutCubic,
-                    child: AnimatedOpacity(
-                      opacity: _modeReelSelectorPressActive ? .88 : 1,
-                      duration: _motionDuration(
-                        const Duration(milliseconds: 120),
-                      ),
-                      child: _buildModeReelVisual(cs),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTableOnlyModeSurface(ColorScheme cs) {
-    return Container(
-      key: const ValueKey<String>('parking-mode:table-only'),
-      color: widget.tabBarStyle.containerColor(cs),
-      child: SafeArea(
-        top: false,
-        minimum: const EdgeInsets.fromLTRB(12, 7, 12, 8),
-        child: Semantics(
-          label: '현재 지역은 테이블 보기만 지원합니다.',
-          child: SizedBox(
-            height: 64,
-            width: double.infinity,
-            child: Center(
-              child: ExcludeSemantics(
-                child: SizedBox(
-                  width: 112,
-                  height: 64,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: <Widget>[
-                      Center(
-                        child: Icon(
-                          Icons.table_rows_rounded,
-                          size: 29,
-                          color: cs.primary,
-                        ),
-                      ),
-                      Align(
-                        alignment: const Alignment(0, .76),
-                        child: Icon(
-                          Icons.horizontal_rule_rounded,
-                          size: 26,
-                          color: cs.outlineVariant.withOpacity(.72),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
+          );
+        }),
       ),
     );
   }
@@ -4512,33 +5417,30 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     return Container(
       key: const ValueKey<String>('parking-mode:loading'),
       color: widget.tabBarStyle.containerColor(cs),
-      child: SafeArea(
-        top: false,
-        minimum: const EdgeInsets.fromLTRB(12, 7, 12, 8),
-        child: SizedBox(
-          height: 64,
-          child: Center(
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.2,
-                    color: cs.primary,
-                  ),
+      padding: const EdgeInsets.fromLTRB(12, 7, 12, 8),
+      child: SizedBox(
+        height: 64,
+        child: Center(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.2,
+                  color: cs.primary,
                 ),
-                const SizedBox(width: 10),
-                Text(
-                  '주차 구역 확인 중',
-                  style: text.labelLarge?.copyWith(
-                    color: cs.onSurfaceVariant,
-                    fontWeight: FontWeight.w800,
-                  ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                '주차 구역 확인 중',
+                style: text.labelLarge?.copyWith(
+                  color: cs.onSurfaceVariant,
+                  fontWeight: FontWeight.w800,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -4585,11 +5487,9 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     return Container(
       key: const ValueKey<String>('parking-mode:empty'),
       color: widget.tabBarStyle.containerColor(cs),
-      child: SafeArea(
-        top: false,
-        minimum: const EdgeInsets.fromLTRB(12, 7, 12, 8),
-        child: SizedBox(
-          height: 72,
+      padding: const EdgeInsets.fromLTRB(12, 7, 12, 8),
+      child: SizedBox(
+        height: 72,
           child: Row(
             children: <Widget>[
               Icon(
@@ -4640,7 +5540,6 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
                 ),
               ),
             ],
-          ),
         ),
       ),
     );
@@ -4652,8 +5551,12 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     final child = switch (_parkingViewCapability) {
       ParkingViewCapability.loading => _buildLocationLoadingSurface(cs),
       ParkingViewCapability.empty => _buildLocationEmptySurface(cs),
-      ParkingViewCapability.tableOnly => _buildTableOnlyModeSurface(cs),
-      ParkingViewCapability.tableAndStatus => _buildModeReelSurface(cs),
+      ParkingViewCapability.tableOnly => const SizedBox.shrink(
+          key: ValueKey<String>('parking-mode:table-only-no-reel'),
+        ),
+      ParkingViewCapability.statusOnly => const SizedBox.shrink(
+          key: ValueKey<String>('parking-mode:status-only-no-reel'),
+        ),
     };
     return AnimatedSize(
       duration: reduceMotion
@@ -4691,39 +5594,274 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final tokens = CommonUiTheme.of(context);
     final area = _resolveArea();
-    final modeReelExtent = _modeControlRowExtent(context);
-    return Container(
-      color: cs.surface,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          Column(
-            children: [
-              _buildTableContextBar(cs),
-              Expanded(
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    _buildSwipeableStateContent(),
-                    _buildStatusContextOverlay(),
-                    _transitionMaskLayer(context),
-                  ],
+    final bottomLayout = _bottomLayoutMetrics(context);
+    _scheduleBottomLayoutTrace(bottomLayout);
+    _scheduleRenderSeparationTrace();
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final shellBackground = _shellBackgroundColor(cs, tokens);
+    return RealTimeStatusActionScope(
+      onOpenParentSelector: _openStatusHeaderParentSelector,
+      child: AnimatedContainer(
+        duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
+        curve: Curves.easeOutCubic,
+        color: shellBackground,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Column(
+              children: [
+                if (_renderTableContent) _buildTableContextBar(cs),
+                Expanded(
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      _buildSwipeableStateContent(),
+                      if (_renderTableContent)
+                        _buildTableCollectionAccentOverlay(),
+                      _transitionMaskLayer(context),
+                    ],
+                  ),
                 ),
-              ),
-              _buildLayerSurface(cs),
-              _buildParkingModeControlSurface(cs),
-            ],
-          ),
-          _buildStatusCountOverlay(
-            area: area,
-            modeReelExtent: modeReelExtent,
-          ),
-        ],
+                _buildLayerSurface(cs),
+                _buildParkingModeControlSurface(cs),
+                _buildBottomSafeAreaSpacer(cs, bottomLayout),
+              ],
+            ),
+            _buildRequestTrayOverlay(
+              area: area,
+              bottomActionStackExtent: bottomLayout.bottomActionStackExtent,
+            ),
+            _buildStatusCountOverlay(
+              area: area,
+              bottomActionStackExtent: bottomLayout.bottomActionStackExtent,
+            ),
+          ],
+        ),
       ),
     );
   }
 
+}
+
+
+class _BottomLayoutMetrics {
+  const _BottomLayoutMetrics({
+    required this.systemBottomInset,
+    required this.quickActionExtent,
+    required this.modeControlExtent,
+  });
+
+  final double systemBottomInset;
+  final double quickActionExtent;
+  final double modeControlExtent;
+
+  double get bottomActionStackExtent =>
+      systemBottomInset + quickActionExtent + modeControlExtent;
+
+  double get hudBottom => bottomActionStackExtent + 1;
+
+  double get trayBottom => bottomActionStackExtent + 56;
+}
+
+
+class _RequestHudCell extends StatefulWidget {
+  const _RequestHudCell({
+    required this.enabled,
+    required this.attentionVisible,
+    required this.attentionSteady,
+    required this.statusColor,
+    required this.semanticsLabel,
+    required this.child,
+    this.onTap,
+    this.onLongPress,
+  });
+
+  final bool enabled;
+  final bool attentionVisible;
+  final bool attentionSteady;
+  final Color statusColor;
+  final String semanticsLabel;
+  final Widget child;
+  final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
+
+  @override
+  State<_RequestHudCell> createState() => _RequestHudCellState();
+}
+
+class _RequestHudCellState extends State<_RequestHudCell> {
+  bool _pressed = false;
+
+  void _setPressed(bool value) {
+    if (!mounted || _pressed == value) return;
+    setState(() => _pressed = value);
+  }
+
+  @override
+  void didUpdateWidget(covariant _RequestHudCell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!widget.enabled && _pressed) {
+      _pressed = false;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final pressDuration = reduceMotion ? Duration.zero : const Duration(milliseconds: 90);
+    return Semantics(
+      button: widget.enabled,
+      enabled: widget.enabled,
+      label: widget.semanticsLabel,
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTapDown: widget.enabled ? (_) => _setPressed(true) : null,
+        onTapUp: widget.enabled ? (_) => _setPressed(false) : null,
+        onTapCancel: widget.enabled ? () => _setPressed(false) : null,
+        onTap: widget.enabled ? widget.onTap : null,
+        onLongPress: widget.enabled ? widget.onLongPress : null,
+        child: SizedBox(
+          width: double.infinity,
+          height: 48,
+          child: AnimatedScale(
+            duration: pressDuration,
+            curve: Curves.easeOutCubic,
+            scale: _pressed ? .96 : 1,
+            child: Stack(
+              alignment: Alignment.center,
+              clipBehavior: Clip.none,
+              children: [
+                widget.child,
+                Transform.translate(
+                  offset: const Offset(-16, -13),
+                  child: _RequestAttentionMark(
+                    visible: widget.attentionVisible,
+                    steady: widget.attentionSteady,
+                    color: widget.statusColor,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RequestAttentionMark extends StatefulWidget {
+  const _RequestAttentionMark({
+    required this.visible,
+    required this.steady,
+    required this.color,
+  });
+
+  final bool visible;
+  final bool steady;
+  final Color color;
+
+  @override
+  State<_RequestAttentionMark> createState() => _RequestAttentionMarkState();
+}
+
+class _RequestAttentionMarkState extends State<_RequestAttentionMark>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  bool _reduceMotion = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 950),
+      value: 0,
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final next = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (_reduceMotion != next) {
+      _reduceMotion = next;
+    }
+    _syncAnimation();
+  }
+
+  @override
+  void didUpdateWidget(covariant _RequestAttentionMark oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncAnimation();
+  }
+
+  void _syncAnimation() {
+    if (!widget.visible || widget.steady || _reduceMotion) {
+      _controller.stop();
+      _controller.value = widget.visible ? 1 : 0;
+      return;
+    }
+    if (!_controller.isAnimating) {
+      _controller.repeat(reverse: true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final duration = _reduceMotion ? Duration.zero : const Duration(milliseconds: 230);
+    return AnimatedOpacity(
+      duration: duration,
+      curve: Curves.easeOutCubic,
+      opacity: widget.visible ? 1 : 0,
+      child: AnimatedScale(
+        duration: duration,
+        curve: Curves.easeOutBack,
+        scale: widget.visible ? 1 : .82,
+        child: AnimatedBuilder(
+          animation: _controller,
+          builder: (context, child) {
+            final pulse = widget.steady || _reduceMotion
+                ? 1.0
+                : Curves.easeInOutSine.transform(_controller.value);
+            final scale = widget.steady || _reduceMotion ? 1.0 : 1 + (.08 * pulse);
+            final opacity = widget.steady || _reduceMotion ? 1.0 : .76 + (.24 * pulse);
+            return Opacity(
+              opacity: opacity,
+              child: Transform.scale(
+                scale: scale,
+                child: child,
+              ),
+            );
+          },
+          child: Text(
+            '!',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: widget.color,
+              fontSize: 11,
+              height: 1,
+              fontWeight: FontWeight.w900,
+              shadows: <Shadow>[
+                Shadow(
+                  color: widget.color.withOpacity(.24),
+                  blurRadius: 6,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _ParentSelectorItem {
@@ -5485,31 +6623,3 @@ class _ParentSelectorTileState extends State<_ParentSelectorTile> {
   }
 }
 
-class _StatusDotMapGlyphPainter extends CustomPainter {
-  const _StatusDotMapGlyphPainter({required this.color});
-
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
-    final radius = size.shortestSide * .105;
-    final points = <Offset>[
-      Offset(size.width * .24, size.height * .28),
-      Offset(size.width * .76, size.height * .28),
-      Offset(size.width * .50, size.height * .50),
-      Offset(size.width * .24, size.height * .72),
-      Offset(size.width * .76, size.height * .72),
-    ];
-    for (final point in points) {
-      canvas.drawCircle(point, radius, paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _StatusDotMapGlyphPainter oldDelegate) {
-    return oldDelegate.color != color;
-  }
-}

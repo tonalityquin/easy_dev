@@ -21,14 +21,14 @@ class ParkingCompletedRealtimeTabGate {
 
 class DoubleParkingCompletedRealTimeTable extends StatelessWidget {
   final VoidCallback? onClose;
-  final bool statusPreview;
   final String area;
+  final RealTimeTabbedTableBackController? backController;
 
   const DoubleParkingCompletedRealTimeTable({
     super.key,
     this.onClose,
-    this.statusPreview = false,
     this.area = '',
+    this.backController,
   });
 
   @override
@@ -66,21 +66,20 @@ class DoubleParkingCompletedRealTimeTable extends StatelessWidget {
       initialIndex: 0,
       screen: 'double_parking_completed_view_embedded',
       description: '자동 갱신됩니다.',
+      backController: backController,
       viewModeAuto: const RealTimeViewModeAutoSpec(),
-      bodyBuilder: statusPreview
-          ? (ctx, spec, ctrl) => RealTimeStatusPreviewBody(
-                controller: ctrl,
-                area: area,
-                screen: 'double_parking_completed_status_dot_map',
-                specs: tabs,
-                overlay: const <ParkingStatusOverlaySpec>[
-                  ParkingStatusOverlaySpec(
-                    collection: 'parking_completed_view',
-                    status: ParkingSlotStatus.parked,
-                  ),
-                ],
-              )
-          : null,
+      statusBodyBuilder: (ctx, spec, ctrl) => RealTimeStatusPreviewBody(
+            controller: ctrl,
+            area: area,
+            screen: 'double_parking_completed_status_dot_map',
+            specs: tabs,
+            overlay: const <ParkingStatusOverlaySpec>[
+              ParkingStatusOverlaySpec(
+                collection: 'parking_completed_view',
+                status: ParkingSlotStatus.parked,
+              ),
+            ],
+          ),
     );
   }
 }

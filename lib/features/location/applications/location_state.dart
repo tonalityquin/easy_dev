@@ -16,7 +16,16 @@ enum ParkingViewCapability {
   loading,
   empty,
   tableOnly,
-  tableAndStatus,
+  statusOnly,
+}
+
+enum ParkingLocationProfile {
+  loading,
+  empty,
+  textOnly,
+  spatialOnly,
+  mixed,
+  invalid,
 }
 
 class LocationState extends ChangeNotifier {
@@ -51,6 +60,29 @@ class LocationState extends ChangeNotifier {
 
   bool get isLoading => _isLoading;
 
+  bool _hasSpatialGeometry(LocationModel location) {
+    return location.parkingGrid != null ||
+        location.childRect != null ||
+        location.childSlots.isNotEmpty ||
+        location.childSlotAreaIds.isNotEmpty;
+  }
+
+  bool _isSpatialLocation(LocationModel location) {
+    final type = (location.type ?? 'single').trim();
+    if (type == 'composite_parent' ||
+        type == 'composite_child' ||
+        type == 'composite') {
+      return true;
+    }
+    return _hasSpatialGeometry(location);
+  }
+
+  bool _isTextLocation(LocationModel location) {
+    final type = (location.type ?? 'single').trim();
+    if (_hasSpatialGeometry(location)) return false;
+    return type.isEmpty || type == 'single';
+  }
+
   int get hierarchicalLocationCount => _locations.where((location) {
         final type = (location.type ?? 'single').trim();
         return type == 'composite_parent' ||
@@ -63,13 +95,43 @@ class LocationState extends ChangeNotifier {
         return type.isEmpty || type == 'single';
       }).length;
 
-  ParkingViewCapability get parkingViewCapability {
-    if (_isLoading) return ParkingViewCapability.loading;
-    if (_locations.isEmpty) return ParkingViewCapability.empty;
-    if (hierarchicalLocationCount > 0) {
-      return ParkingViewCapability.tableAndStatus;
+  int get spatialLocationCount =>
+      _locations.where(_isSpatialLocation).length;
+
+  int get textLocationCount => _locations.where(_isTextLocation).length;
+
+  int get unknownLocationCount => _locations.where((location) {
+        return !_isSpatialLocation(location) && !_isTextLocation(location);
+      }).length;
+
+  ParkingLocationProfile get parkingLocationProfile {
+    if (_isLoading) return ParkingLocationProfile.loading;
+    if (_locations.isEmpty) return ParkingLocationProfile.empty;
+    final spatialCount = spatialLocationCount;
+    final textCount = textLocationCount;
+    final unknownCount = unknownLocationCount;
+    if (unknownCount > 0) return ParkingLocationProfile.invalid;
+    if (spatialCount > 0 && textCount > 0) {
+      return ParkingLocationProfile.mixed;
     }
-    return ParkingViewCapability.tableOnly;
+    if (spatialCount > 0) return ParkingLocationProfile.spatialOnly;
+    if (textCount > 0) return ParkingLocationProfile.textOnly;
+    return ParkingLocationProfile.invalid;
+  }
+
+  ParkingViewCapability get parkingViewCapability {
+    switch (parkingLocationProfile) {
+      case ParkingLocationProfile.loading:
+        return ParkingViewCapability.loading;
+      case ParkingLocationProfile.empty:
+        return ParkingViewCapability.empty;
+      case ParkingLocationProfile.spatialOnly:
+        return ParkingViewCapability.statusOnly;
+      case ParkingLocationProfile.textOnly:
+      case ParkingLocationProfile.mixed:
+      case ParkingLocationProfile.invalid:
+        return ParkingViewCapability.tableOnly;
+    }
   }
 
   Map<String, int> get plateCountsByDisplayName => _plateCountsByDisplayName;

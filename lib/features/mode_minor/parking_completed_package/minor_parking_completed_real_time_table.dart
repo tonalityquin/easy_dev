@@ -44,14 +44,14 @@ class ParkingCompletedRealtimeTabGate {
 
 class MinorParkingCompletedRealTimeTable extends StatelessWidget {
   final VoidCallback? onClose;
-  final bool statusPreview;
   final String area;
+  final RealTimeTabbedTableBackController? backController;
 
   const MinorParkingCompletedRealTimeTable({
     super.key,
     this.onClose,
-    this.statusPreview = false,
     this.area = '',
+    this.backController,
   });
 
   @override
@@ -126,32 +126,30 @@ class MinorParkingCompletedRealTimeTable extends StatelessWidget {
       initialIndex: 1,
       screen: 'minor_reverse_table_embedded',
       description: '자동 갱신됩니다.',
+      backController: backController,
       viewModeAuto: const RealTimeViewModeAutoSpec(),
       useListContextSurface: true,
       showColoredSwipeChevrons: true,
-      bodyBuilder: statusPreview
-          ? (ctx, spec, ctrl) => RealTimeStatusPreviewBody(
-                controller: ctrl,
-                area: area,
-                screen: 'minor_parking_completed_status_dot_map',
-                specs: tabs,
-                showParkingRequestShelf: true,
-                overlay: const <ParkingStatusOverlaySpec>[
-                  ParkingStatusOverlaySpec(
-                    collection: 'parking_requests_view',
-                    status: ParkingSlotStatus.parkingRequest,
-                  ),
-                  ParkingStatusOverlaySpec(
-                    collection: 'parking_completed_view',
-                    status: ParkingSlotStatus.parked,
-                  ),
-                  ParkingStatusOverlaySpec(
-                    collection: 'departure_requests_view',
-                    status: ParkingSlotStatus.departureRequest,
-                  ),
-                ],
-              )
-          : null,
+      statusBodyBuilder: (ctx, spec, ctrl) => RealTimeStatusPreviewBody(
+            controller: ctrl,
+            area: area,
+            screen: 'minor_parking_completed_status_dot_map',
+            specs: tabs,
+            overlay: const <ParkingStatusOverlaySpec>[
+              ParkingStatusOverlaySpec(
+                collection: 'parking_requests_view',
+                status: ParkingSlotStatus.parkingRequest,
+              ),
+              ParkingStatusOverlaySpec(
+                collection: 'parking_completed_view',
+                status: ParkingSlotStatus.parked,
+              ),
+              ParkingStatusOverlaySpec(
+                collection: 'departure_requests_view',
+                status: ParkingSlotStatus.departureRequest,
+              ),
+            ],
+          ),
     );
   }
 }

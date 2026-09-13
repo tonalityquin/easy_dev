@@ -19,8 +19,10 @@ import '../parking_spatial/parking_spatial_child_regions.dart';
 import '../parking_spatial/parking_spatial_geometry.dart';
 import '../parking_spatial/parking_spatial_tower_slot_grid.dart';
 import '../preview_package/parking_grid_3d_preview.dart';
+import 'real_time_driving_plate_text.dart';
 import 'real_time_sort_state.dart';
 import 'real_time_source_rect_modal.dart';
+import 'real_time_status_action_scope.dart';
 import 'real_time_tab_controller.dart';
 import 'real_time_table_row_vm.dart';
 import 'real_time_table_zone.dart';
@@ -359,7 +361,7 @@ class _RealTimeLocationBoardState extends State<RealTimeLocationBoard>
             'scope': 'departure_request_only',
             'layer': 'outer_halo',
             'sharedController': true,
-            'plateLast4Motion': 'static',
+            'plateLast4Motion': 'center_strike_190ms_when_driving',
           },
         );
       }
@@ -409,8 +411,13 @@ class _RealTimeLocationBoardState extends State<RealTimeLocationBoard>
           'departurePulseController': 'shared_board_controller',
           'departurePulseActive': _departurePulseController.isAnimating,
           'departureInProgressPulse': false,
-          'plateLast4Motion': 'static_during_pulse',
+          'plateLast4Motion': 'static_text_center_strike_190ms_when_driving',
           'plateLast4Opacity': 1.0,
+          'statusShellBackground': 'common_ui_canvas',
+          'statusContentBackground': 'common_ui_canvas',
+          'parkingGuidanceCanvas': 'common_ui_canvas',
+          'backgroundUnified': true,
+          'backgroundMotion': reduceMotion ? 'disabled' : '230ms_easeOutCubic',
           'reduceMotion': reduceMotion,
         },
       );
@@ -469,7 +476,12 @@ class _RealTimeLocationBoardState extends State<RealTimeLocationBoard>
         'departurePulseScope': 'departure_request_only',
         'departurePulseController': 'shared_board_controller',
         'departureInProgressPulse': false,
-        'plateLast4Motion': 'static_during_pulse',
+        'plateLast4Motion': 'static_text_center_strike_190ms_when_driving',
+        'statusShellBackground': 'common_ui_canvas',
+        'statusContentBackground': 'common_ui_canvas',
+        'parkingGuidanceCanvas': 'common_ui_canvas',
+        'backgroundUnified': true,
+        'backgroundMotion': _reduceMotion ? 'disabled' : '230ms_easeOutCubic',
         'developerCopy': 'debugPrint_code',
       },
     );
@@ -958,29 +970,35 @@ class _RealTimeLocationBoardState extends State<RealTimeLocationBoard>
       },
     );
 
-    return Column(
-      children: [
-        Expanded(
-          child: multiple
-              ? Listener(
-                  behavior: HitTestBehavior.translucent,
-                  onPointerDown: _onPointerDown,
-                  onPointerMove: _onPointerMove,
-                  onPointerUp: _onPointerUp,
-                  onPointerCancel: _onPointerCancel,
-                  child: pager,
-                )
-              : slide(0),
-        ),
-        if (multiple) ...[
-          _PageIndicator(
-            count: widget.groups.length,
-            index: currentIndex,
-            reduceMotion: reduceMotion,
+    final tokens = CommonUiTheme.of(context);
+    return AnimatedContainer(
+      duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
+      curve: Curves.easeOutCubic,
+      color: tokens.canvas,
+      child: Column(
+        children: [
+          Expanded(
+            child: multiple
+                ? Listener(
+                    behavior: HitTestBehavior.translucent,
+                    onPointerDown: _onPointerDown,
+                    onPointerMove: _onPointerMove,
+                    onPointerUp: _onPointerUp,
+                    onPointerCancel: _onPointerCancel,
+                    child: pager,
+                  )
+                : slide(0),
           ),
-          const SizedBox(height: 8),
+          if (multiple) ...[
+            _PageIndicator(
+              count: widget.groups.length,
+              index: currentIndex,
+              reduceMotion: reduceMotion,
+            ),
+            const SizedBox(height: 8),
+          ],
         ],
-      ],
+      ),
     );
   }
 }
@@ -1020,7 +1038,9 @@ class _ParentMapSlide extends StatefulWidget {
 }
 
 class _ParentMapSlideState extends State<_ParentMapSlide> {
+  final GlobalKey _parentHeaderKey = GlobalKey(debugLabel: 'status-parent-header');
   String? _focusedZoneKey;
+  bool _parentHeaderPressed = false;
   bool _focusAutoPauseActive = false;
   bool _tickerModeEnabled = true;
   bool _dialogRouteOpen = false;
@@ -1037,6 +1057,44 @@ class _ParentMapSlideState extends State<_ParentMapSlide> {
       if (zone.fullName == key) return zone;
     }
     return null;
+  }
+
+  Future<void> _openParentSelectorFromHeader() async {
+    final scope = RealTimeStatusActionScope.maybeOf(context);
+    if (scope == null) {
+      widget.onDebugLog(
+        'status_parent_header_tap_ignored',
+        <String, Object?>{
+          'parent': widget.group.group,
+          'reason': 'status_action_scope_unavailable',
+        },
+      );
+      return;
+    }
+    final headerContext = _parentHeaderKey.currentContext;
+    final renderObject = headerContext?.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) {
+      widget.onDebugLog(
+        'status_parent_header_tap_ignored',
+        <String, Object?>{
+          'parent': widget.group.group,
+          'reason': 'source_rect_unavailable',
+        },
+      );
+      return;
+    }
+    final sourceRect = renderObject.localToGlobal(Offset.zero) & renderObject.size;
+    widget.onUserActivity();
+    HapticFeedback.selectionClick();
+    widget.onDebugLog(
+      'status_parent_header_tapped',
+      <String, Object?>{
+        'parent': widget.group.group,
+        'sourceRect': '${sourceRect.left.toStringAsFixed(1)},${sourceRect.top.toStringAsFixed(1)},${sourceRect.width.toStringAsFixed(1)},${sourceRect.height.toStringAsFixed(1)}',
+        'action': 'open_parent_selector_and_order_editor',
+      },
+    );
+    await scope.onOpenParentSelector(sourceRect, widget.group.group);
   }
 
   @override
@@ -1611,13 +1669,52 @@ class _ParentMapSlideState extends State<_ParentMapSlide> {
             child: Row(
               children: [
                 Expanded(
-                  child: Text(
-                    widget.group.group,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: text.titleSmall?.copyWith(
-                      color: cs.onSurface,
-                      fontWeight: FontWeight.w900,
+                  child: Semantics(
+                    button: true,
+                    label: '부모 주차 구역 순서 관리',
+                    child: GestureDetector(
+                      key: _parentHeaderKey,
+                      behavior: HitTestBehavior.opaque,
+                      onTapDown: (_) {
+                        if (!mounted) return;
+                        setState(() => _parentHeaderPressed = true);
+                      },
+                      onTapCancel: () {
+                        if (!mounted) return;
+                        setState(() => _parentHeaderPressed = false);
+                      },
+                      onTapUp: (_) {
+                        if (!mounted) return;
+                        setState(() => _parentHeaderPressed = false);
+                      },
+                      onTap: () => unawaited(_openParentSelectorFromHeader()),
+                      child: AnimatedScale(
+                        scale: _parentHeaderPressed ? .985 : 1,
+                        duration: reduceMotion
+                            ? Duration.zero
+                            : const Duration(milliseconds: 100),
+                        curve: Curves.easeOutCubic,
+                        alignment: Alignment.centerLeft,
+                        child: AnimatedOpacity(
+                          opacity: _parentHeaderPressed ? .86 : 1,
+                          duration: reduceMotion
+                              ? Duration.zero
+                              : const Duration(milliseconds: 100),
+                          curve: Curves.easeOutCubic,
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              widget.group.group,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: text.titleSmall?.copyWith(
+                                color: cs.onSurface,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -1982,7 +2079,7 @@ class _TowerStatusGridState extends State<_TowerStatusGrid> {
           'departureTone': 'statusDepartureRequested',
           'departurePulse': widget.reduceMotion ? 'disabled' : '940ms_reverse',
           'departurePulseController': 'shared_board_controller',
-          'plateLast4Motion': 'static_during_pulse',
+          'plateLast4Motion': 'static_text_center_strike_190ms_when_driving',
           'firebaseAdditionalRead': 0,
         },
       );
@@ -2051,6 +2148,14 @@ class _TowerStatusSlotCard extends StatefulWidget {
 class _TowerStatusSlotCardState extends State<_TowerStatusSlotCard> {
   bool _pressed = false;
 
+  @override
+  void didUpdateWidget(covariant _TowerStatusSlotCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if ((widget.slot.row?.isSelected ?? false) && _pressed) {
+      _pressed = false;
+    }
+  }
+
   void _setPressed(bool value) {
     if (_pressed == value) return;
     setState(() => _pressed = value);
@@ -2078,7 +2183,9 @@ class _TowerStatusSlotCardState extends State<_TowerStatusSlotCard> {
     final text = Theme.of(context).textTheme;
     final row = widget.slot.row;
     final occupied = row != null;
-    final enabled = occupied && widget.interactionEnabled && widget.onTap != null;
+    final driving = row?.isSelected ?? false;
+    final enabled =
+        occupied && !driving && widget.interactionEnabled && widget.onTap != null;
     final duration = widget.reduceMotion
         ? Duration.zero
         : const Duration(milliseconds: 150);
@@ -2092,11 +2199,12 @@ class _TowerStatusSlotCardState extends State<_TowerStatusSlotCard> {
         ? _statusSignatureOnContainer(widget.slot.status, tokens)
         : cs.onSurfaceVariant;
     final semantics = occupied
-        ? '${widget.zone.group} ${widget.zone.child} 슬롯 ${widget.slot.no}, 번호판 ${row.plateNumber}, $_statusLabel, 상태 처리 빠른 실행'
+        ? '${widget.zone.group} ${widget.zone.child} 슬롯 ${widget.slot.no}, 번호판 ${row.plateNumber}, $_statusLabel${driving ? ', 주행 중, 상태 처리 불가' : ', 상태 처리 빠른 실행'}'
         : '${widget.zone.group} ${widget.zone.child} 슬롯 ${widget.slot.no}, 빈 슬롯';
 
     return Semantics(
-      button: enabled,
+      button: occupied,
+      enabled: enabled,
       label: semantics,
       child: AnimatedScale(
         scale: _pressed ? .965 : 1,
@@ -2216,10 +2324,9 @@ class _TowerStatusSlotCardState extends State<_TowerStatusSlotCard> {
                             alignment: Alignment.center,
                             child: FittedBox(
                               fit: BoxFit.scaleDown,
-                              child: Text(
-                                _plateLast4(row.plateNumber),
-                                maxLines: 1,
-                                softWrap: false,
+                              child: RealTimeDrivingPlateText(
+                                text: _plateLast4(row.plateNumber),
+                                driving: row.isSelected,
                                 style: text.titleSmall?.copyWith(
                                   color: foreground,
                                   fontWeight: FontWeight.w900,
@@ -2228,6 +2335,7 @@ class _TowerStatusSlotCardState extends State<_TowerStatusSlotCard> {
                                     FontFeature.tabularFigures(),
                                   ],
                                 ),
+                                lineColor: foreground,
                               ),
                             ),
                           ),
@@ -3569,10 +3677,9 @@ class _OccupiedSlotLabel extends StatelessWidget {
                                 color: foreground,
                               ),
                               const SizedBox(width: 2),
-                              Text(
-                                last4,
-                                maxLines: 1,
-                                softWrap: false,
+                              RealTimeDrivingPlateText(
+                                text: last4,
+                                driving: row.isSelected,
                                 style: text.labelMedium?.copyWith(
                                   color: foreground,
                                   fontWeight: FontWeight.w900,
@@ -3581,6 +3688,7 @@ class _OccupiedSlotLabel extends StatelessWidget {
                                     FontFeature.tabularFigures(),
                                   ],
                                 ),
+                                lineColor: foreground,
                               ),
                             ],
                           ),
@@ -3636,6 +3744,14 @@ class _OccupiedSlotOverlay extends StatefulWidget {
 class _OccupiedSlotOverlayState extends State<_OccupiedSlotOverlay> {
   bool _pressed = false;
 
+  @override
+  void didUpdateWidget(covariant _OccupiedSlotOverlay oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.entry.slot.row.isSelected && _pressed) {
+      _pressed = false;
+    }
+  }
+
   void _setPressed(bool value) {
     if (_pressed == value) return;
     setState(() => _pressed = value);
@@ -3644,6 +3760,7 @@ class _OccupiedSlotOverlayState extends State<_OccupiedSlotOverlay> {
   @override
   Widget build(BuildContext context) {
     final row = widget.entry.slot.row;
+    final driving = row.isSelected;
     final statusLabel = switch (widget.entry.slot.status) {
       ParkingSlotStatus.departureRequest => '출차 요청',
       ParkingSlotStatus.departureInProgress => '출차 처리 중',
@@ -3663,14 +3780,15 @@ class _OccupiedSlotOverlayState extends State<_OccupiedSlotOverlay> {
           rect: widget.entry.hitRect,
           child: Semantics(
             button: true,
+            enabled: !driving,
             label:
-                '${widget.entry.slot.zone.group} ${widget.entry.slot.zone.child} 슬롯 ${widget.entry.slot.slot.no}, 번호판 ${row.plateNumber}, $statusLabel, 상태 처리 빠른 실행',
+                '${widget.entry.slot.zone.group} ${widget.entry.slot.zone.child} 슬롯 ${widget.entry.slot.slot.no}, 번호판 ${row.plateNumber}, $statusLabel${driving ? ', 주행 중, 상태 처리 불가' : ', 상태 처리 빠른 실행'}',
             child: Material(
               color: Colors.transparent,
               child: InkWell(
                 borderRadius: BorderRadius.circular(8),
-                onHighlightChanged: _setPressed,
-                onTap: widget.onTap,
+                onHighlightChanged: driving ? null : _setPressed,
+                onTap: driving ? null : widget.onTap,
                 child: const SizedBox.expand(),
               ),
             ),

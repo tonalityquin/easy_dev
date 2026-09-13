@@ -4,11 +4,11 @@ import 'package:provider/provider.dart';
 
 import '../account/applications/user_state.dart';
 import '../dev/application/area_state.dart';
-import '../../shared/page/application/common/type_view_mode_state.dart';
 import '../../shared/page/pages/common/parking_completed_page/parking_completed_page_shell.dart';
 import '../../shared/plate/application/triple/triple_plate_state.dart';
 import '../../shared/plate/domain/enums/plate_type.dart';
 import '../../shared/plate/widgets/parking_completed_plate_search_sheet.dart';
+import '../../shared/real_time_table/real_time_table.dart';
 import '../../shared/real_time_table/view_doc_rows_firestore_sync.dart';
 import 'parking_completed_package/triple_parking_completed_real_time_table.dart';
 
@@ -31,6 +31,9 @@ class TripleParkingCompletedPage extends StatefulWidget {
 
 class _TripleParkingCompletedPageState
     extends State<TripleParkingCompletedPage> {
+  final RealTimeTabbedTableBackController _realTimeBackController =
+      RealTimeTabbedTableBackController();
+
   void _log(String msg) {
     if (kDebugMode) {
       debugPrint('[ParkingCompleted] $msg');
@@ -49,6 +52,8 @@ class _TripleParkingCompletedPageState
   }
 
   Future<bool> _handleWillPop() async {
+    final handledByRealTime = await _realTimeBackController.consumeBack();
+    if (handledByRealTime) return false;
     final plateState = context.read<TriplePlateState>();
     final userName = context.read<UserState>().name;
 
@@ -74,7 +79,6 @@ class _TripleParkingCompletedPageState
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final mode = context.watch<TypeViewModeState>().mode;
     final area = resolveParkingCompletedArea(context);
 
     return ParkingCompletedPageShell(
@@ -93,8 +97,8 @@ class _TripleParkingCompletedPageState
       onWillPop: _handleWillPop,
       scaffoldBackgroundColor: cs.surface,
       content: TripleParkingCompletedRealTimeTable(
-        statusPreview: mode == TypeViewMode.status,
         area: area,
+        backController: _realTimeBackController,
       ),
     );
   }

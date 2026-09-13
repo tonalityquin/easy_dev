@@ -33,14 +33,14 @@ class ParkingCompletedRealtimeTabGate {
 
 class TripleParkingCompletedRealTimeTable extends StatelessWidget {
   final VoidCallback? onClose;
-  final bool statusPreview;
   final String area;
+  final RealTimeTabbedTableBackController? backController;
 
   const TripleParkingCompletedRealTimeTable({
     super.key,
     this.onClose,
-    this.statusPreview = false,
     this.area = '',
+    this.backController,
   });
 
   @override
@@ -98,27 +98,26 @@ class TripleParkingCompletedRealTimeTable extends StatelessWidget {
       initialIndex: 0,
       screen: 'triple_reverse_table_embedded',
       description: '자동 갱신됩니다.',
+      backController: backController,
       viewModeAuto: const RealTimeViewModeAutoSpec(),
       useListContextSurface: true,
       showColoredSwipeChevrons: true,
-      bodyBuilder: statusPreview
-          ? (ctx, spec, ctrl) => RealTimeStatusPreviewBody(
-                controller: ctrl,
-                area: area,
-                screen: 'triple_reverse_status_dot_map',
-                specs: tabs,
-                overlay: const <ParkingStatusOverlaySpec>[
-                  ParkingStatusOverlaySpec(
-                    collection: 'parking_completed_view',
-                    status: ParkingSlotStatus.parked,
-                  ),
-                  ParkingStatusOverlaySpec(
-                    collection: 'departure_requests_view',
-                    status: ParkingSlotStatus.departureRequest,
-                  ),
-                ],
-              )
-          : null,
+      statusBodyBuilder: (ctx, spec, ctrl) => RealTimeStatusPreviewBody(
+            controller: ctrl,
+            area: area,
+            screen: 'triple_reverse_status_dot_map',
+            specs: tabs,
+            overlay: const <ParkingStatusOverlaySpec>[
+              ParkingStatusOverlaySpec(
+                collection: 'parking_completed_view',
+                status: ParkingSlotStatus.parked,
+              ),
+              ParkingStatusOverlaySpec(
+                collection: 'departure_requests_view',
+                status: ParkingSlotStatus.departureRequest,
+              ),
+            ],
+          ),
     );
   }
 }
