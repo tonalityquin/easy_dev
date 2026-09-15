@@ -39,10 +39,22 @@ class AppCommandExecutionResult {
 class AppCommandExecutor {
   AppCommandExecutor._();
 
+  static const Set<String> _protectedCommands = <String>{
+    'quick',
+    'debug',
+    'charge',
+  };
+
+  static bool requiresImportingUnlock(String command) {
+    return _protectedCommands.contains(AppCommandRegistry.normalize(command));
+  }
+
   static Future<AppCommandExecutionResult> execute(
     BuildContext context,
     String rawCommand, {
     String source = '',
+    bool importingUnlocked = false,
+    bool showStatusDialog = true,
   }) async {
     final normalized = AppCommandRegistry.normalize(rawCommand);
     final definition = AppCommandRegistry.find(normalized);
@@ -58,6 +70,23 @@ class AppCommandExecutor {
       return AppCommandExecutionResult(
         state: AppCommandExecutionState.unknown,
         normalizedCommand: normalized,
+      );
+    }
+
+    if (requiresImportingUnlock(definition.command) && !importingUnlocked) {
+      AppCommandDiagnostics.record(
+        phase: 'execute_protected_denied',
+        input: definition.command,
+        normalized: definition.command,
+        source: source,
+        command: definition.command,
+        result: 'locked',
+      );
+      return AppCommandExecutionResult(
+        state: AppCommandExecutionState.failure,
+        normalizedCommand: normalized,
+        definition: definition,
+        outputLines: const <String>['[DENIED] command locked'],
       );
     }
 
@@ -81,11 +110,19 @@ class AppCommandExecutor {
           await HeadHubActions.init();
           HeadHubActions.setEnabled(true);
           await HeadHubActions.mountIfNeeded();
+          await _showProtectedStatus(
+            context,
+            command: definition.command,
+            source: source,
+          );
           break;
         case 'setting':
           break;
         case 'charge':
-          surfaceCompletion = _launchCharge(context);
+          surfaceCompletion = _launchCharge(
+            context,
+            source: source,
+          );
           break;
         case 'about':
           surfaceCompletion = _launchAbout(context);
@@ -96,10 +133,23 @@ class AppCommandExecutor {
           await AppExitService.exitApp(context);
           break;
         case 'status':
+          if (showStatusDialog) {
+            await AppCommandDiagnostics.showStatus(
+              context,
+              title: 'Terminal Status',
+              description:
+                  'result=success\nsource=${source.isEmpty ? '-' : source}',
+            );
+          }
           break;
         case 'debug':
           await DebugSessionController.enable(source: 'command_terminal');
           await DevQuickActions.mountIfNeeded();
+          await _showProtectedStatus(
+            context,
+            command: definition.command,
+            source: source,
+          );
           break;
         case 'help':
           break;
@@ -136,6 +186,15 @@ class AppCommandExecutor {
         error: error,
       );
       debugPrint(stackTrace.toString());
+      if (context.mounted && requiresImportingUnlock(definition.command)) {
+        await AppCommandDiagnostics.showStatus(
+          context,
+          title: 'Terminal Command Status',
+          description:
+              'command=${definition.command}\nresult=failure\nsource=${source.isEmpty ? '-' : source}',
+          failure: true,
+        );
+      }
       return AppCommandExecutionResult(
         state: AppCommandExecutionState.failure,
         normalizedCommand: normalized,
@@ -145,7 +204,10 @@ class AppCommandExecutor {
     }
   }
 
-  static Future<void> _launchCharge(BuildContext context) async {
+  static Future<void> _launchCharge(
+    BuildContext context, {
+    required String source,
+  }) async {
     DebugSessionController.record(
       'charge_surface_open',
       source: 'command_terminal',
@@ -154,6 +216,34 @@ class AppCommandExecutor {
     DebugSessionController.record(
       'charge_surface_close',
       source: 'command_terminal',
+    );
+    if (!context.mounted) return;
+    await _showProtectedStatus(
+      context,
+      command: 'charge',
+      source: source,
+    );
+  }
+
+  static Future<void> _showProtectedStatus(
+    BuildContext context, {
+    required String command,
+    required String source,
+  }) async {
+    if (!context.mounted) return;
+    AppCommandDiagnostics.record(
+      phase: 'protected_status_ready',
+      input: command,
+      normalized: command,
+      source: source,
+      command: command,
+      result: 'success',
+    );
+    await AppCommandDiagnostics.showStatus(
+      context,
+      title: 'Terminal Command Status',
+      description:
+          'command=$command\nresult=success\nsource=${source.isEmpty ? '-' : source}',
     );
   }
 

@@ -9,6 +9,7 @@ import '../../../app/utils/snackbar_helper.dart';
 import '../../../design_system/common_ui/common_ui_overlays.dart';
 import '../../../shared/area_remote_settings/application/local_area_capability_refresh.dart';
 import '../../../shared/operational_cache/domain/repositories/operational_local_repository.dart';
+import '../../account/applications/user_state.dart';
 import '../../dev/application/area_state.dart';
 import '../../location/applications/location_state.dart';
 import '../../payment/applications/bill_state.dart';
@@ -51,8 +52,12 @@ class SingleOperationalDataSyncWorkflow {
     _running = true;
     try {
       final areaState = context.read<AreaState>();
-      final area = areaState.currentArea.trim();
-      final division = areaState.currentDivision.trim();
+      final userState = context.read<UserState>();
+      final session = userState.session;
+      final area = session?.selectedArea.trim() ?? '';
+      final division = session != null && session.divisions.isNotEmpty
+          ? session.divisions.first.trim()
+          : '';
       final locationState = context.read<LocationState>();
       final billState = context.read<BillState>();
       final sectorState = context.read<SectorState>();
@@ -74,8 +79,48 @@ class SingleOperationalDataSyncWorkflow {
         progress: 0.02,
       );
 
+      if (session == null) {
+        const failureMessage = '로그인 세션 정보가 없어 운영 데이터를 동기화할 수 없습니다.';
+        await trace.fail(failureMessage);
+        if (!trace.developerMode && rootContext.mounted) {
+          _showFailure(
+            rootContext,
+            failureMessage,
+            useCommonUi: useCommonUi,
+          );
+        }
+        return SingleOperationalDataSyncResult.failed;
+      }
+
       if (area.isEmpty) {
-        const failureMessage = '현재 지역 정보가 없어 운영 데이터를 동기화할 수 없습니다.';
+        const failureMessage = '선택 지역 정보가 없어 운영 데이터를 동기화할 수 없습니다.';
+        await trace.fail(failureMessage);
+        if (!trace.developerMode && rootContext.mounted) {
+          _showFailure(
+            rootContext,
+            failureMessage,
+            useCommonUi: useCommonUi,
+          );
+        }
+        return SingleOperationalDataSyncResult.failed;
+      }
+
+      if (division.isEmpty) {
+        const failureMessage = '선택 지역의 회사 정보가 없어 운영 데이터를 동기화할 수 없습니다.';
+        await trace.fail(failureMessage);
+        if (!trace.developerMode && rootContext.mounted) {
+          _showFailure(
+            rootContext,
+            failureMessage,
+            useCommonUi: useCommonUi,
+          );
+        }
+        return SingleOperationalDataSyncResult.failed;
+      }
+
+      if (areaState.currentArea.trim() != area ||
+          areaState.currentDivision.trim() != division) {
+        const failureMessage = '현재 AreaState와 로그인 선택 지역이 일치하지 않습니다.';
         await trace.fail(failureMessage);
         if (!trace.developerMode && rootContext.mounted) {
           _showFailure(
@@ -103,34 +148,62 @@ class SingleOperationalDataSyncWorkflow {
           return SingleOperationalDataSyncResult.cancelled;
         }
 
-        if (areaState.currentArea.trim() != area) {
-          throw StateError('동기화 중 현재 지역이 변경되었습니다.');
+        final latestSessionBeforeAreaRefresh = userState.session;
+        final latestSelectedArea =
+            latestSessionBeforeAreaRefresh?.selectedArea.trim() ?? '';
+        final latestDivision = latestSessionBeforeAreaRefresh != null &&
+                latestSessionBeforeAreaRefresh.divisions.isNotEmpty
+            ? latestSessionBeforeAreaRefresh.divisions.first.trim()
+            : '';
+        if (latestSelectedArea != area || latestDivision != division) {
+          throw StateError('동기화 중 로그인 선택 지역이 변경되었습니다.');
+        }
+        if (areaState.currentArea.trim() != area ||
+            areaState.currentDivision.trim() != division) {
+          throw StateError('동기화 중 현재 AreaState 지역이 변경되었습니다.');
         }
 
-        LocalAreaCapabilityRefreshResult? capabilityRefresh;
-        if (division.isNotEmpty) {
-          capabilityRefresh = await LocalAreaCapabilityRefresh.refresh(
-            areaState: areaState,
-            division: division,
-            area: area,
-            source: 'single_operational_data_sync',
-            onLog: trace.log,
-            progressStart: 0.13,
-            progressEnd: 0.17,
-          );
-        } else {
-          trace.log(
-            'local_capability_refresh_skipped source=single_operational_data_sync reason=division_empty area=$area remoteRead=0 remoteWrite=0',
-            progress: 0.17,
-          );
+        final refreshedArea = await areaState.refreshCurrentAreaSnapshotFromServer(
+          division: division,
+          area: area,
+          onLog: trace.log,
+          source: 'single_operational_data_sync',
+          progressStart: 0.13,
+          progressEnd: 0.155,
+        );
+        trace.log(
+          '현재 선택 지역 Area Snapshot 최신화 완료: division=$division area=$area emailPresent=${refreshedArea.email.trim().isNotEmpty} capabilities=${LocalAreaCapabilityRefresh.keys(refreshedArea.capabilities)} modes=${refreshedArea.modes.join(',')} areaRemoteRead=1 sqliteAreaWrite=1 sqliteVerified=true areaStateApplied=true',
+          progress: 0.157,
+        );
+
+        final latestSessionAfterAreaRefresh = userState.session;
+        final selectedAreaAfterRefresh =
+            latestSessionAfterAreaRefresh?.selectedArea.trim() ?? '';
+        final divisionAfterRefresh = latestSessionAfterAreaRefresh != null &&
+                latestSessionAfterAreaRefresh.divisions.isNotEmpty
+            ? latestSessionAfterAreaRefresh.divisions.first.trim()
+            : '';
+        if (selectedAreaAfterRefresh != area || divisionAfterRefresh != division) {
+          throw StateError('Area Snapshot 최신화 중 로그인 선택 지역이 변경되었습니다.');
         }
+
+        final capabilityRefresh = await LocalAreaCapabilityRefresh.refresh(
+          areaState: areaState,
+          division: division,
+          area: area,
+          source: 'single_operational_data_sync',
+          onLog: trace.log,
+          progressStart: 0.158,
+          progressEnd: 0.172,
+          requireSnapshot: true,
+        );
 
         final capabilities = areaState.capabilitiesOfCurrentArea;
         final hasBillCapability = capabilities.contains(Capability.bill);
         final hasSectorCapability = capabilities.contains(Capability.sector);
         final hasRuleCapability = capabilities.contains(Capability.rule);
         trace.log(
-          '지역 capability 적용 상태를 확인했습니다: snapshotFound=${capabilityRefresh?.snapshotFound ?? false} applied=${capabilityRefresh?.applied ?? false} changed=${capabilityRefresh?.changed ?? false} capabilities=${LocalAreaCapabilityRefresh.keys(capabilities)} remoteRead=0 remoteWrite=0',
+          '지역 capability 적용 상태를 확인했습니다: snapshotFound=${capabilityRefresh.snapshotFound} applied=${capabilityRefresh.applied} changed=${capabilityRefresh.changed} capabilities=${LocalAreaCapabilityRefresh.keys(capabilities)} remoteRead=0 remoteWrite=0',
           progress: 0.175,
         );
 

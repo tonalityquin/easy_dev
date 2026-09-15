@@ -66,6 +66,12 @@ class ModeLauncherSubmitResult {
 }
 
 class ModeLauncherController extends ChangeNotifier {
+  static const String _hiddenImportingCommand = 'sudo apt importing';
+  static const Set<String> _protectedCommands = <String>{
+    'quick',
+    'debug',
+    'charge',
+  };
   static const String nameDisplayLabel = 'NAME or Unique';
   static const String phoneDisplayLabel = 'TEL or Code';
   static const String passwordDisplayLabel = 'PW or Serial';
@@ -101,6 +107,7 @@ class ModeLauncherController extends ChangeNotifier {
   bool _runtimeContextReady = false;
   bool _devAuthorized = false;
   bool _devModeEnabled = false;
+  bool _importingUnlocked = false;
   AppStartUserPurpose? _startupPurpose;
   TerminalAccountKind? _defaultAccountKind;
   bool _accountKindAutoSelected = false;
@@ -144,6 +151,7 @@ class ModeLauncherController extends ChangeNotifier {
   bool get initialized => _initialized;
   bool get devAuthorized => _devAuthorized;
   bool get devModeEnabled => _devModeEnabled;
+  bool get importingUnlocked => _importingUnlocked;
   int get errorSerial => _errorSerial;
   String get runningCommand => _runningCommand;
   String get currentPromptPath => _commandPath.promptPath;
@@ -1083,6 +1091,7 @@ class ModeLauncherController extends ChangeNotifier {
       'Password length: ${_enteredPassword.length}',
       'Developer authorized: $_devAuthorized',
       'Developer mode: $_devModeEnabled',
+      'Protected commands unlocked: $_importingUnlocked',
     ].join('\n');
   }
 
@@ -1126,6 +1135,17 @@ class ModeLauncherController extends ChangeNotifier {
     }
 
     final normalized = AppModeRegistry.normalizeToken(input);
+    if (!_commandPath.isEmailEdit && normalized == _hiddenImportingCommand) {
+      _append(
+        TerminalLineType.command,
+        input,
+        promptPath: _commandPath.promptPath,
+      );
+      return _unlockImporting(
+        context,
+        reduceMotion: reduceMotion,
+      );
+    }
     if (_commandPath.isSetting) {
       if (!_commandPath.isEmailEdit) {
         if (_history.isEmpty || _history.last != input) {
@@ -1675,6 +1695,74 @@ class ModeLauncherController extends ChangeNotifier {
     return const ModeLauncherSubmitResult();
   }
 
+  bool _requiresImportingUnlock(String normalized) {
+    return _protectedCommands.contains(normalized);
+  }
+
+  Future<ModeLauncherSubmitResult> _unlockImporting(
+    BuildContext context, {
+    required bool reduceMotion,
+  }) async {
+    if (_importingUnlocked) {
+      _append(TerminalLineType.success, '[ OK ] protected commands enabled');
+      notifyListeners();
+      return const ModeLauncherSubmitResult();
+    }
+    _busy = true;
+    _runningCommand = 'AUTH';
+    _append(TerminalLineType.running, 'authorizing');
+    LauncherDiagnostics.record(
+      'terminal_importing_unlock_start',
+      scope: 'mode_terminal',
+      meta: <String, Object?>{
+        'path': _commandPath.promptPath,
+        'command': '<hidden>',
+      },
+    );
+    notifyListeners();
+    await _commandDelay(reduceMotion);
+    if (_disposed || !context.mounted) {
+      _busy = false;
+      _runningCommand = '';
+      return const ModeLauncherSubmitResult();
+    }
+    _importingUnlocked = true;
+    _busy = false;
+    _runningCommand = '';
+    _append(TerminalLineType.success, '[ OK ] protected commands enabled');
+    LauncherDiagnostics.record(
+      'terminal_importing_unlock_complete',
+      scope: 'mode_terminal',
+      meta: <String, Object?>{
+        'path': _commandPath.promptPath,
+        'command': '<hidden>',
+      },
+    );
+    notifyListeners();
+    await LauncherDiagnostics.showStatus(
+      context,
+      title: 'Terminal Session Status',
+      description: 'protectedCommands=enabled\nscope=session',
+      scope: 'mode_terminal',
+    );
+    return const ModeLauncherSubmitResult();
+  }
+
+  ModeLauncherSubmitResult _rejectProtectedCommand(String normalized) {
+    _append(TerminalLineType.error, '[DENIED] command locked');
+    _errorSerial += 1;
+    LauncherDiagnostics.record(
+      'terminal_protected_command_denied',
+      scope: 'mode_terminal',
+      meta: <String, Object?>{
+        'command': normalized,
+        'path': _commandPath.promptPath,
+      },
+    );
+    notifyListeners();
+    return const ModeLauncherSubmitResult();
+  }
+
   Future<ModeLauncherSubmitResult> executeUtilityCommand(
     BuildContext context,
     String command, {
@@ -1718,6 +1806,9 @@ class ModeLauncherController extends ChangeNotifier {
     String normalized, {
     required bool reduceMotion,
   }) async {
+    if (_requiresImportingUnlock(normalized) && !_importingUnlocked) {
+      return _rejectProtectedCommand(normalized);
+    }
     switch (normalized) {
       case 'setting':
         final from = _commandPath.promptPath;
@@ -1746,9 +1837,18 @@ class ModeLauncherController extends ChangeNotifier {
         LauncherDiagnostics.record(
           'terminal_quick',
           scope: 'mode_terminal',
-          meta: <String, Object?>{'path': _commandPath.promptPath},
+          meta: <String, Object?>{
+            'path': _commandPath.promptPath,
+            'importingUnlocked': _importingUnlocked,
+          },
         );
         notifyListeners();
+        await LauncherDiagnostics.showStatus(
+          context,
+          title: 'Terminal Command Status',
+          description: 'command=quick\nresult=success\nprotectedCommands=enabled',
+          scope: 'mode_terminal',
+        );
         return const ModeLauncherSubmitResult();
       case 'modes':
       case 'mode':
@@ -1900,15 +2000,38 @@ class ModeLauncherController extends ChangeNotifier {
                     _selectedAccountKind!,
                   ),
             'autoSelected': _accountKindAutoSelected,
+            'importingUnlocked': _importingUnlocked,
           },
         );
         notifyListeners();
+        await LauncherDiagnostics.showStatus(
+          context,
+          title: 'Terminal Command Status',
+          description: 'command=debug\nresult=success\nprotectedCommands=enabled',
+          scope: 'mode_terminal',
+        );
         return const ModeLauncherSubmitResult();
       case 'charge':
         return _launchSurface(
           context,
           'charge',
-          () => showPlateBillingCountDialog(context),
+          () async {
+            await showPlateBillingCountDialog(context);
+            if (!context.mounted) return;
+            LauncherDiagnostics.record(
+              'terminal_charge_complete',
+              scope: 'mode_terminal',
+              meta: <String, Object?>{
+                'importingUnlocked': _importingUnlocked,
+              },
+            );
+            await LauncherDiagnostics.showStatus(
+              context,
+              title: 'Terminal Command Status',
+              description: 'command=charge\nresult=success\nprotectedCommands=enabled',
+              scope: 'mode_terminal',
+            );
+          },
           reduceMotion: reduceMotion,
         );
       case 'practice':
@@ -2088,6 +2211,7 @@ class ModeLauncherController extends ChangeNotifier {
       return const ModeLauncherSubmitResult();
     }
     final result = await ServiceSettingsCommandHandler.submitEmailEdit(
+      context,
       input,
       source: 'mode_terminal',
     );
@@ -3460,6 +3584,7 @@ class ModeLauncherController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _importingUnlocked = false;
     _disposed = true;
     _enteredPassword = '';
     DevAuth.devModeEnabled.removeListener(_handleDevModeChanged);

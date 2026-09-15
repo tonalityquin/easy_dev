@@ -9,6 +9,8 @@ import 'terminal_command_path.dart';
 import 'terminal_line.dart';
 
 class TerminalSessionController extends ChangeNotifier {
+  static const String _hiddenImportingCommand = 'sudo apt importing';
+
   TerminalSessionController({
     required this.source,
     this.maxLines = 80,
@@ -29,6 +31,7 @@ class TerminalSessionController extends ChangeNotifier {
   int _errorSerial = 0;
   bool _busy = false;
   bool _disposed = false;
+  bool _importingUnlocked = false;
   String _runningCommand = '';
   TerminalCommandPath _commandPath = TerminalCommandPath.root;
 
@@ -39,6 +42,7 @@ class TerminalSessionController extends ChangeNotifier {
   String get currentPromptPath => _commandPath.promptPath;
   bool get commandHistoryEnabled => !_commandPath.isEmailEdit;
   bool get emailEditMode => _commandPath.isEmailEdit;
+  bool get importingUnlocked => _importingUnlocked;
 
   int _nextId() => ++_sequence;
 
@@ -131,6 +135,14 @@ class TerminalSessionController extends ChangeNotifier {
     if (displayCommand.isEmpty) {
       rejectEmptyInput();
       return null;
+    }
+
+    if (!_commandPath.isEmailEdit && normalized == _hiddenImportingCommand) {
+      _appendCommand(displayCommand);
+      return _unlockImporting(
+        context,
+        reduceMotion: reduceMotion,
+      );
     }
 
     if (!_commandPath.isEmailEdit) {
@@ -404,6 +416,7 @@ class TerminalSessionController extends ChangeNotifier {
       );
     }
     final result = await ServiceSettingsCommandHandler.submitEmailEdit(
+      context,
       displayCommand,
       source: source,
     );
@@ -447,6 +460,78 @@ class TerminalSessionController extends ChangeNotifier {
     );
   }
 
+  Future<AppCommandExecutionResult> _unlockImporting(
+    BuildContext context, {
+    required bool reduceMotion,
+  }) async {
+    if (_importingUnlocked) {
+      _append(
+        TerminalLineType.success,
+        '[ok] protected commands enabled',
+        cadence: TerminalCadence.emphasis,
+      );
+      notifyListeners();
+      return const AppCommandExecutionResult(
+        state: AppCommandExecutionState.success,
+        normalizedCommand: '<hidden>',
+      );
+    }
+    _busy = true;
+    _runningCommand = 'AUTH';
+    final runningLineId = _appendRunning('authorizing');
+    AppCommandDiagnostics.record(
+      phase: 'terminal_importing_unlock_start',
+      input: '<hidden>',
+      normalized: '<hidden>',
+      source: source,
+      command: '<hidden>',
+      result: 'started',
+      path: _commandPath.promptPath,
+    );
+    notifyListeners();
+    await Future<void>.delayed(
+      reduceMotion
+          ? const Duration(milliseconds: 18)
+          : const Duration(milliseconds: 180),
+    );
+    if (_disposed || !context.mounted) {
+      _busy = false;
+      _runningCommand = '';
+      return const AppCommandExecutionResult(
+        state: AppCommandExecutionState.failure,
+        normalizedCommand: '<hidden>',
+      );
+    }
+    _settleRunning(runningLineId);
+    _importingUnlocked = true;
+    _append(
+      TerminalLineType.success,
+      '[ok] protected commands enabled',
+      cadence: TerminalCadence.emphasis,
+    );
+    _busy = false;
+    _runningCommand = '';
+    AppCommandDiagnostics.record(
+      phase: 'terminal_importing_unlock_complete',
+      input: '<hidden>',
+      normalized: '<hidden>',
+      source: source,
+      command: '<hidden>',
+      result: 'success',
+      path: _commandPath.promptPath,
+    );
+    notifyListeners();
+    await AppCommandDiagnostics.showStatus(
+      context,
+      title: 'Terminal Session Status',
+      description: 'protectedCommands=enabled\nscope=session',
+    );
+    return const AppCommandExecutionResult(
+      state: AppCommandExecutionState.success,
+      normalizedCommand: '<hidden>',
+    );
+  }
+
   Future<AppCommandExecutionResult> _executeDefinition(
     BuildContext context,
     String rawCommand,
@@ -454,6 +539,31 @@ class TerminalSessionController extends ChangeNotifier {
     AppCommandDefinition definition, {
     required bool reduceMotion,
   }) async {
+    if (AppCommandExecutor.requiresImportingUnlock(definition.command) &&
+        !_importingUnlocked) {
+      _append(
+        TerminalLineType.error,
+        '[DENIED] command locked',
+        cadence: TerminalCadence.error,
+      );
+      _errorSerial += 1;
+      AppCommandDiagnostics.record(
+        phase: 'terminal_protected_denied',
+        input: definition.command,
+        normalized: definition.command,
+        source: source,
+        command: definition.command,
+        result: 'locked',
+        path: _commandPath.promptPath,
+      );
+      notifyListeners();
+      return AppCommandExecutionResult(
+        state: AppCommandExecutionState.failure,
+        normalizedCommand: normalized,
+        definition: definition,
+        outputLines: const <String>['[DENIED] command locked'],
+      );
+    }
     _busy = true;
     _runningCommand = definition.command;
     final runningLineId = _appendRunning(definition.runningMessage);
@@ -490,6 +600,8 @@ class TerminalSessionController extends ChangeNotifier {
       context,
       rawCommand,
       source: source,
+      importingUnlocked: _importingUnlocked,
+      showStatusDialog: false,
     );
     if (_disposed) return result;
 
@@ -611,6 +723,7 @@ class TerminalSessionController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _importingUnlocked = false;
     _disposed = true;
     super.dispose();
   }

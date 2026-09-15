@@ -112,6 +112,10 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
       ? _launcherController!.emailEditMode
       : _workspaceController!.emailEditMode;
 
+  bool get _importingUnlocked => _isLauncher
+      ? _launcherController!.importingUnlocked
+      : _workspaceController!.importingUnlocked;
+
   TextInputType get _keyboardType => _isLauncher
       ? _launcherController!.promptKeyboardType
       : _emailEditMode
@@ -1034,6 +1038,7 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
           _TerminalHeader(
             busy: _busy || _startupSetupBusy || _interactionLocked,
             navigationLocked: _startupSetupActive,
+            importingUnlocked: _importingUnlocked,
             reduceMotion: _reduceMotion,
             onCloseTerminal: () => _submitHeaderCommand('out'),
             onAbout: _isLauncher ? null : () => _submitHeaderCommand('about'),
@@ -1191,6 +1196,7 @@ class _TerminalHeader extends StatelessWidget {
   const _TerminalHeader({
     required this.busy,
     required this.navigationLocked,
+    required this.importingUnlocked,
     required this.reduceMotion,
     required this.onCloseTerminal,
     required this.onAbout,
@@ -1202,6 +1208,7 @@ class _TerminalHeader extends StatelessWidget {
 
   final bool busy;
   final bool navigationLocked;
+  final bool importingUnlocked;
   final bool reduceMotion;
   final VoidCallback onCloseTerminal;
   final VoidCallback? onAbout;
@@ -1241,6 +1248,34 @@ class _TerminalHeader extends StatelessWidget {
               ),
             ),
           ),
+          Semantics(
+            label: importingUnlocked ? '보호 명령 활성' : '보호 명령 잠금',
+            child: AnimatedSwitcher(
+              duration: reduceMotion
+                  ? Duration.zero
+                  : const Duration(milliseconds: 240),
+              switchInCurve: Curves.easeOutBack,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (child, animation) {
+                return FadeTransition(
+                  opacity: animation,
+                  child: ScaleTransition(
+                    scale: Tween<double>(begin: .72, end: 1).animate(animation),
+                    child: child,
+                  ),
+                );
+              },
+              child: Icon(
+                importingUnlocked
+                    ? Icons.lock_open_rounded
+                    : Icons.lock_outline_rounded,
+                key: ValueKey<bool>(importingUnlocked),
+                size: 15,
+                color: importingUnlocked ? _terminalSuccess : _terminalMuted,
+              ),
+            ),
+          ),
+          const SizedBox(width: 7),
           _TerminalHeaderAction(
             semanticLabel: onAppExit != null ? '시작 화면으로 돌아가기' : '터미널 닫기',
             onPressed: busy || navigationLocked ? null : onCloseTerminal,

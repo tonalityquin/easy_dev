@@ -7,6 +7,7 @@ import '../../../features/account/applications/tablet_account_diagnostics.dart';
 import '../../../features/launcher/application/launcher_diagnostics.dart';
 import '../../auth/gmail_sender_diagnostics.dart';
 import '../../../features/selector/application/dev_auth.dart';
+import '../../../shared/area_remote_settings/application/area_snapshot_persistence.dart';
 import '../../command/application/app_command_diagnostics.dart';
 import '../../init/app_start_debug_trace.dart';
 import '../../init/startup_tasks.dart';
@@ -49,6 +50,7 @@ class ParkinWorkinTerminalDiagnostics {
       ...TabletAccountDiagnostics.lines,
       ...AppCommandDiagnostics.lines,
       ...GmailSenderDiagnostics.lines,
+      ...AreaSnapshotPersistence.debugLines,
       ..._lines,
     ];
     if (merged.isEmpty) {
@@ -75,6 +77,7 @@ class ParkinWorkinTerminalDiagnostics {
         'tabletAccountLines': TabletAccountDiagnostics.lines.length,
         'commandLines': AppCommandDiagnostics.lines.length,
         'gmailSenderLines': GmailSenderDiagnostics.lines.length,
+        'areaSnapshotLines': AreaSnapshotPersistence.debugLines.length,
         'startupLines': StartupTasks.debugLines.length,
         'appStartLines': AppStartDebugTrace.lines.length,
       },

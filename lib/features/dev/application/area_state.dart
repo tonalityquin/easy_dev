@@ -6,6 +6,7 @@ import '../../../shared/area_remote_settings/application/area_snapshot_scope.dar
 import '../../../app/models/capability.dart';
 import '../../../shared/tts/application/plate_tts_session_diagnostics.dart';
 import '../../../shared/work_session/application/work_area_session_coordinator.dart';
+import '../../headquarter/application/snapshot/headquarter_snapshot_repository.dart';
 import '../domain/repositories/area_repo_package/area_repository.dart';
 
 typedef AreaStateLog = void Function(
@@ -220,6 +221,17 @@ class AreaState with ChangeNotifier {
     );
   }
 
+  void _applyCurrentAreaRefresh(AreaRecord record) {
+    _currentRecord = record;
+    _currentArea = record.name;
+    _currentDivision = _normalizeDivision(record.division);
+    _areaCaps[record.name] = record.capabilities;
+    AreaSnapshotScope.bind(
+      division: _currentDivision,
+      area: _currentArea,
+    );
+  }
+
   Future<AreaRecord?> _fetchCurrentAreaRecord(
     String area, {
     String? division,
@@ -377,6 +389,127 @@ class AreaState with ChangeNotifier {
       progress: 0.92,
     );
     return record;
+  }
+
+  Future<AreaRecord> refreshCurrentAreaSnapshotFromServer({
+    required String area,
+    required String division,
+    AreaStateLog? onLog,
+    String source = 'current_area_snapshot_refresh',
+    double progressStart = 0,
+    double progressEnd = 1,
+  }) async {
+    final normalizedArea = area.trim();
+    final rawDivision = division.trim();
+    if (normalizedArea.isEmpty) {
+      throw StateError('현재 선택 지역 정보가 비어 있습니다.');
+    }
+    if (rawDivision.isEmpty) {
+      throw StateError('현재 선택 지역의 회사 정보가 비어 있습니다.');
+    }
+    final normalizedDivision = _normalizeDivision(rawDivision);
+    final start = progressStart.clamp(0.0, 1.0).toDouble();
+    final end = progressEnd.clamp(start, 1.0).toDouble();
+
+    void log(String message, double relativeProgress) {
+      final relative = relativeProgress.clamp(0.0, 1.0).toDouble();
+      final progress = start + ((end - start) * relative);
+      _emit(message, onLog: onLog, progress: progress);
+    }
+
+    final generation = _sessionGeneration;
+    final currentArea = _currentArea.trim();
+    final currentDivision = _currentDivision.trim();
+    if (currentArea != normalizedArea ||
+        _normalizeDivision(currentDivision) != normalizedDivision) {
+      throw StateError(
+        '현재 AreaState와 선택 지역이 일치하지 않습니다: selected=$normalizedDivision/$normalizedArea current=${_normalizeDivision(currentDivision)}/$currentArea',
+      );
+    }
+
+    log(
+      '[AreaState] selected_area_server_refresh_start source=$source division=$normalizedDivision area=$normalizedArea areaRemoteRead=1 remoteWrite=0 sqliteAreaWrite=1',
+      0.08,
+    );
+
+    final record = await _repository.getAreaByName(
+      normalizedArea,
+      division: normalizedDivision,
+      serverOnly: true,
+    );
+
+    if (generation != _sessionGeneration) {
+      throw StateError('Area 세션이 변경되어 현재 지역 서버 응답을 적용하지 않습니다.');
+    }
+    if (record == null) {
+      throw StateError(
+        '서버에서 현재 선택 AreaRecord를 찾을 수 없습니다: division=$normalizedDivision, area=$normalizedArea',
+      );
+    }
+    if (record.name.trim() != normalizedArea ||
+        _normalizeDivision(record.division) != normalizedDivision) {
+      throw StateError(
+        '서버 AreaRecord가 현재 선택 지역과 일치하지 않습니다: requested=$normalizedDivision/$normalizedArea received=${record.division}/${record.name}',
+      );
+    }
+    if (_currentArea.trim() != normalizedArea ||
+        _normalizeDivision(_currentDivision) != normalizedDivision) {
+      throw StateError('서버 조회 중 현재 지역이 변경되어 AreaRecord 적용을 중단했습니다.');
+    }
+
+    final stored = await HeadquarterSnapshotRepository.instance.readArea(
+      division: normalizedDivision,
+      area: normalizedArea,
+    );
+    if (stored == null) {
+      throw StateError(
+        '현재 선택 AreaRecord의 SQLite 저장 결과를 확인할 수 없습니다: division=$normalizedDivision, area=$normalizedArea',
+      );
+    }
+    final expectedModes = record.modes
+        .map((value) => value.trim().toLowerCase())
+        .where((value) => value.isNotEmpty)
+        .toSet();
+    final expectedWorkRules = record.workRules
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toList(growable: false);
+    final storedModes = stored.modes.toSet();
+    final storedCapabilities = stored.capabilities.toSet();
+    final recordCapabilities = record.capabilities.toSet();
+    final sqliteMatches = stored.email.trim() == record.email.trim() &&
+        stored.invite.trim() == record.invite.trim() &&
+        stored.communication.trim() == record.communication.trim() &&
+        stored.isHeadquarter == record.isHeadquarter &&
+        storedModes.length == expectedModes.length &&
+        storedModes.containsAll(expectedModes) &&
+        storedCapabilities.length == recordCapabilities.length &&
+        storedCapabilities.containsAll(recordCapabilities) &&
+        stored.workRules.length == expectedWorkRules.length &&
+        _sameOrderedStrings(stored.workRules, expectedWorkRules) &&
+        stored.rawJson.trim().isNotEmpty;
+    if (!sqliteMatches) {
+      throw StateError(
+        '현재 선택 AreaRecord의 SQLite 저장 검증에 실패했습니다: division=$normalizedDivision, area=$normalizedArea',
+      );
+    }
+
+    _applyCurrentAreaRefresh(record);
+    notifyListeners();
+
+    log(
+      '[AreaState] selected_area_server_refresh_complete source=$source division=$normalizedDivision area=$normalizedArea emailPresent=${record.email.trim().isNotEmpty} capabilities=${Cap.human(record.capabilities)} modes=${record.modes.join(',')} isHeadquarter=${record.isHeadquarter} areaRemoteRead=1 remoteWrite=0 sqliteAreaWrite=1 sqliteVerified=true areaStateApplied=true',
+      1,
+    );
+    return record;
+  }
+
+  bool _sameOrderedStrings(List<String> left, List<String> right) {
+    if (left.length != right.length) return false;
+    for (var index = 0; index < left.length; index += 1) {
+      if (left[index].trim() != right[index].trim()) return false;
+    }
+    return true;
   }
 
   Future<bool> resolveIsHeadquarter({
@@ -559,6 +692,50 @@ class AreaState with ChangeNotifier {
     }
   }
 
+  bool applyLocalAreaEmail({
+    required String division,
+    required String area,
+    required String email,
+    String source = 'local_email_update',
+  }) {
+    final normalizedArea = area.trim();
+    final normalizedDivision = _normalizeDivision(division);
+    final normalizedEmail = email.trim();
+    if (normalizedArea.isEmpty || division.trim().isEmpty) {
+      debugPrint(
+        '[AreaState] local email 적용 중단: source=$source division=$normalizedDivision area=$normalizedArea reason=identity_empty remoteRead=0 remoteWrite=0',
+      );
+      return false;
+    }
+    final record = _currentRecord;
+    if (record == null ||
+        record.name.trim() != normalizedArea ||
+        _normalizeDivision(record.division) != normalizedDivision) {
+      debugPrint(
+        '[AreaState] local email 적용 중단: source=$source requested=$normalizedDivision/$normalizedArea current=$_currentDivision/$_currentArea reason=current_record_mismatch remoteRead=0 remoteWrite=0',
+      );
+      return false;
+    }
+    final before = record.email.trim();
+    _currentRecord = AreaRecord(
+      name: record.name,
+      division: record.division,
+      email: normalizedEmail,
+      invite: record.invite,
+      communication: record.communication,
+      workRules: record.workRules,
+      capabilities: record.capabilities,
+      modes: record.modes,
+      isHeadquarter: record.isHeadquarter,
+      rawJson: record.rawJson,
+    );
+    notifyListeners();
+    debugPrint(
+      '[AreaState] local email 적용 완료: source=$source division=$normalizedDivision area=$normalizedArea changed=${before != normalizedEmail} remoteRead=0 remoteWrite=0',
+    );
+    return true;
+  }
+
   bool applyLocalAreaCapabilities({
     required String division,
     required String area,
@@ -602,6 +779,7 @@ class AreaState with ChangeNotifier {
         capabilities: next,
         modes: record.modes,
         isHeadquarter: record.isHeadquarter,
+        rawJson: record.rawJson,
       );
     }
 

@@ -21,6 +21,12 @@ class HeadquarterSnapshotRepository {
     );
   }
 
+  Future<HeadquarterSnapshotArea> upsertArea(
+    HeadquarterSnapshotArea area,
+  ) {
+    return HeadquarterSnapshotDatabase.instance.upsertArea(area);
+  }
+
   Future<HeadquarterSnapshotArea> updateAreaEmail({
     required String division,
     required String area,

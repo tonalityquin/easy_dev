@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import '../../../features/selector/application/dev_auth.dart';
+import '../../../shared/area_remote_settings/application/area_snapshot_persistence.dart';
 import '../../utils/status_dialog.dart';
 
 class AppCommandDiagnostics {
@@ -12,9 +13,15 @@ class AppCommandDiagnostics {
 
   static List<String> get lines => List<String>.unmodifiable(_lines);
 
-  static String get debugPrintCode => _lines
-      .map((line) => 'debugPrint(${jsonEncode(line)});')
-      .join('\n');
+  static String get debugPrintCode {
+    final merged = <String>[
+      ...AreaSnapshotPersistence.debugLines,
+      ..._lines,
+    ];
+    return merged
+        .map((line) => 'debugPrint(${jsonEncode(line)});')
+        .join('\n');
+  }
 
   static void record({
     required String phase,

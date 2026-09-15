@@ -9,6 +9,7 @@ import '../../../app/init/startup_tasks.dart';
 import '../../../app/utils/status_dialog.dart';
 import '../../attendance/application/attendance_diagnostics.dart';
 import '../../selector/application/dev_auth.dart';
+import '../../../shared/area_remote_settings/application/area_snapshot_persistence.dart';
 import '../../../shared/tts/application/plate_tts_session_diagnostics.dart';
 
 class LauncherDiagnostics {
@@ -25,6 +26,7 @@ class LauncherDiagnostics {
       ...GmailSenderDiagnostics.lines,
       ...PlateTtsSessionDiagnostics.lines,
       ...AttendanceDiagnostics.lines,
+      ...AreaSnapshotPersistence.debugLines,
       ..._lines,
     ];
     if (merged.isEmpty) {

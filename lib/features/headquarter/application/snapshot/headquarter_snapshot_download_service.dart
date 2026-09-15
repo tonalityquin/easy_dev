@@ -64,6 +64,7 @@ class HeadquarterSnapshotDownloadService {
             ),
             capabilities: Set<Capability>.unmodifiable(record.capabilities),
             isHeadquarter: record.isHeadquarter,
+            rawJson: record.rawJson,
           ),
         )
         .where((area) => area.name.isNotEmpty)

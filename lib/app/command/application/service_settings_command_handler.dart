@@ -12,8 +12,10 @@ import '../../../app/config/overlay_mode_config.dart';
 import '../../../app/theme/brand_theme.dart';
 import '../../../app/theme/theme_prefs_controller.dart';
 import '../../../app/utils/status_dialog.dart';
+import '../../../features/dev/application/area_state.dart';
 import '../../../features/dev/application/debug_session_controller.dart';
 import '../../../features/selector/application/dev_auth.dart';
+import '../../../shared/area_remote_settings/application/area_snapshot_persistence.dart';
 import '../../../shared/area_remote_settings/application/area_snapshot_scope.dart';
 import 'terminal_command_path.dart';
 
@@ -79,6 +81,7 @@ class ServiceSettingsCommandHandler {
     );
 
     final result = await _executeArgs(
+      context,
       args,
       themeController: themeController,
       selectedArea: selectedArea,
@@ -101,6 +104,7 @@ class ServiceSettingsCommandHandler {
   }
 
   static Future<ServiceSettingsCommandResult> _executeArgs(
+    BuildContext context,
     List<String> args, {
     required ThemePrefsController themeController,
     required String selectedArea,
@@ -136,7 +140,7 @@ class ServiceSettingsCommandHandler {
         return _email(args.skip(1).toList());
       case 'edit':
         if (args.length == 2 && args[1] == 'email') {
-          return await _beginEmailEdit();
+          return await _beginEmailEdit(context);
         }
         return const ServiceSettingsCommandResult.failure(<String>[
           '[error] edit',
@@ -407,12 +411,16 @@ class ServiceSettingsCommandHandler {
       'gmailSuffix=${EmailConfig.gmailSuffix}',
       'storage=headquarter_snapshot.db/areas.email',
     ].join('\n');
+    final copyText = <String>[
+      _areaEmailDebugPrintCode,
+      AreaSnapshotPersistence.debugPrintCode,
+    ].join('\n');
     if (succeeded) {
       await StatusDialog.showSuccess(
         context,
         title: '수신 이메일 상태',
         description: description,
-        copyText: _areaEmailDebugPrintCode,
+        copyText: copyText,
         copyButtonLabel: 'debugPrint 코드 복사',
         visibleDuration: Duration.zero,
         useCommonUi: true,
@@ -424,7 +432,7 @@ class ServiceSettingsCommandHandler {
       context,
       title: '수신 이메일 상태',
       description: description,
-      copyText: _areaEmailDebugPrintCode,
+      copyText: copyText,
       copyButtonLabel: 'debugPrint 코드 복사',
       visibleDuration: Duration.zero,
       useCommonUi: true,
@@ -480,17 +488,53 @@ class ServiceSettingsCommandHandler {
     ]);
   }
 
-  static Future<ServiceSettingsCommandResult> _beginEmailEdit() async {
+  static Future<ServiceSettingsCommandResult> _beginEmailEdit(
+    BuildContext context,
+  ) async {
     if (!AreaSnapshotScope.isBound) {
-      _recordAreaEmailDebug('terminal_edit_begin_rejected', meta: const <String, Object?>{'reason': 'scope_not_bound'});
+      _recordAreaEmailDebug(
+        'terminal_edit_begin_rejected',
+        meta: const <String, Object?>{'reason': 'scope_not_bound'},
+      );
       return const ServiceSettingsCommandResult.failure(<String>[
         '[error] 현재 domain이 바인딩되어 있지 않습니다.',
         'email',
       ]);
     }
-    final area = await AreaSnapshotScope.readCurrentArea();
+    var area = await AreaSnapshotScope.readCurrentArea();
+    if (area == null && context.mounted) {
+      final areaState = context.read<AreaState>();
+      final record = areaState.currentRecordFor(
+        division: AreaSnapshotScope.division,
+        area: AreaSnapshotScope.area,
+      );
+      if (record != null) {
+        try {
+          area = await AreaSnapshotPersistence.persistRecord(
+            record,
+            source: 'terminal_edit_email_recovery',
+          );
+          _recordAreaEmailDebug(
+            'terminal_edit_local_snapshot_recovered',
+            meta: <String, Object?>{
+              'emailPresent': area.email.trim().isNotEmpty,
+            },
+          );
+        } catch (error, stackTrace) {
+          _recordAreaEmailDebug(
+            'terminal_edit_local_snapshot_recovery_failed',
+            meta: <String, Object?>{'error': error},
+          );
+          debugPrint('[AREA_EMAIL] local snapshot recovery failed error=$error');
+          debugPrint(stackTrace.toString());
+        }
+      }
+    }
     if (area == null) {
-      _recordAreaEmailDebug('terminal_edit_begin_rejected', meta: const <String, Object?>{'reason': 'area_not_found'});
+      _recordAreaEmailDebug(
+        'terminal_edit_begin_rejected',
+        meta: const <String, Object?>{'reason': 'area_not_found'},
+      );
       return ServiceSettingsCommandResult.failure(<String>[
         '[error] 로컬 domain 데이터를 찾을 수 없습니다.',
         'division       ${AreaSnapshotScope.division}',
@@ -521,6 +565,7 @@ class ServiceSettingsCommandHandler {
   }
 
   static Future<ServiceSettingsCommandResult> submitEmailEdit(
+    BuildContext context,
     String rawLocalParts, {
     required String source,
   }) async {
@@ -572,6 +617,14 @@ class ServiceSettingsCommandHandler {
     try {
       final saved = await EmailConfig.saveLocal(completedEmail);
       final after = saved.to.trim();
+      if (context.mounted) {
+        context.read<AreaState>().applyLocalAreaEmail(
+          division: AreaSnapshotScope.division,
+          area: AreaSnapshotScope.area,
+          email: after,
+          source: 'terminal_edit_email',
+        );
+      }
       _recordAreaEmailDebug(
         'terminal_edit_complete',
         source: source,

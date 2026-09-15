@@ -11,6 +11,7 @@ class HeadquarterSnapshotArea {
     required this.modes,
     required this.capabilities,
     required this.isHeadquarter,
+    this.rawJson = '{}',
   });
 
   final String division;
@@ -22,6 +23,7 @@ class HeadquarterSnapshotArea {
   final Set<String> modes;
   final CapSet capabilities;
   final bool isHeadquarter;
+  final String rawJson;
 
   bool supportsMode(String modeKey) =>
       modes.contains(modeKey.trim().toLowerCase());

@@ -13,7 +13,7 @@ class HeadquarterSnapshotDatabase {
       HeadquarterSnapshotDatabase._();
 
   static const String databaseName = 'headquarter_snapshot.db';
-  static const int databaseVersion = 3;
+  static const int databaseVersion = 4;
 
   Database? _database;
 
@@ -35,6 +35,9 @@ class HeadquarterSnapshotDatabase {
         }
         if (oldVersion < 3) {
           await _migrateToVersion3(db);
+        }
+        if (oldVersion < 4) {
+          await _migrateToVersion4(db);
         }
         await _ensureSchema(db);
       },
@@ -89,6 +92,22 @@ FROM snapshot_meta
     }
   }
 
+  Future<void> _migrateToVersion4(Database db) async {
+    final areasExists = await _tableExists(db, 'areas');
+    if (areasExists && !await _columnExists(db, 'areas', 'raw_json')) {
+      await db.execute(
+        "ALTER TABLE areas ADD COLUMN raw_json TEXT NOT NULL DEFAULT '{}'",
+      );
+    }
+    final metaExists = await _tableExists(db, 'snapshot_meta');
+    if (metaExists) {
+      await db.update(
+        'snapshot_meta',
+        <String, Object?>{'schema_version': 4},
+      );
+    }
+  }
+
   Future<bool> _tableExists(DatabaseExecutor db, String tableName) async {
     final rows = await db.rawQuery(
       "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1",
@@ -125,6 +144,7 @@ CREATE TABLE IF NOT EXISTS areas (
   invite TEXT NOT NULL DEFAULT '',
   communication TEXT NOT NULL DEFAULT '',
   work_rules_json TEXT NOT NULL DEFAULT '[]',
+  raw_json TEXT NOT NULL DEFAULT '{}',
   is_headquarter INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (division, area_name)
 )
@@ -272,6 +292,7 @@ CREATE TABLE IF NOT EXISTS area_capabilities (
                   .where((value) => value.isNotEmpty)
                   .toList(growable: false),
             ),
+            'raw_json': _normalizeRawJson(area.rawJson),
             'is_headquarter': area.isHeadquarter ? 1 : 0,
           },
           conflictAlgorithm: ConflictAlgorithm.abort,
@@ -398,6 +419,133 @@ CREATE TABLE IF NOT EXISTS area_capabilities (
     });
   }
 
+
+  Future<HeadquarterSnapshotArea> upsertArea(
+    HeadquarterSnapshotArea area,
+  ) async {
+    final division = area.division.trim();
+    final areaName = area.name.trim();
+    if (division.isEmpty) {
+      throw ArgumentError('division is empty');
+    }
+    if (areaName.isEmpty) {
+      throw ArgumentError('area is empty');
+    }
+
+    final normalized = HeadquarterSnapshotArea(
+      division: division,
+      name: areaName,
+      email: area.email.trim(),
+      invite: area.invite.trim(),
+      communication: area.communication.trim(),
+      workRules: List<String>.unmodifiable(
+        area.workRules
+            .map((value) => value.trim())
+            .where((value) => value.isNotEmpty),
+      ),
+      modes: Set<String>.unmodifiable(
+        area.modes
+            .map((value) => value.trim().toLowerCase())
+            .where((value) => value.isNotEmpty)
+            .toSet(),
+      ),
+      capabilities: Set<Capability>.unmodifiable(area.capabilities),
+      isHeadquarter: area.isHeadquarter,
+      rawJson: _normalizeRawJson(area.rawJson),
+    );
+
+    final db = await database;
+    await db.transaction((txn) async {
+      await txn.delete(
+        'area_modes',
+        where: 'division = ? AND area_name = ?',
+        whereArgs: <Object?>[division, areaName],
+      );
+      await txn.delete(
+        'area_capabilities',
+        where: 'division = ? AND area_name = ?',
+        whereArgs: <Object?>[division, areaName],
+      );
+      await txn.insert(
+        'areas',
+        <String, Object?>{
+          'division': division,
+          'area_name': areaName,
+          'email': normalized.email,
+          'invite': normalized.invite,
+          'communication': normalized.communication,
+          'work_rules_json': jsonEncode(normalized.workRules),
+          'raw_json': normalized.rawJson,
+          'is_headquarter': normalized.isHeadquarter ? 1 : 0,
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+
+      final modes = normalized.modes.toList(growable: false)..sort();
+      for (final mode in modes) {
+        await txn.insert(
+          'area_modes',
+          <String, Object?>{
+            'division': division,
+            'area_name': areaName,
+            'mode': mode,
+          },
+          conflictAlgorithm: ConflictAlgorithm.abort,
+        );
+      }
+
+      final capabilities = normalized.capabilities.toList(growable: false)
+        ..sort((a, b) => a.key.compareTo(b.key));
+      for (final capability in capabilities) {
+        await txn.insert(
+          'area_capabilities',
+          <String, Object?>{
+            'division': division,
+            'area_name': areaName,
+            'capability': capability.key,
+          },
+          conflictAlgorithm: ConflictAlgorithm.abort,
+        );
+      }
+
+      final areaRows = await txn.query(
+        'areas',
+        where: 'division = ? AND area_name = ?',
+        whereArgs: <Object?>[division, areaName],
+        limit: 2,
+      );
+      final storedModeCount = Sqflite.firstIntValue(
+            await txn.rawQuery(
+              'SELECT COUNT(*) FROM area_modes WHERE division = ? AND area_name = ?',
+              <Object?>[division, areaName],
+            ),
+          ) ??
+          0;
+      final storedCapabilityCount = Sqflite.firstIntValue(
+            await txn.rawQuery(
+              'SELECT COUNT(*) FROM area_capabilities WHERE division = ? AND area_name = ?',
+              <Object?>[division, areaName],
+            ),
+          ) ??
+          0;
+      if (areaRows.length != 1 ||
+          storedModeCount != normalized.modes.length ||
+          storedCapabilityCount != normalized.capabilities.length) {
+        throw StateError(
+          'SQLite Area upsert verification failed: division=$division area=$areaName rows=${areaRows.length} modes=$storedModeCount/${normalized.modes.length} capabilities=$storedCapabilityCount/${normalized.capabilities.length}',
+        );
+      }
+    });
+
+    final stored = await readArea(division: division, area: areaName);
+    if (stored == null) {
+      throw StateError(
+        'SQLite Area post-transaction verification failed: division=$division area=$areaName',
+      );
+    }
+    return stored;
+  }
+
   Future<HeadquarterDownloadSnapshot?> readSnapshot(String division) async {
     final normalized = division.trim();
     if (normalized.isEmpty) return null;
@@ -466,6 +614,7 @@ CREATE TABLE IF NOT EXISTS area_capabilities (
           capabilitiesByArea[areaName] ?? const <Capability>{},
         ),
         isHeadquarter: _intValue(row['is_headquarter']) == 1,
+        rawJson: _normalizeRawJson(row['raw_json']?.toString() ?? '{}'),
       );
     }).toList(growable: false);
 
@@ -484,12 +633,54 @@ CREATE TABLE IF NOT EXISTS area_capabilities (
     final normalizedDivision = division.trim();
     final normalizedArea = area.trim();
     if (normalizedDivision.isEmpty || normalizedArea.isEmpty) return null;
-    final snapshot = await readSnapshot(normalizedDivision);
-    if (snapshot == null) return null;
-    for (final item in snapshot.areas) {
-      if (item.name.trim() == normalizedArea) return item;
+    final db = await database;
+    final areaRows = await db.query(
+      'areas',
+      where: 'division = ? AND area_name = ?',
+      whereArgs: <Object?>[normalizedDivision, normalizedArea],
+      limit: 2,
+    );
+    if (areaRows.length != 1) return null;
+
+    final modeRows = await db.query(
+      'area_modes',
+      columns: const <String>['mode'],
+      where: 'division = ? AND area_name = ?',
+      whereArgs: <Object?>[normalizedDivision, normalizedArea],
+    );
+    final capabilityRows = await db.query(
+      'area_capabilities',
+      columns: const <String>['capability'],
+      where: 'division = ? AND area_name = ?',
+      whereArgs: <Object?>[normalizedDivision, normalizedArea],
+    );
+
+    final modes = modeRows
+        .map((row) => (row['mode'] ?? '').toString().trim().toLowerCase())
+        .where((value) => value.isNotEmpty)
+        .toSet();
+    final capabilities = <Capability>{};
+    for (final row in capabilityRows) {
+      final key = (row['capability'] ?? '').toString().trim();
+      if (key.isEmpty) continue;
+      capabilities.addAll(Cap.fromDynamic(<String>[key]));
     }
-    return null;
+
+    final row = areaRows.single;
+    return HeadquarterSnapshotArea(
+      division: normalizedDivision,
+      name: normalizedArea,
+      email: (row['email'] ?? '').toString().trim(),
+      invite: (row['invite'] ?? '').toString().trim(),
+      communication: (row['communication'] ?? '').toString().trim(),
+      workRules: List<String>.unmodifiable(
+        _decodeWorkRules(row['work_rules_json']),
+      ),
+      modes: Set<String>.unmodifiable(modes),
+      capabilities: Set<Capability>.unmodifiable(capabilities),
+      isHeadquarter: _intValue(row['is_headquarter']) == 1,
+      rawJson: _normalizeRawJson(row['raw_json']?.toString() ?? '{}'),
+    );
   }
 
   Future<HeadquarterSnapshotArea> updateAreaEmail({
@@ -584,6 +775,17 @@ CREATE TABLE IF NOT EXISTS area_capabilities (
       minorCount: snapshot.supportCount('minor'),
       tabletCount: snapshot.capabilityCount(Capability.tablet),
     );
+  }
+
+  String _normalizeRawJson(String raw) {
+    final normalized = raw.trim();
+    if (normalized.isEmpty) return '{}';
+    try {
+      final decoded = jsonDecode(normalized);
+      return jsonEncode(decoded);
+    } catch (_) {
+      return '{}';
+    }
   }
 
   List<String> _decodeWorkRules(Object? raw) {

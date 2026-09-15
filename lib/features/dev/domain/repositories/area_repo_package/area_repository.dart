@@ -10,6 +10,7 @@ class AreaRecord {
   final CapSet capabilities;
   final List<String> modes;
   final bool isHeadquarter;
+  final String rawJson;
 
   const AreaRecord({
     required this.name,
@@ -21,6 +22,7 @@ class AreaRecord {
     required this.capabilities,
     this.modes = const <String>[],
     this.isHeadquarter = false,
+    this.rawJson = '{}',
   });
 }
 

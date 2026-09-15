@@ -219,6 +219,7 @@ class HeadquarterContextNavigationCoordinator {
           capabilities: snapshotArea.capabilities,
           modes: snapshotArea.modes.toList(growable: false),
           isHeadquarter: true,
+          rawJson: snapshotArea.rawJson,
         );
         areaState.applyLocalAreaRecord(
           record,
@@ -346,6 +347,7 @@ class HeadquarterContextNavigationCoordinator {
         capabilities: snapshotArea.capabilities,
         modes: snapshotArea.modes.toList(growable: false),
         isHeadquarter: false,
+        rawJson: snapshotArea.rawJson,
       );
       areaState.applyLocalAreaRecord(
         record,

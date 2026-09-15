@@ -1,6 +1,9 @@
+import 'dart:convert';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../../../app/models/capability.dart';
+import '../../../../../shared/area_remote_settings/application/area_snapshot_persistence.dart';
 import '../../../domain/repositories/area_repo_package/area_repository.dart';
 
 class FirestoreAreaRepository implements AreaRepository {
@@ -9,6 +12,55 @@ class FirestoreAreaRepository implements AreaRepository {
   }) : _firestore = firestore ?? FirebaseFirestore.instance;
 
   final FirebaseFirestore _firestore;
+
+  Object? _normalizeRawValue(Object? value) {
+    if (value == null ||
+        value is String ||
+        value is num ||
+        value is bool) {
+      return value;
+    }
+    if (value is Timestamp) {
+      return <String, Object?>{
+        '__type': 'timestamp',
+        'value': value.toDate().toUtc().toIso8601String(),
+      };
+    }
+    if (value is GeoPoint) {
+      return <String, Object?>{
+        '__type': 'geo_point',
+        'latitude': value.latitude,
+        'longitude': value.longitude,
+      };
+    }
+    if (value is DocumentReference) {
+      return <String, Object?>{
+        '__type': 'document_reference',
+        'path': value.path,
+      };
+    }
+    if (value is DateTime) {
+      return <String, Object?>{
+        '__type': 'date_time',
+        'value': value.toUtc().toIso8601String(),
+      };
+    }
+    if (value is Map) {
+      final result = <String, Object?>{};
+      for (final entry in value.entries) {
+        result[entry.key.toString()] = _normalizeRawValue(entry.value);
+      }
+      return result;
+    }
+    if (value is Iterable) {
+      return value.map(_normalizeRawValue).toList(growable: false);
+    }
+    return value.toString();
+  }
+
+  String _encodeRawData(Map<String, dynamic> data) {
+    return jsonEncode(_normalizeRawValue(data));
+  }
 
   AreaRecord? _toAreaRecord(Map<String, dynamic>? data) {
     if (data == null) return null;
@@ -53,6 +105,7 @@ class FirestoreAreaRepository implements AreaRepository {
       capabilities: capabilities,
       modes: modes,
       isHeadquarter: data['isHeadquarter'] == true,
+      rawJson: _encodeRawData(data),
     );
   }
 
@@ -75,8 +128,18 @@ class FirestoreAreaRepository implements AreaRepository {
 
     final docId = '$trimmedDivision-$trimmedArea';
     final doc = await _firestore.collection('areas').doc(docId).get();
-
-    return doc.exists && (doc.data()?['isHeadquarter'] == true);
+    if (!doc.exists) return false;
+    final record = _toAreaRecord(doc.data());
+    if (record == null ||
+        record.name != trimmedArea ||
+        record.division != trimmedDivision) {
+      return false;
+    }
+    await AreaSnapshotPersistence.persistRecord(
+      record,
+      source: 'firestore_area_is_headquarter',
+    );
+    return record.isHeadquarter;
   }
 
   @override
@@ -102,6 +165,12 @@ class FirestoreAreaRepository implements AreaRepository {
       if (record.name != trimmedArea || record.division != trimmedDivision) {
         return null;
       }
+      await AreaSnapshotPersistence.persistRecord(
+        record,
+        source: serverOnly
+            ? 'firestore_area_by_name_server'
+            : 'firestore_area_by_name',
+      );
       return record;
     }
 
@@ -112,7 +181,15 @@ class FirestoreAreaRepository implements AreaRepository {
     final qs = options == null ? await query.get() : await query.get(options);
 
     if (qs.docs.isEmpty) return null;
-    return _toAreaRecord(qs.docs.first.data());
+    final record = _toAreaRecord(qs.docs.first.data());
+    if (record == null) return null;
+    await AreaSnapshotPersistence.persistRecord(
+      record,
+      source: serverOnly
+          ? 'firestore_area_query_server'
+          : 'firestore_area_query',
+    );
+    return record;
   }
 
   @override
