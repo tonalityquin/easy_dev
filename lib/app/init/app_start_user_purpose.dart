@@ -49,11 +49,11 @@ extension AppStartUserPurposeValues on AppStartUserPurpose {
 
   List<int> get permissionStepNumbers {
     return switch (this) {
-      AppStartUserPurpose.branchEmployee => const <int>[1, 2, 3, 4, 5, 6, 7],
+      AppStartUserPurpose.branchEmployee => const <int>[1, 2, 3, 4, 5, 7],
       AppStartUserPurpose.headOfficeEmployee =>
-        const <int>[1, 2, 3, 4, 5, 6, 7],
-      AppStartUserPurpose.tabletInstallation => const <int>[1, 2, 4, 6],
-      AppStartUserPurpose.commuteRecorder => const <int>[1, 2, 3, 4, 6],
+        const <int>[1, 2, 3, 4, 5, 7],
+      AppStartUserPurpose.tabletInstallation => const <int>[1, 2, 4],
+      AppStartUserPurpose.commuteRecorder => const <int>[1, 2, 3, 4],
       AppStartUserPurpose.personal => const <int>[1, 2],
     };
   }

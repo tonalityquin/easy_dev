@@ -29,7 +29,7 @@ const List<AppStartPermissionSpec> appStartPermissionSpecs =
     step: 2,
     keyName: 'notifications',
     title: '알림 권한',
-    description: '리마인더와 상태 알림을 위해 필요합니다.',
+    description: '입·출차 요청과 근무 상태 알림을 위해 필요합니다.',
     icon: Icons.notifications_active_outlined,
   ),
   AppStartPermissionSpec(
@@ -52,13 +52,6 @@ const List<AppStartPermissionSpec> appStartPermissionSpecs =
     title: '카메라 권한',
     description: '업무 사진 촬영 기능을 위해 필요합니다.',
     icon: Icons.photo_camera_outlined,
-  ),
-  AppStartPermissionSpec(
-    step: 6,
-    keyName: 'overlay',
-    title: '다른 앱 위 사용 허용',
-    description: '오버레이 표시 기능을 위해 필요합니다.',
-    icon: Icons.picture_in_picture_alt_outlined,
   ),
   AppStartPermissionSpec(
     step: 7,

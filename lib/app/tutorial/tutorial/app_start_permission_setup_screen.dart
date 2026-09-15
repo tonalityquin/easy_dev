@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../../app/di/routes.dart';
@@ -28,7 +27,6 @@ enum _PermissionStepKind {
   location,
   battery,
   camera,
-  overlay,
   microphone,
 }
 
@@ -53,7 +51,6 @@ class _AppStartPermissionSetupScreenState
   PermissionStatus? _batteryStatus;
   PermissionStatus? _cameraStatus;
   PermissionStatus? _microphoneStatus;
-  bool? _overlayGranted;
 
   List<_PermissionStepKind> _steps = const <_PermissionStepKind>[
     _PermissionStepKind.welcome,
@@ -78,7 +75,6 @@ class _AppStartPermissionSetupScreenState
       _PermissionStepKind.location => 'location',
       _PermissionStepKind.battery => 'battery',
       _PermissionStepKind.camera => 'camera',
-      _PermissionStepKind.overlay => 'overlay',
       _PermissionStepKind.microphone => 'microphone',
     };
   }
@@ -91,7 +87,6 @@ class _AppStartPermissionSetupScreenState
       _PermissionStepKind.location => 3,
       _PermissionStepKind.battery => 4,
       _PermissionStepKind.camera => 5,
-      _PermissionStepKind.overlay => 6,
       _PermissionStepKind.microphone => 7,
     };
   }
@@ -151,7 +146,6 @@ class _AppStartPermissionSetupScreenState
       3: _PermissionStepKind.location,
       4: _PermissionStepKind.battery,
       5: _PermissionStepKind.camera,
-      6: _PermissionStepKind.overlay,
       7: _PermissionStepKind.microphone,
     };
     return purpose.permissionStepNumbers
@@ -271,9 +265,6 @@ class _AppStartPermissionSetupScreenState
           },
         );
         return;
-      case _PermissionStepKind.overlay:
-        await _refreshOverlayPermissionStatus();
-        return;
       case _PermissionStepKind.microphone:
         final status = await Permission.microphone.status;
         if (!mounted) return;
@@ -286,16 +277,6 @@ class _AppStartPermissionSetupScreenState
         );
         return;
     }
-  }
-
-  Future<void> _refreshOverlayPermissionStatus() async {
-    final granted = await FlutterOverlayWindow.isPermissionGranted();
-    if (!mounted) return;
-    setState(() => _overlayGranted = granted);
-    _printDebug(
-      'status_refresh',
-      meta: <String, Object?>{'status': granted ? '허용됨' : '미허용'},
-    );
   }
 
   String _statusLabelForPermission(PermissionStatus? status) {
@@ -317,19 +298,6 @@ class _AppStartPermissionSetupScreenState
     return _PermissionStatusTone.neutral;
   }
 
-  String _overlayStatusLabel() {
-    if (_overlayGranted == null) return '확인 전';
-    return _overlayGranted == true ? '허용됨' : '미허용';
-  }
-
-  _PermissionStatusTone _overlayStatusTone() {
-    if (_overlayGranted == null) return _PermissionStatusTone.neutral;
-    return _overlayGranted == true
-        ? _PermissionStatusTone.success
-        : _PermissionStatusTone.warning;
-  }
-
-
   bool _canProceed(_PermissionStepKind kind) {
     switch (kind) {
       case _PermissionStepKind.welcome:
@@ -342,8 +310,6 @@ class _AppStartPermissionSetupScreenState
         return _batteryStatus?.isGranted == true;
       case _PermissionStepKind.camera:
         return _cameraStatus?.isGranted == true;
-      case _PermissionStepKind.overlay:
-        return _overlayGranted == true;
       case _PermissionStepKind.microphone:
         return _microphoneStatus?.isGranted == true;
     }
@@ -374,48 +340,12 @@ class _AppStartPermissionSetupScreenState
     );
   }
 
-  Future<void> _showNeedOverlayPermissionDialog() async {
-    if (!mounted) return;
-    await showCommonOverlayDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      barrierLabel: '다른 앱 위 사용 허용 안내',
-      builder: (dialogContext) {
-        return _CommonPermissionDialog(
-          icon: Icons.picture_in_picture_alt_rounded,
-          title: '다른 앱 위 사용 허용 필요',
-          message:
-              '이 권한은 시스템 설정에서 직접 허용해야 합니다. 다른 앱 위에 표시를 허용한 뒤 앱으로 돌아와 설정 재확인 버튼을 눌러주세요.',
-          secondaryLabel: '닫기',
-          onSecondary: () => Navigator.of(dialogContext).pop(),
-          primaryLabel: '설정 열기',
-          onPrimary: () async {
-            Navigator.of(dialogContext).pop();
-            await _openOverlaySettingsHint();
-          },
-        );
-      },
-    );
-  }
-
   Future<void> _openSettingsHint() async {
     await openAppSettings();
     if (!mounted) return;
     showSelectedSnackbar(
       context,
       '설정에서 허용한 뒤 앱으로 돌아와 설정 재확인을 눌러주세요.',
-      useCommonUi: true,
-    );
-  }
-
-  Future<void> _openOverlaySettingsHint() async {
-    await FlutterOverlayWindow.requestPermission();
-    if (!mounted) return;
-    await _refreshOverlayPermissionStatus();
-    if (!mounted) return;
-    showSelectedSnackbar(
-      context,
-      '시스템 설정에서 허용한 뒤 앱으로 돌아오면 상태가 반영됩니다.',
       useCommonUi: true,
     );
   }
@@ -527,29 +457,6 @@ class _AppStartPermissionSetupScreenState
     } finally {
       if (mounted) setState(() => _busy = false);
     }
-  }
-
-  Future<void> _requestOverlay() async {
-    _printDebug(
-      'permission_request_start',
-      meta: const <String, Object?>{'permission': 'overlay'},
-    );
-    final granted = await FlutterOverlayWindow.isPermissionGranted();
-    if (!mounted) return;
-    if (granted == true) {
-      setState(() => _overlayGranted = true);
-      _printDebug(
-        'permission_request_result',
-        meta: const <String, Object?>{'status': '허용됨'},
-      );
-      return;
-    }
-
-    await _openOverlaySettingsHint();
-    if (!mounted) return;
-    await _refreshOverlayPermissionStatus();
-    if (!mounted || _overlayGranted == true) return;
-    await _showNeedOverlayPermissionDialog();
   }
 
   Future<void> _recheckCurrent() async {
@@ -885,18 +792,6 @@ class _AppStartPermissionSetupScreenState
           status: _statusLabelForPermission(_cameraStatus),
           tone: _toneForPermission(_cameraStatus),
           onRequest: _requestCamera,
-        );
-      case _PermissionStepKind.overlay:
-        return _buildPermissionStep(
-          context,
-          icon: spec.icon,
-          title: spec.title,
-          description: spec.description,
-          label: '다른 앱 위에 표시',
-          status: _overlayStatusLabel(),
-          tone: _overlayStatusTone(),
-          onRequest: _requestOverlay,
-          onOpenSettings: _openOverlaySettingsHint,
         );
       case _PermissionStepKind.microphone:
         return _buildPermissionStep(

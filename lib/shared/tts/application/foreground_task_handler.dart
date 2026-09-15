@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:firebase_core/firebase_core.dart';
@@ -6,9 +7,11 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../notification/work_status_notification_protocol.dart';
 import '../services/plate/plate_local_notification_service.dart';
 import '../services/plate/plate_tts_listener_service.dart';
 import 'plate_tts_session_protocol.dart';
+import 'plate_tts_session_recovery_store.dart';
 import 'tts_ownership.dart';
 import 'tts_user_filters.dart';
 
@@ -26,30 +29,79 @@ class MyTaskHandler implements TaskHandler {
     DartPluginRegistrant.ensureInitialized();
     PlateTtsListenerService.setLocalRole(TtsOwner.foreground);
     _startedAt = DateTime.now();
-    debugPrint('[HANDLER][${_ts()}] onStart: starter=$starter at=$_startedAt');
+    debugPrint('[HANDLER][${_ts()}] onStart starter=$starter at=$_startedAt');
 
     try {
       if (Firebase.apps.isEmpty) {
         await Firebase.initializeApp();
-        debugPrint(
-            '[HANDLER][${_ts()}] Firebase.initializeApp() done in FG isolate');
+        debugPrint('[HANDLER][${_ts()}] Firebase.initializeApp done');
       } else {
-        debugPrint(
-            '[HANDLER][${_ts()}] Firebase already initialized in FG isolate');
+        debugPrint('[HANDLER][${_ts()}] Firebase already initialized');
       }
-    } catch (e, st) {
-      debugPrint('[HANDLER][${_ts()}] Firebase init error: $e\n$st');
+    } catch (error, stackTrace) {
+      debugPrint('[HANDLER][${_ts()}] Firebase init error=$error\n$stackTrace');
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+    final isWorking = prefs.getBool('isWorking') ?? false;
+    if (!isWorking) {
+      await PlateTtsSessionRecoveryStore.clear(
+        source: 'handler_start_not_working',
+      );
+      await PlateTtsListenerService.stop();
+      await TtsOwnership.setOwner(TtsOwner.app);
+      PlateTtsListenerService.setLocalRole(TtsOwner.app);
+      _listeningArea = null;
+      _listeningMode = null;
+      _sendStatus(
+        event: 'handler_start_blocked',
+        listening: false,
+        masterOn: false,
+        reason: 'not_working',
+        source: 'foreground_service_start',
+      );
+      _sendWorkStatusNotificationEvent(
+        WorkStatusNotificationProtocol.serviceStartBlockedNotWorkingEvent,
+      );
+      debugPrint(
+        '[HANDLER][${_ts()}] start blocked isWorking=false starter=$starter',
+      );
+      await FlutterForegroundTask.stopService();
+      return;
     }
 
     await PlateLocalNotificationService.instance.ensureInitialized();
     await PlateTtsListenerService.stop();
     _listeningArea = null;
     _listeningMode = null;
-    _sendStatus(
-      event: 'handler_started',
-      listening: false,
-      masterOn: false,
-      reason: 'awaiting_session_payload',
+
+    final recovery = await PlateTtsSessionRecoveryStore.load();
+    if (recovery == null) {
+      await TtsOwnership.setOwner(TtsOwner.app);
+      _sendStatus(
+        event: 'handler_started',
+        listening: false,
+        masterOn: false,
+        reason: 'awaiting_session_payload',
+        source: 'foreground_service_start',
+      );
+      debugPrint('[HANDLER][${_ts()}] recovery snapshot unavailable');
+      return;
+    }
+
+    final recoverySource = recovery.source.isEmpty
+        ? 'foreground_service_recovery'
+        : 'foreground_service_recovery:${recovery.source}';
+    debugPrint(
+      '[HANDLER][${_ts()}] recovery apply area=${recovery.area} mode=${recovery.mode} clearMode=${recovery.clearMode} source=$recoverySource',
+    );
+    await _applySessionCommand(
+      recovery.toTaskPayload(
+        source: recoverySource,
+        forceRestart: true,
+      ),
+      fallbackSource: recoverySource,
     );
   }
 
@@ -57,23 +109,34 @@ class MyTaskHandler implements TaskHandler {
   Future<void> onRepeatEvent(DateTime timestamp) async {}
 
   @override
-  Future<void> onDestroy(DateTime timestamp, bool isServiceDetached) async {
+  Future<void> onDestroy(DateTime timestamp, bool isTimeout) async {
     debugPrint(
-        '[HANDLER][${_ts()}] onDestroy: detached=$isServiceDetached → stop listener (area=$_listeningArea)');
+      '[HANDLER][${_ts()}] onDestroy isTimeout=$isTimeout area=$_listeningArea mode=$_listeningMode',
+    );
     await PlateTtsListenerService.stop();
+    await TtsOwnership.setOwner(TtsOwner.app);
     _listeningArea = null;
     _listeningMode = null;
     _sendStatus(
-      event: 'handler_destroyed',
+      event: isTimeout ? 'handler_timeout' : 'handler_destroyed',
       listening: false,
       masterOn: false,
-      reason: 'service_destroyed',
+      reason: isTimeout ? 'service_timeout' : 'service_destroyed',
+      source: 'foreground_service_destroy',
+    );
+    _sendWorkStatusNotificationEvent(
+      isTimeout
+          ? WorkStatusNotificationProtocol.serviceTimeoutEvent
+          : WorkStatusNotificationProtocol.serviceDestroyedEvent,
     );
   }
 
   @override
   void onNotificationPressed() {
     debugPrint('[HANDLER][${_ts()}] onNotificationPressed');
+    _sendWorkStatusNotificationEvent(
+      WorkStatusNotificationProtocol.pressedEvent,
+    );
   }
 
   @override
@@ -84,21 +147,71 @@ class MyTaskHandler implements TaskHandler {
   @override
   void onNotificationDismissed() {
     debugPrint('[HANDLER][${_ts()}] onNotificationDismissed');
+    unawaited(_restoreWorkStatusNotificationAfterDismiss());
+  }
+
+  Future<void> _restoreWorkStatusNotificationAfterDismiss() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.reload();
+      final isWorking = prefs.getBool('isWorking') ?? false;
+      if (!isWorking) {
+        debugPrint(
+          '[HANDLER][${_ts()}] notification restore skipped isWorking=false',
+        );
+        return;
+      }
+
+      await FlutterForegroundTask.updateService(
+        notificationTitle: '근무 중',
+        notificationText: '현재 근무 세션이 진행 중입니다.',
+        notificationInitialRoute: '/',
+      );
+      debugPrint(
+        '[HANDLER][${_ts()}] notification restored after dismissal',
+      );
+    } catch (error, stackTrace) {
+      debugPrint(
+        '[HANDLER][${_ts()}] notification restore error=$error\n$stackTrace',
+      );
+    } finally {
+      _sendWorkStatusNotificationEvent(
+        WorkStatusNotificationProtocol.dismissedEvent,
+      );
+    }
   }
 
   @override
-  void onReceiveData(dynamic data) async {
+  void onReceiveData(Object data) async {
+    await _applySessionCommand(
+      data,
+      fallbackSource: 'receive_data',
+    );
+  }
+
+  Future<void> _applySessionCommand(
+    Object data, {
+    required String fallbackSource,
+  }) async {
     debugPrint(
-        '[HANDLER][${_ts()}] onReceiveData: $data (current=$_listeningArea)');
+      '[HANDLER][${_ts()}] applySessionCommand data=$data currentArea=$_listeningArea currentMode=$_listeningMode',
+    );
 
     String? area;
     String? incomingMode;
     TtsUserFilters? incomingFilters;
     var forceRestart = false;
     var clearMode = false;
-    var source = 'legacy';
+    var source = fallbackSource;
 
     if (data is Map) {
+      final kind = data['kind'];
+      if (kind != null && kind.toString() != PlateTtsSessionProtocol.commandKind) {
+        debugPrint(
+          '[HANDLER][${_ts()}] unsupported command kind=${kind.toString()}',
+        );
+        return;
+      }
       final vArea = data['area'];
       if (vArea is String) {
         area = vArea.trim();
@@ -120,12 +233,13 @@ class MyTaskHandler implements TaskHandler {
     } else if (data is String && data.trim().isNotEmpty) {
       area = data.trim();
     } else {
-      debugPrint(
-          '[HANDLER][${_ts()}] unsupported data type=${data.runtimeType}');
+      debugPrint('[HANDLER][${_ts()}] unsupported data type=${data.runtimeType}');
+      return;
     }
 
     if (clearMode) {
       await PlateTtsListenerService.stop();
+      await TtsOwnership.setOwner(TtsOwner.app);
       _listeningArea = null;
       _listeningMode = null;
       _sendStatus(
@@ -138,7 +252,7 @@ class MyTaskHandler implements TaskHandler {
         source: source,
       );
       debugPrint(
-        "[HANDLER][${_ts()}] session mode cleared area=${area ?? ''} source=$source",
+        '[HANDLER][${_ts()}] session mode cleared area=${area ?? ''} source=$source',
       );
       return;
     }
@@ -160,6 +274,7 @@ class MyTaskHandler implements TaskHandler {
     final mode = await _resolveMode(incomingMode);
     if (mode.isEmpty) {
       await PlateTtsListenerService.stop();
+      await TtsOwnership.setOwner(TtsOwner.app);
       _listeningArea = null;
       _listeningMode = null;
       _sendStatus(
@@ -173,6 +288,8 @@ class MyTaskHandler implements TaskHandler {
       );
       return;
     }
+
+    await TtsOwnership.setOwner(TtsOwner.foreground);
     final isTablet = mode == 'tablet';
     final completedOk = filters.completed && isTablet;
     final masterOn =
@@ -184,7 +301,8 @@ class MyTaskHandler implements TaskHandler {
       _listeningArea = null;
       _listeningMode = mode;
       debugPrint(
-          '[HANDLER][${_ts()}] session disabled: mode="$mode" filters=${filters.toMap()}');
+        '[HANDLER][${_ts()}] session disabled mode=$mode filters=${filters.toMap()}',
+      );
       _sendStatus(
         event: 'session_disabled',
         listening: false,
@@ -220,7 +338,8 @@ class MyTaskHandler implements TaskHandler {
         PlateTtsListenerService.currentArea == area &&
         PlateTtsListenerService.currentMode == mode) {
       debugPrint(
-          '[HANDLER][${_ts()}] same area="$area" mode="$mode" and listener active → no-op');
+        '[HANDLER][${_ts()}] session noop area=$area mode=$mode source=$source',
+      );
       _sendStatus(
         event: 'session_noop',
         listening: true,
@@ -246,12 +365,14 @@ class MyTaskHandler implements TaskHandler {
         _listeningArea = area;
         _listeningMode = mode;
         debugPrint(
-            '[HANDLER][${_ts()}] listener started: area="$area" mode="$mode" prevArea=$prevArea prevMode=$prevMode source=$source');
+          '[HANDLER][${_ts()}] listener started area=$area mode=$mode prevArea=$prevArea prevMode=$prevMode source=$source',
+        );
       } else {
         _listeningArea = null;
         _listeningMode = mode;
         debugPrint(
-            '[HANDLER][${_ts()}] listener start rejected: area="$area" mode="$mode" source=$source');
+          '[HANDLER][${_ts()}] listener start rejected area=$area mode=$mode source=$source',
+        );
       }
       _sendStatus(
         event: started ? 'listener_started' : 'listener_rejected',
@@ -262,19 +383,34 @@ class MyTaskHandler implements TaskHandler {
         reason: started ? 'subscription_active' : 'start_returned_false',
         source: source,
       );
-    } catch (e, st) {
+    } catch (error, stackTrace) {
       _listeningArea = null;
       _listeningMode = mode;
       debugPrint(
-          '[HANDLER][${_ts()}] listener start error: area="$area" mode="$mode" error=$e\n$st');
+        '[HANDLER][${_ts()}] listener start error area=$area mode=$mode error=$error\n$stackTrace',
+      );
       _sendStatus(
         event: 'listener_error',
         listening: false,
         masterOn: true,
         area: area,
         mode: mode,
-        reason: e.toString(),
+        reason: error.toString(),
         source: source,
+      );
+    }
+  }
+
+  void _sendWorkStatusNotificationEvent(String event) {
+    try {
+      FlutterForegroundTask.sendDataToMain(<String, dynamic>{
+        'kind': WorkStatusNotificationProtocol.eventKind,
+        'event': event,
+        'ts': DateTime.now().millisecondsSinceEpoch,
+      });
+    } catch (error) {
+      debugPrint(
+        '[HANDLER][${_ts()}] work status notification event send failed error=$error',
       );
     }
   }
@@ -288,8 +424,8 @@ class MyTaskHandler implements TaskHandler {
       final prefs = await SharedPreferences.getInstance();
       await prefs.reload();
       return (prefs.getString('mode') ?? '').trim();
-    } catch (e) {
-      debugPrint('[HANDLER][${_ts()}] mode load failed: $e');
+    } catch (error) {
+      debugPrint('[HANDLER][${_ts()}] mode load failed error=$error');
       return '';
     }
   }
@@ -297,8 +433,8 @@ class MyTaskHandler implements TaskHandler {
   Future<TtsUserFilters?> _loadFiltersSafe() async {
     try {
       return await TtsUserFilters.load();
-    } catch (e) {
-      debugPrint('[HANDLER][${_ts()}] TtsUserFilters.load() failed: $e');
+    } catch (error) {
+      debugPrint('[HANDLER][${_ts()}] TtsUserFilters.load failed error=$error');
       return null;
     }
   }
@@ -324,8 +460,8 @@ class MyTaskHandler implements TaskHandler {
         'source': source,
         'ts': DateTime.now().millisecondsSinceEpoch,
       });
-    } catch (e) {
-      debugPrint('[HANDLER][${_ts()}] send status failed: $e');
+    } catch (error) {
+      debugPrint('[HANDLER][${_ts()}] send status failed error=$error');
     }
   }
 }

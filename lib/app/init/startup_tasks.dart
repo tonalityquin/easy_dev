@@ -1,12 +1,11 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../features/dashboard/applications/common/endtime_reminder_service.dart';
 import '../../features/dashboard/widgets/utils/productivity_tools.dart';
-import 'foreground_entrypoints.dart';
 import 'local_notifications.dart';
 import 'work_schedule_prefs.dart';
+import 'work_status_notification.dart';
 
 @immutable
 class StartupReport {
@@ -15,12 +14,14 @@ class StartupReport {
     required this.reminderReady,
     required this.chillStoreReady,
     required this.foregroundServiceReady,
+    required this.foregroundServiceRunning,
   });
 
   final bool notificationsReady;
   final bool reminderReady;
   final bool chillStoreReady;
   final bool foregroundServiceReady;
+  final bool foregroundServiceRunning;
 
   int get readyCount => <bool>[
         notificationsReady,
@@ -56,6 +57,7 @@ class StartupTasks {
     var reminderReady = false;
     var chillStoreReady = false;
     var foregroundServiceReady = false;
+    var foregroundServiceRunning = false;
 
     try {
       await LocalNotifications.ensureInitialized();
@@ -86,10 +88,17 @@ class StartupTasks {
     }
 
     try {
-      foregroundServiceReady = await ensureForegroundServiceRunning();
+      foregroundServiceReady = await WorkStatusNotificationController.refresh(
+        source: 'startup_work_state',
+      );
+      foregroundServiceRunning =
+          WorkStatusNotificationController.status.value.serviceRunning;
+      _log(
+        '[STARTUP] Foreground lifecycle ready=$foregroundServiceReady running=$foregroundServiceRunning working=${WorkStatusNotificationController.status.value.isWorking}',
+      );
     } catch (e, st) {
-      _log('[STARTUP] Foreground service error: $e');
-      _log('[STARTUP] Foreground service stackTrace: $st');
+      _log('[STARTUP] Foreground lifecycle error: $e');
+      _log('[STARTUP] Foreground lifecycle stackTrace: $st');
     }
 
     final report = StartupReport(
@@ -97,6 +106,7 @@ class StartupTasks {
       reminderReady: reminderReady,
       chillStoreReady: chillStoreReady,
       foregroundServiceReady: foregroundServiceReady,
+      foregroundServiceRunning: foregroundServiceRunning,
     );
     _lastReport = report;
     _log(
@@ -105,39 +115,22 @@ class StartupTasks {
     return report;
   }
 
+  static Future<ForegroundServiceEnsureResult>
+      ensureForegroundServiceState({
+    String source = 'startup_tasks',
+  }) async {
+    final result = await WorkStatusNotificationController.ensureServiceState(
+      source: source,
+    );
+    _log(
+      '[STARTUP] Foreground service ensure running=${result.running} startedNow=${result.startedNow} source=${result.source}',
+    );
+    return result;
+  }
+
   static Future<bool> ensureForegroundServiceRunning() async {
-    try {
-      final running = await FlutterForegroundTask.isRunningService;
-      if (running) {
-        _log('[STARTUP] Foreground service already running');
-        return true;
-      }
-      await FlutterForegroundTask.startService(
-        notificationTitle: 'ParkinWorkin',
-        notificationText: '포그라운드에서 대기 중',
-        callback: myForegroundCallback,
-      );
-      _log('[STARTUP] Foreground service start request completed');
-      for (var attempt = 1; attempt <= 4; attempt++) {
-        final started = await FlutterForegroundTask.isRunningService;
-        _log(
-          '[STARTUP] Foreground service verify attempt=$attempt running=$started',
-        );
-        if (started) {
-          _log('[STARTUP] Foreground service ensure result=true');
-          return true;
-        }
-        if (attempt < 4) {
-          await Future<void>.delayed(const Duration(milliseconds: 120));
-        }
-      }
-      _log('[STARTUP] Foreground service ensure result=false');
-      return false;
-    } catch (e, st) {
-      _log('[STARTUP] Foreground service ensure error: $e');
-      _log('[STARTUP] Foreground service ensure stackTrace: $st');
-      return false;
-    }
+    final result = await ensureForegroundServiceState();
+    return result.running;
   }
 
   static Future<void> _applyEndTimeReminderFromPrefs() async {

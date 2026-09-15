@@ -2,13 +2,10 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../app/config/email_config.dart';
-import '../../../app/config/overlay_edge_side_config.dart';
-import '../../../app/config/overlay_mode_config.dart';
 import '../../../app/theme/brand_theme.dart';
 import '../../../app/theme/theme_prefs_controller.dart';
 import '../../../app/utils/status_dialog.dart';
@@ -54,8 +51,6 @@ class ServiceSettingsCommandHandler {
     final args = normalized.isEmpty ? <String>[] : normalized.split(' ');
     final prefs = await SharedPreferences.getInstance();
     final selectedArea = (prefs.getString('selectedArea') ?? '').trim();
-    final singleMode =
-        (prefs.getString('mode') ?? '').trim().toLowerCase() == 'single';
     final debugEnabled = await DevAuth.isDevModeEnabled();
     if (!context.mounted) {
       return const ServiceSettingsCommandResult.failure(<String>[
@@ -85,7 +80,6 @@ class ServiceSettingsCommandHandler {
       args,
       themeController: themeController,
       selectedArea: selectedArea,
-      singleMode: singleMode,
       debugEnabled: debugEnabled,
     );
 
@@ -108,7 +102,6 @@ class ServiceSettingsCommandHandler {
     List<String> args, {
     required ThemePrefsController themeController,
     required String selectedArea,
-    required bool singleMode,
     required bool debugEnabled,
   }) async {
     if (args.isEmpty) {
@@ -117,7 +110,6 @@ class ServiceSettingsCommandHandler {
         themeController: themeController,
         selectedArea: selectedArea,
         debugEnabled: debugEnabled,
-        singleMode: singleMode,
       );
     }
 
@@ -128,14 +120,11 @@ class ServiceSettingsCommandHandler {
           themeController: themeController,
           selectedArea: selectedArea,
           debugEnabled: debugEnabled,
-          singleMode: singleMode,
         );
       case 'theme':
         return _theme(args.skip(1).toList(), themeController, selectedArea);
       case 'color':
         return _color(args.skip(1).toList(), themeController, selectedArea);
-      case 'edge':
-        return _edge(args.skip(1).toList());
       case 'email':
         return _email(args.skip(1).toList());
       case 'edit':
@@ -146,9 +135,6 @@ class ServiceSettingsCommandHandler {
           '[error] edit',
           'edit email',
         ]);
-      case 'overlay':
-        if (!debugEnabled) return _debugRequired('overlay');
-        return _overlay(args.skip(1).toList(), singleMode: singleMode);
       case 'recipient':
         if (!debugEnabled) return _debugRequired('recipient');
         return _recipient(args.skip(1).toList());
@@ -165,7 +151,6 @@ class ServiceSettingsCommandHandler {
     required ThemePrefsController themeController,
     required String selectedArea,
     required bool debugEnabled,
-    required bool singleMode,
   }) async {
     if (args.length > 1) {
       return ServiceSettingsCommandResult.failure(<String>[
@@ -187,18 +172,9 @@ class ServiceSettingsCommandHandler {
               selectedArea: selectedArea,
             ),
           );
-        case 'edge':
-          return ServiceSettingsCommandResult.success(
-            await _edgeHelpLines(),
-          );
         case 'email':
           return ServiceSettingsCommandResult.success(
             await _emailHelpLines(),
-          );
-        case 'overlay':
-          if (!debugEnabled) return _debugRequired('overlay');
-          return ServiceSettingsCommandResult.success(
-            await _overlayHelpLines(singleMode: singleMode),
           );
         case 'recipient':
           if (!debugEnabled) return _debugRequired('recipient');
@@ -219,21 +195,11 @@ class ServiceSettingsCommandHandler {
       }
     }
 
-    final edge = await OverlayEdgeSideConfig.getSide();
     final lines = <String>[
       'CURRENT',
       'theme       ${themeController.themeModeId}',
       'color       ${themeController.presetId}',
-      'edge        ${_edgeId(edge)}',
     ];
-    if (debugEnabled) {
-      final storedOverlay = await OverlayModeConfig.getMode();
-      final effectiveOverlay = _effectiveOverlayMode(
-        storedOverlay,
-        singleMode: singleMode,
-      );
-      lines.add('overlay     ${_overlayId(effectiveOverlay)}');
-    }
     lines.addAll(<String>[
       '',
       ..._themeHelpLines(themeController, includeCurrent: false),
@@ -244,17 +210,10 @@ class ServiceSettingsCommandHandler {
         includeCurrent: false,
       ),
       '',
-      ...await _edgeHelpLines(includeCurrent: false),
-      '',
       ...await _emailHelpLines(includeCurrent: false),
     ]);
     if (debugEnabled) {
       lines.addAll(<String>[
-        '',
-        ...await _overlayHelpLines(
-          singleMode: singleMode,
-          includeCurrent: false,
-        ),
         '',
         'RECIPIENT',
         'recipient       현재 수신자',
@@ -271,9 +230,7 @@ class ServiceSettingsCommandHandler {
       'help',
       'help theme',
       'help color',
-      'help edge',
       'help email',
-      if (debugEnabled) 'help overlay',
       if (debugEnabled) 'help recipient',
       '',
       'NAVIGATION',
@@ -317,23 +274,6 @@ class ServiceSettingsCommandHandler {
       'color',
       'color list',
       for (final preset in available) 'color ${preset.id}',
-    ];
-  }
-
-  static Future<List<String>> _edgeHelpLines({
-    bool includeCurrent = true,
-  }) async {
-    final current = await OverlayEdgeSideConfig.getSide();
-    return <String>[
-      'EDGE',
-      if (includeCurrent) 'current     ${_edgeId(current)}',
-      'left        왼쪽',
-      'right       오른쪽',
-      '',
-      'COMMAND',
-      'edge',
-      'edge left',
-      'edge right',
     ];
   }
 
@@ -671,35 +611,11 @@ class ServiceSettingsCommandHandler {
     }
   }
 
-  static Future<List<String>> _overlayHelpLines({
-    required bool singleMode,
-    bool includeCurrent = true,
-  }) async {
-    final stored = await OverlayModeConfig.getMode();
-    final current = _effectiveOverlayMode(
-      stored,
-      singleMode: singleMode,
-    );
-    return <String>[
-      'OVERLAY',
-      if (includeCurrent) 'current     ${_overlayId(current)}',
-      'bubble      플로팅 버블',
-      if (!singleMode) 'top         상단 포그라운드',
-      '',
-      'COMMAND',
-      'overlay',
-      'overlay bubble',
-      if (!singleMode) 'overlay top',
-    ];
-  }
-
   static List<String> _helpTopicLines({required bool debugEnabled}) {
     return <String>[
       'help theme',
       'help color',
-      'help edge',
       'help email',
-      if (debugEnabled) 'help overlay',
       if (debugEnabled) 'help recipient',
     ];
   }
@@ -783,86 +699,6 @@ class ServiceSettingsCommandHandler {
     await themeController.setPresetId(value);
     return ServiceSettingsCommandResult.success(<String>[
       'color: $before -> ${themeController.presetId}',
-    ]);
-  }
-
-  static Future<ServiceSettingsCommandResult> _edge(List<String> args) async {
-    final current = await OverlayEdgeSideConfig.getSide();
-    if (args.isEmpty) {
-      return ServiceSettingsCommandResult.success(
-        await _edgeHelpLines(),
-      );
-    }
-    if (args.length != 1 ||
-        !const <String>{'left', 'right'}.contains(args.first)) {
-      return const ServiceSettingsCommandResult.failure(<String>[
-        '[error] edge',
-        'edge left',
-        'edge right',
-      ]);
-    }
-    final next =
-        args.first == 'right' ? OverlayEdgeSide.right : OverlayEdgeSide.left;
-    await OverlayEdgeSideConfig.setSide(next);
-    var overlayClosed = false;
-    try {
-      if (await FlutterOverlayWindow.isActive()) {
-        await FlutterOverlayWindow.closeOverlay();
-        overlayClosed = true;
-      }
-    } catch (error, stackTrace) {
-      debugPrint('[SERVICE_SETTING] edge overlay close failure error=$error');
-      debugPrint(stackTrace.toString());
-    }
-    return ServiceSettingsCommandResult.success(<String>[
-      'edge: ${_edgeId(current)} -> ${_edgeId(next)}',
-      if (overlayClosed) 'overlay closed',
-    ]);
-  }
-
-  static Future<ServiceSettingsCommandResult> _overlay(
-    List<String> args, {
-    required bool singleMode,
-  }) async {
-    final current = await OverlayModeConfig.getMode();
-    if (args.isEmpty) {
-      return ServiceSettingsCommandResult.success(
-        await _overlayHelpLines(singleMode: singleMode),
-      );
-    }
-    if (args.length != 1 ||
-        !const <String>{'bubble', 'top'}.contains(args.first)) {
-      return ServiceSettingsCommandResult.failure(<String>[
-        '[error] overlay',
-        'overlay bubble',
-        if (!singleMode) 'overlay top',
-      ]);
-    }
-    final wantsTop = args.first == 'top';
-    if (singleMode && wantsTop) {
-      if (current != OverlayMode.bubble) {
-        await OverlayModeConfig.setMode(OverlayMode.bubble);
-      }
-      return const ServiceSettingsCommandResult.failure(<String>[
-        '[blocked] overlay top',
-        'overlay bubble',
-      ]);
-    }
-    final next = wantsTop ? OverlayMode.topHalf : OverlayMode.bubble;
-    await OverlayModeConfig.setMode(next);
-    try {
-      if (await FlutterOverlayWindow.isActive()) {
-        await FlutterOverlayWindow.shareData(
-          next == OverlayMode.topHalf ? '__mode:topHalf__' : '__mode:bubble__',
-        );
-        await FlutterOverlayWindow.shareData('__collapse__');
-      }
-    } catch (error, stackTrace) {
-      debugPrint('[SERVICE_SETTING] overlay live sync failure error=$error');
-      debugPrint(stackTrace.toString());
-    }
-    return ServiceSettingsCommandResult.success(<String>[
-      'overlay: ${_overlayId(current)} -> ${_overlayId(next)}',
     ]);
   }
 
@@ -963,18 +799,4 @@ class ServiceSettingsCommandHandler {
     return value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
   }
 
-  static String _edgeId(OverlayEdgeSide side) {
-    return side == OverlayEdgeSide.right ? 'right' : 'left';
-  }
-
-  static OverlayMode _effectiveOverlayMode(
-    OverlayMode stored, {
-    required bool singleMode,
-  }) {
-    return singleMode ? OverlayMode.bubble : stored;
-  }
-
-  static String _overlayId(OverlayMode mode) {
-    return mode == OverlayMode.topHalf ? 'top' : 'bubble';
-  }
 }

@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../app/utils/status_dialog.dart';
 import '../../../features/selector/application/dev_auth.dart';
 import 'plate_tts_session_protocol.dart';
+import 'plate_tts_session_recovery_store.dart';
 import 'tts_ownership.dart';
 import 'tts_user_filters.dart';
 
@@ -36,10 +37,14 @@ class PlateTtsSessionDiagnostics {
   static List<String> get lines => List<String>.unmodifiable(_lines);
 
   static String get debugPrintCode {
-    if (_lines.isEmpty) {
+    final combined = <String>[
+      ..._lines,
+      ...PlateTtsSessionRecoveryStore.debugLines,
+    ];
+    if (combined.isEmpty) {
       return 'debugPrint(${jsonEncode('[PlateTtsSession] 기록된 로그가 없습니다.')});';
     }
-    return _lines
+    return combined
         .map((line) => 'debugPrint(${jsonEncode(line)});')
         .join('\n');
   }
@@ -148,6 +153,7 @@ class PlateTtsSessionDiagnostics {
           'listening': normalized['listening'] ?? false,
           'masterOn': normalized['masterOn'] ?? false,
           'reason': normalized['reason'] ?? '',
+          'source': normalized['source'] ?? '',
         },
       );
       return;
@@ -180,6 +186,7 @@ class PlateTtsSessionDiagnostics {
     final running = await FlutterForegroundTask.isRunningService;
     final resolvedFilters = filters ?? await TtsUserFilters.load();
     final status = _lastForegroundStatus;
+    final recoveryStatus = await PlateTtsSessionRecoveryStore.statusDescription();
     return <String>[
       'Division: ${_lastDivision.isEmpty ? '-' : _lastDivision}',
       'Home area: ${_lastHomeArea.isEmpty ? '-' : _lastHomeArea}',
@@ -208,7 +215,10 @@ class PlateTtsSessionDiagnostics {
       'FG listening: ${status['listening'] ?? false}',
       'FG masterOn: ${status['masterOn'] ?? false}',
       'FG reason: ${status['reason'] ?? '-'}',
+      'FG source: ${status['source'] ?? '-'}',
+      recoveryStatus,
       'Debug lines: ${_lines.length}',
+      'Recovery debug lines: ${PlateTtsSessionRecoveryStore.debugLines.length}',
     ].join('\n');
   }
 

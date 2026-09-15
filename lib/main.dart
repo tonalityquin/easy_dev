@@ -1,196 +1,32 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
-import 'package:flutter_overlay_window/flutter_overlay_window.dart';
+import 'package:intl/date_symbol_data_local.dart';
+import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+
 import 'app/auth/google_auth_session.dart';
 import 'app/config/auth_config.dart';
-import 'app/config/overlay_edge_side_config.dart';
-import 'app/config/overlay_mode_config.dart';
 import 'app/di/providers.dart';
 import 'app/di/routes.dart';
 import 'app/init/app_exit_flag.dart';
 import 'app/init/app_mode_migration.dart';
-import 'app/init/checkout_nudge_guard.dart';
 import 'app/init/app_navigator.dart';
-import 'app/init/quick_overlay_main.dart';
-import 'app/init/overlay_access_guard.dart';
-import 'app/init/overlay_lifecycle_gate.dart';
+import 'app/init/work_status_notification.dart';
 import 'app/theme/theme_prefs_controller.dart';
-import 'features/community/application/game/game_quick_actions.dart';
 import 'features/chat/presentation/work_chat_alert_host.dart';
+import 'features/community/application/game/game_quick_actions.dart';
 import 'features/dashboard/applications/common/firebase_google_auth_bridge.dart';
 import 'features/dashboard/widgets/productivity_sheet.dart';
 import 'features/dev/page/sheets/dev_quick_actions.dart';
 import 'features/dev/presentation/debug_session_visual_overlay.dart';
-import 'features/headquarter/application/fab/hub_quick_actions.dart';
 import 'features/headquarter/page/sheets/head_memo.dart';
 import 'shared/tts/application/plate_tts_event_hub.dart';
-import 'package:intl/date_symbol_data_local.dart';
-import 'package:intl/intl.dart';
-
-String _overlayModeToWire(OverlayMode mode) {
-  switch (mode) {
-    case OverlayMode.topHalf:
-      return 'topHalf';
-    case OverlayMode.bubble:
-      return 'bubble';
-  }
-}
-
-Future<bool> _isSingleAppMode() async {
-  return (await OverlayAccessGuard.currentMode()) == 'single';
-}
 
 String _ts() => DateTime.now().toIso8601String();
-
-@pragma('vm:entry-point')
-void overlayMain() {
-  debugPrint('[OVERLAY][${_ts()}] overlayMain() 시작');
-  WidgetsFlutterBinding.ensureInitialized();
-  runApp(const QuickOverlayApp());
-}
-
-class _OverlayWindowConfig {
-  final int height;
-  final int width;
-  final bool enableDrag;
-  final OverlayAlignment alignment;
-  final PositionGravity positionGravity;
-  final OverlayPosition? startPosition;
-
-  const _OverlayWindowConfig({
-    required this.height,
-    required this.width,
-    required this.enableDrag,
-    required this.alignment,
-    required this.positionGravity,
-    this.startPosition,
-  });
-}
-
-Future<_OverlayWindowConfig> _buildOverlayWindowConfig(OverlayMode mode) async {
-  final view = WidgetsBinding.instance.platformDispatcher.views.first;
-  final physicalHeight = view.physicalSize.height;
-  final physicalWidth = view.physicalSize.width;
-  final devicePixelRatio = view.devicePixelRatio;
-
-  final media = MediaQueryData.fromView(view);
-  final statusBarLogical = media.padding.top;
-
-  if (mode == OverlayMode.topHalf) {
-    final h = (physicalHeight * 0.5).round();
-    final w = physicalWidth.round();
-
-    return _OverlayWindowConfig(
-      height: h,
-      width: w,
-      enableDrag: false,
-      alignment: OverlayAlignment.topLeft,
-      positionGravity: PositionGravity.none,
-      startPosition: OverlayPosition(0.0, statusBarLogical),
-    );
-  } else {
-    final side = await OverlayEdgeSideConfig.getSide();
-
-    final stripPhysicalW = (kEdgeStripWidth * devicePixelRatio).round();
-    final stripPhysicalH = physicalHeight.round();
-
-    final alignment = (side == OverlayEdgeSide.left)
-        ? OverlayAlignment.topLeft
-        : OverlayAlignment.topRight;
-    return _OverlayWindowConfig(
-      height: stripPhysicalH,
-      width: stripPhysicalW,
-      enableDrag: false,
-      alignment: alignment,
-      positionGravity: PositionGravity.none,
-    );
-  }
-}
-
-Future<bool> ensureOverlayPermission(BuildContext context) async {
-  final isGranted = await FlutterOverlayWindow.isPermissionGranted();
-  if (isGranted) return true;
-  if (!context.mounted) return false;
-  return false;
-}
-
-Future<void> openQuickOverlay(BuildContext context) async {
-  if (await OverlayAccessGuard.closeIfBlocked()) return;
-  if (!await ensureOverlayPermission(context)) return;
-
-  final requestedMode = await OverlayModeConfig.getMode();
-  final isSingleMode = await _isSingleAppMode();
-  final mode = isSingleMode ? OverlayMode.bubble : requestedMode;
-  final wire = _overlayModeToWire(mode);
-
-  if (await FlutterOverlayWindow.isActive()) {
-    if (!isSingleMode) {
-      await FlutterOverlayWindow.shareData('__mode:${wire}__');
-      await FlutterOverlayWindow.shareData('__collapse__');
-      return;
-    }
-
-    await FlutterOverlayWindow.closeOverlay();
-    await Future<void>.delayed(const Duration(milliseconds: 120));
-  }
-
-  final config = await _buildOverlayWindowConfig(mode);
-
-  await FlutterOverlayWindow.showOverlay(
-    enableDrag: config.enableDrag,
-    overlayTitle: 'ParkinWorkin 오버레이',
-    overlayContent: '퀵 패널 실행 중',
-    flag: OverlayFlag.defaultFlag,
-    alignment: config.alignment,
-    positionGravity: config.positionGravity,
-    height: config.height,
-    width: config.width,
-    startPosition: config.startPosition,
-  );
-
-  await FlutterOverlayWindow.shareData('__mode:${wire}__');
-  await FlutterOverlayWindow.shareData('__collapse__');
-}
-
-Future<void> closeQuickOverlay() async {
-  if (await FlutterOverlayWindow.isActive()) {
-    await FlutterOverlayWindow.closeOverlay();
-  }
-}
-
-class _LifecycleOverlayRequest {
-  final OverlayMode mode;
-  final bool checkoutNudge;
-  final bool workFinished;
-
-  const _LifecycleOverlayRequest({
-    required this.mode,
-    required this.checkoutNudge,
-    required this.workFinished,
-  });
-
-  String get wire {
-    if (workFinished) return 'workFinished';
-    if (checkoutNudge) return 'checkoutNudge';
-    return _overlayModeToWire(mode);
-  }
-
-  String get title {
-    if (workFinished) return 'ParkinWorkin 업무 종료 안내';
-    if (checkoutNudge) return 'ParkinWorkin 퇴근 확인';
-    return 'ParkinWorkin';
-  }
-
-  String get content {
-    if (workFinished) return '오늘의 업무는 종료되었습니다. 앱 종료 방법을 확인해 주세요.';
-    if (checkoutNudge) return '퇴근 시간이 지났습니다. 퇴근 버튼을 눌러주세요.';
-    return '출퇴근 기록형 플로팅';
-  }
-}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -198,7 +34,7 @@ void main() async {
 
   final deviceLocale = WidgetsBinding.instance.platformDispatcher.locale;
   final deviceLocaleTag =
-      (deviceLocale.countryCode != null && deviceLocale.countryCode!.isNotEmpty)
+      deviceLocale.countryCode != null && deviceLocale.countryCode!.isNotEmpty
           ? '${deviceLocale.languageCode}_${deviceLocale.countryCode}'
           : deviceLocale.languageCode;
 
@@ -211,6 +47,8 @@ void main() async {
 
   debugPrint('[MAIN][${_ts()}] initCommunicationPort');
   FlutterForegroundTask.initCommunicationPort();
+  WorkStatusNotificationController.initializeForegroundTask();
+  WorkStatusNotificationController.initializeTaskEventListener();
   PlateTtsEventHub.ensureStarted();
 
   debugPrint('[MAIN][${_ts()}] runApp(AppBootstrapper + ThemePrefsController)');
@@ -234,7 +72,7 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder(
+    return FutureBuilder<void>(
       future: _initFuture,
       builder: (context, snapshot) {
         if (snapshot.hasError) {
@@ -273,10 +111,12 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
     try {
       await FirebaseGoogleAuthBridge.instance.configureRuntime();
       debugPrint(
-          '[MAIN][${_ts()}] FirebaseGoogleAuthBridge.configureRuntime done uid=${FirebaseAuth.instance.currentUser?.uid} email=${FirebaseAuth.instance.currentUser?.email} anonymous=${FirebaseAuth.instance.currentUser?.isAnonymous}');
+        '[MAIN][${_ts()}] FirebaseGoogleAuthBridge.configureRuntime done uid=${FirebaseAuth.instance.currentUser?.uid} email=${FirebaseAuth.instance.currentUser?.email} anonymous=${FirebaseAuth.instance.currentUser?.isAnonymous}',
+      );
     } catch (e, st) {
       debugPrint(
-          '[MAIN][${_ts()}] FirebaseGoogleAuthBridge.configureRuntime failed: $e\n$st');
+        '[MAIN][${_ts()}] FirebaseGoogleAuthBridge.configureRuntime failed: $e\n$st',
+      );
     }
 
     debugPrint('[MAIN][${_ts()}] GoogleAuthSession.init (one-time OAuth)');
@@ -290,18 +130,22 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
     }
 
     debugPrint(
-        '[MAIN][${_ts()}] FirebaseGoogleAuthBridge.bootstrapWithExistingGoogleUser');
+      '[MAIN][${_ts()}] FirebaseGoogleAuthBridge.bootstrapWithExistingGoogleUser',
+    );
     try {
       final existingGoogleUser = GoogleAuthSession.instance.currentUser;
       debugPrint(
-          '[MAIN][${_ts()}] existing Google user email=${existingGoogleUser?.email}');
+        '[MAIN][${_ts()}] existing Google user email=${existingGoogleUser?.email}',
+      );
       final ok = await FirebaseGoogleAuthBridge.instance
           .bootstrapWithExistingGoogleUser(existingGoogleUser);
       debugPrint(
-          '[MAIN][${_ts()}] FirebaseGoogleAuthBridge.bootstrapWithExistingGoogleUser done ok=$ok uid=${FirebaseAuth.instance.currentUser?.uid} email=${FirebaseAuth.instance.currentUser?.email} anonymous=${FirebaseAuth.instance.currentUser?.isAnonymous}');
+        '[MAIN][${_ts()}] FirebaseGoogleAuthBridge.bootstrapWithExistingGoogleUser done ok=$ok uid=${FirebaseAuth.instance.currentUser?.uid} email=${FirebaseAuth.instance.currentUser?.email} anonymous=${FirebaseAuth.instance.currentUser?.isAnonymous}',
+      );
     } catch (e, st) {
       debugPrint(
-          '[MAIN][${_ts()}] FirebaseGoogleAuthBridge.bootstrapWithExistingGoogleUser failed: $e\n$st');
+        '[MAIN][${_ts()}] FirebaseGoogleAuthBridge.bootstrapWithExistingGoogleUser failed: $e\n$st',
+      );
     }
 
     debugPrint('[MAIN][${_ts()}] HeadMemo.init');
@@ -309,9 +153,6 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
 
     debugPrint('[MAIN][${_ts()}] DashMemo.init');
     await ProductivitySheet.init();
-
-    debugPrint('[MAIN][${_ts()}] HeadHubActions.init');
-    await HeadHubActions.init();
 
     debugPrint('[MAIN][${_ts()}] GameQuickActions.init');
     await GameQuickActions.init();
@@ -331,11 +172,6 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
-  String? _lifecycleOverlayWire;
-  bool _lifecycleOverlayStartInFlight = false;
-  AppLifecycleState _lifecycleState =
-      WidgetsBinding.instance.lifecycleState ?? AppLifecycleState.resumed;
-
   @override
   void initState() {
     super.initState();
@@ -351,209 +187,27 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    _lifecycleState = state;
     debugPrint('[LIFECYCLE][${_ts()}] $state');
+    WorkStatusNotificationController.recordLifecycle(state);
 
     if (AppExitFlag.isExiting) {
       if (state == AppLifecycleState.detached) {
         unawaited(GameQuickActions.terminateSession());
-        unawaited(closeQuickOverlay());
         AppExitFlag.reset();
       }
       return;
     }
 
-    switch (state) {
-      case AppLifecycleState.resumed:
-        _stopOverlayFromLifecycle();
-        break;
-
-      case AppLifecycleState.inactive:
-      case AppLifecycleState.paused:
-      case AppLifecycleState.hidden:
-        _startOverlayFromLifecycle();
-        break;
-
-      case AppLifecycleState.detached:
-        _lifecycleOverlayWire = null;
-        unawaited(GameQuickActions.terminateSession());
-        unawaited(closeQuickOverlay());
-        break;
-    }
-  }
-
-  Future<_LifecycleOverlayRequest> _resolveLifecycleOverlayRequest() async {
-    final isSingleMode = await _isSingleAppMode();
-    final nudge = await CheckoutNudgeGuard.evaluate();
-
-    if (isSingleMode) {
-      return const _LifecycleOverlayRequest(
-        mode: OverlayMode.bubble,
-        checkoutNudge: false,
-        workFinished: false,
+    if (state == AppLifecycleState.resumed) {
+      unawaited(
+        WorkStatusNotificationController.refresh(
+          source: 'app_lifecycle_resumed',
+        ),
       );
     }
 
-    if (nudge.shouldShowWorkFinished) {
-      return const _LifecycleOverlayRequest(
-        mode: OverlayMode.topHalf,
-        checkoutNudge: false,
-        workFinished: true,
-      );
-    }
-
-    if (nudge.shouldNudge) {
-      return const _LifecycleOverlayRequest(
-        mode: OverlayMode.topHalf,
-        checkoutNudge: true,
-        workFinished: false,
-      );
-    }
-
-    return const _LifecycleOverlayRequest(
-      mode: OverlayMode.bubble,
-      checkoutNudge: false,
-      workFinished: false,
-    );
-  }
-
-  Future<void> _applyLifecycleOverlayMode(
-    _LifecycleOverlayRequest request,
-  ) async {
-    if (request.workFinished) {
-      await FlutterOverlayWindow.shareData('__work_finished__');
-    } else if (request.checkoutNudge) {
-      await FlutterOverlayWindow.shareData('__checkout_nudge__');
-    } else {
-      await FlutterOverlayWindow.shareData('__mode:${request.wire}__');
-    }
-    await FlutterOverlayWindow.shareData('__collapse__');
-  }
-
-  bool get _lifecycleAllowsOverlayStart {
-    return _lifecycleState == AppLifecycleState.inactive ||
-        _lifecycleState == AppLifecycleState.paused ||
-        _lifecycleState == AppLifecycleState.hidden;
-  }
-
-  bool _canContinueLifecycleOverlayStart(String stage) {
-    if (!OverlayLifecycleGate.canAutoStart) {
-      OverlayLifecycleGate.recordAutoStartSkipped(
-        reason: 'runtime_not_ready',
-        lifecycle: _lifecycleState.name,
-        stage: stage,
-      );
-      return false;
-    }
-    if (!_lifecycleAllowsOverlayStart) {
-      OverlayLifecycleGate.recordAutoStartSkipped(
-        reason: 'lifecycle_not_background',
-        lifecycle: _lifecycleState.name,
-        stage: stage,
-      );
-      return false;
-    }
-    return true;
-  }
-
-  Future<void> _startOverlayFromLifecycle() async {
-    if (_lifecycleOverlayStartInFlight) {
-      OverlayLifecycleGate.recordAutoStartSkipped(
-        reason: 'start_in_flight',
-        lifecycle: _lifecycleState.name,
-        stage: 'entry',
-      );
-      return;
-    }
-    if (!_canContinueLifecycleOverlayStart('entry')) return;
-
-    _lifecycleOverlayStartInFlight = true;
-    try {
-      if (await OverlayAccessGuard.closeIfBlocked()) {
-        _lifecycleOverlayWire = null;
-        debugPrint(
-            '[OVERLAY][${_ts()}] blocked app mode → skip auto start');
-        return;
-      }
-
-      final granted = await FlutterOverlayWindow.isPermissionGranted();
-      if (!granted) {
-        debugPrint(
-            '[OVERLAY][${_ts()}] permission not granted → skip auto start');
-        return;
-      }
-
-      final request = await _resolveLifecycleOverlayRequest();
-      final wire = request.wire;
-
-      if (!_canContinueLifecycleOverlayStart('request_resolved')) return;
-
-      if (await OverlayAccessGuard.closeIfBlocked()) {
-        _lifecycleOverlayWire = null;
-        debugPrint(
-            '[OVERLAY][${_ts()}] blocked app mode after request → skip auto start');
-        return;
-      }
-
-      if (!_canContinueLifecycleOverlayStart('before_active_check')) return;
-
-      if (await FlutterOverlayWindow.isActive()) {
-        if (!_canContinueLifecycleOverlayStart('overlay_active')) return;
-        if (_lifecycleOverlayWire == wire) {
-          await _applyLifecycleOverlayMode(request);
-          return;
-        }
-
-        await FlutterOverlayWindow.closeOverlay();
-        _lifecycleOverlayWire = null;
-        await Future<void>.delayed(const Duration(milliseconds: 120));
-      }
-
-      if (!_canContinueLifecycleOverlayStart('before_config')) return;
-      final config = await _buildOverlayWindowConfig(request.mode);
-      if (!_canContinueLifecycleOverlayStart('before_show')) return;
-
-      await FlutterOverlayWindow.showOverlay(
-        enableDrag: config.enableDrag,
-        overlayTitle: request.title,
-        overlayContent: request.content,
-        flag: OverlayFlag.defaultFlag,
-        alignment: config.alignment,
-        positionGravity: config.positionGravity,
-        height: config.height,
-        width: config.width,
-        startPosition: config.startPosition,
-      );
-
-      if (!_canContinueLifecycleOverlayStart('after_show')) {
-        await FlutterOverlayWindow.closeOverlay();
-        _lifecycleOverlayWire = null;
-        return;
-      }
-
-      _lifecycleOverlayWire = wire;
-      await _applyLifecycleOverlayMode(request);
-
-      debugPrint(
-          '[OVERLAY][${_ts()}] auto start overlay from lifecycle (mode=$wire)');
-    } catch (e, st) {
-      debugPrint('[OVERLAY][${_ts()}] auto start error: $e');
-      debugPrint(st.toString());
-    } finally {
-      _lifecycleOverlayStartInFlight = false;
-    }
-  }
-
-  Future<void> _stopOverlayFromLifecycle() async {
-    try {
-      if (await FlutterOverlayWindow.isActive()) {
-        await FlutterOverlayWindow.closeOverlay();
-        _lifecycleOverlayWire = null;
-        debugPrint('[OVERLAY][${_ts()}] auto stop overlay from lifecycle');
-      }
-    } catch (e, st) {
-      debugPrint('[OVERLAY][${_ts()}] auto stop error: $e');
-      debugPrint(st.toString());
+    if (state == AppLifecycleState.detached) {
+      unawaited(GameQuickActions.terminateSession());
     }
   }
 
@@ -578,9 +232,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             navigatorKey: AppNavigator.key,
             builder: (context, child) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
-                debugPrint(
-                    '[MAIN][${_ts()}] postFrameCallback → mountIfNeeded');
-                HeadHubActions.mountIfNeeded();
+                debugPrint('[MAIN][${_ts()}] postFrameCallback → mountIfNeeded');
                 GameQuickActions.mountIfNeeded();
                 ProductivitySheet.mountIfNeeded();
                 DevQuickActions.mountIfNeeded();

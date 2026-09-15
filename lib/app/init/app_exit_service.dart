@@ -3,7 +3,6 @@ import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
-import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 
 import '../../design_system/common_ui/common_ui_theme.dart';
 import '../../features/community/application/game/game_quick_actions.dart';
@@ -16,9 +15,6 @@ class AppExitService {
   static const MethodChannel _androidExitChannel = MethodChannel(
     'com.quintus.dev/app_exit',
   );
-
-  // Channel's Path : android/app/src/main/kotlin/com/quintus/easydev/MainActivity.kt
-  // Release 버전에서는 kotlin/com/~ 경로가 다르니 참고할 것
 
   static Future<void> exitApp(
     BuildContext context, {
@@ -54,13 +50,7 @@ class AppExitService {
     BuildContext context, {
     required bool useCommonUi,
   }) async {
-    try {
-      if (await FlutterOverlayWindow.isActive()) {
-        await FlutterOverlayWindow.closeOverlay();
-      }
-    } catch (_) {}
-
-    bool running = false;
+    var running = false;
     try {
       running = await FlutterForegroundTask.isRunningService;
     } catch (_) {}
@@ -84,7 +74,7 @@ class AppExitService {
       );
     }
 
-    await Future.delayed(const Duration(milliseconds: 150));
+    await Future<void>.delayed(const Duration(milliseconds: 150));
   }
 
   static Future<void> _closeApplication() async {

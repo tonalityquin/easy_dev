@@ -24,7 +24,7 @@ import '../../../community/application/discord/discord_config.dart';
 import '../../../community/page/faq_side_dock.dart';
 import '../../../community/page/side_docks/discord_side_dock.dart';
 import '../../../dev/application/area_state.dart';
-import '../../../headquarter/application/fab/hub_quick_actions.dart';
+import '../../../headquarter/application/headquarter_support_actions.dart';
 import '../../../selector/application/dev_auth.dart';
 import 'dashboard_dock_request.dart';
 import '../../widgets/widgets/schedule/dashboard_work_schedule_surface.dart';
@@ -359,7 +359,7 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
 
   Future<void> _openTermsOfService(BuildContext context) async {
     await _closeCurrentDockAndRun(context, (rootContext) async {
-      final opened = await HeadHubActions.openTermsOfService(rootContext);
+      final opened = await HeadquarterSupportActions.openTermsOfService(rootContext);
       debugPrint(
         '[OpsDashboardSideDock] support_external_result id=terms opened=$opened',
       );
@@ -368,7 +368,7 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
 
   Future<void> _openPrivacyPolicy(BuildContext context) async {
     await _closeCurrentDockAndRun(context, (rootContext) async {
-      final opened = await HeadHubActions.openPrivacyPolicy(rootContext);
+      final opened = await HeadquarterSupportActions.openPrivacyPolicy(rootContext);
       debugPrint(
         '[OpsDashboardSideDock] support_external_result id=privacy opened=$opened',
       );

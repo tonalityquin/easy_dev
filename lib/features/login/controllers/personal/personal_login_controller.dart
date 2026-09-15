@@ -8,7 +8,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../../app/di/routes.dart';
 import '../../../../app/utils/dev_firebase_debug_dialog.dart';
 import '../../../../features/dev/application/area_state.dart';
-import '../../../../features/headquarter/application/fab/hub_quick_actions.dart';
 import '../../../../features/tablet/applications/tablet_pad_mode_state.dart';
 import '../../../../shared/auth/five_digit_password_generator.dart';
 import '../../../selector/application/dev_auth.dart';
@@ -806,7 +805,6 @@ class PersonalLoginController {
       await prefs.remove('personalName');
       await prefs.remove('personalPhone');
       await prefs.remove('personalEmail');
-      await HeadHubActions.resetForLogout();
 
       passwordController.clear();
       isLoggedIn = false;

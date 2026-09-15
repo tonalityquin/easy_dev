@@ -15,9 +15,6 @@ class GameQuickActions {
   static const _kEnabledKey = 'game_quick_actions_enabled_v1';
   static const _kBubbleXKey = 'game_quick_actions_bubble_x_v1';
   static const _kBubbleYKey = 'game_quick_actions_bubble_y_v1';
-  static const _kHeadEnabledKey = 'head_hub_actions_enabled_v1';
-  static const _kHeadBubbleXKey = 'head_hub_actions_bubble_x_v1';
-  static const _kHeadBubbleYKey = 'head_hub_actions_bubble_y_v1';
 
   static SharedPreferences? _prefs;
   static OverlayEntry? _entry;
@@ -258,9 +255,6 @@ class _GameBubbleState extends State<_GameBubble> {
   static const double _touchWidth = 34;
   static const double _height = 64;
   static const double _visualWidth = 18;
-  static const double _headTouchWidth = 28;
-  static const double _headHeight = 56;
-  static const double _bubbleGap = 12;
 
   late Offset _pos;
   bool _clampedOnce = false;
@@ -276,37 +270,7 @@ class _GameBubbleState extends State<_GameBubble> {
     final x = right ? screen.width - _touchWidth : 0.0;
     final maxY = (screen.height - _height - bottomInset).clamp(0.0, double.infinity).toDouble();
     final y = raw.dy.clamp(0.0, maxY).toDouble();
-    return _avoidHeadOverlap(Offset(x, y), screen, bottomInset);
-  }
-
-  Rect? _headBubbleRect(Size screen, double bottomInset) {
-    final prefs = GameQuickActions._prefs;
-    if (prefs?.getBool(GameQuickActions._kHeadEnabledKey) != true) return null;
-    final rawDx = prefs?.getDouble(GameQuickActions._kHeadBubbleXKey) ?? 12.0;
-    final rawDy = prefs?.getDouble(GameQuickActions._kHeadBubbleYKey) ?? 200.0;
-    final right = (rawDx + _headTouchWidth / 2) >= screen.width / 2;
-    final x = right ? screen.width - _headTouchWidth : 0.0;
-    final maxY = (screen.height - _headHeight - bottomInset).clamp(0.0, double.infinity).toDouble();
-    final y = rawDy.clamp(0.0, maxY).toDouble();
-    return Rect.fromLTWH(x, y, _headTouchWidth, _headHeight);
-  }
-
-  Offset _avoidHeadOverlap(Offset pos, Size screen, double bottomInset) {
-    final head = _headBubbleRect(screen, bottomInset);
-    if (head == null) return pos;
-    final mine = Rect.fromLTWH(pos.dx, pos.dy, _touchWidth, _height);
-    if (!mine.overlaps(head)) return pos;
-
-    final maxY = (screen.height - _height - bottomInset).clamp(0.0, double.infinity).toDouble();
-    final below = (head.bottom + _bubbleGap).clamp(0.0, maxY).toDouble();
-    final belowRect = Rect.fromLTWH(pos.dx, below, _touchWidth, _height);
-    if (!belowRect.overlaps(head)) return Offset(pos.dx, below);
-
-    final above = (head.top - _bubbleGap - _height).clamp(0.0, maxY).toDouble();
-    final aboveRect = Rect.fromLTWH(pos.dx, above, _touchWidth, _height);
-    if (!aboveRect.overlaps(head)) return Offset(pos.dx, above);
-
-    return Offset(pos.dx, maxY);
+    return Offset(x, y);
   }
 
   @override

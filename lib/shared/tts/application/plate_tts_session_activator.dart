@@ -5,6 +5,7 @@ import '../../../app/init/startup_tasks.dart';
 import '../services/plate/plate_tts_listener_service.dart';
 import 'plate_tts_session_diagnostics.dart';
 import 'plate_tts_session_protocol.dart';
+import 'plate_tts_session_recovery_store.dart';
 import 'tts_ownership.dart';
 import 'tts_user_filters.dart';
 
@@ -41,6 +42,7 @@ class PlateTtsSessionActivator {
     final normalizedMode = mode.trim();
     final resolvedFilters = filters ?? await TtsUserFilters.load();
     final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
 
     if (normalizedMode.isNotEmpty) {
       await prefs.setString('mode', normalizedMode);
@@ -58,6 +60,58 @@ class PlateTtsSessionActivator {
         'area': normalizedArea,
         'mode': normalizedMode,
         'filters': resolvedFilters.toMap(),
+      },
+    );
+
+    final isWorking = prefs.getBool('isWorking') ?? false;
+    if (!isWorking) {
+      await PlateTtsSessionRecoveryStore.clear(
+        source: 'activation_deferred_not_working:$source',
+      );
+      await TtsOwnership.setOwner(TtsOwner.app);
+      PlateTtsListenerService.setLocalRole(TtsOwner.app);
+      await PlateTtsListenerService.stop();
+      final foreground = await StartupTasks.ensureForegroundServiceState(
+        source: 'plate_tts_deferred_not_working:$source',
+      );
+      PlateTtsSessionDiagnostics.record(
+        'activation_deferred_not_working',
+        meta: <String, Object?>{
+          'source': source,
+          'area': normalizedArea,
+          'mode': normalizedMode,
+          'foregroundServiceRunning': foreground.running,
+          'serviceStartedNow': foreground.startedNow,
+        },
+      );
+      PlateTtsSessionDiagnostics.noteActivationResult(
+        foregroundServiceRunning: foreground.running,
+        foregroundOwner: false,
+        appFallbackListening: false,
+      );
+      return PlateTtsSessionActivationResult(
+        foregroundServiceRunning: foreground.running,
+        foregroundOwner: false,
+        appFallbackListening: false,
+        area: normalizedArea,
+        mode: normalizedMode,
+      );
+    }
+
+    await PlateTtsSessionRecoveryStore.save(
+      area: normalizedArea,
+      mode: normalizedMode,
+      filters: resolvedFilters,
+      clearMode: normalizedMode.isEmpty,
+      source: source,
+    );
+    PlateTtsSessionDiagnostics.record(
+      'recovery_snapshot_saved',
+      meta: <String, Object?>{
+        'source': source,
+        'area': normalizedArea,
+        'mode': normalizedMode,
+        'clearMode': normalizedMode.isEmpty,
       },
     );
 
@@ -100,29 +154,45 @@ class PlateTtsSessionActivator {
       );
     }
 
-    final foregroundRunning =
-        await StartupTasks.ensureForegroundServiceRunning();
+    final foreground = await StartupTasks.ensureForegroundServiceState(
+      source: 'plate_tts_activation:$source',
+    );
 
-    if (foregroundRunning) {
+    if (foreground.running) {
       await TtsOwnership.setOwner(TtsOwner.foreground);
       PlateTtsListenerService.setLocalRole(TtsOwner.app);
       await PlateTtsListenerService.stop();
-      FlutterForegroundTask.sendDataToTask(<String, dynamic>{
-        'kind': PlateTtsSessionProtocol.commandKind,
-        'area': normalizedArea,
-        'mode': normalizedMode,
-        'ttsFilters': resolvedFilters.toMap(),
-        'forceRestart': true,
-        'source': source,
-      });
-      PlateTtsSessionDiagnostics.record(
-        'foreground_command_sent',
-        meta: <String, Object?>{
-          'source': source,
+
+      if (foreground.startedNow) {
+        PlateTtsSessionDiagnostics.record(
+          'foreground_recovery_handoff',
+          meta: <String, Object?>{
+            'source': source,
+            'area': normalizedArea,
+            'mode': normalizedMode,
+            'serviceStartedNow': true,
+          },
+        );
+      } else {
+        FlutterForegroundTask.sendDataToTask(<String, dynamic>{
+          'kind': PlateTtsSessionProtocol.commandKind,
           'area': normalizedArea,
           'mode': normalizedMode,
-        },
-      );
+          'ttsFilters': resolvedFilters.toMap(),
+          'forceRestart': true,
+          'source': source,
+        });
+        PlateTtsSessionDiagnostics.record(
+          'foreground_command_sent',
+          meta: <String, Object?>{
+            'source': source,
+            'area': normalizedArea,
+            'mode': normalizedMode,
+            'serviceStartedNow': false,
+          },
+        );
+      }
+
       PlateTtsSessionDiagnostics.noteActivationResult(
         foregroundServiceRunning: true,
         foregroundOwner: true,

@@ -2,7 +2,7 @@ name: easydev
 description: "backend+frontend prototype project"
 publish_to: 'none'
 
-version: 1.1.1+461
+version: 1.1.1+462
 
 environment:
   sdk: ">=3.5.4 <4.0.0"
@@ -57,7 +57,7 @@ dependencies:
 
   # TTS
   flutter_tts: ^4.2.3
-  flutter_foreground_task: ^9.1.0
+  flutter_foreground_task: ^9.2.2
 
   url_launcher: ^6.3.1
 
@@ -89,9 +89,6 @@ dependencies:
   # PDF For Send Mail
   pdf: ^3.11.3
   pdfx: ^2.9.2
-
-  # ✅ 다른 앱 위에 플로팅 오버레이 표시용
-  flutter_overlay_window: ^0.5.0
   
   # 이미지 AI 모델 관련
   tflite_flutter: ^0.11.0

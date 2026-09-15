@@ -442,10 +442,10 @@ packages:
     dependency: "direct main"
     description:
       name: flutter_foreground_task
-      sha256: "9f1b25a81db95d7119d2c5cffc654048cbdd49d4056183e1beadc1a6a38f3e29"
+      sha256: fc5c01a5e1b8f7bb51d0c737714f0c50440dbdf1aeddc5f8cbba313aa6fd4856
       url: "https://pub.dev"
     source: hosted
-    version: "9.1.0"
+    version: "9.2.2"
   flutter_launcher_icons:
     dependency: "direct dev"
     description:
@@ -502,14 +502,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.7.7+1"
-  flutter_overlay_window:
-    dependency: "direct main"
-    description:
-      name: flutter_overlay_window
-      sha256: "17988420249da68e421d1b44b511e6113d3de7a9e52c3fbd6d99730508af4580"
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.5.0"
   flutter_plugin_android_lifecycle:
     dependency: transitive
     description:

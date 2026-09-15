@@ -8,14 +8,6 @@ class AppCommandRegistry {
 
   static const List<AppCommandDefinition> commands = <AppCommandDefinition>[
     AppCommandDefinition(
-      command: 'quick',
-      title: '빠른 실행',
-      description: '본사 빠른 실행 핸들을 활성화합니다.',
-      category: basicCategory,
-      runningMessage: '빠른 실행 환경을 준비 중...',
-      successMessage: '[ok] 빠른 실행을 활성화했습니다.',
-    ),
-    AppCommandDefinition(
       command: 'setting',
       title: '설정 경로',
       description: '설정 경로로 이동합니다.',

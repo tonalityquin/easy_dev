@@ -14,13 +14,12 @@ import '../../../app/init/app_start_flow_prefs.dart';
 import '../../../app/init/app_start_setup_flow_resolver.dart';
 import '../../../app/init/app_start_user_purpose.dart';
 import '../../../app/init/db_connection_status_section.dart';
-import '../../../app/init/overlay_lifecycle_gate.dart';
+import '../../../app/init/work_status_notification.dart';
 import '../../../app/init/startup_tasks.dart';
 import '../../dev/application/debug_session_controller.dart';
 import '../../dev/domain/repositories/area_repo_package/area_repository.dart';
 import '../../dev/page/dialogs/plate_billing_count_dialog.dart';
 import '../../dev/page/sheets/dev_quick_actions.dart';
-import '../../headquarter/application/fab/hub_quick_actions.dart';
 import 'launcher_work_area_option.dart';
 import 'launcher_work_area_resolver.dart';
 import 'launcher_work_area_server_resolver.dart';
@@ -68,7 +67,6 @@ class ModeLauncherSubmitResult {
 class ModeLauncherController extends ChangeNotifier {
   static const String _hiddenImportingCommand = 'sudo apt importing';
   static const Set<String> _protectedCommands = <String>{
-    'quick',
     'debug',
     'charge',
   };
@@ -749,10 +747,11 @@ class ModeLauncherController extends ChangeNotifier {
       reduceMotion,
     );
     await _appendPaced(
-      (_foregroundRunning ?? report.foregroundServiceReady)
+      ((_foregroundRunning ?? report.foregroundServiceRunning) ||
+              report.foregroundServiceReady)
           ? TerminalLineType.success
           : TerminalLineType.system,
-      '${(_foregroundRunning ?? report.foregroundServiceReady) ? '[ OK ]' : '[WARN]'} Foreground service',
+      '${(_foregroundRunning ?? report.foregroundServiceRunning) ? '[ OK ] Foreground service' : report.foregroundServiceReady ? '[ OK ] Foreground service idle' : '[WARN] Foreground service'}',
       reduceMotion,
     );
   }
@@ -873,7 +872,6 @@ class ModeLauncherController extends ChangeNotifier {
       'cancel      로그인 입력 취소',
       'status      시스템 상태',
       'setting     설정 경로',
-      'quick       빠른 실행',
       'update      업데이트',
       'support     앱 이용 문의',
       'signup      개인형 회원가입',
@@ -948,10 +946,11 @@ class ModeLauncherController extends ChangeNotifier {
       'Notifications       ${report?.notificationsReady == true ? 'READY' : 'WARN'}',
     );
     _append(
-      (_foregroundRunning ?? report?.foregroundServiceReady) == true
+      ((_foregroundRunning ?? report?.foregroundServiceRunning) == true ||
+              report?.foregroundServiceReady == true)
           ? TerminalLineType.success
           : TerminalLineType.system,
-      'Foreground service  ${(_foregroundRunning ?? report?.foregroundServiceReady) == true ? 'ACTIVE' : 'WARN'}',
+      'Foreground service  ${(_foregroundRunning ?? report?.foregroundServiceRunning) == true ? 'ACTIVE' : report?.foregroundServiceReady == true ? 'IDLE' : 'WARN'}',
     );
     _append(
       TerminalLineType.output,
@@ -1017,13 +1016,14 @@ class ModeLauncherController extends ChangeNotifier {
       TerminalLineType.output,
       'Runtime context      ${_runtimeContextReady ? 'READY' : 'NOT READY'}',
     );
+    final workStatusNotification = WorkStatusNotificationController.status.value;
     _append(
       TerminalLineType.output,
-      'Overlay lifecycle    ${OverlayLifecycleGate.stateLabel}',
+      'Work notification    ${workStatusNotification.title}',
     );
     _append(
       TerminalLineType.output,
-      'Overlay gate reason  ${OverlayLifecycleGate.reason}',
+      'Work notification FGS ${workStatusNotification.serviceRunning ? 'ACTIVE' : 'INACTIVE'}',
     );
     _append(
       TerminalLineType.output,
@@ -1045,7 +1045,7 @@ class ModeLauncherController extends ChangeNotifier {
       'Notifications: ${report?.notificationsReady == true ? 'READY' : 'WARN'}',
       'Reminder: ${report?.reminderReady == true ? 'READY' : 'WARN'}',
       'Productivity store: ${report?.chillStoreReady == true ? 'READY' : 'WARN'}',
-      'Foreground service: ${(_foregroundRunning ?? report?.foregroundServiceReady) == true ? 'ACTIVE' : 'WARN'}',
+      'Foreground service: ${(_foregroundRunning ?? report?.foregroundServiceRunning) == true ? 'ACTIVE' : report?.foregroundServiceReady == true ? 'IDLE' : 'WARN'}',
       'Saved mode: ${_savedModeRaw ?? '-'}',
       'Assigned mode: ${_assignedMode?.id ?? '-'}',
       'Selected area: ${_selectedWorkArea?.areaName ?? '-'}',
@@ -1080,9 +1080,9 @@ class ModeLauncherController extends ChangeNotifier {
       'Startup setup policy progress: ${_startupSetupCoordinator.policyScrollProgress.toStringAsFixed(3)}',
       'Startup setup Google connected: ${_startupSetupCoordinator.googleConnected}',
       'Runtime context ready: $_runtimeContextReady',
-      'Overlay lifecycle: ${OverlayLifecycleGate.stateLabel}',
-      'Overlay gate reason: ${OverlayLifecycleGate.reason}',
-      'Overlay gate generation: ${OverlayLifecycleGate.generation}',
+      'Work notification: ${WorkStatusNotificationController.status.value.title}',
+      'Work notification service: ${WorkStatusNotificationController.status.value.serviceRunning}',
+      'Work notification source: ${WorkStatusNotificationController.status.value.source}',
       'Auth stage: ${_loginStage.name}',
       'Terminal path: ${_commandPath.promptPath}',
       'Email edit mode: ${_commandPath.isEmailEdit}',
@@ -1794,7 +1794,7 @@ class ModeLauncherController extends ChangeNotifier {
   bool _isGlobalCommand(String normalized) {
     return const <String>{
       'modes', 'mode', '모드', 'help', 'status', '상태',
-      'setting', 'quick', 'update', '업데이트',
+      'setting', 'update', '업데이트',
       'signup', '회원가입', 'support', '문의', 'clear', 'cls', '지우기',
       'out', 'exit', '종료', 'debug', 'charge', 'practice', '연습', 'dev', '개발',
     }.contains(normalized);
@@ -1822,33 +1822,6 @@ class ModeLauncherController extends ChangeNotifier {
           },
         );
         notifyListeners();
-        return const ModeLauncherSubmitResult();
-      case 'quick':
-        _busy = true;
-        _runningCommand = 'quick';
-        _append(TerminalLineType.running, 'quick');
-        await _commandDelay(reduceMotion);
-        await HeadHubActions.init();
-        HeadHubActions.setEnabled(true);
-        await HeadHubActions.mountIfNeeded();
-        _busy = false;
-        _runningCommand = '';
-        _append(TerminalLineType.success, '[ OK ] quick');
-        LauncherDiagnostics.record(
-          'terminal_quick',
-          scope: 'mode_terminal',
-          meta: <String, Object?>{
-            'path': _commandPath.promptPath,
-            'importingUnlocked': _importingUnlocked,
-          },
-        );
-        notifyListeners();
-        await LauncherDiagnostics.showStatus(
-          context,
-          title: 'Terminal Command Status',
-          description: 'command=quick\nresult=success\nprotectedCommands=enabled',
-          scope: 'mode_terminal',
-        );
         return const ModeLauncherSubmitResult();
       case 'modes':
       case 'mode':

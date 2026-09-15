@@ -13,7 +13,7 @@ import '../../command/application/app_command_registry.dart';
 import '../../command/application/terminal_line.dart';
 import '../../command/application/terminal_session_controller.dart';
 import '../../init/app_start_setup_flow_resolver.dart';
-import '../../init/overlay_lifecycle_gate.dart';
+import '../../init/work_status_notification.dart';
 import '../../init/startup_tasks.dart';
 import '../../tutorial/tutorial/app_start_setup_specs.dart';
 import '../application/parkinworkin_terminal_diagnostics.dart';
@@ -152,7 +152,6 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
   void initState() {
     super.initState();
     if (_isLauncher) {
-      OverlayLifecycleGate.lock(reason: 'launcher_runtime_not_ready');
       _launcherController = ModeLauncherController(
         startupReport: widget.startupReport,
       );
@@ -843,12 +842,6 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
       await _openController.reverse(from: 1);
     }
     if (!mounted) return;
-    if (_isLauncher && _launcherController!.runtimeContextReady) {
-      OverlayLifecycleGate.markRuntimeReady(
-        reason: 'runtime_activated',
-        targetRoute: route,
-      );
-    }
     ParkinWorkinTerminalDiagnostics.record(
       'terminal_close_complete',
       context: _contextLabel,
@@ -856,7 +849,10 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
         'targetRoute': route,
         'runtimeContextReady':
             _isLauncher ? _launcherController!.runtimeContextReady : false,
-        ...OverlayLifecycleGate.debugMeta(),
+        'workStatusNotification':
+            WorkStatusNotificationController.status.value.title,
+        'workStatusNotificationService':
+            WorkStatusNotificationController.status.value.serviceRunning,
       },
     );
     Navigator.of(context).pushReplacementNamed(route);

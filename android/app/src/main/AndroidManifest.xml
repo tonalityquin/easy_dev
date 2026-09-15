@@ -3,44 +3,24 @@
     xmlns:tools="http://schemas.android.com/tools"
     package="com.quintus.dev">
 
-    <!-- 네트워크 통신(HTTP/HTTPS) 사용 -->
     <uses-permission android:name="android.permission.INTERNET" />
-
-    <!-- 네트워크 연결 상태 확인 -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-
-    <!-- 포그라운드 서비스 기본 권한(API 28+) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-
-    <!-- (API 34+) 포그라운드 서비스 유형: 데이터 동기화 -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
-
-    <!-- (API 34+) 포그라운드 서비스 유형: 미디어 재생(TTS) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
-
-    <!-- 배터리 최적화 제외 요청(사용자 승인 필요) -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
-
-    <!-- 기기 깨우기/유지 -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
-
-    <!-- 부팅 완료 브로드캐스트 수신 -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-
-    <!-- Android 13+ 알림 권한 -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-
-    <!-- ✅ 카메라 권한(번호판 촬영/OCR) -->
+    <uses-permission
+        android:name="android.permission.SYSTEM_ALERT_WINDOW"
+        tools:node="remove" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.CAMERA" />
-
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
-
-    <!-- ✅ 위치 권한 (앱 사용 중) -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
-    <!-- ✅ 카메라 하드웨어 기능 선언(필수 단말만 설치 가능하게 할 경우 required=true) -->
     <uses-feature
         android:name="android.hardware.camera.any"
         android:required="false"
@@ -57,12 +37,6 @@
         android:name="android.hardware.camera.flash"
         android:required="false"
         tools:replace="android:required" />
-
-    <!-- ✅ 오버레이(다른 앱 위에 표시) 권한 -->
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-
-    <!-- ✅ Android 14+ 특수 포그라운드 서비스 유형(오버레이용) -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <application
         android:name="${applicationName}"
@@ -92,31 +66,22 @@
             </intent-filter>
         </activity>
 
-        <!-- 플러그인 포그라운드 서비스 선언: 데이터 동기화 + TTS 오디오 재생 -->
         <service
             android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
             android:exported="false"
-            android:foregroundServiceType="dataSync|mediaPlayback" />
-        <!-- 위치를 서비스에서 실제로 사용할 때만:
-             android:foregroundServiceType="dataSync|mediaPlayback|location"
-             + 매니페스트 상단에 FOREGROUND_SERVICE_LOCATION 권한 추가 필요 -->
-
-        <!-- ✅ flutter_overlay_window 오버레이 서비스 선언 -->
-        <service
-            android:name="flutter.overlay.window.flutter_overlay_window.OverlayService"
-            android:exported="false"
-            android:foregroundServiceType="specialUse">
+            android:foregroundServiceType="specialUse|mediaPlayback">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="easyvalet_quick_overlay" />
+                android:value="Continuous real-time valet parking request monitoring and voice alerts during an active employee work session" />
         </service>
+        <service
+            android:name="flutter.overlay.window.flutter_overlay_window.OverlayService"
+            tools:node="remove" />
 
-        <!-- Flutter 엔진 등록 -->
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
 
-        <!-- ✅ flutter_local_notifications: 예약/부팅 리시버 -->
         <receiver
             android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"
             android:exported="false" />
@@ -132,9 +97,7 @@
 
     </application>
 
-    <!-- 외부 앱/인텐트 조회 허용 (필요 대상만 제한적으로 명시) -->
     <queries>
-        <!-- 다른 앱의 텍스트 처리(PROCESS_TEXT) 인텐트 조회 허용 -->
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT" />
             <data android:mimeType="text/plain" />

@@ -4,7 +4,6 @@ import '../../../features/description/pages/description_page.dart';
 import '../../../features/dev/application/debug_session_controller.dart';
 import '../../../features/dev/page/dialogs/plate_billing_count_dialog.dart';
 import '../../../features/dev/page/sheets/dev_quick_actions.dart';
-import '../../../features/headquarter/application/fab/hub_quick_actions.dart';
 import '../../init/app_exit_service.dart';
 import 'app_command_definition.dart';
 import 'app_command_diagnostics.dart';
@@ -40,7 +39,6 @@ class AppCommandExecutor {
   AppCommandExecutor._();
 
   static const Set<String> _protectedCommands = <String>{
-    'quick',
     'debug',
     'charge',
   };
@@ -106,16 +104,6 @@ class AppCommandExecutor {
       Object? error;
 
       switch (definition.command) {
-        case 'quick':
-          await HeadHubActions.init();
-          HeadHubActions.setEnabled(true);
-          await HeadHubActions.mountIfNeeded();
-          await _showProtectedStatus(
-            context,
-            command: definition.command,
-            source: source,
-          );
-          break;
         case 'setting':
           break;
         case 'charge':

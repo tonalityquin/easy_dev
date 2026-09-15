@@ -7,7 +7,7 @@ import '../../../app/di/routes.dart';
 import '../../../app/init/app_start_debug_trace.dart';
 import '../../../app/init/app_start_flow_prefs.dart';
 import '../../../app/init/app_start_user_purpose.dart';
-import '../../../app/init/overlay_lifecycle_gate.dart';
+import '../../../app/init/work_status_notification.dart';
 import '../../../app/init/startup_tasks.dart';
 import '../../../app/terminal/presentation/parkinworkin_terminal_screen.dart';
 import '../../../app/tutorial/widgets/app_start_cinematic_reveal.dart';
@@ -75,7 +75,6 @@ class _PowerBootScreenState extends State<PowerBootScreen>
   @override
   void initState() {
     super.initState();
-    OverlayLifecycleGate.lock(reason: 'power_boot');
     _revealController = AnimationController(
       vsync: this,
       duration: _cinematicEnterDuration,
@@ -756,16 +755,15 @@ class _PowerBootScreenState extends State<PowerBootScreen>
         'Notifications: ${_report?.notificationsReady == true ? 'READY' : 'WARN'}',
         'Reminder: ${_report?.reminderReady == true ? 'READY' : 'WARN'}',
         'Productivity store: ${_report?.chillStoreReady == true ? 'READY' : 'WARN'}',
-        'Foreground service: ${_report?.foregroundServiceReady == true ? 'ACTIVE' : 'WARN'}',
+        'Foreground service: ${_report?.foregroundServiceRunning == true ? 'ACTIVE' : _report?.foregroundServiceReady == true ? 'IDLE' : 'WARN'}',
         'Powering on: $_poweringOn',
         'Purpose committing: $_purposeCommitting',
         'Stage transitioning: $_stageTransitioning',
         'Exiting: $_exiting',
         'Interaction locked: $_interactionLocked',
-        'Overlay lifecycle: ${OverlayLifecycleGate.stateLabel}',
-        'Overlay gate reason: ${OverlayLifecycleGate.reason}',
-        'Overlay runtime ready: ${OverlayLifecycleGate.runtimeReady}',
-        'Overlay gate generation: ${OverlayLifecycleGate.generation}',
+        'Work notification: ${WorkStatusNotificationController.status.value.title}',
+        'Work notification service: ${WorkStatusNotificationController.status.value.serviceRunning}',
+        'Work notification source: ${WorkStatusNotificationController.status.value.source}',
       ].join('\n'),
       scope: 'power_boot',
     );

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../application/fab/hub_quick_actions.dart';
+import '../application/headquarter_support_actions.dart';
+import '../widgets/headquarter_work_status_header_indicator.dart';
 import '../widgets/hr/attendance_calendar.dart' as hr_att;
 import '../widgets/hr/break_calendar.dart' as hr_break;
 import '../widgets/mgmt/field.dart' as mgmt;
@@ -110,7 +111,7 @@ class HeadStubPage extends StatelessWidget {
         title: '문의하기',
         color: cs.errorContainer,
         foreground: cs.onErrorContainer,
-        onTap: () async => HeadHubActions.openContactForm(context),
+        onTap: () async => HeadquarterSupportActions.openContactForm(context),
       ),
       _HeadHubAction(
         icon: Icons.map_rounded,
@@ -262,7 +263,7 @@ class _HeadOpsHeader extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              _BubbleController(),
+              const HeadquarterWorkStatusHeaderIndicator(),
             ],
           ),
           const SizedBox(height: 12),
@@ -272,77 +273,12 @@ class _HeadOpsHeader extends StatelessWidget {
               children: [
                 _HeadMetric(label: '기능', value: '$actionCount', icon: Icons.grid_view_rounded, color: cs.primary),
                 const SizedBox(width: 8),
-                ValueListenableBuilder<bool>(
-                  valueListenable: HeadHubActions.enabled,
-                  builder: (context, on, _) {
-                    return _HeadMetric(
-                      label: '버블',
-                      value: on ? 'ON' : 'OFF',
-                      icon: Icons.bubble_chart_rounded,
-                      color: on ? cs.primary : cs.onInverseSurface,
-                    );
-                  },
-                ),
-                const SizedBox(width: 8),
                 _HeadMetric(label: '화면', value: '허브', icon: Icons.hub_rounded, color: cs.secondary),
               ],
             ),
           ),
         ],
       ),
-    );
-  }
-}
-
-class _BubbleController extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return ValueListenableBuilder<bool>(
-      valueListenable: HeadHubActions.enabled,
-      builder: (context, on, _) {
-        return Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-              decoration: BoxDecoration(
-                color: on ? cs.primary : cs.onInverseSurface.withOpacity(.10),
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(
-                  color: on ? cs.primary : cs.onInverseSurface.withOpacity(.14),
-                ),
-              ),
-              child: Text(
-                on ? 'ON' : 'OFF',
-                style: TextStyle(
-                  color: on ? cs.onPrimary : cs.onInverseSurface,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 12,
-                ),
-              ),
-            ),
-            const SizedBox(width: 6),
-            Switch.adaptive(
-              value: on,
-              onChanged: (v) async {
-                HeadHubActions.setEnabled(v);
-                if (v) {
-                  await HeadHubActions.mountIfNeeded();
-                }
-                HapticFeedback.selectionClick();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(v ? '본사 허브 버블 ON' : '본사 허브 버블 OFF'),
-                    behavior: SnackBarBehavior.floating,
-                    duration: const Duration(milliseconds: 900),
-                  ),
-                );
-              },
-            ),
-          ],
-        );
-      },
     );
   }
 }

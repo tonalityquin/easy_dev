@@ -11,6 +11,7 @@ import '../../../shared/area_remote_settings/application/area_snapshot_persisten
 import '../../command/application/app_command_diagnostics.dart';
 import '../../init/app_start_debug_trace.dart';
 import '../../init/startup_tasks.dart';
+import '../../init/work_status_notification.dart';
 import '../../utils/status_dialog.dart';
 
 class ParkinWorkinTerminalDiagnostics {
@@ -45,6 +46,7 @@ class ParkinWorkinTerminalDiagnostics {
   static String get debugPrintCode {
     final merged = <String>[
       ...StartupTasks.debugLines,
+      ...WorkStatusNotificationController.debugLines,
       ...AppStartDebugTrace.lines,
       ...LauncherDiagnostics.lines,
       ...TabletAccountDiagnostics.lines,
@@ -79,6 +81,8 @@ class ParkinWorkinTerminalDiagnostics {
         'gmailSenderLines': GmailSenderDiagnostics.lines.length,
         'areaSnapshotLines': AreaSnapshotPersistence.debugLines.length,
         'startupLines': StartupTasks.debugLines.length,
+        'workStatusNotificationLines':
+            WorkStatusNotificationController.debugLines.length,
         'appStartLines': AppStartDebugTrace.lines.length,
       },
     );

@@ -4,12 +4,17 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../app/config/commute_true_false_mode_config.dart';
 import '../../../app/init/work_schedule_prefs.dart';
+import '../../../app/init/work_status_notification.dart';
 import '../../../app/utils/developer_operation_status_dialog.dart';
 import '../../account/applications/user_state.dart';
 import '../../commute/domain/repositories/commute_true_false_repository.dart';
 import '../../dashboard/applications/common/endtime_reminder_service.dart';
 import '../../dev/application/area_state.dart';
 import '../../mode_single/application/att_brk_repository.dart';
+import '../../../shared/tts/application/plate_tts_session_recovery_store.dart';
+import '../../../shared/tts/application/tts_ownership.dart';
+import '../../../shared/tts/services/plate/plate_tts_listener_service.dart';
+import '../../../shared/work_session/application/work_area_session_coordinator.dart';
 import '../domain/attendance_action_result.dart';
 import '../domain/attendance_context.dart';
 import 'attendance_diagnostics.dart';
@@ -106,6 +111,14 @@ class CommonAttendanceService {
       await prefs.setBool('isWorking', true);
       await WorkSchedulePrefs.refreshReminderFromPrefs(prefs);
       await userState.setWorkingStatus(true);
+      await _activateWorkingRuntime(
+        attendance,
+        userState: userState,
+        trace: trace,
+      );
+      await WorkStatusNotificationController.refresh(
+        source: 'attendance_clock_in',
+      );
       userState.markClockInToday();
       _record(
         'clock_in_working_state_updated',
@@ -370,6 +383,9 @@ class CommonAttendanceService {
         await prefs.setBool('isWorking', false);
         await EndTimeReminderService.instance.cancel();
         await userState.setWorkingStatus(false);
+        await _stopWorkingRuntime(
+          source: 'attendance_clock_out',
+        );
         _record(
           'clock_out_working_state_updated',
           attendance,
@@ -500,12 +516,69 @@ class CommonAttendanceService {
     await prefs.setBool('isWorking', false);
     await EndTimeReminderService.instance.cancel();
     await userState.setWorkingStatus(false);
+    await _stopWorkingRuntime(
+      source: 'attendance_stale_reset',
+    );
     _record(
       'stale_working_reset_complete',
       attendance,
       trace: trace,
       extra: <String, Object?>{'isWorkingAfter': userState.isWorking},
     );
+  }
+
+  static Future<void> _activateWorkingRuntime(
+    AttendanceContext attendance, {
+    required UserState userState,
+    DeveloperOperationTrace? trace,
+  }) async {
+    try {
+      final homeArea = userState.area.trim();
+      final result = await WorkAreaSessionCoordinator.activate(
+        currentArea: attendance.area,
+        division: attendance.division,
+        homeArea: homeArea,
+        mode: attendance.modeKey,
+        currentIsHeadquarter: attendance.isHeadquarter,
+        homeIsHeadquarter:
+            homeArea.isNotEmpty && homeArea == attendance.area
+                ? attendance.isHeadquarter
+                : null,
+        source: 'attendance_clock_in',
+      );
+      _record(
+        'clock_in_runtime_activation_complete',
+        attendance,
+        trace: trace,
+        extra: <String, Object?>{
+          'foregroundServiceRunning': result.foregroundServiceRunning,
+          'foregroundOwner': result.foregroundOwner,
+          'appFallbackListening': result.appFallbackListening,
+          'mode': result.mode,
+        },
+      );
+    } catch (error, stackTrace) {
+      _record(
+        'clock_in_runtime_activation_failure',
+        attendance,
+        trace: trace,
+        extra: <String, Object?>{
+          'error': error.toString(),
+          'stack': stackTrace.toString(),
+        },
+      );
+    }
+  }
+
+  static Future<void> _stopWorkingRuntime({
+    required String source,
+  }) async {
+    await PlateTtsSessionRecoveryStore.clear(source: source);
+    await WorkStatusNotificationController.refresh(source: source);
+    await TtsOwnership.setOwner(TtsOwner.app);
+    PlateTtsListenerService.setLocalRole(TtsOwner.app);
+    await PlateTtsListenerService.stop();
+    debugPrint('[ATTENDANCE_RUNTIME] stopped source=$source');
   }
 
   static Future<void> _recordClockInAtToCommuteTrueFalse(
