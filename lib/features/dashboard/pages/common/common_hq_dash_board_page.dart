@@ -4,6 +4,7 @@ import '../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../calendar/presentation/headquarter_calendar_card.dart';
 import '../../../headquarter/application/headquarter_dashboard_context.dart';
+import '../../../headquarter/widgets/headquarter_side_dock_launcher_toggle.dart';
 import '../../../headquarter/widgets/headquarter_work_status_header_indicator.dart';
 
 class CommonHqDashBoardPage extends StatelessWidget {
@@ -41,7 +42,14 @@ class CommonHqDashBoardPage extends StatelessWidget {
                 useCommonUi: true,
                 showAccountEntry: true,
                 fillViewport: true,
-                headerTrailing: const HeadquarterWorkStatusHeaderIndicator(),
+                headerTrailing: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    HeadquarterWorkStatusHeaderIndicator(),
+                    SizedBox(width: 8),
+                    HeadquarterSideDockLauncherToggle(),
+                  ],
+                ),
               ),
             ),
           ),

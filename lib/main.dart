@@ -23,7 +23,9 @@ import 'features/dashboard/applications/common/firebase_google_auth_bridge.dart'
 import 'features/dashboard/widgets/productivity_sheet.dart';
 import 'features/dev/page/sheets/dev_quick_actions.dart';
 import 'features/dev/presentation/debug_session_visual_overlay.dart';
+import 'features/headquarter/application/headquarter_side_dock_launcher_controller.dart';
 import 'features/headquarter/page/sheets/head_memo.dart';
+import 'features/headquarter/widgets/headquarter_side_dock_edge_handle.dart';
 import 'shared/tts/application/plate_tts_event_hub.dart';
 
 String _ts() => DateTime.now().toIso8601String();
@@ -151,6 +153,9 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
     debugPrint('[MAIN][${_ts()}] HeadMemo.init');
     await HeadMemo.init();
 
+    debugPrint('[MAIN][${_ts()}] HeadquarterSideDockLauncherController.initialize');
+    await HeadquarterSideDockLauncherController.initialize();
+
     debugPrint('[MAIN][${_ts()}] DashMemo.init');
     await ProductivitySheet.init();
 
@@ -241,6 +246,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
               return Stack(
                 children: [
                   WorkChatAlertHost(child: child!),
+                  const Positioned.fill(
+                    child: HeadquarterSideDockEdgeHandle(),
+                  ),
                   const Positioned.fill(
                     child: DebugSessionVisualOverlay(),
                   ),

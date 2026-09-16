@@ -34,6 +34,7 @@ class HeadquarterContextNavigationCoordinator {
     required String currentModeKey,
     required String currentScreen,
     String source = 'unknown',
+    bool useRootNavigator = false,
   }) async {
     final normalizedCurrent =
         HeadquarterDashboardContext.normalizeModeKey(currentModeKey);
@@ -44,6 +45,7 @@ class HeadquarterContextNavigationCoordinator {
       context: context,
       currentModeKey: normalizedCurrent,
       currentScreen: currentScreen,
+      useRootNavigator: useRootNavigator,
     );
     if (result == null || !context.mounted) {
       debugPrint(
@@ -59,6 +61,7 @@ class HeadquarterContextNavigationCoordinator {
       await showSecondarySideDock<void>(
         context: context,
         barrierLabel: '운영 관리',
+        useRootNavigator: useRootNavigator,
       );
       return;
     }

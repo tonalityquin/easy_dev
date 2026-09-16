@@ -45,10 +45,12 @@ Future<HeadquarterWorkAreaDockResult?> showHeadquarterWorkAreaSideDock({
   required BuildContext context,
   required String currentModeKey,
   required String currentScreen,
+  bool useRootNavigator = false,
 }) {
   return showCommonLeftSideDock<HeadquarterWorkAreaDockResult>(
     context: context,
     barrierLabel: '업무 지역 선택',
+    useRootNavigator: useRootNavigator,
     maxWidth: 440,
     widthFactor: 0.96,
     builder: (_) => HeadquarterWorkAreaSideDock(

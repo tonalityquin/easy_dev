@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../features/account/applications/user_state.dart';
 import '../../features/dashboard/applications/common/firebase_google_auth_bridge.dart';
 import '../../features/dev/application/area_state.dart';
+import '../../features/headquarter/application/headquarter_side_dock_launcher_controller.dart';
 import '../../features/launcher/application/launcher_debug_account_override_store.dart';
 import '../../shared/tts/application/plate_tts_session_diagnostics.dart';
 import '../../shared/tts/application/plate_tts_session_recovery_store.dart';
@@ -54,6 +55,10 @@ class LogoutHelper {
       final areaState = Provider.of<AreaState>(context, listen: false);
 
       trace.log('Foreground service 종료를 시작합니다.', progress: 0.1);
+      await HeadquarterSideDockLauncherController.resetForLogout(
+        source: 'logout_helper',
+      );
+      trace.log('본사 Side Dock 빠른 열기 상태를 OFF로 초기화했습니다.', progress: 0.12);
       await PlateTtsSessionRecoveryStore.clear(source: 'logout_helper');
       await TtsOwnership.setOwner(TtsOwner.app);
       PlateTtsListenerService.setLocalRole(TtsOwner.app);
